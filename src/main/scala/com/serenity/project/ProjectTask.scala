@@ -3,9 +3,9 @@ package com.serenity.project
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
-import scala.io.{Codec, Source}
-
-import cats.effect.{IO, Resource}
+import cats.effect.{IO, Ref, Resource}
+import fs2.io.readInputStream
+import fs2.{Stream, text}
 
 /** Project-level workflow supported by Serenity's command runner. */
 enum ProjectTaskKind(val label: String, val lowerLabel: String):
@@ -163,7 +163,7 @@ object ProjectTaskRunner:
   private val DestroyGraceMillis = 250
 
   private[project] trait ProcessHandle:
-    def output: IO[String]
+    def output: Stream[IO, String]
     def waitFor: IO[Int]
     def destroy: IO[Unit]
 
@@ -183,12 +183,8 @@ object ProjectTaskRunner:
 
   final private case class JdkProcessHandle(process: Process) extends ProcessHandle:
 
-    override def output: IO[String] =
-      IO.interruptible {
-        val source = Source.fromInputStream(process.getInputStream)(using Codec.UTF8)
-        try source.mkString
-        finally source.close()
-      }
+    override def output: Stream[IO, String] =
+      readInputStream(IO.pure(process.getInputStream), 8192, closeAfterUse = true).through(text.utf8.decode)
 
     override def waitFor: IO[Int] =
       IO.interruptible(process.waitFor())
@@ -202,14 +198,33 @@ object ProjectTaskRunner:
       }.void
 
   def run(command: ProjectTaskCommand): IO[ProjectTaskResult] =
-    run(command, SystemProcessStarter)
+    runStreaming(command)(_ => IO.unit)
+
+  /** Runs a task while delivering bounded, incremental output to the caller. */
+  def runStreaming(command: ProjectTaskCommand)(onOutput: String => IO[Unit]): IO[ProjectTaskResult] =
+    runStreaming(command, SystemProcessStarter)(onOutput)
 
   private[project] def run(command: ProjectTaskCommand, starter: ProcessStarter): IO[ProjectTaskResult] =
+    runStreaming(command, starter)(_ => IO.unit)
+
+  private[project] def runStreaming(
+    command: ProjectTaskCommand,
+    starter: ProcessStarter
+  )(onOutput: String => IO[Unit]): IO[ProjectTaskResult] =
     processResource(command, starter).use { process =>
       for
-        output   <- process.output
-        exitCode <- process.waitFor
-      yield ProjectTaskResult(command, exitCode, trimOutput(output))
+        outputRef <- Ref.of[IO, String]("")
+        reader <- process.output
+          .evalMap(chunk => onOutput(chunk) >> outputRef.update(existing => trimOutput(existing + chunk)))
+          .compile
+          .drain
+          .start
+        result <- (for
+          exitCode <- process.waitFor
+          _        <- reader.joinWithNever
+          output   <- outputRef.get
+        yield ProjectTaskResult(command, exitCode, output)).guarantee(reader.cancel)
+      yield result
     }
 
   private def processResource(command: ProjectTaskCommand, starter: ProcessStarter): Resource[IO, ProcessHandle] =
@@ -218,6 +233,9 @@ object ProjectTaskRunner:
   private def trimOutput(output: String): String =
     if output.length <= MaxOutputLength then output
     else output.takeRight(MaxOutputLength).prependedAll("[output trimmed]\n")
+
+  def appendOutputTail(existing: String, chunk: String): String =
+    trimOutput(existing + chunk)
 
 /** Formats project task status for the pinned terminal surface. */
 object ProjectTaskTerminal:
@@ -249,6 +267,12 @@ object ProjectTaskTerminal:
        |
        |Output:
        |${if result.output.trim.isEmpty then "(no output)" else result.output}
+       |""".stripMargin
+
+  def running(command: ProjectTaskCommand, output: String): String =
+    s"""${started(command)}
+       |Output:
+       |${if output.isEmpty then "(waiting for output)" else output}
        |""".stripMargin
 
   def failedToStart(command: ProjectTaskCommand, error: Throwable): String =

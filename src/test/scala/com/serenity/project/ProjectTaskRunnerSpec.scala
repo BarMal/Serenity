@@ -4,6 +4,7 @@ import java.nio.file.Paths
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -12,8 +13,11 @@ final private case class FakeProcessHandle(
     outputRelease: Deferred[IO, Unit],
     destroyed: Ref[IO, Boolean]
 ) extends ProjectTaskRunner.ProcessHandle:
-  override def output: IO[String] =
-    outputStarted.complete(()) >> outputRelease.get.as("done")
+
+  override def output: Stream[IO, String] =
+    Stream.eval(outputStarted.complete(())).drain ++
+      Stream.emit("live\n") ++
+      Stream.eval(outputRelease.get).as("done")
 
   override def waitFor: IO[Int] =
     IO.pure(0)
@@ -50,4 +54,31 @@ class ProjectTaskRunnerSpec extends AnyFlatSpec with Matchers:
       yield wasDestroyed).unsafeRunSync()
 
     result shouldBe true
+  }
+
+  it should "stream output before completion and retain only a bounded tail" in {
+    val result =
+      (for
+        outputStarted <- Deferred[IO, Unit]
+        outputRelease <- Deferred[IO, Unit]
+        destroyed     <- Ref.of[IO, Boolean](false)
+        received      <- Ref.of[IO, List[String]](Nil)
+        firstOutput   <- Deferred[IO, Unit]
+        command = ProjectTaskCommand(ProjectTaskKind.Build, "test", Paths.get("."), "test-build", Nil)
+        handle  = FakeProcessHandle(outputStarted, outputRelease, destroyed)
+        fiber <- ProjectTaskRunner
+          .runStreaming(command, FakeProcessStarter(handle))(chunk =>
+            received.update(_ :+ chunk) >> firstOutput.complete(()).void
+          )
+          .start
+        _                <- outputStarted.get
+        _                <- firstOutput.get
+        beforeCompletion <- received.get
+        _                <- outputRelease.complete(())
+        completed        <- fiber.joinWithNever
+      yield (beforeCompletion, completed.output)).unsafeRunSync()
+
+    result._1 shouldBe List("live\n")
+    result._2 shouldBe "live\ndone"
+    ProjectTaskRunner.appendOutputTail("x" * 20_000, "y") should startWith("[output trimmed]")
   }

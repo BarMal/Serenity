@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.*
+import cats.effect.std.Semaphore
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
@@ -190,8 +191,10 @@ object StateManager:
       themeNamesRef <- themeManager.listAvailableThemes
         .handleErrorWith(_ => IO.pure(Nil))
         .flatMap(Ref.of[IO, List[String]])
-      quitSignal <- Deferred[IO, Unit]
-      lspQueue   <- LspEffectQueue.create
+      quitSignal           <- Deferred[IO, Unit]
+      lspQueue             <- LspEffectQueue.create
+      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore <- Semaphore[IO](1)
       runtime = StateManagerRuntime.create(
         stateRef = stateRef,
         undoRef = undoRef,
@@ -202,6 +205,8 @@ object StateManager:
         sessionRootOverride = resolvedSessionRootOverride,
         themeManager = themeManager,
         lspQueue = lspQueue,
+        projectTaskFiberRef = projectTaskFiberRef,
+        projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = onFontConfigChanged,
@@ -249,6 +254,8 @@ object StateManager:
       runtime.policy,
       runtime.themeManager,
       runtime.lspQueue,
+      runtime.projectTaskFiberRef,
+      runtime.projectTaskSemaphore,
       runtime.mouseTargetCacheRef,
       runtime.documentAnalysisFiberRef,
       runtime.onFontConfigChanged,

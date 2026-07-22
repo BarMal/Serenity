@@ -3,7 +3,9 @@ package com.serenity.state.manager
 import java.nio.file.Path
 import java.util.UUID
 
-import cats.effect.IO
+import scala.concurrent.duration.*
+
+import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
@@ -25,6 +27,7 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.{UiPreset, UiPresetEditSession, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
+import fs2.Stream
 
 /** Workflow operations selected by command effects. */
 private[manager] trait WorkflowEffectPort:
@@ -778,6 +781,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
       case CommandIntent.RunProjectTask(kind) =>
         runProjectTask(state, kind)
+      case CommandIntent.CancelProjectTask =>
+        cancelProjectTask
       case CommandIntent.ToggleLigatures =>
         updateFontConfig(config =>
           config.copy(enableLigatures = !config.enableLigatures, textLigatures = !config.textLigatures)
@@ -1475,16 +1480,45 @@ final private[manager] class StateManagerEffectHandlers(
         case None =>
           pinProjectTerminal(ProjectTaskTerminal.noTask(kind, start))
         case Some(command) =>
-          pinProjectTerminal(ProjectTaskTerminal.started(command)) >>
-            ProjectTaskRunner
-              .run(command)
-              .attempt
-              .flatMap {
-                case Right(result) =>
-                  pinProjectTerminal(ProjectTaskTerminal.completed(result))
-                case Left(error) =>
-                  pinProjectTerminal(ProjectTaskTerminal.failedToStart(command, error))
-              }
+          projectTaskSemaphore.permit.use { _ =>
+            projectTaskFiberRef.get.flatMap {
+              case Some(_) =>
+                pinProjectTerminal(
+                  "A project task is already running. Use Cancel Project Task before starting another."
+                )
+              case None =>
+                for
+                  outputRef <- Ref.of[IO, String]("")
+                  finished  <- Deferred[IO, Unit]
+                  startTask <- Deferred[IO, Unit]
+                  renderer <- Stream
+                    .awakeEvery[IO](100.millis)
+                    .evalMap(_ =>
+                      outputRef.get.flatMap(output => pinProjectTerminal(ProjectTaskTerminal.running(command, output)))
+                    )
+                    .interruptWhen(Stream.eval(finished.get).as(true))
+                    .compile
+                    .drain
+                    .start
+                  task = startTask.get >> ProjectTaskRunner
+                    .runStreaming(command)(chunk =>
+                      outputRef.update(output => ProjectTaskRunner.appendOutputTail(output, chunk))
+                    )
+                    .attempt
+                    .flatMap {
+                      case Right(result) => pinProjectTerminal(ProjectTaskTerminal.completed(result))
+                      case Left(error)   => pinProjectTerminal(ProjectTaskTerminal.failedToStart(command, error))
+                    }
+                    .guarantee(
+                      finished.complete(()).attempt.void >> renderer.joinWithNever >> ProjectTaskOwnership
+                        .clear(projectTaskFiberRef, finished)
+                    )
+                  fiber <- (pinProjectTerminal(ProjectTaskTerminal.started(command)) >> task).start
+                  _     <- projectTaskFiberRef.set(Some(ManagedProjectTask(finished, fiber)))
+                  _     <- startTask.complete(())
+                yield ()
+            }
+          }
     }
 
   private def projectTaskStartPath(state: AppState): IO[Path] =
@@ -1495,6 +1529,12 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def pinProjectTerminal(text: String): IO[Unit] =
     pinPanel(PanelContent.Terminal(text, text.length), PanelPosition.Bottom, 14)
+
+  private def cancelProjectTask: IO[Unit] =
+    ProjectTaskOwnership.cancel(projectTaskFiberRef, projectTaskSemaphore).flatMap {
+      case true  => pinProjectTerminal("Project task cancelled.")
+      case false => pinProjectTerminal("No project task is running.")
+    }
 
   private def requestLspHover(state: AppState): IO[Unit] =
     activeLspRequestTarget(state) match

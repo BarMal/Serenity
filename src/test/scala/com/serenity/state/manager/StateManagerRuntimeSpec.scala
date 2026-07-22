@@ -3,7 +3,9 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.*
+import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileDialog
 import com.serenity.lsp.LspEffect
@@ -33,6 +35,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
       quitSignal               <- Deferred[IO, Unit]
       lspQueue                 <- LspEffectQueue.create
+      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore     <- Semaphore[IO](1)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
@@ -47,6 +51,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         sessionRootOverride = Some(sessionRoot),
         themeManager = AppThemeManager.create,
         lspQueue = lspQueue,
+        projectTaskFiberRef = projectTaskFiberRef,
+        projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
@@ -63,6 +69,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.themeNamesRef shouldBe themeNamesRef
       runtime.quitSignal shouldBe quitSignal
       runtime.lspQueue shouldBe lspQueue
+      runtime.projectTaskFiberRef shouldBe projectTaskFiberRef
+      runtime.projectTaskSemaphore shouldBe projectTaskSemaphore
       runtime.mouseTargetCacheRef shouldBe mouseTargetCacheRef
       runtime.documentAnalysisFiberRef shouldBe documentAnalysisFiberRef
       runtime.sessionManager.sessionExists.unsafeRunSync() shouldBe false
@@ -73,13 +81,15 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "cancel pending document analysis when force quitting" in {
+  it should "cancel active project tasks from the cancel command and force quit" in {
     val program = for
       stateRef                 <- Ref.of[IO, AppState](AppState.initial)
       undoRef                  <- Ref.of[IO, UndoState](UndoState())
       themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
       quitSignal               <- Deferred[IO, Unit]
       lspQueue                 <- LspEffectQueue.create
+      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore     <- Semaphore[IO](1)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       analysisCancelled        <- Deferred[IO, Unit]
@@ -100,6 +110,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         sessionRootOverride = Some(sessionRoot),
         themeManager = AppThemeManager.create,
         lspQueue = lspQueue,
+        projectTaskFiberRef = projectTaskFiberRef,
+        projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
@@ -124,6 +136,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.policy,
         runtime.themeManager,
         runtime.lspQueue,
+        runtime.projectTaskFiberRef,
+        runtime.projectTaskSemaphore,
         runtime.mouseTargetCacheRef,
         runtime.documentAnalysisFiberRef,
         runtime.onFontConfigChanged,
@@ -137,15 +151,74 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.sessionPersistence,
         operations
       )
-      _         <- analysisStarted.get
-      _         <- documentAnalysisFiberRef.set(Some(pendingAnalysis))
-      _         <- composition.forceQuit()
-      cancelled <- analysisCancelled.tryGet
-      pending   <- documentAnalysisFiberRef.get
-      _         <- pending.fold(IO.unit)(_.cancel)
+      commandChildDestroyed <- Deferred[IO, Unit]
+      commandTaskStarted    <- Deferred[IO, Unit]
+      commandTaskFinished   <- Deferred[IO, Unit]
+      commandTask <- IO
+        .defer(commandTaskStarted.complete(()).void >> IO.never[Unit])
+        .onCancel(commandChildDestroyed.complete(()).void)
+        .start
+      _ <- commandTaskStarted.get
+      _ <- projectTaskFiberRef.set(Some(ManagedProjectTask(commandTaskFinished, commandTask)))
+      _ <- composition.interpretCommand(
+        Command.typed(
+          "project-cancel",
+          "Cancel the running project task.",
+          CommandIntent.CancelProjectTask,
+          CommandCategory.Project
+        ),
+        AppState.initial
+      )
+      commandChildWasDestroyed <- commandChildDestroyed.tryGet
+      projectTaskAfterCommand  <- projectTaskFiberRef.get
+      shutdownChildDestroyed   <- Deferred[IO, Unit]
+      shutdownTaskStarted      <- Deferred[IO, Unit]
+      shutdownTaskFinished     <- Deferred[IO, Unit]
+      shutdownTask <- IO
+        .defer(shutdownTaskStarted.complete(()).void >> IO.never[Unit])
+        .onCancel(shutdownChildDestroyed.complete(()).void)
+        .start
+      _                         <- shutdownTaskStarted.get
+      _                         <- projectTaskFiberRef.set(Some(ManagedProjectTask(shutdownTaskFinished, shutdownTask)))
+      _                         <- analysisStarted.get
+      _                         <- documentAnalysisFiberRef.set(Some(pendingAnalysis))
+      _                         <- composition.forceQuit()
+      shutdownChildWasDestroyed <- shutdownChildDestroyed.tryGet
+      projectTaskAfterShutdown  <- projectTaskFiberRef.get
+      analysisWasCancelled      <- analysisCancelled.tryGet
+      pendingAnalysisFiber      <- documentAnalysisFiberRef.get
+      _                         <- projectTaskAfterCommand.fold(IO.unit)(_.fiber.cancel)
+      _                         <- projectTaskAfterShutdown.fold(IO.unit)(_.fiber.cancel)
+      _                         <- pendingAnalysisFiber.fold(IO.unit)(_.cancel)
     yield
-      cancelled shouldBe Some(())
-      pending shouldBe None
+      commandChildWasDestroyed shouldBe Some(())
+      projectTaskAfterCommand shouldBe None
+      shutdownChildWasDestroyed shouldBe Some(())
+      projectTaskAfterShutdown shouldBe None
+      analysisWasCancelled shouldBe Some(())
+      pendingAnalysisFiber shouldBe None
+
+    program.unsafeRunSync()
+  }
+
+  it should "retain a replacement task when an older finalizer clears after it starts" in {
+    val program = for
+      projectTaskFiberRef <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      olderFinished       <- Deferred[IO, Unit]
+      replacementFinished <- Deferred[IO, Unit]
+      releaseOlder        <- Deferred[IO, Unit]
+      olderTask           <- IO.never[Unit].start
+      replacementTask     <- IO.never[Unit].start
+      replacement = ManagedProjectTask(replacementFinished, replacementTask)
+      _              <- projectTaskFiberRef.set(Some(ManagedProjectTask(olderFinished, olderTask)))
+      olderFinalizer <- (releaseOlder.get >> ProjectTaskOwnership.clear(projectTaskFiberRef, olderFinished)).start
+      _              <- projectTaskFiberRef.set(Some(replacement))
+      _              <- releaseOlder.complete(())
+      _              <- olderFinalizer.joinWithNever
+      active         <- projectTaskFiberRef.get
+      _              <- olderTask.cancel
+      _              <- replacementTask.cancel
+    yield active shouldBe Some(replacement)
 
     program.unsafeRunSync()
   }

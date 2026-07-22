@@ -182,6 +182,7 @@ enum CommandIntent:
   case DeleteUiPreset(name: String)
   case ResetUiPreset(name: String)
   case RunProjectTask(kind: ProjectTaskKind)
+  case CancelProjectTask
   case ToggleLigatures
   case StartupNewSession
   case StartupRestoreSession

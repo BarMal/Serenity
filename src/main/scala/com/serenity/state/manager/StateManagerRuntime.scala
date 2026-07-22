@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.*
-import cats.effect.std.Queue
+import cats.effect.std.{Queue, Semaphore}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.lsp.LspEffect
@@ -81,6 +81,30 @@ private[manager] object LspEffectQueue:
       documentVersions <- Ref.of[IO, Map[String, Int]](Map.empty)
     yield new LspEffectQueue(queue, pendingChanges, documentVersions)
 
+private[manager] case class ManagedProjectTask(
+    finished: Deferred[IO, Unit],
+    fiber: Fiber[IO, Throwable, Unit]
+)
+
+private[manager] object ProjectTaskOwnership:
+
+  def clear(
+    projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
+    finished: Deferred[IO, Unit]
+  ): IO[Unit] =
+    projectTaskFiberRef.update(_.filterNot(_.finished eq finished))
+
+  def cancel(
+    projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
+    projectTaskSemaphore: Semaphore[IO]
+  ): IO[Boolean] =
+    projectTaskSemaphore.permit.use { _ =>
+      projectTaskFiberRef.getAndSet(None).flatMap {
+        case Some(task) => task.fiber.cancel.as(true)
+        case None       => IO.pure(false)
+      }
+    }
+
 private[manager] case class StateManagerRuntime(
     stateRef: Ref[IO, AppState],
     undoRef: Ref[IO, UndoState],
@@ -90,6 +114,8 @@ private[manager] case class StateManagerRuntime(
     policy: SessionManager.SessionPolicy,
     themeManager: AppThemeManager,
     lspQueue: LspEffectQueue,
+    projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
+    projectTaskSemaphore: Semaphore[IO],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     onFontConfigChanged: FontConfig => IO[Unit],
@@ -116,6 +142,8 @@ private[manager] object StateManagerRuntime:
     sessionRootOverride: Option[Path],
     themeManager: AppThemeManager,
     lspQueue: LspEffectQueue,
+    projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
+    projectTaskSemaphore: Semaphore[IO],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     onFontConfigChanged: FontConfig => IO[Unit],
@@ -138,6 +166,8 @@ private[manager] object StateManagerRuntime:
       policy = policy,
       themeManager = themeManager,
       lspQueue = lspQueue,
+      projectTaskFiberRef = projectTaskFiberRef,
+      projectTaskSemaphore = projectTaskSemaphore,
       mouseTargetCacheRef = mouseTargetCacheRef,
       documentAnalysisFiberRef = documentAnalysisFiberRef,
       onFontConfigChanged = onFontConfigChanged,

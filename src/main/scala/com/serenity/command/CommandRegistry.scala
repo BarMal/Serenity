@@ -720,6 +720,13 @@ object CommandRegistry:
       CommandIntent.RunProjectTask(ProjectTaskKind.Dependencies),
       CommandCategory.Project,
       label = "Project Dependencies"
+    ),
+    Command.typed(
+      "project-cancel",
+      "Cancel the running project task.",
+      CommandIntent.CancelProjectTask,
+      CommandCategory.Project,
+      label = "Cancel Project Task"
     )
   ) ++ builtInPresetCommands
 
