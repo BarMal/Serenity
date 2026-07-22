@@ -44,7 +44,10 @@ object AccessibilitySnapshot:
     previous: Option[AccessibilitySnapshot] = None
   ): AccessibilitySnapshot =
     val scene = UiSceneSnapshot.from(state, viewport)
-    val nodes = scene.nodesInPaintOrder.flatMap(nodeFor(state, _)) ++ surfaceControls(state, scene)
+    val visibleNodes = state.topModalSurface match
+      case Some(surface) => scene.modal.filter(_.id == SceneNodeId.Surface(surface.id))
+      case None          => scene.nodesInPaintOrder
+    val nodes = visibleNodes.flatMap(nodeFor(state, _)) ++ surfaceControls(state, visibleNodes)
     AccessibilitySnapshot(nodes, announcements(previous, nodes))
 
   /** Comfortable and spacious surfaces reserve two text rows for pointer targets; compact remains keyboard complete. */
@@ -85,8 +88,8 @@ object AccessibilitySnapshot:
           )
         }
 
-  private def surfaceControls(state: AppState, scene: UiSceneSnapshot): List[AccessibleNode] =
-    scene.nodesInPaintOrder.flatMap {
+  private def surfaceControls(state: AppState, nodes: List[SceneNode]): List[AccessibleNode] =
+    nodes.flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
         state.surfaceById(surfaceId).toList.flatMap { surface =>
           controlsFor(surface, node.frameRect, state) ++ statusFor(surface, node.frameRect)

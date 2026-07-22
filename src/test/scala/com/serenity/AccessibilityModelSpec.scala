@@ -134,6 +134,33 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "expose only the top modal and its controls while a modal is active" in {
+    val floatingId = SurfaceId("runner")
+    val modalId    = SurfaceId("replace")
+    val state = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          floatingId,
+          SurfaceContent.CommandPalette(CommandRunner.empty),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        ),
+        UiSurface(
+          modalId,
+          SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState())),
+          SurfacePresentation.Modal
+        )
+      ),
+      focus = Focus.Surface(modalId)
+    )
+
+    val nodes = AccessibilitySnapshot.from(state, viewport).nodes
+
+    nodes.map(_.id) should contain(s"surface:${modalId.value}")
+    nodes.map(_.id) should contain(s"surface:${modalId.value}/control:find")
+    nodes.map(_.id) should not contain "pane:0"
+    nodes.exists(_.id.startsWith(s"surface:${floatingId.value}")) shouldBe false
+  }
+
   it should "align wrapped toolbar accessibility bounds with rendered row slots" in {
     val surfaceId    = SurfaceId("toolbar")
     val bufferId     = BufferId(42)

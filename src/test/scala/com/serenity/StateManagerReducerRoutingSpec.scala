@@ -56,6 +56,41 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     succeed
   }
 
+  it should "ignore global and close events while a blocking modal is active" in {
+    val stateManager = createStateManager()
+    val bufferId     = stateManager.createBuffer("unsaved").unsafeRunSync()
+    val modal = UiSurface(
+      SurfaceId("close-confirmation"),
+      SurfaceContent.ModalWorkflow(
+        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
+      ),
+      SurfacePresentation.Modal
+    )
+
+    stateManager
+      .updateState { state =>
+        state.copy(
+          buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(isDirty = true)),
+          layout = state.layout.copy(
+            editorPanes = state.layout.editorPanes.updated(
+              PaneId(0),
+              state.layout.editorPanes(PaneId(0)).copy(bufferId = Some(bufferId))
+            )
+          ),
+          uiSurfaces = state.uiSurfaces :+ modal,
+          focus = Focus.Surface(modal.id)
+        )
+      }
+      .unsafeRunSync()
+    val before = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    stateManager.applyEvent(CloseTab).unsafeRunSync()
+    stateManager.applyEvent(Quit).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync() shouldBe before
+  }
+
   it should "save the focused buffer through the file event path" in {
     val tempFile       = Files.createTempFile("state-manager-save", ".scala")
     val initialContent = "val x = 42"

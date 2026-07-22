@@ -114,10 +114,16 @@ final private[manager] class StateManagerEventPipeline(
           resizeEvents.apply(resize, prevState)
         case systemEvent: SystemEvent =>
           applyReducerResult(SystemEventReducer.reduce(systemEvent, prevState), prevState)
+        case com.serenity.keystroke.events.CloseTab if prevState.hasBlockingModal =>
+          cats.effect.IO.unit
         case com.serenity.keystroke.events.CloseTab =>
           beginCloseAction(CloseScope.Current, prevState)
+        case com.serenity.keystroke.events.Quit if prevState.hasBlockingModal =>
+          cats.effect.IO.unit
         case com.serenity.keystroke.events.Quit =>
           beginCloseAction(CloseScope.Quit, prevState)
+        case _: GlobalAppEvent if prevState.hasBlockingModal =>
+          cats.effect.IO.unit
         case appEvent: GlobalAppEvent =>
           val registry = CommandRegistry.withToggleUI
           applyReducerResult(AppEventReducer.reduce(appEvent, prevState, registry)(using balance), prevState) >>
