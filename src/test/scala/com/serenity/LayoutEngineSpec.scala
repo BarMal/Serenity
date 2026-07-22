@@ -349,6 +349,49 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     panes(second).bottom shouldBe panes(third).y
   }
 
+  it should "calculate contained non-overlapping rectangles for horizontal splits inside vertical splits" in {
+    val first  = PaneId(0)
+    val second = PaneId(1)
+    val third  = PaneId(2)
+    val tree = WorkspaceTree(
+      WorkspaceNode.Split(
+        WorkspaceNodeId("outer"),
+        SplitAxis.Vertical,
+        0.4,
+        WorkspaceNode.Leaf(WorkspaceNodeId("first"), first),
+        WorkspaceNode.Split(
+          WorkspaceNodeId("inner"),
+          SplitAxis.Horizontal,
+          0.5,
+          WorkspaceNode.Leaf(WorkspaceNodeId("second"), second),
+          WorkspaceNode.Leaf(WorkspaceNodeId("third"), third)
+        )
+      )
+    )
+    val state = AppState(
+      layout = Layout(
+        editorPanes = Map(
+          first  -> EditorPane.empty(first),
+          second -> EditorPane.empty(second),
+          third  -> EditorPane.empty(third)
+        ),
+        activeEditorPaneId = Some(first),
+        workspaceTree = Some(tree)
+      ),
+      buffers = Map.empty,
+      focus = Focus.EditorPane(first)
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
+
+    panes(first) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y, 97, 11)
+    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y + 11, 48, 18)
+    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 48, layout.editorPanelRect.y + 11, 49, 18)
+    panes.values.foreach(layout.editorPanelRect.containsRect(_) shouldBe true)
+    panes(first).bottom shouldBe panes(second).y
+    panes(second).right shouldBe panes(third).x
+  }
+
   it should "clamp nested workspace splits in tiny viewports while retaining a usable leaf" in {
     val first  = PaneId(0)
     val second = PaneId(1)
