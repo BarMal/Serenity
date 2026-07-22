@@ -1361,7 +1361,8 @@ final private[manager] class StateManagerEventPipeline(
         menu.selectedIndex,
         hasHeader = true,
         hasFooter = menu.items.nonEmpty,
-        itemGapRows = state.config.commandRunnerItemGapRows
+        itemGapRows = state.config.commandRunnerItemGapRows,
+        itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity)
       )
     yield (surface, menu, index)
 
@@ -1500,12 +1501,25 @@ final private[manager] class StateManagerEventPipeline(
               itemCount = rowCount,
               hasHeader = false,
               hasFooter = false,
-              itemGapRows = state.config.uiElementGap
+              itemGapRows = state.config.uiElementGap,
+              itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(
+                SurfaceContent.ContextualToolbar(toolbarState),
+                state.config.interfaceDensity
+              )
             )
             .translated(0.0, FloatingSurfaceGeometry.signedRowOffsetPixels(floatingOffsetRows, metrics))
           index <- geometry.itemIndexAt(pixelX, pixelY)
         yield index
-      else overlayDisplayedRowIndexAt(event, contentRect, rowSlots)
+      else
+        overlayDisplayedRowIndexAt(
+          event,
+          contentRect,
+          rowSlots,
+          SurfaceFrameLayout.itemTargetRowsFor(
+            SurfaceContent.ContextualToolbar(toolbarState),
+            state.config.interfaceDensity
+          )
+        )
     rowIndex.flatMap { rowIndex =>
       ContextualToolbar.hitAt(
         rowIndex = rowIndex,
@@ -1690,7 +1704,8 @@ final private[manager] class StateManagerEventPipeline(
               runner.settingsSurfaceSelectedIndex,
               hasHeader = true,
               hasFooter = true,
-              itemGapRows = state.config.commandRunnerItemGapRows
+              itemGapRows = state.config.commandRunnerItemGapRows,
+              itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity)
             ).map { index =>
               if runner.activeSubmenu.nonEmpty then RunnerSelectSubmenuItem(index) else RunnerSelectVisibleItem(index)
             }
@@ -1708,7 +1723,8 @@ final private[manager] class StateManagerEventPipeline(
                   runner.selectedIndex,
                   hasHeader = true,
                   hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-                  itemGapRows = state.config.commandRunnerItemGapRows
+                  itemGapRows = state.config.commandRunnerItemGapRows,
+                  itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity)
                 ).map(RunnerSelectVisibleItem(_))
               )
         case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
@@ -1730,7 +1746,8 @@ final private[manager] class StateManagerEventPipeline(
             hasHeader = group.nonEmpty,
             hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
             reservedContentRows = detailRows,
-            itemGapRows = state.config.commandRunnerItemGapRows
+            itemGapRows = state.config.commandRunnerItemGapRows,
+            itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity)
           ).map { index =>
             if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
             else RunnerSelectSubmenuItem(index)
@@ -1763,7 +1780,8 @@ final private[manager] class StateManagerEventPipeline(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    itemGapRows: Double = 0.0
+    itemGapRows: Double = 0.0,
+    itemTargetRows: Int = 1
   ): Option[Int] =
     val itemWindow = SurfaceFrameLayout(contentRect, borderCells = 0).itemWindow(
       itemCount,
@@ -1771,7 +1789,8 @@ final private[manager] class StateManagerEventPipeline(
       hasHeader,
       hasFooter,
       reservedContentRows,
-      itemGapRows
+      itemGapRows,
+      itemTargetRows
     )
     val pixelSelection = for
       pixelX <- event.pixelX
@@ -1785,26 +1804,29 @@ final private[manager] class StateManagerEventPipeline(
           itemCount = itemCount,
           hasHeader = hasHeader,
           hasFooter = hasFooter,
-          itemGapRows = itemGapRows
+          itemGapRows = itemGapRows,
+          itemTargetRows = itemTargetRows
         )
         .translated(0.0, FloatingSurfaceGeometry.signedRowOffsetPixels(floatingOffsetRows, metrics))
       displayedIndex <- geometry.itemIndexAt(pixelX, pixelY)
       absoluteIndex  <- itemWindow.absoluteIndexAt(displayedIndex)
     yield absoluteIndex
     if event.pixelX.isDefined && event.pixelY.isDefined then pixelSelection
-    else overlayDisplayedRowIndexAt(event, contentRect, rowSlots).flatMap(itemWindow.absoluteIndexAt)
+    else overlayDisplayedRowIndexAt(event, contentRect, rowSlots, itemTargetRows).flatMap(itemWindow.absoluteIndexAt)
 
   private def overlayDisplayedRowIndexAt(
     event: MouseInputEvent,
     contentRect: LayoutRect,
-    rowSlots: List[SurfaceContentRowSlot]
+    rowSlots: List[SurfaceContentRowSlot],
+    itemTargetRows: Int = 1
   ): Option[Int] =
     val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
     Option
       .when(insideColumns)(())
       .flatMap(_ =>
         rowSlots.collectFirst {
-          case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) if y == event.row =>
+          case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y)
+              if event.row >= y && event.row < y + math.max(1, itemTargetRows) =>
             index
         }
       )

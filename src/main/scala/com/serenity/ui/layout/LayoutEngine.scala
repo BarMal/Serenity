@@ -809,7 +809,8 @@ object LayoutEngine:
             hasHeader = true,
             hasFooter = true,
             borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-            itemGapRows = state.config.commandRunnerItemGapRows
+            itemGapRows = state.config.commandRunnerItemGapRows,
+            itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
           )
         )
         .getOrElse(densityMetrics.commandSurfaceMaxHeight)
@@ -843,7 +844,8 @@ object LayoutEngine:
           hasHeader = false,
           hasFooter = false,
           borderCells = borderCells,
-          itemGapRows = state.config.uiElementGap
+          itemGapRows = state.config.uiElementGap,
+          itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
         )
       case SurfaceContent.ContextMenu(menu) =>
         SurfaceFrameLayout.frameHeightForItemRows(
@@ -851,7 +853,8 @@ object LayoutEngine:
           hasHeader = true,
           hasFooter = menu.items.nonEmpty,
           borderCells = SurfaceFrameLayout.borderCellsFor(content),
-          itemGapRows = state.config.commandRunnerItemGapRows
+          itemGapRows = state.config.commandRunnerItemGapRows,
+          itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
         )
       case SurfaceContent.CommentLens(lens) =>
         math.max(4, math.min(8, lens.draft.split("\n", -1).length + 3))
@@ -870,7 +873,8 @@ object LayoutEngine:
               hasHeader = true,
               hasFooter = true,
               borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-              itemGapRows = state.config.commandRunnerItemGapRows
+              itemGapRows = state.config.commandRunnerItemGapRows,
+              itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
             )
           )
         )

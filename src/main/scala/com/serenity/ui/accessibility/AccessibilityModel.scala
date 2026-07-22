@@ -49,9 +49,7 @@ object AccessibilitySnapshot:
 
   /** Comfortable and spacious surfaces reserve two text rows for pointer targets; compact remains keyboard complete. */
   def minimumTargetRows(density: InterfaceDensity): Int =
-    density match
-      case InterfaceDensity.Compact                                 => 1
-      case InterfaceDensity.Comfortable | InterfaceDensity.Spacious => 2
+    SurfaceFrameLayout.minimumTargetRows(density)
 
   private def nodeFor(state: AppState, node: SceneNode): Option[AccessibleNode] =
     node.id match

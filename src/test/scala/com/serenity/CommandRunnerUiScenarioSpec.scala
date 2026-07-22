@@ -1,6 +1,7 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, SurfaceContent}
@@ -44,7 +45,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "navigate nested settings, edit a decimal, and preserve configured row spacing" in {
-    val config = com.serenity.config.AppConfig.default.withCommandRunnerItemGapRows(1)
+    val config = AppConfig.default.withCommandRunnerItemGapRows(1)
     val driver = UiScenarioDriver.create("command-runner-settings", initialConfig = config).unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     "blur radius".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
@@ -69,6 +70,25 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(Enter).unsafeRunSync()
     driver.state.unsafeRunSync().config.blurRadius shouldBe 0.5f
   }
+
+  it should "render two-row command targets in comfortable and spacious density" in
+    List(InterfaceDensity.Comfortable, InterfaceDensity.Spacious).foreach { density =>
+      val driver = UiScenarioDriver
+        .create(s"command-runner-target-$density", initialConfig = AppConfig.default.withInterfaceDensity(density))
+        .unsafeRunSync()
+
+      driver.dispatch(ToggleCommandRunner).unsafeRunSync()
+      val frame     = driver.renderFrame(s"command-runner-target-$density").unsafeRunSync()
+      val surfaceId = frame.evidence.surfaceRects.keys.headOption.getOrElse(fail("Expected command runner"))
+      val target = frame.evidence.itemRects
+        .getOrElse(surfaceId, Nil)
+        .headOption
+        .getOrElse(fail("Expected command target"))
+
+      frame.evidence.itemRects.getOrElse(surfaceId, Nil).foreach(_.height should be >= 2)
+      driver.dispatch(MouseMove(target.x + 1, target.y + 1)).unsafeRunSync()
+      runnerFrom(driver.state.unsafeRunSync()).selectedIndex shouldBe 0
+    }
 
   it should "open the dedicated settings surface, search and persist an edit, then dismiss in one action" in {
     val driver = UiScenarioDriver.create("dedicated-settings-surface").unsafeRunSync()
