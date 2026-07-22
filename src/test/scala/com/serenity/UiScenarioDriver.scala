@@ -4,6 +4,7 @@ import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 import java.nio.file.{Files, Path}
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import com.serenity.config.ConfigManager
@@ -37,6 +38,8 @@ case class ScenarioFrameEvidence(
     visiblePreviewSourceLines: Map[BufferId, Set[Int]],
     visibleText: List[String],
     drawnText: List[ScenarioDrawnText],
+    paintedRegions: List[ScenarioPaintedRegion],
+    borders: List[ScenarioBorder],
     styleCalls: List[ScenarioStyleCall],
     drawnItems: Map[SurfaceId, List[ScenarioDrawnItem]],
     drawnImageRects: List[LayoutRect],
@@ -47,6 +50,12 @@ case class ScenarioFrameEvidence(
 
 /** Text and its cell bounds as actually submitted to the render surface. */
 case class ScenarioDrawnText(text: String, bounds: LayoutRect)
+
+/** A renderer region paired with the semantic colours active while it was painted. */
+case class ScenarioPaintedRegion(bounds: LayoutRect, foreground: Color, background: Color)
+
+/** A rounded surface border submitted with its semantic focus or elevation colour. */
+case class ScenarioBorder(bounds: LayoutRect, color: Color)
 
 /** A text-style transition submitted while rendering a scenario frame. */
 case class ScenarioStyleCall(action: String, style: TextStyle)
@@ -214,6 +223,8 @@ final class UiScenarioDriver private (
       visiblePreviewSourceLines,
       visibleText,
       recordingSurface.drawnText,
+      recordingSurface.paintedRegions,
+      recordingSurface.borders,
       recordingSurface.styleCalls,
       drawnItems,
       recordingSurface.drawnImages.map(_.bounds),
@@ -288,27 +299,44 @@ final class UiScenarioDriver private (
     }
 
 final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: CellMetrics) extends RenderSurface:
-  private val drawnTextBuffer  = scala.collection.mutable.ListBuffer.empty[ScenarioDrawnText]
-  private val drawnImageBuffer = scala.collection.mutable.ListBuffer.empty[ScenarioDrawnImage]
-  private val styleCallsBuffer = scala.collection.mutable.ListBuffer.empty[ScenarioStyleCall]
+  private val drawnTextBuffer      = scala.collection.mutable.ListBuffer.empty[ScenarioDrawnText]
+  private val drawnImageBuffer     = scala.collection.mutable.ListBuffer.empty[ScenarioDrawnImage]
+  private val paintedRegionsBuffer = scala.collection.mutable.ListBuffer.empty[ScenarioPaintedRegion]
+  private val bordersBuffer        = scala.collection.mutable.ListBuffer.empty[ScenarioBorder]
+  private val styleCallsBuffer     = scala.collection.mutable.ListBuffer.empty[ScenarioStyleCall]
+  private val foregroundColor      = AtomicReference(Color.BLACK)
+  private val backgroundColor      = AtomicReference(Color.BLACK)
 
   def drawnText: List[ScenarioDrawnText] = drawnTextBuffer.toList
 
   def drawnImages: List[ScenarioDrawnImage] = drawnImageBuffer.toList
 
+  def paintedRegions: List[ScenarioPaintedRegion] = paintedRegionsBuffer.toList
+
+  def borders: List[ScenarioBorder] = bordersBuffer.toList
+
   def styleCalls: List[ScenarioStyleCall] = styleCallsBuffer.toList
 
   override def setFont(font: Font): Unit                    = delegate.setFont(font)
   override def fontRenderContext: Option[FontRenderContext] = delegate.fontRenderContext
-  def setForegroundColor(color: Color): Unit                = delegate.setForegroundColor(color)
-  def setBackgroundColor(color: Color): Unit                = delegate.setBackgroundColor(color)
-  def getBackgroundColor: Color                             = delegate.getBackgroundColor
+
+  def setForegroundColor(color: Color): Unit =
+    foregroundColor.set(color)
+    delegate.setForegroundColor(color)
+
+  def setBackgroundColor(color: Color): Unit =
+    backgroundColor.set(color)
+    delegate.setBackgroundColor(color)
+
+  def getBackgroundColor: Color = delegate.getBackgroundColor
 
   def putString(x: Int, y: Int, text: String): Unit =
     recordText(text, LayoutRect(x, y, text.length.max(1), 1))
+    recordPaint(LayoutRect(x, y, text.length.max(1), 1))
     delegate.putString(x, y, text)
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
+    recordPaint(LayoutRect(x, y, width, height))
     delegate.fillRect(x, y, width, height, char)
 
   def enableStyle(style: TextStyle): Unit =
@@ -335,7 +363,9 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     arcPx: Int,
     color: Color,
     strokeWidth: Float
-  ): Unit = delegate.strokeRoundRect(x, y, width, height, arcPx, color, strokeWidth)
+  ): Unit =
+    bordersBuffer += ScenarioBorder(LayoutRect(x, y, width, height), color)
+    delegate.strokeRoundRect(x, y, width, height, arcPx, color, strokeWidth)
 
   def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, arcPx: Int)(render: => Unit): Unit =
     delegate.withRoundRectClip(x, y, width, height, arcPx)(render)
@@ -355,6 +385,7 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     val y     = math.floor(yPx / metrics.lineHeight.max(1).toFloat).toInt
     val width = math.ceil(bgWidthPx / metrics.charWidth.max(1).toFloat).toInt.max(1)
     recordText(text, LayoutRect(x, y, width, 1))
+    recordPaint(LayoutRect(x, y, width, 1))
     delegate.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, text, clipGlyphToRun)
 
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
@@ -368,6 +399,9 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
 
   private def recordText(text: String, bounds: LayoutRect): Unit =
     if text.nonEmpty then drawnTextBuffer += ScenarioDrawnText(text, bounds)
+
+  private def recordPaint(bounds: LayoutRect): Unit =
+    paintedRegionsBuffer += ScenarioPaintedRegion(bounds, foregroundColor.get, backgroundColor.get)
 
 private case class ScenarioDrawnImage(image: BufferedImage, bounds: LayoutRect)
 

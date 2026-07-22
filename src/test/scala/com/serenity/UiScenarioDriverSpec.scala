@@ -5,11 +5,12 @@ import java.nio.file.Files
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
-import com.serenity.config.{MarkdownViewMode, MotionPreset}
+import com.serenity.config.{AppConfig, MarkdownViewMode, MaterialPreset, MotionPreset}
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.renderer.SurfaceMaterials
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -70,16 +71,34 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       startup.evidence.drawnText.map(_.text).mkString(" ") should include("Welcome to Serenity")
       startup.evidence.layoutViolations shouldBe empty
       startup.evidence.styleCalls should contain(ScenarioStyleCall("enable", theme.focusStyle))
-      assertFrameRegions(startup, narrowEnvironment)
+      assertVisualReference(
+        startup,
+        narrowEnvironment,
+        expectedForegrounds = Set(theme.foreground, theme.selection.foreground),
+        expectedBackgrounds = Set(theme.background, theme.selection.background),
+        expectedFocusStyle = true
+      )
 
-      val runnerDriver = UiScenarioDriver.create(s"semantic-$themeName-runner", environment).unsafeRunSync()
+      val crystalConfig = AppConfig.default.withMaterialPreset(MaterialPreset.Crystal)
+      val runnerDriver = UiScenarioDriver
+        .create(s"semantic-$themeName-runner", environment, initialConfig = crystalConfig)
+        .unsafeRunSync()
       runnerDriver.dispatch(ToggleCommandRunner).unsafeRunSync()
       val runner = runnerDriver.renderFrame("command-runner").unsafeRunSync()
       runner.evidence.surfaceRects should not be empty
       runner.evidence.drawnText.map(_.text).mkString(" ") should include("Open Settings")
       runner.evidence.layoutViolations shouldBe empty
       runner.evidence.styleCalls should contain(ScenarioStyleCall("enable", theme.focusStyle))
-      assertFrameRegions(runner, environment)
+      assertVisualReference(
+        runner,
+        environment,
+        expectedForegrounds = Set(theme.panel.foreground, theme.selection.foreground),
+        expectedBackgrounds = Set(theme.panel.background, theme.selection.background),
+        expectedFocusStyle = true,
+        expectedSurfaceCount = 1,
+        expectedBorderColor = Some(theme.focus),
+        expectedSheen = SurfaceMaterials.glassSheenBackground(crystalConfig, theme)
+      )
 
       val settingsDriver = UiScenarioDriver.create(s"semantic-$themeName-settings", environment).unsafeRunSync()
       settingsDriver.stateManager
@@ -91,21 +110,38 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       settings.evidence.surfaceRects should not be empty
       settings.evidence.drawnText.map(_.text).mkString(" ") should include("Settings")
       settings.evidence.layoutViolations shouldBe empty
-      assertFrameRegions(settings, environment)
+      assertVisualReference(
+        settings,
+        environment,
+        expectedForegrounds = Set(theme.panel.foreground),
+        expectedBackgrounds = Set(theme.panel.background),
+        expectedSurfaceCount = 1,
+        expectedBorderColor = Some(theme.focus)
+      )
 
       val proseDriver = UiScenarioDriver.create(s"semantic-$themeName-prose", environment).unsafeRunSync()
       setDocument(proseDriver, "# Serenity notes\n\nQuiet prose keeps attention on the document.", LanguageId.Markdown)
       val prose = proseDriver.renderFrame("prose").unsafeRunSync()
       prose.evidence.drawnText.map(_.text).mkString(" ") should include("Serenity notes")
       prose.evidence.renderedContentRows should not be empty
-      assertFrameRegions(prose, environment)
+      assertVisualReference(
+        prose,
+        environment,
+        expectedForegrounds = Set(theme.foreground),
+        expectedBackgrounds = Set(theme.background)
+      )
 
       val codeDriver = UiScenarioDriver.create(s"semantic-$themeName-code", environment).unsafeRunSync()
       setDocument(codeDriver, "object Serenity:\n  val language = \"quiet\"", LanguageId.Scala)
       val code = codeDriver.renderFrame("code").unsafeRunSync()
       code.evidence.drawnText.map(_.text).mkString(" ") should include("object Serenity:")
       code.evidence.renderedContentRows should not be empty
-      assertFrameRegions(code, environment)
+      assertVisualReference(
+        code,
+        environment,
+        expectedForegrounds = Set(theme.foreground),
+        expectedBackgrounds = Set(theme.background)
+      )
     }
 
   private def setDocument(driver: UiScenarioDriver, content: String, language: LanguageId): Unit =
@@ -117,10 +153,31 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-  private def assertFrameRegions(frame: ScenarioFrame, environment: UiScenarioEnvironment): Unit =
+  private def assertVisualReference(
+    frame: ScenarioFrame,
+    environment: UiScenarioEnvironment,
+    expectedForegrounds: Set[java.awt.Color],
+    expectedBackgrounds: Set[java.awt.Color],
+    expectedFocusStyle: Boolean = false,
+    expectedSurfaceCount: Int = 0,
+    expectedBorderColor: Option[java.awt.Color] = None,
+    expectedSheen: Option[java.awt.Color] = None
+  ): Unit =
     frame.image.getWidth shouldBe environment.viewport.width * environment.cellMetrics.charWidth
     frame.image.getHeight shouldBe environment.viewport.height * environment.cellMetrics.lineHeight
     frame.evidence.drawnText should not be empty
+    frame.evidence.paintedRegions.map(_.foreground).toSet should contain allElementsOf expectedForegrounds
+    frame.evidence.paintedRegions.map(_.background).toSet should contain allElementsOf expectedBackgrounds
+    frame.evidence.surfaceRects.size should be >= expectedSurfaceCount
+    if expectedFocusStyle then
+      frame.evidence.styleCalls should contain(ScenarioStyleCall("enable", com.serenity.ui.theme.TextStyle.bold))
+    expectedBorderColor.foreach { color =>
+      frame.evidence.borders.map(_.color) should contain(color)
+      frame.evidence.surfaceRects.values.foreach { surfaceRect =>
+        frame.evidence.borders should contain(ScenarioBorder(surfaceRect, color))
+      }
+    }
+    expectedSheen.foreach(color => frame.evidence.paintedRegions.map(_.background) should contain(color))
     frame.evidence.drawnText.foreach { drawnText =>
       drawnText.bounds.x should be >= 0
       drawnText.bounds.x should be < environment.viewport.width
