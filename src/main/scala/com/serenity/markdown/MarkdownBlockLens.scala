@@ -1,5 +1,7 @@
 package com.serenity.markdown
 
+import scala.annotation.tailrec
+
 object MarkdownBlockLens:
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
@@ -38,7 +40,18 @@ object MarkdownBlockLens:
 
   private def fencedBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
     def isOpeningFence(index: Int): Boolean =
-      (0 until index).count(line => isFenceLine(lines.at(line))) % 2 == 0
+      @tailrec
+      def countFencesBefore(cursor: Int, crossedBlank: Boolean, count: Int): Int =
+        if cursor < 0 then count
+        else
+          val line = lines.at(cursor)
+          if line.trim.isEmpty then
+            if crossedBlank then count
+            else countFencesBefore(cursor - 1, crossedBlank = true, count)
+          else
+            countFencesBefore(cursor - 1, crossedBlank, count + (if isFenceLine(line) then 1 else 0))
+
+      countFencesBefore(index - 1, crossedBlank = false, count = 0) % 2 == 0
 
     def previousFence(index: Int, crossedBlank: Boolean = false): Option[Int] =
       if index < 0 then None
