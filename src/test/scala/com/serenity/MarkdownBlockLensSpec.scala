@@ -100,6 +100,20 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 3) shouldBe (3 to 3)
   }
 
+  it should "not pair prose between adjacent fenced blocks" in {
+    val lines = Vector(
+      "```scala",
+      "val first = 1",
+      "```",
+      "Prose between fences",
+      "```scala",
+      "val second = 2",
+      "```"
+    )
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 3) shouldBe (3 to 3)
+  }
+
   it should "treat markdown tables as one block" in {
     val lines = Vector(
       "Intro",

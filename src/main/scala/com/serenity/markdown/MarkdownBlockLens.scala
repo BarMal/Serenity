@@ -37,6 +37,9 @@ object MarkdownBlockLens:
       .getOrElse(Set.empty)
 
   private def fencedBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
+    def isOpeningFence(index: Int): Boolean =
+      (0 until index).count(line => isFenceLine(lines.at(line))) % 2 == 0
+
     def previousFence(index: Int, crossedBlank: Boolean = false): Option[Int] =
       if index < 0 then None
       else if isFenceLine(lines.at(index)) then Some(index)
@@ -54,11 +57,14 @@ object MarkdownBlockLens:
       else nextFence(index + 1)
 
     if isFenceLine(lines.at(activeLine)) then
-      nextFence(activeLine + 1).map(activeLine to _).orElse(previousFence(activeLine - 1).map(_ to activeLine))
+      if isOpeningFence(activeLine) then
+        nextFence(activeLine + 1).filter(index => !isOpeningFence(index)).map(activeLine to _)
+      else
+        previousFence(activeLine - 1).filter(isOpeningFence).map(_ to activeLine)
     else
       for
-        start <- previousFence(activeLine - 1)
-        end   <- nextFence(activeLine + 1)
+        start <- previousFence(activeLine - 1).filter(isOpeningFence)
+        end   <- nextFence(activeLine + 1).filter(index => !isOpeningFence(index))
       yield start to end
 
   private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
