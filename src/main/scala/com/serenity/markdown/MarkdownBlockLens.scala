@@ -84,8 +84,7 @@ object MarkdownBlockLens:
           .map(_ to activeLine)
           .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
     else
-      val lookupWindow =
-        if lines.at(activeLine).trim.startsWith("print") then lines.lineCount else fenceLookupWindow
+      val lookupWindow = if isFenceContentSyntax(lines.at(activeLine)) then lines.lineCount else fenceLookupWindow
       for
         start <- previousFence(activeLine - 1, lookupWindow).filter(isOpeningFence)
         end   <- nextFence(activeLine + 1, lookupWindow).filter(isClosingFence)
@@ -137,7 +136,7 @@ object MarkdownBlockLens:
       val activeIndent = leadingIndent(lines.at(activeLine))
       Iterator
         .iterate(activeLine - 1)(_ - 1)
-        .takeWhile(index => index >= 0 && activeLine - index <= fenceLookupWindow && lines.at(index).trim.nonEmpty)
+        .takeWhile(index => index >= 0 && lines.at(index).trim.nonEmpty)
         .collectFirst {
           case index
               if isListItemLine(lines.at(index)) &&
@@ -160,23 +159,7 @@ object MarkdownBlockLens:
     Option.when(belongs(lines.at(activeLine)))(blockSpan(lines, activeLine, belongs))
 
   private def paragraphBlock(lines: LineSource, activeLine: Int): Range.Inclusive =
-    boundedBlockSpan(lines, activeLine, isParagraphLine, fenceLookupWindow)
-
-  private def boundedBlockSpan(
-    lines: LineSource,
-    activeLine: Int,
-    belongs: String => Boolean,
-    window: Int
-  ): Range.Inclusive =
-    val start = Iterator
-      .iterate(activeLine)(_ - 1)
-      .takeWhile(index => index >= 0 && activeLine - index <= window && belongs(lines.at(index)))
-      .foldLeft(activeLine)((_, index) => index)
-    val end = Iterator
-      .iterate(activeLine + 1)(_ + 1)
-      .takeWhile(index => index < lines.lineCount && index - activeLine <= window && belongs(lines.at(index)))
-      .foldLeft(activeLine)((_, index) => index)
-    start to end
+    blockSpan(lines, activeLine, isParagraphLine)
 
   private def blockSpan(
     lines: LineSource,
@@ -215,6 +198,10 @@ object MarkdownBlockLens:
     !isThematicBreak(line) &&
     !isListItemLine(line) &&
     !isBlockQuoteLine(line)
+
+  private def isFenceContentSyntax(line: String): Boolean =
+    val trimmed = line.trim
+    trimmed.contains("(") || trimmed.contains("{") || trimmed.contains("[") || trimmed.contains(":")
 
   private def isHeadingLine(line: String): Boolean =
     line.trim.matches("""^#{1,6}\s+.*""")

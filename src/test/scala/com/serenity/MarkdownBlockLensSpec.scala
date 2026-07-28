@@ -118,7 +118,7 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "select an interior line beyond 256 fenced lines" in {
-    val lines = Vector("```") ++ (1 to 300).map(index => s"print${"ln"}(\"line $index\")") ++ Vector("```")
+    val lines = Vector("```") ++ (1 to 300).map(index => s"render(\"line $index\")") ++ Vector("```")
 
     MarkdownBlockLens.currentBlock(lines, activeLine = 280) shouldBe (0 to 301)
   }
@@ -242,7 +242,11 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "bound reads for a large document without fences" in {
-    val lines = Vector.fill(10_000)("unrelated prose")
+    val lines = Vector
+      .fill(10_000)("unrelated prose")
+      .updated(4_999, "")
+      .updated(5_000, "focused prose")
+      .updated(5_001, "")
     val reads = AtomicInteger(0)
 
     MarkdownBlockLens.currentBlock(
@@ -255,6 +259,18 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     )
 
     reads.get() should be < 2_000
+  }
+
+  it should "preserve long paragraph blocks" in {
+    val lines = Vector.fill(400)("paragraph line")
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 200) shouldBe (0 to 399)
+  }
+
+  it should "preserve long indented list continuations" in {
+    val lines = Vector("- item") ++ Vector.fill(400)("  continuation")
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 300) shouldBe (0 to 400)
   }
 
   it should "resolve fenced blocks without reading unrelated leading lines" in {

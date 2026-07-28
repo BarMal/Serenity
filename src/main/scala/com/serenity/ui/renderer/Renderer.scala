@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import java.awt.{Color, Font}
+import java.util.concurrent.ConcurrentHashMap
 
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode}
@@ -50,6 +51,13 @@ object Renderer:
       diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]]
   )
 
+  private case class CachedAnnotationIndex(
+      commentsRef: AnyRef,
+      diagnosticsRef: AnyRef,
+      commentsByLine: Map[Int, List[DocumentComment]],
+      diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]]
+  )
+
   private case class MarkdownLensFrame(
       firstSourceLine: Int,
       lines: Vector[String],
@@ -66,6 +74,7 @@ object Renderer:
 
   private val MinMarkdownPreviewSourceLines = 32
   private val MarkdownPreviewOverscanFactor = 4
+  private val annotationIndexCache          = ConcurrentHashMap[BufferId, CachedAnnotationIndex]()
 
   private def withEffectiveTheme(state: AppState): AppState =
     state.themeTransition match
@@ -348,24 +357,42 @@ object Renderer:
       .flatMap { bufferId =>
         state.buffers.get(bufferId).map { buffer =>
           val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val visibleStart = visibleLines.minOption.getOrElse(0)
-          val visibleEnd   = visibleLines.maxOption.getOrElse(-1)
+          val diagnostics  = state.diagnostics.getOrElse(SpellChecker.diagnosticsUri(buffer), Nil)
+          val cached = annotationIndexCache.compute(
+            bufferId,
+            (_, previous) =>
+              if previous != null &&
+                  previous.commentsRef.eq(buffer.documentComments.asInstanceOf[AnyRef]) &&
+                  previous.diagnosticsRef.eq(diagnostics.asInstanceOf[AnyRef])
+              then previous
+              else buildAnnotationIndex(buffer.documentComments, diagnostics)
+          )
           val commentsByLine =
-            buffer.documentComments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
-              (comment.start.line.max(visibleStart) to comment.end.line.min(visibleEnd)).iterator
-                .filter(visibleLines.contains)
-                .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
-            }
-          val diagnosticsByLine = state.diagnostics
-            .getOrElse(SpellChecker.diagnosticsUri(buffer), Nil)
-            .filter(diagnostic => visibleLines.contains(diagnostic.range.start.line))
-            .groupMap(_.range.start.line)(identity)
+            visibleLines.iterator.flatMap(line => cached.commentsByLine.get(line).map(line -> _)).toMap
+          val diagnosticsByLine =
+            visibleLines.iterator.flatMap(line => cached.diagnosticsByLine.get(line).map(line -> _)).toMap
           bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine)
         }
       }
       .toMap
 
     EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots, annotations)
+
+  private def buildAnnotationIndex(
+    comments: List[DocumentComment],
+    diagnostics: List[com.serenity.lsp.model.Diagnostic]
+  ): CachedAnnotationIndex =
+    val commentsByLine = comments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
+      (comment.start.line to comment.end.line).foldLeft(byLine) { (updated, line) =>
+        updated.updated(line, comment :: updated.getOrElse(line, Nil))
+      }
+    }
+    CachedAnnotationIndex(
+      comments.asInstanceOf[AnyRef],
+      diagnostics.asInstanceOf[AnyRef],
+      commentsByLine,
+      diagnostics.groupMap(_.range.start.line)(identity)
+    )
 
   private def snapshotForBuffer(
     buffer: Buffer,
