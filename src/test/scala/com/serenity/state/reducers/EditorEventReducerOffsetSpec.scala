@@ -110,6 +110,26 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
     updatedBuffer.cursors shouldBe List(CursorPosition(0, 6))
   }
 
+  it should "move, delete, and replace regional-indicator flag pairs as one grapheme" in {
+    val flag = "\uD83C\uDDFA\uD83C\uDDF8"
+    val text = s"a$flag!"
+
+    reduceTextEvent(text, CursorPosition(0, 5), MoveLeft).cursors shouldBe List(CursorPosition(0, 1))
+    reduceTextEvent(text, CursorPosition(0, 1), MoveRight).cursors shouldBe List(CursorPosition(0, 5))
+    reduceTextEvent(text, CursorPosition(0, 1), DeleteForward).content.collect() shouldBe "a!"
+    reduceTextEvent(text, CursorPosition(0, 5), DeleteBackward).content.collect() shouldBe "a!"
+
+    val buffer = Buffer
+      .fromString(bufferId, text)
+      .copy(
+        cursors = List(CursorPosition(0, 5)),
+        selection = Some(Selection(CursorPosition(0, 2), CursorPosition(0, 4)))
+      )
+    val state = AppState.initial.copy(buffers = Map(bufferId -> buffer))
+
+    EditorEventReducer.reduce(InsertChar('X'), paneId, state).state.buffers(bufferId).content.collect() shouldBe "aX!"
+  }
+
   private def reduceTextEvent(text: String, cursor: CursorPosition, event: TextEntryEvent): Buffer =
     val buffer = Buffer.fromString(bufferId, text).copy(cursors = List(cursor))
     val state  = AppState.initial.copy(buffers = Map(bufferId -> buffer))

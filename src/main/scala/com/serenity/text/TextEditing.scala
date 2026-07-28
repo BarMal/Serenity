@@ -145,6 +145,8 @@ object TextEditing:
     val currentCodePoint = codePointAt(source, idx)
     if idx > 0 && isGraphemeExtender(currentCodePoint) then
       rewindGraphemeStart(source, previousCodePointStart(source, idx))
+    else if isRegionalIndicator(currentCodePoint) && hasOddRegionalIndicatorRunBefore(source, idx) then
+      rewindGraphemeStart(source, previousCodePointStart(source, idx))
     else
       previous match
         case Some(joinedStart) => rewindGraphemeStart(source, joinedStart)
@@ -156,13 +158,17 @@ object TextEditing:
     else
       val codePoint = codePointAt(source, idx)
       if isGraphemeExtender(codePoint) then consumeGraphemeEnd(source, nextCodePointEnd(source, idx))
+      else if isRegionalIndicator(codePoint) && hasOddRegionalIndicatorRunBefore(source, idx) then
+        consumeGraphemeEnd(source, nextCodePointEnd(source, idx))
       else if codePoint == ZeroWidthJoiner && nextCodePointEnd(source, idx) < source.length then
         consumeGraphemeEnd(source, nextCodePointEnd(source, nextCodePointEnd(source, idx)))
       else idx
 
-  private val ZeroWidthJoiner    = 0x200d
-  private val EmojiModifierStart = 0x1f3fb
-  private val EmojiModifierEnd   = 0x1f3ff
+  private val ZeroWidthJoiner        = 0x200d
+  private val EmojiModifierStart     = 0x1f3fb
+  private val EmojiModifierEnd       = 0x1f3ff
+  private val RegionalIndicatorStart = 0x1f1e6
+  private val RegionalIndicatorEnd   = 0x1f1ff
 
   private def isGraphemeExtender(codePoint: Int): Boolean =
     isEmojiModifier(codePoint) ||
@@ -172,6 +178,18 @@ object TextEditing:
 
   private def isEmojiModifier(codePoint: Int): Boolean =
     codePoint >= EmojiModifierStart && codePoint <= EmojiModifierEnd
+
+  private def isRegionalIndicator(codePoint: Int): Boolean =
+    codePoint >= RegionalIndicatorStart && codePoint <= RegionalIndicatorEnd
+
+  @annotation.tailrec
+  private def hasOddRegionalIndicatorRunBefore(source: CharacterSource, idx: Int, count: Int = 0): Boolean =
+    if idx <= 0 then count % 2 == 1
+    else
+      val previousStart = previousCodePointStart(source, idx)
+      if isRegionalIndicator(codePointAt(source, previousStart)) then
+        hasOddRegionalIndicatorRunBefore(source, previousStart, count + 1)
+      else count % 2 == 1
 
   @annotation.tailrec
   private def scanBackwardClassStart(source: CharacterSource, idx: Int, targetClass: CharacterClass): Int =

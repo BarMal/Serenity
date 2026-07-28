@@ -1503,6 +1503,31 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     buffer.cursors shouldBe List(CursorPosition(0, 0))
   }
 
+  it should "drop find-next matches that split a regional-indicator flag pair" in {
+    val paneId         = PaneId(0)
+    val bufferId       = BufferId(0)
+    val flag           = "\uD83C\uDDFA\uD83C\uDDF8"
+    val firstIndicator = flag.substring(0, 2)
+    val initialState = AppState.initial.copy(
+      buffers = AppState.initial.buffers.updated(
+        bufferId,
+        AppState.initial
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope(s"a$flag!"),
+            cursors = List(CursorPosition(0, 0)),
+            findState = Some(FindState(firstIndicator, List(FindResult(0, 1)), 0))
+          )
+      )
+    )
+
+    val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
+    val buffer       = updatedState.buffers(bufferId)
+
+    buffer.findState shouldBe None
+    buffer.cursors shouldBe List(CursorPosition(0, 0))
+  }
+
   it should "scroll wrapped text to the selected find-next visual row" in {
     val paneId       = PaneId(0)
     val bufferId     = BufferId(0)

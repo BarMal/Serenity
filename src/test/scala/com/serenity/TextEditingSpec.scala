@@ -55,3 +55,24 @@ class TextEditingSpec extends AnyFlatSpec with Matchers:
     TextEditing.graphemeBoundaryBeforeOrAt(accent, 4) shouldBe 3
     TextEditing.graphemeBoundaryAfterOrAt(accent, 4) shouldBe 5
   }
+
+  it should "keep supported visible-character families intact in both directions" in {
+    val clusters = Vector(
+      "surrogate-pair emoji"         -> "\uD83D\uDE42",
+      "combining-mark accent"        -> "e\u0301",
+      "emoji modifier sequence"      -> "\uD83D\uDC4D\uD83C\uDFFD",
+      "ZWJ sequence"                 -> "\uD83D\uDC69\u200D\uD83D\uDCBB",
+      "regional-indicator flag pair" -> "\uD83C\uDDFA\uD83C\uDDF8"
+    )
+
+    clusters.foreach {
+      case (name, cluster) =>
+        withClue(name) {
+          val text       = s"a${cluster}b"
+          val clusterEnd = 1 + cluster.length
+
+          TextEditing.nextGraphemeBoundary(text, 1) shouldBe clusterEnd
+          TextEditing.previousGraphemeBoundary(text, clusterEnd) shouldBe 1
+        }
+    }
+  }
