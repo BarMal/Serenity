@@ -5,7 +5,7 @@ import scala.annotation.tailrec
 object MarkdownBlockLens:
 
   private val fenceStateWindow  = 256
-  private val fenceLookupWindow = 512
+  private val fenceLookupWindow = 2_048
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
     def at(index: Int): String =
@@ -77,12 +77,12 @@ object MarkdownBlockLens:
 
     if isFenceLine(lines.at(activeLine)) then
       if hasFenceInfo(activeLine) then
-        nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _)
+        nextFence(activeLine + 1, fenceLookupWindow).filter(isClosingFence).map(activeLine to _)
       else
-        previousFence(activeLine - 1, lines.lineCount)
+        previousFence(activeLine - 1, fenceLookupWindow)
           .filter(isOpeningFence)
           .map(_ to activeLine)
-          .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
+          .orElse(nextFence(activeLine + 1, fenceLookupWindow).filter(isClosingFence).map(activeLine to _))
     else
       for
         start <- previousFence(activeLine - 1, fenceLookupWindow).filter(isOpeningFence)
