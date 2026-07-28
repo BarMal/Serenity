@@ -1327,6 +1327,35 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments should contain(
       DocumentComment(CursorPosition(0, 3), CursorPosition(0, 3), "Point")
     )
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("a\uD83C\uDDFA\uD83C\uDDF8b"),
+            cursors = List(CursorPosition(0, 3)),
+            selection = None,
+            documentComments = Nil
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "document-comment",
+          "Add document comment.",
+          CommandIntent.AddDocumentComment("Flag point"),
+          CommandCategory.Edit
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments should contain(
+      DocumentComment(CursorPosition(0, 5), CursorPosition(0, 5), "Flag point")
+    )
   }
 
   it should "save, restore, and clear the current session from command runner commands" in {

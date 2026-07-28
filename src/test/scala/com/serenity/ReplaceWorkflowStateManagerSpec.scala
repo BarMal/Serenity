@@ -559,9 +559,11 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not replace matches that split a grapheme cluster" in {
-    val stateManager = createStateManager()
-    val bufferId     = BufferId(0)
-    val original     = "cafe\u0301 one\ncafe\u0301 two"
+    val stateManager   = createStateManager()
+    val bufferId       = BufferId(0)
+    val flag           = "\uD83C\uDDFA\uD83C\uDDF8"
+    val firstIndicator = flag.substring(0, 2)
+    val original       = s"a$flag one\na$flag two"
 
     stateManager
       .updateState { state =>
@@ -577,7 +579,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "replace-all", "replace-all")
 
-    stateManager.applyEvent(InsertChar('\u0301')).unsafeRunSync()
+    firstIndicator.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(TabKey).unsafeRunSync()
     stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
@@ -589,7 +591,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ModalWorkflow(
         Modal.ReplaceWorkflow(
           ReplaceWorkflowState(
-            findText = "\u0301",
+            findText = firstIndicator,
             replacementText = "!",
             activeField = com.serenity.state.models.ReplaceWorkflowField.ReplaceWith,
             selectedAction = com.serenity.state.models.ReplaceWorkflowAction.ReplaceAll,
