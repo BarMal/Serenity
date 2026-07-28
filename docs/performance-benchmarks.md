@@ -80,7 +80,7 @@ The focused viewport regressions are covered by indexed-line tests: deep scrolli
 | `markdown.deep_scroll.no_fence.reads` | bounded indexed reads; 10,000-line fixture |
 | `markdown.long_fenced_block.interior` | passes through 4,500 lines |
 | `renderer.focused_body.long_block` | range predicate; no block-sized `Set` allocation |
-| `renderer.diagnostics.visible_projection` | only visible lines retained in render annotations |
+| `renderer.diagnostics.visible_projection` | scene-local line index retains only visible lines |
 
 Measured harness results (same WSL2 host, warmed run):
 
