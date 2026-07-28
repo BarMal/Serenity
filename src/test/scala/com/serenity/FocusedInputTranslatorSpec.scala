@@ -121,6 +121,31 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
   }
 
+  it should "route a modifier double-tap stroke to a keymap submenu recorder" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(
+        activeSubmenu = Some(
+          CommandRunnerSubmenuState(
+            groupId = "keymap",
+            recordingItemId = Some("keymap-global-command_palette")
+          )
+        )
+      )
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPaletteSubmenu(runner, "keymap", previewOnly = false),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val state = editorState.copy(
+      focus = Focus.Surface(surface.id),
+      uiSurfaces = List(surface)
+    )
+    val doubleTap = KeyStrokeInfo(InputKey.Ctrl, None, Set.empty)
+
+    FocusedInputTranslator.forState(state).translate(doubleTap) shouldBe RunnerRecordBinding(doubleTap)
+  }
+
   it should "reject conflicting loaded hotkeys instead of dispatching the first matching action" in {
     val configFile = Files.createTempFile("serenity-conflicting-hotkeys", ".conf")
     Files.writeString(
