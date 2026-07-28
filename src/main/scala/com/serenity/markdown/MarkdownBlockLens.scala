@@ -4,7 +4,8 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  private val fenceLookupWindow = 11
+  private val fenceLookupWindow = 64
+  private val fenceStateWindow = 64
   private val activeFenceLookupWindow = 64
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
@@ -51,17 +52,17 @@ object MarkdownBlockLens:
       if hasFenceInfo(index) then true
       else
         @tailrec
-        def countFencesBefore(cursor: Int, crossedBlank: Boolean, count: Int): Int =
-          if cursor < 0 then count
+        def countFencesBefore(cursor: Int, crossedBlank: Boolean, count: Int, remaining: Int): Int =
+          if cursor < 0 || remaining <= 0 then count
           else
             val line = lines.at(cursor)
             if line.trim.isEmpty then
               if crossedBlank then count
-              else countFencesBefore(cursor - 1, crossedBlank = true, count)
+              else countFencesBefore(cursor - 1, crossedBlank = true, count, remaining - 1)
             else
-              countFencesBefore(cursor - 1, crossedBlank, count + (if isFenceLine(line) then 1 else 0))
+              countFencesBefore(cursor - 1, crossedBlank, count + (if isFenceLine(line) then 1 else 0), remaining - 1)
 
-        countFencesBefore(index - 1, crossedBlank = false, count = 0) % 2 == 0
+        countFencesBefore(index - 1, crossedBlank = false, count = 0, remaining = fenceStateWindow) % 2 == 0
 
     def isClosingFence(index: Int): Boolean = !hasFenceInfo(index)
 
