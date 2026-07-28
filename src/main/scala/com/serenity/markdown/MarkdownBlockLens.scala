@@ -4,6 +4,9 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
+  private val fenceLookupWindow = 11
+  private val activeFenceLookupWindow = 64
+
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
     def at(index: Int): String =
       lineAt(index).getOrElse("")
@@ -62,28 +65,22 @@ object MarkdownBlockLens:
 
     def isClosingFence(index: Int): Boolean = !hasFenceInfo(index)
 
-    def previousFence(index: Int, crossedBlank: Boolean = false): Option[Int] =
-      if index < 0 then None
+    def previousFence(index: Int, remaining: Int = fenceLookupWindow): Option[Int] =
+      if index < 0 || remaining <= 0 then None
       else if isFenceLine(lines.at(index)) then Some(index)
-      else if lines.at(index).trim.isEmpty then
-        if crossedBlank then None else previousFence(index - 1, crossedBlank = true)
-      else if crossedBlank then previousFence(index - 1, crossedBlank = true)
-      else previousFence(index - 1)
+      else previousFence(index - 1, remaining - 1)
 
-    def nextFence(index: Int, crossedBlank: Boolean = false): Option[Int] =
-      if index >= lines.lineCount then None
+    def nextFence(index: Int, remaining: Int = fenceLookupWindow): Option[Int] =
+      if index >= lines.lineCount || remaining <= 0 then None
       else if isFenceLine(lines.at(index)) then Some(index)
-      else if lines.at(index).trim.isEmpty then
-        if crossedBlank then None else nextFence(index + 1, crossedBlank = true)
-      else if crossedBlank then nextFence(index + 1, crossedBlank = true)
-      else nextFence(index + 1)
+      else nextFence(index + 1, remaining - 1)
 
     if isFenceLine(lines.at(activeLine)) then
       if hasFenceInfo(activeLine) then
-        nextFence(activeLine + 1).filter(isClosingFence).map(activeLine to _)
+        nextFence(activeLine + 1, activeFenceLookupWindow).filter(isClosingFence).map(activeLine to _)
       else
-        previousFence(activeLine - 1).filter(isOpeningFence).map(_ to activeLine)
-          .orElse(nextFence(activeLine + 1).filter(isClosingFence).map(activeLine to _))
+        previousFence(activeLine - 1, activeFenceLookupWindow).filter(isOpeningFence).map(_ to activeLine)
+          .orElse(nextFence(activeLine + 1, activeFenceLookupWindow).filter(isClosingFence).map(activeLine to _))
     else
       for
         start <- previousFence(activeLine - 1).filter(isOpeningFence)

@@ -79,6 +79,8 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
       "```scala",
       "val x = 1",
       "",
+      "",
+      "",
       "val y = 2",
       "val z = 3",
       "val result = x + y + z",
@@ -86,7 +88,7 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
       "After fence"
     )
 
-    MarkdownBlockLens.currentBlock(lines, activeLine = 5) shouldBe (0 to 6)
+    MarkdownBlockLens.currentBlock(lines, activeLine = 7) shouldBe (0 to 8)
   }
 
   it should "select a long fenced block when the closing delimiter is active" in {
