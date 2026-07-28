@@ -81,10 +81,11 @@ object MarkdownBlockLens:
       else nextFence(index + 1)
 
     if isFenceLine(lines.at(activeLine)) then
-      if isOpeningFence(activeLine) then
+      if hasFenceInfo(activeLine) then
         nextFence(activeLine + 1).filter(isClosingFence).map(activeLine to _)
       else
-        previousFence(activeLine - 1).filter(isOpeningFence).map(_ to activeLine)
+        nextFence(activeLine + 1).filter(isClosingFence).map(activeLine to _)
+          .orElse(previousFence(activeLine - 1).filter(isOpeningFence).map(_ to activeLine))
     else
       for
         start <- previousFence(activeLine - 1).filter(isOpeningFence)
