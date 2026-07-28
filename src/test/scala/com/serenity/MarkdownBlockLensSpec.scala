@@ -80,11 +80,13 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
       "val x = 1",
       "",
       "val y = 2",
+      "val z = 3",
+      "val result = x + y + z",
       "```",
       "After fence"
     )
 
-    MarkdownBlockLens.currentBlock(lines, activeLine = 3) shouldBe (0 to 4)
+    MarkdownBlockLens.currentBlock(lines, activeLine = 5) shouldBe (0 to 6)
   }
 
   it should "not let a previous closing fence capture following prose" in {
@@ -147,8 +149,8 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resolve a block through indexed line access without materialising the document" in {
-    val lines = Vector.fill(200)("unrelated").updated(100, "").updated(101, "First paragraph").updated(102, "continued")
-      .updated(103, "")
+    val lines = Vector.fill(200)("unrelated").updated(99, "").updated(100, "").updated(101, "First paragraph")
+      .updated(102, "continued").updated(103, "")
     val reads = AtomicInteger(0)
 
     val block = MarkdownBlockLens.currentBlock(

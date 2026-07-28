@@ -37,22 +37,20 @@ object MarkdownBlockLens:
       .getOrElse(Set.empty)
 
   private def fencedBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
-    def previousFence(index: Int, crossedBlank: Boolean = false, afterBlank: Int = 0): Option[Int] =
+    def previousFence(index: Int, crossedBlank: Boolean = false): Option[Int] =
       if index < 0 then None
       else if isFenceLine(lines.at(index)) then Some(index)
       else if lines.at(index).trim.isEmpty then
         if crossedBlank then None else previousFence(index - 1, crossedBlank = true)
-      else if crossedBlank then
-        if afterBlank >= 2 then None else previousFence(index - 1, crossedBlank = true, afterBlank + 1)
+      else if crossedBlank then previousFence(index - 1, crossedBlank = true)
       else previousFence(index - 1)
 
-    def nextFence(index: Int, crossedBlank: Boolean = false, afterBlank: Int = 0): Option[Int] =
+    def nextFence(index: Int, crossedBlank: Boolean = false): Option[Int] =
       if index >= lines.lineCount then None
       else if isFenceLine(lines.at(index)) then Some(index)
       else if lines.at(index).trim.isEmpty then
         if crossedBlank then None else nextFence(index + 1, crossedBlank = true)
-      else if crossedBlank then
-        if afterBlank >= 2 then None else nextFence(index + 1, crossedBlank = true, afterBlank + 1)
+      else if crossedBlank then nextFence(index + 1, crossedBlank = true)
       else nextFence(index + 1)
 
     if isFenceLine(lines.at(activeLine)) then
