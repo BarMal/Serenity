@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import com.serenity.config.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -64,6 +65,21 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     HotkeyConfig.validate(reset.bindings) shouldBe Right(())
   }
 
+  it should "parse and match a double modifier tap" in {
+    val trigger = HotkeyTrigger.parse("ctrl+ctrl").getOrElse(fail("double modifier trigger"))
+
+    trigger.render shouldBe "ctrl+ctrl"
+    trigger.matches(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty)) shouldBe true
+    trigger.matches(KeyStrokeInfo(InputKey.Character, Some('c'), Set.empty)) shouldBe false
+  }
+
+  it should "include a platform primary modifier double tap for the command runner" in {
+    HotkeyConfig.defaultBindingsFor("Linux")(HotkeyAction.ToggleCommandRunner).map(_.render) should contain("ctrl+ctrl")
+    HotkeyConfig.defaultBindingsFor("Mac OS X")(HotkeyAction.ToggleCommandRunner).map(_.render) should contain(
+      "meta+meta"
+    )
+  }
+
   it should "preserve core editing overrides when configuration is saved and reloaded" in {
     val overrides = List(
       HotkeyAction.Find     -> "ctrl+alt+f",
@@ -84,5 +100,57 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     overrides.foreach {
       case (action, binding) =>
         reloaded.hotkeyConfig.bindingsFor(action).headOption.map(_.render) shouldBe Some(binding)
+    }
+  }
+
+  it should "load a double modifier tap from the text configuration" in {
+    val configFile = Files.createTempFile("serenity-double-tap-hotkey", ".conf")
+    Files.writeString(configFile, "hotkey.command_palette = ctrl+ctrl\n")
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+ctrl"
+  }
+
+  it should "round-trip all command palette bindings through config persistence" in {
+    val config     = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux"))
+    val configFile = Files.createTempFile("serenity-multi-hotkey", ".conf")
+
+    ConfigManager.saveConfig(config, configFile) shouldBe true
+
+    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    reloaded.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List(
+      "ctrl+p",
+      "ctrl+ctrl"
+    )
+  }
+
+  it should "round-trip multi-bindings for every serialized hotkey action" in {
+    val configFile = Files.createTempFile("serenity-multi-hotkey-actions", ".conf")
+    Files.writeString(
+      configFile,
+      """hotkey.file_search = ctrl+shift+f,alt+shift+f
+        |hotkey.find = ctrl+alt+f,meta+alt+f
+        |hotkey.replace = ctrl+alt+h,meta+alt+h
+        |hotkey.go_to_line = ctrl+alt+g,meta+alt+g
+        |hotkey.save_as = ctrl+alt+s,meta+alt+s
+        |""".stripMargin
+    )
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    ConfigManager.saveConfig(loaded, configFile) shouldBe true
+
+    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    Map(
+      HotkeyAction.FileSearch -> List("ctrl+shift+f", "alt+shift+f"),
+      HotkeyAction.Find       -> List("ctrl+alt+f", "alt+meta+f"),
+      HotkeyAction.Replace    -> List("ctrl+alt+h", "alt+meta+h"),
+      HotkeyAction.GoToLine   -> List("ctrl+alt+g", "alt+meta+g"),
+      HotkeyAction.SaveAs     -> List("ctrl+alt+s", "alt+meta+s")
+    ).foreach {
+      case (action, expected) =>
+        reloaded.hotkeyConfig.bindingsFor(action).map(_.render) shouldBe expected
     }
   }

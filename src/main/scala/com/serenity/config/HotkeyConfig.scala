@@ -56,8 +56,11 @@ case class HotkeyTrigger(
     character: Option[Char],
     modifiers: Set[Modifier]
 ):
+
   def matches(info: KeyStrokeInfo): Boolean =
-    info.keyType == keyType && info.character == character && info.modifiers == modifiers
+    info.keyType == keyType &&
+      info.character == character &&
+      info.modifiers == modifiers
 
   def render: String =
     val modifierParts =
@@ -70,6 +73,10 @@ case class HotkeyTrigger(
     val keyPart =
       keyType match
         case InputKey.Character  => character.map(_.toString).getOrElse("")
+        case InputKey.Ctrl       => "ctrl"
+        case InputKey.Alt        => "alt"
+        case InputKey.Shift      => "shift"
+        case InputKey.Meta       => "meta"
         case InputKey.Tab        => "tab"
         case InputKey.ReverseTab => "reverse-tab"
         case InputKey.Enter      => "enter"
@@ -98,12 +105,22 @@ case class HotkeyTrigger(
         case InputKey.F12        => "f12"
         case InputKey.EOF        => "eof"
         case other               => other.toString.toLowerCase
-    (modifierParts :+ keyPart).mkString("+")
+    if Set(InputKey.Ctrl, InputKey.Alt, InputKey.Shift, InputKey.Meta).contains(keyType) then s"$keyPart+$keyPart"
+    else (modifierParts :+ keyPart).mkString("+")
 
 object HotkeyTrigger:
 
   def parse(input: String): Option[HotkeyTrigger] =
     val parts = input.trim.toLowerCase.split("\\+").toList.map(_.trim).filter(_.nonEmpty)
+    parts match
+      case key :: second :: Nil if key == second =>
+        modifierKey(key)
+          .map(inputKey => HotkeyTrigger(inputKey, None, Set.empty))
+          .orElse(parseStandard(parts))
+      case _ =>
+        parseStandard(parts)
+
+  private def parseStandard(parts: List[String]): Option[HotkeyTrigger] =
     val (modifierParts, keyParts) = parts.partition {
       case "ctrl" | "alt" | "shift" | "meta" | "cmd" | "command" => true
       case _                                                     => false
@@ -181,6 +198,14 @@ object HotkeyTrigger:
       case _ =>
         None
 
+  private def modifierKey(value: String): Option[InputKey] =
+    value match
+      case "ctrl"                     => Some(InputKey.Ctrl)
+      case "alt"                      => Some(InputKey.Alt)
+      case "shift"                    => Some(InputKey.Shift)
+      case "meta" | "cmd" | "command" => Some(InputKey.Meta)
+      case _                          => None
+
 case class HotkeyConfig(
     bindings: Map[HotkeyAction, List[HotkeyTrigger]] = HotkeyConfig.defaultBindings
 ):
@@ -217,6 +242,15 @@ object HotkeyConfig:
       )
     def primaryKey(key: InputKey, shift: Boolean = false): HotkeyTrigger =
       HotkeyTrigger(key, None, Set(primaryModifier) ++ Option.when(shift)(Modifier.Shift).toSet)
+    def primaryDoubleTap: HotkeyTrigger =
+      HotkeyTrigger(
+        primaryModifier match
+          case Modifier.Ctrl => InputKey.Ctrl
+          case Modifier.Meta => InputKey.Meta
+          case _             => InputKey.Unknown,
+        None,
+        Set.empty
+      )
 
     Map(
       HotkeyAction.Save -> List(primary('s')),
@@ -235,7 +269,8 @@ object HotkeyConfig:
       ),
       HotkeyAction.OpenFile -> List(primary('o')),
       HotkeyAction.ToggleCommandRunner -> List(
-        primary('p')
+        primary('p'),
+        primaryDoubleTap
       ),
       HotkeyAction.ToggleContextualToolbar -> List(
         primary('t', shift = true)

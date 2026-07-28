@@ -2,7 +2,7 @@ package com.serenity.input
 
 import java.awt.event.*
 import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 import cats.effect.{Concurrent, Sync}
 import com.serenity.keystroke.events.*
@@ -26,9 +26,12 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
     this(component, inputRouter, metrics, metrics)
 
-  private val infoQueue    = new LinkedBlockingQueue[Option[KeyStrokeInfo]]()
-  private val mouseQueue   = new LinkedBlockingQueue[Option[Event]]()
-  private val shutdownFlag = new AtomicBoolean(false)
+  private val infoQueue          = new LinkedBlockingQueue[Option[KeyStrokeInfo]]()
+  private val mouseQueue         = new LinkedBlockingQueue[Option[Event]]()
+  private val shutdownFlag       = new AtomicBoolean(false)
+  private val pendingModifierTap = new AtomicReference[Option[(Int, Long, Boolean)]](None)
+
+  private val doubleTapWindowMillis = 400L
 
   private def enqueueInput(info: KeyStrokeInfo): Unit =
     if !shutdownFlag.get() then infoQueue.put(Some(info))
@@ -40,7 +43,9 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
     override def keyTyped(e: KeyEvent): Unit =
       translateTyped(e).foreach(enqueueInput)
     override def keyPressed(e: KeyEvent): Unit =
-      translatePressed(e).foreach(enqueueInput))
+      translatePressed(e).foreach(enqueueInput)
+    override def keyReleased(e: KeyEvent): Unit =
+      translateModifierReleased(e))
 
   component.addMouseListener(
     new MouseAdapter:
@@ -153,42 +158,84 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
 
   private def translatePressed(e: KeyEvent): Option[KeyStrokeInfo] =
     import KeyEvent.*
-    val m = mods(e)
+    translateModifierPressed(e) match
+      case Some(info)               => Some(info)
+      case None if isModifierKey(e) => None
+      case None =>
+        pendingModifierTap.set(None)
+        val m = mods(e)
+        e.getKeyCode match
+          case VK_UP         => Some(KeyStrokeInfo(InputKey.ArrowUp, None, m))
+          case VK_DOWN       => Some(KeyStrokeInfo(InputKey.ArrowDown, None, m))
+          case VK_LEFT       => Some(KeyStrokeInfo(InputKey.ArrowLeft, None, m))
+          case VK_RIGHT      => Some(KeyStrokeInfo(InputKey.ArrowRight, None, m))
+          case VK_BACK_SPACE => Some(KeyStrokeInfo(InputKey.Backspace, None, m))
+          case VK_DELETE     => Some(KeyStrokeInfo(InputKey.Delete, None, m))
+          case VK_ENTER      => Some(KeyStrokeInfo(InputKey.Enter, None, m))
+          case VK_TAB        =>
+            // Shift is encoded as ReverseTab; strip it from modifiers so translators
+            // only see Ctrl/Alt when deciding between NextTab / RunnerPreviousCategory etc.
+            val tabMods = m - Modifier.Shift
+            if e.isShiftDown then Some(KeyStrokeInfo(InputKey.ReverseTab, None, tabMods))
+            else Some(KeyStrokeInfo(InputKey.Tab, None, tabMods))
+          case VK_ESCAPE                               => Some(KeyStrokeInfo(InputKey.Escape, None, m))
+          case VK_HOME                                 => Some(KeyStrokeInfo(InputKey.Home, None, m))
+          case VK_END                                  => Some(KeyStrokeInfo(InputKey.End, None, m))
+          case VK_PAGE_UP                              => Some(KeyStrokeInfo(InputKey.PageUp, None, m))
+          case VK_PAGE_DOWN                            => Some(KeyStrokeInfo(InputKey.PageDown, None, m))
+          case VK_F1                                   => Some(KeyStrokeInfo(InputKey.F1, None, m))
+          case VK_F2                                   => Some(KeyStrokeInfo(InputKey.F2, None, m))
+          case VK_F3                                   => Some(KeyStrokeInfo(InputKey.F3, None, m))
+          case VK_F4                                   => Some(KeyStrokeInfo(InputKey.F4, None, m))
+          case VK_F5                                   => Some(KeyStrokeInfo(InputKey.F5, None, m))
+          case VK_F6                                   => Some(KeyStrokeInfo(InputKey.F6, None, m))
+          case VK_F7                                   => Some(KeyStrokeInfo(InputKey.F7, None, m))
+          case VK_F8                                   => Some(KeyStrokeInfo(InputKey.F8, None, m))
+          case VK_F9                                   => Some(KeyStrokeInfo(InputKey.F9, None, m))
+          case VK_F10                                  => Some(KeyStrokeInfo(InputKey.F10, None, m))
+          case VK_F11                                  => Some(KeyStrokeInfo(InputKey.F11, None, m))
+          case VK_F12                                  => Some(KeyStrokeInfo(InputKey.F12, None, m))
+          case code if e.isControlDown || e.isMetaDown =>
+            // Modified letters/digits are represented as character strokes for hotkey matching.
+            val ch = code.toChar.toLower
+            if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') then
+              Some(KeyStrokeInfo(InputKey.Character, Some(ch), m))
+            else None
+          case _ => None
+
+  private def isModifierKey(e: KeyEvent): Boolean =
+    import KeyEvent.*
     e.getKeyCode match
-      case VK_UP         => Some(KeyStrokeInfo(InputKey.ArrowUp, None, m))
-      case VK_DOWN       => Some(KeyStrokeInfo(InputKey.ArrowDown, None, m))
-      case VK_LEFT       => Some(KeyStrokeInfo(InputKey.ArrowLeft, None, m))
-      case VK_RIGHT      => Some(KeyStrokeInfo(InputKey.ArrowRight, None, m))
-      case VK_BACK_SPACE => Some(KeyStrokeInfo(InputKey.Backspace, None, m))
-      case VK_DELETE     => Some(KeyStrokeInfo(InputKey.Delete, None, m))
-      case VK_ENTER      => Some(KeyStrokeInfo(InputKey.Enter, None, m))
-      case VK_TAB        =>
-        // Shift is encoded as ReverseTab; strip it from modifiers so translators
-        // only see Ctrl/Alt when deciding between NextTab / RunnerPreviousCategory etc.
-        val tabMods = m - Modifier.Shift
-        if e.isShiftDown then Some(KeyStrokeInfo(InputKey.ReverseTab, None, tabMods))
-        else Some(KeyStrokeInfo(InputKey.Tab, None, tabMods))
-      case VK_ESCAPE                               => Some(KeyStrokeInfo(InputKey.Escape, None, m))
-      case VK_HOME                                 => Some(KeyStrokeInfo(InputKey.Home, None, m))
-      case VK_END                                  => Some(KeyStrokeInfo(InputKey.End, None, m))
-      case VK_PAGE_UP                              => Some(KeyStrokeInfo(InputKey.PageUp, None, m))
-      case VK_PAGE_DOWN                            => Some(KeyStrokeInfo(InputKey.PageDown, None, m))
-      case VK_F1                                   => Some(KeyStrokeInfo(InputKey.F1, None, m))
-      case VK_F2                                   => Some(KeyStrokeInfo(InputKey.F2, None, m))
-      case VK_F3                                   => Some(KeyStrokeInfo(InputKey.F3, None, m))
-      case VK_F4                                   => Some(KeyStrokeInfo(InputKey.F4, None, m))
-      case VK_F5                                   => Some(KeyStrokeInfo(InputKey.F5, None, m))
-      case VK_F6                                   => Some(KeyStrokeInfo(InputKey.F6, None, m))
-      case VK_F7                                   => Some(KeyStrokeInfo(InputKey.F7, None, m))
-      case VK_F8                                   => Some(KeyStrokeInfo(InputKey.F8, None, m))
-      case VK_F9                                   => Some(KeyStrokeInfo(InputKey.F9, None, m))
-      case VK_F10                                  => Some(KeyStrokeInfo(InputKey.F10, None, m))
-      case VK_F11                                  => Some(KeyStrokeInfo(InputKey.F11, None, m))
-      case VK_F12                                  => Some(KeyStrokeInfo(InputKey.F12, None, m))
-      case code if e.isControlDown || e.isMetaDown =>
-        // Modified letters/digits are represented as character strokes for hotkey matching.
-        val ch = code.toChar.toLower
-        if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') then
-          Some(KeyStrokeInfo(InputKey.Character, Some(ch), m))
-        else None
-      case _ => None
+      case VK_CONTROL | VK_ALT | VK_SHIFT | VK_META => true
+      case _                                        => false
+
+  private def translateModifierPressed(e: KeyEvent): Option[KeyStrokeInfo] =
+    import KeyEvent.*
+    val keyType = e.getKeyCode match
+      case VK_CONTROL => Some(InputKey.Ctrl)
+      case VK_ALT     => Some(InputKey.Alt)
+      case VK_SHIFT   => Some(InputKey.Shift)
+      case VK_META    => Some(InputKey.Meta)
+      case _          => None
+
+    keyType.flatMap { inputKey =>
+      val timestamp = e.getWhen
+      pendingModifierTap.get match
+        case Some((keyCode, previousTimestamp, released))
+            if keyCode == e.getKeyCode && released && timestamp >= previousTimestamp &&
+              timestamp - previousTimestamp <= doubleTapWindowMillis =>
+          pendingModifierTap.set(None)
+          Some(KeyStrokeInfo(inputKey, None, Set.empty))
+        case Some((keyCode, _, false)) if keyCode == e.getKeyCode =>
+          None
+        case _ =>
+          pendingModifierTap.set(Some((e.getKeyCode, timestamp, false)))
+          None
+    }
+
+  private def translateModifierReleased(e: KeyEvent): Unit =
+    if isModifierKey(e) then
+      pendingModifierTap.get match
+        case Some((keyCode, timestamp, false)) if keyCode == e.getKeyCode =>
+          pendingModifierTap.set(Some((keyCode, timestamp, true)))
+        case _ => ()

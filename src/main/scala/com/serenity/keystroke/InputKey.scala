@@ -2,6 +2,10 @@ package com.serenity.keystroke
 
 enum InputKey:
   case Character
+  case Ctrl
+  case Alt
+  case Shift
+  case Meta
   case Enter
   case Backspace
   case Delete
