@@ -37,22 +37,30 @@ object MarkdownBlockLens:
       .getOrElse(Set.empty)
 
   private def fencedBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
-    def previousFence: Option[Int] =
-      Iterator.iterate(activeLine - 1)(_ - 1)
-        .takeWhile(index => index >= 0 && lines.at(index).trim.nonEmpty)
-        .find(index => isFenceLine(lines.at(index)))
+    def previousFence(index: Int, crossedBlank: Boolean = false, afterBlank: Int = 0): Option[Int] =
+      if index < 0 then None
+      else if isFenceLine(lines.at(index)) then Some(index)
+      else if lines.at(index).trim.isEmpty then
+        if crossedBlank then None else previousFence(index - 1, crossedBlank = true)
+      else if crossedBlank then
+        if afterBlank >= 2 then None else previousFence(index - 1, crossedBlank = true, afterBlank + 1)
+      else previousFence(index - 1)
 
-    def nextFence: Option[Int] =
-      Iterator.iterate(activeLine + 1)(_ + 1)
-        .takeWhile(index => index < lines.lineCount && lines.at(index).trim.nonEmpty)
-        .find(index => isFenceLine(lines.at(index)))
+    def nextFence(index: Int, crossedBlank: Boolean = false, afterBlank: Int = 0): Option[Int] =
+      if index >= lines.lineCount then None
+      else if isFenceLine(lines.at(index)) then Some(index)
+      else if lines.at(index).trim.isEmpty then
+        if crossedBlank then None else nextFence(index + 1, crossedBlank = true)
+      else if crossedBlank then
+        if afterBlank >= 2 then None else nextFence(index + 1, crossedBlank = true, afterBlank + 1)
+      else nextFence(index + 1)
 
     if isFenceLine(lines.at(activeLine)) then
-      nextFence.map(activeLine to _).orElse(previousFence.map(_ to activeLine))
+      nextFence(activeLine + 1).map(activeLine to _).orElse(previousFence(activeLine - 1).map(_ to activeLine))
     else
       for
-        start <- previousFence
-        end   <- nextFence
+        start <- previousFence(activeLine - 1)
+        end   <- nextFence(activeLine + 1)
       yield start to end
 
   private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =

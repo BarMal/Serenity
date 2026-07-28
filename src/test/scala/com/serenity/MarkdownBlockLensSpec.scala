@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import com.serenity.markdown.MarkdownBlockLens
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -72,6 +74,19 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 2) shouldBe (1 to 3)
   }
 
+  it should "keep fenced code together across blank lines" in {
+    val lines = Vector(
+      "```scala",
+      "val x = 1",
+      "",
+      "val y = 2",
+      "```",
+      "After fence"
+    )
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 3) shouldBe (0 to 4)
+  }
+
   it should "not let a previous closing fence capture following prose" in {
     val lines = Vector(
       "```",
@@ -134,16 +149,16 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
   it should "resolve a block through indexed line access without materialising the document" in {
     val lines = Vector.fill(200)("unrelated").updated(100, "").updated(101, "First paragraph").updated(102, "continued")
       .updated(103, "")
-    var reads = 0
+    val reads = AtomicInteger(0)
 
     val block = MarkdownBlockLens.currentBlock(
       lineCount = lines.length,
       lineAt = index =>
-        reads += 1
+        reads.incrementAndGet()
         lines.lift(index),
       activeLine = 102
     )
 
     block shouldBe (101 to 102)
-    reads should be < 30
+    reads.get() should be < 30
   }
