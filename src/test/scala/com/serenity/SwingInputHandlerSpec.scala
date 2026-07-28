@@ -93,7 +93,9 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_CONTROL, '\u0000'))
     listener.keyReleased(KeyEvent(component, KeyEvent.KEY_RELEASED, now, 0, KeyEvent.VK_CONTROL, '\u0000'))
-    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now + 100, InputEvent.CTRL_DOWN_MASK, KeyEvent.VK_CONTROL, '\u0000'))
+    listener.keyPressed(
+      KeyEvent(component, KeyEvent.KEY_PRESSED, now + 100, InputEvent.CTRL_DOWN_MASK, KeyEvent.VK_CONTROL, '\u0000')
+    )
 
     handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
       Some(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty))
@@ -107,7 +109,9 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     val now       = System.currentTimeMillis()
 
     listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_CONTROL, '\u0000'))
-    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now + 100, InputEvent.CTRL_DOWN_MASK, KeyEvent.VK_CONTROL, '\u0000'))
+    listener.keyPressed(
+      KeyEvent(component, KeyEvent.KEY_PRESSED, now + 100, InputEvent.CTRL_DOWN_MASK, KeyEvent.VK_CONTROL, '\u0000')
+    )
 
     handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(250.millis) shouldBe None
   }

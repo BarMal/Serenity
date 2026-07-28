@@ -75,7 +75,9 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
 
   it should "include a platform primary modifier double tap for the command runner" in {
     HotkeyConfig.defaultBindingsFor("Linux")(HotkeyAction.ToggleCommandRunner).map(_.render) should contain("ctrl+ctrl")
-    HotkeyConfig.defaultBindingsFor("Mac OS X")(HotkeyAction.ToggleCommandRunner).map(_.render) should contain("meta+meta")
+    HotkeyConfig.defaultBindingsFor("Mac OS X")(HotkeyAction.ToggleCommandRunner).map(_.render) should contain(
+      "meta+meta"
+    )
   }
 
   it should "preserve core editing overrides when configuration is saved and reloaded" in {
