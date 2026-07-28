@@ -4,8 +4,8 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  private val fenceLookupWindow = 256
-  private val fenceStateWindow  = 256
+  private val fenceStateWindow        = 256
+  private val localFenceDocumentLimit = 1_024
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
     def at(index: Int): String =
@@ -84,7 +84,7 @@ object MarkdownBlockLens:
           .map(_ to activeLine)
           .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
     else
-      val lookupWindow = if isFenceContentSyntax(lines.at(activeLine)) then lines.lineCount else fenceLookupWindow
+      val lookupWindow = if lines.lineCount <= localFenceDocumentLimit then lines.lineCount else 256
       for
         start <- previousFence(activeLine - 1, lookupWindow).filter(isOpeningFence)
         end   <- nextFence(activeLine + 1, lookupWindow).filter(isClosingFence)
@@ -198,10 +198,6 @@ object MarkdownBlockLens:
     !isThematicBreak(line) &&
     !isListItemLine(line) &&
     !isBlockQuoteLine(line)
-
-  private def isFenceContentSyntax(line: String): Boolean =
-    val trimmed = line.trim
-    trimmed.contains("(") || trimmed.contains("{") || trimmed.contains("[") || trimmed.contains(":")
 
   private def isHeadingLine(line: String): Boolean =
     line.trim.matches("""^#{1,6}\s+.*""")

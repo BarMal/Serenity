@@ -1,7 +1,6 @@
 package com.serenity.ui.renderer
 
 import java.awt.{Color, Font}
-import java.util.concurrent.ConcurrentHashMap
 
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode}
@@ -52,8 +51,6 @@ object Renderer:
   )
 
   private case class CachedAnnotationIndex(
-      commentsRef: AnyRef,
-      diagnosticsRef: AnyRef,
       commentsByLine: Map[Int, List[DocumentComment]],
       diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]]
   )
@@ -74,7 +71,6 @@ object Renderer:
 
   private val MinMarkdownPreviewSourceLines = 32
   private val MarkdownPreviewOverscanFactor = 4
-  private val annotationIndexCache          = ConcurrentHashMap[BufferId, CachedAnnotationIndex]()
 
   private def withEffectiveTheme(state: AppState): AppState =
     state.themeTransition match
@@ -350,23 +346,26 @@ object Renderer:
       .mapValues(_.foldLeft(Set.empty[Int])(_ ++ _))
       .toMap
 
+    val annotationIndexes = state.layout.editorPanes.values
+      .flatMap(_.bufferId)
+      .toList
+      .distinct
+      .flatMap(bufferId =>
+        state.buffers.get(bufferId).map { buffer =>
+          val diagnostics = state.diagnostics.getOrElse(SpellChecker.diagnosticsUri(buffer), Nil)
+          bufferId -> buildAnnotationIndex(buffer.documentComments, diagnostics)
+        }
+      )
+      .toMap
+
     val annotations = state.layout.editorPanes.values
       .flatMap(_.bufferId)
       .toList
       .distinct
       .flatMap { bufferId =>
-        state.buffers.get(bufferId).map { buffer =>
+        state.buffers.get(bufferId).map { _ =>
           val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val diagnostics  = state.diagnostics.getOrElse(SpellChecker.diagnosticsUri(buffer), Nil)
-          val cached = annotationIndexCache.compute(
-            bufferId,
-            (_, previous) =>
-              if previous != null &&
-                  previous.commentsRef.eq(buffer.documentComments.asInstanceOf[AnyRef]) &&
-                  previous.diagnosticsRef.eq(diagnostics.asInstanceOf[AnyRef])
-              then previous
-              else buildAnnotationIndex(buffer.documentComments, diagnostics)
-          )
+          val cached       = annotationIndexes(bufferId)
           val commentsByLine =
             visibleLines.iterator.flatMap(line => cached.commentsByLine.get(line).map(line -> _)).toMap
           val diagnosticsByLine =
@@ -388,8 +387,6 @@ object Renderer:
       }
     }
     CachedAnnotationIndex(
-      comments.asInstanceOf[AnyRef],
-      diagnostics.asInstanceOf[AnyRef],
       commentsByLine,
       diagnostics.groupMap(_.range.start.line)(identity)
     )
