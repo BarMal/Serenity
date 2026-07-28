@@ -88,6 +88,12 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "dispatch the default primary-modifier double tap to the command runner" in {
+    val linux = FocusedInputTranslator.forState(editorState)
+
+    linux.translate(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty)) shouldBe ToggleCommandRunner
+  }
+
   it should "reject conflicting loaded hotkeys instead of dispatching the first matching action" in {
     val configFile = Files.createTempFile("serenity-conflicting-hotkeys", ".conf")
     Files.writeString(

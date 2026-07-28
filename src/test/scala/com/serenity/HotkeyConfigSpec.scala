@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import com.serenity.config.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -64,6 +65,19 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     HotkeyConfig.validate(reset.bindings) shouldBe Right(())
   }
 
+  it should "parse and match a double modifier tap" in {
+    val trigger = HotkeyTrigger.parse("ctrl+ctrl").getOrElse(fail("double modifier trigger"))
+
+    trigger.render shouldBe "ctrl+ctrl"
+    trigger.matches(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty)) shouldBe true
+    trigger.matches(KeyStrokeInfo(InputKey.Character, Some('c'), Set.empty)) shouldBe false
+  }
+
+  it should "include a platform primary modifier double tap for the command runner" in {
+    HotkeyConfig.defaultBindingsFor("Linux")(HotkeyAction.ToggleCommandRunner).map(_.render) should contain("ctrl+ctrl")
+    HotkeyConfig.defaultBindingsFor("Mac OS X")(HotkeyAction.ToggleCommandRunner).map(_.render) should contain("meta+meta")
+  }
+
   it should "preserve core editing overrides when configuration is saved and reloaded" in {
     val overrides = List(
       HotkeyAction.Find     -> "ctrl+alt+f",
@@ -85,4 +99,13 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
       case (action, binding) =>
         reloaded.hotkeyConfig.bindingsFor(action).headOption.map(_.render) shouldBe Some(binding)
     }
+  }
+
+  it should "load a double modifier tap from the text configuration" in {
+    val configFile = Files.createTempFile("serenity-double-tap-hotkey", ".conf")
+    Files.writeString(configFile, "hotkey.command_palette = ctrl+ctrl\n")
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+ctrl"
   }

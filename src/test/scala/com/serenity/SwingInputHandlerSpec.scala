@@ -83,3 +83,17 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
       Some(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Meta)))
   }
+
+  it should "emit a double-tap stroke for a rapid modifier press" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val listener  = component.getKeyListeners.head
+    val now       = System.currentTimeMillis()
+
+    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_CONTROL, '\u0000'))
+    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, InputEvent.CTRL_DOWN_MASK, KeyEvent.VK_CONTROL, '\u0000'))
+
+    handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
+      Some(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty))
+  }
