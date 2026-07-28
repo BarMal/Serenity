@@ -113,9 +113,14 @@ object HotkeyTrigger:
   def parse(input: String): Option[HotkeyTrigger] =
     val parts = input.trim.toLowerCase.split("\\+").toList.map(_.trim).filter(_.nonEmpty)
     parts match
-      case key :: second :: Nil if key == second && modifierKey(key).isDefined =>
-        return modifierKey(key).map(inputKey => HotkeyTrigger(inputKey, None, Set.empty))
-      case _ => ()
+      case key :: second :: Nil if key == second =>
+        modifierKey(key)
+          .map(inputKey => HotkeyTrigger(inputKey, None, Set.empty))
+          .orElse(parseStandard(parts))
+      case _ =>
+        parseStandard(parts)
+
+  private def parseStandard(parts: List[String]): Option[HotkeyTrigger] =
     val (modifierParts, keyParts) = parts.partition {
       case "ctrl" | "alt" | "shift" | "meta" | "cmd" | "command" => true
       case _                                                     => false
