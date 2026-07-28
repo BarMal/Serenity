@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
 import com.serenity.ui.layout.Layout
@@ -128,6 +129,69 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(Paste, state, registry)
 
     runnerFrom(result.state).searchTerm shouldBe "UI Outline Thickness"
+  }
+
+  it should "enter binding recording mode for a selected keymap input" in {
+    val registry = CommandRegistry.default
+    val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val items    = base.submenuItems("settings-keymap")
+    val runner = base.copy(
+      activeSubmenu = Some(
+        CommandRunnerSubmenuState("settings-keymap", selectedIndex = items.indexWhere(_.id == "keymap-global-find"))
+      )
+    )
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner"))
+    )
+
+    val result = CommandRunnerReducer.reduce(Enter, state, registry)
+
+    runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe Some("keymap-global-find")
+    runnerFrom(result.state).statusMessage shouldBe Some("Press a key or shortcut to assign")
+  }
+
+  it should "assign a recorded key and submit its setting intent" in {
+    val registry = CommandRegistry.default
+    val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val items    = base.submenuItems("settings-keymap")
+    val runner = base.copy(
+      activeSubmenu = Some(
+        CommandRunnerSubmenuState(
+          "settings-keymap",
+          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
+          recordingItemId = Some("keymap-global-find")
+        )
+      )
+    )
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner"))
+    )
+
+    val result = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))),
+      state,
+      registry
+    )
+
+    result.effects.head match
+      case AppEffect.ExecuteCommand(command) =>
+        command.intent shouldBe CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+k")
+      case other => fail(s"Expected setting command, got $other")
+    runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
   }
 
   it should "switch categories with tab and reverse-tab while search is empty" in {

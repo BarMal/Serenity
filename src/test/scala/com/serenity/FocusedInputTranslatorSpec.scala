@@ -2,7 +2,7 @@ package com.serenity
 
 import java.nio.file.Files
 
-import com.serenity.command.CommandRunner
+import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.*
 import com.serenity.document.RenderedComment
 import com.serenity.input.FocusedInputTranslator
@@ -92,6 +92,26 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val linux = FocusedInputTranslator.forState(editorState)
 
     linux.translate(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty)) shouldBe ToggleCommandRunner
+  }
+
+  it should "route raw strokes to a binding recorder while a keymap row is recording" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(recordingItemId = Some("keymap-global-find"))
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val state = editorState.copy(
+      focus = Focus.Surface(surface.id),
+      uiSurfaces = List(surface)
+    )
+
+    FocusedInputTranslator
+      .forState(state)
+      .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))) shouldBe
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
   }
 
   it should "reject conflicting loaded hotkeys instead of dispatching the first matching action" in {

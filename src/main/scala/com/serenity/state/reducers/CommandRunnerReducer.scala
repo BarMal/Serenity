@@ -1,6 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.command.*
+import com.serenity.config.HotkeyTrigger
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.text.TextEditing
@@ -24,7 +25,8 @@ object CommandRunnerReducer:
   private def reduceActive(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
     event match
       case RunnerDismiss =>
-        if currentRunner(state).exists(_.isSettingsSurface) then ReducerResult.noEffects(deactivate(state))
+        if submenuRecording(state) then ReducerResult.noEffects(clearSubmenuRecording(state))
+        else if currentRunner(state).exists(_.isSettingsSurface) then ReducerResult.noEffects(deactivate(state))
         else if submenuEditing(state) then ReducerResult.noEffects(clearSubmenuEditMode(state))
         else if submenuSearching(state) then ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch("")))
         else if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
@@ -157,6 +159,9 @@ object CommandRunnerReducer:
                   ReducerResult.noEffects(
                     replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm + char))
                   )
+
+      case RunnerRecordBinding(info) =>
+        recordBinding(state, info)
 
       case RunnerDeleteBackward =>
         if submenuHasFocus(state) then
@@ -499,8 +504,54 @@ object CommandRunnerReducer:
       case Some(submenu) =>
         val runner = currentRunner(state).get
         submenu.selectedItemFromAll(runner.submenuItems(submenu.groupId)) match
+          case Some(item: CommandSurfaceItem.InputItem) if submenu.editingItemId.isEmpty && item.acceptsBindingText =>
+            ReducerResult.noEffects(
+              replaceRunner(
+                state,
+                runner =>
+                  runner.copy(
+                    activeSubmenu = runner.activeSubmenu.map(
+                      _.copy(
+                        editingItemId = Some(item.id),
+                        editingText = "",
+                        recordingItemId = Some(item.id)
+                      )
+                    ),
+                    statusMessage = Some("Press a key or shortcut to assign")
+                  )
+              )
+            )
           case Some(_: CommandSurfaceItem.InputItem) if submenu.editingItemId.isEmpty =>
             ReducerResult.noEffects(state)
+          case Some(item: CommandSurfaceItem.InputItem) if submenu.pendingGlobalHotkeyConflict.nonEmpty =>
+            val (action, binding) = submenu.pendingGlobalHotkeyConflict.get
+            ReducerResult(
+              state = replaceRunner(
+                state,
+                r =>
+                  r.copy(
+                    activeSubmenu = r.activeSubmenu.map(
+                      _.copy(
+                        editingItemId = None,
+                        editingText = "",
+                        recordingItemId = None,
+                        pendingGlobalHotkeyConflict = None
+                      )
+                    ),
+                    statusMessage = None
+                  )
+              ),
+              effects = List(
+                AppEffect.ExecuteCommand(
+                  Command.typed(
+                    item.id,
+                    item.label,
+                    CommandIntent.ResolveGlobalHotkeyConflict(action, binding),
+                    item.category
+                  )
+                )
+              )
+            )
           case Some(item: CommandSurfaceItem.InputItem) =>
             item.parse(submenu.editingText) match
               case Some(intent) =>
@@ -509,7 +560,14 @@ object CommandRunnerReducer:
                     state,
                     r =>
                       r.copy(
-                        activeSubmenu = r.activeSubmenu.map(_.copy(editingItemId = None, editingText = "")),
+                        activeSubmenu = r.activeSubmenu.map(
+                          _.copy(
+                            editingItemId = None,
+                            editingText = "",
+                            recordingItemId = None,
+                            pendingGlobalHotkeyConflict = None
+                          )
+                        ),
                         statusMessage = None
                       )
                   ),
@@ -545,6 +603,61 @@ object CommandRunnerReducer:
     val value = if text.trim.isEmpty then "<empty>" else text
     if item.acceptsBindingText then s"Invalid binding: $value"
     else s"Invalid value: $value"
+
+  private def recordBinding(state: AppState, info: com.serenity.keystroke.KeyStrokeInfo): ReducerResult =
+    currentRunner(state).flatMap(_.activeSubmenu) match
+      case Some(submenu) if submenu.recordingItemId.nonEmpty =>
+        val runner = currentRunner(state).get
+        runner.submenuItems(submenu.groupId).find(_.id == submenu.recordingItemId.get) match
+          case Some(item: CommandSurfaceItem.InputItem) =>
+            val binding = HotkeyTrigger(info.keyType, info.character, info.modifiers).render
+            item.parse(binding) match
+              case Some(intent) =>
+                ReducerResult(
+                  state = replaceRunner(
+                    state,
+                    current =>
+                      current.copy(
+                        activeSubmenu = current.activeSubmenu.map(
+                          _.copy(
+                            editingItemId = None,
+                            editingText = "",
+                            recordingItemId = None,
+                            pendingGlobalHotkeyConflict = None
+                          )
+                        ),
+                        statusMessage = None
+                      )
+                  ),
+                  effects = List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
+                )
+              case None =>
+                ReducerResult.noEffects(
+                  replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, binding))))
+                )
+          case _ => ReducerResult.noEffects(state)
+      case _ =>
+        ReducerResult.noEffects(state)
+
+  private def submenuRecording(state: AppState): Boolean =
+    currentRunner(state).exists(_.activeSubmenu.exists(_.recordingItemId.nonEmpty))
+
+  private def clearSubmenuRecording(state: AppState): AppState =
+    replaceRunner(
+      state,
+      runner =>
+        runner.copy(
+          activeSubmenu = runner.activeSubmenu.map(
+            _.copy(
+              editingItemId = None,
+              editingText = "",
+              recordingItemId = None,
+              pendingGlobalHotkeyConflict = None
+            )
+          ),
+          statusMessage = None
+        )
+    )
 
   private def replaceRunner(state: AppState, update: CommandRunner => CommandRunner): AppState =
     state.commandRunnerSurface match

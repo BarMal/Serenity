@@ -1745,6 +1745,9 @@ case class AppConfig(
   def withHotkeyOverride(action: HotkeyAction, binding: String): AppConfig =
     withInputConfig(inputConfig.copy(hotkeyConfig = hotkeyConfig.withBinding(action, binding)))
 
+  def withHotkeyOverrideUnbindingConflicts(action: HotkeyAction, binding: String): AppConfig =
+    withInputConfig(inputConfig.copy(hotkeyConfig = hotkeyConfig.withBindingUnbindingConflicts(action, binding)))
+
   def resetHotkeyOverride(action: HotkeyAction): AppConfig =
     withInputConfig(inputConfig.copy(hotkeyConfig = hotkeyConfig.resetBinding(action)))
 

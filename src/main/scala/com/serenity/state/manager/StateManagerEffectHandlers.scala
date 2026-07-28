@@ -822,7 +822,9 @@ final private[manager] class StateManagerEffectHandlers(
                 IO.unit
           case None => IO.unit
       case CommandIntent.SetGlobalHotkey(action, binding) =>
-        updateKeyBinding(_.withHotkeyOverride(action, binding))
+        updateGlobalHotkeyBinding(action, binding)
+      case CommandIntent.ResolveGlobalHotkeyConflict(action, binding) =>
+        updateConfig(_.withHotkeyOverrideUnbindingConflicts(action, binding)).void
       case CommandIntent.SetEditorKeyBinding(action, binding) =>
         updateKeyBinding(_.withEditorKeyOverride(action, binding))
       case CommandIntent.SetCommandRunnerKeyBinding(action, binding) =>
@@ -855,6 +857,16 @@ final private[manager] class StateManagerEffectHandlers(
       else updateConfig(_ => updatedConfig).void
     }
 
+  private def updateGlobalHotkeyBinding(action: com.serenity.config.HotkeyAction, binding: String): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      val updatedConfig = state.config.withHotkeyOverride(action, binding)
+      if updatedConfig == state.config then
+        stateRef.update(
+          withGlobalKeymapConflictMessage(action, binding)
+        )
+      else updateConfig(_ => updatedConfig).void
+    }
+
   private def withKeymapConflictMessage(state: AppState): AppState =
     state.commandRunnerSurface match
       case Some(surface) =>
@@ -864,6 +876,38 @@ final private[manager] class StateManagerEffectHandlers(
               case current if current.id == surface.id =>
                 current.copy(content =
                   SurfaceContent.CommandPalette(runner.copy(statusMessage = Some("Binding is already assigned")))
+                )
+              case current => current
+            })
+          case _ => state
+      case None => state
+
+  private def withGlobalKeymapConflictMessage(
+    action: com.serenity.config.HotkeyAction,
+    binding: String
+  )(state: AppState): AppState =
+    state.commandRunnerSurface match
+      case Some(surface) =>
+        surface.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            state.copy(uiSurfaces = state.uiSurfaces.map {
+              case current if current.id == surface.id =>
+                current.copy(content =
+                  SurfaceContent.CommandPalette(
+                    runner.copy(
+                      activeSubmenu = runner.activeSubmenu.map(
+                        _.copy(
+                          editingItemId = Some(s"keymap-global-${action.configKey}"),
+                          editingText = binding,
+                          recordingItemId = None,
+                          pendingGlobalHotkeyConflict = Some(action -> binding)
+                        )
+                      ),
+                      statusMessage = Some(
+                        "Binding is already assigned. Enter to unbind the other action, or Escape to preserve it."
+                      )
+                    )
+                  )
                 )
               case current =>
                 current

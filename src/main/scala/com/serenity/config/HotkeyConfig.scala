@@ -218,6 +218,14 @@ case class HotkeyConfig(
   def withBinding(action: HotkeyAction, binding: String): HotkeyConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
+  /** Assign a trigger after removing it from every other global action. */
+  def withBindingUnbindingConflicts(action: HotkeyAction, binding: String): HotkeyConfig =
+    HotkeyTrigger.parse(binding) match
+      case Some(trigger) =>
+        val withoutConflict = bindings.view.mapValues(_.filterNot(_ == trigger)).toMap
+        HotkeyConfig.fromBindings(withoutConflict + (action -> List(trigger))).fold(_ => this, identity)
+      case None => this
+
   def resetBinding(action: HotkeyAction): HotkeyConfig =
     HotkeyConfig
       .fromBindings(bindings + (action -> HotkeyConfig.defaultBindings.getOrElse(action, Nil)))
