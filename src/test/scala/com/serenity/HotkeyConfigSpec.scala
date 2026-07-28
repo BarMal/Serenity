@@ -125,3 +125,32 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
       "ctrl+ctrl"
     )
   }
+
+  it should "round-trip multi-bindings for every serialized hotkey action" in {
+    val configFile = Files.createTempFile("serenity-multi-hotkey-actions", ".conf")
+    Files.writeString(
+      configFile,
+      """hotkey.file_search = ctrl+shift+f,alt+shift+f
+        |hotkey.find = ctrl+alt+f,meta+alt+f
+        |hotkey.replace = ctrl+alt+h,meta+alt+h
+        |hotkey.go_to_line = ctrl+alt+g,meta+alt+g
+        |hotkey.save_as = ctrl+alt+s,meta+alt+s
+        |""".stripMargin
+    )
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    ConfigManager.saveConfig(loaded, configFile) shouldBe true
+
+    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    Map(
+      HotkeyAction.FileSearch -> List("ctrl+shift+f", "alt+shift+f"),
+      HotkeyAction.Find       -> List("ctrl+alt+f", "alt+meta+f"),
+      HotkeyAction.Replace    -> List("ctrl+alt+h", "alt+meta+h"),
+      HotkeyAction.GoToLine   -> List("ctrl+alt+g", "alt+meta+g"),
+      HotkeyAction.SaveAs     -> List("ctrl+alt+s", "alt+meta+s")
+    ).foreach {
+      case (action, expected) =>
+        reloaded.hotkeyConfig.bindingsFor(action).map(_.render) shouldBe expected
+    }
+  }

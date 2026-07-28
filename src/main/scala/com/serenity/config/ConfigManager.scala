@@ -303,6 +303,12 @@ object ConfigManager:
         .headOption
         .orElse(EditorKeymapConfig.defaultBindings.get(action).flatMap(_.headOption))
         .fold("")(_.render)
+    val hotkeySettings = HotkeyAction.values
+      .map { action =>
+        val bindings = config.hotkeyConfig.bindingsFor(action).map(_.render).mkString(",")
+        s"hotkey.${action.configKey} = $bindings"
+      }
+      .mkString("\n")
 
     s"""# Serenity Editor Configuration
        |config.version = ${ConfigVersion.Current.value}
@@ -390,12 +396,7 @@ object ConfigManager:
        |spellcheck.words = ${config.spellCheck.normalized.additionalWords.mkString(",")}
        |
        |# Hotkey overrides
-       |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render).mkString(",")}
-       |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
-       |hotkey.find = ${config.hotkeyConfig.bindingsFor(HotkeyAction.Find).head.render}
-       |hotkey.replace = ${config.hotkeyConfig.bindingsFor(HotkeyAction.Replace).head.render}
-       |hotkey.go_to_line = ${config.hotkeyConfig.bindingsFor(HotkeyAction.GoToLine).head.render}
-       |hotkey.save_as = ${config.hotkeyConfig.bindingsFor(HotkeyAction.SaveAs).head.render}
+       |$hotkeySettings
        |
        |# Focused keymap overrides
        |keymap.editor.page_down = ${editorBinding(EditorKeyAction.PageDown)}
