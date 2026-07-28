@@ -4,8 +4,7 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  private val fenceStateWindow        = 256
-  private val localFenceDocumentLimit = 1_024
+  private val fenceStateWindow = 256
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
     def at(index: Int): String =
@@ -84,10 +83,9 @@ object MarkdownBlockLens:
           .map(_ to activeLine)
           .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
     else
-      val lookupWindow = if lines.lineCount <= localFenceDocumentLimit then lines.lineCount else 256
       for
-        start <- previousFence(activeLine - 1, lookupWindow).filter(isOpeningFence)
-        end   <- nextFence(activeLine + 1, lookupWindow).filter(isClosingFence)
+        start <- previousFence(activeLine - 1, lines.lineCount).filter(isOpeningFence)
+        end   <- nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence)
       yield start to end
 
   private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =

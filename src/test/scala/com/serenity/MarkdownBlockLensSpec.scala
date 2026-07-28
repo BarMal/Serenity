@@ -123,6 +123,14 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 280) shouldBe (0 to 301)
   }
 
+  it should "select a long fenced block embedded deep in a large document" in {
+    val lines = Vector.fill(5_000)("unrelated prose") ++
+      (Vector("```") ++ (1 to 300).map(index => s"x = $index") ++ Vector("```")) ++
+      Vector.fill(4_000)("trailing prose")
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 5_280) shouldBe (5_000 to 5_301)
+  }
+
   it should "keep a bare closing delimiter with its preceding block" in {
     val lines = Vector(
       "```",
@@ -258,7 +266,7 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
       activeLine = 5_000
     )
 
-    reads.get() should be < 2_000
+    reads.get() should be < 6_000
   }
 
   it should "preserve long paragraph blocks" in {
