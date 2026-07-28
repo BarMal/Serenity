@@ -198,15 +198,21 @@ object ConfigManager:
             case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
               HotkeyAction.values
                 .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
-                .flatMap(action =>
-                  HotkeyTrigger
-                    .parse(value.trim)
-                    .map(trigger =>
+                .flatMap { action =>
+                  val triggers = value
+                    .split(",")
+                    .toList
+                    .map(_.trim)
+                    .filter(_.nonEmpty)
+                    .map(HotkeyTrigger.parse)
+                  if triggers.nonEmpty && triggers.forall(_.isDefined) then
+                    Some(
                       config.withHotkeyConfig(
-                        HotkeyConfig(config.hotkeyConfig.bindings + (action -> List(trigger)))
+                        HotkeyConfig(config.hotkeyConfig.bindings + (action -> triggers.flatten))
                       )
                     )
-                )
+                  else None
+                }
                 .getOrElse(config)
             case keymapKey if keymapKey.startsWith("keymap.editor.") =>
               EditorKeyAction.values
@@ -384,7 +390,7 @@ object ConfigManager:
        |spellcheck.words = ${config.spellCheck.normalized.additionalWords.mkString(",")}
        |
        |# Hotkey overrides
-       |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render}
+       |hotkey.command_palette = ${config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render).mkString(",")}
        |hotkey.file_search = ${config.hotkeyConfig.bindingsFor(HotkeyAction.FileSearch).head.render}
        |hotkey.find = ${config.hotkeyConfig.bindingsFor(HotkeyAction.Find).head.render}
        |hotkey.replace = ${config.hotkeyConfig.bindingsFor(HotkeyAction.Replace).head.render}

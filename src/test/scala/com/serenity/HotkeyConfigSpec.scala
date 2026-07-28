@@ -109,3 +109,17 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
 
     config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+ctrl"
   }
+
+  it should "round-trip all command palette bindings through config persistence" in {
+    val config     = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux"))
+    val configFile = Files.createTempFile("serenity-multi-hotkey", ".conf")
+
+    ConfigManager.saveConfig(config, configFile) shouldBe true
+
+    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    reloaded.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List(
+      "ctrl+p",
+      "ctrl+ctrl"
+    )
+  }
