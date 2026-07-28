@@ -81,3 +81,11 @@ The focused viewport regressions are covered by indexed-line tests: deep scrolli
 | `markdown.long_fenced_block.interior` | passes through 4,500 lines |
 | `renderer.focused_body.long_block` | range predicate; no block-sized `Set` allocation |
 | `renderer.diagnostics.visible_projection` | only visible lines retained in render annotations |
+
+Measured harness results (same WSL2 host, warmed run):
+
+| Scenario | p50 (ms) | p95 (ms) |
+| --- | ---: | ---: |
+| `reducer.deep_scroll.plain` | 0.006 | 0.048 |
+| `reducer.deep_scroll.rich_text` | 0.011 | 0.036 |
+| `render.diagnostics_and_comments.java2d` | 7.169 | 10.973 |

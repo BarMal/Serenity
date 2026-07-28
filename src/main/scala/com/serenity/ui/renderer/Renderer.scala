@@ -837,27 +837,25 @@ object Renderer:
           .map(line => MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line))
           .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
           .getOrElse((_: Int) => true)
-      else line => plainTextBodyLineSet(buffer, activeLine).contains(line)
+      else
+        plainTextBodyRange(buffer, activeLine)
+          .map(range => (line: Int) => range.contains(line))
+          .getOrElse((_: Int) => true)
 
-  private def plainTextBodyLineSet(buffer: Buffer, activeLine: Option[Int]): Set[Int] =
+  private def plainTextBodyRange(buffer: Buffer, activeLine: Option[Int]): Option[Range.Inclusive] =
     activeLine
       .filter(line => line >= 0 && line < buffer.content.lineCount)
       .map { line =>
-        if buffer.content.getLine(line).exists(_.trim.isEmpty) then Set(line)
-        else
-          val start = Iterator
-            .iterate(line)(_ - 1)
-            .takeWhile(index => index >= 0 && buffer.content.getLine(index).exists(_.trim.nonEmpty))
-            .foldLeft(line)((_, index) => index)
-          val end = Iterator
-            .iterate(line)(_ + 1)
-            .takeWhile(index =>
-              index < buffer.content.lineCount && buffer.content.getLine(index).exists(_.trim.nonEmpty)
-            )
-            .foldLeft(line)((_, index) => index)
-          (start to end).toSet
+        val start = Iterator
+          .iterate(line)(_ - 1)
+          .takeWhile(index => index >= 0 && buffer.content.getLine(index).exists(_.trim.nonEmpty))
+          .foldLeft(line)((_, index) => index)
+        val end = Iterator
+          .iterate(line + 1)(_ + 1)
+          .takeWhile(index => index < buffer.content.lineCount && buffer.content.getLine(index).exists(_.trim.nonEmpty))
+          .foldLeft(line)((_, index) => index)
+        start to end
       }
-      .getOrElse(Set.empty)
 
   private def renderInlineMarkdownPreview(
     buffer: Buffer,
