@@ -66,7 +66,24 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     state.config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+k"
     state.commandRunnerSurface.flatMap(_.content match
       case SurfaceContent.CommandPalette(runner) => runner.statusMessage
-      case _                                     => None) shouldBe Some("Binding is already assigned")
+      case _                                     => None) shouldBe Some(
+      "Binding is already assigned. Enter to unbind the other action, or Escape to preserve it."
+    )
+  }
+
+  it should "offer conflict resolution by unbinding the previous owner on enter" in {
+    val stateManager = createLinuxStateManager("KeymapEditorConflictResolveSpec")
+
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    "ctrl+o".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val config = stateManager.getCurrentState.unsafeRunSync().config
+    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+o"
+    config.hotkeyConfig.bindingsFor(HotkeyAction.OpenFile) shouldBe Nil
   }
 
 end KeymapEditorStateManagerSpec

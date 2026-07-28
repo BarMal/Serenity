@@ -592,7 +592,7 @@ object CommandRunnerSettingsInputItems:
       bindingInputItem(
         s"keymap-global-${action.configKey}",
         if action == HotkeyAction.OpenFile then "Open Document" else keymapLabel(action.configKey),
-        config.hotkeyConfig.bindingsFor(action).headOption.map(_.render),
+        config.hotkeyConfig.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
         binding => CommandIntent.SetGlobalHotkey(action, binding),
         CommandIntent.ResetGlobalHotkey(action)
       )
@@ -600,7 +600,7 @@ object CommandRunnerSettingsInputItems:
       bindingInputItem(
         s"keymap-editor-${action.configKey}",
         keymapLabel(action.configKey),
-        config.focusedKeymapConfig.editor.bindingsFor(action).headOption.map(_.render),
+        config.focusedKeymapConfig.editor.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
         binding => CommandIntent.SetEditorKeyBinding(action, binding),
         CommandIntent.ResetEditorKeyBinding(action)
       )
@@ -608,7 +608,7 @@ object CommandRunnerSettingsInputItems:
       bindingInputItem(
         s"keymap-command-runner-${action.configKey}",
         keymapLabel(action.configKey),
-        config.focusedKeymapConfig.commandRunner.bindingsFor(action).headOption.map(_.render),
+        config.focusedKeymapConfig.commandRunner.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
         binding => CommandIntent.SetCommandRunnerKeyBinding(action, binding),
         CommandIntent.ResetCommandRunnerKeyBinding(action)
       )
@@ -616,7 +616,7 @@ object CommandRunnerSettingsInputItems:
       bindingInputItem(
         s"keymap-modal-${action.configKey}",
         keymapLabel(action.configKey),
-        config.focusedKeymapConfig.modal.bindingsFor(action).headOption.map(_.render),
+        config.focusedKeymapConfig.modal.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
         binding => CommandIntent.SetModalKeyBinding(action, binding),
         CommandIntent.ResetModalKeyBinding(action)
       )
@@ -624,7 +624,7 @@ object CommandRunnerSettingsInputItems:
       bindingInputItem(
         s"keymap-panel-${action.configKey}",
         keymapLabel(action.configKey),
-        config.focusedKeymapConfig.panel.bindingsFor(action).headOption.map(_.render),
+        config.focusedKeymapConfig.panel.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
         binding => CommandIntent.SetPanelKeyBinding(action, binding),
         CommandIntent.ResetPanelKeyBinding(action)
       )
@@ -632,7 +632,7 @@ object CommandRunnerSettingsInputItems:
       bindingInputItem(
         s"keymap-peek-${action.configKey}",
         keymapLabel(action.configKey),
-        config.focusedKeymapConfig.peek.bindingsFor(action).headOption.map(_.render),
+        config.focusedKeymapConfig.peek.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
         binding => CommandIntent.SetPeekKeyBinding(action, binding),
         CommandIntent.ResetPeekKeyBinding(action)
       )

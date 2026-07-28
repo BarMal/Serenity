@@ -53,6 +53,15 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     HotkeyConfig.validate(bindings).isLeft shouldBe true
   }
 
+  it should "unbind a conflicting trigger before assigning it to a new action" in {
+    val config     = HotkeyConfig.forOs("Linux")
+    val reassigned = config.withBindingUnbindingConflicts(HotkeyAction.Find, "ctrl+o")
+
+    reassigned.bindingsFor(HotkeyAction.OpenFile).map(_.render) shouldBe Nil
+    reassigned.bindingsFor(HotkeyAction.Find).map(_.render) shouldBe List("ctrl+o")
+    HotkeyConfig.validate(reassigned.bindings) shouldBe Right(())
+  }
+
   it should "preserve a valid keymap when resetting an override would conflict" in {
     val findDefault = HotkeyConfig.defaultBindings(HotkeyAction.Find).head
     val overridden = HotkeyConfig()

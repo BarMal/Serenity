@@ -7,6 +7,12 @@ import com.serenity.state.models.{AppState, SurfaceContent}
 object FocusedInputTranslator:
 
   def forState(state: AppState): Translator[Event] =
+    val recordingBinding = state.activeSurface.exists { surface =>
+      surface.content match
+        case SurfaceContent.CommandPalette(runner)              => runner.recordingItemId.nonEmpty
+        case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner.recordingItemId.nonEmpty
+        case _                                                  => false
+    }
     val editorTranslator        = new EditorInputTranslator(state.config)
     val commandRunnerTranslator = new CommandRunnerTranslator(state.config)
     val formTranslator          = new SingleLineFormTranslator(state.config)
@@ -40,4 +46,5 @@ object FocusedInputTranslator:
             editorTranslator
 
     if state.hasBlockingModal then formTranslator
+    else if recordingBinding then new HotkeyRecordingTranslator
     else CompositeTranslator(new GlobalHotkeyTranslator(state.config), localTranslator)

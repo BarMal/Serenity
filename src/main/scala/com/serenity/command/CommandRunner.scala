@@ -10,6 +10,8 @@ case class CommandRunnerSubmenuState(
     selectedIndex: Int = 0,
     editingItemId: Option[String] = None,
     editingText: String = "",
+    recordingItemId: Option[String] = None,
+    pendingGlobalHotkeyConflict: Option[(HotkeyAction, String)] = None,
     searchTerm: String = "",
     parentGroupId: Option[String] = None,
     ancestorGroupIds: List[String] = Nil
@@ -36,6 +38,7 @@ case class CommandRunner(
     inputItems: List[CommandSurfaceItem.InputItem] = List.empty,
     editingItemId: Option[String] = None,
     editingText: String = "",
+    recordingItemId: Option[String] = None,
     submenuSelections: Map[String, Int] = Map.empty,
     previewedGroupId: Option[String] = None,
     activeSubmenu: Option[CommandRunnerSubmenuState] = None,
@@ -86,6 +89,7 @@ case class CommandRunner(
       filteredCommands = filtered,
       previewedGroupId = None,
       activeSubmenu = None,
+      recordingItemId = None,
       statusMessage = None
     )
 
@@ -320,7 +324,15 @@ case class CommandRunner(
           val wrappedIndex = if newIndex < 0 then itemCount + newIndex else newIndex
           copy(
             submenuSelections = submenuSelections + (submenu.groupId -> wrappedIndex),
-            activeSubmenu = Some(submenu.copy(selectedIndex = wrappedIndex, editingItemId = None, editingText = ""))
+            activeSubmenu = Some(
+              submenu.copy(
+                selectedIndex = wrappedIndex,
+                editingItemId = None,
+                editingText = "",
+                recordingItemId = None,
+                pendingGlobalHotkeyConflict = None
+              )
+            )
           )
       case None => this
 
@@ -329,7 +341,16 @@ case class CommandRunner(
       case Some(submenu) =>
         submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
           case Some(item: CommandSurfaceItem.InputItem) =>
-            copy(activeSubmenu = Some(submenu.copy(editingItemId = Some(item.id), editingText = item.currentValue)))
+            copy(
+              activeSubmenu = Some(
+                submenu.copy(
+                  editingItemId = Some(item.id),
+                  editingText = item.currentValue,
+                  recordingItemId = None,
+                  pendingGlobalHotkeyConflict = None
+                )
+              )
+            )
           case _ =>
             this
       case None =>
@@ -414,7 +435,15 @@ case class CommandRunner(
         if items.indices.contains(index) then
           copy(
             submenuSelections = submenuSelections + (submenu.groupId -> index),
-            activeSubmenu = Some(submenu.copy(selectedIndex = index, editingItemId = None, editingText = ""))
+            activeSubmenu = Some(
+              submenu.copy(
+                selectedIndex = index,
+                editingItemId = None,
+                editingText = "",
+                recordingItemId = None,
+                pendingGlobalHotkeyConflict = None
+              )
+            )
           )
         else this
       case None =>
@@ -460,6 +489,7 @@ case class CommandRunner(
       inputItems = List.empty,
       editingItemId = None,
       editingText = "",
+      recordingItemId = None,
       submenuSelections = Map.empty,
       previewedGroupId = None,
       activeSubmenu = None,
@@ -484,14 +514,30 @@ case class CommandRunner(
           case Some(item: CommandSurfaceItem.InputItem) if submenu.editingItemId.contains(item.id) =>
             this
           case _ =>
-            copy(activeSubmenu = Some(submenu.copy(editingItemId = None, editingText = "")))
+            copy(
+              activeSubmenu = Some(
+                submenu.copy(
+                  editingItemId = None,
+                  editingText = "",
+                  recordingItemId = None,
+                  pendingGlobalHotkeyConflict = None
+                )
+              )
+            )
       case None =>
         this
 
   def updateSubmenuSearch(term: String): CommandRunner =
     activeSubmenu match
       case Some(submenu) =>
-        val updated = submenu.copy(searchTerm = term, selectedIndex = 0, editingItemId = None, editingText = "")
+        val updated = submenu.copy(
+          searchTerm = term,
+          selectedIndex = 0,
+          editingItemId = None,
+          editingText = "",
+          recordingItemId = None,
+          pendingGlobalHotkeyConflict = None
+        )
         copy(activeSubmenu = Some(updated))
       case None =>
         this

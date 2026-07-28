@@ -65,3 +65,21 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     inputById(items, "keymap-global-command_palette").parse("reset") shouldBe
       Some(CommandIntent.ResetGlobalHotkey(com.serenity.config.HotkeyAction.ToggleCommandRunner))
   }
+
+  it should "show every current binding in global keymap rows" in {
+    val action = HotkeyAction.ToggleCommandRunner
+    val config = AppConfig.default.withHotkeyConfig(
+      HotkeyConfig(
+        HotkeyConfig.defaultBindings.updated(
+          action,
+          List(
+            HotkeyTrigger.parse("ctrl+k").get,
+            HotkeyTrigger.parse("ctrl+l").get
+          )
+        )
+      )
+    )
+
+    inputById(CommandRunnerSettingsInputItems.build(config), "keymap-global-command_palette").currentValue shouldBe
+      "ctrl+k, ctrl+l"
+  }
