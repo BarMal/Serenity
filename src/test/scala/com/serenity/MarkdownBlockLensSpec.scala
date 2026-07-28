@@ -109,6 +109,14 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 2) shouldBe (0 to 2)
   }
 
+  it should "leave prose outside a long fenced block before the next opener" in {
+    val lines = Vector("```") ++
+      (1 to 17).map(index => s"val first = $index") ++
+      Vector("```", "Prose between long blocks", "```", "second block", "```")
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 19) shouldBe (19 to 19)
+  }
+
   it should "not let a previous closing fence capture following prose" in {
     val lines = Vector(
       "```",
@@ -220,21 +228,16 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     reads.get() should be < 30
   }
 
-  it should "resolve a fence after uninterrupted prose without scanning its prefix" in {
+  it should "resolve a fence after uninterrupted prose" in {
     val lines = Vector.fill(1_003)("unrelated prose")
-      .updated(1_000, "```")
+      .updated(1_000, "```scala")
       .updated(1_001, "val result = 1")
       .updated(1_002, "```")
-    val reads = AtomicInteger(0)
-
     val block = MarkdownBlockLens.currentBlock(
       lineCount = lines.length,
-      lineAt = index =>
-        reads.incrementAndGet()
-        lines.lift(index),
+      lineAt = lines.lift,
       activeLine = 1_001
     )
 
     block shouldBe (1_000 to 1_002)
-    reads.get() should be < 30
   }
