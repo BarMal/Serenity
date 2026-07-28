@@ -95,6 +95,20 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 18) shouldBe (0 to 18)
   }
 
+  it should "keep a bare closing delimiter with its preceding block" in {
+    val lines = Vector(
+      "```",
+      "first block",
+      "```",
+      "Prose between blocks",
+      "```",
+      "second block",
+      "```"
+    )
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 2) shouldBe (0 to 2)
+  }
+
   it should "not let a previous closing fence capture following prose" in {
     val lines = Vector(
       "```",
