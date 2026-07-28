@@ -394,10 +394,13 @@ object Renderer:
     diagnostics: List[com.serenity.lsp.model.Diagnostic],
     visibleLines: Set[Int]
   ): CachedAnnotationIndex =
-    val visibleStart        = visibleLines.min
-    val visibleEnd          = visibleLines.max
-    val relevantComments    = comments.takeWhile(comment => comment.start.line <= visibleEnd)
-    val relevantDiagnostics = diagnostics.takeWhile(diagnostic => diagnostic.range.start.line <= visibleEnd)
+    val visibleStart = visibleLines.min
+    val visibleEnd   = visibleLines.max
+    val relevantComments =
+      comments.filter(comment => comment.start.line <= visibleEnd && comment.end.line >= visibleStart)
+    val relevantDiagnostics = diagnostics.filter(diagnostic =>
+      diagnostic.range.start.line >= visibleStart && diagnostic.range.start.line <= visibleEnd
+    )
     val commentsByLine = relevantComments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
       (comment.start.line.max(visibleStart) to comment.end.line.min(visibleEnd)).iterator
         .filter(visibleLines.contains)
