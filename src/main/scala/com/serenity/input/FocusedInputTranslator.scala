@@ -9,9 +9,11 @@ object FocusedInputTranslator:
   def forState(state: AppState): Translator[Event] =
     val recordingBinding = state.activeSurface.exists { surface =>
       surface.content match
-        case SurfaceContent.CommandPalette(runner)              => runner.recordingItemId.nonEmpty
-        case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner.recordingItemId.nonEmpty
-        case _                                                  => false
+        case SurfaceContent.CommandPalette(runner) =>
+          runner.recordingItemId.nonEmpty || runner.activeSubmenu.exists(_.recordingItemId.nonEmpty)
+        case SurfaceContent.CommandPaletteSubmenu(runner, _, _) =>
+          runner.activeSubmenu.exists(_.recordingItemId.nonEmpty)
+        case _ => false
     }
     val editorTranslator        = new EditorInputTranslator(state.config)
     val commandRunnerTranslator = new CommandRunnerTranslator(state.config)

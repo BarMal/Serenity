@@ -115,3 +115,19 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(250.millis) shouldBe None
   }
+
+  it should "ignore modifier taps outside the 200 millisecond double-tap window" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val listener  = component.getKeyListeners.head
+    val now       = System.currentTimeMillis()
+
+    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_CONTROL, '\u0000'))
+    listener.keyReleased(KeyEvent(component, KeyEvent.KEY_RELEASED, now, 0, KeyEvent.VK_CONTROL, '\u0000'))
+    listener.keyPressed(
+      KeyEvent(component, KeyEvent.KEY_PRESSED, now + 201, InputEvent.CTRL_DOWN_MASK, KeyEvent.VK_CONTROL, '\u0000')
+    )
+
+    handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(250.millis) shouldBe None
+  }

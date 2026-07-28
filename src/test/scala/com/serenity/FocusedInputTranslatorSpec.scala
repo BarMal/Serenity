@@ -2,7 +2,7 @@ package com.serenity
 
 import java.nio.file.Files
 
-import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.command.{CommandRegistry, CommandRunner, CommandRunnerSubmenuState}
 import com.serenity.config.*
 import com.serenity.document.RenderedComment
 import com.serenity.input.FocusedInputTranslator
@@ -94,13 +94,20 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     linux.translate(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty)) shouldBe ToggleCommandRunner
   }
 
-  it should "route raw strokes to a binding recorder while a keymap row is recording" in {
+  it should "route raw strokes to a binding recorder while a keymap submenu row is recording" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .copy(recordingItemId = Some("keymap-global-find"))
+      .copy(
+        activeSubmenu = Some(
+          CommandRunnerSubmenuState(
+            groupId = "keymap",
+            recordingItemId = Some("keymap-global-find")
+          )
+        )
+      )
     val surface = UiSurface(
       SurfaceId("command-runner"),
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandPaletteSubmenu(runner, "keymap", previewOnly = false),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = editorState.copy(

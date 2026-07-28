@@ -31,7 +31,7 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   private val shutdownFlag       = new AtomicBoolean(false)
   private val pendingModifierTap = new AtomicReference[Option[(Int, Long, Boolean)]](None)
 
-  private val doubleTapWindowMillis = 400L
+  private val doubleTapWindowMillis = 200L
 
   private def enqueueInput(info: KeyStrokeInfo): Unit =
     if !shutdownFlag.get() then infoQueue.put(Some(info))
