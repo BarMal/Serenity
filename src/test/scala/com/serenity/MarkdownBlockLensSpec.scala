@@ -202,7 +202,7 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
 
   it should "resolve a fence after uninterrupted prose without scanning its prefix" in {
     val lines = Vector.fill(1_003)("unrelated prose")
-      .updated(1_000, "```scala")
+      .updated(1_000, "```")
       .updated(1_001, "val result = 1")
       .updated(1_002, "```")
     val reads = AtomicInteger(0)
