@@ -818,25 +818,26 @@ object Renderer:
     visualLine: TextVisualLine,
     theme: Theme,
     snapshot: TextLayoutSnapshot,
-    activeBodyLines: Set[Int]
+    activeBodyLine: Int => Boolean
   ): Option[List[StyledText]] =
     val richSegments = richTextStyledSegments(visualLine, theme, snapshot)
-    if activeBodyLines.nonEmpty && !activeBodyLines.contains(visualLine.bufferLine) then
+    if activeBodyLine(visualLine.bufferLine) then richSegments
+    else
       val baseSegments =
         richSegments.getOrElse(List(StyledText(visualLine.text, TextStyle.normal, theme.foreground, theme.background)))
       Some(baseSegments.map(segment => segment.copy(foregroundColor = theme.muted, backgroundColor = theme.background)))
-    else richSegments
 
-  private def focusedTextBodyLines(buffer: Buffer, state: AppState): Set[Int] =
-    if !state.config.focusedTextBodyEnabled then Set.empty
+  private def focusedTextBodyLines(buffer: Buffer, state: AppState): Int => Boolean =
+    if !state.config.focusedTextBodyEnabled then _ => true
     else
       val activeLine = buffer.cursors.headOption.map(_.line)
       if buffer.language.contains(LanguageId.Markdown) then
         activeLine
           .filter(line => line >= 0 && line < buffer.content.lineCount)
-          .map(line => MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line).toSet)
-          .getOrElse(Set.empty)
-      else plainTextBodyLineSet(buffer, activeLine)
+          .map(line => MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line))
+          .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
+          .getOrElse((_: Int) => true)
+      else line => plainTextBodyLineSet(buffer, activeLine).contains(line)
 
   private def plainTextBodyLineSet(buffer: Buffer, activeLine: Option[Int]): Set[Int] =
     activeLine
