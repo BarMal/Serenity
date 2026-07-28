@@ -4,7 +4,6 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  private val fenceLookupWindow = 256
   private val fenceStateWindow = 256
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
@@ -43,7 +42,7 @@ object MarkdownBlockLens:
 
   private def fencedBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
     def hasFenceInfo(index: Int): Boolean =
-      val trimmed = lines.at(index).trim
+      val trimmed      = lines.at(index).trim
       val markerLength = if trimmed.startsWith("```") || trimmed.startsWith("~~~") then 3 else 0
       markerLength > 0 && trimmed.drop(markerLength).trim.nonEmpty
 
@@ -79,14 +78,14 @@ object MarkdownBlockLens:
       if hasFenceInfo(activeLine) then
         nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _)
       else
-        previousFence(activeLine - 1, lines.lineCount).filter(isOpeningFence).map(_ to activeLine)
+        previousFence(activeLine - 1, lines.lineCount)
+          .filter(isOpeningFence)
+          .map(_ to activeLine)
           .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
     else
-      val lookupWindow =
-        if lines.at(activeLine).contains("=") then lines.lineCount else fenceLookupWindow
       for
-        start <- previousFence(activeLine - 1, lookupWindow).filter(isOpeningFence)
-        end   <- nextFence(activeLine + 1, lookupWindow).filter(isClosingFence)
+        start <- previousFence(activeLine - 1, lines.lineCount).filter(isOpeningFence)
+        end   <- nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence)
       yield start to end
 
   private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =

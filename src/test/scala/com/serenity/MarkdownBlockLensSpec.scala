@@ -118,7 +118,7 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "select an interior line beyond 256 fenced lines" in {
-    val lines = Vector("```") ++ (1 to 300).map(index => s"val line = $index") ++ Vector("```")
+    val lines = Vector("```") ++ (1 to 300).map(index => s"print${"ln"}(\"line $index\")") ++ Vector("```")
 
     MarkdownBlockLens.currentBlock(lines, activeLine = 280) shouldBe (0 to 301)
   }
@@ -219,15 +219,21 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resolve a block through indexed line access without materialising the document" in {
-    val lines = Vector.fill(200)("unrelated").updated(99, "").updated(100, "").updated(101, "First paragraph")
-      .updated(102, "continued").updated(103, "")
+    val lines = Vector
+      .fill(200)("unrelated")
+      .updated(99, "")
+      .updated(100, "")
+      .updated(101, "First paragraph")
+      .updated(102, "continued")
+      .updated(103, "")
     val reads = AtomicInteger(0)
 
     val block = MarkdownBlockLens.currentBlock(
       lineCount = lines.length,
       lineAt = index =>
         reads.incrementAndGet()
-        lines.lift(index),
+        lines.lift(index)
+      ,
       activeLine = 102
     )
 
@@ -236,7 +242,8 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resolve fenced blocks without reading unrelated leading lines" in {
-    val lines = Vector.fill(1_003)("unrelated")
+    val lines = Vector
+      .fill(1_003)("unrelated")
       .updated(998, "")
       .updated(999, "")
       .updated(1_000, "```scala")
@@ -248,7 +255,8 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
       lineCount = lines.length,
       lineAt = index =>
         reads.incrementAndGet()
-        lines.lift(index),
+        lines.lift(index)
+      ,
       activeLine = 1_001
     )
 
@@ -257,7 +265,8 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resolve a fence after uninterrupted prose" in {
-    val lines = Vector.fill(1_003)("unrelated prose")
+    val lines = Vector
+      .fill(1_003)("unrelated prose")
       .updated(1_000, "```scala")
       .updated(1_001, "val result = 1")
       .updated(1_002, "```")
