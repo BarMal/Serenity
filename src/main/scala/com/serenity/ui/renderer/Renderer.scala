@@ -368,18 +368,19 @@ object Renderer:
       .distinct
       .flatMap { bufferId =>
         state.buffers.get(bufferId).map { _ =>
-          val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val cached       = annotationIndexes(bufferId)
-          val commentsByLine =
-            visibleLines.iterator.flatMap(line => cached.commentsByLine.get(line).map(line -> _)).toMap
-          val diagnosticsByLine =
-            visibleLines.iterator.flatMap(line => cached.diagnosticsByLine.get(line).map(line -> _)).toMap
+          val visibleLines      = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
+          val cached            = annotationIndexes(bufferId)
+          val commentsByLine    = visibleAnnotationLines(visibleLines, cached.commentsByLine)
+          val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
           bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine)
         }
       }
       .toMap
 
     EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots, annotations)
+
+  private def visibleAnnotationLines[A](visibleLines: Set[Int], indexed: Map[Int, List[A]]): Map[Int, List[A]] =
+    visibleLines.iterator.flatMap(line => indexed.get(line).map(line -> _)).toMap
 
   private def buildAnnotationIndex(
     comments: List[DocumentComment],
