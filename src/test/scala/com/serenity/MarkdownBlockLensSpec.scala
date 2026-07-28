@@ -199,3 +199,22 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     block shouldBe (1_000 to 1_002)
     reads.get() should be < 30
   }
+
+  it should "resolve a fence after uninterrupted prose without scanning its prefix" in {
+    val lines = Vector.fill(1_003)("unrelated prose")
+      .updated(1_000, "```scala")
+      .updated(1_001, "val result = 1")
+      .updated(1_002, "```")
+    val reads = AtomicInteger(0)
+
+    val block = MarkdownBlockLens.currentBlock(
+      lineCount = lines.length,
+      lineAt = index =>
+        reads.incrementAndGet()
+        lines.lift(index),
+      activeLine = 1_001
+    )
+
+    block shouldBe (1_000 to 1_002)
+    reads.get() should be < 30
+  }

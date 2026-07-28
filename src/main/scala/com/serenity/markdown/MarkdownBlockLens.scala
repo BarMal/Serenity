@@ -39,19 +39,28 @@ object MarkdownBlockLens:
       .getOrElse(Set.empty)
 
   private def fencedBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
-    def isOpeningFence(index: Int): Boolean =
-      @tailrec
-      def countFencesBefore(cursor: Int, crossedBlank: Boolean, count: Int): Int =
-        if cursor < 0 then count
-        else
-          val line = lines.at(cursor)
-          if line.trim.isEmpty then
-            if crossedBlank then count
-            else countFencesBefore(cursor - 1, crossedBlank = true, count)
-          else
-            countFencesBefore(cursor - 1, crossedBlank, count + (if isFenceLine(line) then 1 else 0))
+    def hasFenceInfo(index: Int): Boolean =
+      val trimmed = lines.at(index).trim
+      val markerLength = if trimmed.startsWith("```") || trimmed.startsWith("~~~") then 3 else 0
+      markerLength > 0 && trimmed.drop(markerLength).trim.nonEmpty
 
-      countFencesBefore(index - 1, crossedBlank = false, count = 0) % 2 == 0
+    def isOpeningFence(index: Int): Boolean =
+      if hasFenceInfo(index) then true
+      else
+        @tailrec
+        def countFencesBefore(cursor: Int, crossedBlank: Boolean, count: Int): Int =
+          if cursor < 0 then count
+          else
+            val line = lines.at(cursor)
+            if line.trim.isEmpty then
+              if crossedBlank then count
+              else countFencesBefore(cursor - 1, crossedBlank = true, count)
+            else
+              countFencesBefore(cursor - 1, crossedBlank, count + (if isFenceLine(line) then 1 else 0))
+
+        countFencesBefore(index - 1, crossedBlank = false, count = 0) % 2 == 0
+
+    def isClosingFence(index: Int): Boolean = !hasFenceInfo(index)
 
     def previousFence(index: Int, crossedBlank: Boolean = false): Option[Int] =
       if index < 0 then None
@@ -71,13 +80,13 @@ object MarkdownBlockLens:
 
     if isFenceLine(lines.at(activeLine)) then
       if isOpeningFence(activeLine) then
-        nextFence(activeLine + 1).filter(index => !isOpeningFence(index)).map(activeLine to _)
+        nextFence(activeLine + 1).filter(isClosingFence).map(activeLine to _)
       else
         previousFence(activeLine - 1).filter(isOpeningFence).map(_ to activeLine)
     else
       for
         start <- previousFence(activeLine - 1).filter(isOpeningFence)
-        end   <- nextFence(activeLine + 1).filter(index => !isOpeningFence(index))
+        end   <- nextFence(activeLine + 1).filter(isClosingFence)
       yield start to end
 
   private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
