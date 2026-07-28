@@ -29,7 +29,7 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   private val infoQueue          = new LinkedBlockingQueue[Option[KeyStrokeInfo]]()
   private val mouseQueue         = new LinkedBlockingQueue[Option[Event]]()
   private val shutdownFlag       = new AtomicBoolean(false)
-  private val pendingModifierTap = new AtomicReference[Option[(Int, Long)]](None)
+  private val pendingModifierTap = new AtomicReference[Option[(Int, Long, Boolean)]](None)
 
   private val doubleTapWindowMillis = 400L
 
@@ -43,7 +43,9 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
     override def keyTyped(e: KeyEvent): Unit =
       translateTyped(e).foreach(enqueueInput)
     override def keyPressed(e: KeyEvent): Unit =
-      translatePressed(e).foreach(enqueueInput))
+      translatePressed(e).foreach(enqueueInput)
+    override def keyReleased(e: KeyEvent): Unit =
+      translateModifierReleased(e))
 
   component.addMouseListener(
     new MouseAdapter:
@@ -218,12 +220,22 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
 
     keyType.flatMap { inputKey =>
       val timestamp = e.getWhen
-      pendingModifierTap.getAndSet(Some(e.getKeyCode -> timestamp)) match
-        case Some((keyCode, previousTimestamp))
-            if keyCode == e.getKeyCode &&
-              timestamp >= previousTimestamp &&
+      pendingModifierTap.get match
+        case Some((keyCode, previousTimestamp, released))
+            if keyCode == e.getKeyCode && released && timestamp >= previousTimestamp &&
               timestamp - previousTimestamp <= doubleTapWindowMillis =>
           pendingModifierTap.set(None)
           Some(KeyStrokeInfo(inputKey, None, Set.empty))
-        case _ => None
+        case Some((keyCode, _, false)) if keyCode == e.getKeyCode =>
+          None
+        case _ =>
+          pendingModifierTap.set(Some((e.getKeyCode, timestamp, false)))
+          None
     }
+
+  private def translateModifierReleased(e: KeyEvent): Unit =
+    if isModifierKey(e) then
+      pendingModifierTap.get match
+        case Some((keyCode, timestamp, false)) if keyCode == e.getKeyCode =>
+          pendingModifierTap.set(Some((keyCode, timestamp, true)))
+        case _ => ()
