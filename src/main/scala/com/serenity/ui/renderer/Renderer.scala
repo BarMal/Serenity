@@ -395,9 +395,7 @@ object Renderer:
     }
     CachedAnnotationIndex(
       commentsByLine,
-      diagnostics
-        .filter(diagnostic => visibleLines.contains(diagnostic.range.start.line))
-        .groupMap(_.range.start.line)(identity)
+      diagnostics.groupMap(_.range.start.line)(identity)
     )
 
   private def snapshotForBuffer(

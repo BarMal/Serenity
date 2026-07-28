@@ -4,9 +4,6 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  private val fenceLookupWindow = 8_192
-  private val fenceStateWindow  = 8_192
-
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
     def at(index: Int): String =
       lineAt(index).getOrElse("")
@@ -61,7 +58,7 @@ object MarkdownBlockLens:
             else
               countFencesBefore(cursor - 1, crossedBlank, count + (if isFenceLine(line) then 1 else 0), remaining - 1)
 
-        countFencesBefore(index - 1, crossedBlank = false, count = 0, remaining = fenceStateWindow) % 2 == 0
+        countFencesBefore(index - 1, crossedBlank = false, count = 0, remaining = lines.lineCount) % 2 == 0
 
     def isClosingFence(index: Int): Boolean = !hasFenceInfo(index)
 
@@ -77,16 +74,16 @@ object MarkdownBlockLens:
 
     if isFenceLine(lines.at(activeLine)) then
       if hasFenceInfo(activeLine) then
-        nextFence(activeLine + 1, fenceLookupWindow).filter(isClosingFence).map(activeLine to _)
+        nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _)
       else
-        previousFence(activeLine - 1, fenceLookupWindow)
+        previousFence(activeLine - 1, lines.lineCount)
           .filter(isOpeningFence)
           .map(_ to activeLine)
-          .orElse(nextFence(activeLine + 1, fenceLookupWindow).filter(isClosingFence).map(activeLine to _))
+          .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
     else
       for
-        start <- previousFence(activeLine - 1, fenceLookupWindow).filter(isOpeningFence)
-        end   <- nextFence(activeLine + 1, fenceLookupWindow).filter(isClosingFence)
+        start <- previousFence(activeLine - 1, lines.lineCount).filter(isOpeningFence)
+        end   <- nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence)
       yield start to end
 
   private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
