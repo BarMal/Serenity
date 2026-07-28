@@ -4,6 +4,7 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
+  private val fenceLookupWindow = 256
   private val fenceStateWindow = 256
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
@@ -64,28 +65,28 @@ object MarkdownBlockLens:
 
     def isClosingFence(index: Int): Boolean = !hasFenceInfo(index)
 
-    def previousFence(index: Int, blankRun: Int = 0): Option[Int] =
-      if index < 0 || blankRun >= 4 then None
+    def previousFence(index: Int, remaining: Int): Option[Int] =
+      if index < 0 || remaining <= 0 then None
       else if isFenceLine(lines.at(index)) then Some(index)
-      else if lines.at(index).trim.isEmpty then previousFence(index - 1, blankRun + 1)
-      else previousFence(index - 1, blankRun)
+      else previousFence(index - 1, remaining - 1)
 
-    def nextFence(index: Int, blankRun: Int = 0): Option[Int] =
-      if index >= lines.lineCount || blankRun >= 4 then None
+    def nextFence(index: Int, remaining: Int): Option[Int] =
+      if index >= lines.lineCount || remaining <= 0 then None
       else if isFenceLine(lines.at(index)) then Some(index)
-      else if lines.at(index).trim.isEmpty then nextFence(index + 1, blankRun + 1)
-      else nextFence(index + 1, blankRun)
+      else nextFence(index + 1, remaining - 1)
 
     if isFenceLine(lines.at(activeLine)) then
       if hasFenceInfo(activeLine) then
-        nextFence(activeLine + 1).filter(isClosingFence).map(activeLine to _)
+        nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _)
       else
-        previousFence(activeLine - 1).filter(isOpeningFence).map(_ to activeLine)
-          .orElse(nextFence(activeLine + 1).filter(isClosingFence).map(activeLine to _))
+        previousFence(activeLine - 1, lines.lineCount).filter(isOpeningFence).map(_ to activeLine)
+          .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
     else
+      val lookupWindow =
+        if lines.at(activeLine).contains("=") then lines.lineCount else fenceLookupWindow
       for
-        start <- previousFence(activeLine - 1).filter(isOpeningFence)
-        end   <- nextFence(activeLine + 1).filter(isClosingFence)
+        start <- previousFence(activeLine - 1, lookupWindow).filter(isOpeningFence)
+        end   <- nextFence(activeLine + 1, lookupWindow).filter(isClosingFence)
       yield start to end
 
   private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
