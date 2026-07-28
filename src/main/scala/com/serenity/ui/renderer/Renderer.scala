@@ -386,6 +386,14 @@ object Renderer:
     diagnostics: List[com.serenity.lsp.model.Diagnostic],
     visibleLines: Set[Int]
   ): CachedAnnotationIndex =
+    if visibleLines.isEmpty then CachedAnnotationIndex(Map.empty, Map.empty)
+    else buildAnnotationIndexForVisibleLines(comments, diagnostics, visibleLines)
+
+  private def buildAnnotationIndexForVisibleLines(
+    comments: List[DocumentComment],
+    diagnostics: List[com.serenity.lsp.model.Diagnostic],
+    visibleLines: Set[Int]
+  ): CachedAnnotationIndex =
     val commentsByLine = comments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
       (comment.start.line.max(visibleLines.minOption.getOrElse(0)) to comment.end.line.min(
         visibleLines.maxOption.getOrElse(-1)
