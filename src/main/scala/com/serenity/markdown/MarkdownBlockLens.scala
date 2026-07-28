@@ -6,7 +6,6 @@ object MarkdownBlockLens:
 
   private val fenceLookupWindow = 64
   private val fenceStateWindow = 64
-  private val activeFenceLookupWindow = 64
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
     def at(index: Int): String =
@@ -78,10 +77,10 @@ object MarkdownBlockLens:
 
     if isFenceLine(lines.at(activeLine)) then
       if hasFenceInfo(activeLine) then
-        nextFence(activeLine + 1, activeFenceLookupWindow).filter(isClosingFence).map(activeLine to _)
+        nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _)
       else
-        previousFence(activeLine - 1, activeFenceLookupWindow).filter(isOpeningFence).map(_ to activeLine)
-          .orElse(nextFence(activeLine + 1, activeFenceLookupWindow).filter(isClosingFence).map(activeLine to _))
+        previousFence(activeLine - 1, lines.lineCount).filter(isOpeningFence).map(_ to activeLine)
+          .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
     else
       for
         start <- previousFence(activeLine - 1).filter(isOpeningFence)

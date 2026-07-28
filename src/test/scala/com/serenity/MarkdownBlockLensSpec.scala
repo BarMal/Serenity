@@ -103,6 +103,12 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 15) shouldBe (0 to 21)
   }
 
+  it should "select a closing delimiter after more than 64 fenced lines" in {
+    val lines = Vector("```") ++ (1 to 80).map(index => s"val line = $index") ++ Vector("```")
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 81) shouldBe (0 to 81)
+  }
+
   it should "keep a bare closing delimiter with its preceding block" in {
     val lines = Vector(
       "```",
