@@ -241,6 +241,22 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     reads.get() should be < 600
   }
 
+  it should "bound reads for a large document without fences" in {
+    val lines = Vector.fill(10_000)("unrelated prose")
+    val reads = AtomicInteger(0)
+
+    MarkdownBlockLens.currentBlock(
+      lineCount = lines.length,
+      lineAt = index =>
+        reads.incrementAndGet()
+        lines.lift(index)
+      ,
+      activeLine = 5_000
+    )
+
+    reads.get() should be < 2_000
+  }
+
   it should "resolve fenced blocks without reading unrelated leading lines" in {
     val lines = Vector
       .fill(1_003)("unrelated")

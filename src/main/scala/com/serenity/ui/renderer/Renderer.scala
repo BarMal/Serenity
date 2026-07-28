@@ -348,11 +348,13 @@ object Renderer:
       .flatMap { bufferId =>
         state.buffers.get(bufferId).map { buffer =>
           val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
+          val visibleStart = visibleLines.minOption.getOrElse(0)
+          val visibleEnd   = visibleLines.maxOption.getOrElse(-1)
           val commentsByLine =
-            visibleLines.toList.sorted.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, line) =>
-              buffer.documentComments
-                .filter(comment => comment.start.line <= line && line <= comment.end.line)
-                .foldLeft(byLine)((updated, comment) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
+            buffer.documentComments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
+              (comment.start.line.max(visibleStart) to comment.end.line.min(visibleEnd)).iterator
+                .filter(visibleLines.contains)
+                .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
             }
           val diagnosticsByLine = state.diagnostics
             .getOrElse(SpellChecker.diagnosticsUri(buffer), Nil)

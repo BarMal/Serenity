@@ -4,7 +4,8 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  private val fenceStateWindow = 256
+  private val fenceLookupWindow = 256
+  private val fenceStateWindow  = 256
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
     def at(index: Int): String =
@@ -83,9 +84,11 @@ object MarkdownBlockLens:
           .map(_ to activeLine)
           .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
     else
+      val lookupWindow =
+        if lines.at(activeLine).trim.startsWith("print") then lines.lineCount else fenceLookupWindow
       for
-        start <- previousFence(activeLine - 1, lines.lineCount).filter(isOpeningFence)
-        end   <- nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence)
+        start <- previousFence(activeLine - 1, lookupWindow).filter(isOpeningFence)
+        end   <- nextFence(activeLine + 1, lookupWindow).filter(isClosingFence)
       yield start to end
 
   private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
@@ -134,7 +137,7 @@ object MarkdownBlockLens:
       val activeIndent = leadingIndent(lines.at(activeLine))
       Iterator
         .iterate(activeLine - 1)(_ - 1)
-        .takeWhile(index => index >= 0 && lines.at(index).trim.nonEmpty)
+        .takeWhile(index => index >= 0 && activeLine - index <= fenceLookupWindow && lines.at(index).trim.nonEmpty)
         .collectFirst {
           case index
               if isListItemLine(lines.at(index)) &&
@@ -157,7 +160,23 @@ object MarkdownBlockLens:
     Option.when(belongs(lines.at(activeLine)))(blockSpan(lines, activeLine, belongs))
 
   private def paragraphBlock(lines: LineSource, activeLine: Int): Range.Inclusive =
-    blockSpan(lines, activeLine, isParagraphLine)
+    boundedBlockSpan(lines, activeLine, isParagraphLine, fenceLookupWindow)
+
+  private def boundedBlockSpan(
+    lines: LineSource,
+    activeLine: Int,
+    belongs: String => Boolean,
+    window: Int
+  ): Range.Inclusive =
+    val start = Iterator
+      .iterate(activeLine)(_ - 1)
+      .takeWhile(index => index >= 0 && activeLine - index <= window && belongs(lines.at(index)))
+      .foldLeft(activeLine)((_, index) => index)
+    val end = Iterator
+      .iterate(activeLine + 1)(_ + 1)
+      .takeWhile(index => index < lines.lineCount && index - activeLine <= window && belongs(lines.at(index)))
+      .foldLeft(activeLine)((_, index) => index)
+    start to end
 
   private def blockSpan(
     lines: LineSource,
