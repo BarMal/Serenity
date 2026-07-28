@@ -5,7 +5,7 @@ import scala.annotation.tailrec
 object MarkdownBlockLens:
 
   private val fenceStateWindow  = 256
-  private val fenceLookupWindow = 2_048
+  private val fenceLookupWindow = 4_096
 
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
     def at(index: Int): String =

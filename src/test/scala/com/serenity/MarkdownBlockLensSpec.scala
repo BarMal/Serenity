@@ -137,6 +137,12 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 1_100) shouldBe (0 to 1_201)
   }
 
+  it should "select an interior line beyond 2,048 fenced lines" in {
+    val lines = Vector("```") ++ (1 to 2_400).map(index => s"x = $index") ++ Vector("```")
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 2_200) shouldBe (0 to 2_401)
+  }
+
   it should "keep a bare closing delimiter with its preceding block" in {
     val lines = Vector(
       "```",
