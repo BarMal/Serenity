@@ -145,6 +145,14 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 2) shouldBe (0 to 2)
   }
 
+  it should "keep a bare closing delimiter paired after a long block" in {
+    val lines = Vector("```") ++
+      (1 to 300).map(index => s"x = $index") ++
+      Vector("```", "prose between blocks", "```", "second block", "```")
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 301) shouldBe (0 to 301)
+  }
+
   it should "leave prose outside a long fenced block before the next opener" in {
     val lines = Vector("```") ++
       (1 to 17).map(index => s"val first = $index") ++

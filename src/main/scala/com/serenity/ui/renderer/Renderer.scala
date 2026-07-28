@@ -353,7 +353,11 @@ object Renderer:
       .flatMap(bufferId =>
         state.buffers.get(bufferId).map { buffer =>
           val diagnostics = state.diagnostics.getOrElse(SpellChecker.diagnosticsUri(buffer), Nil)
-          bufferId -> buildAnnotationIndex(buffer.documentComments, diagnostics)
+          bufferId -> buildAnnotationIndex(
+            buffer.documentComments,
+            diagnostics,
+            visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
+          )
         }
       )
       .toMap
@@ -379,12 +383,15 @@ object Renderer:
 
   private def buildAnnotationIndex(
     comments: List[DocumentComment],
-    diagnostics: List[com.serenity.lsp.model.Diagnostic]
+    diagnostics: List[com.serenity.lsp.model.Diagnostic],
+    visibleLines: Set[Int]
   ): CachedAnnotationIndex =
     val commentsByLine = comments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
-      (comment.start.line to comment.end.line).foldLeft(byLine) { (updated, line) =>
-        updated.updated(line, comment :: updated.getOrElse(line, Nil))
-      }
+      (comment.start.line.max(visibleLines.minOption.getOrElse(0)) to comment.end.line.min(
+        visibleLines.maxOption.getOrElse(-1)
+      )).iterator
+        .filter(visibleLines.contains)
+        .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
     }
     CachedAnnotationIndex(
       commentsByLine,
