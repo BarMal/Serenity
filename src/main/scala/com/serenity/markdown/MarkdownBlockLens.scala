@@ -4,12 +4,12 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  private case class LineSource(lineCount: Int, lineAt: Int => Option[String]):
+  private case class LineSource(lineCount: Int, lineAt: Int => Option[String], boundedFenceProbe: Boolean):
     def at(index: Int): String =
       lineAt(index).getOrElse("")
 
   def currentBlock(lines: Vector[String], activeLine: Int): Range.Inclusive =
-    currentBlock(lines.length, lines.lift, activeLine)
+    currentBlock(LineSource(lines.length, lines.lift, boundedFenceProbe = false), activeLine)
 
   /** Resolves a block using only the source lines inspected by the block parser. */
   def currentBlock(
@@ -17,7 +17,9 @@ object MarkdownBlockLens:
     lineAt: Int => Option[String],
     activeLine: Int
   ): Range.Inclusive =
-    val lines = LineSource(lineCount, lineAt)
+    currentBlock(LineSource(lineCount, lineAt, boundedFenceProbe = true), activeLine)
+
+  private def currentBlock(lines: LineSource, activeLine: Int): Range.Inclusive =
     if lines.lineCount <= 0 then 0 to 0
     else
       val clampedLine = activeLine.max(0).min(lines.lineCount - 1)
@@ -72,18 +74,19 @@ object MarkdownBlockLens:
       else if isFenceLine(lines.at(index)) then Some(index)
       else nextFence(index + 1, remaining - 1)
 
+    val fenceProbe = if lines.boundedFenceProbe then 512 else lines.lineCount
+
     if isFenceLine(lines.at(activeLine)) then
-      if hasFenceInfo(activeLine) then
-        nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _)
+      if hasFenceInfo(activeLine) then nextFence(activeLine + 1, fenceProbe).filter(isClosingFence).map(activeLine to _)
       else
-        previousFence(activeLine - 1, lines.lineCount)
+        previousFence(activeLine - 1, fenceProbe)
           .filter(isOpeningFence)
           .map(_ to activeLine)
-          .orElse(nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence).map(activeLine to _))
+          .orElse(nextFence(activeLine + 1, fenceProbe).filter(isClosingFence).map(activeLine to _))
     else
       for
-        start <- previousFence(activeLine - 1, lines.lineCount).filter(isOpeningFence)
-        end   <- nextFence(activeLine + 1, lines.lineCount).filter(isClosingFence)
+        start <- previousFence(activeLine - 1, fenceProbe).filter(isOpeningFence)
+        end   <- nextFence(activeLine + 1, fenceProbe).filter(isClosingFence)
       yield start to end
 
   private def tableBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =

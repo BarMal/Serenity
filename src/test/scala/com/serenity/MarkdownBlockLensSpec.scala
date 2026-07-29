@@ -298,7 +298,7 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
       activeLine = 5_000
     )
 
-    reads.get() should be < 6_000
+    reads.get() should be < 1_500
   }
 
   it should "preserve long paragraph blocks" in {
