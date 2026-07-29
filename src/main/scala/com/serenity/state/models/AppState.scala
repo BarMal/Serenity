@@ -6,7 +6,7 @@ import com.serenity.lsp.model.Diagnostic
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.rope.Rope
 import com.serenity.text.TextEditing
-import com.serenity.ui.layout.{Layout, ViewportSize}
+import com.serenity.ui.layout.{Layout, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.presets.UiPresetEditSession
 import com.serenity.ui.theme.Theme
 
@@ -562,7 +562,8 @@ object AppState:
     val layout = Layout(
       editorPanes = Map(PaneId(0) -> initialPane),
       activeEditorPaneId = Some(PaneId(0)),
-      paneOrder = List(PaneId(0))
+      paneOrder = List(PaneId(0)),
+      workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
     )
     AppState(
       layout = layout,
