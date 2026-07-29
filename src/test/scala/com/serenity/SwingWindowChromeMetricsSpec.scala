@@ -210,8 +210,12 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     pool.publish(spare)
 
     pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should be theSameInstanceAs initial
-    pool.acquire(width = 80, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should not be theSameInstanceAs (initial)
-    pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_RGB) should not be theSameInstanceAs (initial)
+    pool.acquire(width = 80, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should not be theSameInstanceAs(
+      initial
+    )
+    pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_RGB) should not be theSameInstanceAs(
+      initial
+    )
   }
 
   it should "clear prior frame pixels before masking a reused rounded buffer" in {

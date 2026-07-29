@@ -617,14 +617,13 @@ object SwingWindow:
   private[serenity] object PublishedImages:
     val empty: PublishedImages = PublishedImages(None, None)
 
-  private[serenity] final class ReusableImagePool:
+  final private[serenity] class ReusableImagePool:
     private val published = new AtomicReference[Option[BufferedImage]](None)
     private val spare     = new AtomicReference[Option[BufferedImage]](None)
 
     def acquire(width: Int, height: Int, imageType: Int): BufferedImage =
-      val candidate = spare.get().filter(image =>
-        image.getWidth == width && image.getHeight == height && image.getType == imageType
-      )
+      val candidate =
+        spare.get().filter(image => image.getWidth == width && image.getHeight == height && image.getType == imageType)
       candidate.getOrElse(new BufferedImage(width, height, imageType))
 
     def publish(image: BufferedImage): Unit =

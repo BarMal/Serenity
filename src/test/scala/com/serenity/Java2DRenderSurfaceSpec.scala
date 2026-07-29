@@ -214,8 +214,8 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   it should "accept a reusable frame-image provider with device-scaled dimensions" in {
     val canvas = new JPanel()
     canvas.setPreferredSize(new java.awt.Dimension(640, 480))
-    val metrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics  = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12)
+    val font     = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val provided = AtomicReference[Option[BufferedImage]](None)
     val surface = Java2DRenderSurface.forFrame(
       metrics,
