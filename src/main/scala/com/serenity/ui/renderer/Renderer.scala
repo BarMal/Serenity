@@ -1843,6 +1843,7 @@ object Renderer:
 
   private def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
     scene.modalBackdrop.foreach { backdrop =>
+      context.surface.setAlpha(0.4f)
       context.surface.setBackgroundColor(state.theme.margin)
       context.surface.fillRect(
         backdrop.frameRect.x,
@@ -1851,6 +1852,7 @@ object Renderer:
         backdrop.frameRect.height,
         ' '
       )
+      context.surface.setAlpha(1.0f)
     }
     OverlayViewModel.fromState(state, scene).modal.foreach { overlay =>
       TextOverlayRenderer.render(
