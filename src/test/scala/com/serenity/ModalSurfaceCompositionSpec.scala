@@ -7,6 +7,13 @@ import org.scalatest.matchers.should.Matchers
 
 class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
+  private val frame = LayoutRect(10, 4, 60, 12)
+
+  private def planFor(modal: Modal, targetRows: Int = 1): ResolvedSurfaceComposition =
+    ModalSurfaceComposition
+      .forModal(modal, frame, targetRows)
+      .getOrElse(fail(s"expected composition for $modal"))
+
   "ModalSurfaceComposition" should "derive close workflow paint, focus, and hit geometry from one plan" in {
     val workflow = CloseWorkflowState(
       CloseScope.Current,
@@ -74,4 +81,100 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     }
     plan.hitRegions.foreach(hit => plan.bounds.containsRect(hit.rect) shouldBe true)
     plan.focusOrder shouldBe plan.hitRegions.map(_.focusId)
+  }
+
+  it should "compose goto and custom workflows as labelled text inputs" in {
+    val goto   = planFor(Modal.GotoLine("42"))
+    val custom = planFor(Modal.Custom("rename", "draft"))
+
+    goto.hitRegions.map(_.semanticLabel) shouldBe List("Go to line")
+    goto.paintBoxes.flatMap(_.cursorOffset) shouldBe List("Go to line 42".length)
+    custom.hitRegions.map(_.semanticLabel) shouldBe List("rename")
+    custom.paintBoxes.flatMap(_.cursorOffset) shouldBe List("rename draft".length)
+    goto.focusOrder shouldBe goto.hitRegions.map(_.focusId)
+    custom.focusOrder shouldBe custom.hitRegions.map(_.focusId)
+  }
+
+  it should "compose find input and result rows from one clipped plan" in {
+    val plan = planFor(
+      Modal.Find(
+        "needle",
+        List(FindResult(1, 2), FindResult(4, 5), FindResult(7, 8)),
+        currentIndex = 1
+      )
+    )
+
+    plan.hitRegions.map(_.semanticLabel) shouldBe List("Find")
+    plan.paintBoxes.flatMap(_.text) should contain allOf ("Find needle", "1. 2:3", "2. 5:6", "3. 8:9")
+    plan.paintBoxes.find(_.text.contains("2. 5:6")).exists(_.selected) shouldBe true
+    plan.paintBoxes.foreach(box => plan.bounds.containsRect(box.rect) shouldBe true)
+  }
+
+  it should "compose replace fields and actions with stable semantic identities" in {
+    val workflow = ReplaceWorkflowState(
+      findText = "before",
+      replacementText = "after",
+      activeField = ReplaceWorkflowField.ReplaceWith,
+      selectedAction = ReplaceWorkflowAction.ReplaceAll,
+      selectedScope = ReplaceWorkflowScope.Selection
+    )
+
+    val plan = planFor(Modal.ReplaceWorkflow(workflow))
+
+    plan.hitRegions.map(_.semanticLabel) should contain allOf (
+      "Find",
+      "Replace",
+      "Replace Next",
+      "Replace All",
+      "Current Buffer",
+      "Selection"
+    )
+    plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("replace-all"))).exists(_.selected) shouldBe true
+    plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("replace-selection"))).exists(_.selected) shouldBe true
+    plan.paintBoxes.filter(_.actionId.nonEmpty).map(_.rect) shouldBe
+      plan.hitRegions.filter(_.actionId.nonEmpty).map(_.rect)
+  }
+
+  it should "compose file fields and suggestions with matching paint and hit boxes" in {
+    val workflow = FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.scala",
+      path = "/tmp/project",
+      activeField = FileWorkflowField.Path,
+      suggestions = List(
+        FileWorkflowSuggestion("/tmp/project", isDirectory = true),
+        FileWorkflowSuggestion("/tmp/project/notes.scala", isDirectory = false)
+      ),
+      selectedSuggestionIndex = 1
+    )
+
+    val plan = planFor(Modal.FileWorkflow(workflow), targetRows = 2)
+
+    plan.hitRegions.map(_.semanticLabel) should contain allOf (
+      "Filename",
+      "Path",
+      "/tmp/project/",
+      "/tmp/project/notes.scala"
+    )
+    plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("file-suggestion-1"))).exists(_.selected) shouldBe true
+    plan.paintBoxes.filter(_.focusId.nonEmpty).map(_.rect) shouldBe plan.hitRegions.map(_.rect)
+  }
+
+  it should "derive preferred frame height from each workflow composition" in {
+    ModalSurfaceComposition.frameHeight(Modal.GotoLine(""), targetRows = 1) shouldBe 3
+    ModalSurfaceComposition.frameHeight(Modal.Custom("rename", ""), targetRows = 1) shouldBe 4
+    ModalSurfaceComposition.frameHeight(Modal.Find("needle", Nil, 0), targetRows = 1) shouldBe 4
+    ModalSurfaceComposition.frameHeight(
+      Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace"))),
+      targetRows = 1
+    ) shouldBe 8
+    ModalSurfaceComposition.frameHeight(
+      Modal.FileWorkflow(
+        FileWorkflowState(
+          mode = FileWorkflowMode.Open,
+          suggestions = List(FileWorkflowSuggestion("one", false), FileWorkflowSuggestion("two", false))
+        )
+      ),
+      targetRows = 1
+    ) shouldBe 8
   }

@@ -215,8 +215,8 @@ object OverlayViewModel:
 
   private def isComposedContent(content: SurfaceContent): Boolean =
     content match
-      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(_)) => true
-      case _                                                    => false
+      case SurfaceContent.ModalWorkflow(_) => true
+      case _                               => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
     content match
@@ -245,13 +245,11 @@ object OverlayViewModel:
     state: AppState
   ): Option[ResolvedSurfaceComposition] =
     content match
-      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) =>
-        Some(
-          ModalSurfaceComposition.close(
-            workflow,
-            rect,
-            SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
-          )
+      case SurfaceContent.ModalWorkflow(modal) =>
+        ModalSurfaceComposition.forModal(
+          modal,
+          rect,
+          SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
         )
       case _ => None
 

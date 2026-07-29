@@ -158,6 +158,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.rows(1).selected shouldBe true
     overlay.footer.map(_.plainText) shouldBe Some("1 match, 1/1 at 2:1")
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
+    overlay.composition shouldBe defined
+    overlay.composition.toList.flatMap(_.hitRegions).map(_.semanticLabel) shouldBe List("Find")
   }
 
   it should "allocate spaced framed rows for a context menu at compact density" in {
