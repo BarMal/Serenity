@@ -28,7 +28,9 @@ object ModalSurfaceComposition:
       case Modal.Find(_, Nil, _)           => 5
       case Modal.Custom(_, _)              => 4
       case Modal.Find(_, _, _)             => 6
-      case Modal.ReplaceWorkflow(workflow) => if workflow.statusMessage.nonEmpty then 8 else 7
+      case Modal.ReplaceWorkflow(workflow) =>
+        val contentRows = 3 + actionRows * 2 + workflow.statusMessage.fold(0)(_ => 1)
+        SurfaceFrameLayout.DefaultBorderCells * 2 + contentRows
       case Modal.FileWorkflow(workflow)    => math.max(8, math.min(12, workflow.suggestions.take(4).size + 6))
       case Modal.CloseWorkflow(_)          => closeFrameHeight(actionRows)
 
@@ -143,7 +145,9 @@ object ModalSurfaceComposition:
         textBox(
           s"${index + 1}. ${result.line + 1}:${result.column + 1}",
           rowRect(bounds, offset + 2),
-          selected = index == resultSet.currentIndex
+          selected = index == resultSet.currentIndex,
+          focusId = Some(SurfaceFocusId(s"find-result-$index")),
+          actionId = Some(SurfaceActionId(s"find-result-$index"))
         )
     }
     val footer = Option.when(resultSet.query.nonEmpty) {
@@ -283,12 +287,17 @@ object ModalSurfaceComposition:
     rect: LogicalPixelRect,
     selected: Boolean = false,
     segments: List[OverlaySegment] = Nil,
-    layout: SurfacePaintLayout = SurfacePaintLayout.Plain
+    layout: SurfacePaintLayout = SurfacePaintLayout.Plain,
+    focusId: Option[SurfaceFocusId] = None,
+    actionId: Option[SurfaceActionId] = None
   ): SurfacePaintBox =
     SurfacePaintBox(
       SurfacePaintKind.Text,
       rect,
       text = Some(text),
+      focusId = focusId,
+      actionId = actionId,
+      semanticLabel = Some(text),
       selected = selected,
       segments = segments,
       layout = layout

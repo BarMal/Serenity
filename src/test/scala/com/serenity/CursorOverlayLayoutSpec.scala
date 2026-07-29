@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -529,22 +529,24 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "size a replace overlay to fit fields, actions, scope, and status" in {
-    val state = baseState().copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("replace"),
-          SurfaceContent.ModalWorkflow(
-            Modal.ReplaceWorkflow(
-              ReplaceWorkflowState(statusMessage = Some("3 matches will be replaced"))
-            )
-          ),
-          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+    List(InterfaceDensity.Comfortable, InterfaceDensity.Spacious).foreach { density =>
+      val modal = Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("3 matches will be replaced")))
+      val state = baseState().copy(
+        config = baseState().config.withInterfaceDensity(density),
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("replace"),
+            SurfaceContent.ModalWorkflow(modal),
+            SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+          )
         )
       )
-    )
 
-    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+      val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
-    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(8)
+      layout.belowCursorOverlayRect.map(_.height) shouldBe Some(
+        ModalSurfaceComposition.frameHeight(modal, targetRows = 2)
+      )
+    }
   }
 end CursorOverlayLayoutSpec

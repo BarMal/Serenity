@@ -127,6 +127,60 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("12")))
   }
 
+  it should "apply clicked find results and replace controls through modal input events" in {
+    val findSurface = UiSurface(
+      SurfaceId("find"),
+      SurfaceContent.ModalWorkflow(Modal.Find("needle", List(matchAt(0, 0), matchAt(1, 0)), 0)),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val findState = stateWithFindModal("needle", "needle\nneedle").copy(
+      uiSurfaces = List(findSurface),
+      focus = Focus.Surface(findSurface.id)
+    )
+    val selectedFind = ModalEventReducer
+      .reduce(ModalType.Find, ModalClick("find-result-1", Some("find-result-1")), findState)
+      .state
+    activeFindModal(selectedFind) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(1, 0)), 1))
+
+    val replaceSurface = UiSurface(
+      SurfaceId("replace"),
+      SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState())),
+      SurfacePresentation.Modal
+    )
+    val replaceState = AppState.initial.copy(
+      uiSurfaces = List(replaceSurface),
+      focus = Focus.Surface(replaceSurface.id)
+    )
+    val selectedReplace = ModalEventReducer
+      .reduce(ModalType.ReplaceWorkflow, ModalClick("replace-selection", Some("replace-selection")), replaceState)
+      .state
+    selectedReplace.modalSurface.flatMap(_.content match
+      case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => Some(workflow.selectedScope)
+      case _                                                              => None
+    ) shouldBe Some(ReplaceWorkflowScope.Selection)
+
+    val fileSurface = UiSurface(
+      SurfaceId("file"),
+      SurfaceContent.ModalWorkflow(
+        Modal.FileWorkflow(
+          FileWorkflowState(
+            mode = FileWorkflowMode.Open,
+            suggestions = List(FileWorkflowSuggestion("one"), FileWorkflowSuggestion("two"))
+          )
+        )
+      ),
+      SurfacePresentation.Modal
+    )
+    val fileState = AppState.initial.copy(uiSurfaces = List(fileSurface), focus = Focus.Surface(fileSurface.id))
+    val selectedFile = ModalEventReducer
+      .reduce(ModalType.FileWorkflow, ModalClick("file-suggestion-1", Some("file-suggestion-1")), fileState)
+      .state
+    selectedFile.modalSurface.flatMap(_.content match
+      case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.selectedSuggestionIndex)
+      case _                                                           => None
+    ) shouldBe Some(1)
+  }
+
   it should "jump to the requested line and dismiss the goto line modal" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)

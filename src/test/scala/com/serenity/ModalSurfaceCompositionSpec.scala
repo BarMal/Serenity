@@ -104,7 +104,7 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    plan.hitRegions.map(_.semanticLabel) shouldBe List("Find")
+    plan.hitRegions.map(_.semanticLabel) shouldBe List("Find", "1. 2:3", "2. 5:6", "3. 8:9")
     plan.paintBoxes.flatMap(_.text) should contain allOf ("Find needle", "1. 2:3", "2. 5:6", "3. 8:9")
     plan.paintBoxes.flatMap(_.text) should contain("3 matches, 2/3 at 5:6")
     plan.paintBoxes.find(_.text.contains("2. 5:6")).exists(_.selected) shouldBe true
@@ -211,6 +211,11 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace"))),
       targetRows = 1
     ) shouldBe 8
+    ModalSurfaceComposition.frameHeight(Modal.ReplaceWorkflow(ReplaceWorkflowState()), targetRows = 2) shouldBe 9
+    ModalSurfaceComposition.frameHeight(
+      Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace"))),
+      targetRows = 2
+    ) shouldBe 10
     ModalSurfaceComposition.frameHeight(
       Modal.FileWorkflow(
         FileWorkflowState(

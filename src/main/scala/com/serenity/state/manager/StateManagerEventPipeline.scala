@@ -931,22 +931,30 @@ final private[manager] class StateManagerEventPipeline(
   private def handleModalMouseInput(event: MouseInputEvent, state: AppState): cats.effect.IO[Unit] =
     event match
       case click: MouseClick if click.button == MouseButton.Primary =>
-        modalCloseWorkflowChoiceAt(click, state) match
-          case Some(choice) =>
-            val selected = ModalEventReducer.selectCloseWorkflowChoice(choice, state)
-            applyReducerResult(selected, state) >>
-              stateRef.get.flatMap { updatedState =>
-                applyReducerResult(
-                  ModalEventReducer.reduce(ModalType.CloseWorkflow, ModalSubmit, updatedState),
-                  updatedState
-                )
-              }
-          case None =>
-            cats.effect.IO.unit
+        modalHitAt(click, state) match
+          case Some((modal, hit)) =>
+            val modalType = this.modalType(modal)
+            val clicked = ModalEventReducer.reduce(
+              modalType,
+              ModalClick(hit.focusId.value, hit.actionId.map(_.value)),
+              state
+            )
+            applyReducerResult(clicked, state) >>
+              Option.when(modalType == ModalType.CloseWorkflow && hit.actionId.nonEmpty)(()).fold(
+                cats.effect.IO.unit
+              )(_ =>
+                stateRef.get.flatMap { updatedState =>
+                  applyReducerResult(
+                    ModalEventReducer.reduce(ModalType.CloseWorkflow, ModalSubmit, updatedState),
+                    updatedState
+                  )
+                }
+              )
+          case None => cats.effect.IO.unit
       case _ =>
         cats.effect.IO.unit
 
-  private def modalCloseWorkflowChoiceAt(click: MouseClick, state: AppState): Option[CloseWorkflowChoice] =
+  private def modalHitAt(click: MouseClick, state: AppState): Option[(Modal, SurfaceHitRegion)] =
     for
       viewportSize <- state.viewportSize
       surface      <- state.topModalSurface
@@ -955,16 +963,14 @@ final private[manager] class StateManagerEventPipeline(
         .modal
         .find(_.id == SceneNodeId.Surface(surface.id))
       _ <- Option.when(node.frameRect.contains(click.col, click.row))(())
-      workflow <- surface.content match
-        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-        case _                                                           => None
+      modal <- surface.content match
+        case SurfaceContent.ModalWorkflow(modal) => Some(modal)
+        case _                                   => None
       targetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
-      actionId <- ModalSurfaceComposition
-        .forModal(Modal.CloseWorkflow(workflow), node.frameRect, targetRows)
+      hit <- ModalSurfaceComposition
+        .forModal(modal, node.frameRect, targetRows)
         .flatMap(_.hitAt(click.col.toDouble, click.row.toDouble))
-        .flatMap(_.actionId)
-      choice <- ModalSurfaceComposition.closeChoice(actionId)
-    yield choice
+    yield (modal, hit)
 
   private def handleStartupPageMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
     val action = state.startPageSurface.flatMap { surface =>

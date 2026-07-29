@@ -13,6 +13,7 @@ case object ModalPreviousField                 extends ModalInputEvent
 case object ModalSubmit                        extends ModalInputEvent
 case object ModalFindNext                      extends ModalInputEvent
 case object ModalDismiss                       extends ModalInputEvent
+case class ModalClick(focusId: String, actionId: Option[String]) extends ModalInputEvent
 
 object ModalInputEvent:
 

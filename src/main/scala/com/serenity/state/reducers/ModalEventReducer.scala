@@ -73,6 +73,8 @@ object ModalEventReducer:
                 ReducerResult.noEffects(dismissToPane(currentState))
           case _ =>
             ReducerResult.noEffects(dismissToPane(currentState))
+      case ModalClick(_, _) =>
+        ReducerResult.noEffects(currentState)
       case _ =>
         ReducerResult.noEffects(currentState)
 
@@ -120,6 +122,16 @@ object ModalEventReducer:
             ReducerResult.noEffects(updateFindSelection(currentState, surface, query, results, nextIndex))
           case _ =>
             ReducerResult.noEffects(currentState)
+      case ModalClick(_, Some(actionId)) if actionId.startsWith("find-result-") =>
+        currentModal(currentState) match
+          case Some((surface, Modal.Find(query, results, _))) if query.nonEmpty =>
+            actionId.stripPrefix("find-result-").toIntOption match
+              case Some(index) if index >= 0 && index < results.length =>
+                ReducerResult.noEffects(updateFindSelection(currentState, surface, query, results, index))
+              case _ => ReducerResult.noEffects(currentState)
+          case _ => ReducerResult.noEffects(currentState)
+      case ModalClick(_, _) =>
+        ReducerResult.noEffects(currentState)
       case _ =>
         ReducerResult.noEffects(currentState)
 
@@ -213,6 +225,24 @@ object ModalEventReducer:
             ReducerResult.withEffect(currentState, AppEffect.SubmitFileWorkflow(surface.id))
           case _ =>
             ReducerResult.noEffects(currentState)
+      case ModalClick(focusId, actionId) =>
+        currentModal(currentState) match
+          case Some((surface, Modal.FileWorkflow(workflow))) =>
+            val updated = actionId match
+              case Some(id) if id.startsWith("file-suggestion-") =>
+                id.stripPrefix("file-suggestion-").toIntOption
+                  .filter(index => index >= 0 && index < workflow.suggestions.length)
+                  .map(index => workflow.updated(selectedSuggestionIndex = index, statusMessage = None))
+              case _ => None
+            val fieldUpdated = focusId match
+              case "filename" => Some(workflow.updated(activeField = FileWorkflowField.Filename, statusMessage = None))
+              case "path"     => Some(workflow.updated(activeField = FileWorkflowField.Path, statusMessage = None))
+              case _          => None
+            val nextState = updateModal(currentState, surface, Modal.FileWorkflow(updated.orElse(fieldUpdated).getOrElse(workflow)))
+            if fieldUpdated.nonEmpty then ReducerResult.withEffect(nextState, AppEffect.RefreshFileWorkflow(surface.id))
+            else ReducerResult.noEffects(nextState)
+          case _ =>
+            ReducerResult.noEffects(currentState)
       case _ =>
         ReducerResult.noEffects(currentState)
 
@@ -238,6 +268,23 @@ object ModalEventReducer:
             ReducerResult.withEffect(currentState, AppEffect.SubmitCloseWorkflow(surface.id))
           case _ =>
             ReducerResult.noEffects(currentState)
+      case ModalClick(_, Some(actionId)) =>
+        currentModal(currentState) match
+          case Some((surface, Modal.CloseWorkflow(workflow))) =>
+            val choice = actionId match
+              case "close-save"    => Some(CloseWorkflowChoice.Save)
+              case "close-discard" => Some(CloseWorkflowChoice.Discard)
+              case "close-cancel"  => Some(CloseWorkflowChoice.Cancel)
+              case _               => None
+            ReducerResult.noEffects(choice.fold(currentState)(selected => updateModal(
+              currentState,
+              surface,
+              Modal.CloseWorkflow(workflow.copy(selectedChoice = selected))
+            )))
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalClick(_, _) =>
+        ReducerResult.noEffects(currentState)
       case _ =>
         ReducerResult.noEffects(currentState)
 
@@ -337,6 +384,22 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(_))) =>
             ReducerResult.withEffect(currentState, AppEffect.SubmitReplaceWorkflow(surface.id))
+          case _ =>
+            ReducerResult.noEffects(currentState)
+      case ModalClick(focusId, actionId) =>
+        currentModal(currentState) match
+          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+            val clicked = actionId match
+              case Some("replace-next")      => Some(workflow.copy(selectedAction = ReplaceWorkflowAction.ReplaceNext))
+              case Some("replace-all")       => Some(workflow.copy(selectedAction = ReplaceWorkflowAction.ReplaceAll))
+              case Some("current-buffer")    => Some(workflow.copy(selectedScope = ReplaceWorkflowScope.CurrentBuffer))
+              case Some("replace-selection") => Some(workflow.copy(selectedScope = ReplaceWorkflowScope.Selection))
+              case _                          => None
+            val field = focusId match
+              case "find"    => Some(workflow.copy(activeField = ReplaceWorkflowField.Find))
+              case "replace" => Some(workflow.copy(activeField = ReplaceWorkflowField.ReplaceWith))
+              case _         => None
+            ReducerResult.noEffects(updateReplaceWorkflow(currentState, surface, clicked.orElse(field).getOrElse(workflow)))
           case _ =>
             ReducerResult.noEffects(currentState)
       case _ =>
