@@ -36,9 +36,8 @@ case class RenderContext(
 
 object Renderer:
 
-  private val MarkdownFenceProbeWindow         = 512
-  private val MarkdownFenceFallbackProbeWindow = 1_024
-  private val MarkdownSelectionProbeLimit      = 512
+  private val MarkdownFenceProbeWindow    = 512
+  private val MarkdownSelectionProbeLimit = 512
 
   private def markdownBlockForRenderer(buffer: Buffer, line: Int): Range.Inclusive =
     val bounded = MarkdownBlockLens.currentBlock(
@@ -47,14 +46,20 @@ object Renderer:
       line,
       fenceProbeWindow = MarkdownFenceProbeWindow
     )
-    if bounded.length != MarkdownFenceProbeWindow * 2 + 1 then bounded
-    else
-      MarkdownBlockLens.currentBlock(
-        buffer.content.lineCount,
-        buffer.content.getLine,
-        line,
-        fenceProbeWindow = MarkdownFenceFallbackProbeWindow
-      )
+    def resolve(window: Int, range: Range.Inclusive): Range.Inclusive =
+      val exhausted = range.length == window * 2 + 1
+      if !exhausted || window >= buffer.content.lineCount then range
+      else
+        val nextWindow = (window * 2).min(buffer.content.lineCount)
+        val expanded = MarkdownBlockLens.currentBlock(
+          buffer.content.lineCount,
+          buffer.content.getLine,
+          line,
+          fenceProbeWindow = nextWindow
+        )
+        resolve(nextWindow, expanded)
+
+    resolve(MarkdownFenceProbeWindow, bounded)
 
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
