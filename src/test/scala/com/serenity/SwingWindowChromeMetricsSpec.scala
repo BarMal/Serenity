@@ -63,22 +63,24 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.Custom, "Linux") shouldBe true
   }
 
-  it should "include the sitter glyph in the native window title" in {
+  it should "keep the native window title stable while the sitter animates" in {
     val sitter = WindowSitter.default.observeTyping(1_000_000_000L)
 
-    SwingWindow.windowTitle(sitter, visible = true) shouldBe s"Serenity  ${sitter.glyph}"
+    SwingWindow.WindowTitle shouldBe "Serenity"
+    SwingWindow.WindowTitle shouldBe "Serenity"
+    SwingWindow.WindowTitle shouldBe "Serenity"
   }
 
-  it should "render configured resting frames in the startup title" in {
+  it should "keep the custom title label text stable at startup" in {
     val sitter = WindowSitter.fromConfig(WindowSitterConfig(frames = Vector("rest", "active")))
 
-    SwingWindow.windowTitle(sitter, visible = true) shouldBe "Serenity  rest"
+    SwingWindow.WindowTitle shouldBe "Serenity"
   }
 
   it should "hide the sitter title decoration when it is disabled or reduced motion is active" in {
     val sitter = WindowSitter.fromConfig(WindowSitterConfig(enabled = false, frames = Vector("rest")))
 
-    SwingWindow.windowTitle(sitter, visible = false) shouldBe "Serenity"
+    SwingWindow.WindowTitle shouldBe "Serenity"
   }
 
   it should "refresh the per-pixel corner mask when chrome metrics change" in {

@@ -58,6 +58,7 @@ class SwingWindow(
   private val controlPanelRef        = new AtomicReference[Option[JPanel]](None)
   private val titleBarRef            = new AtomicReference[Option[JPanel]](None)
   private val titleLabelRef          = new AtomicReference[Option[JLabel]](None)
+  private val sitterLabelRef         = new AtomicReference[Option[JLabel]](None)
   private val titleSpacerRef         = new AtomicReference[Option[JPanel]](None)
   private val onResizeCallbackRef    = new AtomicReference[Option[() => Unit]](None)
   private val resizeGlassPaneRef     = new AtomicReference[Option[JComponent]](None)
@@ -250,13 +251,23 @@ class SwingWindow(
       setPreferredSize(chromeSpacerSize)
     titleSpacerRef.set(Some(spacer))
 
-    val titleLabel = new JLabel(
-      SwingWindow.windowTitle(initialWindowSitter, initialWindowSitterVisible),
-      SwingConstants.CENTER
-    ):
+    val titleLabel = new JLabel(SwingWindow.WindowTitle, SwingConstants.CENTER):
       setForeground(chromePaletteRef.get().titleForeground)
       setFont(chromeControlFont)
+      SwingWindow.setAccessibleNameIfAvailable(this, SwingWindow.WindowTitle)
     titleLabelRef.set(Some(titleLabel))
+
+    val sitterLabel = new JLabel(initialWindowSitter.glyph, SwingConstants.CENTER):
+      setForeground(chromePaletteRef.get().titleForeground)
+      setFont(chromeControlFont)
+      setVisible(initialWindowSitterVisible)
+      override def getAccessibleContext: javax.accessibility.AccessibleContext = null
+    sitterLabelRef.set(Some(sitterLabel))
+
+    val titleContent = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0)):
+      setOpaque(false)
+    titleContent.add(titleLabel)
+    titleContent.add(sitterLabel)
 
     val dragAdapter = new MouseAdapter:
       private case class DragAnchor(x: Int, y: Int)
@@ -301,11 +312,15 @@ class SwingWindow(
       case SwingWindow.ChromeControlPlacement.Right =>
         bar.add(spacer, BorderLayout.WEST)
         bar.add(btnPanel, BorderLayout.EAST)
-    bar.add(titleLabel, BorderLayout.CENTER)
+    bar.add(titleContent, BorderLayout.CENTER)
     bar.addMouseListener(dragAdapter)
     bar.addMouseMotionListener(dragAdapter)
     titleLabel.addMouseListener(dragAdapter)
     titleLabel.addMouseMotionListener(dragAdapter)
+    sitterLabel.addMouseListener(dragAdapter)
+    sitterLabel.addMouseMotionListener(dragAdapter)
+    titleContent.addMouseListener(dragAdapter)
+    titleContent.addMouseMotionListener(dragAdapter)
     bar
 
   private class ResizeGlassPane extends JComponent:
@@ -422,7 +437,7 @@ class SwingWindow(
       else super.paint(g)
 
   private val frame: JFrame =
-    val f = new JFrame(SwingWindow.windowTitle(initialWindowSitter, initialWindowSitterVisible))
+    val f = new JFrame(SwingWindow.WindowTitle)
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
     f.setUndecorated(usesCustomChrome)
     if usesCustomChrome && perPixelTranslucencySupported then f.setBackground(SwingWindow.Transparent)
@@ -535,10 +550,11 @@ class SwingWindow(
 
   /** Update the decorative sitter without changing the window's title-bar interactions. */
   def updateWindowSitter(sitter: WindowSitter, visible: Boolean): Unit =
-    val title = SwingWindow.windowTitle(sitter, visible)
     val update: Runnable = () =>
-      frame.setTitle(title)
-      titleLabelRef.get().foreach(_.setText(title))
+      sitterLabelRef.get().foreach { label =>
+        label.setText(sitter.glyph)
+        label.setVisible(visible)
+      }
     if SwingUtilities.isEventDispatchThread then update.run()
     else SwingUtilities.invokeLater(update)
 
@@ -574,6 +590,7 @@ class SwingWindow(
       val controlFont = chromeControlFont
       controlButtonsRef.get().foreach(button => button.setPreferredSize(chromeButtonSize))
       titleLabelRef.get().foreach(_.setFont(controlFont))
+      sitterLabelRef.get().foreach(_.setFont(controlFont))
       titleSpacerRef.get().foreach(_.setPreferredSize(chromeSpacerSize))
       titleBarRef.get().foreach(_.setPreferredSize(chromeTitleBarSize))
       frame.setMinimumSize(new Dimension(chrome.minWidth, chrome.minHeight))
@@ -586,6 +603,7 @@ class SwingWindow(
     controlPanelRef.get().foreach(_.setBackground(palette.titleBackground))
     titleSpacerRef.get().foreach(_.setBackground(palette.titleBackground))
     titleLabelRef.get().foreach(_.setForeground(palette.titleForeground))
+    sitterLabelRef.get().foreach(_.setForeground(palette.titleForeground))
     titleBarRef.get().foreach { titleBar =>
       titleBar.setBackground(palette.titleBackground)
       titleBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, palette.border))
@@ -619,9 +637,7 @@ object SwingWindow:
   val DefaultMetrics: CellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
   val BaseMinWidth: Int           = 400
   val BaseMinHeight: Int          = 300
-
-  private[serenity] def windowTitle(sitter: WindowSitter, visible: Boolean): String =
-    if visible then s"Serenity  ${sitter.glyph}" else "Serenity"
+  private[serenity] val WindowTitle: String = "Serenity"
 
   private[serenity] def perPixelTranslucencySupported: Boolean =
     GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice
