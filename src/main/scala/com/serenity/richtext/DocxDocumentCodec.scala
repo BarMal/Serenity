@@ -14,12 +14,14 @@ import org.w3c.dom.{Document as XmlDocument, Element, Node}
 /** Reads and writes Word Open XML documents through Serenity's native rich text model. */
 object DocxDocumentCodec:
   private val WNs = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
   private val SupportedArchiveEntries = Set(
     "[Content_Types].xml",
     "_rels/.rels",
     "word/document.xml",
     "word/_rels/document.xml.rels"
   )
+
   private val SupportedElements = Set(
     "document",
     "body",
@@ -45,6 +47,10 @@ object DocxDocumentCodec:
   /** Read a DOCX file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(readBytes(RichTextArchive.readFile(path, "DOCX")))
+
+  /** Read a DOCX file and report structures that the native model cannot round-trip. */
+  def readWithFidelity(path: Path): IO[RichTextImport] =
+    IO.blocking(readBytesWithFidelity(RichTextArchive.readFile(path, "DOCX")))
 
   /** Write Serenity's native rich text model to a DOCX file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
@@ -76,8 +82,8 @@ object DocxDocumentCodec:
   /** Decode DOCX bytes and report structures that the native model cannot round-trip. */
   def readBytesWithFidelity(bytes: Array[Byte]): RichTextImport =
     val document = readBytes(bytes)
-    val content = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse(Array.emptyByteArray)
-    val xml     = parseXml(content)
+    val content  = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse(Array.emptyByteArray)
+    val xml      = parseXml(content)
     val unsupportedElements =
       (0 until xml.getElementsByTagNameNS(WNs, "*").getLength)
         .map(xml.getElementsByTagNameNS(WNs, "*").item)

@@ -72,6 +72,7 @@ case class SessionBuffer(
     // Persist buffer text so restore does not depend on disk reads
     unsavedContent: Option[String] = None,
     richTextDocument: Option[RichTextDocument] = None,
+    richTextFidelity: Option[RichTextFidelity] = None,
     findState: Option[SessionFindState] = None,
     bookmarks: List[SessionCursorPosition] = Nil,
     documentComments: List[SessionDocumentComment] = Nil
@@ -281,6 +282,7 @@ object SessionBuffer:
         if persistUnsaved || (!buffer.isDirty && !buffer.isNewEmpty) then Some(text)
         else None,
       richTextDocument = buffer.richTextDocument.filter(_.matchesPlainText(text)),
+      richTextFidelity = buffer.richTextFidelity,
       findState = buffer.findState.map(SessionFindState.fromFindState),
       bookmarks = buffer.bookmarks.map(SessionCursorPosition.fromCursorPosition),
       documentComments = buffer.documentComments.map(SessionDocumentComment.fromDocumentComment)
@@ -302,7 +304,8 @@ object SessionBuffer:
       findState = sessionBuffer.findState.map(SessionFindState.toFindState),
       bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition),
       documentComments = sessionBuffer.documentComments.map(SessionDocumentComment.toDocumentComment),
-      richTextDocument = sessionBuffer.richTextDocument
+      richTextDocument = sessionBuffer.richTextDocument,
+      richTextFidelity = sessionBuffer.richTextFidelity
     )
 
   def toBufferIO(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
@@ -1232,8 +1235,10 @@ given Decoder[SessionUiPresetEditSession] = Decoder.instance { cursor =>
   )
 }
 
-given Encoder[SessionBuffer] = deriveEncoder
-given Decoder[SessionBuffer] = deriveDecoder
+given Encoder[SessionBuffer]    = deriveEncoder
+given Decoder[SessionBuffer]    = deriveDecoder
+given Encoder[RichTextFidelity] = deriveEncoder
+given Decoder[RichTextFidelity] = deriveDecoder
 
 given Encoder[SessionCursorPosition] = deriveEncoder
 given Decoder[SessionCursorPosition] = deriveDecoder
