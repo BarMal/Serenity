@@ -23,6 +23,28 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
 
   behavior of "Startup State Rendering"
 
+  it should "render the start page without editor content" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+    yield
+      val surface = new MockRenderSurface(100, 30)
+
+      Renderer.render(
+        state,
+        cursorVisible = true,
+        surface,
+        ViewportSize(100, 30)
+      )
+      surface.drawRunPxCalls.map(_.s) should contain(state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page.title)
+      surface.drawRunPxCalls.map(_.s) should not contain "Empty document — start typing"
+
+    program.unsafeRunSync()
+  }
+
   it should "render the dedicated start page vertically centered in the viewport" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
