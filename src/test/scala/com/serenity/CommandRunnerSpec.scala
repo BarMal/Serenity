@@ -239,7 +239,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "return one unambiguous global motion target for an animation search" in {
+  it should "return all matching global motion targets for an animation search" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -247,8 +247,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(CommandCategory.Settings)
       .updateSearchTerm("animation")
 
-    runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe
-      List("settings-animation")
+    runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe List(
+      "settings-animation",
+      "settings-interface-layout",
+      "settings-preset-animations",
+      "settings-preset-ui-surface-motion"
+    )
   }
 
   it should "return a unique leaf result with its breadcrumb for an exact settings search" in {
@@ -412,12 +416,18 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "window-chrome",
+      "window-sitter-enabled",
+      "window-sitter-action",
       "ui-element-gap",
       "ui-corner-radius",
       "ui-outline-thickness",
       "command-runner-visible-rows",
       "command-runner-item-gap-rows",
-      "command-runner-cursor-gap-rows"
+      "command-runner-cursor-gap-rows",
+      "window-sitter-frames",
+      "window-sitter-active-ticks",
+      "window-sitter-fast-active-ticks",
+      "window-sitter-fast-threshold-ms"
     )
     nestedGroup("settings-rendering").children.map(_.id) shouldBe List("render-fps")
     nestedGroup("settings-animation").children.map(_.id) should contain allOf (
