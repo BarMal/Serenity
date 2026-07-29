@@ -202,7 +202,7 @@ object CharacterRenderer:
       val (runs, currentRun, _) = chars.foldLeft((List.empty[MeasuredRun], Option.empty[MeasuredRun], 0)) {
         case ((completed, current, localIndex), (char, segmentForeground, segmentBackground, style)) =>
           val bufferColumn = visualLine.startColumn + localIndex
-          val cell = if hasAnimations then animations.getCell(bufferColumn, visualLine.bufferLine) else None
+          val cell         = if hasAnimations then animations.getCell(bufferColumn, visualLine.bufferLine) else None
           val foreground   = cell.flatMap(_.currentForeground).getOrElse(segmentForeground)
           val background   = cell.flatMap(_.currentBackground).getOrElse(segmentBackground)
 
@@ -289,7 +289,7 @@ object CharacterRenderer:
           copy(completed = TextRun(currentStartX, currentText.toString) :: completed, currentText = StringBuilder())
         else this
 
-    val initial = PlainRunState(Nil, StringBuilder(), startX, startX)
+    val initial    = PlainRunState(Nil, StringBuilder(), startX, startX)
     val codePoints = content.codePoints().iterator()
     @annotation.tailrec
     def consume(state: PlainRunState): PlainRunState =

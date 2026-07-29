@@ -275,7 +275,8 @@ object PerformanceBenchmarks:
         () => assert(renderedFrameHasPixels(longMeasuredLineFrame)),
         () =>
           val _ = renderedLongMeasuredLine(longMeasuredLine)
-          (),
+          ()
+        ,
         measureAllocation = true
       ),
       Benchmark(
@@ -418,14 +419,17 @@ object PerformanceBenchmarks:
     }.sorted
     val allocationSamples =
       if benchmark.measureAllocation then
-        allocationBean.map { bean =>
-          val threadId = Thread.currentThread().getId
-          (0 until benchmark.iterations).map { _ =>
-            val started = bean.getThreadAllocatedBytes(threadId)
-            benchmark.run()
-            (bean.getThreadAllocatedBytes(threadId) - started).max(0L)
+        allocationBean
+          .map { bean =>
+            val threadId = Thread.currentThread().getId
+            (0 until benchmark.iterations).map { _ =>
+              val started = bean.getThreadAllocatedBytes(threadId)
+              benchmark.run()
+              (bean.getThreadAllocatedBytes(threadId) - started).max(0L)
+            }
           }
-        }.getOrElse(Vector.empty[Long]).sorted
+          .getOrElse(Vector.empty[Long])
+          .sorted
       else Vector.empty[Long]
     BenchmarkResult(
       name = benchmark.name,
