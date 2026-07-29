@@ -3,6 +3,7 @@ package com.serenity
 import java.awt.{Color, Font}
 import java.nio.file.Files
 
+import _root_.io.circe.Json
 import _root_.io.circe.syntax.*
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
@@ -10,9 +11,18 @@ import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.session.given
-import com.serenity.session.{SessionFindResult, SessionFindState, SessionState}
+import com.serenity.session.{SessionFindResult, SessionFindState, SessionState, SessionWorkspaceNode}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, PaneSplitDirection}
+import com.serenity.ui.layout.{
+  Layout,
+  PaneSplitDirection,
+  PanelContent,
+  PanelPosition,
+  SplitAxis,
+  WorkspaceNode,
+  WorkspaceNodeId,
+  WorkspaceTree
+}
 import com.serenity.ui.presets.{UiPreset, UiPresetEditSession}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -882,6 +892,232 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restored.layout.splitDirection shouldBe PaneSplitDirection.Vertical
   }
 
+  it should "round-trip nested workspace trees, docked panels on every edge, and maximisation" in {
+    val pane0 = PaneId(0)
+    val pane1 = PaneId(1)
+    val panels = List(
+      PanelPosition.Left,
+      PanelPosition.Right,
+      PanelPosition.Top,
+      PanelPosition.Bottom
+    ).zipWithIndex.map { (position, index) =>
+      UiSurface.fromPanelContent(
+        SurfaceId(s"surface-$index"),
+        PanelContent.Diagnostics(Nil),
+        position,
+        8 + index
+      )
+    }
+    val editorTree = WorkspaceTree(
+      WorkspaceNode.Split(
+        WorkspaceNodeId("editors"),
+        SplitAxis.Vertical,
+        0.4,
+        WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), pane0),
+        WorkspaceNode.Leaf(WorkspaceNodeId("editor-1"), pane1)
+      )
+    )
+    val workspaceTree = panels.zipWithIndex.foldLeft(editorTree) {
+      case (tree, (panel, index)) =>
+        val position = panel.presentation match
+          case SurfacePresentation.Pinned(value, _) => value
+          case other                                => fail(s"Expected pinned panel, got $other")
+        tree
+          .dock(
+            panel.id,
+            position,
+            WorkspaceNodeId(s"dock-split-$index"),
+            WorkspaceNodeId(s"dock-leaf-$index")
+          )
+          .getOrElse(fail(s"Panel $index should dock"))
+    }
+    val state = AppState.initial.copy(
+      layout = Layout(
+        editorPanes = Map(
+          pane0 -> EditorPane.withBuffer(pane0, BufferId(0)),
+          pane1 -> EditorPane.empty(pane1)
+        ),
+        activeEditorPaneId = Some(pane0),
+        paneOrder = List(pane0, pane1),
+        workspaceTree = Some(workspaceTree),
+        maximizedWorkspaceNodeId = workspaceTree.nodeIdForSurface(panels(2).id)
+      ),
+      uiSurfaces = panels,
+      nextPaneId = PaneId(2),
+      nextSurfaceId = panels.size
+    )
+
+    val encoded = SessionState.fromAppState(state).asJson
+    val restored = encoded
+      .as[SessionState]
+      .map(SessionState.toAppState(_, Theme.default))
+      .getOrElse(fail("workspace session should decode"))
+
+    restored.layout.workspaceTree shouldBe Some(workspaceTree)
+    restored.layout.maximizedWorkspaceNodeId shouldBe workspaceTree.nodeIdForSurface(panels(2).id)
+    restored.pinnedSurfaces.map(_.id) shouldBe state.pinnedSurfaces.map(_.id)
+    restored.pinnedSurfaces.map(_.presentation) shouldBe state.pinnedSurfaces.map(_.presentation)
+    restored.nextSurfaceId shouldBe panels.size
+    restored.isValid shouldBe true
+    encoded.hcursor.downField("schemaVersion").as[Int] shouldBe Right(SessionState.CurrentSchemaVersion)
+  }
+
+  it should "migrate schema-v1 flat pane layouts into an equivalent workspace tree" in {
+    val pane0 = PaneId(0)
+    val pane1 = PaneId(1)
+    val state = AppState.initial.copy(
+      layout = Layout(
+        editorPanes = Map(pane0 -> EditorPane.empty(pane0), pane1 -> EditorPane.empty(pane1)),
+        activeEditorPaneId = Some(pane1),
+        paneOrder = List(pane1, pane0),
+        splitDirection = PaneSplitDirection.Vertical
+      ),
+      focus = Focus.EditorPane(pane1),
+      nextPaneId = PaneId(2)
+    )
+    val currentJson = SessionState.fromAppState(state).asJson
+    val legacyJson = currentJson.mapObject(
+      _.add("schemaVersion", Json.fromInt(1))
+        .add(
+          "layout",
+          currentJson.hcursor
+            .downField("layout")
+            .focus
+            .getOrElse(fail("layout should encode"))
+            .mapObject(
+              _.remove("workspaceTree")
+                .remove("maximizedWorkspaceNodeId")
+                .remove("dockedPanels")
+            )
+        )
+    )
+
+    val restored = legacyJson
+      .as[SessionState]
+      .map(SessionState.toAppState(_, Theme.default))
+      .getOrElse(fail("schema-v1 session should decode"))
+
+    restored.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane1, pane0))
+    restored.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(SplitAxis.Vertical))
+    restored.layout.maximizedWorkspaceNodeId shouldBe None
+    restored.isValid shouldBe true
+  }
+
+  it should "fall back safely from invalid persisted workspace trees without losing buffers" in {
+    val state       = AppState.initial
+    val session     = SessionState.fromAppState(state)
+    val invalidTree = SessionWorkspaceNode.EditorLeaf("missing-pane", 999)
+    val invalid = session.copy(
+      layout = session.layout.copy(workspaceTree = Some(invalidTree)),
+      schemaVersion = SessionState.CurrentSchemaVersion
+    )
+
+    val restored = SessionState.toAppState(invalid, Theme.default)
+
+    restored.buffers shouldBe state.buffers
+    restored.bufferOrder shouldBe state.bufferOrder
+    restored.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
+    restored.layout.maximizedWorkspaceNodeId shouldBe None
+    restored.isValid shouldBe true
+  }
+
+  it should "recover stale pane, focus, active-pane, and buffer-order references without losing buffers" in {
+    val state   = AppState.initial
+    val session = SessionState.fromAppState(state)
+    val corrupt = session.copy(
+      layout = session.layout.copy(
+        editorPanes = session.layout.editorPanes.map(_.copy(bufferId = Some(999))),
+        activeEditorPaneId = Some(999)
+      ),
+      focus = Some(com.serenity.session.SessionFocus.EditorPane(999)),
+      bufferOrder = List(999, BufferId(0).value, BufferId(0).value)
+    )
+
+    val restored = SessionState.toAppState(corrupt, Theme.default)
+
+    restored.buffers shouldBe state.buffers
+    restored.layout.editorPanes(PaneId(0)).bufferId shouldBe None
+    restored.layout.activeEditorPaneId shouldBe Some(PaneId(0))
+    restored.focus shouldBe Focus.EditorPane(PaneId(0))
+    restored.bufferOrder shouldBe List(BufferId(0))
+    restored.isValid shouldBe true
+  }
+
+  it should "restore one empty editor fallback when persisted layout panes are empty" in {
+    val state   = AppState.initial
+    val session = SessionState.fromAppState(state)
+    val corrupt = session.copy(
+      layout = session.layout.copy(
+        editorPanes = Nil,
+        activeEditorPaneId = None,
+        paneOrder = Nil,
+        workspaceTree = None
+      ),
+      focus = None
+    )
+
+    val restored = SessionState.toAppState(corrupt, Theme.default)
+
+    restored.buffers shouldBe state.buffers
+    restored.layout.editorPanes.keySet shouldBe Set(PaneId(0))
+    restored.layout.editorPanes(PaneId(0)).bufferId shouldBe None
+    restored.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
+    restored.layout.activeEditorPaneId shouldBe Some(PaneId(0))
+    restored.focus shouldBe Focus.EditorPane(PaneId(0))
+    restored.isValid shouldBe true
+  }
+
+  it should "ignore unsupported persisted panel content without losing buffers" in {
+    val panel = UiSurface.fromPanelContent(
+      SurfaceId("surface-0"),
+      PanelContent.Diagnostics(Nil),
+      PanelPosition.Left,
+      8
+    )
+    val tree = WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
+      .dock(
+        panel.id,
+        PanelPosition.Left,
+        WorkspaceNodeId("dock-split"),
+        WorkspaceNodeId("dock-leaf")
+      )
+      .getOrElse(fail("Panel should dock"))
+    val state = AppState.initial.copy(
+      layout = AppState.initial.layout.copy(workspaceTree = Some(tree)),
+      uiSurfaces = List(panel),
+      nextSurfaceId = 1
+    )
+    val encoded = SessionState.fromAppState(state).asJson
+    val unsupportedPanel = Json.obj(
+      "surfaceId" -> Json.fromString(panel.id.value),
+      "panel" -> Json.obj(
+        "position" -> Json.fromString("Left"),
+        "size"     -> Json.fromInt(8),
+        "content"  -> Json.obj("FuturePanel" -> Json.obj())
+      )
+    )
+    val futureJson = encoded.mapObject(
+      _.add(
+        "layout",
+        encoded.hcursor
+          .downField("layout")
+          .focus
+          .getOrElse(fail("layout should encode"))
+          .mapObject(_.add("dockedPanels", Json.arr(unsupportedPanel)))
+      )
+    )
+
+    val restored = futureJson
+      .as[SessionState]
+      .map(SessionState.toAppState(_, Theme.default))
+      .getOrElse(fail("unsupported panel content should not reject the session"))
+
+    restored.buffers shouldBe state.buffers
+    restored.pinnedSurfaces shouldBe Nil
+    restored.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
+    restored.isValid shouldBe true
+  }
+
   it should "preserve distinct find state per buffer through round trip" in {
     val file1 = Files.createTempFile("session-find-buffer-1", ".txt")
     val file2 = Files.createTempFile("session-find-buffer-2", ".txt")
@@ -961,7 +1197,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restored.uiPresetEditSession.map(_.baseline.config.backgroundStyle) shouldBe Some(BackgroundStyle.Solid)
     restored.uiPresetEditSession.map(_.draft.config.backgroundStyle) shouldBe Some(BackgroundStyle.GlassLike)
     restored.uiPresetEditSession.map(_.dirty) shouldBe Some(true)
-    restored.uiPresetEditSession.map(_.baselineLayout) shouldBe Some(Some(baselineLayout))
+    restored.uiPresetEditSession.map(_.baselineLayout) shouldBe Some(
+      Some(baselineLayout.copy(workspaceTree = baselineLayout.effectiveWorkspaceTree))
+    )
     restored.uiPresetEditSession.map(_.baselineFocus) shouldBe Some(Some(Focus.EditorPane(PaneId(3))))
     restored.uiPresetEditSession.map(_.baselineNextPaneId) shouldBe Some(Some(PaneId(4)))
   }
