@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope, WindowSitterAction}
 import com.serenity.config.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
@@ -45,6 +45,8 @@ object CommandRunnerOptionSelections:
       "background-style"           -> backgroundStyleIndex(surfaceConfig.backgroundStyle),
       "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
+      "window-sitter-enabled"      -> enabledIndex(config.windowSitterConfig.enabled),
+      "window-sitter-action"       -> windowSitterActionIndex(config.windowSitterConfig.action),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "spellcheck-enabled"         -> spellCheckEnabledIndex(languageToolsConfig.spellCheck.enabled),
@@ -128,6 +130,12 @@ object CommandRunnerOptionSelections:
       case WindowChromeMode.Native       => 1
       case WindowChromeMode.NativeThemed => 2
       case WindowChromeMode.Custom       => 3
+
+  private def windowSitterActionIndex(action: WindowSitterAction): Int =
+    action match
+      case WindowSitterAction.Cycle => 0
+      case WindowSitterAction.Pulse => 1
+      case WindowSitterAction.Blink => 2
 
   private def materialPresetIndex(preset: MaterialPreset): Int =
     preset match

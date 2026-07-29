@@ -246,13 +246,27 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[com.serenity.config.AppConfig] =
     updateMotionConfig(_.withMotionAccessibility(accessibility))
 
+  private def updateWindowSitterConfig(
+    update: com.serenity.animation.WindowSitterConfig => com.serenity.animation.WindowSitterConfig
+  ): IO[Unit] =
+    updateAppearanceConfig(config => config.withWindowSitterConfig(update(config.windowSitterConfig))).flatTap { config =>
+      stateRef.update { state =>
+        val sitter =
+          if config.windowSitterConfig.enabled then
+            com.serenity.animation.WindowSitter.fromConfig(config.windowSitterConfig)
+          else com.serenity.animation.WindowSitter.default
+        state.copy(windowSitter = sitter)
+      }
+    }.void
+
   private def cancelActiveMotion(): IO[Unit] =
     stateRef.update(state =>
       state.copy(
         buffers = clearBufferAnimations(state),
         themeTransition = None,
         uiSurfaces = state.uiSurfaces.filterNot(_.content.isInstanceOf[SurfaceContent.GhostOverlay]),
-        surfaceAnimations = Map.empty
+        surfaceAnimations = Map.empty,
+        windowSitter = com.serenity.animation.WindowSitter.default
       )
     )
 
@@ -267,7 +281,16 @@ final private[manager] class StateManagerEffectHandlers(
     else
       com.serenity.config.MotionFamily.values.toList
         .filter(family => previousFamilies.family(family).enabled && !currentFamilies.family(family).enabled)
-        .traverse_(cancelMotionFamily)
+        .traverse_(cancelMotionFamily) >>
+        IO.whenA(
+          !previousFamilies.family(com.serenity.config.MotionFamily.UiTransitions).enabled &&
+            currentFamilies.family(com.serenity.config.MotionFamily.UiTransitions).enabled &&
+            current.windowSitterConfig.enabled
+        )(
+          stateRef.update(state =>
+            state.copy(windowSitter = com.serenity.animation.WindowSitter.fromConfig(current.windowSitterConfig))
+          )
+        )
 
   private def cancelMotionFamily(family: com.serenity.config.MotionFamily): IO[Unit] =
     family match
@@ -286,7 +309,8 @@ final private[manager] class StateManagerEffectHandlers(
         stateRef.update(state =>
           state.copy(
             buffers = clearBufferAnimations(state, com.serenity.animation.AnimationOwner.UiTransitions),
-            themeTransition = None
+            themeTransition = None,
+            windowSitter = com.serenity.animation.WindowSitter.default
           )
         )
       case com.serenity.config.MotionFamily.Cursor =>
@@ -619,6 +643,18 @@ final private[manager] class StateManagerEffectHandlers(
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
       case CommandIntent.SetWindowChromeMode(mode) =>
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
+      case CommandIntent.SetWindowSitterEnabled(enabled) =>
+        updateWindowSitterConfig(_.copy(enabled = enabled))
+      case CommandIntent.SetWindowSitterAction(action) =>
+        updateWindowSitterConfig(_.copy(action = action))
+      case CommandIntent.SetWindowSitterFrames(frames) =>
+        updateWindowSitterConfig(_.copy(frames = frames))
+      case CommandIntent.SetWindowSitterActiveTicks(ticks) =>
+        updateWindowSitterConfig(_.copy(activeTicks = ticks))
+      case CommandIntent.SetWindowSitterFastActiveTicks(ticks) =>
+        updateWindowSitterConfig(_.copy(fastActiveTicks = ticks))
+      case CommandIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
+        updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
       case CommandIntent.FocusPanel(position) =>
         switchToPinnedPanel(position)
       case CommandIntent.UnpinPanel(position) =>

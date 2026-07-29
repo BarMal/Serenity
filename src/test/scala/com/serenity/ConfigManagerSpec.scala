@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterConfig}
 import com.serenity.config.*
 import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
@@ -15,6 +15,29 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
+
+  "ConfigManager" should "persist window sitter controls" in {
+    val config = AppConfig.default.withWindowSitterConfig(
+      WindowSitterConfig(
+        enabled = false,
+        action = com.serenity.animation.WindowSitterAction.Blink,
+        frames = Vector(".", "x"),
+        activeTicks = 4,
+        fastActiveTicks = 9,
+        fastTypingThresholdMs = 275
+      )
+    )
+    val configFile = Files.createTempFile("serenity-sitter-config", ".conf")
+    Files.writeString(configFile, ConfigManager.configToString(config))
+
+    val reloaded = ConfigManager.loadConfig(Some(configFile.toString)).windowSitterConfig
+    reloaded.enabled shouldBe false
+    reloaded.action shouldBe com.serenity.animation.WindowSitterAction.Blink
+    reloaded.frames shouldBe Vector(".", "x")
+    reloaded.activeTicks shouldBe 4
+    reloaded.fastActiveTicks shouldBe 9
+    reloaded.fastTypingThresholdMs shouldBe 275
+  }
 
   "ConfigManager" should "load configured hotkey overrides from a config file" in {
     val configFile = Files.createTempFile("serenity-config", ".conf")

@@ -4,7 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Dimension}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.accessibility.AccessibleContext
-import javax.swing.JComponent
+import javax.swing.{JComponent, JLabel, JPanel}
 
 import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -61,6 +61,59 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.NativeThemed, "Linux") shouldBe false
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.Custom, "Linux") shouldBe true
   }
+
+  it should "render and hide sitter updates while keeping the semantic title stable" in {
+    val titleLabel = new SwingWindow.DecorativeTitleLabel("rest", initiallyVisible = true)
+    titleLabel.setForeground(Color.WHITE)
+
+    val restingImage = renderTitle(titleLabel)
+    val restingSize  = titleLabel.getPreferredSize
+
+    titleLabel.updateDecoration("active", visible = true)
+    val activeImage = renderTitle(titleLabel)
+    val activeSize  = titleLabel.getPreferredSize
+
+    titleLabel.updateDecoration("active", visible = false)
+    val hiddenImage = renderTitle(titleLabel)
+    val hiddenSize  = titleLabel.getPreferredSize
+
+    activeSize.width should be > restingSize.width
+    hiddenSize.width shouldBe SwingWindow.DecorativeTitleLabel("", initiallyVisible = false).getPreferredSize.width
+    imagePixels(activeImage) should not be imagePixels(restingImage)
+    imagePixels(hiddenImage) should not be imagePixels(activeImage)
+    titleLabel.getText shouldBe SwingWindow.WindowTitle
+    titleLabel.getAccessibleContext.getAccessibleName shouldBe SwingWindow.WindowTitle
+  }
+
+  it should "keep the decorative sitter title component accessible without naming the decoration" in {
+    val titleLabel = new SwingWindow.DecorativeTitleLabel("rest", initiallyVisible = true)
+    val titleBar   = new JPanel
+    titleBar.add(titleLabel)
+
+    val child = titleBar.getAccessibleContext.getAccessibleChild(0)
+    child.getAccessibleContext should not be null
+    child.getAccessibleContext.getAccessibleName shouldBe SwingWindow.WindowTitle
+
+    titleLabel.updateDecoration("active", visible = true)
+
+    child.getAccessibleContext should not be null
+    child.getAccessibleContext.getAccessibleName shouldBe SwingWindow.WindowTitle
+  }
+
+  private def renderTitle(label: JLabel): BufferedImage =
+    val size = label.getPreferredSize
+    label.setSize(size)
+    val image    = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB)
+    val graphics = image.createGraphics()
+    try
+      graphics.setColor(Color.BLACK)
+      graphics.fillRect(0, 0, size.width, size.height)
+      label.paint(graphics)
+    finally graphics.dispose()
+    image
+
+  private def imagePixels(image: BufferedImage): Vector[Int] =
+    image.getRGB(0, 0, image.getWidth, image.getHeight, null, 0, image.getWidth).toVector
 
   it should "refresh the per-pixel corner mask when chrome metrics change" in {
     val base   = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13))

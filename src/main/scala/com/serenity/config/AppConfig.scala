@@ -1561,6 +1561,7 @@ case class AppConfig(
     motionConfiguration: Option[MotionConfig] = None,
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
+    windowSitterConfig: WindowSitterConfig = WindowSitterConfig.default,
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
@@ -2192,6 +2193,9 @@ case class AppConfig(
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))
+
+  def withWindowSitterConfig(config: WindowSitterConfig): AppConfig =
+    copy(windowSitterConfig = config.normalized)
 
   def withLspUserConfig(config: LspUserConfig): AppConfig =
     withLanguageToolsConfig(languageToolsConfig.copy(lspUserConfig = config))

@@ -8,6 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.animation.{WindowSitter, WindowSitterConfig}
 import com.serenity.app.AppRuntime
 import com.serenity.config.*
 import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
@@ -30,6 +31,40 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+  "AppRuntime" should "keep fast rendering active while the window sitter is ticking" in {
+    val state = AppState.initial.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L))
+
+    AppRuntime.hasActiveAnimations(state) shouldBe true
+  }
+
+  it should "initialize the window sitter from the configured startup frames" in {
+    val config = AppConfig.default.withWindowSitterConfig(
+      WindowSitterConfig(frames = Vector("rest", "active"), activeTicks = 3)
+    )
+
+    AppState.initial(config).windowSitter shouldBe WindowSitter.fromConfig(config.windowSitterConfig)
+  }
+
+  it should "wake and settle the window sitter through a real typing and tick sequence" in {
+    val logger       = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeSpec"))
+    val stateManager = StateManager(logger, initialConfig = AppConfig.default).unsafeRunSync()
+
+    AppRuntime
+      .observeWindowSitterTyping(InsertChar('a'), stateManager)
+      .unsafeRunSync()
+
+    val awakened = stateManager.getCurrentState.unsafeRunSync().windowSitter
+    awakened.isActive shouldBe true
+    awakened.glyph should not be WindowSitter.default.glyph
+
+    Iterator
+      .continually(stateManager.advanceAnimationsOnTick().unsafeRunSync())
+      .takeWhile(identity)
+      .toList
+
+    stateManager.getCurrentState.unsafeRunSync().windowSitter.isActive shouldBe false
+  }
 
   private class SilentInputHandler extends InputHandler[IO]:
     override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never

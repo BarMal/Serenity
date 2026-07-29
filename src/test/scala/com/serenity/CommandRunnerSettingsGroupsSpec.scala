@@ -75,12 +75,18 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "window-chrome",
+      "window-sitter-enabled",
+      "window-sitter-action",
       "ui-element-gap",
       "ui-corner-radius",
       "ui-outline-thickness",
       "command-runner-visible-rows",
       "command-runner-item-gap-rows",
-      "command-runner-cursor-gap-rows"
+      "command-runner-cursor-gap-rows",
+      "window-sitter-frames",
+      "window-sitter-active-ticks",
+      "window-sitter-fast-active-ticks",
+      "window-sitter-fast-threshold-ms"
     )
     groupById(groups, "settings-surface-appearance").children.map(_.id) shouldBe List(
       "background-style",

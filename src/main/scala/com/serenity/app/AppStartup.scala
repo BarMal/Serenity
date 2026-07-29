@@ -89,20 +89,21 @@ object AppStartup:
       startPage = createStartPage(sessionExists, recentFiles)
     yield
       val startPageSurfaceId = SurfaceId("surface-0")
-      AppState.empty.copy(
-        focus = Focus.Surface(startPageSurfaceId),
-        config = appConfig,
-        uiSurfaces = List(
-          UiSurface(
-            id = startPageSurfaceId,
-            content = SurfaceContent.StartPage(startPage),
-            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        ),
-        viewportSize = Some(initialViewportSize),
-        theme = theme,
-        nextSurfaceId = 1
-      )
+      AppState
+        .empty(appConfig)
+        .copy(
+          focus = Focus.Surface(startPageSurfaceId),
+          uiSurfaces = List(
+            UiSurface(
+              id = startPageSurfaceId,
+              content = SurfaceContent.StartPage(startPage),
+              presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+            )
+          ),
+          viewportSize = Some(initialViewportSize),
+          theme = theme,
+          nextSurfaceId = 1
+        )
 
   /** Resolve the theme to use for startup before a saved session is restored. */
   def startupTheme(
@@ -127,12 +128,13 @@ object AppStartup:
       case Some(path) =>
         for
           _ <- stateManager.updateState(_ =>
-            AppState.empty.copy(
-              uiSurfaces = List.empty,
-              config = appConfig,
-              viewportSize = Some(initialViewportSize),
-              theme = theme
-            )
+            AppState
+              .empty(appConfig)
+              .copy(
+                uiSurfaces = List.empty,
+                viewportSize = Some(initialViewportSize),
+                theme = theme
+              )
           )
           _     <- stateManager.openFile(path)
           state <- stateManager.getCurrentState

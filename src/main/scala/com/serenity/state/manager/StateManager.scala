@@ -191,7 +191,7 @@ object StateManager:
     val themeManager = AppThemeManager.create
     for
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
-      stateRef                    <- Ref.of[IO, AppState](AppState.initial.copy(config = initialConfig))
+      stateRef                    <- Ref.of[IO, AppState](AppState.initial(initialConfig))
       undoRef                     <- Ref.of[IO, UndoState](UndoState(maxUndoDepth = policy.maxUndoDepth))
       mouseTargetCacheRef         <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef    <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)

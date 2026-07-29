@@ -1,6 +1,7 @@
 import cats.effect.*
+import com.serenity.animation.WindowSitter
 import com.serenity.app.*
-import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
+import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, MotionFamily}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
@@ -43,7 +44,10 @@ object Main extends IOApp:
           displayState.primaryMetrics,
           displayState.uiMetrics,
           appConfig.windowChromeMode,
-          appConfig.preferredWindowSize
+          appConfig.preferredWindowSize,
+          initialWindowSitter = WindowSitter.fromConfig(appConfig.windowSitterConfig),
+          initialWindowSitterVisible = appConfig.windowSitterConfig.enabled &&
+            appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).enabled
         )
         .use { swingWin =>
           val actualAppConfig =
@@ -61,7 +65,12 @@ object Main extends IOApp:
             }
 
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
-            IO.blocking(swingWin.updateChromeTheme(state.theme))
+            IO.blocking {
+              swingWin.updateChromeTheme(state.theme)
+              val sitterVisible = state.config.windowSitterConfig.enabled &&
+                state.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).enabled
+              swingWin.updateWindowSitter(state.windowSitter, sitterVisible)
+            }
 
           def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
             IO.blocking(swingWin.updateAccessibility(AccessibilitySnapshot.from(state, swingWin.viewportSize)))

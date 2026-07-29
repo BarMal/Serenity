@@ -41,20 +41,26 @@ final private[manager] class StateManagerEditorCapability(
       val hasBufferAnimations  = state.buffers.values.exists(_.animations.hasActiveAnimations)
       val hasThemeTransition   = state.themeTransition.isDefined
       val hasSurfaceAnimations = state.surfaceAnimations.nonEmpty
-      if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations then IO.pure(false)
+      val hasWindowSitter      = state.windowSitter.isActive
+      if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasWindowSitter then IO.pure(false)
       else
         val updatedBuffers = state.buffers.view.mapValues { buffer =>
           val updatedAnimations = buffer.animations.advanceAllAnimations()
           if updatedAnimations eq buffer.animations then buffer
           else buffer.copy(animations = updatedAnimations)
         }.toMap
-        val updatedTransition        = state.themeTransition.map(_.advance).filterNot(_.isComplete)
-        val stateWithAdvancedBuffers = state.copy(buffers = updatedBuffers, themeTransition = updatedTransition)
-        val newState                 = advanceSurfaceAnimations(stateWithAdvancedBuffers)
+        val updatedTransition = state.themeTransition.map(_.advance).filterNot(_.isComplete)
+        val stateWithAdvancedBuffers = state.copy(
+          buffers = updatedBuffers,
+          themeTransition = updatedTransition,
+          windowSitter = state.windowSitter.advance
+        )
+        val newState = advanceSurfaceAnimations(stateWithAdvancedBuffers)
         val stillActive =
           newState.buffers.values.exists(_.animations.hasActiveAnimations) ||
             newState.themeTransition.isDefined ||
-            newState.surfaceAnimations.nonEmpty
+            newState.surfaceAnimations.nonEmpty ||
+            newState.windowSitter.isActive
         stateRef.set(newState).as(stillActive)
     }
 

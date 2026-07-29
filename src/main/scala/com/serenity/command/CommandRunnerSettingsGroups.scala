@@ -19,6 +19,8 @@ object CommandRunnerSettingsGroups:
     val backgroundStyleItem     = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
     val interfaceDensityItem    = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
     val windowChromeItem        = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
+    val windowSitterEnabledItem = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
+    val windowSitterActionItem  = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
     val materialPresetItem      = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
     val postProcessingItem      = CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections)
     val uiShadowsItem           = CommandRunnerSettingsItems.uiShadowsOptionItem(optionSelections)
@@ -116,14 +118,20 @@ object CommandRunnerSettingsGroups:
     val interfaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-interface-layout",
       label = "Interface Layout",
-      children = List(interfaceDensityItem, windowChromeItem) ++ inputItems.filter(item =>
-        item.id == "ui-element-gap" ||
-          item.id == "ui-corner-radius" ||
-          item.id == "ui-outline-thickness" ||
-          item.id == "command-runner-visible-rows" ||
-          item.id == "command-runner-item-gap-rows" ||
-          item.id == "command-runner-cursor-gap-rows"
-      ),
+      children =
+        List(interfaceDensityItem, windowChromeItem, windowSitterEnabledItem, windowSitterActionItem) ++ inputItems
+          .filter(item =>
+            item.id == "ui-element-gap" ||
+              item.id == "ui-corner-radius" ||
+              item.id == "ui-outline-thickness" ||
+              item.id == "command-runner-visible-rows" ||
+              item.id == "command-runner-item-gap-rows" ||
+              item.id == "command-runner-cursor-gap-rows"
+              || item.id == "window-sitter-frames"
+              || item.id == "window-sitter-active-ticks"
+              || item.id == "window-sitter-fast-active-ticks"
+              || item.id == "window-sitter-fast-threshold-ms"
+          ),
       category = CommandCategory.Settings,
       hint = Some("Density, spacing, window chrome, command rows")
     )

@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterAction}
 import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.fonts.FontLoader
@@ -229,6 +229,37 @@ object CommandRunnerSettingsItems:
       selectedIndex = optionSelections.getOrElse("window-chrome", 0),
       category = CommandCategory.Settings,
       hint = Some("Applies after restart; auto uses Serenity chrome on Linux")
+    )
+
+  private[command] def windowSitterEnabledOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "window-sitter-enabled",
+      label = "Window Sitter",
+      options = List(
+        CommandOption("On", CommandIntent.SetWindowSitterEnabled(true)),
+        CommandOption("Off", CommandIntent.SetWindowSitterEnabled(false))
+      ),
+      selectedIndex = optionSelections.getOrElse("window-sitter-enabled", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Typing-reactive window decoration")
+    )
+
+  private[command] def windowSitterActionOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "window-sitter-action",
+      label = "Sitter Action",
+      options = List(
+        CommandOption("Cycle", CommandIntent.SetWindowSitterAction(WindowSitterAction.Cycle)),
+        CommandOption("Pulse", CommandIntent.SetWindowSitterAction(WindowSitterAction.Pulse)),
+        CommandOption("Blink", CommandIntent.SetWindowSitterAction(WindowSitterAction.Blink))
+      ),
+      selectedIndex = optionSelections.getOrElse("window-sitter-action", 1),
+      category = CommandCategory.Settings,
+      hint = Some("Frame action after typing")
     )
 
   private[command] def materialPresetOptionItem(
