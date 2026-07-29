@@ -1,5 +1,8 @@
 package com.serenity.state.manager
 
+import java.awt.Font
+import java.util.LinkedHashMap
+
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
@@ -7,9 +10,6 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-
-import java.awt.Font
-import java.util.LinkedHashMap
 
 final private[manager] case class RopeIdentity private (value: Rope):
 
