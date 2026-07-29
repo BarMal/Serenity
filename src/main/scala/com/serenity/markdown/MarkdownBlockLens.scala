@@ -199,9 +199,10 @@ object MarkdownBlockLens:
     activeLine: Int,
     belongs: String => Boolean
   ): Int =
+    val firstProbeLine = activeLine - lines.fenceProbeWindow.getOrElse(lines.lineCount)
     Iterator
       .iterate(activeLine)(_ - 1)
-      .takeWhile(index => index >= 0 && belongs(lines.at(index)))
+      .takeWhile(index => index >= 0 && index >= firstProbeLine && belongs(lines.at(index)))
       .foldLeft(activeLine)((_, index) => index)
 
   private def blockEnd(
@@ -209,9 +210,10 @@ object MarkdownBlockLens:
     activeLine: Int,
     belongs: String => Boolean
   ): Int =
+    val lastProbeLine = activeLine + lines.fenceProbeWindow.getOrElse(lines.lineCount)
     Iterator
       .iterate(activeLine)(_ + 1)
-      .takeWhile(index => index < lines.lineCount && belongs(lines.at(index)))
+      .takeWhile(index => index < lines.lineCount && index <= lastProbeLine && belongs(lines.at(index)))
       .foldLeft(activeLine)((_, index) => index)
 
   private def isParagraphLine(line: String): Boolean =
