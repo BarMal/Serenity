@@ -231,7 +231,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     result shouldBe (true, 0)
   }
 
-  it should "avoid refreshing the focused translator for ordinary editor events" in {
+  it should "refresh the focused translator after every input event" in {
     val program = for
       refreshes     <- Ref.of[IO, Int](0)
       resizeChecks  <- Ref.of[IO, Int](0)
@@ -270,7 +270,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       resizeCount  <- resizeChecks.get
     yield (refreshCount, resizeCount)
 
-    program.unsafeRunSync() shouldBe (0, 0)
+    program.unsafeRunSync() shouldBe (4, 0)
   }
 
   it should "check for a resize before applying pointer input" in {
