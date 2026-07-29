@@ -2,12 +2,16 @@ package com.serenity
 
 import java.awt.{Color, Font}
 import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.net.{InetAddress, InetSocketAddress}
 import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
+import java.util.Base64
 
 import com.sun.net.httpserver.HttpServer
+
+import scala.util.Try
 
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.ui.theme.Theme
@@ -278,6 +282,46 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     containsColor(image, Color(30, 220, 40)) shouldBe false
   }
 
+  it should "deny relative traversal outside the preview resource root" in {
+    val root        = Files.createTempDirectory("serenity-markdown-preview-root")
+    val outsideRoot = Files.createTempDirectory("serenity-markdown-preview-outside")
+    val outside     = outsideRoot.resolve("outside.png")
+    writeSolidImage(outside, Color(30, 220, 40), width = 8, height = 8)
+
+    val image = MarkdownDocumentPreview.renderImage(
+      source = "![Traversal](../" + outsideRoot.getFileName + "/outside.png)",
+      title = "traversal.md",
+      widthPx = 180,
+      heightPx = 120,
+      theme = Theme.default,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      baseUri = Some(root.toUri)
+    )
+
+    containsColor(image, Color(30, 220, 40)) shouldBe false
+  }
+
+  it should "deny symlinked images that resolve outside the preview resource root" in {
+    val root        = Files.createTempDirectory("serenity-markdown-preview-root")
+    val outsideRoot = Files.createTempDirectory("serenity-markdown-preview-outside")
+    val outside     = outsideRoot.resolve("outside.png")
+    writeSolidImage(outside, Color(30, 220, 40), width = 8, height = 8)
+    val link = Try(Files.createSymbolicLink(root.resolve("linked.png"), outside)).toOption
+    assume(link.nonEmpty, "symbolic links are unavailable on this platform")
+
+    val image = MarkdownDocumentPreview.renderImage(
+      source = "![Symlink](linked.png)",
+      title = "symlink.md",
+      widthPx = 180,
+      heightPx = 120,
+      theme = Theme.default,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      baseUri = Some(root.toUri)
+    )
+
+    containsColor(image, Color(30, 220, 40)) shouldBe false
+  }
+
   it should "deny remote images without making a network request" in {
     val requests = new AtomicInteger(0)
     val server   = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress, 0), 0)
@@ -302,6 +346,39 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       image.getHeight shouldBe 120
       requests.get() shouldBe 0
     finally server.stop(0)
+  }
+
+  it should "deny oversized data URI images before decoding them" in {
+    val embedded = new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB)
+    for
+      x <- 0 until embedded.getWidth
+      y <- 0 until embedded.getHeight
+    do embedded.setRGB(x, y, Color(220, 30, 40).getRGB)
+    val embeddedBytes = new ByteArrayOutputStream()
+    val _             = ImageIO.write(embedded, "png", embeddedBytes)
+    val validImage = MarkdownDocumentPreview.renderImage(
+      source = s"![Embedded](data:image/png;base64,${Base64.getEncoder.encodeToString(embeddedBytes.toByteArray)})",
+      title = "embedded-valid.md",
+      widthPx = 180,
+      heightPx = 120,
+      theme = Theme.default,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    )
+    val payload = Base64.getEncoder.encodeToString(Array.fill[Byte](3 * 1024 * 1024)(1))
+    val oversizedImage = MarkdownDocumentPreview.renderImage(
+      source = s"![Embedded](data:image/png;base64,$payload)",
+      title = "embedded.md",
+      widthPx = 180,
+      heightPx = 120,
+      theme = Theme.default,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    )
+
+    validImage.getWidth shouldBe 180
+    validImage.getHeight shouldBe 120
+    containsColor(validImage, Color(220, 30, 40)) shouldBe false
+    oversizedImage.getWidth shouldBe 180
+    oversizedImage.getHeight shouldBe 120
   }
 
   it should "bound image bytes and decoded dimensions" in {

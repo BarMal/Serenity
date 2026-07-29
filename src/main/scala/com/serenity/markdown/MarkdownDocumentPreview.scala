@@ -6,6 +6,7 @@ import java.io.{ByteArrayInputStream, StringReader}
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.util.LinkedHashMap
+import java.util.Locale
 import javax.imageio.ImageIO
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -678,8 +679,14 @@ object MarkdownDocumentPreview:
       .filter(uri => uri.getScheme == "file" && uri.getHost == null)
       .flatMap(uri => Try(Paths.get(uri).toAbsolutePath.normalize()).toOption)
 
+    def isDataUri(uri: String): Boolean =
+      Option(uri).exists(_.trim.toLowerCase(Locale.ROOT).startsWith("data:"))
+
+    def placeholderImage: BufferedImage =
+      new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+
     def imageFor(uri: String): BufferedImage =
-      loadImage(uri).getOrElse(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB))
+      loadImage(uri).getOrElse(placeholderImage)
 
     private def loadImage(uri: String): Option[BufferedImage] =
       for
@@ -736,12 +743,35 @@ object MarkdownDocumentPreview:
       }.toOption.flatten
 
   private def previewReplacedElementFactory(resourcePolicy: PreviewResourcePolicy): SwingReplacedElementFactory =
-    new SwingReplacedElementFactory(
+    new PreviewReplacedElementFactory(resourcePolicy)
+
+  private class PreviewReplacedElementFactory(resourcePolicy: PreviewResourcePolicy)
+      extends SwingReplacedElementFactory(
         ImageResourceLoader.NO_OP_REPAINT_LISTENER,
         new ImageResourceLoader:
           override def get(uri: String, width: Int, height: Int): ImageResource =
             ImageResource(uri, AWTFSImage.createImage(resourcePolicy.imageFor(uri)))
-    )
+      ):
+
+    override def createReplacedElement(
+      context: org.xhtmlrenderer.layout.LayoutContext,
+      box: org.xhtmlrenderer.render.BlockBox,
+      userAgent: org.xhtmlrenderer.extend.UserAgentCallback,
+      cssWidth: Int,
+      cssHeight: Int
+    ): org.xhtmlrenderer.extend.ReplacedElement =
+      val element = Option(box.getElement)
+      val dataImage = element
+        .filter(_.getNodeName.equalsIgnoreCase("img"))
+        .map(_.getAttribute("src"))
+        .exists(resourcePolicy.isDataUri)
+      if dataImage then
+        new org.xhtmlrenderer.swing.InstantImageReplacedElement(
+          resourcePolicy.placeholderImage,
+          cssWidth,
+          cssHeight
+        )
+      else super.createReplacedElement(context, box, userAgent, cssWidth, cssHeight)
 
   private def fallbackImage(width: Int, height: Int, theme: Theme, font: Font, message: String): BufferedImage =
     val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
