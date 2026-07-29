@@ -12,6 +12,7 @@ import javax.swing.*
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
+import com.serenity.animation.WindowSitter
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
@@ -247,7 +248,7 @@ class SwingWindow(
       setPreferredSize(chromeSpacerSize)
     titleSpacerRef.set(Some(spacer))
 
-    val titleLabel = new JLabel("Serenity", SwingConstants.CENTER):
+    val titleLabel = new JLabel("Serenity  ·", SwingConstants.CENTER):
       setForeground(chromePaletteRef.get().titleForeground)
       setFont(chromeControlFont)
     titleLabelRef.set(Some(titleLabel))
@@ -526,6 +527,13 @@ class SwingWindow(
       if SwingUtilities.isEventDispatchThread then applyPalette.run()
       else SwingUtilities.invokeLater(applyPalette)
     else if usesNativeThemedChrome then updateNativeChromeTheme(SwingWindow.ChromePalette.fromTheme(theme))
+
+  /** Update the decorative sitter without changing the window's title-bar interactions. */
+  def updateWindowSitter(sitter: WindowSitter): Unit =
+    val update: Runnable = () =>
+      titleLabelRef.get().foreach(_.setText(s"Serenity  ${sitter.glyph}"))
+    if SwingUtilities.isEventDispatchThread then update.run()
+    else SwingUtilities.invokeLater(update)
 
   private def updateNativeChromeTheme(palette: SwingWindow.ChromePalette): Unit =
     if nativeChromeThemeCache.recordIfChanged(palette, WindowsNativeChrome.isSupported()) then

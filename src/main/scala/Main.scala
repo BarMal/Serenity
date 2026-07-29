@@ -61,7 +61,10 @@ object Main extends IOApp:
             }
 
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
-            IO.blocking(swingWin.updateChromeTheme(state.theme))
+            IO.blocking {
+              swingWin.updateChromeTheme(state.theme)
+              swingWin.updateWindowSitter(state.windowSitter)
+            }
 
           def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
             IO.blocking(swingWin.updateAccessibility(AccessibilitySnapshot.from(state, swingWin.viewportSize)))

@@ -1,6 +1,6 @@
 package com.serenity.state.models
 
-import com.serenity.animation.AnimationState
+import com.serenity.animation.{AnimationState, WindowSitter}
 import com.serenity.config.*
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.markdown.MarkdownBlockLens
@@ -222,7 +222,8 @@ case class AppState(
     navigationBackStack: List[NavigationPoint] = Nil,
     navigationForwardStack: List[NavigationPoint] = Nil,
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
-    uiPresetEditSession: Option[UiPresetEditSession] = None
+    uiPresetEditSession: Option[UiPresetEditSession] = None,
+    windowSitter: WindowSitter = WindowSitter.default
 ):
 
   /** Lazily indexes annotations for this immutable state snapshot. A new state snapshot gets a fresh index, while

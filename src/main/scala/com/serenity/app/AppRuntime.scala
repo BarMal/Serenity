@@ -8,7 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.*
 import cats.effect.std.Dispatcher
 import cats.syntax.parallel.*
-import com.serenity.config.{AppConfig, CursorMode, RenderFpsTarget}
+import com.serenity.config.{AppConfig, CursorMode, MotionFamily, RenderFpsTarget}
 import com.serenity.input.*
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -254,12 +254,27 @@ object AppRuntime:
     _.evalMap { event =>
       checkResizeBeforeInput(event, checkResizeAndHandle) >>
         ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
+        observeWindowSitterTyping(event, stateManager) >>
         stateManager.applyEvent(event) >>
         ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
         refreshFocusedInputTranslator(stateManager, inputRouter) >>
         resetCursorActivity(cursorVisible, breathIndex) >>
         requestFastRender
     }.drain
+
+  private def observeWindowSitterTyping(
+      event: Event,
+      stateManager: StateUpdater
+  ): IO[Unit] =
+    event match
+      case _: com.serenity.keystroke.events.InsertChar =>
+        stateManager.updateState { state =>
+          val motion = state.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
+          if motion.enabled then
+            state.copy(windowSitter = state.windowSitter.observeTyping(System.nanoTime()))
+          else state
+        }
+      case _ => IO.unit
 
   private def checkResizeBeforeInput(event: Event, checkResizeAndHandle: IO[Unit]): IO[Unit] =
     event match
