@@ -779,15 +779,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.CancelUiPresetSwitch =>
         cancelUiPresetSwitchEffect
       case CommandIntent.ApplyUiPreset(name) =>
-        val selectedFromStartup = state.startPageSurface.exists { surface =>
-          surface.content match
-            case SurfaceContent.StartPage(page) => page.selectedAction.exists(_.section == StartupActionSection.Workflow)
-            case _                               => false
-        }
-        requireCleanPresetDraft(
-          applyUiPresetEffect(name) >>
-            Option.when(selectedFromStartup)(createStartupSession()).getOrElse(IO.unit)
-        )
+        requireCleanPresetDraft(applyUiPresetEffect(name))
       case CommandIntent.EditUiPreset(name) =>
         requireCleanPresetDraft(editUiPresetEffect(name))
       case CommandIntent.DuplicateUiPreset(sourceName, targetName) =>
