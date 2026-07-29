@@ -8,13 +8,13 @@ sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"
 
 The cursor-only scenario opens a temporary Swing window so it can measure Serenity's real overlay publication path. Run it in a graphical session; a headless Linux environment can use `xvfb-run -a sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"`.
 
-The harness prints CSV rows with `min_ms`, `p50_ms`, `p95_ms`, `max_ms`, `allocation_p50_bytes`, and `allocation_p95_bytes`. Allocation columns are populated for the long measured-line scenario and are sampled separately from timing so the allocation probe does not distort p50/p95. Every scenario builds its immutable document, state, search, LSP, and project-task fixtures before timing, runs the measured operation once, and asserts its observable result before warmup. Java2D frame and cursor-overlay image allocation remain inside their timed paths because those allocations, drawing, copying, and repaint requests are part of the user-visible work being measured.
+The harness prints CSV rows with `min_ms`, `p50_ms`, `p95_ms`, `max_ms`, `allocation_p50_bytes`, and `allocation_p95_bytes`. Allocation columns are populated for the long measured-line scenario and are sampled separately from timing so the allocation probe does not distort p50/p95. Every scenario builds its immutable document, state, search, LSP, and project-task fixtures before timing, runs the measured operation once, and asserts its observable result before warmup. Java2D frame drawing, reusable backing-buffer acquisition, cursor-overlay composition, and repaint requests remain inside their timed paths because they are part of the user-visible work being measured.
 
 Scenarios cover:
 
 - large JSON rope search and cursor-offset lookup
 - visible multiline layout, normal editing, and deep plain/rich-text scrolling reducers
-- real Java2D full frames, cursor-overlay copying, diagnostics/comments, and HiDPI buffers
+- real Java2D full frames, cursor-overlay composition, diagnostics/comments, and HiDPI buffers
 - long measured single-line Java2D rendering, including proportional caret placement and run construction
 - authoritative-scene reuse for cursor-only Java2D overlays
 - large find/replace result-set presentation and complete find-query updates, including grapheme filtering, offset-to-position conversion, and selected-result application
@@ -75,6 +75,16 @@ Captured with the standard warmed harness workflow under Xvfb on the same WSL2 h
 | `render.long_measured_line.java2d` | 2.146 | 2.538 |
 
 The same warmed run reported `allocation_p50_bytes = 5,935,640` and `allocation_p95_bytes = 5,950,824` for `render.long_measured_line.java2d`; allocation is reported per operation by the harness's thread-allocation counter.
+
+## After #834: backing-buffer reuse validation
+
+The full-frame benchmark now alternates reusable device-scaled backing images, while cursor-only rendering publishes a reusable transparent overlay over the authoritative base frame. Resize or image-type changes still allocate replacement storage. Captured with the same WSL2 host and Microsoft OpenJDK 21.0.8+9-LTS runtime under `xvfb-run -a`; times are milliseconds.
+
+| Scenario | Before p50 | Before p95 | After p50 | After p95 |
+| --- | ---: | ---: | ---: | ---: |
+| `render.full_frame.java2d` | 11.284 | 15.223 | 6.087 | 7.916 |
+| `render.cursor_only.java2d_overlay` | 5.158 | 10.270 | 0.403 | 0.829 |
+| `render.hidpi_frame.java2d` | 10.277 | 20.254 | 5.680 | 14.010 |
 
 ## After #827: 2026-07-22
 

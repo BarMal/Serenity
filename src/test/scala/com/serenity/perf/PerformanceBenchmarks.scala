@@ -25,6 +25,11 @@ import io.circe.Json
 
 object PerformanceBenchmarks:
 
+  private val reusableFramePools = Map(
+    1.0 -> new SwingWindow.ReusableImagePool,
+    2.0 -> new SwingWindow.ReusableImagePool
+  )
+
   private case class Benchmark(
       name: String,
       warmups: Int,
@@ -470,7 +475,7 @@ object PerformanceBenchmarks:
     }
 
   private def renderedFrame(state: AppState, deviceScale: Double): BufferedImage =
-    val image = new BufferedImage(
+    val image = reusableFramePools(deviceScale).acquire(
       math.ceil(frameWidthPx * deviceScale).toInt,
       math.ceil(frameHeightPx * deviceScale).toInt,
       BufferedImage.TYPE_INT_ARGB
@@ -486,6 +491,7 @@ object PerformanceBenchmarks:
       deviceScaleY = deviceScale
     )
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, textFont, cellMetrics, None)
+    reusableFramePools(deviceScale).publish(image)
     image
 
   private def renderedFrameHasPixels(image: BufferedImage): Boolean =
