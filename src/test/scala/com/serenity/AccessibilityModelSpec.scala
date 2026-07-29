@@ -134,6 +134,73 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "derive every modal control from its resolved composition" in {
+    val cases = List(
+      SurfaceId("goto")   -> Modal.GotoLine("42"),
+      SurfaceId("custom") -> Modal.Custom("Rename", "draft"),
+      SurfaceId("find")   -> Modal.Find("needle", List(FindResult(1, 2), FindResult(4, 5)), currentIndex = 1),
+      SurfaceId("file") -> Modal.FileWorkflow(
+        FileWorkflowState(
+          mode = FileWorkflowMode.SaveAs,
+          filename = "notes.scala",
+          path = "/tmp/project",
+          activeField = FileWorkflowField.Path,
+          suggestions = List(FileWorkflowSuggestion("/tmp/project", isDirectory = true)),
+          selectedSuggestionIndex = 0
+        )
+      ),
+      SurfaceId("replace") -> Modal.ReplaceWorkflow(
+        ReplaceWorkflowState(
+          findText = "before",
+          replacementText = "after",
+          activeField = ReplaceWorkflowField.ReplaceWith,
+          selectedAction = ReplaceWorkflowAction.ReplaceAll,
+          selectedScope = ReplaceWorkflowScope.Selection
+        )
+      ),
+      SurfaceId("close") -> Modal.CloseWorkflow(
+        CloseWorkflowState(
+          CloseScope.Current,
+          BufferId(0),
+          "notes.scala",
+          selectedChoice = CloseWorkflowChoice.Discard
+        )
+      )
+    )
+
+    cases.foreach {
+      case (surfaceId, modal) =>
+        val state = AppState.initial.copy(
+          uiSurfaces = List(UiSurface(surfaceId, SurfaceContent.ModalWorkflow(modal), SurfacePresentation.Modal)),
+          focus = Focus.Surface(surfaceId),
+          viewportSize = Some(viewport)
+        )
+        val snapshot = AccessibilitySnapshot.from(state, viewport)
+        val frame =
+          snapshot.nodes.find(_.id == s"surface:${surfaceId.value}").map(_.bounds).getOrElse(fail("Expected modal"))
+        val plan = ModalSurfaceComposition
+          .forModal(modal, frame, SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity))
+          .getOrElse(fail("Expected composition"))
+        val controls = snapshot.nodes.filter(_.id.startsWith(s"surface:${surfaceId.value}/control:"))
+
+        controls.map(_.id) shouldBe plan.hitRegions.map(hit =>
+          s"surface:${surfaceId.value}/control:${hit.focusId.value}"
+        )
+        controls.map(_.name) shouldBe plan.hitRegions.map(_.semanticLabel)
+        controls.map(_.role) shouldBe plan.hitRegions.map { hit =>
+          plan.paintBoxes.find(_.focusId.contains(hit.focusId)).map(_.kind) match
+            case Some(SurfacePaintKind.TextInput) => AccessibilityRole.TextField
+            case _                                => AccessibilityRole.Button
+        }
+        controls.map(_.bounds) shouldBe plan.hitRegions.map { hit =>
+          LayoutRect(hit.rect.x.toInt, hit.rect.y.toInt, hit.rect.width.toInt, hit.rect.height.toInt)
+        }
+        controls.map(_.selected) shouldBe plan.hitRegions.map { hit =>
+          plan.paintBoxes.find(_.focusId.contains(hit.focusId)).exists(_.selected)
+        }
+    }
+  }
+
   it should "expose only the top modal and its controls while a modal is active" in {
     val floatingId = SurfaceId("runner")
     val modalId    = SurfaceId("replace")
