@@ -122,3 +122,20 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
 
     program.unsafeRunSync()
   }
+
+  it should "keep the session choice available when a workflow preset is chosen" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupOptionsEndToEndSpec-workflow")
+      _            <- AppStartup.initializeState(stateManager, Theme.default, ViewportSize(80, 24))
+      _            <- stateManager.applyEvent(MoveDown)
+      _            <- stateManager.applyEvent(MoveDown)
+      _            <- stateManager.applyEvent(Enter)
+      state        <- stateManager.getCurrentState
+    yield state
+
+    val state = program.unsafeRunSync()
+    state.startPageSurface shouldBe defined
+    state.startPageSurface.map(_.content) should not be empty
+  }
