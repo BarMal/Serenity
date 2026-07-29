@@ -48,3 +48,30 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     ModalSurfaceComposition.closeChoice(SurfaceActionId("close-cancel")) shouldBe Some(CloseWorkflowChoice.Cancel)
     ModalSurfaceComposition.closeChoice(SurfaceActionId("unsupported")) shouldBe None
   }
+
+  it should "reflow every close action inside a height-constrained frame" in {
+    val workflow = CloseWorkflowState(CloseScope.Current, BufferId(7), "notes.scala")
+    val frame    = LayoutRect(5, 2, 30, 4)
+    val content  = SurfaceFrameLayout(frame).contentRect
+
+    val plan = ModalSurfaceComposition.close(workflow, frame, targetRows = 2)
+
+    plan.paintBoxes.foreach(box => plan.bounds.containsRect(box.rect) shouldBe true)
+    plan.hitRegions.foreach(hit => plan.bounds.containsRect(hit.rect) shouldBe true)
+    plan.hitRegions.map(_.semanticLabel) shouldBe List("Save", "Close Anyway", "Cancel")
+    plan.hitRegions.map(_.rect.y).distinct shouldBe List(content.bottom - 1.0)
+    plan.hitRegions.map(_.rect.width).sum shouldBe content.width.toDouble
+  }
+
+  it should "omit clipped controls from paint, hit, and focus output in a tiny frame" in {
+    val workflow = CloseWorkflowState(CloseScope.Current, BufferId(7), "notes.scala")
+    val plan     = ModalSurfaceComposition.close(workflow, LayoutRect(0, 0, 3, 3), targetRows = 2)
+
+    plan.paintBoxes.foreach { box =>
+      plan.bounds.containsRect(box.rect) shouldBe true
+      box.rect.width should be > 0.0
+      box.rect.height should be > 0.0
+    }
+    plan.hitRegions.foreach(hit => plan.bounds.containsRect(hit.rect) shouldBe true)
+    plan.focusOrder shouldBe plan.hitRegions.map(_.focusId)
+  }

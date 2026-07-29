@@ -202,6 +202,30 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "keep close workflow accessibility controls inside a constrained modal" in {
+    val surfaceId           = SurfaceId("close-constrained")
+    val workflow            = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
+    val constrainedViewport = ViewportSize(40, 4)
+    val state = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          surfaceId,
+          SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
+          SurfacePresentation.Modal
+        )
+      ),
+      focus = Focus.Surface(surfaceId),
+      viewportSize = Some(constrainedViewport)
+    )
+
+    val snapshot = AccessibilitySnapshot.from(state, constrainedViewport)
+    val modal    = snapshot.nodes.find(_.id == s"surface:${surfaceId.value}").getOrElse(fail("Expected modal"))
+    val controls = snapshot.nodes.filter(_.id.startsWith(s"surface:${surfaceId.value}/control:"))
+
+    controls.map(_.name) shouldBe List("Save", "Close Anyway", "Cancel")
+    controls.foreach(control => modal.bounds.containsRect(control.bounds) shouldBe true)
+  }
+
   it should "align wrapped toolbar accessibility bounds with rendered row slots" in {
     val surfaceId    = SurfaceId("toolbar")
     val bufferId     = BufferId(42)

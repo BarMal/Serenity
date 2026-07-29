@@ -47,6 +47,24 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.getBg(frame.x + 1, frame.y + 5) shouldBe Theme.light.highlighted.background
   }
 
+  it should "keep reflowed close workflow controls inside a constrained frame" in {
+    val surface  = new MockRenderSurface(40, 8)
+    val font     = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics  = CellMetrics.fromFont(font)
+    val workflow = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
+    val frame    = LayoutRect(2, 2, 30, 4)
+    val overlay = TextOverlayView(
+      rect = frame,
+      contentRect = Some(SurfaceFrameLayout(frame).contentRect),
+      composition = Some(ModalSurfaceComposition.close(workflow, frame, targetRows = 2))
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getRow(frame.bottom).trim shouldBe empty
+    (frame.x until frame.right).exists(x => surface.getRow(frame.bottom - 2).charAt(x) != ' ') shouldBe true
+  }
+
   it should "position a fractional cursor gap at its logical-pixel origin" in {
     val surface = new MockRenderSurface(20, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)

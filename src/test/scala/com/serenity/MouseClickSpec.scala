@@ -222,6 +222,44 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     after.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  it should "route a reflowed close action inside a constrained modal frame" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    val viewport = ViewportSize(40, 4)
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+    val workflow = CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")
+    val close = UiSurface(
+      SurfaceId("close-constrained"),
+      SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
+      SurfacePresentation.Modal
+    )
+    sm.updateState(state => state.copy(uiSurfaces = state.uiSurfaces :+ close, focus = Focus.Surface(close.id)))
+      .unsafeRunSync()
+
+    val before = sm.getCurrentState.unsafeRunSync()
+    val modal = UiSceneSnapshot
+      .from(before, viewport)
+      .modal
+      .lastOption
+      .getOrElse(fail("Expected constrained close modal"))
+    val cancel = ModalSurfaceComposition
+      .close(
+        workflow,
+        modal.frameRect,
+        SurfaceFrameLayout.minimumTargetRows(before.config.interfaceDensity)
+      )
+      .hitRegions
+      .find(_.actionId.contains(SurfaceActionId("close-cancel")))
+      .getOrElse(fail("Expected reflowed cancel action"))
+
+    sm.applyEvent(MouseClick(cancel.rect.x.toInt, cancel.rect.y.toInt)).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.topModalSurface shouldBe None
+    after.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
   it should "open an editor context menu on secondary click without moving the cursor" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
