@@ -270,10 +270,11 @@ object ConfigManager:
           config
     }
 
-    val withLists = applyHoconLists(parsed, source)
+    val withLists    = applyHoconLists(parsed, source)
+    val withLspLists = applyHoconLspLists(withLists, source)
     HotkeyConfig
-      .fromBindings(withLists.hotkeyConfig.bindings)
-      .fold(_ => withLists.withHotkeyConfig(HotkeyConfig()), withLists.withHotkeyConfig)
+      .fromBindings(withLspLists.hotkeyConfig.bindings)
+      .fold(_ => withLspLists.withHotkeyConfig(HotkeyConfig()), withLspLists.withHotkeyConfig)
 
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String =
@@ -568,6 +569,20 @@ object ConfigManager:
       additionalWords = strings("spellcheck.words").getOrElse(spellCheck.additionalWords)
     )
     config.withSpellCheck(updatedSpellCheck)
+
+  private def applyHoconLspLists(config: AppConfig, source: Config): AppConfig =
+    source.entrySet().asScala.foldLeft(config) { (current, entry) =>
+      val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
+      if key.startsWith("lsp.") && key.endsWith(".args") && entry.getValue.valueType == ConfigValueType.LIST then
+        key.split("\\.", 3).toList match
+          case "lsp" :: languageKey :: "args" :: Nil =>
+            LanguageId.fromString(languageKey).fold(current) { languageId =>
+              val args = source.getList(entry.getKey).asScala.map(_.unwrapped().toString).toList
+              updateLspOverride(current, languageId)(_.copy(args = Some(args)))
+            }
+          case _ => current
+      else current
+    }
 
   private def deprecatedReplacement(key: String): Option[String] =
     ConfigKeySchema.deprecatedReplacement(key)

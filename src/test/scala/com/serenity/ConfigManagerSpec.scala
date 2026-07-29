@@ -561,6 +561,27 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     written should include("lsp.python.args = [\"--stdio\", \"--log-file\", \"/tmp/pylsp.log\"]")
   }
 
+  it should "preserve commas inside HOCON LSP argument list values" in {
+    val configFile = Files.createTempFile("serenity-lsp-comma-args", ".conf")
+    Files.writeString(configFile, "lsp.python.args = [\"--define=A,B\", \"--stdio\"]\n")
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.lspUserConfig.servers.value(LanguageId.Python.id).args shouldBe Some(
+      List("--define=A,B", "--stdio")
+    )
+    val written = ConfigManager.configToString(config)
+    Files.writeString(configFile, written)
+    ConfigManager
+      .loadConfig(Some(configFile.toString))
+      .lspUserConfig
+      .servers
+      .value(LanguageId.Python.id)
+      .args shouldBe Some(
+      List("--define=A,B", "--stdio")
+    )
+  }
+
   it should "load and write text area inset percentages" in {
     val configFile = Files.createTempFile("serenity-text-area-config", ".conf")
     Files.writeString(
