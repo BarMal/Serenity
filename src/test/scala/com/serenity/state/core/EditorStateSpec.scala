@@ -51,7 +51,7 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
   it should "insert a new buffer after the currently focused buffer" in {
     val withSecondBuffer = EditorState
       .openNewTab(AppState.initial.copy(viewportSize = Some(ViewportSize(200, 24))))
-    val focusedFirst = EditorState.focusBuffer(withSecondBuffer, BufferId(0))
+    val focusedFirst = EditorState.rebalancePanes(withSecondBuffer, Some(BufferId(0)))
 
     val updatedState = EditorState.openNewTab(focusedFirst)
 
@@ -90,7 +90,7 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
 
     updatedState.buffers should not contain key(BufferId(1))
     updatedState.bufferOrder shouldBe List(BufferId(0))
-    updatedState.layout.editorPanes.values.flatMap(_.bufferId) shouldBe List(Some(BufferId(0))).flatten
+    updatedState.layout.editorPanes.values.flatMap(_.bufferId) shouldBe empty
   }
 
   "EditorState.removePane" should "remove the pane and focus the next available pane" in {
@@ -122,20 +122,47 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     updatedState.focusedBufferId shouldBe Some(BufferId(1))
   }
 
-  it should "remove the focused pane when multiple panes are visible" in {
+  it should "retain explicit pane topology when a focused tab closes" in {
     val wideViewport = ViewportSize(400, 24)
     val withThreeBuffers = EditorState.openNewTab(
       EditorState.openNewTab(AppState.initial.copy(viewportSize = Some(wideViewport)))
     )
+    val firstPane      = withThreeBuffers.layout.activeEditorPaneId.get
+    val withSecondPane = addPane(withThreeBuffers, firstPane, PaneId(1), BufferId(0))
+    val withThirdPane  = addPane(withSecondPane, PaneId(1), PaneId(2), BufferId(1))
+    val withExplicitPanes = withThirdPane.copy(
+      layout = withThirdPane.layout.copy(activeEditorPaneId = Some(firstPane)),
+      focus = Focus.EditorPane(firstPane)
+    )
 
-    withThreeBuffers.layout.editorPanes should have size 3
-    withThreeBuffers.layout.activeEditorPaneId shouldBe Some(PaneId(2))
+    withExplicitPanes.layout.editorPanes should have size 3
 
-    val updatedState = EditorState.closeFocusedTab(withThreeBuffers)
+    val updatedState = EditorState.closeFocusedTab(withExplicitPanes)
 
     updatedState.buffers should not contain key(BufferId(2))
     updatedState.bufferOrder shouldBe List(BufferId(0), BufferId(1))
-    updatedState.layout.editorPanes.keySet shouldBe Set(PaneId(0), PaneId(1))
-    updatedState.layout.activeEditorPaneId shouldBe Some(PaneId(1))
-    updatedState.focus shouldBe Focus.EditorPane(PaneId(1))
+    updatedState.layout.editorPanes.keySet shouldBe Set(PaneId(0), PaneId(1), PaneId(2))
+    updatedState.layout.activeEditorPaneId shouldBe Some(PaneId(2))
+    updatedState.focus shouldBe Focus.EditorPane(PaneId(2))
   }
+
+  private def addPane(state: AppState, after: PaneId, paneId: PaneId, bufferId: BufferId): AppState =
+    val tree = state.layout.effectiveWorkspaceTree
+      .flatMap(
+        _.split(
+          after,
+          paneId,
+          com.serenity.ui.layout.SplitAxis.Horizontal,
+          com.serenity.ui.layout.WorkspaceNodeId(s"split-${after.value}-${paneId.value}"),
+          com.serenity.ui.layout.WorkspaceNodeId(s"editor-${paneId.value}")
+        )
+      )
+      .getOrElse(fail("expected workspace split"))
+    state.copy(
+      layout = state.layout.copy(
+        editorPanes = state.layout.editorPanes.updated(paneId, EditorPane.withBuffer(paneId, bufferId)),
+        paneOrder = tree.paneIds,
+        workspaceTree = Some(tree)
+      ),
+      nextPaneId = PaneId(paneId.value + 1)
+    )

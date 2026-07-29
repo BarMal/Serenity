@@ -3,11 +3,12 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
+import com.serenity.keystroke.events.Direction
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Rope
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, PaneSplitDirection, ViewportSize}
+import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerEditorCapability(
     dependencies: EditorCapabilityPort
@@ -129,21 +130,12 @@ final private[manager] class StateManagerEditorCapability(
 
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
     stateRef.modify { state =>
-      val paneId = state.nextPaneId
-      val pane = bufferId match
-        case Some(id) => EditorPane.withBuffer(paneId, id)
-        case None     => EditorPane.empty(paneId)
-
-      val newState = state.copy(
-        layout = state.layout.copy(
-          editorPanes = state.layout.editorPanes + (paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          paneOrder = state.layout.paneOrder :+ paneId
-        ),
-        focus = Focus.EditorPane(paneId),
-        nextPaneId = PaneId(paneId.value + 1)
+      insertPane(
+        state,
+        state.layout.orderedPaneIds.lastOption,
+        bufferId,
+        SplitAxis.Horizontal
       )
-      (newState, paneId)
     }
 
   def switchToPane(paneId: PaneId): IO[Unit] =
@@ -158,9 +150,10 @@ final private[manager] class StateManagerEditorCapability(
 
   def closePane(paneId: PaneId): IO[Unit] =
     stateRef.update { state =>
-      val updatedState = EditorState.removePane(state, paneId)
-      if updatedState.layout.activeEditorPaneId.isDefined then updatedState
-      else ensureCommandRunnerSurface(updatedState)
+      val updated = EditorState.removePane(state, paneId)
+      if state.layout.editorPanes.size == 1 && state.layout.editorPanes.contains(paneId) then
+        ensureCommandRunnerSurface(updated)
+      else updated
     }
 
   def setBufferForPane(paneId: PaneId, bufferId: BufferId): IO[Unit] =
@@ -223,44 +216,93 @@ final private[manager] class StateManagerEditorCapability(
     }
 
   def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
-    stateRef.modify { state =>
-      val paneId = state.nextPaneId
-      val pane = bufferId match
-        case Some(id) => EditorPane.withBuffer(paneId, id)
-        case None     => EditorPane.empty(paneId)
-
-      val insertIdx = state.layout.paneOrder.indexOf(afterPaneId) match
-        case -1  => state.layout.paneOrder.size
-        case idx => idx + 1
-
-      val newState = state.copy(
-        layout = state.layout.copy(
-          editorPanes = state.layout.editorPanes + (paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          paneOrder = state.layout.paneOrder.patch(insertIdx, List(paneId), 0)
-        ),
-        focus = Focus.EditorPane(paneId),
-        nextPaneId = PaneId(paneId.value + 1)
-      )
-      (newState, paneId)
-    }
+    stateRef.modify(state => insertPane(state, Some(afterPaneId), bufferId, SplitAxis.Horizontal))
 
   def getTabOrder(): IO[List[PaneId]] =
     stateRef.get.map(_.layout.orderedPaneIds)
 
   def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
-    splitPane(paneId, bufferId, PaneSplitDirection.Horizontal)
+    splitPane(paneId, bufferId, SplitAxis.Horizontal)
 
   def splitPaneVertical(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
-    splitPane(paneId, bufferId, PaneSplitDirection.Vertical)
+    splitPane(paneId, bufferId, SplitAxis.Vertical)
+
+  def resizePaneSplit(splitId: WorkspaceNodeId, ratio: Double): IO[Unit] =
+    stateRef.update { state =>
+      state.layout.effectiveWorkspaceTree
+        .flatMap(_.resize(splitId, ratio))
+        .map(tree => state.copy(layout = state.layout.copy(workspaceTree = Some(tree), paneOrder = tree.paneIds)))
+        .getOrElse(state)
+    }
+
+  def focusPaneInDirection(direction: Direction): IO[Unit] =
+    stateRef.update { state =>
+      val currentPaneId =
+        state.focus match
+          case Focus.EditorPane(paneId) => Some(paneId)
+          case _                        => state.layout.activeEditorPaneId
+      val viewportSize = state.viewportSize.getOrElse(ViewportSize(80, 24))
+      val layout       = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      currentPaneId
+        .flatMap(LayoutEngine.directionalPaneNeighbor(state, layout, _, direction))
+        .map { paneId =>
+          state.copy(
+            layout = state.layout.copy(activeEditorPaneId = Some(paneId)),
+            focus = Focus.EditorPane(paneId)
+          )
+        }
+        .getOrElse(state)
+    }
 
   private def splitPane(
     paneId: PaneId,
     bufferId: Option[BufferId],
-    splitDirection: PaneSplitDirection
+    splitAxis: SplitAxis
   ): IO[PaneId] =
-    createPaneAfter(paneId, bufferId).flatMap { createdPaneId =>
-      stateRef
-        .update(state => state.copy(layout = state.layout.copy(splitDirection = splitDirection)))
-        .as(createdPaneId)
-    }
+    stateRef.modify(state => insertPane(state, Some(paneId), bufferId, splitAxis))
+
+  private def insertPane(
+    state: AppState,
+    requestedAfter: Option[PaneId],
+    bufferId: Option[BufferId],
+    splitAxis: SplitAxis
+  ): (AppState, PaneId) =
+    val paneId = state.nextPaneId
+    val pane = bufferId match
+      case Some(id) => EditorPane.withBuffer(paneId, id)
+      case None     => EditorPane.empty(paneId)
+    val targetPaneId =
+      requestedAfter
+        .filter(state.layout.editorPanes.contains)
+        .orElse(state.layout.orderedPaneIds.lastOption)
+
+    val updatedTree =
+      targetPaneId match
+        case Some(target) =>
+          state.layout.effectiveWorkspaceTree.flatMap(
+            _.split(
+              target,
+              paneId,
+              splitAxis,
+              WorkspaceNodeId(s"split-${target.value}-${paneId.value}"),
+              WorkspaceNodeId(s"editor-${paneId.value}")
+            )
+          )
+        case None =>
+          Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
+
+    updatedTree match
+      case Some(tree) =>
+        val updatedState = state.copy(
+          layout = state.layout.copy(
+            editorPanes = state.layout.editorPanes.updated(paneId, pane),
+            activeEditorPaneId = Some(paneId),
+            paneOrder = tree.paneIds,
+            workspaceTree = Some(tree)
+          ),
+          focus = Focus.EditorPane(paneId),
+          nextPaneId = PaneId(paneId.value + 1)
+        )
+        (updatedState, paneId)
+      case None =>
+        (state, paneId)

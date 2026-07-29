@@ -56,6 +56,10 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 
     // When: Create multiple buffers
     (1 to 4).foreach(_ => stateManager.applyEvent(NewTab).unsafeRunSync())
+    val bufferState = stateManager.getCurrentState.unsafeRunSync()
+    val firstPane   = bufferState.layout.activeEditorPaneId.get
+    val secondPane  = stateManager.splitPaneHorizontal(firstPane, Some(bufferState.bufferOrder.head)).unsafeRunSync()
+    stateManager.splitPaneHorizontal(secondPane, Some(bufferState.bufferOrder(1))).unsafeRunSync()
     val finalState = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Should have all buffers in memory
@@ -95,6 +99,10 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 
     // When: Create multiple buffers
     (1 to 4).foreach(_ => stateManager.applyEvent(NewTab).unsafeRunSync())
+    val bufferState = stateManager.getCurrentState.unsafeRunSync()
+    val firstPane   = bufferState.layout.activeEditorPaneId.get
+    val secondPane  = stateManager.splitPaneHorizontal(firstPane, Some(bufferState.bufferOrder.head)).unsafeRunSync()
+    stateManager.splitPaneHorizontal(secondPane, Some(bufferState.bufferOrder(1))).unsafeRunSync()
     val finalState = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Should respect custom minimum width in layout
@@ -155,7 +163,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 
     paneLayouts.values.foreach(rect => rect.width should be >= defaultMinPaneWidth)
 
-  it should "expand from one visible pane to multiple panes after widening a terminal that was narrow during tab creation" in new PaneConstraintFixture:
+  it should "keep one persistent pane after widening a terminal used for tab creation" in new PaneConstraintFixture:
     val narrowTerminal = ViewportSize(80, 24)
     val wideTerminal   = ViewportSize(200, 24)
 
@@ -169,21 +177,23 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     stateManager.handleViewportResize(wideTerminal).unsafeRunSync()
 
     val widenedState = stateManager.getCurrentState.unsafeRunSync()
-    widenedState.layout.editorPanes.size should be >= 2
+    widenedState.layout.editorPanes.keySet shouldBe narrowState.layout.editorPanes.keySet
+    widenedState.layout.editorPanes should have size 1
+    widenedState.focusedBufferId shouldBe narrowState.focusedBufferId
 
-    val visibleBufferIds =
-      widenedState.layout.editorPanes.values.flatMap(_.bufferId).toSet
-    visibleBufferIds should contain allElementsOf widenedState.bufferOrder.toSet
-
-  it should "shrink visible panes under narrow widths and restore them when widened again" in new PaneConstraintFixture:
+  it should "preserve explicit pane leaves while resizing through constrained widths" in new PaneConstraintFixture:
     val wideTerminal   = ViewportSize(200, 24)
     val narrowTerminal = ViewportSize(80, 24)
 
     stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
+    val bufferState = stateManager.getCurrentState.unsafeRunSync()
+    val firstPane   = bufferState.layout.activeEditorPaneId.get
+    stateManager.splitPaneHorizontal(firstPane, Some(bufferState.bufferOrder.head)).unsafeRunSync()
 
     val wideState = stateManager.getCurrentState.unsafeRunSync()
-    wideState.layout.editorPanes.size should be >= 2
+    wideState.layout.editorPanes should have size 2
+    val paneIds = wideState.layout.editorPanes.keySet
 
     val wideLayout = LayoutEngine.calculateLayout(wideState, wideTerminal)
     val visibleWidePanes =
@@ -202,7 +212,8 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
         .calculatePaneLayouts(narrowState, narrowLayout)
         .values
         .count(rect => rect.x >= narrowLayout.editorPanelRect.x && rect.right <= narrowLayout.editorPanelRect.right)
-    visibleNarrowPanes.shouldBe(1)
+    visibleNarrowPanes.shouldBe(2)
+    narrowState.layout.editorPanes.keySet shouldBe paneIds
 
     stateManager.handleViewportResize(wideTerminal).unsafeRunSync()
 
@@ -213,4 +224,5 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
         .calculatePaneLayouts(restoredState, restoredLayout)
         .values
         .count(rect => rect.x >= restoredLayout.editorPanelRect.x && rect.right <= restoredLayout.editorPanelRect.right)
-    restoredVisiblePanes.should(be >= 2)
+    restoredVisiblePanes.shouldBe(2)
+    restoredState.layout.editorPanes.keySet shouldBe paneIds

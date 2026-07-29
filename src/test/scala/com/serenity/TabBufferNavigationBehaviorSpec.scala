@@ -107,6 +107,11 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     // Given: Two buffers, wide terminal (2 panes can be visible)
     stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Create second buffer
+    val singlePaneState = stateManager.getCurrentState.unsafeRunSync()
+    val initialPaneId   = singlePaneState.layout.activeEditorPaneId.get
+    val firstBufferId   = singlePaneState.bufferOrder.head
+    stateManager.splitPaneHorizontal(initialPaneId, Some(firstBufferId)).unsafeRunSync()
+    stateManager.switchToPane(initialPaneId).unsafeRunSync()
     val stateWith2Buffers = stateManager.getCurrentState.unsafeRunSync()
 
     // Check we have 2 panes visible in wide terminal
@@ -114,7 +119,6 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     stateWith2Buffers.layout.editorPanes should have size 2
 
     val bufferIds      = stateWith2Buffers.buffers.keys.toList.sortBy(_.value)
-    val firstBufferId  = bufferIds.head
     val secondBufferId = bufferIds.last
 
     // Should start with focus on second buffer (in second pane)
@@ -235,6 +239,10 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     // Given: Two buffers, wide terminal (2 panes visible)
     stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
+    val singlePaneState = stateManager.getCurrentState.unsafeRunSync()
+    val initialPaneId   = singlePaneState.layout.activeEditorPaneId.get
+    stateManager.splitPaneHorizontal(initialPaneId, Some(singlePaneState.bufferOrder.head)).unsafeRunSync()
+    stateManager.switchToPane(initialPaneId).unsafeRunSync()
     val stateWith2Buffers = stateManager.getCurrentState.unsafeRunSync()
 
     // Should have 2 panes, each with different buffers

@@ -518,6 +518,13 @@ case class AppState(
         if !buffers.contains(bufferId) then errors += s"Pane $paneId references non-existent buffer: $bufferId"
       }
     }
+    layout.workspaceTree.foreach { tree =>
+      errors ++= tree.validationErrors(layout.editorPanes.keySet)
+      focus match
+        case Focus.EditorPane(paneId) if !tree.paneIds.contains(paneId) =>
+          errors += s"Focus points outside workspace tree: $paneId"
+        case _ =>
+    }
 
     errors.result()
 

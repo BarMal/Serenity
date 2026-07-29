@@ -27,6 +27,10 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
     stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
+    val bufferState = stateManager.getCurrentState.unsafeRunSync()
+    val firstPane   = bufferState.layout.activeEditorPaneId.get
+    val secondPane  = stateManager.splitPaneHorizontal(firstPane, Some(bufferState.bufferOrder.head)).unsafeRunSync()
+    stateManager.splitPaneHorizontal(secondPane, Some(bufferState.bufferOrder(1))).unsafeRunSync()
 
     val wideState = stateManager.getCurrentState.unsafeRunSync()
     wideState.buffers should have size 3
@@ -40,10 +44,10 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     val narrowState = stateManager.getCurrentState.unsafeRunSync()
 
-    // Then: Layout should be recalculated with fewer panes
+    // Then: Geometry is recalculated without changing persistent pane topology.
     narrowState.viewportSize shouldBe Some(narrowTerminal)
-    narrowState.buffers should have size 3                             // Buffers preserved
-    narrowState.layout.editorPanes.size should be <= originalPaneCount // Fewer or same panes
+    narrowState.buffers should have size 3
+    narrowState.layout.editorPanes.size shouldBe originalPaneCount
 
     // And: All buffers should still be accessible via navigation
     val bufferIds = narrowState.bufferOrder

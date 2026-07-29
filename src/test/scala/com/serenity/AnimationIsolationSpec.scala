@@ -44,9 +44,12 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val twoBufferState = stateManager.getCurrentState.unsafeRunSync()
     val buffer2Id      = twoBufferState.bufferOrder.last
+    val originalPaneId = twoBufferState.layout.activeEditorPaneId.get
+    stateManager.splitPaneHorizontal(originalPaneId, Some(buffer1Id)).unsafeRunSync()
+    stateManager.switchToPane(originalPaneId).unsafeRunSync()
 
-    // Should have 2 panes displaying the 2 buffers
-    twoBufferState.layout.editorPanes should have size 2
+    // Explicitly split the workspace so both buffers have persistent views.
+    stateManager.getCurrentState.unsafeRunSync().layout.editorPanes should have size 2
 
     // Navigate to first buffer, type a character (should trigger animation)
     stateManager.applyEvent(com.serenity.keystroke.events.PreviousTab).unsafeRunSync() // Go to first buffer

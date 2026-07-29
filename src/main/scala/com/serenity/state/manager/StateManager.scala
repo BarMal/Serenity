@@ -7,7 +7,7 @@ import cats.effect.std.Semaphore
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
-import com.serenity.keystroke.events.Event
+import com.serenity.keystroke.events.{Direction, Event}
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -88,6 +88,8 @@ trait PaneManager:
   def getTabOrder(): IO[List[PaneId]]
   def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
   def splitPaneVertical(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
+  def resizePaneSplit(splitId: WorkspaceNodeId, ratio: Double): IO[Unit]
+  def focusPaneInDirection(direction: Direction): IO[Unit]
 
 /** Manages transient peek surfaces. */
 trait PeekManager:
