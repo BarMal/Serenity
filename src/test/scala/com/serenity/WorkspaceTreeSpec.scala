@@ -10,7 +10,15 @@ import com.serenity.state.models.{
   SurfacePresentation,
   UiSurface
 }
-import com.serenity.ui.layout.{Layout, PaneSplitDirection, PanelPosition, SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{
+  Layout,
+  PaneSplitDirection,
+  PanelPosition,
+  SplitAxis,
+  WorkspaceNode,
+  WorkspaceNodeId,
+  WorkspaceTree
+}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

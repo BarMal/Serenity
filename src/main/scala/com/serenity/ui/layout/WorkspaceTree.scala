@@ -65,6 +65,9 @@ case class WorkspaceTree(root: WorkspaceNode):
   def dockedSurfaceIds: List[SurfaceId] = root.dockedSurfaceIds
   def nodeIds: List[WorkspaceNodeId]    = root.nodeIds
 
+  def positionForSurface(surfaceId: SurfaceId): Option[PanelPosition] =
+    WorkspaceTree.dockedSurface(root, surfaceId).map(_.position)
+
   /** Replaces one editor leaf with a ratio-controlled split containing the original and new pane. */
   def split(
     paneId: PaneId,
