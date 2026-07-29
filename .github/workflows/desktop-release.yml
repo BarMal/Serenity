@@ -42,6 +42,10 @@ jobs:
         shell: bash
         run: sbt -v clean assembly
 
+      - name: Verify assembled JAR service providers
+        shell: bash
+        run: ./scripts/check-assembled-jar.sh target/scala-*/Serenity.jar
+
       - name: Prepare app image
         shell: bash
         run: |

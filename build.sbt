@@ -33,12 +33,16 @@ lazy val root = (project in file("."))
     assembly / mainClass := Some("Main"),
     assembly / assemblyJarName := "Serenity.jar",
     assembly / assemblyMergeStrategy := {
-      case PathList("META-INF", xs @ _*) =>
+      case PathList("META-INF", "services", _*) => MergeStrategy.concat
+      case x @ PathList("META-INF", xs @ _*) =>
         xs.map(_.toLowerCase) match {
-          case "manifest.mf" :: Nil => MergeStrategy.discard
-          case "index.list" :: Nil  => MergeStrategy.discard
-          case "dependencies" :: Nil => MergeStrategy.discard
-          case _ => MergeStrategy.discard
+          case "manifest.mf" :: Nil   => MergeStrategy.discard
+          case "index.list" :: Nil    => MergeStrategy.discard
+          case "dependencies" :: Nil  => MergeStrategy.discard
+          case name :: Nil
+              if name.endsWith(".sf") || name.endsWith(".rsa") || name.endsWith(".dsa") || name.endsWith(".ec") =>
+            MergeStrategy.discard
+          case _ => (assembly / assemblyMergeStrategy).value(x)
         }
       case PathList("module-info.class") => MergeStrategy.discard
       case x => (assembly / assemblyMergeStrategy).value(x)
