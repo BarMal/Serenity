@@ -9,12 +9,12 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
 import cats.effect.IO
-import com.typesafe.config.{Config, ConfigFactory, ConfigValueType}
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueType}
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
