@@ -602,7 +602,28 @@ case class AppState(
               val leafId  = WorkspaceNodeId(s"dock-leaf-${surfaceId.value}")
               currentTree.dock(surfaceId, position, splitId, leafId).getOrElse(currentTree)
         }
-        copy(layout = layout.copy(workspaceTree = Some(reconciledTree), paneOrder = reconciledTree.paneIds))
+        val orderedTree = pinned
+          .groupBy(_._2)
+          .foldLeft(reconciledTree) {
+            case (currentTree, (position, surfacesAtPosition)) =>
+              val desiredOrder = surfacesAtPosition.map(_._1)
+              val currentOrder = currentTree.dockedSurfaceIds.filter { surfaceId =>
+                currentTree.positionForSurface(surfaceId).contains(position)
+              }
+              if currentOrder == desiredOrder then currentTree
+              else
+                desiredOrder.zipWithIndex.foldLeft(currentTree) {
+                  case (tree, (surfaceId, index)) =>
+                    tree
+                      .moveSurface(
+                        surfaceId,
+                        position,
+                        WorkspaceNodeId(s"reconcile-order-${position.toString.toLowerCase}-$index-${surfaceId.value}")
+                      )
+                      .getOrElse(tree)
+                }
+          }
+        copy(layout = layout.copy(workspaceTree = Some(orderedTree), paneOrder = orderedTree.paneIds))
 
 object AppState:
 

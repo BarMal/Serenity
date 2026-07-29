@@ -83,10 +83,17 @@ object PanelStateReducer:
         val movedTree = state.layout.workspaceTree.flatMap { tree =>
           tree.moveSurface(surfaceId, position, nextSplitId(tree, surfaceId))
         }
-        val moved = surface.copy(presentation = SurfacePresentation.Pinned(position, size))
+        val moved           = surface.copy(presentation = SurfacePresentation.Pinned(position, size))
+        val updatedSurfaces = replaceSurfaceInPlace(state.uiSurfaces, moved)
+        val orderedSurfaces = movedTree
+          .map(tree =>
+            tree.dockedSurfaceIds.flatMap(surfaceId => updatedSurfaces.find(_.id == surfaceId)) ++
+              updatedSurfaces.filterNot(surface => tree.dockedSurfaceIds.contains(surface.id))
+          )
+          .getOrElse(updatedSurfaces)
         ReducerResult.noEffects(
           state.copy(
-            uiSurfaces = replaceSurfaceInPlace(state.uiSurfaces, moved),
+            uiSurfaces = orderedSurfaces,
             layout = state.layout.copy(workspaceTree = movedTree.orElse(state.layout.workspaceTree))
           )
         )
