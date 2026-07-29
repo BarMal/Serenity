@@ -1,8 +1,12 @@
 package com.serenity.richtext
 
+import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
+import java.util.concurrent.atomic.AtomicInteger
+
+import com.sun.net.httpserver.HttpServer
 
 import cats.effect.unsafe.implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
@@ -185,20 +189,55 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
     error.getMessage should include("ODT document could not be decoded")
   }
 
-  it should "reject ODT XML with external entities" in {
-    val xml =
-      """<?xml version="1.0" encoding="UTF-8"?>
-        |<!DOCTYPE office:document-content [<!ENTITY external SYSTEM "file:///serenity-should-not-be-read">]>
-        |<office:document-content
-        |    xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-        |    xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
-        |  <office:body><office:text><text:p>&external;</text:p></office:text></office:body>
-        |</office:document-content>""".stripMargin
+  it should "reject ODT XML with external entities" in
+    withHttpRequestCounter { (resourceUrl, requests) =>
+      val xml =
+        s"""<?xml version="1.0" encoding="UTF-8"?>
+           |<!DOCTYPE office:document-content [<!ENTITY external SYSTEM "$resourceUrl">]>
+           |<office:document-content
+           |    xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+           |    xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+           |  <office:body><office:text><text:p>&external;</text:p></office:text></office:body>
+           |</office:document-content>""".stripMargin
 
-    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes(xml))
+      val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes(xml))
 
-    error.getMessage should include("ODT document could not be decoded")
-  }
+      error.getMessage should include("ODT document could not be decoded")
+      requests.get() shouldBe 0
+    }
+
+  it should "reject ODT XML with an external DTD without requesting it" in
+    withHttpRequestCounter { (resourceUrl, requests) =>
+      val xml =
+        s"""<?xml version="1.0" encoding="UTF-8"?>
+           |<!DOCTYPE office:document-content SYSTEM "$resourceUrl">
+           |<office:document-content
+           |    xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+           |    xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+           |  <office:body><office:text><text:p>safe</text:p></office:text></office:body>
+           |</office:document-content>""".stripMargin
+
+      val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes(xml))
+
+      error.getMessage should include("ODT document could not be decoded")
+      requests.get() shouldBe 0
+    }
+
+  it should "not request an external ODT schema hint" in
+    withHttpRequestCounter { (resourceUrl, requests) =>
+      val xml =
+        s"""<?xml version="1.0" encoding="UTF-8"?>
+           |<office:document-content
+           |    xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+           |    xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+           |    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           |    xsi:schemaLocation="urn:oasis:names:tc:opendocument:xmlns:office:1.0 $resourceUrl">
+           |  <office:body><office:text><text:p>safe</text:p></office:text></office:body>
+           |</office:document-content>""".stripMargin
+
+      OdtDocumentCodec.readBytes(odtBytes(xml)).plainText shouldBe "safe"
+      requests.get() shouldBe 0
+    }
 
   it should "reject ODT XML with entity expansion payloads" in {
     val xml =
@@ -236,6 +275,22 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
       zip.closeEntry()
     finally zip.close()
     output.toByteArray
+
+  private def withHttpRequestCounter(test: (String, AtomicInteger) => Unit): Unit =
+    val requests = AtomicInteger(0)
+    val server   = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+    server.createContext(
+      "/resource",
+      exchange =>
+        requests.incrementAndGet()
+        val body = "<!ELEMENT document ANY>".getBytes(StandardCharsets.UTF_8)
+        exchange.sendResponseHeaders(200, body.length.toLong)
+        try exchange.getResponseBody.write(body)
+        finally exchange.close()
+    )
+    server.start()
+    try test(s"http://127.0.0.1:${server.getAddress.getPort}/resource", requests)
+    finally server.stop(0)
 
   private def zipEntryText(bytes: Array[Byte], name: String): String =
     val input = ZipInputStream(java.io.ByteArrayInputStream(bytes))
