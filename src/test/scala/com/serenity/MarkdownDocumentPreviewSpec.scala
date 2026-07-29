@@ -1,20 +1,19 @@
 package com.serenity
 
-import java.awt.{Color, Font}
 import java.awt.image.BufferedImage
+import java.awt.{Color, Font}
 import java.io.ByteArrayOutputStream
 import java.net.{InetAddress, InetSocketAddress}
 import java.nio.file.{Files, Path, Paths}
+import java.util.Base64
 import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
-import java.util.Base64
-
-import com.sun.net.httpserver.HttpServer
 
 import scala.util.Try
 
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.ui.theme.Theme
+import com.sun.net.httpserver.HttpServer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -325,11 +324,13 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   it should "deny remote images without making a network request" in {
     val requests = new AtomicInteger(0)
     val server   = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress, 0), 0)
-    server.createContext("/image.png", exchange =>
-      requests.incrementAndGet()
-      val body = Array.emptyByteArray
-      exchange.sendResponseHeaders(200, body.length)
-      exchange.getResponseBody.close()
+    server.createContext(
+      "/image.png",
+      exchange =>
+        requests.incrementAndGet()
+        val body = Array.emptyByteArray
+        exchange.sendResponseHeaders(200, body.length)
+        exchange.getResponseBody.close()
     )
     server.start()
     try

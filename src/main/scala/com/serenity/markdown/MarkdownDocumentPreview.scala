@@ -5,8 +5,7 @@ import java.awt.{Color, Font, RenderingHints}
 import java.io.{ByteArrayInputStream, StringReader}
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
-import java.util.LinkedHashMap
-import java.util.Locale
+import java.util.{LinkedHashMap, Locale}
 import javax.imageio.ImageIO
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -697,15 +696,18 @@ object MarkdownDocumentPreview:
       yield image
 
     private def permittedFile(uri: URI): Option[Path] =
-      Option.when(uri.getScheme == "file" && uri.getHost == null && resourceRoot.nonEmpty) {
-        Try(Paths.get(uri).toAbsolutePath.normalize()).toOption
-      }.flatten.filter { path =>
-        resourceRoot.exists { root =>
-          path.startsWith(root) &&
-          Try(path.toRealPath().startsWith(root.toRealPath())).getOrElse(false) &&
-          Files.isRegularFile(path)
+      Option
+        .when(uri.getScheme == "file" && uri.getHost == null && resourceRoot.nonEmpty) {
+          Try(Paths.get(uri).toAbsolutePath.normalize()).toOption
         }
-      }
+        .flatten
+        .filter { path =>
+          resourceRoot.exists { root =>
+            path.startsWith(root) &&
+            Try(path.toRealPath().startsWith(root.toRealPath())).getOrElse(false) &&
+            Files.isRegularFile(path)
+          }
+        }
 
     private def readBounded(path: Path): Option[Array[Byte]] =
       Try {
@@ -729,13 +731,15 @@ object MarkdownDocumentPreview:
               reader.setInput(input, true, true)
               val width  = reader.getWidth(0)
               val height = reader.getHeight(0)
-              Option.when(
-                width > 0 &&
-                  height > 0 &&
-                  width <= MaxImageDimension &&
-                  height <= MaxImageDimension &&
-                  width.toLong * height.toLong <= MaxImagePixels
-              )(Option(ImageIO.read(new ByteArrayInputStream(bytes)))).flatten
+              Option
+                .when(
+                  width > 0 &&
+                    height > 0 &&
+                    width <= MaxImageDimension &&
+                    height <= MaxImageDimension &&
+                    width.toLong * height.toLong <= MaxImagePixels
+                )(Option(ImageIO.read(new ByteArrayInputStream(bytes))))
+                .flatten
             finally
               reader.dispose()
               input.close()
