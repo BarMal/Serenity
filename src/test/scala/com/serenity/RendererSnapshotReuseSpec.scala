@@ -192,6 +192,19 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     index.commentsByLine(Set(100000)).values.flatten should contain only comment
   }
 
+  it should "query a visible comment without scanning unrelated indexed ranges" in {
+    val bufferId = BufferId(1)
+    val unrelated =
+      (0 until 50000).map(line => DocumentComment(CursorPosition(line, 0), CursorPosition(line, 0), "offscreen"))
+    val visible = DocumentComment(CursorPosition(100000, 0), CursorPosition(100000, 0), "visible")
+    val buffer  = Buffer.fromString(bufferId, "content").copy(documentComments = (unrelated :+ visible).toList)
+    val state   = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
+
+    val result = state.annotationIndexByBuffer(bufferId)().commentsByLine(Set(100000))
+
+    result.values.flatten.toList shouldBe List(visible)
+  }
+
   it should "render a plain large buffer without materialising the whole rope" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)

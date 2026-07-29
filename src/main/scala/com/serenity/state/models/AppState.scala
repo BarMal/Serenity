@@ -151,24 +151,52 @@ case class SpellCheckCacheEntry(
     diagnostics: List[Diagnostic]
 )
 
+/** Scene-owned interval node for bounded comment overlap queries. */
+private case class CommentIntervalNode(
+    comment: DocumentComment,
+    maxEnd: Int,
+    left: Option[CommentIntervalNode],
+    right: Option[CommentIntervalNode]
+)
+
 /** Scene-owned annotation lookup keyed by buffer line. */
 case class AnnotationLineIndex(
     comments: Vector[DocumentComment],
     diagnosticsByLine: Map[Int, List[Diagnostic]]
 ):
 
+  private lazy val commentTree: Option[CommentIntervalNode] =
+    def build(sorted: Vector[DocumentComment]): Option[CommentIntervalNode] =
+      if sorted.isEmpty then None
+      else
+        val middle  = sorted.length / 2
+        val comment = sorted(middle)
+        val left    = build(sorted.take(middle))
+        val right   = build(sorted.drop(middle + 1))
+        val maxEnd  = (comment.end.line :: left.toList.map(_.maxEnd) ::: right.toList.map(_.maxEnd)).max
+        Some(CommentIntervalNode(comment, maxEnd, left, right))
+    build(comments.sortBy(_.start.line))
+
   def commentsByLine(visibleLines: Set[Int]): Map[Int, List[DocumentComment]] =
     if visibleLines.isEmpty then Map.empty
     else
       val start = visibleLines.min
       val end   = visibleLines.max
-      comments.iterator
-        .filter(comment => comment.start.line <= end && comment.end.line >= start)
-        .foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
-          (comment.start.line.max(start) to comment.end.line.min(end)).iterator
-            .filter(visibleLines.contains)
-            .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
-        }
+      def overlapping(node: Option[CommentIntervalNode]): List[DocumentComment] =
+        node match
+          case None => Nil
+          case Some(current) =>
+            val fromLeft = if current.left.exists(_.maxEnd >= start) then overlapping(current.left) else Nil
+            val here =
+              if current.comment.start.line <= end && current.comment.end.line >= start then List(current.comment)
+              else Nil
+            val fromRight = if current.comment.start.line <= end then overlapping(current.right) else Nil
+            fromLeft ::: here ::: fromRight
+      overlapping(commentTree).foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
+        (comment.start.line.max(start) to comment.end.line.min(end)).iterator
+          .filter(visibleLines.contains)
+          .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
+      }
 
 case class AppState(
     layout: Layout,
