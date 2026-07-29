@@ -399,7 +399,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       None
     )
 
-    lineReads.get() should be < 20_000
+    lineReads.get() should be < 6_000
   }
 
   it should "bound renderer reads for a long paragraph in a large document" in {
@@ -409,7 +409,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val markdown =
       (Vector.fill(1_000)("paragraph content") ++
         Vector("") ++
-        Vector.fill(10_000)("trailing prose")).mkString("\n")
+        Vector.fill(1_000)("trailing prose")).mkString("\n")
     val content = CountingAccessRope(Rope(markdown), lineReads = lineReads)
     val buffer = Buffer(bufferId, content).copy(
       language = Some(LanguageId.Markdown),
@@ -444,7 +444,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     )
 
     // The renderer intentionally resolves only the viewport-local lens range for long blocks.
-    lineReads.get() should be < 20_000
+    lineReads.get() should be < 6_000
   }
 
   it should "bound bare fence classification reads after a long prose prefix" in {
