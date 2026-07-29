@@ -5,9 +5,29 @@ import com.serenity.state.models.SurfaceContent
 
 /** A device-independent rectangle used at the floating-surface boundary. */
 case class LogicalPixelRect(x: Double, y: Double, width: Double, height: Double):
-  def contains(pixelX: Double, pixelY: Double): Boolean =
-    pixelX >= x && pixelX < x + width && pixelY >= y && pixelY < y + height
+  /** Exclusive right edge. */
+  def right: Double = x + width
 
+  /** Exclusive bottom edge. */
+  def bottom: Double = y + height
+
+  /** Whether the supplied logical pixel is inside this rectangle. */
+  def contains(pixelX: Double, pixelY: Double): Boolean =
+    pixelX >= x && pixelX < right && pixelY >= y && pixelY < bottom
+
+  /** Whether this rectangle fully contains another rectangle. */
+  def containsRect(rect: LogicalPixelRect): Boolean =
+    rect.x >= x && rect.y >= y && rect.right <= right && rect.bottom <= bottom
+
+  /** The positive-area overlap with another rectangle. */
+  def intersection(other: LogicalPixelRect): Option[LogicalPixelRect] =
+    val left   = math.max(x, other.x)
+    val top    = math.max(y, other.y)
+    val right  = math.min(this.right, other.right)
+    val bottom = math.min(this.bottom, other.bottom)
+    Option.when(right > left && bottom > top)(LogicalPixelRect(left, top, right - left, bottom - top))
+
+  /** Translate this rectangle without changing its size. */
   def translated(deltaX: Double, deltaY: Double): LogicalPixelRect =
     copy(x = x + deltaX, y = y + deltaY)
 
