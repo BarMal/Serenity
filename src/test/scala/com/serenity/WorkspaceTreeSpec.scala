@@ -1,11 +1,14 @@
 package com.serenity
 
-import com.serenity.state.models.{EditorPane, PaneId}
+import com.serenity.rope.Balance
+import com.serenity.state.models.{AppState, EditorPane, PaneId}
 import com.serenity.ui.layout.{Layout, PaneSplitDirection, SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   "WorkspaceTree" should "retain stable node and pane identities through nested splits" in {
     val first  = WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))
@@ -60,6 +63,12 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
 
   it should "initialize the default layout as one explicit editor leaf" in {
     Layout.initial.workspaceTree shouldBe Some(
+      WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
+    )
+  }
+
+  it should "initialize the default app state with one explicit editor leaf" in {
+    AppState.initial.layout.workspaceTree shouldBe Some(
       WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
     )
   }
