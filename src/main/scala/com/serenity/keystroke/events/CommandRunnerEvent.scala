@@ -24,8 +24,7 @@ case class RunnerBindingRecordingExpired(recordedAtMillis: Long)       extends C
 
 case class RunnerRecordBinding(
     info: KeyStrokeInfo,
-    recordedAtMillis: Long = System.currentTimeMillis(),
-    isDoubleTap: Boolean = false
+    recordedAtMillis: Long = System.currentTimeMillis()
 ) extends CommandRunnerEvent
 
 object CommandRunnerEvent:

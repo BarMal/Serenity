@@ -1,9 +1,9 @@
 package com.serenity
 
-import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import scala.concurrent.duration.*
 
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.serenity.config.{CommandRunnerKeyAction, HotkeyAction, HotkeyConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
@@ -58,11 +58,21 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager
       .applyEvent(RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty)))
       .unsafeRunSync()
 
-    IO.sleep(250.millis).unsafeRunSync()
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .commandRunnerSurface
+      .flatMap(_.content match
+        case SurfaceContent.CommandPalette(runner) => runner.activeSubmenu.flatMap(_.pendingRecordedBinding)
+        case SurfaceContent.CommandPaletteSubmenu(runner, _, _) =>
+          runner.activeSubmenu.flatMap(_.pendingRecordedBinding)
+        case _ => None) should not be empty
+
+    IO.sleep(500.millis).unsafeRunSync()
 
     stateManager.getCurrentState
       .unsafeRunSync()

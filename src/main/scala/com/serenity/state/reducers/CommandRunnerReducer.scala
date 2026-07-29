@@ -161,8 +161,8 @@ object CommandRunnerReducer:
                     replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm + char))
                   )
 
-      case RunnerRecordBinding(info, recordedAtMillis, isDoubleTap) =>
-        recordBinding(state, info, recordedAtMillis, isDoubleTap)
+      case RunnerRecordBinding(info, recordedAtMillis) =>
+        recordBinding(state, info, recordedAtMillis)
 
       case RunnerBindingRecordingExpired(recordedAtMillis) =>
         expireRecordedBinding(state, recordedAtMillis)
@@ -645,8 +645,7 @@ object CommandRunnerReducer:
   private def recordBinding(
     state: AppState,
     info: com.serenity.keystroke.KeyStrokeInfo,
-    recordedAtMillis: Long,
-    isDoubleTap: Boolean
+    recordedAtMillis: Long
   ): ReducerResult =
     currentRunner(state).flatMap(_.activeSubmenu) match
       case Some(submenu) if submenu.recordingItemId.nonEmpty =>
@@ -654,30 +653,28 @@ object CommandRunnerReducer:
         runner.submenuItems(submenu.groupId).find(_.id == submenu.recordingItemId.get) match
           case Some(item: CommandSurfaceItem.InputItem) =>
             val pending = submenu.pendingRecordedBinding
-            if isDoubleTap then assignRecordedBinding(state, item, info)
-            else
-              pending match
-                case None =>
-                  ReducerResult(
-                    replaceRunner(
-                      state,
-                      current =>
-                        current.copy(
-                          activeSubmenu = current.activeSubmenu.map(
-                            _.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))
-                          ),
-                          statusMessage = Some("Press the same key again within 200ms to record a double tap")
-                        )
-                    ),
-                    List(AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis))
-                  )
-                case Some((first, firstAt))
-                    if recordedAtMillis >= firstAt &&
-                      recordedAtMillis - firstAt <= DoubleTapWindowMillis &&
-                      sameKeyStroke(first, info) =>
-                  assignRecordedBinding(state, item, first)
-                case Some((first, _)) =>
-                  assignRecordedBinding(state, item, first)
+            pending match
+              case None =>
+                ReducerResult(
+                  replaceRunner(
+                    state,
+                    current =>
+                      current.copy(
+                        activeSubmenu = current.activeSubmenu.map(
+                          _.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))
+                        ),
+                        statusMessage = Some("Press the same key again within 200ms to record a double tap")
+                      )
+                  ),
+                  List(AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis))
+                )
+              case Some((first, firstAt))
+                  if recordedAtMillis >= firstAt &&
+                    recordedAtMillis - firstAt <= DoubleTapWindowMillis &&
+                    sameKeyStroke(first, info) =>
+                assignRecordedBinding(state, item, first)
+              case Some((first, _)) =>
+                assignRecordedBinding(state, item, first)
           case _ => ReducerResult.noEffects(state)
       case _ =>
         ReducerResult.noEffects(state)

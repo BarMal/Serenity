@@ -118,13 +118,12 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     FocusedInputTranslator
       .forState(state)
       .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))) match
-      case RunnerRecordBinding(info, _, isDoubleTap) =>
+      case RunnerRecordBinding(info, _) =>
         info shouldBe KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
-        isDoubleTap shouldBe false
       case other => fail(s"Expected a recorded binding, got $other")
   }
 
-  it should "route a modifier double-tap stroke to a keymap submenu recorder" in {
+  it should "route a modifier stroke to a keymap submenu recorder without deciding tap count" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
@@ -146,8 +145,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val doubleTap = KeyStrokeInfo(InputKey.Ctrl, None, Set.empty)
 
-    FocusedInputTranslator.forState(state).translate(doubleTap) shouldBe
-      RunnerRecordBinding(doubleTap, isDoubleTap = true)
+    FocusedInputTranslator.forState(state).translate(doubleTap) shouldBe RunnerRecordBinding(doubleTap)
   }
 
   it should "reject conflicting loaded hotkeys instead of dispatching the first matching action" in {

@@ -211,7 +211,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runnerFrom(completed.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
   }
 
-  it should "assign a synthesized modifier double tap without waiting for another stroke" in {
+  it should "assign a modifier double tap when the matching second stroke arrives within 200ms" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
     val items    = base.submenuItems("settings-keymap")
@@ -235,9 +235,17 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       focus = Focus.Surface(SurfaceId("command-runner"))
     )
 
-    val result = CommandRunnerReducer.reduce(
-      RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), isDoubleTap = true),
+    val first = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), 1_000L),
       state,
+      registry
+    )
+    first.effects.collectFirst { case AppEffect.ExecuteCommand(_) => true } shouldBe None
+    runnerFrom(first.state).activeSubmenu.flatMap(_.pendingRecordedBinding).map(_._2) shouldBe Some(1_000L)
+
+    val result = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), 1_200L),
+      first.state,
       registry
     )
 

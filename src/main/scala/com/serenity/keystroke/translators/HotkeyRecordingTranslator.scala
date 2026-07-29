@@ -8,10 +8,5 @@ class HotkeyRecordingTranslator extends Translator[CommandRunnerEvent]:
 
   override val converters: List[PartialFunction[KeyStrokeInfo, CommandRunnerEvent]] = List {
     case KeyStrokeInfo(InputKey.Escape, _, _) => RunnerDismiss
-    case info
-        if info.modifiers.isEmpty && Set(InputKey.Ctrl, InputKey.Alt, InputKey.Shift, InputKey.Meta).contains(
-          info.keyType
-        ) =>
-      RunnerRecordBinding(info, isDoubleTap = true)
-    case info => RunnerRecordBinding(info)
+    case info                                 => RunnerRecordBinding(info)
   }
