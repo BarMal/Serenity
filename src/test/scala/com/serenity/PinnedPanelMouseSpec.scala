@@ -175,9 +175,9 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "characterize expanded panel clicks against the scene node content region" in {
-    val root = Paths.get("/repo")
-    val src  = root.resolve("src")
-    val tree = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
+    val root    = Paths.get("/repo")
+    val src     = root.resolve("src")
+    val tree    = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
     val surface = expandedExplorerSurface(tree, selectedPath = Some(root))
     val sm      = makeStateManager()
     sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
