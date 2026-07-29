@@ -1,7 +1,13 @@
 package com.serenity
 
 import java.awt.{Color, Font}
-import java.nio.file.Paths
+import java.awt.image.BufferedImage
+import java.net.{InetAddress, InetSocketAddress}
+import java.nio.file.{Files, Path, Paths}
+import java.util.concurrent.atomic.AtomicInteger
+import javax.imageio.ImageIO
+
+import com.sun.net.httpserver.HttpServer
 
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.ui.theme.Theme
@@ -235,6 +241,103 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     html should include(s"""src="$expected"""")
   }
 
+  it should "render local images only when they are below the preview resource root" in {
+    val root       = Files.createTempDirectory("serenity-markdown-preview-root")
+    val localImage = root.resolve("local.png")
+    writeSolidImage(localImage, Color(220, 30, 40), width = 8, height = 8)
+
+    val image = MarkdownDocumentPreview.renderImage(
+      source = "![Local](local.png)",
+      title = "local.md",
+      widthPx = 180,
+      heightPx = 120,
+      theme = Theme.default,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      baseUri = Some(root.toUri)
+    )
+
+    containsColor(image, Color(220, 30, 40)) shouldBe true
+  }
+
+  it should "deny images outside the preview resource root" in {
+    val root        = Files.createTempDirectory("serenity-markdown-preview-root")
+    val outsideRoot = Files.createTempDirectory("serenity-markdown-preview-outside")
+    val outside     = outsideRoot.resolve("outside.png")
+    writeSolidImage(outside, Color(30, 220, 40), width = 8, height = 8)
+
+    val image = MarkdownDocumentPreview.renderImage(
+      source = s"![Outside](${outside.toUri})",
+      title = "outside.md",
+      widthPx = 180,
+      heightPx = 120,
+      theme = Theme.default,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      baseUri = Some(root.toUri)
+    )
+
+    containsColor(image, Color(30, 220, 40)) shouldBe false
+  }
+
+  it should "deny remote images without making a network request" in {
+    val requests = new AtomicInteger(0)
+    val server   = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress, 0), 0)
+    server.createContext("/image.png", exchange =>
+      requests.incrementAndGet()
+      val body = Array.emptyByteArray
+      exchange.sendResponseHeaders(200, body.length)
+      exchange.getResponseBody.close()
+    )
+    server.start()
+    try
+      val image = MarkdownDocumentPreview.renderImage(
+        source = s"![Remote](http://127.0.0.1:${server.getAddress.getPort}/image.png)",
+        title = "remote.md",
+        widthPx = 180,
+        heightPx = 120,
+        theme = Theme.default,
+        font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+      )
+
+      image.getWidth shouldBe 180
+      image.getHeight shouldBe 120
+      requests.get() shouldBe 0
+    finally server.stop(0)
+  }
+
+  it should "bound image bytes and decoded dimensions" in {
+    val root       = Files.createTempDirectory("serenity-markdown-preview-bounds")
+    val largeBytes = root.resolve("large.bin")
+    Files.write(largeBytes, Array.fill[Byte](3 * 1024 * 1024)(1))
+    val largeImage = root.resolve("large.png")
+    writeSolidImage(largeImage, Color(40, 30, 220), width = 5000, height = 1)
+
+    val bytesBounded = MarkdownDocumentPreview.renderImage(
+      source = "![Large bytes](large.bin)",
+      title = "large-bytes.md",
+      widthPx = 180,
+      heightPx = 120,
+      theme = Theme.default,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      baseUri = Some(root.toUri)
+    )
+    val dimensionsBounded = MarkdownDocumentPreview.renderImage(
+      source = "![Large dimensions](large.png)",
+      title = "large-dimensions.md",
+      widthPx = 180,
+      heightPx = 120,
+      theme = Theme.default,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      baseUri = Some(root.toUri)
+    )
+
+    bytesBounded.getWidth shouldBe 180
+    bytesBounded.getHeight shouldBe 120
+    dimensionsBounded.getWidth shouldBe 180
+    dimensionsBounded.getHeight shouldBe 120
+    containsColor(bytesBounded, Color(40, 30, 220)) shouldBe false
+    containsColor(dimensionsBounded, Color(40, 30, 220)) shouldBe false
+  }
+
   it should "render Markdown HTML to a Java2D image for pinned previews" in {
     val image = MarkdownDocumentPreview.renderImage(
       source = """# Rendered
@@ -436,5 +539,20 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
 
     second should not be theSameInstanceAs(first)
   }
+
+  private def writeSolidImage(path: Path, color: Color, width: Int, height: Int): Unit =
+    val image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+    for
+      x <- 0 until width
+      y <- 0 until height
+    do image.setRGB(x, y, color.getRGB)
+    val _ = ImageIO.write(image, "png", path.toFile)
+
+  private def containsColor(image: BufferedImage, color: Color): Boolean =
+    (for
+      x <- 0 until image.getWidth
+      y <- 0 until image.getHeight
+      if image.getRGB(x, y) == color.getRGB
+    yield true).headOption.getOrElse(false)
 
 end MarkdownDocumentPreviewSpec
