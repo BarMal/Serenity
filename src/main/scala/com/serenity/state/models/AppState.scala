@@ -313,18 +313,30 @@ case class AppState(
         case SurfacePresentation.Pinned(_, _) => true
         case _                                => false
     }
-    storedPinned ++ cursorInfoBarSurface.filter {
+    val orderedStored = layout.workspaceTree match
+      case Some(tree) =>
+        tree.dockedSurfaceIds.flatMap(surfaceId => storedPinned.find(_.id == surfaceId)) ++
+          storedPinned.filterNot(surface => tree.dockedSurfaceIds.contains(surface.id))
+      case None =>
+        storedPinned
+    orderedStored ++ cursorInfoBarSurface.filter {
       _.presentation match
         case SurfacePresentation.Pinned(_, _) => true
         case _                                => false
     }
 
   def expandedPanelSurface: Option[UiSurface] =
-    uiSurfaces.find {
+    val maximized = for
+      tree      <- layout.workspaceTree
+      nodeId    <- layout.maximizedWorkspaceNodeId
+      surfaceId <- tree.surfaceIdForNode(nodeId)
+      surface   <- surfaceById(surfaceId)
+    yield surface
+    maximized.orElse(uiSurfaces.find {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
-    }
+    })
 
   def surfaceById(surfaceId: SurfaceId): Option[UiSurface] =
     uiSurfaces.find(_.id == surfaceId).orElse(cursorInfoBarSurface.filter(_.id == surfaceId))
@@ -519,11 +531,18 @@ case class AppState(
       }
     }
     layout.workspaceTree.foreach { tree =>
-      errors ++= tree.validationErrors(layout.editorPanes.keySet)
+      val pinnedSurfaceIds = uiSurfaces.collect {
+        case UiSurface(id, _, SurfacePresentation.Pinned(_, _), _) => id
+      }.toSet
+      errors ++= tree.validationErrors(layout.editorPanes.keySet, pinnedSurfaceIds)
       focus match
         case Focus.EditorPane(paneId) if !tree.paneIds.contains(paneId) =>
           errors += s"Focus points outside workspace tree: $paneId"
         case _ =>
+      layout.maximizedWorkspaceNodeId.foreach { nodeId =>
+        if tree.surfaceIdForNode(nodeId).isEmpty then
+          errors += s"Maximised workspace node is not a docked surface: ${nodeId.value}"
+      }
     }
 
     errors.result()

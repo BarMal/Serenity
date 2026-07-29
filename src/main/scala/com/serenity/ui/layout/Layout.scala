@@ -18,7 +18,8 @@ case class Layout(
     activeEditorPaneId: Option[PaneId],
     paneOrder: List[PaneId] = Nil,
     splitDirection: PaneSplitDirection = PaneSplitDirection.Horizontal,
-    workspaceTree: Option[WorkspaceTree] = None
+    workspaceTree: Option[WorkspaceTree] = None,
+    maximizedWorkspaceNodeId: Option[WorkspaceNodeId] = None
 ):
 
   def orderedPaneIds: List[PaneId] =

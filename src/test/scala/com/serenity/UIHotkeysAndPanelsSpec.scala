@@ -111,6 +111,27 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case SurfaceContent.Diagnostics(_, _) => "diagnostics"
       case other                            => fail(s"Unexpected pinned content: $other")
     } shouldBe List("outline", "diagnostics")
+    state.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(pinned.map(_.id))
+
+  it should "address focus, move, resize, and unpin operations by surface ID" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    val before      = stateManager.getCurrentState.unsafeRunSync()
+    val outline     = before.pinnedSurfaces.head
+    val diagnostics = before.pinnedSurfaces.last
+
+    stateManager.switchToPinnedPanel(outline.id).unsafeRunSync()
+    stateManager.resizePinnedPanel(outline.id, 20).unsafeRunSync()
+    stateManager.movePinnedPanel(outline.id, PanelPosition.Right).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.map(_.id) shouldBe List(diagnostics.id, outline.id)
+    stateManager.movePinnedPanel(diagnostics.id, PanelPosition.Bottom).unsafeRunSync()
+    stateManager.unpinPanel(outline.id).unsafeRunSync()
+
+    val updated = stateManager.getCurrentState.unsafeRunSync()
+    updated.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.pinnedSurfaces.map(_.id) shouldBe List(diagnostics.id)
+    updated.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Bottom, 30)
+    updated.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(List(diagnostics.id))
 
   it should "start an element transition animation when pinning a panel" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
@@ -224,14 +245,16 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val expanded = stateManager.getCurrentState.unsafeRunSync()
     expanded.expandedPanelSurface.map(_.presentation) shouldBe Some(
-      SurfacePresentation.Expanded(PanelPosition.Right, 30)
+      SurfacePresentation.Pinned(PanelPosition.Right, 30)
     )
-    expanded.pinnedSurfaces shouldBe empty
+    expanded.pinnedSurfaces should have size 1
+    expanded.layout.maximizedWorkspaceNodeId shouldBe defined
 
     stateManager.collapseExpandedPanel().unsafeRunSync()
 
     val collapsed = stateManager.getCurrentState.unsafeRunSync()
     collapsed.expandedPanelSurface shouldBe None
+    collapsed.layout.maximizedWorkspaceNodeId shouldBe None
     collapsed.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 30))
 
   it should "expand and collapse a pinned panel through commands" in new UIFixture:
@@ -248,7 +271,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().expandedPanelSurface.map(_.presentation) shouldBe Some(
-      SurfacePresentation.Expanded(PanelPosition.Bottom, 10)
+      SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
     )
 
     stateManager

@@ -128,4 +128,29 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedSurfaceRects(SurfaceId("bottom-two")) shouldBe LayoutRect(40, 16, 40, 8)
     layout.editorPanelRect.bottom shouldBe 16
   }
+
+  it should "derive ordered same-edge panel rectangles from docked workspace leaves" in {
+    val first = UiSurface.fromPanelContent(SurfaceId("right-one"), PanelContent.Outline(Nil), PanelPosition.Right, 25)
+    val second =
+      UiSurface.fromPanelContent(SurfaceId("right-two"), PanelContent.Diagnostics(Nil), PanelPosition.Right, 25)
+    val tree = baseState.layout.effectiveWorkspaceTree
+      .flatMap(
+        _.dock(first.id, PanelPosition.Right, WorkspaceNodeId("right-split"), WorkspaceNodeId("right-one"))
+      )
+      .flatMap(
+        _.dock(second.id, PanelPosition.Right, WorkspaceNodeId("right-stack"), WorkspaceNodeId("right-two"))
+      )
+      .getOrElse(fail("expected docked workspace"))
+    val state = baseState.copy(
+      uiSurfaces = List(first, second),
+      layout = baseState.layout.copy(workspaceTree = Some(tree))
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 31))
+
+    layout.pinnedSurfaceRects(first.id) shouldBe LayoutRect(75, 0, 25, 15)
+    layout.pinnedSurfaceRects(second.id) shouldBe LayoutRect(75, 15, 25, 15)
+    layout.pinnedPanelRects(PanelPosition.Right) shouldBe LayoutRect(75, 0, 25, 30)
+    layout.editorPanelRect.right shouldBe 75
+  }
 end PinnedPanelLayoutSpec

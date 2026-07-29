@@ -106,12 +106,17 @@ trait SessionService:
 /** Manages pinned panels and the file explorer. */
 trait PanelManager:
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
+  def unpinPanel(surfaceId: SurfaceId): IO[Unit]
   def unpinPanel(position: PanelPosition): IO[Unit]
+  def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit]
+  def expandPinnedPanel(surfaceId: SurfaceId): IO[Unit]
   def expandPinnedPanel(position: PanelPosition): IO[Unit]
   def collapseExpandedPanel(): IO[Unit]
+  def switchToPinnedPanel(surfaceId: SurfaceId): IO[Unit]
   def switchToPinnedPanel(position: PanelPosition): IO[Unit]
   def loadDirectoryTree(path: String, files: List[String]): IO[Unit]
   def selectFileInExplorer(filePath: String): IO[Unit]
+  def resizePinnedPanel(surfaceId: SurfaceId, newSize: Int): IO[Unit]
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
   def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit]
 

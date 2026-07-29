@@ -649,18 +649,27 @@ private[manager] class StateManagerComposition(
   def peekToPin(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.peekToPin(position))
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
     runSurfaceOperation(surfaces.pinPanel(content, position, size))
-  def unpinPanel(position: PanelPosition): IO[Unit]        = runSurfaceOperation(surfaces.unpinPanel(position))
+  def unpinPanel(surfaceId: SurfaceId): IO[Unit]    = runSurfaceOperation(surfaces.unpinPanel(surfaceId))
+  def unpinPanel(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.unpinPanel(position))
+  def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit] =
+    runSurfaceOperation(surfaces.movePinnedPanel(surfaceId, position))
+  def expandPinnedPanel(surfaceId: SurfaceId): IO[Unit] =
+    runSurfaceOperation(surfaces.expandPinnedPanel(surfaceId))
   def expandPinnedPanel(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.expandPinnedPanel(position))
   def collapseExpandedPanel(): IO[Unit]                    = runSurfaceOperation(surfaces.collapseExpandedPanel())
   def showModal(modal: Modal): IO[Unit]                    = runSurfaceOperation(surfaces.showModal(modal))
   def dismissModal(): IO[Unit]                             = runSurfaceOperation(surfaces.dismissModal())
   def switchToPinnedPanel(position: PanelPosition): IO[Unit] =
     runSurfaceOperation(surfaces.switchToPinnedPanel(position))
+  def switchToPinnedPanel(surfaceId: SurfaceId): IO[Unit] =
+    runSurfaceOperation(surfaces.switchToPinnedPanel(surfaceId))
   def loadDirectoryTree(path: String, files: List[String]): IO[Unit] =
     runSurfaceOperation(surfaces.loadDirectoryTree(path, files))
   def selectFileInExplorer(filePath: String): IO[Unit] = runSurfaceOperation(surfaces.selectFileInExplorer(filePath))
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
     runSurfaceOperation(surfaces.resizePinnedPanel(position, newSize))
+  def resizePinnedPanel(surfaceId: SurfaceId, newSize: Int): IO[Unit] =
+    runSurfaceOperation(surfaces.resizePinnedPanel(surfaceId, newSize))
   def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =
     runSurfaceOperation(surfaces.dragFileToDirectory(sourceFile, targetDir))
 

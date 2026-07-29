@@ -38,6 +38,24 @@ final private[manager] class StateManagerSurfaceCapability(
         .flatMap(_ => applyAnimationHooks(state))
     }
 
+  def unpinPanel(surfaceId: SurfaceId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      validateAndUpdateState(PanelStateReducer.unpin(surfaceId, state).state, state)
+        .flatMap(_ => applyAnimationHooks(state))
+    }
+
+  def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      validateAndUpdateState(PanelStateReducer.move(surfaceId, position, state).state, state)
+        .flatMap(_ => applyAnimationHooks(state))
+    }
+
+  def expandPinnedPanel(surfaceId: SurfaceId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      validateAndUpdateState(PanelStateReducer.expand(surfaceId, state).state, state)
+        .flatMap(_ => applyAnimationHooks(state))
+    }
+
   def expandPinnedPanel(position: PanelPosition): IO[Unit] =
     stateRef.get.flatMap { state =>
       validateAndUpdateState(PanelStateReducer.expand(position, state).state, state)
@@ -58,6 +76,9 @@ final private[manager] class StateManagerSurfaceCapability(
 
   def switchToPinnedPanel(position: PanelPosition): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.focus(position, state).state, state))
+
+  def switchToPinnedPanel(surfaceId: SurfaceId): IO[Unit] =
+    stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.focus(surfaceId, state).state, state))
 
   def loadDirectoryTree(path: String, files: List[String]): IO[Unit] =
     val rootPath = Path.of(path)
@@ -120,6 +141,11 @@ final private[manager] class StateManagerSurfaceCapability(
   def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
     stateRef.get.flatMap(state =>
       validateAndUpdateState(PanelStateReducer.resize(position, newSize, state).state, state)
+    )
+
+  def resizePinnedPanel(surfaceId: SurfaceId, newSize: Int): IO[Unit] =
+    stateRef.get.flatMap(state =>
+      validateAndUpdateState(PanelStateReducer.resize(surfaceId, newSize, state).state, state)
     )
 
   def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =

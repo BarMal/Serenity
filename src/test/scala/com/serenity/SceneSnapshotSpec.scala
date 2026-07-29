@@ -47,6 +47,33 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "paint a maximised docked surface after editor content without changing the workspace tree" in {
+    val panel = UiSurface(
+      SurfaceId("outline"),
+      SurfaceContent.Outline(Nil),
+      SurfacePresentation.Pinned(PanelPosition.Right, 20)
+    )
+    val tree = AppState.initial.layout.effectiveWorkspaceTree
+      .flatMap(
+        _.dock(panel.id, PanelPosition.Right, WorkspaceNodeId("split"), WorkspaceNodeId("dock-outline"))
+      )
+      .getOrElse(fail("expected docked workspace"))
+    val state = AppState.initial.copy(
+      uiSurfaces = List(panel),
+      layout = AppState.initial.layout.copy(
+        workspaceTree = Some(tree),
+        maximizedWorkspaceNodeId = tree.nodeIdForSurface(panel.id)
+      ),
+      focus = Focus.Surface(panel.id)
+    )
+
+    val scene = UiSceneSnapshot.from(state, viewport)
+
+    scene.workspace.last.id shouldBe SceneNodeId.Surface(panel.id)
+    scene.workspace.last.frameRect shouldBe scene.calculatedLayout.editorPanelRect
+    state.layout.workspaceTree shouldBe Some(tree)
+  }
+
   it should "own the editor contract and visible text snapshots consumed by clients" in {
     val state  = AppState.initial
     val scene  = UiSceneSnapshot.from(state, viewport)
