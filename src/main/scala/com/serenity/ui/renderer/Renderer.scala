@@ -37,12 +37,13 @@ case class RenderContext(
 object Renderer:
 
   private def markdownBlockForRenderer(buffer: Buffer, state: AppState, line: Int): Range.Inclusive =
-    state.markdownFenceIndexByBuffer
-      .get(buffer.id)
-      .flatMap(_().rangeAt(line))
-      .getOrElse(
-        MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line, fenceProbeWindow = 512)
-      )
+    val bounded = MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line, fenceProbeWindow = 512)
+    if bounded.start != line || bounded.end != line then bounded
+    else
+      state.markdownFenceIndexByBuffer
+        .get(buffer.id)
+        .flatMap(_().rangeAt(line))
+        .getOrElse(bounded)
 
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
