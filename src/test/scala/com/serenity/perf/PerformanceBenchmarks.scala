@@ -2,6 +2,7 @@ package com.serenity.perf
 
 import java.awt.Font
 import java.awt.image.BufferedImage
+import java.lang.management.ManagementFactory
 import java.nio.file.{Files, Path}
 
 import cats.effect.{IO, Resource}
@@ -24,7 +25,14 @@ import io.circe.Json
 
 object PerformanceBenchmarks:
 
-  private case class Benchmark(name: String, warmups: Int, iterations: Int, verify: () => Unit, run: () => Unit)
+  private case class Benchmark(
+      name: String,
+      warmups: Int,
+      iterations: Int,
+      verify: () => Unit,
+      run: () => Unit,
+      measureAllocation: Boolean = false
+  )
 
   private case class BenchmarkResult(
       name: String,
@@ -32,8 +40,16 @@ object PerformanceBenchmarks:
       minMs: Double,
       p50Ms: Double,
       p95Ms: Double,
-      maxMs: Double
+      maxMs: Double,
+      allocationP50Bytes: Option[Long],
+      allocationP95Bytes: Option[Long]
   )
+
+  private val allocationBean = ManagementFactory.getThreadMXBean match
+    case bean: com.sun.management.ThreadMXBean if bean.isThreadAllocatedMemorySupported =>
+      if !bean.isThreadAllocatedMemoryEnabled then bean.setThreadAllocatedMemoryEnabled(true)
+      Some(bean)
+    case _ => None
 
   given Balance = Balance.default
 
@@ -259,7 +275,8 @@ object PerformanceBenchmarks:
         () => assert(renderedFrameHasPixels(longMeasuredLineFrame)),
         () =>
           val _ = renderedLongMeasuredLine(longMeasuredLine)
-          ()
+          (),
+        measureAllocation = true
       ),
       Benchmark(
         "render.cursor_only.scene_reuse.java2d_overlay",
@@ -399,17 +416,36 @@ object PerformanceBenchmarks:
       benchmark.run()
       (System.nanoTime() - started).toDouble / 1_000_000.0
     }.sorted
+    val allocationSamples =
+      if benchmark.measureAllocation then
+        allocationBean.map { bean =>
+          val threadId = Thread.currentThread().getId
+          (0 until benchmark.iterations).map { _ =>
+            val started = bean.getThreadAllocatedBytes(threadId)
+            benchmark.run()
+            (bean.getThreadAllocatedBytes(threadId) - started).max(0L)
+          }
+        }.getOrElse(Vector.empty[Long]).sorted
+      else Vector.empty[Long]
     BenchmarkResult(
       name = benchmark.name,
       iterations = benchmark.iterations,
       minMs = samples.headOption.getOrElse(0.0),
       p50Ms = percentile(samples, 0.50),
       p95Ms = percentile(samples, 0.95),
-      maxMs = samples.lastOption.getOrElse(0.0)
+      maxMs = samples.lastOption.getOrElse(0.0),
+      allocationP50Bytes = allocationSamples.headOption.map(_ => percentileLong(allocationSamples, 0.50)),
+      allocationP95Bytes = allocationSamples.headOption.map(_ => percentileLong(allocationSamples, 0.95))
     )
 
   private def percentile(samples: IndexedSeq[Double], percentile: Double): Double =
     if samples.isEmpty then 0.0
+    else
+      val index = math.ceil(percentile.max(0.0).min(1.0) * samples.length).toInt - 1
+      samples(index.max(0).min(samples.length - 1))
+
+  private def percentileLong(samples: IndexedSeq[Long], percentile: Double): Long =
+    if samples.isEmpty then 0L
     else
       val index = math.ceil(percentile.max(0.0).min(1.0) * samples.length).toInt - 1
       samples(index.max(0).min(samples.length - 1))
@@ -420,10 +456,12 @@ object PerformanceBenchmarks:
     println(s"context,java_vendor,${System.getProperty("java.vendor", "unknown")}")
     println(s"context,os,${System.getProperty("os.name", "unknown")} ${System.getProperty("os.version", "unknown")}")
     println(s"context,available_processors,${Runtime.getRuntime.availableProcessors()}")
-    println("name,iterations,min_ms,p50_ms,p95_ms,max_ms")
+    println("name,iterations,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes")
     results.foreach { result =>
+      val allocationP50 = result.allocationP50Bytes.fold("")(_.toString)
+      val allocationP95 = result.allocationP95Bytes.fold("")(_.toString)
       println(
-        f"${result.name},${result.iterations},${result.minMs}%.3f,${result.p50Ms}%.3f,${result.p95Ms}%.3f,${result.maxMs}%.3f"
+        f"${result.name},${result.iterations},${result.minMs}%.3f,${result.p50Ms}%.3f,${result.p95Ms}%.3f,${result.maxMs}%.3f,$allocationP50,$allocationP95"
       )
     }
 

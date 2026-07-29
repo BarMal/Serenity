@@ -290,28 +290,32 @@ object CharacterRenderer:
         else this
 
     val initial = PlainRunState(Nil, StringBuilder(), startX, startX)
-    val finalState = content
-      .codePoints()
-      .toArray
-      .foldLeft(initial) {
-        case (state, '\t') =>
-          val flushed     = state.flush
-          val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
-          val tabSpaces   = " " * spacesToAdd
-          flushed.copy(
-            completed = TextRun(flushed.currentX, tabSpaces) :: flushed.completed,
-            currentStartX = flushed.currentX + spacesToAdd,
-            currentX = flushed.currentX + spacesToAdd
-          )
-        case (state, codePoint) if isVisibleCodePoint(codePoint) =>
-          val start = if state.currentText.length == 0 then state.currentX else state.currentStartX
-          state.currentText.appendAll(Character.toChars(codePoint))
-          state.copy(currentStartX = start, currentX = state.currentX + displayWidth(codePoint))
-        case (state, _) =>
-          val flushed = state.flush
-          flushed.copy(currentStartX = flushed.currentX)
-      }
-      .flush
+    val codePoints = content.codePoints().iterator()
+    @annotation.tailrec
+    def consume(state: PlainRunState): PlainRunState =
+      if !codePoints.hasNext then state.flush
+      else
+        val codePoint = codePoints.nextInt()
+        val nextState = codePoint match
+          case '\t' =>
+            val flushed     = state.flush
+            val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
+            val tabSpaces   = " " * spacesToAdd
+            flushed.copy(
+              completed = TextRun(flushed.currentX, tabSpaces) :: flushed.completed,
+              currentStartX = flushed.currentX + spacesToAdd,
+              currentX = flushed.currentX + spacesToAdd
+            )
+          case visible if isVisibleCodePoint(visible) =>
+            val start = if state.currentText.length == 0 then state.currentX else state.currentStartX
+            state.currentText.appendAll(Character.toChars(visible))
+            state.copy(currentStartX = start, currentX = state.currentX + displayWidth(visible))
+          case _ =>
+            val flushed = state.flush
+            flushed.copy(currentStartX = flushed.currentX)
+        consume(nextState)
+
+    val finalState = consume(initial)
 
     CollectedRuns(finalState.completed.reverse, finalState.currentX)
 

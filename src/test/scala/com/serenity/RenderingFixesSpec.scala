@@ -86,6 +86,14 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
     surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
   }
 
+  it should "retain supplementary printable code points in plain runs" in {
+    val surface = new MockRenderSurface(80, 24)
+
+    CharacterRenderer.renderStringPlain(surface, 0, 0, "a😀b")
+
+    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "a😀b"))
+  }
+
   it should "batch contiguous printable runs in animated plain rendering when cell colors match" in {
     val surface = new MockRenderSurface(80, 24)
 
