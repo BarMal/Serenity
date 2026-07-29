@@ -824,14 +824,7 @@ object Renderer:
       if buffer.language.contains(LanguageId.Markdown) then
         activeLine
           .filter(line => line >= 0 && line < buffer.content.lineCount)
-          .map(line =>
-            MarkdownBlockLens.currentBlock(
-              buffer.content.lineCount,
-              buffer.content.getLine,
-              line,
-              fenceProbeWindow = MarkdownFenceProbeWindow
-            )
-          )
+          .map(line => markdownBlockForRenderer(buffer, line))
           .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
           .getOrElse((_: Int) => true)
       else

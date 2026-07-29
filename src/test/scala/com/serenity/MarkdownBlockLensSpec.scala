@@ -74,6 +74,12 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines, activeLine = 2) shouldBe (1 to 3)
   }
 
+  it should "treat longer bare fence runs as closing delimiters" in {
+    val lines = Vector("````scala", "code", "````", "After")
+
+    MarkdownBlockLens.currentBlock(lines, activeLine = 1) shouldBe (0 to 2)
+  }
+
   it should "keep fenced code together across blank lines" in {
     val lines = Vector(
       "```scala",

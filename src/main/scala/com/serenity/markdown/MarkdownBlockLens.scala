@@ -69,9 +69,12 @@ object MarkdownBlockLens:
 
   private def fencedBlock(lines: LineSource, activeLine: Int): Option[Range.Inclusive] =
     def hasFenceInfo(index: Int): Boolean =
-      val trimmed      = lines.at(index).trim
-      val markerLength = if trimmed.startsWith("```") || trimmed.startsWith("~~~") then 3 else 0
-      markerLength > 0 && trimmed.drop(markerLength).trim.nonEmpty
+      val trimmed = lines.at(index).trim
+      val marker  = trimmed.headOption.filter(ch => ch == '`' || ch == '~')
+      marker.exists { ch =>
+        val markerLength = trimmed.takeWhile(_ == ch).length
+        markerLength >= 3 && trimmed.drop(markerLength).trim.nonEmpty
+      }
 
     def isOpeningFence(index: Int): Boolean =
       if hasFenceInfo(index) then true
