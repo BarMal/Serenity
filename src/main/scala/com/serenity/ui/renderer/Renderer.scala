@@ -36,6 +36,12 @@ case class RenderContext(
 
 object Renderer:
 
+  private def markdownBlockForRenderer(buffer: Buffer, state: AppState, line: Int): Range.Inclusive =
+    state.markdownFenceIndexByBuffer
+      .get(buffer.id)
+      .flatMap(_().rangeAt(line))
+      .getOrElse(MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line, fenceProbeWindow = 512))
+
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
       layoutContract: EditorLayoutContract,
@@ -798,10 +804,7 @@ object Renderer:
       if buffer.language.contains(LanguageId.Markdown) then
         activeLine
           .filter(line => line >= 0 && line < buffer.content.lineCount)
-          .map(line =>
-            MarkdownBlockLens
-              .currentBlock(buffer.content.lineCount, buffer.content.getLine, line)
-          )
+          .map(line => markdownBlockForRenderer(buffer, state, line))
           .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
           .getOrElse((_: Int) => true)
       else

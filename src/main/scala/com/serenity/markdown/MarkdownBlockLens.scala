@@ -4,6 +4,14 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
+  final case class FenceRangeIndex(ranges: Vector[Range.Inclusive]):
+    def rangeAt(line: Int): Option[Range.Inclusive] =
+      ranges.find(range => range.contains(line))
+
+  def fenceRangeIndex(lineCount: Int, lineAt: Int => Option[String]): FenceRangeIndex =
+    val fences = (0 until lineCount).iterator.filter(index => isFenceLine(lineAt(index).getOrElse(""))).toVector
+    FenceRangeIndex(fences.grouped(2).collect { case pair if pair.size == 2 => pair.head to pair(1) }.toVector)
+
   private case class LineSource(lineCount: Int, lineAt: Int => Option[String], fenceProbeWindow: Option[Int]):
     def at(index: Int): String =
       lineAt(index).getOrElse("")

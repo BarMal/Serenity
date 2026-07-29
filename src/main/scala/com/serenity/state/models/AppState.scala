@@ -3,6 +3,7 @@ package com.serenity.state.models
 import com.serenity.animation.AnimationState
 import com.serenity.config.*
 import com.serenity.lsp.model.Diagnostic
+import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.rope.Rope
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.{Layout, ViewportSize}
@@ -233,6 +234,13 @@ case class AppState(
         lazy val index =
           val diagnostics = this.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
           AnnotationLineIndex(buffer.documentComments.toVector, diagnostics.groupMap(_.range.start.line)(identity))
+        bufferId -> (() => index)
+    }.toMap
+
+  lazy val markdownFenceIndexByBuffer: Map[BufferId, () => MarkdownBlockLens.FenceRangeIndex] =
+    buffers.iterator.map {
+      case (bufferId, buffer) =>
+        lazy val index = MarkdownBlockLens.fenceRangeIndex(buffer.content.lineCount, buffer.content.getLine)
         bufferId -> (() => index)
     }.toMap
 
