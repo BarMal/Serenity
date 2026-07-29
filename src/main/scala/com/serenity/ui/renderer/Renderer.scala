@@ -448,7 +448,7 @@ object Renderer:
         renderLineNumbers(state, context, editorRenderPlan)
         renderGutter(state, context, editorRenderPlan.layoutContract)
         renderEditorPanes(state, context, editorRenderPlan)
-        renderPinnedPanels(state, context, finalizedScene.editorContract)
+        renderPinnedPanels(state, context, finalizedScene)
         renderFloatingPanels(state, context, finalizedScene)
         renderModalLayer(state, context, finalizedScene)
         Some(editorRenderPlan)
@@ -1867,16 +1867,20 @@ object Renderer:
   private def renderPinnedPanels(
     state: AppState,
     context: RenderContext,
-    contract: EditorLayoutContract
+    scene: UiSceneSnapshot
   ): Unit =
     context.surface.setFont(context.uiFont)
+    val surfaceNodes = scene.workspace.collect {
+      case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) => surfaceId -> node
+    }.toMap
     (state.pinnedSurfaces ++ state.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
     }).foreach {
       case surface @ UiSurface(_, content, SurfacePresentation.Pinned(position, _), _) =>
-        contract.panelRect(surface.id).foreach { rect =>
+        surfaceNodes.get(surface.id).foreach { node =>
+          val rect = node.frameRect
           val animationState =
             state.surfaceAnimations
               .get(surface.id)
@@ -1897,9 +1901,7 @@ object Renderer:
                 bufferId,
                 title,
                 rect,
-                contract
-                  .panelContentRect(surface.id)
-                  .getOrElse(SurfaceFrameLayout.forContent(rect, content).contentRect),
+                node.contentRect,
                 state,
                 context,
                 animationState
@@ -1907,14 +1909,15 @@ object Renderer:
             case _ =>
               PinnedPanelRenderer.render(
                 context.surface,
-                PinnedPanelViewModel.resolve(surface, rect, state),
+                PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
                 state.theme,
                 state.config,
                 animationState
               )
         }
       case surface @ UiSurface(_, content, SurfacePresentation.Expanded(_, _), _) =>
-        contract.panelRect(surface.id).foreach { rect =>
+        surfaceNodes.get(surface.id).foreach { node =>
+          val rect = node.frameRect
           val animationState =
             state.surfaceAnimations
               .get(surface.id)
@@ -1935,9 +1938,7 @@ object Renderer:
                 bufferId,
                 title,
                 rect,
-                contract
-                  .panelContentRect(surface.id)
-                  .getOrElse(SurfaceFrameLayout.forContent(rect, content).contentRect),
+                node.contentRect,
                 state,
                 context,
                 animationState
@@ -1945,7 +1946,7 @@ object Renderer:
             case _ =>
               PinnedPanelRenderer.render(
                 context.surface,
-                PinnedPanelViewModel.resolve(surface, rect, state),
+                PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
                 state.theme,
                 state.config,
                 animationState

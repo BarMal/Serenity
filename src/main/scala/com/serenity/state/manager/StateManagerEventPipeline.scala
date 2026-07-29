@@ -1314,23 +1314,23 @@ final private[manager] class StateManagerEventPipeline(
 
   private def pinnedPanelRowHitAt(event: MouseInputEvent, state: AppState): Option[PinnedPanelRowHit] =
     state.viewportSize.flatMap { viewportSize =>
-      val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      val contract = EditorLayoutContract.from(state, viewportSize, layout)
-      state.uiSurfaces.reverseIterator
-        .map { surface =>
-          panelPosition(surface).flatMap { position =>
-            for
-              rect        <- contract.panelRect(surface.id)
-              contentRect <- contract.panelContentRect(surface.id)
-              rowIndex <- pinnedPanelItemRowIndexAt(
-                event,
-                contentRect,
-                contract.panelRowSlots(surface.id)
-              )
-            yield PinnedPanelRowHit(surface, position, rowIndex, SurfaceLayoutKind.classify(rect))
-          }
-        }
-        .collectFirst { case Some(hit) => hit }
+      val scene = AuthoritativeUiScene.forState(state, viewportSize)
+      scene.workspace.reverseIterator.flatMap {
+        case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, hitRegions, _) =>
+          for
+            surface     <- state.surfaceById(surfaceId)
+            position    <- panelPosition(surface)
+            contentRect <- hitRegions.collectFirst {
+              case SceneHitRegion(SceneHitKind.Content, rect) if rect.contains(event.col, event.row) => rect
+            }
+            rowIndex <- pinnedPanelItemRowIndexAt(
+              event,
+              contentRect,
+              scene.editorContract.panelRowSlots(surface.id)
+            )
+          yield PinnedPanelRowHit(surface, position, rowIndex, SurfaceLayoutKind.classify(frameRect))
+        case _ => None
+      }.collectFirst { case hit => hit }
     }
 
   private def pinnedPanelItemRowIndexAt(
