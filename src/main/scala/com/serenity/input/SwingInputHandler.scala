@@ -1,8 +1,8 @@
 package com.serenity.input
 
 import java.awt.event.*
-import java.util.concurrent.{ConcurrentLinkedQueue, Semaphore}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import java.util.concurrent.{ConcurrentLinkedQueue, Semaphore}
 
 import cats.effect.Sync
 import com.serenity.keystroke.events.*
@@ -96,6 +96,12 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     latestMovement.set(None)
     inputQueue.offer(input)
     inputAvailable.release()
+
+  @annotation.tailrec
+  private def awaitEnqueues(): Unit =
+    if enqueuesInFlight.get() != 0 then
+      Thread.onSpinWait()
+      awaitEnqueues()
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
@@ -206,7 +212,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   def shutdown: F[Unit] =
     Sync[F].blocking {
       if shutdownFlag.compareAndSet(false, true) then
-        while enqueuesInFlight.get() != 0 do Thread.onSpinWait()
+        awaitEnqueues()
         latestMovement.set(None)
         inputQueue.offer(QueuedShutdown)
         inputAvailable.release()

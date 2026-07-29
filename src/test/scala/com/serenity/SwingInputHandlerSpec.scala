@@ -19,8 +19,7 @@ import com.serenity.keystroke.events.{
   MousePress,
   MouseRenderMetrics
 }
-import com.serenity.keystroke.translators.TextEntryTranslator
-import com.serenity.keystroke.translators.Translator
+import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
