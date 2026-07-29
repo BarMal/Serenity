@@ -4,6 +4,7 @@ import java.awt.Color
 
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
+import com.serenity.text.TextEditing
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
 object CharacterRenderer:
@@ -162,66 +163,127 @@ object CharacterRenderer:
           else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
         }
 
-      def stopXPx(localIndex: Int): Float =
-        stops.find(_.column == visualLine.startColumn + localIndex).map(_.xPx).getOrElse(0.0f)
-
       case class MeasuredRun(
-          startXPx: Float,
+          startLocalIndex: Int,
           foreground: Color,
           background: Color,
           style: TextStyle,
-          text: String,
+          text: StringBuilder,
           endLocalIndex: Int
       )
 
+      val graphemeBounds =
+        @annotation.tailrec
+        def collect(
+          localIndex: Int,
+          stopIndex: Int,
+          acc: List[(Int, Int, Float, Float)]
+        ): List[(Int, Int, Float, Float)] =
+          if localIndex >= text.length || stopIndex + 1 >= stops.length then acc.reverse
+          else
+            val nextIndex = TextEditing.nextGraphemeBoundary(text, localIndex).min(text.length)
+            val startStop = stops.lift(stopIndex).filter(_.column == visualLine.startColumn + localIndex)
+            val endStop   = stops.lift(stopIndex + 1).filter(_.column == visualLine.startColumn + nextIndex)
+            (startStop, endStop) match
+              case (Some(start), Some(end)) =>
+                collect(nextIndex, stopIndex + 1, (localIndex, nextIndex, start.xPx, end.xPx) :: acc)
+              case _ => collect(localIndex, stopIndex + 1, acc)
+
+        collect(0, 0, Nil)
+
+      val graphemeBoundsByLocalIndex = graphemeBounds.flatMap {
+        case (start, end, startXPx, endXPx) =>
+          Vector.fill(end - start)((startXPx, endXPx))
+      }.toVector
+
+      def visualExtentsForRange(startLocalIndex: Int, endLocalIndex: Int): Vector[Float] =
+        graphemeBoundsByLocalIndex
+          .slice(startLocalIndex, endLocalIndex)
+          .flatMap { case (startXPx, endXPx) => Vector(startXPx, endXPx) }
+
       def drawRun(run: MeasuredRun): Unit =
-        val endXPx        = xOriginPx + stopXPx(run.endLocalIndex)
+        val visualExtents = visualExtentsForRange(run.startLocalIndex, run.endLocalIndex)
+        val startXPx      = xOriginPx + visualExtents.minOption.getOrElse(0.0f)
+        val endXPx        = xOriginPx + visualExtents.maxOption.getOrElse(0.0f)
         val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
-        val widthPx       = clippedEndXPx - run.startXPx
+        val widthPx       = clippedEndXPx - startXPx
         if widthPx > 0.0f then
           surface.setForegroundColor(run.foreground)
           surface.setBackgroundColor(run.background)
           withStyle(surface, run.style) {
-            surface.drawRunPx(run.startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
+            surface.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text.toString)
           }
 
-      val chars = styledSegments0.flatMap(segment =>
-        segment.content.map(char => (char, segment.foregroundColor, segment.backgroundColor, segment.style))
-      )
+      val chars = styledSegments0
+        .flatMap(segment =>
+          segment.content.map(char => (char, segment.foregroundColor, segment.backgroundColor, segment.style))
+        )
+        .toVector
+      val hasAnimations = animations.animations.nonEmpty
 
-      val (runs, currentRun, _) = chars.foldLeft((List.empty[MeasuredRun], Option.empty[MeasuredRun], 0)) {
-        case ((completed, current, localIndex), (char, segmentForeground, segmentBackground, style)) =>
-          val bufferColumn = visualLine.startColumn + localIndex
-          val cell         = animations.getCell(bufferColumn, visualLine.bufferLine)
+      val graphemeChars =
+        @annotation.tailrec
+        def collect(
+          localIndex: Int,
+          acc: List[(String, Color, Color, TextStyle, Int, Int)]
+        ): Vector[(String, Color, Color, TextStyle, Int, Int)] =
+          if localIndex >= text.length then acc.reverse.toVector
+          else
+            val endLocalIndex     = TextEditing.nextGraphemeBoundary(text, localIndex).min(text.length)
+            val segmentStyle      = chars.lift(localIndex).map(_._4).getOrElse(TextStyle.normal)
+            val segmentForeground = chars.lift(localIndex).map(_._2).getOrElse(theme.foreground)
+            val segmentBackground = chars.lift(localIndex).map(_._3).getOrElse(theme.background)
+            collect(
+              endLocalIndex,
+              (
+                text.substring(localIndex, endLocalIndex),
+                segmentForeground,
+                segmentBackground,
+                segmentStyle,
+                localIndex,
+                endLocalIndex
+              ) :: acc
+            )
+
+        collect(0, Nil)
+
+      val (runs, currentRun, _) = graphemeChars.foldLeft((List.empty[MeasuredRun], Option.empty[MeasuredRun], 0)) {
+        case (
+              (completed, current, localIndex),
+              (grapheme, segmentForeground, segmentBackground, style, graphemeStart, graphemeEnd)
+            ) =>
+          val bufferColumn = visualLine.startColumn + graphemeStart
+          val cell         = if hasAnimations then animations.getCell(bufferColumn, visualLine.bufferLine) else None
           val foreground   = cell.flatMap(_.currentForeground).getOrElse(segmentForeground)
           val background   = cell.flatMap(_.currentBackground).getOrElse(segmentBackground)
 
           current match
             case None =>
               val run = MeasuredRun(
-                xOriginPx + stopXPx(localIndex),
+                localIndex,
                 foreground,
                 background,
                 style,
-                char.toString,
-                localIndex + 1
+                StringBuilder(grapheme),
+                graphemeEnd
               )
-              (completed, Some(run), localIndex + 1)
+              (completed, Some(run), graphemeEnd)
 
             case Some(run) if foreground == run.foreground && background == run.background && style == run.style =>
-              val updatedRun = run.copy(text = run.text + char, endLocalIndex = localIndex + 1)
-              (completed, Some(updatedRun), localIndex + 1)
+              run.text.append(grapheme)
+              val updatedRun = run.copy(endLocalIndex = graphemeEnd)
+              (completed, Some(updatedRun), graphemeEnd)
 
             case Some(run) =>
               val nextRun = MeasuredRun(
-                xOriginPx + stopXPx(localIndex),
+                graphemeStart,
                 foreground,
                 background,
                 style,
-                char.toString,
-                localIndex + 1
+                StringBuilder(grapheme),
+                graphemeEnd
               )
-              (run :: completed, Some(nextRun), localIndex + 1)
+              (run :: completed, Some(nextRun), graphemeEnd)
       }
 
       (currentRun.toList ::: runs).reverse.foreach(drawRun)
@@ -269,41 +331,42 @@ object CharacterRenderer:
   ): CollectedRuns =
     case class PlainRunState(
         completed: List[TextRun],
-        currentText: String,
+        currentText: StringBuilder,
         currentStartX: Int,
         currentX: Int
     ):
       def flush: PlainRunState =
-        if currentText.nonEmpty then
-          copy(completed = TextRun(currentStartX, currentText) :: completed, currentText = "")
+        if currentText.length > 0 then
+          copy(completed = TextRun(currentStartX, currentText.toString) :: completed, currentText = StringBuilder())
         else this
 
-    val initial = PlainRunState(Nil, "", startX, startX)
-    val finalState = content
-      .codePoints()
-      .toArray
-      .foldLeft(initial) {
-        case (state, '\t') =>
-          val flushed     = state.flush
-          val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
-          val tabSpaces   = " " * spacesToAdd
-          flushed.copy(
-            completed = TextRun(flushed.currentX, tabSpaces) :: flushed.completed,
-            currentStartX = flushed.currentX + spacesToAdd,
-            currentX = flushed.currentX + spacesToAdd
-          )
-        case (state, codePoint) if isVisibleCodePoint(codePoint) =>
-          val start = if state.currentText.isEmpty then state.currentX else state.currentStartX
-          state.copy(
-            currentText = state.currentText + new String(Character.toChars(codePoint)),
-            currentStartX = start,
-            currentX = state.currentX + displayWidth(codePoint)
-          )
-        case (state, _) =>
-          val flushed = state.flush
-          flushed.copy(currentStartX = flushed.currentX)
-      }
-      .flush
+    val initial    = PlainRunState(Nil, StringBuilder(), startX, startX)
+    val codePoints = content.codePoints().iterator()
+    @annotation.tailrec
+    def consume(state: PlainRunState): PlainRunState =
+      if !codePoints.hasNext then state.flush
+      else
+        val codePoint = codePoints.nextInt()
+        val nextState = codePoint match
+          case '\t' =>
+            val flushed     = state.flush
+            val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
+            val tabSpaces   = " " * spacesToAdd
+            flushed.copy(
+              completed = TextRun(flushed.currentX, tabSpaces) :: flushed.completed,
+              currentStartX = flushed.currentX + spacesToAdd,
+              currentX = flushed.currentX + spacesToAdd
+            )
+          case visible if isVisibleCodePoint(visible) =>
+            val start = if state.currentText.length == 0 then state.currentX else state.currentStartX
+            state.currentText.appendAll(Character.toChars(visible))
+            state.copy(currentStartX = start, currentX = state.currentX + displayWidth(visible))
+          case _ =>
+            val flushed = state.flush
+            flushed.copy(currentStartX = flushed.currentX)
+        consume(nextState)
+
+    val finalState = consume(initial)
 
     CollectedRuns(finalState.completed.reverse, finalState.currentX)
 
@@ -331,16 +394,21 @@ object CharacterRenderer:
     bufferLine: Int,
     bufferStartColumn: Int
   ): Unit =
-    runs.foreach { run =>
-      val grouped =
-        groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
-      grouped.foreach {
-        case (startX, text, foreground, background) =>
-          surface.setForegroundColor(foreground)
-          surface.setBackgroundColor(background)
-          surface.putString(startX, y, text)
+    if screenAnimations.animations.isEmpty then
+      surface.setForegroundColor(theme.foreground)
+      surface.setBackgroundColor(theme.background)
+      runs.foreach(run => surface.putString(run.startX, y, run.content))
+    else
+      runs.foreach { run =>
+        val grouped =
+          groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
+        grouped.foreach {
+          case (startX, text, foreground, background) =>
+            surface.setForegroundColor(foreground)
+            surface.setBackgroundColor(background)
+            surface.putString(startX, y, text)
+        }
       }
-    }
 
   private def groupRunByEffectiveColors(
     run: TextRun,
@@ -354,20 +422,20 @@ object CharacterRenderer:
 
     case class ColorRunState(
         completed: List[(Int, String, Color, Color)],
-        currentText: String,
+        currentText: StringBuilder,
         currentStartX: Int,
         currentForeground: Color,
         currentBackground: Color
     ):
       def flush: ColorRunState =
-        if currentText.nonEmpty then
+        if currentText.length > 0 then
           copy(
-            completed = (currentStartX, currentText, currentForeground, currentBackground) :: completed,
-            currentText = ""
+            completed = (currentStartX, currentText.toString, currentForeground, currentBackground) :: completed,
+            currentText = StringBuilder()
           )
         else this
 
-    val initial = ColorRunState(Nil, "", run.startX, theme.foreground, theme.background)
+    val initial = ColorRunState(Nil, StringBuilder(), run.startX, theme.foreground, theme.background)
     val finalState = text.zipWithIndex
       .foldLeft(initial) {
         case (state, (char, index)) =>
@@ -376,18 +444,19 @@ object CharacterRenderer:
           val foreground   = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
           val background   = cell.flatMap(_.currentBackground).getOrElse(theme.background)
 
-          if state.currentText.isEmpty then
+          if state.currentText.length == 0 then
             state.copy(
-              currentText = char.toString,
+              currentText = StringBuilder(char.toString),
               currentStartX = run.startX + index,
               currentForeground = foreground,
               currentBackground = background
             )
           else if foreground == state.currentForeground && background == state.currentBackground then
-            state.copy(currentText = state.currentText + char)
+            state.currentText.append(char)
+            state
           else
             state.flush.copy(
-              currentText = char.toString,
+              currentText = StringBuilder(char.toString),
               currentStartX = run.startX + index,
               currentForeground = foreground,
               currentBackground = background

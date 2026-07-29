@@ -8,13 +8,14 @@ sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"
 
 The cursor-only scenario opens a temporary Swing window so it can measure Serenity's real overlay publication path. Run it in a graphical session; a headless Linux environment can use `xvfb-run -a sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"`.
 
-The harness prints CSV rows with `min_ms`, `p50_ms`, `p95_ms`, and `max_ms`. Every scenario builds its immutable document, state, search, LSP, and project-task fixtures before timing, runs the measured operation once, and asserts its observable result before warmup. Java2D frame and cursor-overlay image allocation remain inside their timed paths because those allocations, drawing, copying, and repaint requests are part of the user-visible work being measured.
+The harness prints CSV rows with `min_ms`, `p50_ms`, `p95_ms`, `max_ms`, `allocation_p50_bytes`, and `allocation_p95_bytes`. Allocation columns are populated for the long measured-line scenario and are sampled separately from timing so the allocation probe does not distort p50/p95. Every scenario builds its immutable document, state, search, LSP, and project-task fixtures before timing, runs the measured operation once, and asserts its observable result before warmup. Java2D frame and cursor-overlay image allocation remain inside their timed paths because those allocations, drawing, copying, and repaint requests are part of the user-visible work being measured.
 
 Scenarios cover:
 
 - large JSON rope search and cursor-offset lookup
 - visible multiline layout, normal editing, and deep plain/rich-text scrolling reducers
 - real Java2D full frames, cursor-overlay copying, diagnostics/comments, and HiDPI buffers
+- long measured single-line Java2D rendering, including proportional caret placement and run construction
 - authoritative-scene reuse for cursor-only Java2D overlays
 - large find/replace result-set presentation and complete find-query updates, including grapheme filtering, offset-to-position conversion, and selected-result application
 - LSP frame decoding and project-task detection/terminal preparation
@@ -64,6 +65,16 @@ prepared text snapshots.
 | --- | ---: | ---: |
 | `render.cursor_only.java2d_overlay` (baseline) | 5.158 | 10.270 |
 | `render.cursor_only.scene_reuse.java2d_overlay` | 2.162 | 2.221 |
+
+## After #835: linear measured-line rendering validation — 2026-07-29
+
+Captured with the standard warmed harness workflow under Xvfb on the same WSL2 host and Microsoft OpenJDK 21.0.8+9-LTS runtime.
+
+| Scenario | p50 | p95 |
+| --- | ---: | ---: |
+| `render.long_measured_line.java2d` | 2.146 | 2.538 |
+
+The same warmed run reported `allocation_p50_bytes = 5,935,640` and `allocation_p95_bytes = 5,950,824` for `render.long_measured_line.java2d`; allocation is reported per operation by the harness's thread-allocation counter.
 
 ## After #827: 2026-07-22
 

@@ -1,9 +1,9 @@
 package com.serenity
 
-import java.awt.Color
+import java.awt.{Color, Font}
 
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
-import com.serenity.ui.layout.{TextCaretStop, TextVisualLine}
+import com.serenity.ui.layout.{TextCaretStop, TextLayoutSnapshot, TextVisualLine}
 import com.serenity.ui.renderer.CharacterRenderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -31,6 +31,17 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
       Map(
         CharacterKey(1, 0) -> AnimatedCell(
           content = Some('b'),
+          foregroundSteps = List(fg),
+          backgroundSteps = List(bg)
+        )
+      )
+    )
+
+  private def animAt(column: Int, fg: Color, bg: Color): AnimationState =
+    AnimationState(
+      Map(
+        CharacterKey(column, 0) -> AnimatedCell(
+          content = Some('?'),
           foregroundSteps = List(fg),
           backgroundSteps = List(bg)
         )
@@ -117,4 +128,98 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
     calls should have size 1
     calls.head.xPx shouldBe 0.0f +- 0.001f
     calls.head.bgWidthPx shouldBe 15.0f +- 0.001f
+  }
+
+  it should "render a long measured line as one run when animation state is empty" in {
+    val text = "Wi" * 2_000
+    val visualLine = TextVisualLine(
+      bufferLine = 0,
+      startColumn = 0,
+      endColumn = text.length,
+      text = text,
+      widthPx = text.length * 6.0f,
+      caretStops = Vector.tabulate(text.length + 1)(index => TextCaretStop(index, index * 6.0f))
+    )
+    val surface = new MockRenderSurface(20_000, 24)
+
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      visualLine,
+      Theme.light,
+      AnimationState.empty
+    )
+
+    surface.drawRunPxCalls.map(_.s).mkString shouldBe text
+  }
+
+  it should "render an RTL measured line whose logical endpoints share the right edge" in {
+    val text       = "אבג"
+    val font       = Font("SansSerif", Font.PLAIN, 12)
+    val visualLine = TextLayoutSnapshot.visualLineForText(text, bufferLine = 0, font)
+    val surface    = new MockRenderSurface(200, 24)
+
+    visualLine.caretStops.head.xPx shouldBe visualLine.caretStops.last.xPx +- 0.001f
+
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      visualLine,
+      Theme.light,
+      AnimationState.empty
+    )
+
+    val calls = surface.drawRunPxCalls
+    calls should have size 1
+    calls.head.s shouldBe text
+    calls.head.xPx shouldBe visualLine.caretStops.map(_.xPx).min +- 0.001f
+    calls.head.bgWidthPx shouldBe (visualLine.caretStops.map(_.xPx).max - visualLine.caretStops
+      .map(_.xPx)
+      .min) +- 0.001f
+  }
+
+  it should "keep animated emoji and combining graphemes at their measured bounds" in {
+    val text = "😀e\u0301x"
+    val visualLine = TextVisualLine(
+      bufferLine = 0,
+      startColumn = 0,
+      endColumn = text.length,
+      text = text,
+      widthPx = 30.0f,
+      caretStops = Vector(
+        TextCaretStop(0, 0.0f),
+        TextCaretStop(2, 12.0f),
+        TextCaretStop(4, 24.0f),
+        TextCaretStop(5, 30.0f)
+      )
+    )
+    val emojiColor  = Color(200, 80, 40)
+    val accentColor = Color(40, 120, 210)
+    val animations = AnimationState(
+      animAt(0, emojiColor, emojiColor).animations ++ animAt(2, accentColor, accentColor).animations
+    )
+    val surface = new MockRenderSurface(200, 24)
+
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      visualLine,
+      Theme.light,
+      animations
+    )
+
+    val calls = surface.drawRunPxCalls
+    calls.map(_.s) shouldBe List("😀", "e\u0301", "x")
+    calls.map(_.xPx) shouldBe List(0.0f, 12.0f, 24.0f)
+    calls.map(_.bgWidthPx) shouldBe List(12.0f, 12.0f, 6.0f)
+    calls.take(2).map(_.foreground) shouldBe List(emojiColor, accentColor)
   }
