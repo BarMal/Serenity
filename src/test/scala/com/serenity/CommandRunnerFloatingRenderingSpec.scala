@@ -130,10 +130,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "keep written document text and the command runner visible with Writing's text insets" in {
     val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val writing = UiPreset.builtIn("Writing").getOrElse(fail("Expected Writing preset"))
-    val state   = stateWithRunner(Theme.light, "op", commands).copy(config = writing.config)
-    val surface = new MockRenderSurface(100, 30)
-    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val writing  = UiPreset.builtIn("Writing").getOrElse(fail("Expected Writing preset"))
+    val state    = stateWithRunner(Theme.light, "op", commands).copy(config = writing.config)
+    val surface  = new MockRenderSurface(100, 30)
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val paneLayout = LayoutEngine
       .calculateEditorPaneLayouts(state, layout)
       .getOrElse(paneId, fail("Expected pane layout"))
