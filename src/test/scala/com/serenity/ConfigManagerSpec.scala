@@ -1174,6 +1174,26 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
   }
 
+  it should "resolve HOCON substitutions alongside legacy Windows path values" in {
+    val configFile = Files.createTempFile("serenity-mixed-legacy-hocon", ".conf")
+    Files.writeString(
+      configFile,
+      """font.text.family = "Text Font"
+        |font.ui.family = ${font.text.family}
+        |font.code.family = ${?missing.font.family}
+        |spellcheck.dictionary_paths = C:\Dictionaries\en_US.dic
+        |""".stripMargin
+    )
+
+    ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
+      case Right(result) =>
+        result.config.fontConfig.textFontFamily shouldBe "Text Font"
+        result.config.fontConfig.uiFontFamily shouldBe "Text Font"
+        result.config.fontConfig.codeFontFamily shouldBe AppConfig.default.fontConfig.codeFontFamily
+        result.config.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
+      case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
+  }
+
   it should "return structured errors at the effectful configuration boundary" in {
     val invalidFile = Files.createTempFile("serenity-invalid-hocon", ".conf")
     Files.writeString(invalidFile, "font.code.size = [not-a-number]\n")

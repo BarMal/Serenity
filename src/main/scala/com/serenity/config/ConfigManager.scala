@@ -12,7 +12,7 @@ import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
-import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigValueType}
+import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValueType}
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
@@ -509,19 +509,52 @@ object ConfigManager:
       .filter(line => line.nonEmpty && !line.startsWith("#"))
       .map { line =>
         line.split("=", 2).toList match
-          case key :: value :: Nil
-              if key.trim.matches("[A-Za-z0-9_.]+") &&
-                !List("\"", "[", "{", "${").exists(value.trim.startsWith) &&
-                !value.contains("//") &&
-                (!value.contains("#") || value.trim.startsWith("#")) =>
-            Some(s""""${key.trim}"""" -> value.trim)
+          case key :: value :: Nil if key.trim.matches("[A-Za-z0-9_.]+") =>
+            Some(LegacyEntry(key.trim, value.trim))
           case _ => None
       }
       .toList
 
     Option.when(entries.nonEmpty && entries.forall(_.isDefined)) {
-      ConfigFactory.parseMap(entries.flatten.toMap.asJava)
+      val flatEntries = entries.flatten
+      val byKey       = flatEntries.map(entry => entry.key -> entry).toMap
+
+      def referencedKeys(keys: Set[String]): Set[String] =
+        val expanded = keys ++ keys.flatMap(key => byKey.get(key).toSet.flatMap(entry => substitutionKeys(entry.value)))
+        if expanded == keys then keys else referencedKeys(expanded)
+
+      val references = referencedKeys(flatEntries.flatMap(entry => substitutionKeys(entry.value)).toSet)
+      val resolutionScope = references
+        .flatMap(byKey.get)
+        .foldLeft(ConfigFactory.empty())((scope, entry) => parseLegacyLookupEntry(entry).withFallback(scope))
+        .resolve()
+
+      val resolvedEntries = flatEntries.flatMap { entry =>
+        val quotedKey = s""""${entry.key}""""
+        try
+          val resolved = ConfigFactory
+            .parseString(s"$quotedKey = ${entry.value}")
+            .withFallback(resolutionScope)
+            .resolve()
+          Option.when(resolved.hasPath(quotedKey))(quotedKey -> resolved.getValue(quotedKey).unwrapped())
+        catch case _: ConfigException.Parse => Some(quotedKey -> entry.value)
+      }
+
+      ConfigFactory.parseMap(resolvedEntries.toMap.asJava)
     }
+
+  private case class LegacyEntry(key: String, value: String)
+
+  private val substitutionPattern = """\$\{\??([^}]+)\}""".r
+
+  private def substitutionKeys(value: String): Set[String] =
+    substitutionPattern.findAllMatchIn(value).map(_.group(1)).toSet
+
+  private def parseLegacyLookupEntry(entry: LegacyEntry): Config =
+    try ConfigFactory.parseString(s"${entry.key} = ${entry.value}")
+    catch
+      case _: ConfigException.Parse =>
+        ConfigFactory.parseMap(Map(entry.key -> entry.value).asJava)
 
   private case class HoconEntry(key: String, value: String, valueType: ConfigValueType)
 
