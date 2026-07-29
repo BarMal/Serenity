@@ -195,6 +195,35 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.pinnedSurfaces shouldBe Nil
   }
 
+  it should "keep Writing's new session in its single editor pane" in {
+    val path  = Files.createTempDirectory("state-manager-writing-new-session").resolve("ui-presets.json")
+    val store = UiPresetStore(path)
+    val sm    = managerWithStore(store)
+
+    sm.executeCommand(
+      Command.typed(
+        "apply-writing-preset",
+        "Apply writing preset",
+        CommandIntent.ApplyUiPreset("Writing"),
+        CommandCategory.Settings
+      )
+    ).unsafeRunSync()
+    sm.executeCommand(
+      Command.typed(
+        "startup-new-session",
+        "Start a new session",
+        CommandIntent.StartupNewSession
+      )
+    ).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+
+    state.layout.editorPanes should have size 1
+    state.layout.activeEditorPaneId.flatMap(state.layout.editorPanes.get).flatMap(_.bufferId) shouldBe
+      state.bufferOrder.lastOption
+    state.focusedBufferId.flatMap(state.buffers.get).flatMap(_.richTextDocument) should not be empty
+  }
+
   it should "preserve unrelated persisted configuration when applying a built-in workflow" in {
     val path  = Files.createTempDirectory("state-manager-built-in-workflow-config").resolve("ui-presets.json")
     val store = UiPresetStore(path)

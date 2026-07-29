@@ -12,6 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
+import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.renderer.{Java2DRenderSurface, Renderer, SurfaceMaterials}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -125,6 +126,25 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
         call.yPx == searchCursorYPx &&
         call.color == state.theme.cursor
     ) shouldBe true
+  }
+
+  it should "keep written document text and the command runner visible with Writing's text insets" in {
+    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val writing  = UiPreset.builtIn("Writing").getOrElse(fail("Expected Writing preset"))
+    val state    = stateWithRunner(Theme.light, "op", commands).copy(config = writing.config)
+    val surface  = new MockRenderSurface(100, 30)
+    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val paneLayout = LayoutEngine
+      .calculateEditorPaneLayouts(state, layout)
+      .getOrElse(paneId, fail("Expected pane layout"))
+    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    overlay.x shouldBe paneLayout.contentRect.x
+    overlay.width shouldBe paneLayout.contentRect.width
+    surface.drawRunPxCalls.map(_.s) should contain("beta")
+    surface.drawRunPxCalls.map(_.s) should contain("search: op")
   }
 
   it should "place the command runner below the editor cursor when there is room" in {
