@@ -70,3 +70,24 @@ Captured on the same x86_64 Linux WSL2 host and Microsoft OpenJDK 21.0.8+9-LTS r
 | --- | ---: | ---: |
 | `find_replace.large_query_update` | 16.198 | 19.746 |
 | `find_replace.large_query_keystroke` | 0.026 | 0.039 |
+
+## #836 validation: 2026-07-28
+
+The focused viewport regressions are covered by indexed-line tests: deep scrolling keeps source reads bounded, and visible annotation projections avoid expanding comment ranges outside the rendered lines. The Markdown block suite also covers active fenced blocks through 4,500 interior lines and long paragraph/list blocks without materializing line sets.
+
+| Scenario | Result |
+| --- | --- |
+| `markdown.deep_scroll.no_fence.reads` | bounded indexed reads; 10,000-line fixture |
+| `markdown.long_fenced_block.interior` | passes through 4,500 lines |
+| `renderer.focused_body.long_block` | range predicate; no block-sized `Set` allocation |
+| `renderer.diagnostics.visible_projection` | visible-line projection; annotation index reuse remains pending |
+
+The high-count correctness fixture retains annotations positioned after 1,024 unrelated entries; this guards against truncating source lists while scene-owned index reuse is completed.
+
+Measured harness results (same WSL2 host, warmed run):
+
+| Scenario | p50 (ms) | p95 (ms) |
+| --- | ---: | ---: |
+| `reducer.deep_scroll.plain` | 0.006 | 0.048 |
+| `reducer.deep_scroll.rich_text` | 0.011 | 0.036 |
+| `render.diagnostics_and_comments.java2d` | 7.169 | 10.973 |

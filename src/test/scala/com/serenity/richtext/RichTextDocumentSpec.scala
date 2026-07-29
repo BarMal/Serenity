@@ -27,6 +27,13 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
     document.plainText shouldBe "First\n\nThird"
   }
 
+  it should "provide indexed paragraph access without changing its list codec shape" in {
+    val document = RichTextDocument((1 to 10_000).map(index => RichTextParagraph.plain(s"line-$index")).toList)
+
+    document.paragraphAt(9_999) shouldBe Some(RichTextParagraph.plain("line-10000"))
+    document.paragraphAt(10_000) shouldBe None
+  }
+
   it should "normalize empty runs and merge adjacent runs with the same style" in {
     val bold = RichTextStyle(marks = Set(InlineMark.Bold))
     val document = RichTextDocument(

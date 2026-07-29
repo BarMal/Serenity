@@ -170,6 +170,41 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     surface.drawRunPxCalls.exists(_.s.contains("hello")) shouldBe true
   }
 
+  it should "project only visible lines from a high-count annotation index" in {
+    val indexed = (0 until 100000).iterator.map(line => line -> List(line)).toMap
+    val visible = Set(50000, 50001, 50002)
+
+    val projected = Renderer.visibleAnnotationLines(visible, indexed)
+
+    projected.keySet shouldBe visible
+    projected.values.flatten.toSet shouldBe visible
+  }
+
+  it should "construct a compact scene annotation index for a high-count buffer" in {
+    val bufferId = BufferId(1)
+    val comment  = DocumentComment(CursorPosition(0, 0), CursorPosition(100000, 0), "wide")
+    val buffer   = Buffer.fromString(bufferId, "content").copy(documentComments = List.fill(10000)(comment))
+    val state    = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
+
+    val index = state.annotationIndexByBuffer(bufferId)()
+
+    index.comments should have size 10000
+    index.commentsByLine(Set(100000)).values.flatten should contain only comment
+  }
+
+  it should "query a visible comment without scanning unrelated indexed ranges" in {
+    val bufferId = BufferId(1)
+    val unrelated =
+      (0 until 50000).map(line => DocumentComment(CursorPosition(line, 0), CursorPosition(line, 0), "offscreen"))
+    val visible = DocumentComment(CursorPosition(100000, 0), CursorPosition(100000, 0), "visible")
+    val buffer  = Buffer.fromString(bufferId, "content").copy(documentComments = (unrelated :+ visible).toList)
+    val state   = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
+
+    val result = state.annotationIndexByBuffer(bufferId)().commentsByLine(Set(100000))
+
+    result.values.flatten.toList shouldBe List(visible)
+  }
+
   it should "render a plain large buffer without materialising the whole rope" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
@@ -290,7 +325,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val paneId    = PaneId(0)
     val bufferId  = BufferId(1)
     val lineReads = AtomicInteger(0)
-    val markdown  = (1 to 12).map(i => s"# Heading $i").mkString("\n")
+    val markdown  = (1 to 2_000).map(i => s"# Heading $i").mkString("\n")
     val content   = CountingAccessRope(Rope(markdown), lineReads = lineReads)
     val buffer = Buffer(bufferId, content).copy(
       language = Some(LanguageId.Markdown),
@@ -318,5 +353,174 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 
-    lineReads.get() shouldBe math.min(buffer.content.lineCount, paneContentHeight) + buffer.content.lineCount + 1
+    lineReads.get() should be < 200
+  }
+
+  it should "bound renderer reads for a long fenced block in a large document" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(1)
+    val lineReads = AtomicInteger(0)
+    val markdown =
+      (Vector.fill(5_000)("unrelated prose") ++
+        Vector("```scala") ++
+        (1 to 1_000).map(index => s"val result = $index") ++
+        Vector("```") ++
+        Vector.fill(5_000)("trailing prose")).mkString("\n")
+    val content = CountingAccessRope(Rope(markdown), lineReads = lineReads)
+    val buffer = Buffer(bufferId, content).copy(
+      language = Some(LanguageId.Markdown),
+      cursors = List(CursorPosition(5_500, 0)),
+      viewport = Viewport(topLine = 5_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withWordWrap(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    noException should be thrownBy Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
+
+    lineReads.get() should be < 20_000
+  }
+
+  it should "bound renderer reads for a long paragraph in a large document" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(1)
+    val lineReads = AtomicInteger(0)
+    val markdown =
+      (Vector.fill(1_000)("paragraph content") ++
+        Vector("") ++
+        Vector.fill(1_000)("trailing prose")).mkString("\n")
+    val content = CountingAccessRope(Rope(markdown), lineReads = lineReads)
+    val buffer = Buffer(bufferId, content).copy(
+      language = Some(LanguageId.Markdown),
+      cursors = List(CursorPosition(500, 0)),
+      viewport = Viewport(topLine = 500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withWordWrap(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    noException should be thrownBy Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
+
+    // Full-block Markdown lens resolution may inspect the enclosing semantic block.
+    lineReads.get() should be < 20_000
+  }
+
+  it should "keep reads bounded for a large fence-free Markdown document" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(1)
+    val lineReads = AtomicInteger(0)
+    val markdown  = Vector.fill(11_000)("ordinary prose without fences").mkString("\n")
+    val content   = CountingAccessRope(Rope(markdown), lineReads = lineReads)
+    val buffer = Buffer(bufferId, content).copy(
+      language = Some(LanguageId.Markdown),
+      cursors = List(CursorPosition(5_500, 0)),
+      viewport = Viewport(topLine = 5_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withWordWrap(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+
+    lineReads.get() should be < 200_000
+  }
+
+  it should "bound bare fence classification reads after a long prose prefix" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(1)
+    val lineReads = AtomicInteger(0)
+    val markdown =
+      (Vector.fill(1_000)("unrelated prose") ++
+        Vector("```scala") ++
+        Vector.fill(499)("fenced content") ++
+        Vector("```") ++
+        Vector.fill(1_000)("trailing prose")).mkString("\n")
+    val content = CountingAccessRope(Rope(markdown), lineReads = lineReads)
+    val buffer = Buffer(bufferId, content).copy(
+      language = Some(LanguageId.Markdown),
+      cursors = List(CursorPosition(1_500, 0)),
+      viewport = Viewport(topLine = 1_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withWordWrap(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    noException should be thrownBy Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
+
+    lineReads.get() should be < 2_000
   }

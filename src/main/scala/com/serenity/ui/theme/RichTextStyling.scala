@@ -13,8 +13,8 @@ object RichTextStyling:
     endColumn: Int,
     theme: Theme
   ): List[StyledText] =
-    document.paragraphs
-      .lift(bufferLine)
+    document
+      .paragraphAt(bufferLine)
       .map { paragraph =>
         paragraph.runs
           .foldLeft((0, List.empty[StyledText])) {

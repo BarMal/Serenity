@@ -3,6 +3,7 @@ package com.serenity.state.models
 import com.serenity.animation.AnimationState
 import com.serenity.config.*
 import com.serenity.lsp.model.Diagnostic
+import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.rope.Rope
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.{Layout, ViewportSize}
@@ -151,6 +152,53 @@ case class SpellCheckCacheEntry(
     diagnostics: List[Diagnostic]
 )
 
+/** Scene-owned interval node for bounded comment overlap queries. */
+private case class CommentIntervalNode(
+    comment: DocumentComment,
+    maxEnd: Int,
+    left: Option[CommentIntervalNode],
+    right: Option[CommentIntervalNode]
+)
+
+/** Scene-owned annotation lookup keyed by buffer line. */
+case class AnnotationLineIndex(
+    comments: Vector[DocumentComment],
+    diagnosticsByLine: Map[Int, List[Diagnostic]]
+):
+
+  private lazy val commentTree: Option[CommentIntervalNode] =
+    def build(sorted: Vector[DocumentComment]): Option[CommentIntervalNode] =
+      if sorted.isEmpty then None
+      else
+        val middle  = sorted.length / 2
+        val comment = sorted(middle)
+        val left    = build(sorted.take(middle))
+        val right   = build(sorted.drop(middle + 1))
+        val maxEnd  = (comment.end.line :: left.toList.map(_.maxEnd) ::: right.toList.map(_.maxEnd)).max
+        Some(CommentIntervalNode(comment, maxEnd, left, right))
+    build(comments.sortBy(_.start.line))
+
+  def commentsByLine(visibleLines: Set[Int]): Map[Int, List[DocumentComment]] =
+    if visibleLines.isEmpty then Map.empty
+    else
+      val start = visibleLines.min
+      val end   = visibleLines.max
+      def overlapping(node: Option[CommentIntervalNode]): List[DocumentComment] =
+        node match
+          case None => Nil
+          case Some(current) =>
+            val fromLeft = if current.left.exists(_.maxEnd >= start) then overlapping(current.left) else Nil
+            val here =
+              if current.comment.start.line <= end && current.comment.end.line >= start then List(current.comment)
+              else Nil
+            val fromRight = if current.comment.start.line <= end then overlapping(current.right) else Nil
+            fromLeft ::: here ::: fromRight
+      overlapping(commentTree).foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
+        (comment.start.line.max(start) to comment.end.line.min(end)).iterator
+          .filter(visibleLines.contains)
+          .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
+      }
+
 case class AppState(
     layout: Layout,
     buffers: Map[BufferId, Buffer],
@@ -176,6 +224,26 @@ case class AppState(
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
     uiPresetEditSession: Option[UiPresetEditSession] = None
 ):
+
+  /** Lazily indexes annotations for this immutable state snapshot. A new state snapshot gets a fresh index, while
+    * repeated render plans for the same scene reuse the existing one.
+    */
+  lazy val annotationIndexByBuffer: Map[BufferId, () => AnnotationLineIndex] =
+    buffers.iterator.map {
+      case (bufferId, buffer) =>
+        lazy val index =
+          val diagnostics = this.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
+          AnnotationLineIndex(buffer.documentComments.toVector, diagnostics.groupMap(_.range.start.line)(identity))
+        bufferId -> (() => index)
+    }.toMap
+
+  lazy val markdownFenceIndexByBuffer: Map[BufferId, () => MarkdownBlockLens.FenceRangeIndex] =
+    buffers.iterator.map {
+      case (bufferId, buffer) =>
+        lazy val index = MarkdownBlockLens.fenceRangeIndex(buffer.content.lineCount, buffer.content.getLine)
+        bufferId -> (() => index)
+    }.toMap
+
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled
   def isValid: Boolean                   = validationErrors.isEmpty
