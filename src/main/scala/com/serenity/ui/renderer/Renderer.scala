@@ -6,7 +6,6 @@ import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
-import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.*
@@ -46,11 +45,6 @@ object Renderer:
     def paneLayouts: Map[PaneId, EditorPaneLayout] = workspaceLayout.paneLayouts
 
   private case class BufferRenderAnnotations(
-      commentsByLine: Map[Int, List[DocumentComment]],
-      diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]]
-  )
-
-  private case class CachedAnnotationIndex(
       commentsByLine: Map[Int, List[DocumentComment]],
       diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]]
   )
@@ -346,30 +340,14 @@ object Renderer:
       .mapValues(_.foldLeft(Set.empty[Int])(_ ++ _))
       .toMap
 
-    val annotationIndexes = state.layout.editorPanes.values
-      .flatMap(_.bufferId)
-      .toList
-      .distinct
-      .flatMap(bufferId =>
-        state.buffers.get(bufferId).map { buffer =>
-          val diagnostics = state.diagnostics.getOrElse(SpellChecker.diagnosticsUri(buffer), Nil)
-          bufferId -> buildAnnotationIndex(
-            buffer.documentComments,
-            diagnostics,
-            visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          )
-        }
-      )
-      .toMap
-
     val annotations = state.layout.editorPanes.values
       .flatMap(_.bufferId)
       .toList
       .distinct
       .flatMap { bufferId =>
         state.buffers.get(bufferId).map { _ =>
-          val visibleLines      = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val cached            = annotationIndexes(bufferId)
+          val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
+          val cached = state.annotationIndexByBuffer.getOrElse(bufferId, AnnotationLineIndex(Map.empty, Map.empty))
           val commentsByLine    = visibleAnnotationLines(visibleLines, cached.commentsByLine)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
           bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine)
@@ -379,40 +357,11 @@ object Renderer:
 
     EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots, annotations)
 
-  private def visibleAnnotationLines[A](visibleLines: Set[Int], indexed: Map[Int, List[A]]): Map[Int, List[A]] =
+  private[serenity] def visibleAnnotationLines[A](
+    visibleLines: Set[Int],
+    indexed: Map[Int, List[A]]
+  ): Map[Int, List[A]] =
     visibleLines.iterator.flatMap(line => indexed.get(line).map(line -> _)).toMap
-
-  private def buildAnnotationIndex(
-    comments: List[DocumentComment],
-    diagnostics: List[com.serenity.lsp.model.Diagnostic],
-    visibleLines: Set[Int]
-  ): CachedAnnotationIndex =
-    if visibleLines.isEmpty then CachedAnnotationIndex(Map.empty, Map.empty)
-    else buildAnnotationIndexForVisibleLines(comments, diagnostics, visibleLines)
-
-  private def buildAnnotationIndexForVisibleLines(
-    comments: List[DocumentComment],
-    diagnostics: List[com.serenity.lsp.model.Diagnostic],
-    visibleLines: Set[Int]
-  ): CachedAnnotationIndex =
-    val visibleStart = visibleLines.min
-    val visibleEnd   = visibleLines.max
-    val relevantComments =
-      comments.filter(comment => comment.start.line <= visibleEnd && comment.end.line >= visibleStart)
-    val relevantDiagnostics = diagnostics.filter(diagnostic =>
-      diagnostic.range.start.line >= visibleStart && diagnostic.range.start.line <= visibleEnd
-    )
-    val commentsByLine = relevantComments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
-      (comment.start.line.max(visibleStart) to comment.end.line.min(visibleEnd)).iterator
-        .filter(visibleLines.contains)
-        .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
-    }
-    CachedAnnotationIndex(
-      commentsByLine,
-      relevantDiagnostics
-        .filter(diagnostic => visibleLines.contains(diagnostic.range.start.line))
-        .groupMap(_.range.start.line)(identity)
-    )
 
   private def snapshotForBuffer(
     buffer: Buffer,

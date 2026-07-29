@@ -151,6 +151,12 @@ case class SpellCheckCacheEntry(
     diagnostics: List[Diagnostic]
 )
 
+/** Scene-owned annotation lookup keyed by buffer line. */
+case class AnnotationLineIndex(
+    commentsByLine: Map[Int, List[DocumentComment]],
+    diagnosticsByLine: Map[Int, List[Diagnostic]]
+)
+
 case class AppState(
     layout: Layout,
     buffers: Map[BufferId, Buffer],
@@ -176,6 +182,23 @@ case class AppState(
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
     uiPresetEditSession: Option[UiPresetEditSession] = None
 ):
+
+  /** Lazily indexes annotations for this immutable state snapshot. A new state snapshot gets a fresh index, while
+    * repeated render plans for the same scene reuse the existing one.
+    */
+  lazy val annotationIndexByBuffer: Map[BufferId, AnnotationLineIndex] =
+    buffers.iterator.map {
+      case (bufferId, buffer) =>
+        val commentsByLine =
+          buffer.documentComments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
+            (comment.start.line to comment.end.line).iterator
+              .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
+          }
+        val diagnostics = this.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
+        val diagnosticsByLine = diagnostics.groupMap(_.range.start.line)(identity)
+        bufferId -> AnnotationLineIndex(commentsByLine, diagnosticsByLine)
+    }.toMap
+
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled
   def isValid: Boolean                   = validationErrors.isEmpty

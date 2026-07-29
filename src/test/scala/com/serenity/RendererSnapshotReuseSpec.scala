@@ -170,6 +170,16 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     surface.drawRunPxCalls.exists(_.s.contains("hello")) shouldBe true
   }
 
+  it should "project only visible lines from a high-count annotation index" in {
+    val indexed = (0 until 100000).iterator.map(line => line -> List(line)).toMap
+    val visible = Set(50000, 50001, 50002)
+
+    val projected = Renderer.visibleAnnotationLines(visible, indexed)
+
+    projected.keySet shouldBe visible
+    projected.values.flatten.toSet shouldBe visible
+  }
+
   it should "render a plain large buffer without materialising the whole rope" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
