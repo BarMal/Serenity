@@ -57,4 +57,10 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     layout.effectiveWorkspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(1), PaneId(0)))
     layout.effectiveWorkspaceTree.flatMap(_.root.axis) shouldBe Some(SplitAxis.Vertical)
   }
+
+  it should "initialize the default layout as one explicit editor leaf" in {
+    Layout.initial.workspaceTree shouldBe Some(
+      WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
+    )
+  }
 end WorkspaceTreeSpec
