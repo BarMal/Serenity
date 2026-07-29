@@ -3,12 +3,11 @@ package com.serenity.richtext
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 import java.util.concurrent.atomic.AtomicInteger
-
-import com.sun.net.httpserver.HttpServer
+import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 import cats.effect.unsafe.implicits.global
+import com.sun.net.httpserver.HttpServer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

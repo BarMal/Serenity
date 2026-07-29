@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.util.zip.{ZipEntry, ZipOutputStream}
+
 import scala.util.control.NonFatal
 
 import cats.effect.IO
