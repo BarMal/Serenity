@@ -1,7 +1,7 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{HotkeyAction, HotkeyConfig}
+import com.serenity.config.{CommandRunnerKeyAction, HotkeyAction, HotkeyConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.SurfaceContent
 import org.scalatest.flatspec.AnyFlatSpec
@@ -84,6 +84,53 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     val config = stateManager.getCurrentState.unsafeRunSync().config
     config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+o"
     config.hotkeyConfig.bindingsFor(HotkeyAction.OpenFile) shouldBe Nil
+  }
+
+  it should "offer focused keymap conflict resolution by unbinding the previous owner on enter" in {
+    val stateManager = createLinuxStateManager("FocusedKeymapEditorConflictResolveSpec")
+
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config = state.config
+            .withCommandRunnerKeyOverride(CommandRunnerKeyAction.NavigateDown, "ctrl+k")
+        )
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    List.fill(3)(MoveDown).foreach(event => stateManager.applyEvent(event).unsafeRunSync())
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .commandRunnerSurface
+      .flatMap(_.content match
+        case SurfaceContent.CommandPalette(runner) =>
+          runner.activeSubmenu
+            .flatMap(submenu => runner.submenuItems(submenu.groupId).lift(submenu.selectedIndex))
+            .map(_.id)
+        case _ => None) shouldBe Some("keymap-command-runner-submit")
+    "ctrl+k".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val conflicted = stateManager.getCurrentState.unsafeRunSync()
+    conflicted.config.focusedKeymapConfig.commandRunner
+      .bindingsFor(CommandRunnerKeyAction.NavigateDown)
+      .map(_.render) shouldBe List("ctrl+k")
+    conflicted.config.focusedKeymapConfig.commandRunner
+      .bindingsFor(CommandRunnerKeyAction.Submit)
+      .map(_.render) shouldBe List("enter")
+    conflicted.commandRunnerSurface.flatMap(_.content match
+      case SurfaceContent.CommandPalette(runner) => runner.statusMessage
+      case _                                     => None) shouldBe Some(
+      "Binding is already assigned. Enter to unbind the other action, or Escape to preserve it."
+    )
+
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val resolved = stateManager.getCurrentState.unsafeRunSync().config.focusedKeymapConfig.commandRunner
+    resolved.bindingsFor(CommandRunnerKeyAction.Submit).map(_.render) shouldBe List("ctrl+k")
+    resolved.bindingsFor(CommandRunnerKeyAction.NavigateDown) shouldBe Nil
   }
 
 end KeymapEditorStateManagerSpec

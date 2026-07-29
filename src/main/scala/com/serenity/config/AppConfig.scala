@@ -1757,6 +1757,11 @@ case class AppConfig(
   def withEditorKeyOverride(action: EditorKeyAction, binding: String): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withEditorBinding(action, binding)))
 
+  def withEditorKeyOverrideUnbindingConflicts(action: EditorKeyAction, binding: String): AppConfig =
+    withInputConfig(
+      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withEditorBindingUnbindingConflicts(action, binding))
+    )
+
   def resetEditorKeyOverride(action: EditorKeyAction): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetEditorBinding(action)))
 
@@ -1765,11 +1770,26 @@ case class AppConfig(
       inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withCommandRunnerBinding(action, binding))
     )
 
+  def withCommandRunnerKeyOverrideUnbindingConflicts(
+    action: CommandRunnerKeyAction,
+    binding: String
+  ): AppConfig =
+    withInputConfig(
+      inputConfig.copy(
+        focusedKeymapConfig = focusedKeymapConfig.withCommandRunnerBindingUnbindingConflicts(action, binding)
+      )
+    )
+
   def resetCommandRunnerKeyOverride(action: CommandRunnerKeyAction): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetCommandRunnerBinding(action)))
 
   def withModalKeyOverride(action: ModalKeyAction, binding: String): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withModalBinding(action, binding)))
+
+  def withModalKeyOverrideUnbindingConflicts(action: ModalKeyAction, binding: String): AppConfig =
+    withInputConfig(
+      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withModalBindingUnbindingConflicts(action, binding))
+    )
 
   def resetModalKeyOverride(action: ModalKeyAction): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetModalBinding(action)))
@@ -1777,11 +1797,21 @@ case class AppConfig(
   def withPanelKeyOverride(action: PanelKeyAction, binding: String): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPanelBinding(action, binding)))
 
+  def withPanelKeyOverrideUnbindingConflicts(action: PanelKeyAction, binding: String): AppConfig =
+    withInputConfig(
+      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPanelBindingUnbindingConflicts(action, binding))
+    )
+
   def resetPanelKeyOverride(action: PanelKeyAction): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetPanelBinding(action)))
 
   def withPeekKeyOverride(action: PeekKeyAction, binding: String): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPeekBinding(action, binding)))
+
+  def withPeekKeyOverrideUnbindingConflicts(action: PeekKeyAction, binding: String): AppConfig =
+    withInputConfig(
+      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPeekBindingUnbindingConflicts(action, binding))
+    )
 
   def resetPeekKeyOverride(action: PeekKeyAction): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetPeekBinding(action)))

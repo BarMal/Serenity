@@ -62,6 +62,18 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     HotkeyConfig.validate(reassigned.bindings) shouldBe Right(())
   }
 
+  it should "unbind a conflicting focused keymap trigger before assigning it" in {
+    val config = FocusedKeymapConfig().withCommandRunnerBinding(CommandRunnerKeyAction.NavigateDown, "ctrl+enter")
+
+    val reassigned = config.withCommandRunnerBindingUnbindingConflicts(
+      CommandRunnerKeyAction.Submit,
+      "ctrl+enter"
+    )
+
+    reassigned.commandRunner.bindingsFor(CommandRunnerKeyAction.NavigateDown) shouldBe Nil
+    reassigned.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit).map(_.render) shouldBe List("ctrl+enter")
+  }
+
   it should "preserve a valid keymap when resetting an override would conflict" in {
     val findDefault = HotkeyConfig.defaultBindings(HotkeyAction.Find).head
     val overridden = HotkeyConfig()

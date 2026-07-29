@@ -535,7 +535,8 @@ object CommandRunnerReducer:
                         editingItemId = None,
                         editingText = "",
                         recordingItemId = None,
-                        pendingGlobalHotkeyConflict = None
+                        pendingGlobalHotkeyConflict = None,
+                        pendingFocusedKeymapConflict = None
                       )
                     ),
                     statusMessage = None
@@ -547,6 +548,35 @@ object CommandRunnerReducer:
                     item.id,
                     item.label,
                     CommandIntent.ResolveGlobalHotkeyConflict(action, binding),
+                    item.category
+                  )
+                )
+              )
+            )
+          case Some(item: CommandSurfaceItem.InputItem) if submenu.pendingFocusedKeymapConflict.nonEmpty =>
+            val (itemId, binding) = submenu.pendingFocusedKeymapConflict.get
+            ReducerResult(
+              state = replaceRunner(
+                state,
+                r =>
+                  r.copy(
+                    activeSubmenu = r.activeSubmenu.map(
+                      _.copy(
+                        editingItemId = None,
+                        editingText = "",
+                        recordingItemId = None,
+                        pendingFocusedKeymapConflict = None
+                      )
+                    ),
+                    statusMessage = None
+                  )
+              ),
+              effects = List(
+                AppEffect.ExecuteCommand(
+                  Command.typed(
+                    item.id,
+                    item.label,
+                    CommandIntent.ResolveFocusedKeymapConflict(itemId, binding),
                     item.category
                   )
                 )
@@ -565,7 +595,8 @@ object CommandRunnerReducer:
                             editingItemId = None,
                             editingText = "",
                             recordingItemId = None,
-                            pendingGlobalHotkeyConflict = None
+                            pendingGlobalHotkeyConflict = None,
+                            pendingFocusedKeymapConflict = None
                           )
                         ),
                         statusMessage = None
@@ -623,7 +654,8 @@ object CommandRunnerReducer:
                             editingItemId = None,
                             editingText = "",
                             recordingItemId = None,
-                            pendingGlobalHotkeyConflict = None
+                            pendingGlobalHotkeyConflict = None,
+                            pendingFocusedKeymapConflict = None
                           )
                         ),
                         statusMessage = None
@@ -652,7 +684,8 @@ object CommandRunnerReducer:
               editingItemId = None,
               editingText = "",
               recordingItemId = None,
-              pendingGlobalHotkeyConflict = None
+              pendingGlobalHotkeyConflict = None,
+              pendingFocusedKeymapConflict = None
             )
           ),
           statusMessage = None
