@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.awt.Font
 import java.util.LinkedHashMap
 
+import com.serenity.config.{CursorInfoBarMode, CursorInfoBarPlacement, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
@@ -32,6 +33,17 @@ private[manager] case class MouseTargetLayoutKey(
     showLineNumbers: Boolean,
     wordWrapEnabled: Boolean,
     minimumPaneWidth: Int,
+    textAreaInsets: TextAreaInsets,
+    interfaceDensity: InterfaceDensity,
+    uiElementGap: Double,
+    showPaneHeaders: Boolean,
+    cursorInfoBarMode: CursorInfoBarMode,
+    cursorInfoBarPlacement: CursorInfoBarPlacement,
+    commandRunnerVisibleRows: Option[Int],
+    commandRunnerItemGapRows: Double,
+    commandRunnerCursorGapRows: Option[Double],
+    layoutState: Layout,
+    focus: Focus,
     focusPaneId: Option[PaneId],
     orderedPaneIds: List[PaneId],
     paneBuffers: List[(PaneId, Option[BufferId])],
@@ -41,6 +53,8 @@ private[manager] case class MouseTargetLayoutKey(
         Option[(RopeIdentity, Viewport, TypographyRole, Option[LanguageId], Option[RichTextDocument])]
       )
     ],
+    uiSurfaces: List[UiSurface],
+    derivedCursorInfoBarSurface: Option[UiSurface],
     pinnedPanels: List[(SurfaceId, PanelPosition, Int)],
     lineNumberContent: List[(BufferId, RopeIdentity)]
 )
@@ -55,6 +69,17 @@ private[manager] object MouseTargetLayoutKey:
       showLineNumbers = state.config.showLineNumbers,
       wordWrapEnabled = state.config.wordWrapEnabled,
       minimumPaneWidth = state.config.minimumPaneWidth,
+      textAreaInsets = state.config.textAreaInsets,
+      interfaceDensity = state.config.interfaceDensity,
+      uiElementGap = state.config.uiElementGap,
+      showPaneHeaders = state.config.showPaneHeaders,
+      cursorInfoBarMode = state.config.cursorInfoBarMode,
+      cursorInfoBarPlacement = state.config.cursorInfoBarPlacement,
+      commandRunnerVisibleRows = state.config.commandRunnerVisibleRows,
+      commandRunnerItemGapRows = state.config.commandRunnerItemGapRows,
+      commandRunnerCursorGapRows = state.config.commandRunnerCursorGapRows,
+      layoutState = state.layout,
+      focus = state.focus,
       focusPaneId = state.focus match
         case Focus.EditorPane(paneId) if state.layout.editorPanes.contains(paneId) => Some(paneId)
         case _                                                                     => None,
@@ -76,6 +101,8 @@ private[manager] object MouseTargetLayoutKey:
             )
           )
       },
+      uiSurfaces = state.uiSurfaces,
+      derivedCursorInfoBarSurface = state.cursorInfoBarSurface,
       pinnedPanels = state.uiSurfaces.collect {
         case UiSurface(id, _, SurfacePresentation.Pinned(position, size), _) => (id, position, size)
       },

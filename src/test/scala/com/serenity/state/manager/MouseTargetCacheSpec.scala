@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.awt.Font
 
-import com.serenity.config.{AppConfig, TextAreaInsets}
+import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -175,4 +175,28 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     List(fontChanged, languageChanged, languageRemoved, viewportChanged, richTextChanged).foreach { changed =>
       MouseTargetLayoutKey.from(changed, size) should not be key
     }
+  }
+
+  it should "invalidate scene geometry when text-area insets change" in {
+    val state = stateWith(Buffer.fromString(bufferId, "alpha beta"))
+    val size  = ViewportSize(80, 24)
+
+    val insetState = state.copy(config = state.config.withTextAreaInsets(TextAreaInsets(0.2, 0.1, 0.1, 0.1)))
+
+    MouseTargetLayoutKey.from(insetState, size) should not be MouseTargetLayoutKey.from(state, size)
+    MouseTargetCache.fromState(insetState, size).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(state, size).scene
+    )
+  }
+
+  it should "invalidate scene composition when interface density changes" in {
+    val state = stateWith(Buffer.fromString(bufferId, "alpha beta"))
+    val size  = ViewportSize(80, 24)
+
+    val spaciousState = state.copy(config = state.config.withInterfaceDensity(InterfaceDensity.Spacious))
+
+    MouseTargetLayoutKey.from(spaciousState, size) should not be MouseTargetLayoutKey.from(state, size)
+    MouseTargetCache.fromState(spaciousState, size).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(state, size).scene
+    )
   }
