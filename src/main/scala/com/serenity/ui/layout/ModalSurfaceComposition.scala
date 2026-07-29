@@ -136,16 +136,23 @@ object ModalSurfaceComposition:
     val content   = SurfaceFrameLayout(frameRect).contentRect
     val bounds    = logicalRect(content.x, content.y, content.width, content.height)
     val resultSet = FindResultSet.normalized(query, results, currentIndex)
-    val queryBox  = inputBox("Find", query, SurfaceFocusId("find"), rowRect(bounds, 0))
-    val resultBoxes = resultSet.visibleResults(math.max(0, content.height - 1)).zipWithIndex.map {
+    val headerBox = textBox("find", rowRect(bounds, 0))
+    val queryBox  = inputBox("Find", query, SurfaceFocusId("find"), rowRect(bounds, 1))
+    val resultBoxes = resultSet.visibleResults(math.max(0, content.height - 3)).zipWithIndex.map {
       case ((result, index), offset) =>
         textBox(
           s"${index + 1}. ${result.line + 1}:${result.column + 1}",
-          rowRect(bounds, offset + 1),
+          rowRect(bounds, offset + 2),
           selected = index == resultSet.currentIndex
         )
     }
-    plan(bounds, queryBox :: resultBoxes)
+    val footer = Option.when(resultSet.query.nonEmpty) {
+      textBox(
+        if resultSet.results.isEmpty then "0 matches" else resultSet.selectionSummary,
+        rowRect(bounds, content.height - 1)
+      )
+    }
+    plan(bounds, headerBox :: queryBox :: resultBoxes ++ footer.toList)
 
   private def replacePlan(
     workflow: ReplaceWorkflowState,
@@ -156,8 +163,20 @@ object ModalSurfaceComposition:
     val bounds     = logicalRect(content.x, content.y, content.width, content.height)
     val actionRows = math.max(1, targetRows)
     val fields = List(
-      inputBox("Find", workflow.findText, SurfaceFocusId("find"), rowRect(bounds, 0)),
-      inputBox("Replace", workflow.replacementText, SurfaceFocusId("replace"), rowRect(bounds, 1))
+      inputBox(
+        "Find",
+        workflow.findText,
+        SurfaceFocusId("find"),
+        rowRect(bounds, 0),
+        selected = workflow.activeField == ReplaceWorkflowField.Find
+      ),
+      inputBox(
+        "Replace",
+        workflow.replacementText,
+        SurfaceFocusId("replace"),
+        rowRect(bounds, 1),
+        selected = workflow.activeField == ReplaceWorkflowField.ReplaceWith
+      )
     )
     val actionY = bounds.y + 2
     val actionBoxes = horizontalBoxes(
@@ -185,21 +204,44 @@ object ModalSurfaceComposition:
     val content   = SurfaceFrameLayout(frameRect).contentRect
     val bounds    = logicalRect(content.x, content.y, content.width, content.height)
     val rowHeight = 1
+    val header    = textBox(workflow.operationLabel, rowRect(bounds, 0))
     val filename = inputBox(
       "Filename",
       workflow.filename,
       SurfaceFocusId("filename"),
       rowRect(bounds, 1, rowHeight),
       selected = workflow.activeField == FileWorkflowField.Filename,
-      cursorAtEnd = false
+      cursorAtEnd = false,
+      segments = List(
+        OverlaySegment("Filename"),
+        OverlaySegment(workflow.filename, selected = workflow.activeField == FileWorkflowField.Filename)
+      ),
+      layout = SurfacePaintLayout.Split
     )
+    val pathSegments =
+      if workflow.path.isEmpty then List(OverlaySegment(""))
+      else
+        workflow.path
+          .split("(?<=[/\\\\])", -1)
+          .toList
+          .filter(_.nonEmpty)
+          .map { segment =>
+            val missing = workflow.missingPathSegments.exists(segment.contains)
+            OverlaySegment(
+              segment,
+              selected = workflow.activeField == FileWorkflowField.Path && !missing,
+              tone = if missing then OverlayTone.Error else OverlayTone.Normal
+            )
+          }
     val path = inputBox(
       "Path",
       workflow.path,
       SurfaceFocusId("path"),
       rowRect(bounds, 2, rowHeight),
       selected = workflow.activeField == FileWorkflowField.Path,
-      cursorAtEnd = false
+      cursorAtEnd = false,
+      segments = OverlaySegment("Path ") :: pathSegments,
+      layout = SurfacePaintLayout.Inline
     )
     val suggestions = workflow.suggestions.take(4).zipWithIndex.map {
       case (suggestion, index) =>
@@ -218,7 +260,7 @@ object ModalSurfaceComposition:
       })
       .toList
       .map(message => textBox(message, rowRect(bounds, workflow.suggestions.take(4).size + 3, rowHeight)))
-    plan(bounds, filename :: path :: suggestions ++ footer)
+    plan(bounds, header :: filename :: path :: suggestions ++ footer)
 
   private def plan(bounds: LogicalPixelRect, boxes: List[SurfacePaintBox]): ResolvedSurfaceComposition =
     val clipped = boxes.flatMap(box => box.rect.intersection(bounds).map(rect => box.copy(rect = rect)))
@@ -236,8 +278,21 @@ object ModalSurfaceComposition:
       focusOrder = hits.map(_.focusId)
     )
 
-  private def textBox(text: String, rect: LogicalPixelRect, selected: Boolean = false): SurfacePaintBox =
-    SurfacePaintBox(SurfacePaintKind.Text, rect, text = Some(text), selected = selected)
+  private def textBox(
+    text: String,
+    rect: LogicalPixelRect,
+    selected: Boolean = false,
+    segments: List[OverlaySegment] = Nil,
+    layout: SurfacePaintLayout = SurfacePaintLayout.Plain
+  ): SurfacePaintBox =
+    SurfacePaintBox(
+      SurfacePaintKind.Text,
+      rect,
+      text = Some(text),
+      selected = selected,
+      segments = segments,
+      layout = layout
+    )
 
   private def inputBox(
     label: String,
@@ -245,7 +300,9 @@ object ModalSurfaceComposition:
     focusId: SurfaceFocusId,
     rect: LogicalPixelRect,
     selected: Boolean = true,
-    cursorAtEnd: Boolean = true
+    cursorAtEnd: Boolean = true,
+    segments: List[OverlaySegment] = Nil,
+    layout: SurfacePaintLayout = SurfacePaintLayout.Plain
   ): SurfacePaintBox =
     SurfacePaintBox(
       kind = SurfacePaintKind.TextInput,
@@ -254,7 +311,9 @@ object ModalSurfaceComposition:
       focusId = Some(focusId),
       semanticLabel = Some(label),
       selected = selected,
-      cursorOffset = Option.when(selected && cursorAtEnd)(label.length + 1 + value.length)
+      cursorOffset = Option.when(selected && cursorAtEnd)(label.length + 1 + value.length),
+      segments = if segments.nonEmpty then segments else List(OverlaySegment(label), OverlaySegment(value)),
+      layout = if segments.nonEmpty then layout else SurfacePaintLayout.Split
     )
 
   private def actionBox(

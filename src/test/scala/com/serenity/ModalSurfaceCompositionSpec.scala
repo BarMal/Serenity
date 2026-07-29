@@ -106,8 +106,15 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
     plan.hitRegions.map(_.semanticLabel) shouldBe List("Find")
     plan.paintBoxes.flatMap(_.text) should contain allOf ("Find needle", "1. 2:3", "2. 5:6", "3. 8:9")
+    plan.paintBoxes.flatMap(_.text) should contain("3 matches, 2/3 at 5:6")
     plan.paintBoxes.find(_.text.contains("2. 5:6")).exists(_.selected) shouldBe true
     plan.paintBoxes.foreach(box => plan.bounds.containsRect(box.rect) shouldBe true)
+  }
+
+  it should "compose a zero-match footer for a non-empty find query" in {
+    val plan = planFor(Modal.Find("missing", Nil, currentIndex = 0))
+
+    plan.paintBoxes.flatMap(_.text) should contain("0 matches")
   }
 
   it should "compose replace fields and actions with stable semantic identities" in {
@@ -131,6 +138,10 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     )
     plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("replace-all"))).exists(_.selected) shouldBe true
     plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("replace-selection"))).exists(_.selected) shouldBe true
+    plan.paintBoxes.find(_.semanticLabel.contains("Find")).exists(box => !box.selected && box.cursorOffset.isEmpty) shouldBe true
+    plan.paintBoxes
+      .find(_.semanticLabel.contains("Replace"))
+      .exists(box => box.selected && box.cursorOffset.contains("Replace after".length)) shouldBe true
     plan.paintBoxes.filter(_.actionId.nonEmpty).map(_.rect) shouldBe
       plan.hitRegions.filter(_.actionId.nonEmpty).map(_.rect)
   }
@@ -157,6 +168,10 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       "/tmp/project/notes.scala"
     )
     plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("file-suggestion-1"))).exists(_.selected) shouldBe true
+    plan.paintBoxes.flatMap(_.text) should contain allOf ("save-as", "Filename notes.scala", "Path /tmp/project")
+    plan.paintBoxes
+      .find(_.text.contains("Path /tmp/project"))
+      .map(_.segments.exists(_.tone == OverlayTone.Error)) shouldBe Some(false)
     plan.paintBoxes.filter(_.focusId.nonEmpty).map(_.rect) shouldBe plan.hitRegions.map(_.rect)
   }
 
