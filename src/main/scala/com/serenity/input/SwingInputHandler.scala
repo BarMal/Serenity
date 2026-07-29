@@ -1,10 +1,10 @@
 package com.serenity.input
 
 import java.awt.event.*
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.{ConcurrentLinkedDeque, Semaphore}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
@@ -16,7 +16,7 @@ import fs2.Stream
   * navigation/function keys and Ctrl+letter combinations. Mouse clicks are converted from pixel coords to cell coords
   * via CellMetrics.
   */
-class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
+class SwingInputHandler[F[_] : Sync, E <: Event](
     component: java.awt.Component,
     inputRouter: InputRouter[F, E],
     metrics: () => CellMetrics,
@@ -26,18 +26,49 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
     this(component, inputRouter, metrics, metrics)
 
-  private val infoQueue          = new LinkedBlockingQueue[Option[KeyStrokeInfo]]()
-  private val mouseQueue         = new LinkedBlockingQueue[Option[Event]]()
+  sealed private trait QueuedInput
+  private case class QueuedKey(info: KeyStrokeInfo) extends QueuedInput
+  private case class QueuedMouse(event: Event)      extends QueuedInput
+  private case object QueuedShutdown                extends QueuedInput
+
+  private val inputQueue         = new ConcurrentLinkedDeque[QueuedInput]()
+  private val inputAvailable     = new Semaphore(0)
+  private val inputQueueLock     = new AnyRef
   private val shutdownFlag       = new AtomicBoolean(false)
   private val pendingModifierTap = new AtomicReference[Option[(Int, Long, Boolean)]](None)
 
   private val doubleTapWindowMillis = 200L
 
   private def enqueueInput(info: KeyStrokeInfo): Unit =
-    if !shutdownFlag.get() then infoQueue.put(Some(info))
+    enqueue(QueuedKey(info))
 
   private def enqueueMouse(event: Event): Unit =
-    if !shutdownFlag.get() then mouseQueue.put(Some(event))
+    enqueue(QueuedMouse(event))
+
+  private def enqueue(input: QueuedInput): Unit =
+    if !shutdownFlag.get() then
+      inputQueueLock.synchronized {
+        if !shutdownFlag.get() then
+          val replaced = input match
+            case QueuedMouse(event: MouseMove) => replaceAdjacentMovement(event, isDrag = false)
+            case QueuedMouse(event: MouseDrag) => replaceAdjacentMovement(event, isDrag = true)
+            case _                             => false
+          if !replaced then
+            inputQueue.offerLast(input)
+            inputAvailable.release()
+      }
+
+  private def replaceAdjacentMovement(event: Event, isDrag: Boolean): Boolean =
+    Option(inputQueue.peekLast()) match
+      case Some(QueuedMouse(_: MouseMove)) if !isDrag =>
+        inputQueue.pollLast()
+        inputQueue.offerLast(QueuedMouse(event))
+        true
+      case Some(QueuedMouse(_: MouseDrag)) if isDrag =>
+        inputQueue.pollLast()
+        inputQueue.offerLast(QueuedMouse(event))
+        true
+      case _ => false
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
@@ -107,19 +138,30 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   )
 
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo] =
-    queueStream(infoQueue)
-
-  private def mouseStream: Stream[F, Event] =
-    queueStream(mouseQueue)
+    orderedInputStream.collect { case QueuedKey(info) => info }
 
   def eventStream: Stream[F, Event] =
-    inputRouter.eventStream(keyStrokeInfoStream).merge(mouseStream)
+    orderedInputStream.flatMap {
+      case QueuedKey(info)    => inputRouter.eventStream(Stream.emit(info))
+      case QueuedMouse(event) => Stream.emit(event)
+      case QueuedShutdown     => Stream.empty
+    }
 
-  private def queueStream[A](queue: LinkedBlockingQueue[Option[A]]): Stream[F, A] =
+  private def orderedInputStream: Stream[F, QueuedInput] =
     Stream.eval(Sync[F].delay(shutdownFlag.get())).flatMap {
       case true  => Stream.empty
-      case false => Stream.repeatEval(Sync[F].blocking(queue.take())).unNoneTerminate
+      case false => Stream.repeatEval(takeInput).takeWhile(_ != QueuedShutdown)
     }
+
+  private def takeInput: F[QueuedInput] =
+    Sync[F].map(
+      Sync[F].blocking {
+        inputAvailable.acquire()
+        inputQueueLock.synchronized {
+          inputQueue.pollFirst()
+        }
+      }
+    )(input => Option(input).getOrElse(QueuedShutdown))
 
   private def mouseButton(e: MouseEvent): MouseButton =
     e.getButton match
@@ -138,8 +180,10 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   def shutdown: F[Unit] =
     Sync[F].blocking {
       if shutdownFlag.compareAndSet(false, true) then
-        val _ = infoQueue.offer(None)
-        val _ = mouseQueue.offer(None)
+        inputQueueLock.synchronized {
+          inputQueue.offerLast(QueuedShutdown)
+          inputAvailable.release()
+        }
     }
 
   private def mods(e: KeyEvent): Set[Modifier] =
