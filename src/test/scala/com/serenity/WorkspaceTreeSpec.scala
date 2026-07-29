@@ -1,8 +1,16 @@
 package com.serenity
 
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, EditorPane, PaneId}
-import com.serenity.ui.layout.{Layout, PaneSplitDirection, SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.state.models.{
+  AppState,
+  EditorPane,
+  PaneId,
+  SurfaceContent,
+  SurfaceId,
+  SurfacePresentation,
+  UiSurface
+}
+import com.serenity.ui.layout.{Layout, PaneSplitDirection, PanelPosition, SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -70,6 +78,22 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
   it should "initialize the default app state with one explicit editor leaf" in {
     AppState.initial.layout.workspaceTree shouldBe Some(
       WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
+    )
+  }
+
+  it should "reconcile pinned surfaces added to an explicit default tree" in {
+    val state = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("surface-0"),
+          SurfaceContent.Outline(Nil, None),
+          SurfacePresentation.Pinned(PanelPosition.Left, 30)
+        )
+      )
+    )
+
+    state.validated.map(_.layout.workspaceTree.map(_.dockedSurfaceIds)) shouldBe Right(
+      Some(List(SurfaceId("surface-0")))
     )
   }
 end WorkspaceTreeSpec

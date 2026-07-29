@@ -549,7 +549,35 @@ case class AppState(
     errors.result()
 
   def validated: Either[List[String], AppState] =
-    if isValid then Right(this) else Left(validationErrors)
+    val reconciled = reconcileWorkspaceTree
+    if reconciled.isValid then Right(reconciled) else Left(reconciled.validationErrors)
+
+  private def reconcileWorkspaceTree: AppState =
+    layout.workspaceTree match
+      case None => this
+      case Some(tree) =>
+        val pinned = uiSurfaces.collect {
+          case UiSurface(id, _, SurfacePresentation.Pinned(position, _), _) => id -> position
+        }
+        val pinnedIds = pinned.map(_._1).toSet
+        val prunedTree = tree.dockedSurfaceIds
+          .filterNot(pinnedIds.contains)
+          .foldLeft(tree) {
+            case (currentTree, surfaceId) =>
+              currentTree.removeSurface(surfaceId).getOrElse(currentTree)
+          }
+        val reconciledTree = pinned.zipWithIndex.foldLeft(prunedTree) {
+          case (currentTree, ((surfaceId, position), index)) =>
+            if currentTree.dockedSurfaceIds.contains(surfaceId) then
+              currentTree
+                .moveSurface(surfaceId, position, WorkspaceNodeId(s"reconcile-dock-$index-${surfaceId.value}"))
+                .getOrElse(currentTree)
+            else
+              val splitId = WorkspaceNodeId(s"dock-${surfaceId.value}")
+              val leafId  = WorkspaceNodeId(s"dock-leaf-${surfaceId.value}")
+              currentTree.dock(surfaceId, position, splitId, leafId).getOrElse(currentTree)
+        }
+        copy(layout = layout.copy(workspaceTree = Some(reconciledTree), paneOrder = reconciledTree.paneIds))
 
 object AppState:
 
