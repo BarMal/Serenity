@@ -634,9 +634,9 @@ object SwingWindow:
       .flatMap(url => Option(ImageIO.read(url)))
       .toList
 
-  val DefaultMetrics: CellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
-  val BaseMinWidth: Int           = 400
-  val BaseMinHeight: Int          = 300
+  val DefaultMetrics: CellMetrics           = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
+  val BaseMinWidth: Int                     = 400
+  val BaseMinHeight: Int                    = 300
   private[serenity] val WindowTitle: String = "Serenity"
 
   private[serenity] def perPixelTranslucencySupported: Boolean =
