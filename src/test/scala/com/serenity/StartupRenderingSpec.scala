@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.Font
+import java.util.concurrent.atomic.AtomicInteger
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -22,6 +23,52 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
 
   behavior of "Startup State Rendering"
+
+  it should "avoid scene preparation for startup and cursor-overlay entry points" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+    yield
+      val sceneBuilds = new AtomicInteger(0)
+      val startupResult = Renderer.withSceneIfNeeded(
+        state, {
+          sceneBuilds.incrementAndGet()
+          throw new AssertionError("startup path must not build an authoritative scene")
+        }
+      )(_ => "startup")(_ => "editor")
+
+      startupResult shouldBe "startup"
+      sceneBuilds.get() shouldBe 0
+
+    program.unsafeRunSync()
+  }
+
+  it should "render the start page without editor content" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+    yield
+      val surface = new MockRenderSurface(100, 30)
+
+      Renderer.render(
+        state,
+        cursorVisible = true,
+        surface,
+        ViewportSize(100, 30)
+      )
+      surface.drawRunPxCalls.map(_.s) should contain(
+        state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page.title
+      )
+      surface.drawRunPxCalls.map(_.s) should not contain "Empty document — start typing"
+
+    program.unsafeRunSync()
+  }
 
   it should "render the dedicated start page vertically centered in the viewport" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
