@@ -4,7 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Dimension}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.accessibility.AccessibleContext
-import javax.swing.JComponent
+import javax.swing.{JComponent, JPanel}
 
 import com.serenity.animation.{WindowSitter, WindowSitterConfig}
 import com.serenity.config.WindowChromeMode
@@ -81,6 +81,21 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     val sitter = WindowSitter.fromConfig(WindowSitterConfig(enabled = false, frames = Vector("rest")))
 
     SwingWindow.WindowTitle shouldBe "Serenity"
+  }
+
+  it should "keep the decorative sitter title component accessible without naming the decoration" in {
+    val titleLabel = new SwingWindow.DecorativeTitleLabel("rest", initiallyVisible = true)
+    val titleBar   = new JPanel
+    titleBar.add(titleLabel)
+
+    val child = titleBar.getAccessibleContext.getAccessibleChild(0)
+    child.getAccessibleContext should not be null
+    child.getAccessibleContext.getAccessibleName shouldBe SwingWindow.WindowTitle
+
+    titleLabel.updateDecoration("active", visible = true)
+
+    child.getAccessibleContext should not be null
+    child.getAccessibleContext.getAccessibleName shouldBe SwingWindow.WindowTitle
   }
 
   it should "refresh the per-pixel corner mask when chrome metrics change" in {
