@@ -8,6 +8,9 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 
+import java.awt.Font
+import java.util.LinkedHashMap
+
 final private[manager] case class RopeIdentity private (value: Rope):
 
   override def equals(obj: Any): Boolean =
@@ -82,16 +85,36 @@ private[manager] object MouseTargetLayoutKey:
         else Nil
     )
 
-private[manager] case class MouseTargetCache(
-    layoutKey: MouseTargetLayoutKey,
-    scene: UiSceneSnapshot
-)
+/** The single owner of the prepared scene shared by rendering and mouse targeting. */
+private[serenity] object AuthoritativeUiScene:
 
-private[manager] object MouseTargetCache:
+  private case class SceneFontKey(family: String, style: Int, size: Float)
+  private case class SceneKey(layout: MouseTargetLayoutKey, paneFonts: List[(PaneId, SceneFontKey)])
 
-  def fromState(state: AppState, viewportSize: ViewportSize): MouseTargetCache =
-    val layoutKey = MouseTargetLayoutKey.from(state, viewportSize)
-    val scene = UiSceneSnapshot.publishedFor(state, viewportSize).getOrElse {
+  private val prepared = new LinkedHashMap[SceneKey, UiSceneSnapshot](16, 0.75f, true):
+    override def removeEldestEntry(
+      eldest: java.util.Map.Entry[SceneKey, UiSceneSnapshot]
+    ): Boolean =
+      size() > 64
+
+  def forState(
+    state: AppState,
+    viewportSize: ViewportSize,
+    codeFont: Font,
+    textFont: Font
+  ): UiSceneSnapshot = synchronized {
+    val paneFonts = state.layout.orderedPaneIds.flatMap { paneId =>
+      state.layout.editorPanes
+        .get(paneId)
+        .flatMap(_.bufferId)
+        .flatMap(state.buffers.get)
+        .map { buffer =>
+          val font = if buffer.usesTextFont then textFont else codeFont
+          paneId -> SceneFontKey(font.getFamily, font.getStyle, font.getSize2D)
+        }
+    }
+    val key = SceneKey(MouseTargetLayoutKey.from(state, viewportSize), paneFonts)
+    Option(prepared.get(key)).getOrElse {
       val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val base   = UiSceneSnapshot.from(state, layout, viewportSize)
       val snapshots = base.paneLayouts.flatMap {
@@ -101,12 +124,69 @@ private[manager] object MouseTargetCache:
             bufferId <- pane.bufferId
             buffer   <- state.buffers.get(bufferId)
           yield
-            val font  = FontLoader.previewFontForRole(state.config.fontConfig, buffer.typographyRole)
-            val width = paneLayout.contentRect.width * CellMetrics.fromFont(font).charWidth
-            paneId -> TextLayoutSnapshot.fromBuffer(buffer, width, font, wordWrapEnabled = state.config.wordWrapEnabled)
+            val font        = if buffer.usesTextFont then textFont else codeFont
+            val fontMetrics = CellMetrics.fromFont(font)
+            val width       = paneLayout.contentRect.width * fontMetrics.charWidth
+            val heightPx    = paneLayout.contentRect.height * fontMetrics.lineHeight
+            val baseViewport = LayoutEngine
+              .updateBufferViewportDimensions(buffer, paneLayout.contentRect, state.config.wordWrapEnabled)
+            val visibleColumns =
+              if state.config.wordWrapEnabled then baseViewport.visibleColumns
+              else
+                val averageAdvance = math.max(
+                  1.0f,
+                  TextLayoutSnapshot
+                    .caretXsForText(
+                      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+                      font,
+                      TextLayoutSnapshot.defaultFontRenderContext()
+                    )
+                    .lastOption
+                    .getOrElse(0.0f) / 62.0f
+                )
+                math
+                  .ceil(width.toDouble / averageAdvance.toDouble)
+                  .toInt
+                  .max(baseViewport.visibleColumns)
+                  .max(paneLayout.contentRect.width + 64)
+            val cursorColumn = buffer.cursors.headOption.map(_.column).getOrElse(baseViewport.leftColumn)
+            val leftColumn =
+              if state.config.wordWrapEnabled then 0
+              else baseViewport.leftColumn.max(0).max(cursorColumn - visibleColumns + 1)
+            val viewport = baseViewport.copy(
+              leftColumn = leftColumn,
+              visibleColumns = visibleColumns,
+              visibleLines = math.max(1, heightPx / math.max(1, fontMetrics.lineHeight))
+            )
+            paneId -> TextLayoutSnapshot.fromBuffer(
+              buffer.copy(viewport = viewport),
+              width,
+              font,
+              wordWrapEnabled = state.config.wordWrapEnabled
+            )
       }
-      val prepared = base.withTextSnapshots(snapshots)
-      UiSceneSnapshot.publish(state, viewportSize, prepared)
-      prepared
+      val scene = base.withTextSnapshots(snapshots)
+      prepared.put(key, scene)
+      scene
     }
+  }
+
+  def forState(state: AppState, viewportSize: ViewportSize): UiSceneSnapshot =
+    forState(
+      state,
+      viewportSize,
+      FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Code),
+      FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
+    )
+
+private[manager] case class MouseTargetCache(
+    layoutKey: MouseTargetLayoutKey,
+    scene: UiSceneSnapshot
+)
+
+private[manager] object MouseTargetCache:
+
+  def fromState(state: AppState, viewportSize: ViewportSize): MouseTargetCache =
+    val layoutKey = MouseTargetLayoutKey.from(state, viewportSize)
+    val scene     = AuthoritativeUiScene.forState(state, viewportSize)
     MouseTargetCache(layoutKey, scene)

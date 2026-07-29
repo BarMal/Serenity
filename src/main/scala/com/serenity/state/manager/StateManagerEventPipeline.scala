@@ -1959,8 +1959,8 @@ final private[manager] class StateManagerEventPipeline(
     val key = MouseTargetLayoutKey.from(state, viewportSize)
     mouseTargetCacheRef.modify {
       case Some(cache) if cache.layoutKey == key =>
-        val scene = UiSceneSnapshot.publishedFor(state, viewportSize)
-        val next  = scene.fold(cache)(published => cache.copy(scene = published))
+        val scene = AuthoritativeUiScene.forState(state, viewportSize)
+        val next  = if cache.scene eq scene then cache else cache.copy(scene = scene)
         Some(next) -> next
       case _ =>
         val next = MouseTargetCache.fromState(state, viewportSize)

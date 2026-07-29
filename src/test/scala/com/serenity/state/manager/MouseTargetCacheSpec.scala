@@ -6,7 +6,7 @@ import com.serenity.config.{AppConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, UiSceneSnapshot, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -80,8 +80,6 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val size   = ViewportSize(80, 24)
     val scene  = MouseTargetCache.fromState(state, size).scene
 
-    UiSceneSnapshot.publish(moved, size, scene)
-
     MouseTargetCache.fromState(moved, size).scene should be theSameInstanceAs scene
   }
 
@@ -89,7 +87,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val state   = stateWith(Buffer.fromString(bufferId, (1 to 20).map(_ => "proportional").mkString(" ")))
     val size    = ViewportSize(80, 24)
     val mono    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val text    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+    val text    = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
     val surface = new com.serenity.MockRenderSurface(size.width, size.height)
 
     Renderer.render(state, cursorVisible = true, surface, size, mono, text, CellMetrics.fromFont(mono), None)
@@ -101,6 +99,53 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     snapshot.isProportional shouldBe true
     snapshot.visualLines.size should be > 1
     cache.scene should be theSameInstanceAs MouseTargetCache.fromState(state, size).scene
+  }
+
+  it should "give rendering the scene prepared by mouse targeting first" in {
+    val state    = stateWith(Buffer.fromString(bufferId, "alpha beta"))
+    val size     = ViewportSize(80, 24)
+    val scene    = MouseTargetCache.fromState(state, size).scene
+    val codeFont = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Code)
+    val textFont = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
+    val surface  = new com.serenity.MockRenderSurface(size.width, size.height)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      size,
+      codeFont,
+      textFont,
+      CellMetrics.fromFont(codeFont),
+      None
+    )
+
+    MouseTargetCache.fromState(state, size).scene should be theSameInstanceAs scene
+  }
+
+  it should "share a scene when rendering uses an effective theme copy" in {
+    val state = stateWith(Buffer.fromString(bufferId, "alpha beta")).copy(
+      themeTransition = Some(ThemeTransition(com.serenity.ui.theme.Theme.light, currentStep = 1, totalSteps = 4))
+    )
+    val size     = ViewportSize(80, 24)
+    val codeFont = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Code)
+    val textFont = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
+    val surface  = new com.serenity.MockRenderSurface(size.width, size.height)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      size,
+      codeFont,
+      textFont,
+      CellMetrics.fromFont(codeFont),
+      None
+    )
+    val renderedScene = MouseTargetCache.fromState(state, size).scene
+
+    MouseTargetCache.fromState(state.copy(theme = com.serenity.ui.theme.Theme.dark), size).scene should
+      be theSameInstanceAs renderedScene
   }
 
   it should "change when layout-affecting content changes with line numbers enabled" in {

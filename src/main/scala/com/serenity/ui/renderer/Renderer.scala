@@ -7,6 +7,7 @@ import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
+import com.serenity.state.manager.AuthoritativeUiScene
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.*
@@ -38,7 +39,6 @@ case class RenderContext(
 object Renderer:
 
   private case class PreparedScene(
-      state: AppState,
       scene: UiSceneSnapshot,
       renderPlan: EditorPaneRenderPlan,
       codeFont: Font,
@@ -50,7 +50,7 @@ object Renderer:
   ):
 
     def matches(
-      candidate: AppState,
+      candidateScene: UiSceneSnapshot,
       candidateCodeFont: Font,
       candidateTextFont: Font,
       candidateUiFont: Font,
@@ -58,7 +58,7 @@ object Renderer:
       candidateUiMetrics: CellMetrics,
       candidateViewportSize: ViewportSize
     ): Boolean =
-      (state eq candidate) &&
+      (scene eq candidateScene) &&
         codeFont == candidateCodeFont &&
         textFont == candidateTextFont &&
         uiFont == candidateUiFont &&
@@ -179,10 +179,11 @@ object Renderer:
     swingWin.onCursorOverlayReady { image =>
       val surface =
         Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
+      val authoritativeScene = AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
       val prepared = preparedSceneRef
         .get()
         .filter(
-          _.matches(state0, codeFont, textFont, uiFont, swingWin.metrics, uiMetrics, viewportSize)
+          _.matches(authoritativeScene, codeFont, textFont, uiFont, swingWin.metrics, uiMetrics, viewportSize)
         )
       val (layout, renderPlan) = prepared match
         case Some(value) => value.scene.calculatedLayout -> value.renderPlan
@@ -363,8 +364,7 @@ object Renderer:
         case _                              => None
     } match
       case Some(page) =>
-        val scene = UiSceneSnapshot.from(state, layout, viewportSize)
-        UiSceneSnapshot.publish(state, viewportSize, scene)
+        val scene = AuthoritativeUiScene.forState(state, viewportSize, codeFont, textFont)
         renderStartPage(page, surface, viewportSize, state.theme, uiFont, cellMetrics, uiMetrics)
         val floatContext =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
@@ -417,13 +417,10 @@ object Renderer:
   ): PreparedScene =
     val context =
       RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
-    val scene          = UiSceneSnapshot.from(state, layout, viewportSize)
-    val renderPlan     = prepareEditorPaneRenderPlan(state, context, scene)
-    val finalizedScene = scene.withTextSnapshots(renderPlan.snapshots)
-    UiSceneSnapshot.publish(state, viewportSize, finalizedScene)
+    val scene      = AuthoritativeUiScene.forState(state, viewportSize, codeFont, textFont)
+    val renderPlan = prepareEditorPaneRenderPlan(state, context, scene)
     PreparedScene(
-      state,
-      finalizedScene,
+      scene,
       renderPlan,
       codeFont,
       textFont,
