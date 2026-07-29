@@ -104,12 +104,36 @@ object LayoutEngine:
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
     val uiElementGap   = math.ceil(math.max(0.0, state.config.uiElementGap)).toInt
-    val pinnedPanelLayout = calculatePinnedPanelLayout(
-      state.pinnedSurfaces,
-      viewportSize.width,
-      contentHeight,
-      uiElementGap
-    )
+    val textAreaInsets =
+      if spacerPercentage == DefaultSpacerPercentage then state.config.textAreaInsets.normalized
+      else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
+    val lineNumberWidth =
+      if state.config.showLineNumbers then calculateLineNumberWidth(state)
+      else 0
+    val horizontalTextFraction = (1.0 - textAreaInsets.left - textAreaInsets.right).max(0.01)
+    val minimumEditorWorkspaceWidth =
+      math.ceil((state.config.minimumPaneWidth.max(1) + lineNumberWidth) / horizontalTextFraction).toInt
+    val pinnedPanelLayout =
+      state.layout.workspaceTree
+        .filter(_.dockedSurfaceIds.nonEmpty)
+        .map(
+          calculateDockedPanelLayout(
+            _,
+            state.pinnedSurfaces,
+            LayoutRect(0, 0, viewportSize.width, contentHeight),
+            minimumEditorWorkspaceWidth,
+            MinimumVerticalPaneHeight,
+            uiElementGap
+          )
+        )
+        .getOrElse(
+          calculatePinnedPanelLayout(
+            state.pinnedSurfaces,
+            viewportSize.width,
+            contentHeight,
+            uiElementGap
+          )
+        )
     val pinnedPanelRects = pinnedPanelLayout.panelRects
 
     val topPinnedHeight =
@@ -133,20 +157,12 @@ object LayoutEngine:
     val workspaceHeight =
       math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight - topGap - bottomGap)
 
-    val textAreaInsets =
-      if spacerPercentage == DefaultSpacerPercentage then state.config.textAreaInsets.normalized
-      else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
     val editorPaneHeaderHeight = paneHeaderHeight(state)
     val leftSpacerWidth        = (workspaceWidth * textAreaInsets.left).toInt
     val rightSpacerWidth       = (workspaceWidth * textAreaInsets.right).toInt
     val contentAreaHeight      = math.max(1, workspaceHeight - editorPaneHeaderHeight)
     val topSpacerHeight        = (contentAreaHeight * textAreaInsets.top).toInt
     val bottomSpacerHeight     = (contentAreaHeight * textAreaInsets.bottom).toInt
-
-    // Calculate space needed for UI elements
-    val lineNumberWidth =
-      if state.config.showLineNumbers then calculateLineNumberWidth(state)
-      else 0
 
     // Adjust editor area to accommodate UI elements
     val availableWidth  = math.max(1, workspaceWidth - leftSpacerWidth - rightSpacerWidth - lineNumberWidth)
@@ -266,6 +282,150 @@ object LayoutEngine:
   private case class PinnedAxisSizes(start: Int, end: Int)
 
   final case class PinnedPanelDragResize(position: PanelPosition, size: Int)
+
+  private def calculateDockedPanelLayout(
+    tree: WorkspaceTree,
+    panels: List[UiSurface],
+    workspaceRect: LayoutRect,
+    minimumEditorWidth: Int,
+    minimumEditorHeight: Int,
+    uiElementGap: Int
+  ): PinnedPanelLayout =
+    val requestedSizes = panels.flatMap { surface =>
+      surface.presentation match
+        case SurfacePresentation.Pinned(_, size) => Some(surface.id -> size.max(1))
+        case _                                   => None
+    }.toMap
+    val nodeRects = calculateWorkspaceNodeRects(
+      tree.root,
+      workspaceRect,
+      requestedSizes,
+      minimumEditorWidth,
+      minimumEditorHeight,
+      uiElementGap
+    )
+    val surfaceRects = tree.dockedSurfaceIds.flatMap { surfaceId =>
+      tree.nodeIdForSurface(surfaceId).flatMap(nodeRects.get).map(surfaceId -> _)
+    }.toMap
+    val panelRects = panels
+      .flatMap { surface =>
+        surface.presentation match
+          case SurfacePresentation.Pinned(position, _) => surfaceRects.get(surface.id).map(position -> _)
+          case _                                       => None
+      }
+      .groupMap(_._1)(_._2)
+      .view
+      .mapValues(rects => rects.reduce(unionRects))
+      .toMap
+    PinnedPanelLayout(panelRects, surfaceRects)
+
+  private def calculateWorkspaceNodeRects(
+    root: WorkspaceNode,
+    workspaceRect: LayoutRect,
+    requestedSizes: Map[SurfaceId, Int],
+    minimumEditorWidth: Int,
+    minimumEditorHeight: Int,
+    uiElementGap: Int
+  ): Map[WorkspaceNodeId, LayoutRect] =
+    def requestedDockExtent(node: WorkspaceNode): Option[Int] =
+      node.dockedSurfaceIds.flatMap(requestedSizes.get).maxOption
+
+    def separatesDockFromEditor(first: WorkspaceNode, second: WorkspaceNode): Boolean =
+      (first.paneIds.isEmpty && second.paneIds.nonEmpty) ||
+        (second.paneIds.isEmpty && first.paneIds.nonEmpty)
+
+    def minimumWidth(node: WorkspaceNode): Int =
+      node match
+        case _: WorkspaceNode.Leaf          => minimumEditorWidth
+        case _: WorkspaceNode.DockedSurface => 1
+        case split: WorkspaceNode.Split =>
+          split.splitAxis match
+            case SplitAxis.Horizontal =>
+              minimumWidth(split.first) + minimumWidth(split.second) +
+                (if separatesDockFromEditor(split.first, split.second) then uiElementGap else 0)
+            case SplitAxis.Vertical =>
+              minimumWidth(split.first).max(minimumWidth(split.second))
+
+    def minimumHeight(node: WorkspaceNode): Int =
+      node match
+        case _: WorkspaceNode.Leaf          => minimumEditorHeight
+        case _: WorkspaceNode.DockedSurface => 1
+        case split: WorkspaceNode.Split =>
+          split.splitAxis match
+            case SplitAxis.Horizontal =>
+              minimumHeight(split.first).max(minimumHeight(split.second))
+            case SplitAxis.Vertical =>
+              minimumHeight(split.first) + minimumHeight(split.second) +
+                (if separatesDockFromEditor(split.first, split.second) then uiElementGap else 0)
+
+    def childMinimums(split: WorkspaceNode.Split): (Int, Int) =
+      val (firstMinimum, secondMinimum) =
+        split.splitAxis match
+          case SplitAxis.Horizontal => minimumWidth(split.first)  -> minimumWidth(split.second)
+          case SplitAxis.Vertical   => minimumHeight(split.first) -> minimumHeight(split.second)
+      if !separatesDockFromEditor(split.first, split.second) then firstMinimum -> secondMinimum
+      else if split.first.paneIds.nonEmpty then (firstMinimum + uiElementGap) -> secondMinimum
+      else firstMinimum                                                       -> (secondMinimum + uiElementGap)
+
+    def recurse(node: WorkspaceNode, rect: LayoutRect): Map[WorkspaceNodeId, LayoutRect] =
+      node match
+        case leaf: WorkspaceNode.Leaf =>
+          Map(leaf.id -> rect)
+        case docked: WorkspaceNode.DockedSurface =>
+          Map(docked.id -> rect)
+        case split: WorkspaceNode.Split =>
+          val total =
+            split.splitAxis match
+              case SplitAxis.Horizontal => rect.width
+              case SplitAxis.Vertical   => rect.height
+          val requestedExtent =
+            if split.first.paneIds.isEmpty && split.second.paneIds.nonEmpty then
+              requestedDockExtent(split.first).getOrElse(splitWorkspaceExtent(total, split.ratio))
+            else if split.second.paneIds.isEmpty && split.first.paneIds.nonEmpty then
+              requestedDockExtent(split.second)
+                .map(size => total - size)
+                .getOrElse(splitWorkspaceExtent(total, split.ratio))
+            else splitWorkspaceExtent(total, split.ratio)
+          val (minimumFirst, minimumSecond) = childMinimums(split)
+          val extent                        = clampWorkspaceExtent(total, requestedExtent, minimumFirst, minimumSecond)
+          val (firstRect, secondRect) =
+            split.splitAxis match
+              case SplitAxis.Horizontal =>
+                (
+                  rect.copy(width = extent),
+                  LayoutRect(rect.x + extent, rect.y, rect.width - extent, rect.height)
+                )
+              case SplitAxis.Vertical =>
+                (
+                  rect.copy(height = extent),
+                  LayoutRect(rect.x, rect.y + extent, rect.width, rect.height - extent)
+                )
+          Map(split.id -> rect) ++ recurse(split.first, firstRect) ++ recurse(split.second, secondRect)
+    recurse(root, workspaceRect)
+
+  private def splitWorkspaceExtent(total: Int, ratio: Double): Int =
+    if total <= 1 then total
+    else math.max(1, math.min(total - 1, (total * ratio).toInt))
+
+  private def clampWorkspaceExtent(
+    total: Int,
+    requested: Int,
+    minimumFirst: Int,
+    minimumSecond: Int
+  ): Int =
+    if total <= 1 then total
+    else
+      val canRespectMinimums = minimumFirst + minimumSecond <= total
+      val lower              = if canRespectMinimums then minimumFirst else 1
+      val upper              = if canRespectMinimums then total - minimumSecond else total - 1
+      requested.max(lower).min(upper)
+
+  private def unionRects(first: LayoutRect, second: LayoutRect): LayoutRect =
+    val x      = first.x.min(second.x)
+    val y      = first.y.min(second.y)
+    val right  = first.right.max(second.right)
+    val bottom = first.bottom.max(second.bottom)
+    LayoutRect(x, y, right - x, bottom - y)
 
   def pinnedPanelResizeFromDrag(
     state: AppState,
@@ -1154,7 +1314,8 @@ object LayoutEngine:
   ): Map[PaneId, LayoutRect] =
     def minimumWidth(node: WorkspaceNode): Int =
       node match
-        case WorkspaceNode.Leaf(_, _) => minWidth.max(1)
+        case WorkspaceNode.Leaf(_, _)             => minWidth.max(1)
+        case WorkspaceNode.DockedSurface(_, _, _) => 1
         case WorkspaceNode.Split(_, SplitAxis.Horizontal, _, first, second) =>
           minimumWidth(first) + minimumWidth(second)
         case WorkspaceNode.Split(_, SplitAxis.Vertical, _, first, second) =>
@@ -1162,7 +1323,8 @@ object LayoutEngine:
 
     def minimumHeight(node: WorkspaceNode): Int =
       node match
-        case WorkspaceNode.Leaf(_, _) => MinimumVerticalPaneHeight
+        case WorkspaceNode.Leaf(_, _)             => MinimumVerticalPaneHeight
+        case WorkspaceNode.DockedSurface(_, _, _) => 1
         case WorkspaceNode.Split(_, SplitAxis.Horizontal, _, first, second) =>
           minimumHeight(first).max(minimumHeight(second))
         case WorkspaceNode.Split(_, SplitAxis.Vertical, _, first, second) =>
@@ -1178,7 +1340,8 @@ object LayoutEngine:
 
     def recurse(node: WorkspaceNode, rect: LayoutRect): Map[PaneId, LayoutRect] =
       node match
-        case WorkspaceNode.Leaf(_, paneId) => Map(paneId -> rect)
+        case WorkspaceNode.Leaf(_, paneId)        => Map(paneId -> rect)
+        case WorkspaceNode.DockedSurface(_, _, _) => Map.empty
         case WorkspaceNode.Split(_, SplitAxis.Horizontal, ratio, first, second) =>
           val firstWidth = splitExtent(rect.width, ratio, minimumWidth(first), minimumWidth(second))
           recurse(first, rect.copy(width = firstWidth)) ++
@@ -1188,7 +1351,7 @@ object LayoutEngine:
           recurse(first, rect.copy(height = firstHeight)) ++
             recurse(second, LayoutRect(rect.x, rect.y + firstHeight, rect.width, rect.height - firstHeight))
 
-    recurse(tree.root, editorRect)
+    tree.editorRoot.map(recurse(_, editorRect)).getOrElse(Map.empty)
 
   private def editorPaneLayoutFor(
     paneId: PaneId,

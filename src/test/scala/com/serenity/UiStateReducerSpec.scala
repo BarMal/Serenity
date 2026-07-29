@@ -121,16 +121,19 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     val expanded = PanelStateReducer.expand(PanelPosition.Right, pinned).state
 
     expanded.surfaceById(panelId).map(_.presentation) shouldBe Some(
-      SurfacePresentation.Expanded(PanelPosition.Right, 28)
+      SurfacePresentation.Pinned(PanelPosition.Right, 28)
     )
     expanded.focus shouldBe Focus.Surface(panelId)
-    expanded.pinnedSurfaces shouldBe empty
+    expanded.pinnedSurfaces.map(_.id) shouldBe List(panelId)
+    expanded.layout.maximizedWorkspaceNodeId shouldBe
+      expanded.layout.workspaceTree.flatMap(_.nodeIdForSurface(panelId))
 
     val collapsed = PanelStateReducer.collapseExpandedPanel(expanded).state
 
     collapsed.surfaceById(panelId).map(_.presentation) shouldBe Some(
       SurfacePresentation.Pinned(PanelPosition.Right, 28)
     )
+    collapsed.layout.maximizedWorkspaceNodeId shouldBe None
     collapsed.focus shouldBe Focus.Surface(panelId)
   }
 

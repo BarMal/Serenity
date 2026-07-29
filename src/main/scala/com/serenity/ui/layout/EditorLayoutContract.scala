@@ -67,16 +67,16 @@ case class EditorLayoutContract(
     workspace.lineNumberRowSlots(itemCount)
 
   def panelRect(surfaceId: SurfaceId): Option[LayoutRect] =
-    pinnedSurfaceRects.get(surfaceId).orElse(expandedSurfaceRects.get(surfaceId))
+    expandedSurfaceRects.get(surfaceId).orElse(pinnedSurfaceRects.get(surfaceId))
 
   def panelTitleRect(surfaceId: SurfaceId): Option[LayoutRect] =
-    pinnedSurfaceTitleRects.get(surfaceId).orElse(expandedSurfaceTitleRects.get(surfaceId))
+    expandedSurfaceTitleRects.get(surfaceId).orElse(pinnedSurfaceTitleRects.get(surfaceId))
 
   def panelContentRect(surfaceId: SurfaceId): Option[LayoutRect] =
-    pinnedSurfaceContentRects.get(surfaceId).orElse(expandedSurfaceContentRects.get(surfaceId))
+    expandedSurfaceContentRects.get(surfaceId).orElse(pinnedSurfaceContentRects.get(surfaceId))
 
   def panelRowSlots(surfaceId: SurfaceId): List[SurfaceContentRowSlot] =
-    pinnedSurfaceRowSlots.get(surfaceId).orElse(expandedSurfaceRowSlots.get(surfaceId)).getOrElse(Nil)
+    expandedSurfaceRowSlots.get(surfaceId).orElse(pinnedSurfaceRowSlots.get(surfaceId)).getOrElse(Nil)
 
   def overlayRect(surfaceId: SurfaceId): Option[LayoutRect] =
     floatingOverlayRects.collectFirst { case (`surfaceId`, rect) => rect }
@@ -378,9 +378,13 @@ object EditorLayoutContract:
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
     }).flatMap { surface =>
-      panelRectFor(surface, calculatedLayout).map(rect => surface.id -> pinnedGeometry(surface, rect, state))
+      val panelRect =
+        if state.expandedPanelSurface.exists(_.id == surface.id) then calculatedLayout.expandedPanelRect
+        else panelRectFor(surface, calculatedLayout)
+      panelRect.map(rect => surface.id -> pinnedGeometry(surface, rect, state))
     }.toMap
-    val pinnedSurfaceIds = calculatedLayout.pinnedSurfaceRects.keySet
+    val maximizedSurfaceIds = state.expandedPanelSurface.toSet.map(_.id)
+    val pinnedSurfaceIds    = calculatedLayout.pinnedSurfaceRects.keySet -- maximizedSurfaceIds
     val pinnedSurfaceTitleRects = pinnedSurfaceIds.toList
       .flatMap(surfaceId => panelGeometryById.get(surfaceId).map(geometry => surfaceId -> geometry.titleRect))
       .toMap

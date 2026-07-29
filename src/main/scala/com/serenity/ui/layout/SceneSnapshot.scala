@@ -173,9 +173,10 @@ object UiSceneSnapshot:
     }
     (pinned ++ expanded).zipWithIndex.flatMap {
       case (surface, offset) =>
-        panelRect(surface, calculatedLayout).map { frame =>
-          surfaceNode(surface.id, SceneLayer.Workspace, frame, initialZIndex + offset)
-        }
+        val frame =
+          if state.expandedPanelSurface.exists(_.id == surface.id) then calculatedLayout.expandedPanelRect
+          else panelRect(surface, calculatedLayout)
+        frame.map(frame => surfaceNode(surface.id, SceneLayer.Workspace, frame, initialZIndex + offset))
     }
 
   private def floatingSurfaceNodes(

@@ -29,6 +29,26 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
       focus = Focus.EditorPane(paneId)
     )
 
+  private def dockedState(panels: List[UiSurface]): AppState =
+    val tree = panels.foldLeft(baseState.layout.effectiveWorkspaceTree.getOrElse(fail("expected editor tree"))) {
+      (workspaceTree, panel) =>
+        val position = panel.presentation match
+          case SurfacePresentation.Pinned(value, _) => value
+          case other                                => fail(s"expected pinned panel, got $other")
+        workspaceTree
+          .dock(
+            panel.id,
+            position,
+            WorkspaceNodeId(s"split-${panel.id.value}"),
+            WorkspaceNodeId(s"dock-${panel.id.value}")
+          )
+          .getOrElse(fail(s"expected ${panel.id.value} to dock"))
+    }
+    baseState.copy(
+      uiSurfaces = panels,
+      layout = baseState.layout.copy(workspaceTree = Some(tree))
+    )
+
   "LayoutEngine.calculateLayout" should "allocate pinned panel rects and shrink the editor workspace around them" in {
     val state = baseState.copy(
       uiSurfaces = List(
@@ -127,5 +147,89 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedSurfaceRects(SurfaceId("bottom-one")) shouldBe LayoutRect(0, 16, 40, 8)
     layout.pinnedSurfaceRects(SurfaceId("bottom-two")) shouldBe LayoutRect(40, 16, 40, 8)
     layout.editorPanelRect.bottom shouldBe 16
+  }
+
+  it should "derive ordered same-edge panel rectangles from docked workspace leaves" in {
+    val first = UiSurface.fromPanelContent(SurfaceId("right-one"), PanelContent.Outline(Nil), PanelPosition.Right, 25)
+    val second =
+      UiSurface.fromPanelContent(SurfaceId("right-two"), PanelContent.Diagnostics(Nil), PanelPosition.Right, 25)
+    val tree = baseState.layout.effectiveWorkspaceTree
+      .flatMap(
+        _.dock(first.id, PanelPosition.Right, WorkspaceNodeId("right-split"), WorkspaceNodeId("right-one"))
+      )
+      .flatMap(
+        _.dock(second.id, PanelPosition.Right, WorkspaceNodeId("right-stack"), WorkspaceNodeId("right-two"))
+      )
+      .getOrElse(fail("expected docked workspace"))
+    val state = baseState.copy(
+      uiSurfaces = List(first, second),
+      layout = baseState.layout.copy(workspaceTree = Some(tree))
+    )
+
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 31))
+
+    layout.pinnedSurfaceRects(first.id) shouldBe LayoutRect(75, 0, 25, 15)
+    layout.pinnedSurfaceRects(second.id) shouldBe LayoutRect(75, 15, 25, 15)
+    layout.pinnedPanelRects(PanelPosition.Right) shouldBe LayoutRect(75, 0, 25, 30)
+    layout.editorPanelRect.right shouldBe 75
+  }
+
+  it should "retain the configured editor minimum beside oversized panels on every edge" in {
+    val viewport = ViewportSize(100, 31)
+    List(
+      PanelPosition.Left,
+      PanelPosition.Right,
+      PanelPosition.Top,
+      PanelPosition.Bottom
+    ).foreach { position =>
+      val panel = UiSurface.fromPanelContent(
+        SurfaceId(s"oversized-$position"),
+        PanelContent.Diagnostics(Nil),
+        position,
+        1000
+      )
+
+      val layout = LayoutEngine.calculateLayout(dockedState(List(panel)), viewport)
+
+      position match
+        case PanelPosition.Left | PanelPosition.Right =>
+          layout.editorPanelRect.width should be >= baseState.config.minimumPaneWidth
+        case PanelPosition.Top | PanelPosition.Bottom =>
+          layout.editorPanelRect.height should be >= 5
+    }
+  }
+
+  it should "retain the editor minimum between competing oversized opposite-edge panels" in {
+    val panels = List(
+      UiSurface.fromPanelContent(
+        SurfaceId("oversized-left"),
+        PanelContent.Outline(Nil),
+        PanelPosition.Left,
+        1000
+      ),
+      UiSurface.fromPanelContent(
+        SurfaceId("oversized-right"),
+        PanelContent.Diagnostics(Nil),
+        PanelPosition.Right,
+        1000
+      ),
+      UiSurface.fromPanelContent(
+        SurfaceId("oversized-top"),
+        PanelContent.Terminal("", 0),
+        PanelPosition.Top,
+        1000
+      ),
+      UiSurface.fromPanelContent(
+        SurfaceId("oversized-bottom"),
+        PanelContent.Diagnostics(Nil),
+        PanelPosition.Bottom,
+        1000
+      )
+    )
+
+    val layout = LayoutEngine.calculateLayout(dockedState(panels), ViewportSize(100, 31))
+
+    layout.editorPanelRect.width should be >= baseState.config.minimumPaneWidth
+    layout.editorPanelRect.height should be >= 5
   }
 end PinnedPanelLayoutSpec
