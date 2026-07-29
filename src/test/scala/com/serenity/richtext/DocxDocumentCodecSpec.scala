@@ -147,6 +147,36 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
     error.getMessage should include("DOCX document could not be decoded")
   }
 
+  it should "reject DOCX XML with external entities" in {
+    val xml =
+      """<?xml version="1.0" encoding="UTF-8"?>
+        |<!DOCTYPE w:document [<!ENTITY external SYSTEM "file:///serenity-should-not-be-read">]>
+        |<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        |  <w:body><w:p><w:r><w:t>&external;</w:t></w:r></w:p></w:body>
+        |</w:document>""".stripMargin
+
+    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes(xml))
+
+    error.getMessage should include("DOCX document could not be decoded")
+  }
+
+  it should "reject DOCX XML with entity expansion payloads" in {
+    val xml =
+      """<?xml version="1.0" encoding="UTF-8"?>
+        |<!DOCTYPE w:document [
+        |  <!ENTITY a "0123456789">
+        |  <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">
+        |  <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">
+        |]>
+        |<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        |  <w:body><w:p><w:r><w:t>&c;</w:t></w:r></w:p></w:body>
+        |</w:document>""".stripMargin
+
+    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes(xml))
+
+    error.getMessage should include("DOCX document could not be decoded")
+  }
+
   private def docxBytes(documentXml: String): Array[Byte] =
     docxRawBytes("word/document.xml", documentXml.getBytes(StandardCharsets.UTF_8))
 

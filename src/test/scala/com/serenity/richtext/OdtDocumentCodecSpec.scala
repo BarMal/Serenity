@@ -185,6 +185,40 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
     error.getMessage should include("ODT document could not be decoded")
   }
 
+  it should "reject ODT XML with external entities" in {
+    val xml =
+      """<?xml version="1.0" encoding="UTF-8"?>
+        |<!DOCTYPE office:document-content [<!ENTITY external SYSTEM "file:///serenity-should-not-be-read">]>
+        |<office:document-content
+        |    xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        |    xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+        |  <office:body><office:text><text:p>&external;</text:p></office:text></office:body>
+        |</office:document-content>""".stripMargin
+
+    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes(xml))
+
+    error.getMessage should include("ODT document could not be decoded")
+  }
+
+  it should "reject ODT XML with entity expansion payloads" in {
+    val xml =
+      """<?xml version="1.0" encoding="UTF-8"?>
+        |<!DOCTYPE office:document-content [
+        |  <!ENTITY a "0123456789">
+        |  <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">
+        |  <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">
+        |]>
+        |<office:document-content
+        |    xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        |    xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
+        |  <office:body><office:text><text:p>&c;</text:p></office:text></office:body>
+        |</office:document-content>""".stripMargin
+
+    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes(xml))
+
+    error.getMessage should include("ODT document could not be decoded")
+  }
+
   private def odtBytes(contentXml: String): Array[Byte] =
     odtRawBytes("content.xml", contentXml.getBytes(StandardCharsets.UTF_8))
 

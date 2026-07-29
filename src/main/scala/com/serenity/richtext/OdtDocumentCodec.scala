@@ -1,11 +1,9 @@
 package com.serenity.richtext
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.util.zip.{ZipEntry, ZipOutputStream}
-import javax.xml.parsers.DocumentBuilderFactory
-
 import scala.util.control.NonFatal
 
 import cats.effect.IO
@@ -68,24 +66,7 @@ object OdtDocumentCodec:
     output.toByteArray
 
   private def parseXml(bytes: Array[Byte]): XmlDocument =
-    val factory = DocumentBuilderFactory.newInstance()
-    factory.setNamespaceAware(true)
-    disableExternalEntities(factory)
-    val input = ByteArrayInputStream(bytes)
-    try
-      val builder = factory.newDocumentBuilder()
-      builder.setErrorHandler(RichTextArchive.SilentXmlErrorHandler)
-      builder.parse(input)
-    finally input.close()
-
-  private def disableExternalEntities(factory: DocumentBuilderFactory): Unit =
-    factory.setXIncludeAware(false)
-    factory.setExpandEntityReferences(false)
-    List(
-      "http://apache.org/xml/features/disallow-doctype-decl"    -> true,
-      "http://xml.org/sax/features/external-general-entities"   -> false,
-      "http://xml.org/sax/features/external-parameter-entities" -> false
-    ).foreach((feature, enabled) => scala.util.Try(factory.setFeature(feature, enabled)))
+    RichTextXmlParser.parse(bytes)
 
   private def stylesFromDocument(document: XmlDocument): OdtStyles =
     val styleElements = elements(document.getElementsByTagNameNS(StyleNs, "style"))
