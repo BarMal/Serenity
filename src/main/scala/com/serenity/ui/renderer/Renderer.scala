@@ -48,8 +48,12 @@ object Renderer:
       fenceProbeWindow = MarkdownFenceProbeWindow
     )
     def resolve(window: Int, range: Range.Inclusive): Range.Inclusive =
-      val exhausted = range.length == window * 2 + 1
-      if !exhausted || window >= buffer.content.lineCount || window >= MarkdownFenceProbeMaximum then range
+      val firstProbeLine = (line - window).max(0)
+      val lastProbeLine  = (line + window).min(buffer.content.lineCount - 1)
+      val probeBounded =
+        (firstProbeLine > 0 && range.start == firstProbeLine) ||
+          (lastProbeLine < buffer.content.lineCount - 1 && range.end == lastProbeLine)
+      if !probeBounded || window >= buffer.content.lineCount || window >= MarkdownFenceProbeMaximum then range
       else
         val nextWindow = (window * 2).min(buffer.content.lineCount).min(MarkdownFenceProbeMaximum)
         val expanded = MarkdownBlockLens.currentBlock(
