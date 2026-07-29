@@ -270,7 +270,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val findSurface = UiSurface(
       SurfaceId("find-click"),
       SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)),
-      SurfacePresentation.Modal
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     findManager
       .updateState(state =>
@@ -278,8 +278,11 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
     val findState = findManager.getCurrentState.unsafeRunSync()
-    val findNode =
-      UiSceneSnapshot.from(findState, ViewportSize(80, 24)).modal.lastOption.getOrElse(fail("Expected find modal"))
+    val findNode = UiSceneSnapshot
+      .from(findState, ViewportSize(80, 24))
+      .floating
+      .find(_.id == SceneNodeId.Surface(findSurface.id))
+      .getOrElse(fail("Expected floating find modal"))
     val findHit = ModalSurfaceComposition
       .forModal(findSurface.content.asInstanceOf[SurfaceContent.ModalWorkflow].modal, findNode.frameRect, 2)
       .get
@@ -301,7 +304,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val replaceSurface = UiSurface(
       SurfaceId("replace-click"),
       SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState())),
-      SurfacePresentation.Modal
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     replaceManager
       .updateState(state =>
@@ -311,22 +314,89 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val replaceState = replaceManager.getCurrentState.unsafeRunSync()
     val replaceNode = UiSceneSnapshot
       .from(replaceState, ViewportSize(80, 24))
-      .modal
-      .lastOption
-      .getOrElse(fail("Expected replace modal"))
+      .floating
+      .find(_.id == SceneNodeId.Surface(replaceSurface.id))
+      .getOrElse(fail("Expected floating replace modal"))
     val replaceHit = ModalSurfaceComposition
-      .forModal(replaceSurface.content.asInstanceOf[SurfaceContent.ModalWorkflow].modal, replaceNode.frameRect, 2)
+      .forModal(
+        replaceSurface.content.asInstanceOf[SurfaceContent.ModalWorkflow].modal,
+        replaceNode.frameRect,
+        SurfaceFrameLayout.minimumTargetRows(replaceState.config.interfaceDensity)
+      )
       .get
       .hitRegions
       .find(_.actionId.contains(SurfaceActionId("replace-selection")))
       .getOrElse(fail("Expected replace scope hit region"))
-    replaceManager.applyEvent(MouseClick(replaceHit.rect.x.toInt, replaceHit.rect.y.toInt)).unsafeRunSync()
+    replaceManager
+      .applyEvent(
+        MouseClick(
+          (replaceHit.rect.x + replaceHit.rect.width / 2).toInt,
+          (replaceHit.rect.y + replaceHit.rect.height / 2).toInt
+        )
+      )
+      .unsafeRunSync()
     replaceManager.getCurrentState
       .unsafeRunSync()
       .modalSurface
       .flatMap(_.content match
         case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => Some(workflow.selectedScope)
         case _ => None) shouldBe Some(ReplaceWorkflowScope.Selection)
+
+    val fileManager = makeStateManager()
+    val fileBuffer  = fileManager.createBuffer("needle").unsafeRunSync()
+    fileManager.setBufferForPane(PaneId(0), fileBuffer).unsafeRunSync()
+    fileManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    val fileSurface = UiSurface(
+      SurfaceId("file-click"),
+      SurfaceContent.ModalWorkflow(
+        Modal.FileWorkflow(
+          FileWorkflowState(
+            mode = FileWorkflowMode.Open,
+            suggestions = List(
+              FileWorkflowSuggestion("notes.scala"),
+              FileWorkflowSuggestion("README.md")
+            ),
+            selectedSuggestionIndex = 1
+          )
+        )
+      ),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    fileManager
+      .updateState(state =>
+        state.copy(uiSurfaces = state.uiSurfaces :+ fileSurface, focus = Focus.Surface(fileSurface.id))
+      )
+      .unsafeRunSync()
+    val fileState = fileManager.getCurrentState.unsafeRunSync()
+    val fileNode = UiSceneSnapshot
+      .from(fileState, ViewportSize(80, 24))
+      .floating
+      .find(_.id == SceneNodeId.Surface(fileSurface.id))
+      .getOrElse(fail("Expected floating file modal"))
+    val fileHit = ModalSurfaceComposition
+      .forModal(
+        fileSurface.content.asInstanceOf[SurfaceContent.ModalWorkflow].modal,
+        fileNode.frameRect,
+        SurfaceFrameLayout.minimumTargetRows(fileState.config.interfaceDensity)
+      )
+      .get
+      .hitRegions
+      .find(_.actionId.contains(SurfaceActionId("file-suggestion-0")))
+      .getOrElse(fail("Expected file suggestion hit region"))
+    fileManager
+      .applyEvent(
+        MouseClick(
+          (fileHit.rect.x + fileHit.rect.width / 2).toInt,
+          (fileHit.rect.y + fileHit.rect.height / 2).toInt
+        )
+      )
+      .unsafeRunSync()
+    fileManager.getCurrentState
+      .unsafeRunSync()
+      .modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.selectedSuggestionIndex)
+        case _                                                          => None) shouldBe Some(0)
   }
 
   it should "open an editor context menu on secondary click without moving the cursor" in {
