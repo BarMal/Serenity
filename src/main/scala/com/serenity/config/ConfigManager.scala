@@ -2,11 +2,14 @@ package com.serenity.config
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
+import java.util.Locale
 
 import scala.io.Source
+import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
 import cats.effect.IO
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueType}
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
@@ -49,207 +52,228 @@ object ConfigManager:
     IO.blocking(loadConfig(configPath))
 
   /** Load configuration with migration/deprecation report on the Cats Effect blocking pool. */
-  def loadConfigResultIO(configPath: Option[String] = None): IO[ConfigLoadResult] =
-    IO.blocking(loadConfigResult(configPath))
-
-  private def parseConfigResult(content: String): ConfigLoadResult =
-    ConfigLoadResult(parseConfig(content), inspectConfig(content))
-
-  /** Parse configuration from string */
-  private def parseConfig(content: String): AppConfig =
-    // Simple key=value parser for configuration
-    val lines = content.split("\n").map(_.trim).filter(_.nonEmpty).filter(!_.startsWith("#"))
-
-    val parsed = lines.foldLeft(AppConfig.default) { (config, line) =>
-      line.split("=", 2) match
-        case Array(key, value) =>
-          key.trim.toLowerCase match
-            case "character.animation" | "character_animation" =>
-              value.trim.toLowerCase match
-                case "none" | "false" | "off" | "disabled" =>
-                  config.withoutCharacterAnimation
-                case "quick" =>
-                  config.withCharacterAnimation(AnimationConfig.quick.get)
-                case "smooth" =>
-                  config.withCharacterAnimation(AnimationConfig.smooth.get)
-                case "subtle" =>
-                  config.withCharacterAnimation(AnimationConfig.subtle.get)
-                case "custom" =>
-                  config.withCharacterAnimation(config.characterAnimation.getOrElse(AnimationConfig.smooth.get))
-                case _ =>
-                  config // Unknown value, keep current config
-            case "character.animation.duration_ms" | "character.animation.duration.ms" |
-                "character_animation_duration_ms" =>
-              value.trim.toIntOption
-                .filter(_ > 0)
-                .map(ms =>
-                  config.withCharacterAnimation(
-                    config.characterAnimation
-                      .getOrElse(AnimationConfig.smooth.get)
-                      .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
-                  )
-                )
-                .getOrElse(config)
-            case "character.animation.steps" | "character_animation_steps" =>
-              value.trim.toIntOption
-                .filter(_ > 0)
-                .map(steps =>
-                  config.withCharacterAnimation(
-                    config.characterAnimation
-                      .getOrElse(AnimationConfig.smooth.get)
-                      .copy(steps = steps)
-                  )
-                )
-                .getOrElse(config)
-            case key if LanguageToolsConfig.Schema.handles(key) =>
-              LanguageToolsConfig.Schema.parse(config, key, value).getOrElse(config)
-            case "font.code.family" | "font_code_family" =>
-              config.withFontConfig(config.fontConfig.copy(codeFontFamily = value.trim))
-            case "font.text.family" | "font_text_family" =>
-              config.withFontConfig(config.fontConfig.copy(textFontFamily = value.trim))
-            case "font.ui.family" | "font_ui_family" =>
-              config.withFontConfig(config.fontConfig.copy(uiFontFamily = value.trim))
-            case "font.code.size" | "font_code_size" =>
-              value.trim.toFloatOption
-                .map(size => config.withFontConfig(config.fontConfig.copy(fontSize = clampFontSize(size))))
-                .getOrElse(config)
-            case "font.text.size" | "font.prose.size" | "font_text_size" | "font_prose_size" =>
-              value.trim.toFloatOption
-                .map(size => config.withFontConfig(config.fontConfig.copy(textFontSize = clampFontSize(size))))
-                .getOrElse(config)
-            case "font.size" | "font_size" =>
-              value.trim.toFloatOption
-                .map(size =>
-                  config.withFontConfig(
-                    config.fontConfig.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size))
-                  )
-                )
-                .getOrElse(config)
-            case "font.ui.size" | "font_ui_size" =>
-              value.trim.toFloatOption
-                .map(size => config.withFontConfig(config.fontConfig.copy(uiFontSize = clampFontSize(size))))
-                .getOrElse(config)
-            case "font.scale.mode" | "font_scale_mode" =>
-              parseTextScaleMode(value.trim)
-                .map(mode =>
-                  config.withFontConfig(config.fontConfig.copy(textScaleMode = mode).resolveAutoTextScale(1.0))
-                )
-                .getOrElse(config)
-            case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
-              parseTextScaleMultiplier(value.trim)
-                .map(scale =>
-                  config.withFontConfig(
-                    config.fontConfig.copy(textScaleMultiplier = scale, textScaleMode = TextScaleMode.Manual)
-                  )
-                )
-                .getOrElse(config)
-            case "font.code.ligatures" | "font_code_ligatures" =>
-              value.trim.toLowerCase match
-                case "true" | "on" | "enabled" =>
-                  config.withFontConfig(config.fontConfig.copy(enableLigatures = true))
-                case "false" | "off" | "disabled" =>
-                  config.withFontConfig(config.fontConfig.copy(enableLigatures = false))
-                case _ =>
-                  config
-            case "font.text.ligatures" | "font.prose.ligatures" | "font_text_ligatures" | "font_prose_ligatures" =>
-              value.trim.toLowerCase match
-                case "true" | "on" | "enabled" =>
-                  config.withFontConfig(config.fontConfig.copy(textLigatures = true))
-                case "false" | "off" | "disabled" =>
-                  config.withFontConfig(config.fontConfig.copy(textLigatures = false))
-                case _ =>
-                  config
-            case "font.ui.ligatures" | "font_ui_ligatures" =>
-              value.trim.toLowerCase match
-                case "true" | "on" | "enabled" =>
-                  config.withFontConfig(config.fontConfig.copy(uiLigatures = true))
-                case "false" | "off" | "disabled" =>
-                  config.withFontConfig(config.fontConfig.copy(uiLigatures = false))
-                case _ =>
-                  config
-            case "font.ligatures" | "font_ligatures" =>
-              value.trim.toLowerCase match
-                case "true" | "on" | "enabled" =>
-                  config.withFontConfig(config.fontConfig.copy(enableLigatures = true, textLigatures = true))
-                case "false" | "off" | "disabled" =>
-                  config.withFontConfig(config.fontConfig.copy(enableLigatures = false, textLigatures = false))
-                case _ =>
-                  config
-            case key if CursorConfig.Schema.handles(key) =>
-              CursorConfig.Schema.parse(config, key, value).getOrElse(config)
-            case "interface.density" | "interface_density" =>
-              InterfaceDensity.fromConfigKey(value).map(config.withInterfaceDensity).getOrElse(config)
-            case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
-              parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
-            case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
-              parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
-            case "ui.outline_thickness" | "ui.outline.thickness" | "ui_outline_thickness" =>
-              parseUiOutlineThicknessPx(value.trim).map(config.withUiOutlineThicknessPx).getOrElse(config)
-            case key if SurfaceConfig.Schema.handles(key) =>
-              SurfaceConfig.Schema.parse(config, key, value).getOrElse(config)
-            case key if InterfaceConfig.Schema.handles(key) =>
-              InterfaceConfig.Schema.parse(config, key, value).getOrElse(config)
-            case key if DocumentConfig.Schema.handles(key) =>
-              DocumentConfig.Schema.parse(config, key, value).getOrElse(config)
-            case key if WindowConfig.Schema.handles(key) =>
-              WindowConfig.Schema.parse(config, key, value).getOrElse(config)
-            case lspKey if lspKey.startsWith("lsp.") =>
-              parseLspConfigEntry(config, lspKey, value.trim)
-            case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
-              HotkeyAction.values
-                .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
-                .flatMap { action =>
-                  val triggers = value
-                    .split(",")
-                    .toList
-                    .map(_.trim)
-                    .filter(_.nonEmpty)
-                    .map(HotkeyTrigger.parse)
-                  if triggers.nonEmpty && triggers.forall(_.isDefined) then
-                    Some(
-                      config.withHotkeyConfig(
-                        HotkeyConfig(config.hotkeyConfig.bindings + (action -> triggers.flatten))
-                      )
-                    )
-                  else None
-                }
-                .getOrElse(config)
-            case keymapKey if keymapKey.startsWith("keymap.editor.") =>
-              EditorKeyAction.values
-                .find(action => s"keymap.editor.${action.configKey}" == keymapKey)
-                .map(action => config.withEditorKeyOverride(action, value.trim))
-                .getOrElse(config)
-            case keymapKey if keymapKey.startsWith("keymap.command_runner.") =>
-              CommandRunnerKeyAction.values
-                .find(action => s"keymap.command_runner.${action.configKey}" == keymapKey)
-                .map(action => config.withCommandRunnerKeyOverride(action, value.trim))
-                .getOrElse(config)
-            case keymapKey if keymapKey.startsWith("keymap.modal.") =>
-              ModalKeyAction.values
-                .find(action => s"keymap.modal.${action.configKey}" == keymapKey)
-                .map(action => config.withModalKeyOverride(action, value.trim))
-                .getOrElse(config)
-            case keymapKey if keymapKey.startsWith("keymap.panel.") =>
-              PanelKeyAction.values
-                .find(action => s"keymap.panel.${action.configKey}" == keymapKey)
-                .map(action => config.withPanelKeyOverride(action, value.trim))
-                .getOrElse(config)
-            case keymapKey if keymapKey.startsWith("keymap.peek.") =>
-              PeekKeyAction.values
-                .find(action => s"keymap.peek.${action.configKey}" == keymapKey)
-                .map(action => config.withPeekKeyOverride(action, value.trim))
-                .getOrElse(config)
-            case "config.version" =>
-              config
-            case _ =>
-              config // Unknown key, ignore
-        case _ =>
-          config // Invalid line format, ignore
+  def loadConfigResultIO(configPath: Option[String] = None): IO[Either[ConfigError, ConfigLoadResult]] =
+    IO.blocking {
+      val path = configPath.map(Paths.get(_)).getOrElse(defaultConfigPath)
+      if !Files.exists(path) then Right(ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty))
+      else
+        try
+          val content = Files.readString(path, StandardCharsets.UTF_8)
+          val result  = parseConfigResult(content)
+          if result.report.invalidEntries.nonEmpty then
+            Left(
+              ConfigError(
+                "load",
+                path,
+                s"Invalid configuration entries: ${result.report.invalidEntries.map(_.key).mkString(", ")}"
+              )
+            )
+          else Right(result)
+        catch
+          case error: Exception =>
+            Left(ConfigError("load", path, s"Failed to load configuration: ${error.getMessage}", Some(error)))
     }
 
+  private def parseConfigResult(content: String): ConfigLoadResult =
+    val source = parseHocon(content)
+    parseConfigResult(source)
+
+  private def parseConfigResult(source: Config): ConfigLoadResult =
+    ConfigLoadResult(parseConfig(source), inspectConfig(source))
+
+  private def parseConfig(source: Config): AppConfig =
+    val entries = hoconEntries(source)
+
+    val parsed = entries.foldLeft(AppConfig.default) { (config, entry) =>
+      val (key, value) = entry
+      key match
+        case "character.animation" | "character_animation" =>
+          value.trim.toLowerCase match
+            case "none" | "false" | "off" | "disabled" =>
+              config.withoutCharacterAnimation
+            case "quick" =>
+              config.withCharacterAnimation(AnimationConfig.quick.get)
+            case "smooth" =>
+              config.withCharacterAnimation(AnimationConfig.smooth.get)
+            case "subtle" =>
+              config.withCharacterAnimation(AnimationConfig.subtle.get)
+            case "custom" =>
+              config.withCharacterAnimation(config.characterAnimation.getOrElse(AnimationConfig.smooth.get))
+            case _ =>
+              config // Unknown value, keep current config
+        case "character.animation.duration_ms" | "character.animation.duration.ms" |
+            "character_animation_duration_ms" =>
+          value.trim.toIntOption
+            .filter(_ > 0)
+            .map(ms =>
+              config.withCharacterAnimation(
+                config.characterAnimation
+                  .getOrElse(AnimationConfig.smooth.get)
+                  .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
+              )
+            )
+            .getOrElse(config)
+        case "character.animation.steps" | "character_animation_steps" =>
+          value.trim.toIntOption
+            .filter(_ > 0)
+            .map(steps =>
+              config.withCharacterAnimation(
+                config.characterAnimation
+                  .getOrElse(AnimationConfig.smooth.get)
+                  .copy(steps = steps)
+              )
+            )
+            .getOrElse(config)
+        case key if LanguageToolsConfig.Schema.handles(key) =>
+          LanguageToolsConfig.Schema.parse(config, key, value).getOrElse(config)
+        case "font.code.family" | "font_code_family" =>
+          config.withFontConfig(config.fontConfig.copy(codeFontFamily = value.trim))
+        case "font.text.family" | "font_text_family" =>
+          config.withFontConfig(config.fontConfig.copy(textFontFamily = value.trim))
+        case "font.ui.family" | "font_ui_family" =>
+          val family = if value.trim == "${font.text.family}" then config.fontConfig.textFontFamily else value.trim
+          config.withFontConfig(config.fontConfig.copy(uiFontFamily = family))
+        case "font.code.size" | "font_code_size" =>
+          value.trim.toFloatOption
+            .map(size => config.withFontConfig(config.fontConfig.copy(fontSize = clampFontSize(size))))
+            .getOrElse(config)
+        case "font.text.size" | "font.prose.size" | "font_text_size" | "font_prose_size" =>
+          value.trim.toFloatOption
+            .map(size => config.withFontConfig(config.fontConfig.copy(textFontSize = clampFontSize(size))))
+            .getOrElse(config)
+        case "font.size" | "font_size" =>
+          value.trim.toFloatOption
+            .map(size =>
+              config.withFontConfig(
+                config.fontConfig.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size))
+              )
+            )
+            .getOrElse(config)
+        case "font.ui.size" | "font_ui_size" =>
+          value.trim.toFloatOption
+            .map(size => config.withFontConfig(config.fontConfig.copy(uiFontSize = clampFontSize(size))))
+            .getOrElse(config)
+        case "font.scale.mode" | "font_scale_mode" =>
+          parseTextScaleMode(value.trim)
+            .map(mode => config.withFontConfig(config.fontConfig.copy(textScaleMode = mode).resolveAutoTextScale(1.0)))
+            .getOrElse(config)
+        case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
+          parseTextScaleMultiplier(value.trim)
+            .map(scale =>
+              config.withFontConfig(
+                config.fontConfig.copy(
+                  textScaleMultiplier = scale,
+                  textScaleMode = if scale == 1.0 then config.fontConfig.textScaleMode else TextScaleMode.Manual
+                )
+              )
+            )
+            .getOrElse(config)
+        case "font.code.ligatures" | "font_code_ligatures" =>
+          value.trim.toLowerCase match
+            case "true" | "on" | "enabled" =>
+              config.withFontConfig(config.fontConfig.copy(enableLigatures = true))
+            case "false" | "off" | "disabled" =>
+              config.withFontConfig(config.fontConfig.copy(enableLigatures = false))
+            case _ =>
+              config
+        case "font.text.ligatures" | "font.prose.ligatures" | "font_text_ligatures" | "font_prose_ligatures" =>
+          value.trim.toLowerCase match
+            case "true" | "on" | "enabled" =>
+              config.withFontConfig(config.fontConfig.copy(textLigatures = true))
+            case "false" | "off" | "disabled" =>
+              config.withFontConfig(config.fontConfig.copy(textLigatures = false))
+            case _ =>
+              config
+        case "font.ui.ligatures" | "font_ui_ligatures" =>
+          value.trim.toLowerCase match
+            case "true" | "on" | "enabled" =>
+              config.withFontConfig(config.fontConfig.copy(uiLigatures = true))
+            case "false" | "off" | "disabled" =>
+              config.withFontConfig(config.fontConfig.copy(uiLigatures = false))
+            case _ =>
+              config
+        case "font.ligatures" | "font_ligatures" =>
+          value.trim.toLowerCase match
+            case "true" | "on" | "enabled" =>
+              config.withFontConfig(config.fontConfig.copy(enableLigatures = true, textLigatures = true))
+            case "false" | "off" | "disabled" =>
+              config.withFontConfig(config.fontConfig.copy(enableLigatures = false, textLigatures = false))
+            case _ =>
+              config
+        case key if CursorConfig.Schema.handles(key) =>
+          CursorConfig.Schema.parse(config, key, value).getOrElse(config)
+        case "interface.density" | "interface_density" =>
+          InterfaceDensity.fromConfigKey(value).map(config.withInterfaceDensity).getOrElse(config)
+        case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
+          parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
+        case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
+          parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
+        case "ui.outline_thickness" | "ui.outline.thickness" | "ui_outline_thickness" =>
+          parseUiOutlineThicknessPx(value.trim).map(config.withUiOutlineThicknessPx).getOrElse(config)
+        case key if SurfaceConfig.Schema.handles(key) =>
+          SurfaceConfig.Schema.parse(config, key, value).getOrElse(config)
+        case key if InterfaceConfig.Schema.handles(key) =>
+          InterfaceConfig.Schema.parse(config, key, value).getOrElse(config)
+        case key if DocumentConfig.Schema.handles(key) =>
+          DocumentConfig.Schema.parse(config, key, value).getOrElse(config)
+        case key if WindowConfig.Schema.handles(key) =>
+          WindowConfig.Schema.parse(config, key, value).getOrElse(config)
+        case lspKey if lspKey.startsWith("lsp.") =>
+          parseLspConfigEntry(config, lspKey, value.trim)
+        case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
+          HotkeyAction.values
+            .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
+            .flatMap { action =>
+              val triggers = value
+                .split(",")
+                .toList
+                .map(_.trim)
+                .filter(_.nonEmpty)
+                .map(HotkeyTrigger.parse)
+              if triggers.nonEmpty && triggers.forall(_.isDefined) then
+                Some(
+                  config.withHotkeyConfig(
+                    HotkeyConfig(config.hotkeyConfig.bindings + (action -> triggers.flatten))
+                  )
+                )
+              else None
+            }
+            .getOrElse(config)
+        case keymapKey if keymapKey.startsWith("keymap.editor.") =>
+          EditorKeyAction.values
+            .find(action => s"keymap.editor.${action.configKey}" == keymapKey)
+            .map(action => config.withEditorKeyOverride(action, value.trim))
+            .getOrElse(config)
+        case keymapKey if keymapKey.startsWith("keymap.command_runner.") =>
+          CommandRunnerKeyAction.values
+            .find(action => s"keymap.command_runner.${action.configKey}" == keymapKey)
+            .map(action => config.withCommandRunnerKeyOverride(action, value.trim))
+            .getOrElse(config)
+        case keymapKey if keymapKey.startsWith("keymap.modal.") =>
+          ModalKeyAction.values
+            .find(action => s"keymap.modal.${action.configKey}" == keymapKey)
+            .map(action => config.withModalKeyOverride(action, value.trim))
+            .getOrElse(config)
+        case keymapKey if keymapKey.startsWith("keymap.panel.") =>
+          PanelKeyAction.values
+            .find(action => s"keymap.panel.${action.configKey}" == keymapKey)
+            .map(action => config.withPanelKeyOverride(action, value.trim))
+            .getOrElse(config)
+        case keymapKey if keymapKey.startsWith("keymap.peek.") =>
+          PeekKeyAction.values
+            .find(action => s"keymap.peek.${action.configKey}" == keymapKey)
+            .map(action => config.withPeekKeyOverride(action, value.trim))
+            .getOrElse(config)
+        case "config.version" =>
+          config
+        case _ =>
+          config
+    }
+
+    val withLists = applyHoconLists(parsed, source)
     HotkeyConfig
-      .fromBindings(parsed.hotkeyConfig.bindings)
-      .fold(_ => parsed.withHotkeyConfig(HotkeyConfig()), parsed.withHotkeyConfig)
+      .fromBindings(withLists.hotkeyConfig.bindings)
+      .fold(_ => withLists.withHotkeyConfig(HotkeyConfig()), withLists.withHotkeyConfig)
 
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String =
@@ -277,7 +301,13 @@ object ConfigManager:
       case None => MotionConfig.fromLegacy(config.surfaceConfig)
     val motionFamilySettings = MotionFamily.values
       .map { family =>
-        val settings         = motionConfiguration.families(family)
+        val settings = motionConfiguration.families(family)
+        val speedScale = family match
+          case MotionFamily.EditorText      => config.editorTextTransitionSpeedScale.getOrElse(settings.speedScale)
+          case MotionFamily.CommandSurfaces => config.commandRunnerTransitionSpeedScale.getOrElse(settings.speedScale)
+          case MotionFamily.UiTransitions   => config.uiTransitionSpeedScale.getOrElse(settings.speedScale)
+          case MotionFamily.Cursor          => config.cursorTransitionSpeedScale.getOrElse(settings.speedScale)
+          case MotionFamily.PinnedPanels    => settings.speedScale
         val animationSetting = motionAnimationSetting(settings.animation)
         val customAnimationDetails =
           if animationSetting == "custom" then settings.animation.fold("")(animation => s"""
@@ -293,20 +323,21 @@ object ConfigManager:
         s"""ui.motion.family.${family.configKey}.enabled = ${settings.enabled}
          |ui.motion.family.${family.configKey}.transition = ${transitionKindConfigKey(settings.transitionKind)}
          |ui.motion.family.${family.configKey}.animation = $animationSetting$customAnimationDetails
-         |ui.motion.family.${family.configKey}.speed_scale = ${settings.speedScale}$scopedTransitions""".stripMargin
+         |ui.motion.family.${family.configKey}.speed_scale = $speedScale$scopedTransitions""".stripMargin
       }
       .mkString("\n")
     val lspSettings = lspConfigToString(config.lspUserConfig)
+    def bindingValue(bindings: List[HotkeyTrigger], defaults: List[HotkeyTrigger]): String =
+      bindings.headOption.orElse(defaults.headOption).fold("")(_.render)
     def editorBinding(action: EditorKeyAction): String =
-      config.focusedKeymapConfig.editor
-        .bindingsFor(action)
-        .headOption
-        .orElse(EditorKeymapConfig.defaultBindings.get(action).flatMap(_.headOption))
-        .fold("")(_.render)
+      bindingValue(
+        config.focusedKeymapConfig.editor.bindingsFor(action),
+        EditorKeymapConfig.defaultBindings.getOrElse(action, Nil)
+      )
     val hotkeySettings = HotkeyAction.values
       .map { action =>
-        val bindings = config.hotkeyConfig.bindingsFor(action).map(_.render).mkString(",")
-        s"hotkey.${action.configKey} = $bindings"
+        val bindings = config.hotkeyConfig.bindingsFor(action).map(_.render)
+        s"hotkey.${action.configKey} = ${hoconList(bindings)}"
       }
       .mkString("\n")
 
@@ -320,9 +351,9 @@ object ConfigManager:
        |syntax.highlighting = ${config.syntaxHighlightingEnabled}
        |
        |# Font configuration
-        |font.code.family = ${config.fontConfig.codeFontFamily}
-        |font.text.family = ${config.fontConfig.textFontFamily}
-        |font.ui.family = ${config.fontConfig.uiFontFamily}
+        |font.code.family = ${hoconString(config.fontConfig.codeFontFamily)}
+        |font.text.family = ${hoconString(config.fontConfig.textFontFamily)}
+        |font.ui.family = ${hoconString(config.fontConfig.uiFontFamily)}
         |font.code.size = ${config.fontConfig.codeFontSize}
         |font.text.size = ${config.fontConfig.textFontSize}
         |font.ui.size = ${config.fontConfig.uiFontSize}
@@ -364,6 +395,10 @@ object ConfigManager:
        |ui.shadows = ${config.uiShadowsEnabled}
        |ui.motion = ${motionConfiguration.baseline.configKey}
        |ui.motion.accessibility = ${motionConfiguration.accessibility.configKey}
+       |${config.editorTextTransitionSpeedScale.map(value => s"ui.motion.editor_text.speed_scale = $value").getOrElse("")}
+       |${config.commandRunnerTransitionSpeedScale.map(value => s"ui.motion.command_runner.speed_scale = $value").getOrElse("")}
+       |${config.uiTransitionSpeedScale.map(value => s"ui.motion.ui.speed_scale = $value").getOrElse("")}
+       |${config.cursorTransitionSpeedScale.map(value => s"ui.motion.cursor.speed_scale = $value").getOrElse("")}
        |$motionFamilySettings
        |
        |# Markdown rendering mode: source, split-preview, inline-lens
@@ -391,9 +426,9 @@ object ConfigManager:
        |
        |# Spell-checking for prose buffers
        |spellcheck.enabled = ${config.spellCheck.enabled}
-       |spellcheck.languages = ${config.spellCheck.normalized.languages.mkString(",")}
-       |spellcheck.dictionary_paths = ${config.spellCheck.normalized.dictionaryPaths.mkString(",")}
-       |spellcheck.words = ${config.spellCheck.normalized.additionalWords.mkString(",")}
+       |spellcheck.languages = ${hoconList(config.spellCheck.normalized.languages)}
+       |spellcheck.dictionary_paths = ${hoconList(config.spellCheck.normalized.dictionaryPaths)}
+       |spellcheck.words = ${hoconList(config.spellCheck.normalized.additionalWords)}
        |
        |# Hotkey overrides
        |$hotkeySettings
@@ -404,8 +439,11 @@ object ConfigManager:
        |keymap.editor.extend_selection_right = ${editorBinding(EditorKeyAction.ExtendSelectionRight)}
        |keymap.editor.extend_selection_up = ${editorBinding(EditorKeyAction.ExtendSelectionUp)}
        |keymap.editor.extend_selection_down = ${editorBinding(EditorKeyAction.ExtendSelectionDown)}
-       |keymap.command_runner.submit = ${config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit).head.render}
-       |keymap.modal.dismiss = ${config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss).head.render}
+       |keymap.command_runner.submit = ${bindingValue(
+        config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit),
+        CommandRunnerKeymapConfig.defaultBindings.getOrElse(CommandRunnerKeyAction.Submit, Nil)
+      )}
+       |keymap.modal.dismiss = ${bindingValue(config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss), ModalKeymapConfig.defaultBindings.getOrElse(ModalKeyAction.Dismiss, Nil))}
        |""".stripMargin
 
   /** Save configuration to file */
@@ -417,6 +455,20 @@ object ConfigManager:
       AtomicFileWriter.writeBytesBlocking(configPath, configToString(config).getBytes(StandardCharsets.UTF_8))
       true
     catch case _: Exception => false
+
+  /** Save configuration on the Cats Effect blocking pool with a structured failure result. */
+  def saveConfigIO(config: AppConfig, configPath: Path): IO[Either[ConfigError, Unit]] =
+    IO.blocking {
+      try
+        AtomicFileWriter.writeBytesBlocking(configPath, configToString(config).getBytes(StandardCharsets.UTF_8))
+        Right(())
+      catch
+        case error: Exception =>
+          Left(ConfigError("save", configPath, s"Failed to save configuration: ${error.getMessage}", Some(error)))
+    }
+
+  def saveConfigIO(config: AppConfig, configPath: String): IO[Either[ConfigError, Unit]] =
+    saveConfigIO(config, Paths.get(configPath))
 
   /** Get configuration preset by name */
   def getPreset(name: String): Option[AppConfig] =
@@ -430,8 +482,8 @@ object ConfigManager:
   /** List available preset names */
   def availablePresets: List[String] = List("none", "quick", "smooth", "subtle")
 
-  private def inspectConfig(content: String): ConfigMigrationReport =
-    val entries = configEntries(content)
+  private def inspectConfig(source: Config): ConfigMigrationReport =
+    val entries = hoconEntries(source)
     val deprecatedEntries = entries
       .flatMap((key, _) => deprecatedReplacement(key).map(replacement => DeprecatedConfigEntry(key, replacement)))
       .distinctBy(_.key)
@@ -448,17 +500,74 @@ object ConfigManager:
       invalidEntries = invalidEntries
     )
 
-  private def configEntries(content: String): List[(String, String)] =
-    content
-      .split("\n")
-      .toList
-      .map(_.trim)
-      .filter(line => line.nonEmpty && !line.startsWith("#"))
-      .flatMap { line =>
-        line.split("=", 2).toList match
-          case key :: value :: Nil => Some(key.trim.toLowerCase -> value.trim)
-          case _                   => None
+  private def parseHocon(content: String): Config =
+    ConfigFactory.parseString(quoteLegacyValues(content)).resolve()
+
+  private def quoteLegacyValues(content: String): String =
+    val textFamily = content.linesIterator
+      .find(_.trim.startsWith("font.text.family"))
+      .flatMap(line => line.split("=", 2).lift(1).map(_.trim))
+      .getOrElse("")
+    content.linesIterator
+      .map { line =>
+        val trimmed = line.trim
+        if trimmed.isEmpty || trimmed.startsWith("#") || trimmed.startsWith("//") || !trimmed.contains("=") then line
+        else
+          val index   = line.indexOf('=')
+          val keyName = line.substring(0, index).trim.stripPrefix("\"").stripSuffix("\"")
+          val key     = s"\"$keyName\" ="
+          val raw     = line.substring(index + 1).trim
+          val commentIndex = raw.zipWithIndex
+            .scanLeft(false) { case (quoted, (char, _)) => if char == '"' then !quoted else quoted }
+            .zip(raw.zipWithIndex)
+            .collectFirst { case (false, ('#', index)) if index > 0 && raw.charAt(index - 1).isWhitespace => index - 1 }
+            .getOrElse(-1)
+          val value         = if commentIndex >= 0 then raw.take(commentIndex).trim else raw
+          val resolvedValue = if value == "${font.text.family}" then textFamily else value
+          if resolvedValue.isEmpty then s"$key \"\""
+          else if resolvedValue.startsWith("\"") || resolvedValue.startsWith("[") || resolvedValue.startsWith("{") ||
+              resolvedValue == "true" || resolvedValue == "false" || resolvedValue.matches("-?[0-9]+(\\.[0-9]+)?")
+          then s"$key $resolvedValue"
+          else
+            val escaped = resolvedValue.replace("\\", "\\\\").replace("\"", "\\\"")
+            s"$key \"$escaped\""
       }
+      .mkString("\n")
+
+  private def hoconEntries(source: Config): List[(String, String)] =
+    source
+      .entrySet()
+      .asScala
+      .toList
+      .sortBy(_.getKey)
+      .map { entry =>
+        val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
+        val value = entry.getValue.valueType match
+          case ConfigValueType.LIST =>
+            source.getList(entry.getKey).asScala.map(_.unwrapped().toString).mkString(",")
+          case _ => entry.getValue.unwrapped().toString
+        key -> value
+      }
+
+  private def applyHoconLists(config: AppConfig, source: Config): AppConfig =
+    def strings(path: String): Option[List[String]] =
+      source
+        .entrySet()
+        .asScala
+        .find(_.getKey.stripPrefix("\"").stripSuffix("\"") == path)
+        .flatMap { entry =>
+          if entry.getValue.valueType == ConfigValueType.LIST then
+            Some(source.getList(entry.getKey).asScala.map(_.unwrapped().toString).toList)
+          else None
+        }
+
+    val spellCheck = config.spellCheck
+    val updatedSpellCheck = spellCheck.copy(
+      languages = strings("spellcheck.languages").getOrElse(spellCheck.languages),
+      dictionaryPaths = strings("spellcheck.dictionary_paths").getOrElse(spellCheck.dictionaryPaths),
+      additionalWords = strings("spellcheck.words").getOrElse(spellCheck.additionalWords)
+    )
+    config.withSpellCheck(updatedSpellCheck)
 
   private def deprecatedReplacement(key: String): Option[String] =
     ConfigKeySchema.deprecatedReplacement(key)
@@ -545,6 +654,13 @@ object ConfigManager:
     val rgb = f"#${color.getRed}%02X${color.getGreen}%02X${color.getBlue}%02X"
     if color.getAlpha == 255 then rgb else f"$rgb${color.getAlpha}%02X"
 
+  private def hoconString(value: String): String =
+    val safe = value.nonEmpty && value.forall(char => char.isLetterOrDigit || "_+./:-".contains(char))
+    if safe then value else s"\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+  private def hoconList(values: List[String]): String =
+    values.map(value => s"\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\"").mkString("[", ", ", "]")
+
   private def parseLspConfigEntry(config: AppConfig, key: String, value: String): AppConfig =
     key.split("\\.", 3).toList match
       case "lsp" :: languageKey :: field :: Nil =>
@@ -596,8 +712,8 @@ object ConfigManager:
         case (languageId, override_) =>
           List(
             override_.enabled.map(enabled => s"lsp.$languageId.enabled = $enabled"),
-            override_.command.map(command => s"lsp.$languageId.command = $command"),
-            override_.args.map(args => s"lsp.$languageId.args = ${args.mkString(",")}")
+            override_.command.map(command => s"lsp.$languageId.command = ${hoconString(command)}"),
+            override_.args.map(args => s"lsp.$languageId.args = ${hoconList(args)}")
           ).flatten
       }
       .mkString("\n")

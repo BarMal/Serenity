@@ -24,7 +24,15 @@ object Main extends IOApp:
       _ <- Java2DPipeline.installSafeDefaults()
       _ <- IO(CrashReporter.install())
       launchOptions = LaunchOptions.parse(args)
-      configLoad <- ConfigManager.loadConfigResultIO()
+      configResult <- ConfigManager.loadConfigResultIO()
+      configLoad <- configResult.fold(
+        error =>
+          logger.error(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}") >>
+            IO.pure(
+              com.serenity.config.ConfigLoadResult(AppConfig.default, com.serenity.config.ConfigMigrationReport.empty)
+            ),
+        IO.pure
+      )
       _ <- ConfigMigrationWarning
         .message(ConfigManager.defaultConfigPath, configLoad.report)
         .fold(IO.unit)(message => logger.warn(message))

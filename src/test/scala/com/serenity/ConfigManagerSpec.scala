@@ -86,8 +86,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     )
 
     val written = ConfigManager.configToString(config)
-    written should include("hotkey.command_palette = meta+p")
-    written should include("hotkey.file_search = meta+shift+f")
+    written should include("hotkey.command_palette = [\"meta+p\"]")
+    written should include("hotkey.file_search = [\"meta+shift+f\"]")
     written should include("keymap.command_runner.submit = meta+enter")
   }
 
@@ -558,7 +558,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val written = ConfigManager.configToString(config)
     written should include("lsp.scala.enabled = false")
     written should include("lsp.python.command = pylsp")
-    written should include("lsp.python.args = --stdio,--log-file,/tmp/pylsp.log")
+    written should include("lsp.python.args = [\"--stdio\", \"--log-file\", \"/tmp/pylsp.log\"]")
   }
 
   it should "load and write text area inset percentages" in {
@@ -1013,9 +1013,11 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val written = ConfigManager.configToString(config)
     written should include("spellcheck.enabled = true")
-    written should include("spellcheck.languages = en,fr")
-    written should include("spellcheck.dictionary_paths = C:\\Dictionaries\\en_US.dic,/usr/share/hunspell/fr.dic")
-    written should include("spellcheck.words = serenity,κόσμος,café")
+    written should include("spellcheck.languages = [\"en\", \"fr\"]")
+    written should include(
+      "spellcheck.dictionary_paths = [\"C:\\\\Dictionaries\\\\en_US.dic\", \"/usr/share/hunspell/fr.dic\"]"
+    )
+    written should include("spellcheck.words = [\"serenity\", \"κόσμος\", \"café\"]")
   }
 
   it should "close loaded config files and save using UTF-8" in {
@@ -1034,4 +1036,53 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     ConfigManager.saveConfig(config, configFile) shouldBe true
     Files.readString(configFile, StandardCharsets.UTF_8) should include("font.text.family = Sérif")
+  }
+
+  it should "round-trip HOCON quoting, comments, substitutions, lists, and commas" in {
+    val configFile = Files.createTempFile("serenity-hocon-config", ".conf")
+    Files.writeString(
+      configFile,
+      """font.text.family = "Text Font #1" # trailing comment
+        |spellcheck.languages = ["en", "fr"]
+        |spellcheck.dictionary_paths = ["C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic"]
+        |spellcheck.words = ["hello, world", "Café"]
+        |font.ui.family = ${font.text.family}
+        |""".stripMargin
+    )
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    loaded.fontConfig.textFontFamily shouldBe "Text Font #1"
+    loaded.fontConfig.uiFontFamily shouldBe "Text Font #1"
+    loaded.spellCheck.languages shouldBe List("en", "fr")
+    loaded.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
+    loaded.spellCheck.additionalWords shouldBe List("hello, world", "café")
+
+    ConfigManager.saveConfig(loaded, configFile) shouldBe true
+    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+    reloaded.fontConfig shouldBe loaded.fontConfig
+    reloaded.spellCheck shouldBe loaded.spellCheck
+  }
+
+  it should "return structured errors at the effectful configuration boundary" in {
+    val invalidFile = Files.createTempFile("serenity-invalid-hocon", ".conf")
+    Files.writeString(invalidFile, "font.code.size = [not-a-number]\n")
+
+    ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
+      case Left(error)  => error.message should include("font.code.size")
+      case Right(value) => fail(s"expected a structured load error, received $value")
+
+    val directoryPath = Files.createTempDirectory("serenity-save-error")
+    ConfigManager.saveConfigIO(AppConfig.default, directoryPath).unsafeRunSync() match
+      case Left(error) => error.path shouldBe directoryPath
+      case Right(_)    => fail("expected a structured save error")
+  }
+
+  it should "serialize empty and custom key binding collections without crashing" in {
+    val config = AppConfig.default
+      .withHotkeyConfig(HotkeyConfig(Map.empty))
+      .withFocusedKeymapConfig(FocusedKeymapConfig())
+
+    noException should be thrownBy ConfigManager.configToString(config)
+    ConfigManager.configToString(config) should include("keymap.command_runner.submit")
   }

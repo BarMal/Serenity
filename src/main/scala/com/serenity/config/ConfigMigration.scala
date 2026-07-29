@@ -37,6 +37,14 @@ case class ConfigLoadResult(
     report: ConfigMigrationReport
 )
 
+/** A structured configuration failure surfaced at the effectful IO boundary. */
+case class ConfigError(
+    operation: String,
+    path: Path,
+    message: String,
+    cause: Option[Throwable] = None
+)
+
 object ConfigMigrationWarning:
 
   def message(path: Path, report: ConfigMigrationReport): Option[String] =
