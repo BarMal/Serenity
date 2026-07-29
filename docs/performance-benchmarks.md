@@ -82,6 +82,8 @@ The focused viewport regressions are covered by indexed-line tests: deep scrolli
 | `renderer.focused_body.long_block` | range predicate; no block-sized `Set` allocation |
 | `renderer.diagnostics.visible_projection` | visible-line projection; annotation index reuse remains pending |
 
+The high-count correctness fixture retains annotations positioned after 1,024 unrelated entries; this guards against truncating source lists while scene-owned index reuse is completed.
+
 Measured harness results (same WSL2 host, warmed run):
 
 | Scenario | p50 (ms) | p95 (ms) |
