@@ -8,6 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.animation.WindowSitter
 import com.serenity.app.AppRuntime
 import com.serenity.config.*
 import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
@@ -30,6 +31,12 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+  "AppRuntime" should "keep fast rendering active while the window sitter is ticking" in {
+    val state = AppState.initial.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L))
+
+    AppRuntime.hasActiveAnimations(state) shouldBe true
+  }
 
   private class SilentInputHandler extends InputHandler[IO]:
     override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never

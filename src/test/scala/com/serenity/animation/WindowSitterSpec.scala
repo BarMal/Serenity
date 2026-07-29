@@ -26,9 +26,25 @@ class WindowSitterSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "settle after its activity window completes" in {
-    val active = WindowSitter.default.observeTyping(1_000_000_000L)
+    val active  = WindowSitter.default.observeTyping(1_000_000_000L)
     val settled = Iterator.iterate(active)(_.advance).dropWhile(_.isActive).next()
 
     settled.isActive shouldBe false
     settled.glyph shouldBe "·"
+  }
+
+  it should "use persisted frame and cadence settings" in {
+    val settings = WindowSitterConfig(
+      action = WindowSitterAction.Blink,
+      frames = Vector(".", "x"),
+      activeTicks = 3,
+      fastActiveTicks = 7,
+      fastTypingThresholdMs = 250
+    )
+
+    val sitter = WindowSitter.default.observeTyping(1_000_000_000L, settings)
+    sitter.frames shouldBe Vector(".", "x")
+    sitter.activeTicks shouldBe 3
+    sitter.advance.glyph shouldBe "."
+    sitter.observeTyping(1_100_000_000L, settings).activeTicks shouldBe 7
   }

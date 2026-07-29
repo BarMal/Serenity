@@ -49,13 +49,13 @@ final private[manager] class StateManagerEditorCapability(
           if updatedAnimations eq buffer.animations then buffer
           else buffer.copy(animations = updatedAnimations)
         }.toMap
-        val updatedTransition        = state.themeTransition.map(_.advance).filterNot(_.isComplete)
+        val updatedTransition = state.themeTransition.map(_.advance).filterNot(_.isComplete)
         val stateWithAdvancedBuffers = state.copy(
           buffers = updatedBuffers,
           themeTransition = updatedTransition,
           windowSitter = state.windowSitter.advance
         )
-        val newState                 = advanceSurfaceAnimations(stateWithAdvancedBuffers)
+        val newState = advanceSurfaceAnimations(stateWithAdvancedBuffers)
         val stillActive =
           newState.buffers.values.exists(_.animations.hasActiveAnimations) ||
             newState.themeTransition.isDefined ||

@@ -43,6 +43,7 @@ object CommandRunnerSettingsInputItems:
     val commandItemGapRowsValue   = formatDecimal(surfaceConfig.commandRunnerItemGapRows)
     val commandCursorGapRowsValue = surfaceConfig.commandRunnerCursorGapRows.map(formatDecimal).getOrElse("auto")
     val spellCheck                = languageToolsConfig.spellCheck.normalized
+    val sitterConfig              = config.windowSitterConfig
 
     val commentItems = List(
       CommandSurfaceItem.InputItem(
@@ -484,6 +485,50 @@ object CommandRunnerSettingsInputItems:
         ,
         category = CommandCategory.Settings,
         acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "window-sitter-frames",
+        label = "Sitter Frames",
+        hint = "Comma-separated glyphs",
+        currentValue = sitterConfig.frames.mkString(","),
+        isDecimal = false,
+        parse = text => nonEmptyCommaList(text).map(values => CommandIntent.SetWindowSitterFrames(values.toVector)),
+        category = CommandCategory.Settings,
+        acceptsFreeText = true
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "window-sitter-active-ticks",
+        label = "Sitter Duration",
+        hint = "Animation ticks (1-120)",
+        currentValue = sitterConfig.activeTicks.toString,
+        isDecimal = false,
+        parse = text =>
+          text.toIntOption.filter(value => value >= 1 && value <= 120).map(CommandIntent.SetWindowSitterActiveTicks(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "window-sitter-fast-active-ticks",
+        label = "Fast Sitter Duration",
+        hint = "Fast-typing ticks (1-240)",
+        currentValue = sitterConfig.fastActiveTicks.toString,
+        isDecimal = false,
+        parse = text =>
+          text.toIntOption
+            .filter(value => value >= 1 && value <= 240)
+            .map(CommandIntent.SetWindowSitterFastActiveTicks(_)),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "window-sitter-fast-threshold-ms",
+        label = "Fast Typing Threshold",
+        hint = "Milliseconds (1-5000)",
+        currentValue = sitterConfig.fastTypingThresholdMs.toString,
+        isDecimal = false,
+        parse = text =>
+          text.toIntOption
+            .filter(value => value >= 1 && value <= 5000)
+            .map(CommandIntent.SetWindowSitterFastTypingThresholdMs(_)),
+        category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
         id = "code-font-size",

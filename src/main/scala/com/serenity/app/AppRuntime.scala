@@ -263,15 +263,17 @@ object AppRuntime:
     }.drain
 
   private def observeWindowSitterTyping(
-      event: Event,
-      stateManager: StateUpdater
+    event: Event,
+    stateManager: StateUpdater
   ): IO[Unit] =
     event match
       case _: com.serenity.keystroke.events.InsertChar =>
         stateManager.updateState { state =>
           val motion = state.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
-          if motion.enabled then
-            state.copy(windowSitter = state.windowSitter.observeTyping(System.nanoTime()))
+          if motion.enabled && state.config.windowSitterConfig.enabled then
+            state.copy(windowSitter =
+              state.windowSitter.observeTyping(System.nanoTime(), state.config.windowSitterConfig)
+            )
           else state
         }
       case _ => IO.unit
@@ -454,10 +456,11 @@ object AppRuntime:
         previous.flatMap(_ => stateManager.advanceAnimationsOnTick())
       }
 
-  private def hasActiveAnimations(state: AppState): Boolean =
+  private[serenity] def hasActiveAnimations(state: AppState): Boolean =
     state.buffers.values.exists(_.animations.hasActiveAnimations) ||
       state.themeTransition.isDefined ||
-      state.surfaceAnimations.nonEmpty
+      state.surfaceAnimations.nonEmpty ||
+      state.windowSitter.isActive
 
   private def logSelectiveEvents(
     event: Event,

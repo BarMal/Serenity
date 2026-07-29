@@ -530,8 +530,7 @@ class SwingWindow(
 
   /** Update the decorative sitter without changing the window's title-bar interactions. */
   def updateWindowSitter(sitter: WindowSitter): Unit =
-    val update: Runnable = () =>
-      titleLabelRef.get().foreach(_.setText(s"Serenity  ${sitter.glyph}"))
+    val update: Runnable = () => titleLabelRef.get().foreach(_.setText(s"Serenity  ${sitter.glyph}"))
     if SwingUtilities.isEventDispatchThread then update.run()
     else SwingUtilities.invokeLater(update)
 

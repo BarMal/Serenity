@@ -7,7 +7,7 @@ import java.util.Locale
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope, WindowSitterAction}
 import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
@@ -211,6 +211,29 @@ object ConfigManager:
           DocumentConfig.Schema.parse(config, key, value).getOrElse(config)
         case key if WindowConfig.Schema.handles(key) =>
           WindowConfig.Schema.parse(config, key, value).getOrElse(config)
+        case "window.sitter.enabled" =>
+          parseBoolean(value)
+            .map(enabled => config.withWindowSitterConfig(config.windowSitterConfig.copy(enabled = enabled)))
+            .getOrElse(config)
+        case "window.sitter.action" =>
+          WindowSitterAction
+            .fromConfigKey(value)
+            .map(action => config.withWindowSitterConfig(config.windowSitterConfig.copy(action = action)))
+            .getOrElse(config)
+        case "window.sitter.frames" =>
+          config.withWindowSitterConfig(config.windowSitterConfig.copy(frames = value.split(",").toVector))
+        case "window.sitter.active_ticks" =>
+          value.toIntOption
+            .map(ticks => config.withWindowSitterConfig(config.windowSitterConfig.copy(activeTicks = ticks)))
+            .getOrElse(config)
+        case "window.sitter.fast_active_ticks" =>
+          value.toIntOption
+            .map(ticks => config.withWindowSitterConfig(config.windowSitterConfig.copy(fastActiveTicks = ticks)))
+            .getOrElse(config)
+        case "window.sitter.fast_typing_threshold_ms" =>
+          value.toIntOption
+            .map(ms => config.withWindowSitterConfig(config.windowSitterConfig.copy(fastTypingThresholdMs = ms)))
+            .getOrElse(config)
         case lspKey if lspKey.startsWith("lsp.") =>
           parseLspConfigEntry(config, lspKey, value.trim)
         case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
@@ -368,6 +391,12 @@ object ConfigManager:
        |interface.density = ${config.interfaceDensity.configKey}
        |# Window chrome: auto uses themed chrome on Linux; native preserves OS snap/window animations; native-themed uses Windows system chrome colours; custom is themed and applies after restart
        |window.chrome = ${config.windowChromeMode.configKey}
+       |window.sitter.enabled = ${config.windowSitterConfig.enabled}
+       |window.sitter.action = ${config.windowSitterConfig.action.configKey}
+       |window.sitter.frames = ${hoconList(config.windowSitterConfig.frames.toList)}
+       |window.sitter.active_ticks = ${config.windowSitterConfig.activeTicks}
+       |window.sitter.fast_active_ticks = ${config.windowSitterConfig.fastActiveTicks}
+       |window.sitter.fast_typing_threshold_ms = ${config.windowSitterConfig.fastTypingThresholdMs}
        |ui.element_gap = ${config.uiElementGap}
        |ui.corner_radius = ${config.uiCornerRadiusPx}
        |ui.outline_thickness = ${config.uiOutlineThicknessPx}
@@ -591,7 +620,16 @@ object ConfigManager:
       dictionaryPaths = strings("spellcheck.dictionary_paths").getOrElse(spellCheck.dictionaryPaths),
       additionalWords = strings("spellcheck.words").getOrElse(spellCheck.additionalWords)
     )
-    config.withSpellCheck(updatedSpellCheck)
+    val withSpellCheck = config.withSpellCheck(updatedSpellCheck)
+    source
+      .entrySet()
+      .asScala
+      .find(_.getKey.stripPrefix("\"").stripSuffix("\"") == "window.sitter.frames")
+      .filter(_.getValue.valueType == ConfigValueType.LIST)
+      .map(entry => source.getList(entry.getKey).asScala.map(_.unwrapped().toString).toVector)
+      .fold(withSpellCheck)(frames =>
+        withSpellCheck.withWindowSitterConfig(withSpellCheck.windowSitterConfig.copy(frames = frames))
+      )
 
   private def applyHoconLspLists(config: AppConfig, source: Config): AppConfig =
     source.entrySet().asScala.foldLeft(config) { (current, entry) =>
@@ -647,6 +685,15 @@ object ConfigManager:
           DocumentConfig.Schema.invalidValue(key, value)
         case key if WindowConfig.Schema.handles(key) =>
           WindowConfig.Schema.invalidValue(key, value)
+        case "window.sitter.enabled" =>
+          parseBoolean(value).isEmpty
+        case "window.sitter.action" =>
+          WindowSitterAction.fromConfigKey(value).isEmpty
+        case "window.sitter.frames" =>
+          value.split(",").forall(_.trim.isEmpty)
+        case "window.sitter.active_ticks" | "window.sitter.fast_active_ticks" |
+            "window.sitter.fast_typing_threshold_ms" =>
+          value.trim.toIntOption.forall(_ <= 0)
         case key if InterfaceConfig.Schema.handles(key) =>
           InterfaceConfig.Schema.invalidValue(key, value)
         case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>

@@ -246,6 +246,19 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[com.serenity.config.AppConfig] =
     updateMotionConfig(_.withMotionAccessibility(accessibility))
 
+  private def updateWindowSitterConfig(
+    update: com.serenity.animation.WindowSitterConfig => com.serenity.animation.WindowSitterConfig
+  ): IO[Unit] =
+    updateAppearanceConfig(config => config.withWindowSitterConfig(update(config.windowSitterConfig))).flatTap { config =>
+      stateRef.update { state =>
+        val sitter =
+          if config.windowSitterConfig.enabled then
+            com.serenity.animation.WindowSitter.fromConfig(config.windowSitterConfig)
+          else com.serenity.animation.WindowSitter.default
+        state.copy(windowSitter = sitter)
+      }
+    }.void
+
   private def cancelActiveMotion(): IO[Unit] =
     stateRef.update(state =>
       state.copy(
@@ -621,6 +634,18 @@ final private[manager] class StateManagerEffectHandlers(
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
       case CommandIntent.SetWindowChromeMode(mode) =>
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
+      case CommandIntent.SetWindowSitterEnabled(enabled) =>
+        updateWindowSitterConfig(_.copy(enabled = enabled))
+      case CommandIntent.SetWindowSitterAction(action) =>
+        updateWindowSitterConfig(_.copy(action = action))
+      case CommandIntent.SetWindowSitterFrames(frames) =>
+        updateWindowSitterConfig(_.copy(frames = frames))
+      case CommandIntent.SetWindowSitterActiveTicks(ticks) =>
+        updateWindowSitterConfig(_.copy(activeTicks = ticks))
+      case CommandIntent.SetWindowSitterFastActiveTicks(ticks) =>
+        updateWindowSitterConfig(_.copy(fastActiveTicks = ticks))
+      case CommandIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
+        updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
       case CommandIntent.FocusPanel(position) =>
         switchToPinnedPanel(position)
       case CommandIntent.UnpinPanel(position) =>

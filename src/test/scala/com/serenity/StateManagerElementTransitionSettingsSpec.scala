@@ -5,7 +5,7 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{AnimationConfig, AnimationOwner, TransitionKind, WindowSitter}
+import com.serenity.animation.{AnimationConfig, AnimationOwner, TransitionKind, WindowSitter, WindowSitterConfig}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.*
 import com.serenity.keystroke.events.NextTab
@@ -90,6 +90,33 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     val sitter = stateManager.getCurrentState.unsafeRunSync().windowSitter
     sitter.isActive shouldBe false
     sitter.glyph shouldBe "·"
+  }
+
+  it should "update persisted window sitter controls through settings commands" in {
+    val stateManager = createStateManager()
+    val commands = List(
+      CommandIntent.SetWindowSitterEnabled(false),
+      CommandIntent.SetWindowSitterAction(com.serenity.animation.WindowSitterAction.Blink),
+      CommandIntent.SetWindowSitterFrames(Vector(".", "x")),
+      CommandIntent.SetWindowSitterActiveTicks(4),
+      CommandIntent.SetWindowSitterFastActiveTicks(9),
+      CommandIntent.SetWindowSitterFastTypingThresholdMs(275)
+    )
+    commands.zipWithIndex.foreach {
+      case (intent, index) =>
+        stateManager
+          .executeCommand(Command.typed(s"window-sitter-$index", "Set sitter option", intent, CommandCategory.Settings))
+          .unsafeRunSync()
+    }
+
+    stateManager.getCurrentState.unsafeRunSync().config.windowSitterConfig shouldBe WindowSitterConfig(
+      enabled = false,
+      action = com.serenity.animation.WindowSitterAction.Blink,
+      frames = Vector(".", "x"),
+      activeTicks = 4,
+      fastActiveTicks = 9,
+      fastTypingThresholdMs = 275
+    )
   }
 
   it should "mark the motion preset custom when an explicit motion speed is edited" in {

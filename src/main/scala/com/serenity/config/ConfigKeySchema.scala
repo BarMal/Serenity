@@ -26,7 +26,15 @@ object ConfigKeySchema:
       CursorConfig.Schema.currentKeys ++
       DocumentConfig.Schema.currentKeys ++
       InterfaceConfig.Schema.currentKeys ++
-      WindowConfig.Schema.currentKeys
+      WindowConfig.Schema.currentKeys ++
+      Set(
+        "window.sitter.enabled",
+        "window.sitter.action",
+        "window.sitter.frames",
+        "window.sitter.active_ticks",
+        "window.sitter.fast_active_ticks",
+        "window.sitter.fast_typing_threshold_ms"
+      )
 
   val deprecatedKeys: Map[String, String] =
     Map(
