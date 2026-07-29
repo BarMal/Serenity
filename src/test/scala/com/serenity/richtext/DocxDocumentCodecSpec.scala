@@ -1,10 +1,13 @@
 package com.serenity.richtext
 
+import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 import cats.effect.unsafe.implicits.global
+import com.sun.net.httpserver.HttpServer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -147,6 +150,68 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
     error.getMessage should include("DOCX document could not be decoded")
   }
 
+  it should "reject DOCX XML with external entities" in
+    withHttpRequestCounter { (resourceUrl, requests) =>
+      val xml =
+        s"""<?xml version="1.0" encoding="UTF-8"?>
+           |<!DOCTYPE w:document [<!ENTITY external SYSTEM "$resourceUrl">]>
+           |<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+           |  <w:body><w:p><w:r><w:t>&external;</w:t></w:r></w:p></w:body>
+           |</w:document>""".stripMargin
+
+      val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes(xml))
+
+      error.getMessage should include("DOCX document could not be decoded")
+      requests.get() shouldBe 0
+    }
+
+  it should "reject DOCX XML with an external DTD without requesting it" in
+    withHttpRequestCounter { (resourceUrl, requests) =>
+      val xml =
+        s"""<?xml version="1.0" encoding="UTF-8"?>
+           |<!DOCTYPE w:document SYSTEM "$resourceUrl">
+           |<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+           |  <w:body><w:p><w:r><w:t>safe</w:t></w:r></w:p></w:body>
+           |</w:document>""".stripMargin
+
+      val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes(xml))
+
+      error.getMessage should include("DOCX document could not be decoded")
+      requests.get() shouldBe 0
+    }
+
+  it should "not request an external DOCX schema hint" in
+    withHttpRequestCounter { (resourceUrl, requests) =>
+      val xml =
+        s"""<?xml version="1.0" encoding="UTF-8"?>
+           |<w:document
+           |    xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+           |    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           |    xsi:schemaLocation="http://schemas.openxmlformats.org/wordprocessingml/2006/main $resourceUrl">
+           |  <w:body><w:p><w:r><w:t>safe</w:t></w:r></w:p></w:body>
+           |</w:document>""".stripMargin
+
+      DocxDocumentCodec.readBytes(docxBytes(xml)).plainText shouldBe "safe"
+      requests.get() shouldBe 0
+    }
+
+  it should "reject DOCX XML with entity expansion payloads" in {
+    val xml =
+      """<?xml version="1.0" encoding="UTF-8"?>
+        |<!DOCTYPE w:document [
+        |  <!ENTITY a "0123456789">
+        |  <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">
+        |  <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">
+        |]>
+        |<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        |  <w:body><w:p><w:r><w:t>&c;</w:t></w:r></w:p></w:body>
+        |</w:document>""".stripMargin
+
+    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes(xml))
+
+    error.getMessage should include("DOCX document could not be decoded")
+  }
+
   private def docxBytes(documentXml: String): Array[Byte] =
     docxRawBytes("word/document.xml", documentXml.getBytes(StandardCharsets.UTF_8))
 
@@ -164,6 +229,22 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
       zip.closeEntry()
     finally zip.close()
     output.toByteArray
+
+  private def withHttpRequestCounter(test: (String, AtomicInteger) => Unit): Unit =
+    val requests = AtomicInteger(0)
+    val server   = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+    server.createContext(
+      "/resource",
+      exchange =>
+        requests.incrementAndGet()
+        val body = "<!ELEMENT document ANY>".getBytes(StandardCharsets.UTF_8)
+        exchange.sendResponseHeaders(200, body.length.toLong)
+        try exchange.getResponseBody.write(body)
+        finally exchange.close()
+    )
+    server.start()
+    try test(s"http://127.0.0.1:${server.getAddress.getPort}/resource", requests)
+    finally server.stop(0)
 
   private def zipEntryText(bytes: Array[Byte], name: String): String =
     val input = ZipInputStream(java.io.ByteArrayInputStream(bytes))
