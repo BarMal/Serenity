@@ -1,6 +1,8 @@
 package com.serenity.state.manager
 
 import com.serenity.rope.Rope
+import com.serenity.lsp.config.LanguageId
+import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -22,6 +24,7 @@ private[manager] object RopeIdentity:
 
 private[manager] case class MouseTargetLayoutKey(
     viewportSize: ViewportSize,
+    fontConfig: FontConfig,
     showGutter: Boolean,
     showLineNumbers: Boolean,
     wordWrapEnabled: Boolean,
@@ -29,7 +32,12 @@ private[manager] case class MouseTargetLayoutKey(
     focusPaneId: Option[PaneId],
     orderedPaneIds: List[PaneId],
     paneBuffers: List[(PaneId, Option[BufferId])],
-    paneContents: List[(PaneId, Option[RopeIdentity])],
+    paneSnapshotInputs: List[
+      (
+        PaneId,
+        Option[(RopeIdentity, Viewport, TypographyRole, Option[LanguageId], Option[RichTextDocument])]
+      )
+    ],
     pinnedPanels: List[(SurfaceId, PanelPosition, Int)],
     lineNumberContent: List[(BufferId, RopeIdentity)]
 )
@@ -39,6 +47,7 @@ private[manager] object MouseTargetLayoutKey:
   def from(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     MouseTargetLayoutKey(
       viewportSize = viewportSize,
+      fontConfig = state.config.fontConfig,
       showGutter = state.config.showGutter,
       showLineNumbers = state.config.showLineNumbers,
       wordWrapEnabled = state.config.wordWrapEnabled,
@@ -49,12 +58,20 @@ private[manager] object MouseTargetLayoutKey:
       orderedPaneIds = state.layout.orderedPaneIds,
       paneBuffers =
         state.layout.orderedPaneIds.map(paneId => paneId -> state.layout.editorPanes.get(paneId).flatMap(_.bufferId)),
-      paneContents = state.layout.orderedPaneIds.map { paneId =>
+      paneSnapshotInputs = state.layout.orderedPaneIds.map { paneId =>
         paneId -> state.layout.editorPanes
           .get(paneId)
           .flatMap(_.bufferId)
           .flatMap(state.buffers.get)
-          .map(buffer => RopeIdentity(buffer.content))
+          .map(buffer =>
+            (
+              RopeIdentity(buffer.content),
+              buffer.viewport,
+              buffer.typographyRole,
+              buffer.language,
+              buffer.richTextDocument
+            )
+          )
       },
       pinnedPanels = state.uiSurfaces.collect {
         case UiSurface(id, _, SurfacePresentation.Pinned(position, size), _) => (id, position, size)

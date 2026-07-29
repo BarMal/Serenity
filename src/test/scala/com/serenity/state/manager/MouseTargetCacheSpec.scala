@@ -77,6 +77,27 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       MouseTargetLayoutKey.from(longState, ViewportSize(80, 24))
   }
 
+  it should "invalidate prepared snapshots when font, typography, language, viewport, or rich text changes" in {
+    val buffer = Buffer
+      .fromString(bufferId, "alpha beta")
+      .copy(language = Some(LanguageId.Scala))
+    val state = stateWith(buffer)
+    val size  = ViewportSize(80, 24)
+    val key   = MouseTargetLayoutKey.from(state, size)
+
+    val fontChanged = stateWith(buffer, state.config.withFontConfig(state.config.fontConfig.copy(fontSize = 14.0f)))
+    val languageChanged = stateWith(buffer.copy(language = Some(LanguageId.Markdown)))
+    val languageRemoved = stateWith(buffer.copy(language = None))
+    val viewportChanged = stateWith(buffer.copy(viewport = buffer.viewport.copy(topVisualLine = 1)))
+    val richTextChanged = stateWith(
+      buffer.copy(richTextDocument = Some(com.serenity.richtext.RichTextDocument.fromPlainText("alpha beta")))
+    )
+
+    List(fontChanged, languageChanged, languageRemoved, viewportChanged, richTextChanged).foreach { changed =>
+      MouseTargetLayoutKey.from(changed, size) should not be key
+    }
+  }
+
   "MouseTargetSnapshotKey" should "ignore cursor and selection changes for the same buffer content" in {
     val buffer = Buffer
       .fromString(bufferId, "alpha beta")
