@@ -252,7 +252,8 @@ final private[manager] class StateManagerEffectHandlers(
         buffers = clearBufferAnimations(state),
         themeTransition = None,
         uiSurfaces = state.uiSurfaces.filterNot(_.content.isInstanceOf[SurfaceContent.GhostOverlay]),
-        surfaceAnimations = Map.empty
+        surfaceAnimations = Map.empty,
+        windowSitter = com.serenity.animation.WindowSitter.default
       )
     )
 
@@ -286,7 +287,8 @@ final private[manager] class StateManagerEffectHandlers(
         stateRef.update(state =>
           state.copy(
             buffers = clearBufferAnimations(state, com.serenity.animation.AnimationOwner.UiTransitions),
-            themeTransition = None
+            themeTransition = None,
+            windowSitter = com.serenity.animation.WindowSitter.default
           )
         )
       case com.serenity.config.MotionFamily.Cursor =>

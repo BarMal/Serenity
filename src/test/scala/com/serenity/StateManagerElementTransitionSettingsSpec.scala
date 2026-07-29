@@ -5,7 +5,7 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{AnimationConfig, AnimationOwner, TransitionKind}
+import com.serenity.animation.{AnimationConfig, AnimationOwner, TransitionKind, WindowSitter}
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.*
 import com.serenity.keystroke.events.NextTab
@@ -68,6 +68,28 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .getOrElse(fail("Expected authoritative motion configuration"))
     motion.accessibility shouldBe MotionAccessibility.Off
     motion.baseline shouldBe MotionPreset.Expressive
+  }
+
+  it should "settle the window sitter when accessibility disables UI motion" in {
+    val stateManager = createStateManager()
+    stateManager
+      .updateState(state => state.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L)))
+      .unsafeRunSync()
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "motion-accessibility",
+          "Set motion accessibility",
+          CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val sitter = stateManager.getCurrentState.unsafeRunSync().windowSitter
+    sitter.isActive shouldBe false
+    sitter.glyph shouldBe "·"
   }
 
   it should "mark the motion preset custom when an explicit motion speed is edited" in {
