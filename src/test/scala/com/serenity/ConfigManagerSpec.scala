@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.keystroke.{InputKey, Modifier}
-import com.serenity.lsp.config.{LanguageId, LspServerOverride}
+import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -580,6 +580,28 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       .args shouldBe Some(
       List("--define=A,B", "--stdio")
     )
+  }
+
+  it should "round-trip an empty HOCON LSP argument list through structured loading" in {
+    val configFile = Files.createTempFile("serenity-lsp-empty-args", ".conf")
+    val config = AppConfig.default.withLspUserConfig(
+      LspUserConfig(
+        servers = Some(
+          Map(
+            LanguageId.Python.id -> LspServerOverride(
+              command = None,
+              args = Some(Nil)
+            )
+          )
+        )
+      )
+    )
+    Files.writeString(configFile, ConfigManager.configToString(config))
+
+    ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
+      case Right(result) =>
+        result.config.lspUserConfig.servers.value(LanguageId.Python.id).args shouldBe Some(Nil)
+      case Left(error) => fail(s"expected structured round-trip success, received $error")
   }
 
   it should "load and write text area inset percentages" in {

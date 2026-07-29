@@ -82,7 +82,7 @@ object ConfigManager:
     val entries = hoconEntries(source)
 
     val parsed = entries.foldLeft(AppConfig.default) { (config, entry) =>
-      val (key, value) = entry
+      val HoconEntry(key, value, _) = entry
       key match
         case "character.animation" | "character_animation" =>
           value.trim.toLowerCase match
@@ -483,13 +483,15 @@ object ConfigManager:
   private def inspectConfig(source: Config): ConfigMigrationReport =
     val entries = hoconEntries(source)
     val deprecatedEntries = entries
-      .flatMap((key, _) => deprecatedReplacement(key).map(replacement => DeprecatedConfigEntry(key, replacement)))
+      .flatMap(entry =>
+        deprecatedReplacement(entry.key).map(replacement => DeprecatedConfigEntry(entry.key, replacement))
+      )
       .distinctBy(_.key)
     val unknownKeys = entries
-      .map(_._1)
+      .map(_.key)
       .filterNot(isKnownConfigKey)
       .distinct
-    val invalidEntries = entries.flatMap { case (key, value) => invalidEntry(key, value) }
+    val invalidEntries = entries.flatMap(entry => invalidEntry(entry.key, entry.value, entry.valueType))
 
     ConfigMigrationReport(
       version = ConfigVersion.Current,
@@ -532,7 +534,9 @@ object ConfigManager:
       }
       .mkString("\n")
 
-  private def hoconEntries(source: Config): List[(String, String)] =
+  private case class HoconEntry(key: String, value: String, valueType: ConfigValueType)
+
+  private def hoconEntries(source: Config): List[HoconEntry] =
     source
       .entrySet()
       .asScala
@@ -544,7 +548,7 @@ object ConfigManager:
           case ConfigValueType.LIST =>
             source.getList(entry.getKey).asScala.map(_.unwrapped().toString).mkString(",")
           case _ => entry.getValue.unwrapped().toString
-        key -> value
+        HoconEntry(key, value, entry.getValue.valueType)
       }
 
   private def applyHoconLists(config: AppConfig, source: Config): AppConfig =
@@ -587,7 +591,11 @@ object ConfigManager:
   private def isKnownConfigKey(key: String): Boolean =
     ConfigKeySchema.isKnownKey(key)
 
-  private def invalidEntry(key: String, value: String): Option[InvalidConfigEntry] =
+  private def invalidEntry(
+    key: String,
+    value: String,
+    valueType: ConfigValueType
+  ): Option[InvalidConfigEntry] =
     val normalizedValue = value.trim.toLowerCase
     val invalid =
       key match
@@ -625,7 +633,7 @@ object ConfigManager:
           key.split("\\.", 3).toList match
             case "lsp" :: _ :: "enabled" :: Nil => parseBoolean(value).isEmpty
             case "lsp" :: _ :: "command" :: Nil => value.trim.isEmpty
-            case "lsp" :: _ :: "args" :: Nil    => value.trim.isEmpty
+            case "lsp" :: _ :: "args" :: Nil    => valueType != ConfigValueType.LIST && value.trim.isEmpty
             case _                              => false
         case _ =>
           false
