@@ -80,12 +80,14 @@ case class StartupPage(
 
   /** Zero-based render-line index for each launch action, including section spacing and headings. */
   def actionLineIndices: List[Int] =
-    launchActions.zipWithIndex.foldLeft((List.empty[Int], 3, Option.empty[StartupActionSection])) {
-      case ((indices, nextLine, previousSection), (action, _)) =>
-        val sectionLines =
-          if previousSection.exists(_ != action.section) then 2 else 0
-        (indices :+ (nextLine + sectionLines), nextLine + sectionLines + 1, Some(action.section))
-    }._1
+    launchActions.zipWithIndex
+      .foldLeft((List.empty[Int], 3, Option.empty[StartupActionSection])) {
+        case ((indices, nextLine, previousSection), (action, _)) =>
+          val sectionLines =
+            if previousSection.exists(_ != action.section) then 2 else 0
+          (indices :+ (nextLine + sectionLines), nextLine + sectionLines + 1, Some(action.section))
+      }
+      ._1
 
   def actionBounds(
     viewportSize: ViewportSize,

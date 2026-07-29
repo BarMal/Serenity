@@ -128,11 +128,11 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
 
     val program = for
       stateManager <- createStateManagerIO("StartupOptionsEndToEndSpec-workflow")
-      _ <- AppStartup.initializeState(stateManager, Theme.default, ViewportSize(80, 24))
-      _ <- stateManager.applyEvent(MoveDown)
-      _ <- stateManager.applyEvent(MoveDown)
-      _ <- stateManager.applyEvent(Enter)
-      state <- stateManager.getCurrentState
+      _            <- AppStartup.initializeState(stateManager, Theme.default, ViewportSize(80, 24))
+      _            <- stateManager.applyEvent(MoveDown)
+      _            <- stateManager.applyEvent(MoveDown)
+      _            <- stateManager.applyEvent(Enter)
+      state        <- stateManager.getCurrentState
     yield state
 
     val state = program.unsafeRunSync()
