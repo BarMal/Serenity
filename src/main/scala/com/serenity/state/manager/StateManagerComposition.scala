@@ -10,7 +10,7 @@ import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
-import com.serenity.keystroke.events.Event
+import com.serenity.keystroke.events.{Direction, Event}
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
@@ -19,7 +19,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, ModalEventReducer}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{PanelContent, PanelPosition, PeekContent}
+import com.serenity.ui.layout.{PanelContent, PanelPosition, PeekContent, WorkspaceNodeId}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
@@ -612,10 +612,16 @@ private[manager] class StateManagerComposition(
     new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, viewportPort)
   private val files = new StateManagerFileCapability(stateRef, filePort)
 
-  export editor.*
+  export editor.{focusPaneInDirection as _, resizePaneSplit as _, *}
   export events.applyEvent
   export files.*
   export viewport.*
+
+  def resizePaneSplit(splitId: WorkspaceNodeId, ratio: Double): IO[Unit] =
+    editor.resizePaneSplit(splitId, ratio)
+
+  def focusPaneInDirection(direction: Direction): IO[Unit] =
+    editor.focusPaneInDirection(direction)
 
   def lspEffectStream: Stream[IO, LspEffect] =
     lspQueue.stream

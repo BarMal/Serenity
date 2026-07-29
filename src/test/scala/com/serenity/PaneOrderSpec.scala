@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.PaneId
-import com.serenity.ui.layout.PaneSplitDirection
+import com.serenity.ui.layout.{SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -58,12 +58,61 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     val split = sm.splitPaneHorizontal(pane0).unsafeRunSync()
     sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
 
-  it should "insert splitPaneVertical result immediately after the split pane and mark the layout vertical" in new PaneFixture:
+  it should "split only the selected leaf and preserve its sibling split axis" in new PaneFixture:
     val pane1 = sm.createPane().unsafeRunSync()
     val split = sm.splitPaneVertical(pane0).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
 
     sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
-    state.layout.splitDirection shouldBe PaneSplitDirection.Vertical
+    state.layout.workspaceTree.map(_.root) shouldBe Some(
+      WorkspaceNode.Split(
+        WorkspaceNodeId(s"split-${pane0.value}-${pane1.value}"),
+        SplitAxis.Horizontal,
+        0.5,
+        WorkspaceNode.Split(
+          WorkspaceNodeId(s"split-${pane0.value}-${split.value}"),
+          SplitAxis.Vertical,
+          0.5,
+          WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0),
+          WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${split.value}"), split)
+        ),
+        WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.value}"), pane1)
+      )
+    )
+
+  it should "collapse a closed leaf parent and retain the remaining branch" in new PaneFixture:
+    val pane1 = sm.splitPaneHorizontal(pane0).unsafeRunSync()
+    val pane2 = sm.splitPaneVertical(pane1).unsafeRunSync()
+
+    sm.closePane(pane1).unsafeRunSync()
+
+    val tree = sm.getCurrentState.unsafeRunSync().layout.workspaceTree.getOrElse(fail("expected workspace tree"))
+    tree.paneIds shouldBe List(pane0, pane2)
+    tree.root.axis shouldBe Some(SplitAxis.Horizontal)
+
+  it should "retain one valid empty editor leaf when the final pane closes" in new PaneFixture:
+    sm.closePane(pane0).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    state.layout.editorPanes.keySet shouldBe Set(pane0)
+    state.layout.editorPanes(pane0).bufferId shouldBe None
+    state.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane0))
+    state.layout.activeEditorPaneId shouldBe Some(pane0)
+    state.commandRunnerSurface shouldBe defined
+
+  it should "resize the owning split ratio with clamping" in new PaneFixture:
+    val pane1   = sm.splitPaneHorizontal(pane0).unsafeRunSync()
+    val splitId = WorkspaceNodeId(s"split-${pane0.value}-${pane1.value}")
+
+    sm.resizePaneSplit(splitId, 2.0).unsafeRunSync()
+
+    val tree = sm.getCurrentState.unsafeRunSync().layout.workspaceTree.getOrElse(fail("expected workspace tree"))
+    tree.root shouldBe WorkspaceNode.Split(
+      splitId,
+      SplitAxis.Horizontal,
+      WorkspaceTree.MaximumSplitRatio,
+      WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0),
+      WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.value}"), pane1)
+    )
 
 end PaneOrderSpec

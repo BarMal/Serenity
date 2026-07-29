@@ -2,9 +2,10 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{NewTab, NextTab, PreviousTab}
+import com.serenity.keystroke.events.{Direction, NewTab, NextTab, PreviousTab}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -57,6 +58,18 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should cycle back to Buffer 2 (Buffer 1 -> Buffer 2)
     stateAfterNext3.focusedBufferId.get shouldBe bufferIds(2)
+
+  it should "keep workspace leaves stable while opening and navigating buffers" in new NavigationFixture:
+    val initialLeaves = stateManager.getCurrentState.unsafeRunSync().layout.effectiveWorkspaceTree.map(_.paneIds)
+
+    stateManager.applyEvent(NewTab).unsafeRunSync()
+    stateManager.applyEvent(NewTab).unsafeRunSync()
+    stateManager.applyEvent(NextTab).unsafeRunSync()
+    stateManager.applyEvent(PreviousTab).unsafeRunSync()
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.layout.effectiveWorkspaceTree.map(_.paneIds) shouldBe initialLeaves
+    finalState.layout.editorPanes.keySet shouldBe initialLeaves.toList.flatten.toSet
 
   it should "cycle backward through buffers with Ctrl+Shift+Tab (PreviousTab)" in new NavigationFixture:
     // Given: Wide terminal to allow multiple panes, then create three buffers
@@ -213,3 +226,44 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
     // All focused buffers should exist in buffer order
     focusedBufferIds.foreach(bufferId => bufferIds should contain(bufferId))
+
+  it should "focus deterministic geometric neighbours in a nested workspace" in new NavigationFixture:
+    stateManager.updateState(_.copy(viewportSize = Some(ViewportSize(120, 36)))).unsafeRunSync()
+    val first  = stateManager.getCurrentState.unsafeRunSync().layout.activeEditorPaneId.get
+    val second = stateManager.splitPaneHorizontal(first).unsafeRunSync()
+    val third  = stateManager.splitPaneVertical(second).unsafeRunSync()
+
+    stateManager.switchToPane(first).unsafeRunSync()
+    stateManager.focusPaneInDirection(Direction.Right).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.EditorPane(second)
+
+    stateManager.focusPaneInDirection(Direction.Down).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.EditorPane(third)
+
+    stateManager.focusPaneInDirection(Direction.Left).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.EditorPane(first)
+
+  it should "ignore floating surfaces and unusable leaves during directional focus in constrained viewports" in new NavigationFixture:
+    stateManager.updateState(_.copy(viewportSize = Some(ViewportSize(8, 5)))).unsafeRunSync()
+    val first  = stateManager.getCurrentState.unsafeRunSync().layout.activeEditorPaneId.get
+    val second = stateManager.splitPaneHorizontal(first).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        state.copy(
+          uiSurfaces = List(
+            UiSurface(
+              SurfaceId("quick-info"),
+              SurfaceContent.QuickInfo("details"),
+              SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+            )
+          )
+        )
+      }
+      .unsafeRunSync()
+
+    stateManager.switchToPane(first).unsafeRunSync()
+    stateManager.focusPaneInDirection(Direction.Right).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.focus should (be(Focus.EditorPane(second)) or be(Focus.EditorPane(first)))
+    state.focus should not be Focus.Surface(SurfaceId("quick-info"))

@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{DirEntry, PeekContent}
+import com.serenity.ui.layout.{DirEntry, PeekContent, SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -267,6 +267,39 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     stateManager.closeBuffer(BufferId(999)).unsafeRunSync()
     val afterInvalidClose = stateManager.getCurrentState.unsafeRunSync()
     afterInvalidClose.isValid shouldBe true
+
+  it should "reject workspace trees with duplicate or missing pane leaves" in:
+    val base = AppState.initial
+    val invalidTree = WorkspaceTree(
+      WorkspaceNode.Split(
+        WorkspaceNodeId("duplicate"),
+        SplitAxis.Horizontal,
+        0.5,
+        WorkspaceNode.Leaf(WorkspaceNodeId("duplicate"), PaneId(0)),
+        WorkspaceNode.Leaf(WorkspaceNodeId("other"), PaneId(0))
+      )
+    )
+    val invalid = base.copy(layout = base.layout.copy(workspaceTree = Some(invalidTree)))
+
+    invalid.isValid shouldBe false
+    invalid.validationErrors should contain("Workspace tree contains duplicate node IDs: duplicate")
+    invalid.validationErrors should contain("Workspace tree contains duplicate pane leaves: 0")
+
+  it should "reject editor focus outside the workspace tree" in:
+    val base        = AppState.initial
+    val outsideId   = PaneId(99)
+    val outsidePane = EditorPane.empty(outsideId)
+    val invalid = base.copy(
+      layout = base.layout.copy(
+        editorPanes = base.layout.editorPanes.updated(outsideId, outsidePane),
+        workspaceTree = base.layout.effectiveWorkspaceTree
+      ),
+      focus = Focus.EditorPane(outsideId)
+    )
+
+    invalid.isValid shouldBe false
+    invalid.validationErrors should contain("Workspace tree is missing editor panes: 99")
+    invalid.validationErrors should contain(s"Focus points outside workspace tree: $outsideId")
 
   trait StateFixture:
 

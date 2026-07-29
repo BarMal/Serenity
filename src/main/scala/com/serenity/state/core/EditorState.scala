@@ -4,7 +4,7 @@ import com.serenity.config.DefaultDocumentMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 
 object EditorState:
 
@@ -82,11 +82,9 @@ object EditorState:
                     case None =>
                       withoutBuffer
 
-                if state.layout.editorPanes.size > 1 then removePane(rebalancedState, paneId)
-                else rebalancedState
+                rebalancedState
               case None =>
-                if state.layout.editorPanes.size > 1 then removePane(state, paneId)
-                else state
+                state
           case None =>
             state
       case _ =>
@@ -104,92 +102,97 @@ object EditorState:
     )
 
   def removePane(state: AppState, paneId: PaneId): AppState =
-    val updatedPanes = state.layout.editorPanes - paneId
-    val updatedOrder = state.layout.paneOrder.filterNot(_ == paneId)
-    val newActivePaneId =
-      if state.layout.activeEditorPaneId.contains(paneId) then
-        val idx = state.layout.orderedPaneIds.indexOf(paneId)
-        updatedOrder.lift(idx).orElse(updatedOrder.lastOption)
-      else state.layout.activeEditorPaneId.filter(updatedPanes.contains)
+    state.layout.editorPanes.get(paneId) match
+      case None =>
+        state
+      case Some(pane) if state.layout.editorPanes.size == 1 =>
+        val retainedTree =
+          state.layout.effectiveWorkspaceTree.orElse(
+            Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
+          )
+        state.copy(
+          layout = state.layout.copy(
+            editorPanes = Map(paneId -> pane.copy(bufferId = None)),
+            activeEditorPaneId = Some(paneId),
+            paneOrder = List(paneId),
+            workspaceTree = retainedTree
+          ),
+          focus = Focus.EditorPane(paneId)
+        )
+      case Some(_) =>
+        val previousOrder = state.layout.orderedPaneIds
+        val removedIndex  = previousOrder.indexOf(paneId)
+        val updatedPanes  = state.layout.editorPanes - paneId
+        val updatedTree   = state.layout.effectiveWorkspaceTree.flatMap(_.remove(paneId))
+        val updatedOrder  = updatedTree.map(_.paneIds).getOrElse(previousOrder.filterNot(_ == paneId))
+        val nextActivePaneId =
+          if state.layout.activeEditorPaneId.contains(paneId) then
+            updatedOrder.lift(removedIndex).orElse(updatedOrder.lastOption)
+          else state.layout.activeEditorPaneId.filter(updatedPanes.contains).orElse(updatedOrder.headOption)
+        val nextFocus =
+          state.focus match
+            case Focus.EditorPane(`paneId`) => nextActivePaneId.map(Focus.EditorPane.apply).getOrElse(state.focus)
+            case _                          => state.focus
 
-    val updatedFocus = newActivePaneId match
-      case Some(id) => Focus.EditorPane(id)
-      case None     => Focus.EditorPane(PaneId(0))
-
-    state.copy(
-      layout = state.layout.copy(
-        editorPanes = updatedPanes,
-        paneOrder = updatedOrder,
-        activeEditorPaneId = newActivePaneId
-      ),
-      focus = updatedFocus
-    )
-
-  private def assignBuffersToPanes(state: AppState, focusedBufferId: Option[BufferId]): AppState =
-    val viewportSize        = state.viewportSize.getOrElse(ViewportSize(80, 24))
-    val layout              = LayoutEngine.calculateLayout(state, viewportSize)
-    val maxPossiblePanes    = math.max(1, layout.editorPanelRect.width / state.config.minimumPaneWidth)
-    val targetFocusedBuffer = focusedBufferId.orElse(state.focusedBufferId)
-    updatePaneAssignments(state, maxPossiblePanes, targetFocusedBuffer)
-
-  private def updatePaneAssignments(
-    state: AppState,
-    maxVisiblePanes: Int,
-    targetFocusedBuffer: Option[BufferId]
-  ): AppState =
-    targetFocusedBuffer match
-      case Some(focusedBufferId) =>
-        val focusedIndex = state.bufferOrder.indexOf(focusedBufferId)
-        val startIndex =
-          if focusedIndex == -1 then 0
-          else math.max(0, focusedIndex - maxVisiblePanes / 2)
-        val visibleBuffers = state.bufferOrder.slice(startIndex, startIndex + maxVisiblePanes)
-
-        val neededPanes  = visibleBuffers.size
-        val currentPanes = state.layout.editorPanes
-        val paneIds      = state.layout.orderedPaneIds
-
-        val updatedState =
-          if paneIds.size < neededPanes then
-            val newPaneIds =
-              (paneIds.size until neededPanes).map(i => PaneId(state.nextPaneId.value + i - paneIds.size)).toList
-            val additionalPanes = newPaneIds.map(id => id -> EditorPane.empty(id)).toMap
-            val newNextPaneId = PaneId(
-              math.max(state.nextPaneId.value, state.nextPaneId.value + neededPanes - paneIds.size)
-            )
-            state.copy(
-              layout = state.layout.copy(
-                editorPanes = currentPanes ++ additionalPanes,
-                paneOrder = state.layout.paneOrder ++ newPaneIds
-              ),
-              nextPaneId = newNextPaneId
-            )
-          else state
-
-        val finalPanes      = updatedState.layout.orderedPaneIds
-        val paneAssignments = finalPanes.take(visibleBuffers.size).zip(visibleBuffers).toMap
-
-        val assignedPanes = finalPanes.map { paneId =>
-          paneAssignments.get(paneId) match
-            case Some(bufferId) => paneId -> EditorPane.withBuffer(paneId, bufferId)
-            case None           => paneId -> EditorPane.empty(paneId)
-        }.toMap
-
-        val finalState = updatedState.copy(
-          layout = updatedState.layout.copy(editorPanes = assignedPanes)
+        state.copy(
+          layout = state.layout.copy(
+            editorPanes = updatedPanes,
+            paneOrder = updatedOrder,
+            activeEditorPaneId = nextActivePaneId,
+            workspaceTree = updatedTree
+          ),
+          focus = nextFocus,
+          focusHistory = state.focusHistory.filterNot(_ == Focus.EditorPane(paneId))
         )
 
-        assignedPanes.find(_._2.bufferId.contains(focusedBufferId)) match
+  private def assignBuffersToPanes(state: AppState, focusedBufferId: Option[BufferId]): AppState =
+    val targetFocusedBuffer = focusedBufferId.orElse(state.focusedBufferId)
+    targetFocusedBuffer match
+      case Some(focusedBufferId) =>
+        val stateWithPane = ensureEditorPane(state)
+        stateWithPane.layout.editorPanes.find(_._2.bufferId.contains(focusedBufferId)) match
           case Some((paneId, _)) =>
-            finalState.copy(
-              layout = finalState.layout.copy(activeEditorPaneId = Some(paneId)),
+            stateWithPane.copy(
+              layout = stateWithPane.layout.copy(activeEditorPaneId = Some(paneId)),
               focus = Focus.EditorPane(paneId)
             )
           case None =>
-            finalState
+            val targetPaneId =
+              stateWithPane.focus match
+                case Focus.EditorPane(paneId) if stateWithPane.layout.editorPanes.contains(paneId) => Some(paneId)
+                case _ => stateWithPane.layout.activeEditorPaneId.filter(stateWithPane.layout.editorPanes.contains)
+            targetPaneId
+              .flatMap(stateWithPane.layout.editorPanes.get)
+              .map { pane =>
+                val updatedPane = pane.copy(bufferId = Some(focusedBufferId))
+                stateWithPane.copy(
+                  layout = stateWithPane.layout.copy(
+                    editorPanes = stateWithPane.layout.editorPanes.updated(pane.id, updatedPane),
+                    activeEditorPaneId = Some(pane.id)
+                  ),
+                  focus = Focus.EditorPane(pane.id)
+                )
+              }
+              .getOrElse(stateWithPane)
 
       case None =>
         state
+
+  private def ensureEditorPane(state: AppState): AppState =
+    if state.layout.editorPanes.nonEmpty then state
+    else
+      val paneId = state.nextPaneId
+      val tree   = WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId))
+      state.copy(
+        layout = state.layout.copy(
+          editorPanes = Map(paneId -> EditorPane.empty(paneId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId),
+          workspaceTree = Some(tree)
+        ),
+        focus = Focus.EditorPane(paneId),
+        nextPaneId = PaneId(paneId.value + 1)
+      )
 
   private def navigateBuffer(
     state: AppState,

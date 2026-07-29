@@ -165,9 +165,13 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
     // When: Ctrl+T creates new buffer (using buffer-based navigation)
     stateManager.applyEvent(NewTab).unsafeRunSync()
+    val singlePaneState = stateManager.getCurrentState.unsafeRunSync()
+    val originalPaneId  = singlePaneState.layout.activeEditorPaneId.get
+    stateManager.splitPaneHorizontal(originalPaneId, Some(initialBufferId)).unsafeRunSync()
+    stateManager.switchToPane(originalPaneId).unsafeRunSync()
     val stateAfterNewTab = stateManager.getCurrentState.unsafeRunSync()
 
-    // Then: Should have 2 buffers and 2 panes (wide terminal allows both)
+    // Then: The explicit split gives both buffers persistent views.
     stateAfterNewTab.buffers should have size 2
     stateAfterNewTab.bufferOrder should have size 2
     stateAfterNewTab.layout.editorPanes should have size 2
