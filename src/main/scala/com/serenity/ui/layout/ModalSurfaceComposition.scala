@@ -24,15 +24,15 @@ object ModalSurfaceComposition:
   def frameHeight(modal: Modal, targetRows: Int): Int =
     val actionRows = math.max(1, targetRows)
     modal match
-      case Modal.GotoLine(_)               => 3
-      case Modal.Find(_, Nil, _)           => 5
-      case Modal.Custom(_, _)              => 4
-      case Modal.Find(_, _, _)             => 6
+      case Modal.GotoLine(_)     => 3
+      case Modal.Find(_, Nil, _) => 5
+      case Modal.Custom(_, _)    => 4
+      case Modal.Find(_, _, _)   => 6
       case Modal.ReplaceWorkflow(workflow) =>
         val contentRows = 3 + actionRows * 2 + workflow.statusMessage.fold(0)(_ => 1)
         SurfaceFrameLayout.DefaultBorderCells * 2 + contentRows
-      case Modal.FileWorkflow(workflow)    => math.max(8, math.min(12, workflow.suggestions.take(4).size + 6))
-      case Modal.CloseWorkflow(_)          => closeFrameHeight(actionRows)
+      case Modal.FileWorkflow(workflow) => math.max(8, math.min(12, workflow.suggestions.take(4).size + 6))
+      case Modal.CloseWorkflow(_)       => closeFrameHeight(actionRows)
 
   private val actions: List[(CloseWorkflowChoice, String, SurfaceActionId, SurfaceFocusId)] = List(
     (CloseWorkflowChoice.Save, "Save", SurfaceActionId("close-save"), SurfaceFocusId("close-save")),

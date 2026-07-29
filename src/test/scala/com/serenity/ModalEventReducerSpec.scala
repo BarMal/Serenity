@@ -156,8 +156,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       .state
     selectedReplace.modalSurface.flatMap(_.content match
       case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => Some(workflow.selectedScope)
-      case _                                                              => None
-    ) shouldBe Some(ReplaceWorkflowScope.Selection)
+      case _ => None) shouldBe Some(ReplaceWorkflowScope.Selection)
 
     val fileSurface = UiSurface(
       SurfaceId("file"),
@@ -177,8 +176,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       .state
     selectedFile.modalSurface.flatMap(_.content match
       case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.selectedSuggestionIndex)
-      case _                                                           => None
-    ) shouldBe Some(1)
+      case _                                                          => None) shouldBe Some(1)
   }
 
   it should "jump to the requested line and dismiss the goto line modal" in {

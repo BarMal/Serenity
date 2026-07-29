@@ -528,7 +528,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "size a replace overlay to fit fields, actions, scope, and status" in {
+  it should "size a replace overlay to fit fields, actions, scope, and status" in
     List(InterfaceDensity.Comfortable, InterfaceDensity.Spacious).foreach { density =>
       val modal = Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("3 matches will be replaced")))
       val state = baseState().copy(
@@ -548,5 +548,4 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         ModalSurfaceComposition.frameHeight(modal, targetRows = 2)
       )
     }
-  }
 end CursorOverlayLayoutSpec

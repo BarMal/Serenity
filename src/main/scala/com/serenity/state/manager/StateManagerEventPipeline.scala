@@ -940,16 +940,18 @@ final private[manager] class StateManagerEventPipeline(
               state
             )
             applyReducerResult(clicked, state) >>
-              Option.when(modalType == ModalType.CloseWorkflow && hit.actionId.nonEmpty)(()).fold(
-                cats.effect.IO.unit
-              )(_ =>
-                stateRef.get.flatMap { updatedState =>
-                  applyReducerResult(
-                    ModalEventReducer.reduce(ModalType.CloseWorkflow, ModalSubmit, updatedState),
-                    updatedState
-                  )
-                }
-              )
+              Option
+                .when(modalType == ModalType.CloseWorkflow && hit.actionId.nonEmpty)(())
+                .fold(
+                  cats.effect.IO.unit
+                )(_ =>
+                  stateRef.get.flatMap { updatedState =>
+                    applyReducerResult(
+                      ModalEventReducer.reduce(ModalType.CloseWorkflow, ModalSubmit, updatedState),
+                      updatedState
+                    )
+                  }
+                )
           case None => cats.effect.IO.unit
       case _ =>
         cats.effect.IO.unit

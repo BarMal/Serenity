@@ -272,10 +272,14 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)),
       SurfacePresentation.Modal
     )
-    findManager.updateState(state => state.copy(uiSurfaces = state.uiSurfaces :+ findSurface, focus = Focus.Surface(findSurface.id)))
+    findManager
+      .updateState(state =>
+        state.copy(uiSurfaces = state.uiSurfaces :+ findSurface, focus = Focus.Surface(findSurface.id))
+      )
       .unsafeRunSync()
     val findState = findManager.getCurrentState.unsafeRunSync()
-    val findNode  = UiSceneSnapshot.from(findState, ViewportSize(80, 24)).modal.lastOption.getOrElse(fail("Expected find modal"))
+    val findNode =
+      UiSceneSnapshot.from(findState, ViewportSize(80, 24)).modal.lastOption.getOrElse(fail("Expected find modal"))
     val findHit = ModalSurfaceComposition
       .forModal(findSurface.content.asInstanceOf[SurfaceContent.ModalWorkflow].modal, findNode.frameRect, 2)
       .get
@@ -283,10 +287,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .find(_.actionId.contains(SurfaceActionId("find-result-0")))
       .getOrElse(fail("Expected find result hit region"))
     findManager.applyEvent(MouseClick(findHit.rect.x.toInt, findHit.rect.y.toInt)).unsafeRunSync()
-    findManager.getCurrentState.unsafeRunSync().modalSurface.flatMap(_.content match
-      case SurfaceContent.ModalWorkflow(Modal.Find(_, _, currentIndex)) => Some(currentIndex)
-      case _                                                             => None
-    ) shouldBe Some(0)
+    findManager.getCurrentState
+      .unsafeRunSync()
+      .modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.Find(_, _, currentIndex)) => Some(currentIndex)
+        case _                                                            => None) shouldBe Some(0)
 
     val replaceManager = makeStateManager()
     val replaceBuffer  = replaceManager.createBuffer("needle").unsafeRunSync()
@@ -297,10 +303,17 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState())),
       SurfacePresentation.Modal
     )
-    replaceManager.updateState(state => state.copy(uiSurfaces = state.uiSurfaces :+ replaceSurface, focus = Focus.Surface(replaceSurface.id)))
+    replaceManager
+      .updateState(state =>
+        state.copy(uiSurfaces = state.uiSurfaces :+ replaceSurface, focus = Focus.Surface(replaceSurface.id))
+      )
       .unsafeRunSync()
     val replaceState = replaceManager.getCurrentState.unsafeRunSync()
-    val replaceNode  = UiSceneSnapshot.from(replaceState, ViewportSize(80, 24)).modal.lastOption.getOrElse(fail("Expected replace modal"))
+    val replaceNode = UiSceneSnapshot
+      .from(replaceState, ViewportSize(80, 24))
+      .modal
+      .lastOption
+      .getOrElse(fail("Expected replace modal"))
     val replaceHit = ModalSurfaceComposition
       .forModal(replaceSurface.content.asInstanceOf[SurfaceContent.ModalWorkflow].modal, replaceNode.frameRect, 2)
       .get
@@ -308,10 +321,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .find(_.actionId.contains(SurfaceActionId("replace-selection")))
       .getOrElse(fail("Expected replace scope hit region"))
     replaceManager.applyEvent(MouseClick(replaceHit.rect.x.toInt, replaceHit.rect.y.toInt)).unsafeRunSync()
-    replaceManager.getCurrentState.unsafeRunSync().modalSurface.flatMap(_.content match
-      case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => Some(workflow.selectedScope)
-      case _                                                             => None
-    ) shouldBe Some(ReplaceWorkflowScope.Selection)
+    replaceManager.getCurrentState
+      .unsafeRunSync()
+      .modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => Some(workflow.selectedScope)
+        case _ => None) shouldBe Some(ReplaceWorkflowScope.Selection)
   }
 
   it should "open an editor context menu on secondary click without moving the cursor" in {
