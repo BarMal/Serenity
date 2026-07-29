@@ -1413,7 +1413,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val saved = Files.readString(configFile)
     saved should include("config.version = 1")
-    saved should include("ui.motion = smooth")
+    saved should include("\"ui.motion\" = smooth")
     stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface shouldBe None
   }
 

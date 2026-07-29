@@ -12,16 +12,7 @@ import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
-import com.typesafe.config.{
-  Config,
-  ConfigFactory,
-  ConfigIncludeContext,
-  ConfigIncluder,
-  ConfigIncluderFile,
-  ConfigObject,
-  ConfigParseOptions,
-  ConfigValueType
-}
+import com.typesafe.config.{Config, ConfigFactory, ConfigParseOptions, ConfigValueType}
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
@@ -325,13 +316,13 @@ object ConfigManager:
           else ""
         s"""ui.motion.family.${family.configKey}.enabled = ${settings.enabled}
          |ui.motion.family.${family.configKey}.transition = ${transitionKindConfigKey(settings.transitionKind)}
-         |ui.motion.family.${family.configKey}.animation = $animationSetting$customAnimationDetails
+         |"ui.motion.family.${family.configKey}.animation" = $animationSetting$customAnimationDetails
          |ui.motion.family.${family.configKey}.speed_scale = $speedScale$scopedTransitions""".stripMargin
       }
       .mkString("\n")
     val lspSettings = lspConfigToString(config.lspUserConfig)
     def bindingValue(bindings: List[HotkeyTrigger], defaults: List[HotkeyTrigger]): String =
-      bindings.headOption.orElse(defaults.headOption).fold("")(_.render)
+      hoconString(bindings.headOption.orElse(defaults.headOption).fold("")(_.render))
     def editorBinding(action: EditorKeyAction): String =
       bindingValue(
         config.focusedKeymapConfig.editor.bindingsFor(action),
@@ -348,7 +339,7 @@ object ConfigManager:
        |config.version = ${ConfigVersion.Current.value}
        |
        |# Character animation style: none, quick, smooth, subtle, custom
-       |character.animation = $animationSetting$characterAnimationDetails
+       |"character.animation" = $animationSetting$characterAnimationDetails
        |
        |# Syntax highlighting: true, false
        |syntax.highlighting = ${config.syntaxHighlightingEnabled}
@@ -368,9 +359,9 @@ object ConfigManager:
        |
        |# Cursor colour overrides. Leave empty to use the active theme cursor.
        |cursor.mode = ${config.cursorMode.configKey}
-       |cursor.active.color = ${config.cursorColors.active.map(formatColor).getOrElse("")}
-       |cursor.inactive.color = ${config.cursorColors.inactive.map(formatColor).getOrElse("")}
-       |cursor.info_bar = ${config.cursorInfoBarMode.configKey}
+       |cursor.active.color = ${hoconString(config.cursorColors.active.map(formatColor).getOrElse(""))}
+       |cursor.inactive.color = ${hoconString(config.cursorColors.inactive.map(formatColor).getOrElse(""))}
+       |"cursor.info_bar" = ${config.cursorInfoBarMode.configKey}
        |cursor.info_bar.placement = ${config.cursorInfoBarPlacement.configKey}
        |
        |# Interface density: compact, comfortable, spacious
@@ -396,7 +387,7 @@ object ConfigManager:
        |ui.post_processing = ${config.postProcessingEffect.configKey}
        |# Draw soft shadows behind menus and panels
        |ui.shadows = ${config.uiShadowsEnabled}
-       |ui.motion = ${motionConfiguration.baseline.configKey}
+       |"ui.motion" = ${motionConfiguration.baseline.configKey}
        |ui.motion.accessibility = ${motionConfiguration.accessibility.configKey}
        |${config.editorTextTransitionSpeedScale.map(value => s"ui.motion.editor_text.speed_scale = $value").getOrElse("")}
        |${config.commandRunnerTransitionSpeedScale.map(value => s"ui.motion.command_runner.speed_scale = $value").getOrElse("")}
@@ -411,8 +402,8 @@ object ConfigManager:
        |document.default_mode = ${config.defaultDocumentMode.configKey}
        |
        |# Preferred desktop window size. Leave empty to use the default.
-       |window.preferred.width = ${config.preferredWindowSize.map(_.width).fold("")(_.toString)}
-       |window.preferred.height = ${config.preferredWindowSize.map(_.height).fold("")(_.toString)}
+       |window.preferred.width = ${hoconString(config.preferredWindowSize.map(_.width).fold("")(_.toString))}
+       |window.preferred.height = ${hoconString(config.preferredWindowSize.map(_.height).fold("")(_.toString))}
        |
         |# Text area insets as percentages of the central workspace.
         |text_area.left.percent = ${config.textAreaInsets.leftPercent}
@@ -420,9 +411,9 @@ object ConfigManager:
         |text_area.top.percent = ${config.textAreaInsets.topPercent}
         |text_area.bottom.percent = ${config.textAreaInsets.bottomPercent}
         |viewport.width.percent = ${config.viewportSizing.width.percentValue}
-       |viewport.width.max = ${config.viewportSizing.width.maxCells.fold("")(_.toString)}
+       |viewport.width.max = ${hoconString(config.viewportSizing.width.maxCells.fold("")(_.toString))}
        |viewport.height.percent = ${config.viewportSizing.height.percentValue}
-       |viewport.height.max = ${config.viewportSizing.height.maxCells.fold("")(_.toString)}
+       |viewport.height.max = ${hoconString(config.viewportSizing.height.maxCells.fold("")(_.toString))}
        |
        |# LSP server overrides
        |$lspSettings
@@ -506,66 +497,31 @@ object ConfigManager:
     )
 
   private def parseHoconFile(path: Path): Config =
-    val content = Files.readString(path, StandardCharsets.UTF_8)
     val options = ConfigParseOptions
       .defaults()
       .setOriginDescription(path.toString)
-      .prependIncluder(NormalizingFileIncluder(path.getParent))
-    ConfigFactory.parseString(quoteLegacyValues(content), options).resolve()
+    val content = Files.readString(path, StandardCharsets.UTF_8)
+    parseLegacyConfig(content).getOrElse(ConfigFactory.parseFile(path.toFile, options)).resolve()
 
-  private case class NormalizingFileIncluder(
-      baseDirectory: Path,
-      fallback: Option[ConfigIncluder] = None
-  ) extends ConfigIncluder,
-        ConfigIncluderFile:
-
-    override def withFallback(fallback: ConfigIncluder): ConfigIncluder =
-      copy(fallback = Some(fallback))
-
-    override def include(context: ConfigIncludeContext, what: String): ConfigObject =
-      includePath(baseDirectory.resolve(what), context, what)
-
-    override def includeFile(context: ConfigIncludeContext, file: java.io.File): ConfigObject =
-      val path = file.toPath
-      includePath(if path.isAbsolute then path else baseDirectory.resolve(path), context, file.toString)
-
-    private def includePath(path: Path, context: ConfigIncludeContext, fallbackPath: String): ConfigObject =
-      val normalizedPath = path.normalize()
-      if Files.isRegularFile(normalizedPath) then parseHoconFile(normalizedPath).root()
-      else fallback.fold(ConfigFactory.empty().root())(_.include(context, fallbackPath))
-
-  private def quoteLegacyValues(content: String): String =
-    content.linesIterator
+  private def parseLegacyConfig(content: String): Option[Config] =
+    val entries = content.linesIterator
+      .map(_.trim)
+      .filter(line => line.nonEmpty && !line.startsWith("#"))
       .map { line =>
-        val trimmed = line.trim
-        if trimmed.isEmpty || trimmed.startsWith("#") || trimmed.startsWith("//") || !trimmed.contains("=") then line
-        else
-          val index   = line.indexOf('=')
-          val keyName = line.substring(0, index).trim.stripPrefix("\"").stripSuffix("\"")
-          val key     = s"\"$keyName\" ="
-          val raw     = line.substring(index + 1).trim
-          val commentIndex = raw.zipWithIndex
-            .scanLeft(false) { case (quoted, (char, _)) => if char == '"' then !quoted else quoted }
-            .zip(raw.zipWithIndex)
-            .collectFirst { case (false, ('#', index)) if index > 0 && raw.charAt(index - 1).isWhitespace => index - 1 }
-            .getOrElse(-1)
-          val value = if commentIndex >= 0 then raw.take(commentIndex).trim else raw
-          val normalizedValue =
-            if value.startsWith("${") && value.endsWith("}") then
-              val referencedKey = value.stripPrefix("${").stripSuffix("}")
-              "${\"" + referencedKey + "\"}"
-            else value
-          if normalizedValue.isEmpty then s"$key \"\""
-          else if normalizedValue.startsWith("\"") || normalizedValue.startsWith("[") ||
-              normalizedValue.startsWith("{") || normalizedValue.startsWith("${") ||
-              normalizedValue == "true" || normalizedValue == "false" ||
-              normalizedValue.matches("-?[0-9]+(\\.[0-9]+)?")
-          then s"$key $normalizedValue"
-          else
-            val escaped = normalizedValue.replace("\\", "\\\\").replace("\"", "\\\"")
-            s"$key \"$escaped\""
+        line.split("=", 2).toList match
+          case key :: value :: Nil
+              if key.trim.matches("[A-Za-z0-9_.]+") &&
+                !List("\"", "[", "{", "${").exists(value.trim.startsWith) &&
+                !value.contains("//") &&
+                (!value.contains("#") || value.trim.startsWith("#")) =>
+            Some(s""""${key.trim}"""" -> value.trim)
+          case _ => None
       }
-      .mkString("\n")
+      .toList
+
+    Option.when(entries.nonEmpty && entries.forall(_.isDefined)) {
+      ConfigFactory.parseMap(entries.flatten.toMap.asJava)
+    }
 
   private case class HoconEntry(key: String, value: String, valueType: ConfigValueType)
 
@@ -716,7 +672,7 @@ object ConfigManager:
     if color.getAlpha == 255 then rgb else f"$rgb${color.getAlpha}%02X"
 
   private def hoconString(value: String): String =
-    val safe = value.nonEmpty && value.forall(char => char.isLetterOrDigit || "_+./:-".contains(char))
+    val safe = value.nonEmpty && value.forall(char => char.isLetterOrDigit || "_./-".contains(char))
     if safe then value else s"\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
   private def hoconList(values: List[String]): String =
