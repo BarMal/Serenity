@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import java.awt.{Color, Font}
+import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode}
@@ -35,6 +36,36 @@ case class RenderContext(
     fontForRole(buffer.typographyRole)
 
 object Renderer:
+
+  private case class PreparedScene(
+      state: AppState,
+      scene: UiSceneSnapshot,
+      renderPlan: EditorPaneRenderPlan,
+      codeFont: Font,
+      textFont: Font,
+      uiFont: Font,
+      cellMetrics: CellMetrics,
+      uiMetrics: CellMetrics,
+      viewportSize: ViewportSize
+  ):
+    def matches(
+      candidate: AppState,
+      candidateCodeFont: Font,
+      candidateTextFont: Font,
+      candidateUiFont: Font,
+      candidateCellMetrics: CellMetrics,
+      candidateUiMetrics: CellMetrics,
+      candidateViewportSize: ViewportSize
+    ): Boolean =
+      (state eq candidate) &&
+        codeFont == candidateCodeFont &&
+        textFont == candidateTextFont &&
+        uiFont == candidateUiFont &&
+        cellMetrics == candidateCellMetrics &&
+        uiMetrics == candidateUiMetrics &&
+        viewportSize == candidateViewportSize
+
+  private val preparedSceneRef = new AtomicReference[Option[PreparedScene]](None)
 
   private val MarkdownFenceProbeWindow    = 512
   private val MarkdownFenceProbeMaximum   = 8_192
@@ -144,10 +175,46 @@ object Renderer:
   ): Boolean =
     val state0       = withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
-    val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
     swingWin.onCursorOverlayReady { image =>
       val surface =
         Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
+      val prepared = preparedSceneRef.get().filter(
+        _.matches(state0, codeFont, textFont, uiFont, swingWin.metrics, uiMetrics, viewportSize)
+      )
+      val (layout, renderPlan) = prepared match
+        case Some(value) => value.scene.calculatedLayout -> value.renderPlan
+        case None =>
+          val layout = LayoutEngine.calculateLayout(state0, viewportSize)
+          val scene  = UiSceneSnapshot.from(state0, layout, viewportSize)
+          val context =
+            RenderContext(
+              surface,
+              layout,
+              cursorVisible,
+              cursorColor,
+              codeFont,
+              textFont,
+              uiFont,
+              swingWin.metrics,
+              uiMetrics
+            )
+          val renderPlan = prepareEditorPaneRenderPlan(state0, context, scene)
+          preparedSceneRef.set(
+            Some(
+              PreparedScene(
+                state0,
+                scene.withTextSnapshots(renderPlan.snapshots),
+                renderPlan,
+                codeFont,
+                textFont,
+                uiFont,
+                swingWin.metrics,
+                uiMetrics,
+                viewportSize
+              )
+            )
+          )
+          layout -> renderPlan
       val context =
         RenderContext(
           surface,
@@ -160,7 +227,6 @@ object Renderer:
           swingWin.metrics,
           uiMetrics
         )
-      val renderPlan = prepareEditorPaneRenderPlan(state0, context)
       renderEditorCursors(state0, context, renderPlan)
       surface.flush()
     }
@@ -302,7 +368,7 @@ object Renderer:
   ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
     surface.clearViewport(state.theme.background)
-    val scene = UiSceneSnapshot.from(state, layout)
+    val scene = UiSceneSnapshot.from(state, layout, viewportSize)
 
     val editorRenderPlan = state.startPageSurface.flatMap {
       _.content match
@@ -318,7 +384,22 @@ object Renderer:
       case None =>
         val context =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
-        val editorRenderPlan = prepareEditorPaneRenderPlan(state, context)
+        val editorRenderPlan = prepareEditorPaneRenderPlan(state, context, scene)
+        preparedSceneRef.set(
+          Some(
+            PreparedScene(
+              state,
+              scene.withTextSnapshots(editorRenderPlan.snapshots),
+              editorRenderPlan,
+              codeFont,
+              textFont,
+              uiFont,
+              cellMetrics,
+              uiMetrics,
+              viewportSize
+            )
+          )
+        )
         renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
         renderLineNumbers(state, context, editorRenderPlan)
         renderGutter(state, context, editorRenderPlan.layoutContract)
@@ -339,13 +420,12 @@ object Renderer:
       .filter(rect => rect.width > 0 && rect.height > 0)
       .foreach(rect => surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
 
-  private def prepareEditorPaneRenderPlan(state: AppState, context: RenderContext): EditorPaneRenderPlan =
-    val layoutContract =
-      EditorLayoutContract.from(
-        state,
-        ViewportSize(context.surface.viewportWidth, context.surface.viewportHeight),
-        context.layout
-      )
+  private def prepareEditorPaneRenderPlan(
+    state: AppState,
+    context: RenderContext,
+    scene: UiSceneSnapshot
+  ): EditorPaneRenderPlan =
+    val layoutContract = scene.editorContract
     val workspaceLayout = layoutContract.workspace
     val snapshots =
       state.layout.editorPanes.flatMap {
@@ -354,7 +434,9 @@ object Renderer:
             paneLayout <- workspaceLayout.paneLayouts.get(paneId)
             bufferId   <- pane.bufferId
             buffer     <- state.buffers.get(bufferId)
-          yield paneId -> snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
+          yield paneId -> scene.textSnapshot(paneId).getOrElse(
+            snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
+          )
       }
 
     val visibleLinesByBuffer = state.layout.editorPanes.toList

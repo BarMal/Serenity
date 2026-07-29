@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 
@@ -28,6 +29,7 @@ private[manager] case class MouseTargetLayoutKey(
     focusPaneId: Option[PaneId],
     orderedPaneIds: List[PaneId],
     paneBuffers: List[(PaneId, Option[BufferId])],
+    paneContents: List[(PaneId, Option[RopeIdentity])],
     pinnedPanels: List[(SurfaceId, PanelPosition, Int)],
     lineNumberContent: List[(BufferId, RopeIdentity)]
 )
@@ -47,6 +49,13 @@ private[manager] object MouseTargetLayoutKey:
       orderedPaneIds = state.layout.orderedPaneIds,
       paneBuffers =
         state.layout.orderedPaneIds.map(paneId => paneId -> state.layout.editorPanes.get(paneId).flatMap(_.bufferId)),
+      paneContents = state.layout.orderedPaneIds.map { paneId =>
+        paneId -> state.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .flatMap(state.buffers.get)
+          .map(buffer => RopeIdentity(buffer.content))
+      },
       pinnedPanels = state.uiSurfaces.collect {
         case UiSurface(id, _, SurfacePresentation.Pinned(position, size), _) => (id, position, size)
       },
@@ -86,10 +95,7 @@ private[manager] object MouseTargetSnapshotKey:
 
 private[manager] case class MouseTargetCache(
     layoutKey: MouseTargetLayoutKey,
-    layout: CalculatedLayout,
-    scene: UiSceneSnapshot,
-    paneLayouts: Map[PaneId, EditorPaneLayout],
-    snapshots: Map[MouseTargetSnapshotKey, TextLayoutSnapshot] = Map.empty
+    scene: UiSceneSnapshot
 )
 
 private[manager] object MouseTargetCache:
@@ -97,5 +103,16 @@ private[manager] object MouseTargetCache:
   def fromState(state: AppState, viewportSize: ViewportSize): MouseTargetCache =
     val layoutKey = MouseTargetLayoutKey.from(state, viewportSize)
     val layout    = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-    val scene     = UiSceneSnapshot.from(state, layout)
-    MouseTargetCache(layoutKey, layout, scene, scene.paneLayouts)
+    val scene     = UiSceneSnapshot.from(state, layout, viewportSize)
+    val snapshots = scene.paneLayouts.flatMap {
+      case (paneId, paneLayout) =>
+        for
+          pane   <- state.layout.editorPanes.get(paneId)
+          bufferId <- pane.bufferId
+          buffer <- state.buffers.get(bufferId)
+        yield
+          val font = FontLoader.previewFontForRole(state.config.fontConfig, buffer.typographyRole)
+          val width = paneLayout.contentRect.width * CellMetrics.fromFont(font).charWidth
+          paneId -> TextLayoutSnapshot.fromBuffer(buffer, width, font, wordWrapEnabled = state.config.wordWrapEnabled)
+    }
+    MouseTargetCache(layoutKey, scene.withTextSnapshots(snapshots))

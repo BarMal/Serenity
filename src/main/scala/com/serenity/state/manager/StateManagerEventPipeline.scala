@@ -1924,7 +1924,7 @@ final private[manager] class StateManagerEventPipeline(
       case None => cats.effect.IO.pure(None)
       case Some(tSize) =>
         mouseTargetLayout(state, tSize).flatMap { cache =>
-          cache.paneLayouts.find {
+          cache.scene.paneLayouts.find {
             case (_, paneLayout) =>
               paneLayout.contentRect.contains(click.col, click.row)
           } match
@@ -1938,9 +1938,9 @@ final private[manager] class StateManagerEventPipeline(
                   val metrics      = CellMetrics.fromFont(font)
                   val panelWidthPx = contentRect.width * metrics.charWidth
                   mouseTargetSnapshot(
-                    cache.layoutKey,
+                    cache,
+                    paneId,
                     buffer,
-                    state.config.fontConfig,
                     panelWidthPx,
                     font,
                     state.config.wordWrapEnabled
@@ -1975,26 +1975,16 @@ final private[manager] class StateManagerEventPipeline(
     }
 
   private def mouseTargetSnapshot(
-    layoutKey: MouseTargetLayoutKey,
+    cache: MouseTargetCache,
+    paneId: PaneId,
     buffer: Buffer,
-    fontConfig: FontConfig,
     panelWidthPx: Int,
     font: java.awt.Font,
     wordWrapEnabled: Boolean
   ): cats.effect.IO[TextLayoutSnapshot] =
-    val key = MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx, wordWrapEnabled)
-    mouseTargetCacheRef.modify {
-      case Some(cache) if cache.layoutKey == layoutKey =>
-        cache.snapshots.get(key) match
-          case Some(snapshot) =>
-            Some(cache) -> snapshot
-          case None =>
-            val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font, wordWrapEnabled = wordWrapEnabled)
-            Some(cache.copy(snapshots = cache.snapshots.updated(key, snapshot))) -> snapshot
-      case other =>
-        val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font, wordWrapEnabled = wordWrapEnabled)
-        other -> snapshot
-    }
+    cache.scene.textSnapshot(paneId) match
+      case Some(snapshot) => cats.effect.IO.pure(snapshot)
+      case None => cats.effect.IO.pure(TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font, wordWrapEnabled = wordWrapEnabled))
 
   private def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
     val source        = RopeCharacterSource(buffer.content)
