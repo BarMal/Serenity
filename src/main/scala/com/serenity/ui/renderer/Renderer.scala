@@ -48,6 +48,7 @@ object Renderer:
       uiMetrics: CellMetrics,
       viewportSize: ViewportSize
   ):
+
     def matches(
       candidate: AppState,
       candidateCodeFont: Font,
@@ -178,9 +179,11 @@ object Renderer:
     swingWin.onCursorOverlayReady { image =>
       val surface =
         Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
-      val prepared = preparedSceneRef.get().filter(
-        _.matches(state0, codeFont, textFont, uiFont, swingWin.metrics, uiMetrics, viewportSize)
-      )
+      val prepared = preparedSceneRef
+        .get()
+        .filter(
+          _.matches(state0, codeFont, textFont, uiFont, swingWin.metrics, uiMetrics, viewportSize)
+        )
       val (layout, renderPlan) = prepared match
         case Some(value) => value.scene.calculatedLayout -> value.renderPlan
         case None =>
@@ -425,7 +428,7 @@ object Renderer:
     context: RenderContext,
     scene: UiSceneSnapshot
   ): EditorPaneRenderPlan =
-    val layoutContract = scene.editorContract
+    val layoutContract  = scene.editorContract
     val workspaceLayout = layoutContract.workspace
     val snapshots =
       state.layout.editorPanes.flatMap {
@@ -434,9 +437,11 @@ object Renderer:
             paneLayout <- workspaceLayout.paneLayouts.get(paneId)
             bufferId   <- pane.bufferId
             buffer     <- state.buffers.get(bufferId)
-          yield paneId -> scene.textSnapshot(paneId).getOrElse(
-            snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
-          )
+          yield paneId -> scene
+            .textSnapshot(paneId)
+            .getOrElse(
+              snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
+            )
       }
 
     val visibleLinesByBuffer = state.layout.editorPanes.toList

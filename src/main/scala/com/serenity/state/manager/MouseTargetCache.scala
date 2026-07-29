@@ -1,8 +1,8 @@
 package com.serenity.state.manager
 
-import com.serenity.rope.Rope
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
+import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -124,11 +124,11 @@ private[manager] object MouseTargetCache:
     val snapshots = scene.paneLayouts.flatMap {
       case (paneId, paneLayout) =>
         for
-          pane   <- state.layout.editorPanes.get(paneId)
+          pane     <- state.layout.editorPanes.get(paneId)
           bufferId <- pane.bufferId
-          buffer <- state.buffers.get(bufferId)
+          buffer   <- state.buffers.get(bufferId)
         yield
-          val font = FontLoader.previewFontForRole(state.config.fontConfig, buffer.typographyRole)
+          val font  = FontLoader.previewFontForRole(state.config.fontConfig, buffer.typographyRole)
           val width = paneLayout.contentRect.width * CellMetrics.fromFont(font).charWidth
           paneId -> TextLayoutSnapshot.fromBuffer(buffer, width, font, wordWrapEnabled = state.config.wordWrapEnabled)
     }

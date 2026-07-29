@@ -60,9 +60,9 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "cache the authoritative scene used for mouse-target geometry" in {
-    val state = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"))
-    val size  = ViewportSize(80, 24)
-    val cache = MouseTargetCache.fromState(state, size)
+    val state  = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"))
+    val size   = ViewportSize(80, 24)
+    val cache  = MouseTargetCache.fromState(state, size)
     val layout = LayoutEngine.calculateLayoutWithUI(state, size)
 
     cache.scene.editorContract.workspace.paneLayouts shouldBe cache.scene.paneLayouts
@@ -85,7 +85,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val size  = ViewportSize(80, 24)
     val key   = MouseTargetLayoutKey.from(state, size)
 
-    val fontChanged = stateWith(buffer, state.config.withFontConfig(state.config.fontConfig.copy(fontSize = 14.0f)))
+    val fontChanged     = stateWith(buffer, state.config.withFontConfig(state.config.fontConfig.copy(fontSize = 14.0f)))
     val languageChanged = stateWith(buffer.copy(language = Some(LanguageId.Markdown)))
     val languageRemoved = stateWith(buffer.copy(language = None))
     val viewportChanged = stateWith(buffer.copy(viewport = buffer.viewport.copy(topVisualLine = 1)))

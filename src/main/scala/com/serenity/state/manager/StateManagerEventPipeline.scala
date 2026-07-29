@@ -1984,7 +1984,10 @@ final private[manager] class StateManagerEventPipeline(
   ): cats.effect.IO[TextLayoutSnapshot] =
     cache.scene.textSnapshot(paneId) match
       case Some(snapshot) => cats.effect.IO.pure(snapshot)
-      case None => cats.effect.IO.pure(TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font, wordWrapEnabled = wordWrapEnabled))
+      case None =>
+        cats.effect.IO.pure(
+          TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font, wordWrapEnabled = wordWrapEnabled)
+        )
 
   private def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
     val source        = RopeCharacterSource(buffer.content)

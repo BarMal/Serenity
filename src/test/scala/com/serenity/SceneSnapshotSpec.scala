@@ -48,8 +48,8 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "own the editor contract and visible text snapshots consumed by clients" in {
-    val state = AppState.initial
-    val scene = UiSceneSnapshot.from(state, viewport)
+    val state  = AppState.initial
+    val scene  = UiSceneSnapshot.from(state, viewport)
     val paneId = state.layout.activeEditorPaneId.getOrElse(fail("expected active pane"))
     val buffer = state.layout.editorPanes(paneId).bufferId.flatMap(state.buffers.get).getOrElse(fail("expected buffer"))
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 640, Font(Font.MONOSPACED, Font.PLAIN, 12))
