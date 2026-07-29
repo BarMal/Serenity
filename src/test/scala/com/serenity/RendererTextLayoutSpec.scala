@@ -583,9 +583,9 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         Vector("```")).mkString("\n")
     val surface = renderState(
       content,
-      CursorPosition(1_700, 0),
+      CursorPosition(1_600, 0),
       font,
-      viewport = Viewport(topLine = 1_100, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
+      viewport = Viewport(topLine = 1_000, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
       viewportSize = ViewportSize(100, 12),
       config = AppConfig.default.withLineNumbers(false).withGutter(false).withFocusedTextBody(true)
     )
