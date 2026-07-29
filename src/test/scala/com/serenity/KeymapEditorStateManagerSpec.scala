@@ -1,8 +1,12 @@
 package com.serenity
 
+import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import scala.concurrent.duration.*
+
 import com.serenity.config.{CommandRunnerKeyAction, HotkeyAction, HotkeyConfig}
 import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.state.models.SurfaceContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -46,6 +50,26 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     val config         = stateManager.getCurrentState.unsafeRunSync().config
     val defaultBinding = HotkeyConfig.defaultBindings(HotkeyAction.ToggleCommandRunner).head.render
     config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe defaultBinding
+  }
+
+  it should "finalize a single-key recording without follow-up input" in {
+    val stateManager = createLinuxStateManager("KeymapEditorSingleKeyExpirySpec")
+
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    stateManager
+      .applyEvent(RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty)))
+      .unsafeRunSync()
+
+    IO.sleep(250.millis).unsafeRunSync()
+
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .config
+      .hotkeyConfig
+      .bindingsFor(HotkeyAction.ToggleCommandRunner)
+      .map(_.render) shouldBe List("k")
   }
 
   it should "keep the keymap editor open when a binding conflicts" in {

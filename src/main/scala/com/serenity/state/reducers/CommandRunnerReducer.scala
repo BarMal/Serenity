@@ -164,6 +164,9 @@ object CommandRunnerReducer:
       case RunnerRecordBinding(info, recordedAtMillis, isDoubleTap) =>
         recordBinding(state, info, recordedAtMillis, isDoubleTap)
 
+      case RunnerBindingRecordingExpired(recordedAtMillis) =>
+        expireRecordedBinding(state, recordedAtMillis)
+
       case RunnerDeleteBackward =>
         if submenuHasFocus(state) then
           currentRunner(state).flatMap(_.activeSubmenu) match
@@ -655,7 +658,7 @@ object CommandRunnerReducer:
             else
               pending match
                 case None =>
-                  ReducerResult.noEffects(
+                  ReducerResult(
                     replaceRunner(
                       state,
                       current =>
@@ -665,7 +668,8 @@ object CommandRunnerReducer:
                           ),
                           statusMessage = Some("Press the same key again within 200ms to record a double tap")
                         )
-                    )
+                    ),
+                    List(AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis))
                   )
                 case Some((first, firstAt))
                     if recordedAtMillis >= firstAt &&
@@ -677,6 +681,21 @@ object CommandRunnerReducer:
           case _ => ReducerResult.noEffects(state)
       case _ =>
         ReducerResult.noEffects(state)
+
+  private def expireRecordedBinding(state: AppState, recordedAtMillis: Long): ReducerResult =
+    currentRunner(state)
+      .flatMap { runner =>
+        runner.activeSubmenu.flatMap { submenu =>
+          submenu.pendingRecordedBinding match
+            case Some((first, pendingAt)) if pendingAt == recordedAtMillis =>
+              submenu.recordingItemId
+                .flatMap(itemId => runner.submenuItems(submenu.groupId).find(_.id == itemId)) match
+                case Some(item: CommandSurfaceItem.InputItem) => Some(assignRecordedBinding(state, item, first))
+                case _                                        => None
+            case _ => None
+        }
+      }
+      .getOrElse(ReducerResult.noEffects(state))
 
   private def sameKeyStroke(
     left: com.serenity.keystroke.KeyStrokeInfo,

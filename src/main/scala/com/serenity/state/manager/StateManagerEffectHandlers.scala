@@ -80,6 +80,7 @@ final private[manager] class StateManagerEffectHandlers(
   import sessions.*
   import workflow.*
   private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
+  private val DoubleTapWindow               = 200.millis
 
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
     def requestOpenFile: IO[Unit] = requestOpenFileDialog
@@ -109,7 +110,22 @@ final private[manager] class StateManagerEffectHandlers(
   )
 
   private[manager] def interpretEffect(effect: AppEffect): IO[Unit] =
-    behavior.interpret(effect)
+    effect match
+      case AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis) =>
+        scheduleCommandRunnerBindingExpiry(recordedAtMillis)
+      case _ =>
+        behavior.interpret(effect)
+
+  private def scheduleCommandRunnerBindingExpiry(recordedAtMillis: Long): IO[Unit] =
+    (IO.sleep(DoubleTapWindow) >>
+      stateRef.get.flatMap { state =>
+        val result = CommandRunnerReducer.reduce(
+          com.serenity.keystroke.events.RunnerBindingRecordingExpired(recordedAtMillis),
+          state,
+          CommandRegistry.withToggleUI
+        )
+        validateAndUpdateState(result.state, state) >> result.effects.traverse_(interpretEffect)
+      }).start.void
 
   private def interpretLifecycleEffect(effect: LifecycleEffect): IO[Unit] =
     lifecycleEffects.interpret(effect)

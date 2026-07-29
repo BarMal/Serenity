@@ -50,6 +50,7 @@ enum LspQueueEffect:
 enum AppEffect:
   case Lifecycle(effect: LifecycleEffect)
   case CommandRequest(effect: CommandEffect)
+  case ScheduleCommandRunnerBindingExpiry(recordedAtMillis: Long)
   case Theme(effect: ThemeEffect)
   case Surface(effect: SurfaceEffect)
   case File(effect: FileEffect)

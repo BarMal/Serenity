@@ -190,7 +190,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       registry
     )
 
-    result.effects shouldBe Nil
+    result.effects shouldBe List(AppEffect.ScheduleCommandRunnerBindingExpiry(1_000L))
     runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe Some("keymap-global-find")
     runnerFrom(result.state).activeSubmenu.flatMap(_.pendingRecordedBinding).map(_._1) shouldBe
       Some(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty))
@@ -283,6 +283,39 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "k")
     )
     runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
+  }
+
+  it should "ignore an expiry event for a replaced pending recording" in {
+    val registry = CommandRegistry.default
+    val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val items    = base.submenuItems("settings-keymap")
+    val runner = base.copy(
+      activeSubmenu = Some(
+        CommandRunnerSubmenuState(
+          "settings-keymap",
+          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
+          recordingItemId = Some("keymap-global-find"),
+          pendingRecordedBinding = Some(
+            KeyStrokeInfo(InputKey.Character, Some('j'), Set.empty) -> 2_000L
+          )
+        )
+      )
+    )
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner"))
+    )
+
+    val result = CommandRunnerReducer.reduce(RunnerBindingRecordingExpired(1_000L), state, registry)
+
+    result.state shouldBe state
+    result.effects shouldBe Nil
   }
 
   it should "switch categories with tab and reverse-tab while search is empty" in {

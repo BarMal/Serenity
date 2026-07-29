@@ -20,6 +20,7 @@ case object RunnerNextCategory                                         extends C
 case object RunnerPreviousCategory                                     extends CommandRunnerEvent
 case object RunnerSubmit                                               extends CommandRunnerEvent
 case object RunnerDismiss                                              extends CommandRunnerEvent
+case class RunnerBindingRecordingExpired(recordedAtMillis: Long)       extends CommandRunnerEvent
 
 case class RunnerRecordBinding(
     info: KeyStrokeInfo,
