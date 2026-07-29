@@ -227,7 +227,6 @@ final private[manager] class StateManagerFilePersistence(
                 stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> saved)))
               )
               .flatTap(_ => persistAfterSave)
-              .handleErrorWith(error => logger.error(error)(s"[FILE] Failed to save buffer $bufferId"))
           }
         case None => IO.unit
     }
@@ -245,7 +244,6 @@ final private[manager] class StateManagerFilePersistence(
             stateRef.update(current => current.copy(recentFiles = trackRecentFile(current.recentFiles, path)))
           )
           .flatTap(_ => persistAfterSave)
-          .handleErrorWith(error => logger.error(error)(s"[FILE] Failed to save buffer $bufferId as $path"))
       }
     }
 
@@ -306,6 +304,7 @@ private[manager] trait EffectSessionPort:
 private[manager] trait EffectModalWorkflowPort:
   def clearCloseActions(state: AppState): AppState
   def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
+  def showSaveAsWorkflow(state: AppState, bufferId: BufferId, statusMessage: String): IO[Unit]
   def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit]
   def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
@@ -492,6 +491,8 @@ private[manager] class StateManagerComposition(
     def clearCloseActions(state: AppState): AppState = workflow.clearCloseActions(state)
     def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
       workflow.beginCloseAction(scope, state)
+    def showSaveAsWorkflow(state: AppState, bufferId: BufferId, statusMessage: String): IO[Unit] =
+      workflow.showSaveAsWorkflow(state, bufferId, statusMessage)
     def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
       workflow.requestSaveAsFileDialog(state, bufferIdOverride)
     def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
@@ -543,7 +544,7 @@ private[manager] class StateManagerComposition(
     def loadSession(): IO[Option[AppState]]                 = sessionManager.loadSession()
     def ensureCommandRunnerSurface(state: AppState): AppState =
       operations.ensureCommandRunnerSurface(state)
-    def saveBufferEffect(bufferId: BufferId): IO[Unit]               = filePersistence.saveExistingBuffer(bufferId)
+    def saveBufferEffect(bufferId: BufferId): IO[Unit]               = effects.saveBufferEffect(bufferId)
     def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] = filePersistence.saveBufferAs(bufferId, path)
 
   private val surfacePort: SurfaceCapabilityPort = new SurfaceCapabilityPort:

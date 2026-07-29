@@ -1,5 +1,8 @@
 package com.serenity.richtext
 
+/** Signals that saving an imported rich document would discard source content. */
+final class LossyRichTextOverwriteException(message: String) extends RuntimeException(message)
+
 /** Details about content that a format adapter cannot represent in Serenity's model. */
 case class RichTextFidelity(
     unsupportedElements: Set[String] = Set.empty,

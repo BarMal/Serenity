@@ -20,7 +20,8 @@ final private[manager] class StateManagerWorkflowCapability(
   protected def openFileWorkflowModal(
     mode: FileWorkflowMode,
     state: AppState,
-    bufferIdOverride: Option[BufferId] = None
+    bufferIdOverride: Option[BufferId] = None,
+    statusMessage: Option[String] = None
   ): IO[Unit] =
     val targetBufferId = bufferIdOverride.orElse(state.focusedBufferId)
     val focusedPath    = targetBufferId.flatMap(id => state.buffers.get(id)).flatMap(_.filePath)
@@ -40,7 +41,12 @@ final private[manager] class StateManagerWorkflowCapability(
           FileUtils.getCurrentDirectory
 
     pathIO.flatMap { basePath =>
-      val workflow       = FileWorkflowState(mode = mode, filename = filename, path = basePath.toString)
+      val workflow = FileWorkflowState(
+        mode = mode,
+        filename = filename,
+        path = basePath.toString,
+        statusMessage = statusMessage
+      )
       val predictedState = ModalStateReducer.show(Modal.FileWorkflow(workflow), state).state
       logger.info(
         s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
@@ -48,6 +54,9 @@ final private[manager] class StateManagerWorkflowCapability(
       ) >>
         updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state)
     }
+
+  private[manager] def showSaveAsWorkflow(state: AppState, bufferId: BufferId, statusMessage: String): IO[Unit] =
+    openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId), Some(statusMessage))
 
   private[manager] def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
     val targetBufferIds = closeTargets(scope, state)

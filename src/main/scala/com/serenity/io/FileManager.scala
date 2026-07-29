@@ -4,7 +4,13 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.lsp.config.{FileExtension, LanguageId}
-import com.serenity.richtext.{OdtDocumentCodec, RichTextDocument, RichTextFidelity, RtfDocumentCodec}
+import com.serenity.richtext.{
+  LossyRichTextOverwriteException,
+  OdtDocumentCodec,
+  RichTextDocument,
+  RichTextFidelity,
+  RtfDocumentCodec
+}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 
@@ -129,7 +135,7 @@ class FileManager(using balance: Balance):
     val replacesImportedFile = buffer.filePath.contains(path)
     val isLossyImport        = buffer.richTextFidelity.exists(!_.isLossless)
     IO.raiseWhen(replacesImportedFile && isLossyImport)(
-      RuntimeException(
+      LossyRichTextOverwriteException(
         s"Saving $path would discard unsupported rich document content. Use Save As to write a new file."
       )
     )
