@@ -37,8 +37,6 @@ case class RenderContext(
 
 object Renderer:
 
-  private val annotationScanWindow = 4_096
-
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
       layoutContract: EditorLayoutContract,
@@ -399,14 +397,11 @@ object Renderer:
   ): CachedAnnotationIndex =
     val visibleStart = visibleLines.min
     val visibleEnd   = visibleLines.max
-    val relevantComments = comments.iterator
-      .take(annotationScanWindow)
-      .filter(comment => comment.start.line <= visibleEnd && comment.end.line >= visibleStart)
-      .toList
-    val relevantDiagnostics = diagnostics.iterator
-      .take(annotationScanWindow)
-      .filter(diagnostic => diagnostic.range.start.line >= visibleStart && diagnostic.range.start.line <= visibleEnd)
-      .toList
+    val relevantComments =
+      comments.filter(comment => comment.start.line <= visibleEnd && comment.end.line >= visibleStart)
+    val relevantDiagnostics = diagnostics.filter(diagnostic =>
+      diagnostic.range.start.line >= visibleStart && diagnostic.range.start.line <= visibleEnd
+    )
     val commentsByLine = relevantComments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
       (comment.start.line.max(visibleStart) to comment.end.line.min(visibleEnd)).iterator
         .filter(visibleLines.contains)
