@@ -184,14 +184,11 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val snapshot      = AccessibilitySnapshot.from(state, viewport)
     val controls      = snapshot.nodes.filter(_.id.startsWith(s"surface:${surfaceId.value}/control:"))
     val surfaceBounds = snapshot.nodes.find(_.id == s"surface:${surfaceId.value}").map(_.bounds).get
-    val frame = SurfaceFrameLayout.forContent(
+    val plan = ModalSurfaceComposition.close(
+      workflow,
       surfaceBounds,
-      SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow))
+      SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
     )
-    val actionRow = frame
-      .contentRowSlots(itemCount = 2, hasHeader = true, hasFooter = false)
-      .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(1), y) => y }
-      .get
 
     controls.map(node => node.name -> node.role) shouldBe List(
       "Save"         -> AccessibilityRole.Button,
@@ -200,13 +197,9 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     )
     controls.map(_.selected) shouldBe List(false, true, false)
     controls.map(_.focused) shouldBe List(false, true, false)
-    controls.map(_.bounds.y).distinct shouldBe List(actionRow)
-    controls.map(_.bounds.height).distinct shouldBe List(1)
-    controls.map(_.bounds.x) shouldBe List.tabulate(3)(index =>
-      frame.contentRect.x + index * frame.contentRect.width / 3
-    )
-    controls.map(_.bounds.right) shouldBe
-      List.tabulate(3)(index => frame.contentRect.x + (index + 1) * frame.contentRect.width / 3)
+    controls.map(_.bounds) shouldBe plan.hitRegions.map { hit =>
+      LayoutRect(hit.rect.x.toInt, hit.rect.y.toInt, hit.rect.width.toInt, hit.rect.height.toInt)
+    }
   }
 
   it should "align wrapped toolbar accessibility bounds with rendered row slots" in {

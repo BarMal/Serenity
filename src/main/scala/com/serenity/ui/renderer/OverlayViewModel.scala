@@ -18,7 +18,8 @@ case class TextOverlayView(
     itemGapRows: Double = 0.0,
     itemTargetRows: Int = 1,
     verticalOffsetRows: Double = 0.0,
-    surfaceId: Option[SurfaceId] = None
+    surfaceId: Option[SurfaceId] = None,
+    composition: Option[ResolvedSurfaceComposition] = None
 ):
 
   def resolvedContentRect: LayoutRect =
@@ -115,7 +116,8 @@ object OverlayViewModel:
             itemGapRows = itemGapRowsFor(originalContent, state),
             itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(originalContent, state.config.interfaceDensity),
             verticalOffsetRows = verticalOffsetRows,
-            surfaceId = Some(surface.id)
+            surfaceId = Some(surface.id),
+            composition = compositionFor(originalContent, cachedRect, state)
           )
         }
       case content =>
@@ -134,7 +136,8 @@ object OverlayViewModel:
               itemGapRows = itemGapRowsFor(content, state),
               itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity),
               verticalOffsetRows = verticalOffsetRows,
-              surfaceId = Some(surface.id)
+              surfaceId = Some(surface.id),
+              composition = compositionFor(content, rect, state)
             )
           }
         }
@@ -206,7 +209,14 @@ object OverlayViewModel:
               itemGapRowsFor(content, state),
               SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
             )
-    Option.when(resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty)(resolved)
+    Option.when(
+      resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty || isComposedContent(content)
+    )(resolved)
+
+  private def isComposedContent(content: SurfaceContent): Boolean =
+    content match
+      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(_)) => true
+      case _                                                    => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
     content match
@@ -228,6 +238,22 @@ object OverlayViewModel:
       case com.serenity.state.models.SurfaceContent.ContextualToolbar(_) =>
         state.config.uiElementGap
       case _ => 0
+
+  private def compositionFor(
+    content: SurfaceContent,
+    rect: LayoutRect,
+    state: AppState
+  ): Option[ResolvedSurfaceComposition] =
+    content match
+      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) =>
+        Some(
+          ModalSurfaceComposition.close(
+            workflow,
+            rect,
+            SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+          )
+        )
+      case _ => None
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =
     val focusMultiplier =

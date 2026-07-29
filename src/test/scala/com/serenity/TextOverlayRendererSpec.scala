@@ -4,8 +4,15 @@ import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
+import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutRect, SurfaceContentRowKind}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutRect,
+  ModalSurfaceComposition,
+  SurfaceContentRowKind,
+  SurfaceFrameLayout
+}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,7 +22,32 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "TextOverlayRenderer" should "position a fractional cursor gap at its logical-pixel origin" in {
+  "TextOverlayRenderer" should "paint close workflow controls from shared composition boxes" in {
+    val surface = new MockRenderSurface(50, 14)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val workflow = CloseWorkflowState(
+      CloseScope.Current,
+      BufferId(0),
+      "notes.scala",
+      selectedChoice = CloseWorkflowChoice.Discard
+    )
+    val frame = LayoutRect(2, 1, 40, ModalSurfaceComposition.closeFrameHeight(targetRows = 2))
+    val overlay = TextOverlayView(
+      rect = frame,
+      contentRect = Some(SurfaceFrameLayout(frame).contentRect),
+      composition = Some(ModalSurfaceComposition.close(workflow, frame, targetRows = 2))
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getRow(frame.y + 1) should include("unsaved changes")
+    surface.getRow(frame.y + 2) should include("notes.scala")
+    surface.getRow(frame.y + 5) should include("Close Anyway")
+    surface.getBg(frame.x + 1, frame.y + 5) shouldBe Theme.light.highlighted.background
+  }
+
+  it should "position a fractional cursor gap at its logical-pixel origin" in {
     val surface = new MockRenderSurface(20, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15)

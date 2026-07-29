@@ -342,6 +342,31 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.header.map(_.plainText) should not contain "search: op"
   }
 
+  it should "attach the shared close workflow composition to a modal overlay" in {
+    val surfaceId = SurfaceId("close-modal")
+    val workflow  = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
+    val state = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          surfaceId,
+          SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
+          SurfacePresentation.Modal
+        )
+      ),
+      focus = Focus.Surface(surfaceId)
+    )
+    val scene   = UiSceneSnapshot.from(state, ViewportSize(80, 24))
+    val overlay = OverlayViewModel.fromState(state, scene).modal.lastOption.getOrElse(fail("Expected modal overlay"))
+
+    overlay.composition.map(_.focusOrder) shouldBe Some(
+      List(
+        SurfaceFocusId("close-save"),
+        SurfaceFocusId("close-discard"),
+        SurfaceFocusId("close-cancel")
+      )
+    )
+  }
+
   it should "stack the command runner and submenu preview beneath the cursor" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry

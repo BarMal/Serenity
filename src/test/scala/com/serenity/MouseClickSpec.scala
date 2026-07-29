@@ -202,8 +202,18 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .modal
       .lastOption
       .getOrElse(fail("Expected close confirmation modal"))
-    val cancelX  = modal.contentRect.x + ((modal.contentRect.width * 5) / 6)
-    val choicesY = modal.contentRect.y + 2
+    val targetRows = SurfaceFrameLayout.minimumTargetRows(before.config.interfaceDensity)
+    val cancel = ModalSurfaceComposition
+      .close(
+        CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"),
+        modal.frameRect,
+        targetRows
+      )
+      .hitRegions
+      .find(_.actionId.contains(SurfaceActionId("close-cancel")))
+      .getOrElse(fail("Expected cancel action"))
+    val cancelX  = cancel.rect.x.toInt
+    val choicesY = cancel.rect.y.toInt
 
     sm.applyEvent(MouseClick(cancelX, choicesY)).unsafeRunSync()
 
