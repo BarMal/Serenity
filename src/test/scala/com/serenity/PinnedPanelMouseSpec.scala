@@ -174,6 +174,32 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
   }
 
+  it should "characterize expanded panel clicks against the scene node content region" in {
+    val root    = Paths.get("/repo")
+    val src     = root.resolve("src")
+    val tree    = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
+    val surface = expandedExplorerSurface(tree, selectedPath = Some(root))
+    val sm      = makeStateManager()
+    sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    val scene = UiSceneSnapshot.from(state, viewport)
+    val node = scene.workspace
+      .find(_.id == SceneNodeId.Surface(surface.id))
+      .getOrElse(fail("expected expanded surface node"))
+    val content = node.hitRegions
+      .collectFirst { case SceneHitRegion(SceneHitKind.Content, rect) => rect }
+      .getOrElse(fail("expected expanded content hit region"))
+    val row = scene.editorContract
+      .panelRowSlots(surface.id)
+      .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y }
+      .getOrElse(fail("expected expanded content row"))
+
+    content.contains(content.x, row._2) shouldBe true
+    node.frameRect.containsRect(content) shouldBe true
+  }
+
   it should "select a directory tree row on hover without stealing focus" in {
     val root = Paths.get("/repo")
     val src  = root.resolve("src")
