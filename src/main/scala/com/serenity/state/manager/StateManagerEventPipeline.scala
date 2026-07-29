@@ -12,7 +12,6 @@ import com.serenity.state.reducers.*
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, PendingGroup}
 import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 
@@ -1931,23 +1930,15 @@ final private[manager] class StateManagerEventPipeline(
             case Some((paneId, paneLayout)) =>
               state.layout.editorPanes.get(paneId).flatMap(pane => pane.bufferId.flatMap(state.buffers.get)) match
                 case Some(buffer) =>
-                  val contentRect  = paneLayout.contentRect
-                  val vp           = buffer.viewport
-                  val visualRow    = (click.row - contentRect.y).max(0)
-                  val font         = previewFontForBuffer(buffer, state.config.fontConfig)
-                  val metrics      = CellMetrics.fromFont(font)
-                  val panelWidthPx = contentRect.width * metrics.charWidth
-                  mouseTargetSnapshot(
-                    cache,
-                    paneId,
-                    buffer,
-                    panelWidthPx,
-                    font,
-                    state.config.wordWrapEnabled
-                  ).map { snapshot =>
+                  val contentRect = paneLayout.contentRect
+                  val vp          = buffer.viewport
+                  val visualRow   = (click.row - contentRect.y).max(0)
+                  mouseTargetSnapshot(cache, paneId).map { snapshot =>
+                    val cellWidthPx =
+                      if contentRect.width > 0 then snapshot.panelWidthPx.toFloat / contentRect.width.toFloat else 1.0f
                     val xPx = click.pixelX match
-                      case Some(pixelX) => (pixelX - (contentRect.x * metrics.charWidth)).toFloat
-                      case None         => ((click.col - contentRect.x).max(0) * metrics.charWidth).toFloat
+                      case Some(pixelX) => pixelX.toFloat - (contentRect.x * cellWidthPx)
+                      case None         => (click.col - contentRect.x).max(0) * cellWidthPx
                     val clickedCursor = snapshot
                       .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
                       .orElse {
@@ -1968,7 +1959,9 @@ final private[manager] class StateManagerEventPipeline(
     val key = MouseTargetLayoutKey.from(state, viewportSize)
     mouseTargetCacheRef.modify {
       case Some(cache) if cache.layoutKey == key =>
-        Some(cache) -> cache
+        val scene = UiSceneSnapshot.publishedFor(state, viewportSize)
+        val next  = scene.fold(cache)(published => cache.copy(scene = published))
+        Some(next) -> next
       case _ =>
         val next = MouseTargetCache.fromState(state, viewportSize)
         Some(next) -> next
@@ -1976,18 +1969,11 @@ final private[manager] class StateManagerEventPipeline(
 
   private def mouseTargetSnapshot(
     cache: MouseTargetCache,
-    paneId: PaneId,
-    buffer: Buffer,
-    panelWidthPx: Int,
-    font: java.awt.Font,
-    wordWrapEnabled: Boolean
+    paneId: PaneId
   ): cats.effect.IO[TextLayoutSnapshot] =
     cache.scene.textSnapshot(paneId) match
       case Some(snapshot) => cats.effect.IO.pure(snapshot)
-      case None =>
-        cats.effect.IO.pure(
-          TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font, wordWrapEnabled = wordWrapEnabled)
-        )
+      case None => cats.effect.IO.raiseError(new IllegalStateException(s"missing text snapshot for pane $paneId"))
 
   private def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
     val source        = RopeCharacterSource(buffer.content)
@@ -2048,9 +2034,3 @@ final private[manager] class StateManagerEventPipeline(
       case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
       case Modal.CloseWorkflow(_)   => ModalType.CloseWorkflow
       case Modal.Custom(name, _)    => ModalType.Custom(name)
-
-  private def previewFontForBuffer(
-    buffer: Buffer,
-    config: FontConfig
-  ): java.awt.Font =
-    FontLoader.previewFontForRole(config, buffer.typographyRole)

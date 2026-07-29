@@ -82,34 +82,6 @@ private[manager] object MouseTargetLayoutKey:
         else Nil
     )
 
-private[manager] case class MouseTargetSnapshotKey(
-    bufferId: BufferId,
-    content: RopeIdentity,
-    viewport: Viewport,
-    language: Option[com.serenity.lsp.config.LanguageId],
-    fontConfig: FontConfig,
-    panelWidthPx: Int,
-    wordWrapEnabled: Boolean
-)
-
-private[manager] object MouseTargetSnapshotKey:
-
-  def from(
-    buffer: Buffer,
-    fontConfig: FontConfig,
-    panelWidthPx: Int,
-    wordWrapEnabled: Boolean = true
-  ): MouseTargetSnapshotKey =
-    MouseTargetSnapshotKey(
-      bufferId = buffer.id,
-      content = RopeIdentity(buffer.content),
-      viewport = buffer.viewport,
-      language = buffer.language,
-      fontConfig = fontConfig,
-      panelWidthPx = panelWidthPx,
-      wordWrapEnabled = wordWrapEnabled
-    )
-
 private[manager] case class MouseTargetCache(
     layoutKey: MouseTargetLayoutKey,
     scene: UiSceneSnapshot
@@ -119,17 +91,22 @@ private[manager] object MouseTargetCache:
 
   def fromState(state: AppState, viewportSize: ViewportSize): MouseTargetCache =
     val layoutKey = MouseTargetLayoutKey.from(state, viewportSize)
-    val layout    = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-    val scene     = UiSceneSnapshot.from(state, layout, viewportSize)
-    val snapshots = scene.paneLayouts.flatMap {
-      case (paneId, paneLayout) =>
-        for
-          pane     <- state.layout.editorPanes.get(paneId)
-          bufferId <- pane.bufferId
-          buffer   <- state.buffers.get(bufferId)
-        yield
-          val font  = FontLoader.previewFontForRole(state.config.fontConfig, buffer.typographyRole)
-          val width = paneLayout.contentRect.width * CellMetrics.fromFont(font).charWidth
-          paneId -> TextLayoutSnapshot.fromBuffer(buffer, width, font, wordWrapEnabled = state.config.wordWrapEnabled)
+    val scene = UiSceneSnapshot.publishedFor(state, viewportSize).getOrElse {
+      val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val base   = UiSceneSnapshot.from(state, layout, viewportSize)
+      val snapshots = base.paneLayouts.flatMap {
+        case (paneId, paneLayout) =>
+          for
+            pane     <- state.layout.editorPanes.get(paneId)
+            bufferId <- pane.bufferId
+            buffer   <- state.buffers.get(bufferId)
+          yield
+            val font  = FontLoader.previewFontForRole(state.config.fontConfig, buffer.typographyRole)
+            val width = paneLayout.contentRect.width * CellMetrics.fromFont(font).charWidth
+            paneId -> TextLayoutSnapshot.fromBuffer(buffer, width, font, wordWrapEnabled = state.config.wordWrapEnabled)
+      }
+      val prepared = base.withTextSnapshots(snapshots)
+      UiSceneSnapshot.publish(state, viewportSize, prepared)
+      prepared
     }
-    MouseTargetCache(layoutKey, scene.withTextSnapshots(snapshots))
+    MouseTargetCache(layoutKey, scene)

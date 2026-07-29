@@ -1,5 +1,7 @@
 package com.serenity.ui.layout
 
+import java.util.concurrent.atomic.AtomicReference
+
 import com.serenity.state.models.*
 
 /** The paint order for one frame of Serenity's user interface. */
@@ -65,6 +67,22 @@ case class UiSceneSnapshot(
     copy(textSnapshots = snapshots)
 
 object UiSceneSnapshot:
+
+  private case class PublishedScene(state: AppState, viewportSize: ViewportSize, scene: UiSceneSnapshot)
+
+  private val publishedScene = new AtomicReference[Option[PublishedScene]](None)
+
+  /** Publish the finalized scene for the state and viewport currently being rendered. */
+  def publish(state: AppState, viewportSize: ViewportSize, scene: UiSceneSnapshot): Unit =
+    publishedScene.set(Some(PublishedScene(state, viewportSize, scene)))
+
+  /** Return the finalized scene prepared for this exact immutable state and viewport, when available. */
+  def publishedFor(state: AppState, viewportSize: ViewportSize): Option[UiSceneSnapshot] =
+    publishedScene.get().collect {
+      case PublishedScene(publishedState, publishedViewportSize, scene)
+          if (publishedState eq state) && publishedViewportSize == viewportSize =>
+        scene
+    }
 
   def from(state: AppState, viewportSize: ViewportSize): UiSceneSnapshot =
     from(state, LayoutEngine.calculateLayoutWithUI(state, viewportSize), viewportSize)

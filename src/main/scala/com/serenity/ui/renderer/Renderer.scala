@@ -188,36 +188,21 @@ object Renderer:
         case Some(value) => value.scene.calculatedLayout -> value.renderPlan
         case None =>
           val layout = LayoutEngine.calculateLayout(state0, viewportSize)
-          val scene  = UiSceneSnapshot.from(state0, layout, viewportSize)
-          val context =
-            RenderContext(
-              surface,
-              layout,
-              cursorVisible,
-              cursorColor,
-              codeFont,
-              textFont,
-              uiFont,
-              swingWin.metrics,
-              uiMetrics
-            )
-          val renderPlan = prepareEditorPaneRenderPlan(state0, context, scene)
-          preparedSceneRef.set(
-            Some(
-              PreparedScene(
-                state0,
-                scene.withTextSnapshots(renderPlan.snapshots),
-                renderPlan,
-                codeFont,
-                textFont,
-                uiFont,
-                swingWin.metrics,
-                uiMetrics,
-                viewportSize
-              )
-            )
+          val next = prepareScene(
+            state0,
+            surface,
+            viewportSize,
+            layout,
+            cursorVisible,
+            cursorColor,
+            codeFont,
+            textFont,
+            uiFont,
+            swingWin.metrics,
+            uiMetrics
           )
-          layout -> renderPlan
+          preparedSceneRef.set(Some(next))
+          next.scene.calculatedLayout -> next.renderPlan
       val context =
         RenderContext(
           surface,
@@ -371,7 +356,6 @@ object Renderer:
   ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
     surface.clearViewport(state.theme.background)
-    val scene = UiSceneSnapshot.from(state, layout, viewportSize)
 
     val editorRenderPlan = state.startPageSurface.flatMap {
       _.content match
@@ -379,42 +363,75 @@ object Renderer:
         case _                              => None
     } match
       case Some(page) =>
+        val scene = UiSceneSnapshot.from(state, layout, viewportSize)
+        UiSceneSnapshot.publish(state, viewportSize, scene)
         renderStartPage(page, surface, viewportSize, state.theme, uiFont, cellMetrics, uiMetrics)
         val floatContext =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
         renderFloatingPanels(state, floatContext, scene)
         None
       case None =>
+        val prepared = prepareScene(
+          state,
+          surface,
+          viewportSize,
+          layout,
+          cursorVisible,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics
+        )
+        val finalizedScene   = prepared.scene
+        val editorRenderPlan = prepared.renderPlan
+        preparedSceneRef.set(Some(prepared))
         val context =
           RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
-        val editorRenderPlan = prepareEditorPaneRenderPlan(state, context, scene)
-        preparedSceneRef.set(
-          Some(
-            PreparedScene(
-              state,
-              scene.withTextSnapshots(editorRenderPlan.snapshots),
-              editorRenderPlan,
-              codeFont,
-              textFont,
-              uiFont,
-              cellMetrics,
-              uiMetrics,
-              viewportSize
-            )
-          )
-        )
         renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
         renderLineNumbers(state, context, editorRenderPlan)
         renderGutter(state, context, editorRenderPlan.layoutContract)
         renderPinnedPanels(state, context)
         renderEditorPanes(state, context, editorRenderPlan)
-        renderFloatingPanels(state, context, scene)
-        renderModalLayer(state, context, scene)
+        renderFloatingPanels(state, context, finalizedScene)
+        renderModalLayer(state, context, finalizedScene)
         Some(editorRenderPlan)
 
     surface.applyPostProcessing(state.config.postProcessingEffect)
     surface.flush()
     editorRenderPlan
+
+  private def prepareScene(
+    state: AppState,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    layout: CalculatedLayout,
+    cursorVisible: Boolean,
+    cursorColor: Option[java.awt.Color],
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics
+  ): PreparedScene =
+    val context =
+      RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
+    val scene          = UiSceneSnapshot.from(state, layout, viewportSize)
+    val renderPlan     = prepareEditorPaneRenderPlan(state, context, scene)
+    val finalizedScene = scene.withTextSnapshots(renderPlan.snapshots)
+    UiSceneSnapshot.publish(state, viewportSize, finalizedScene)
+    PreparedScene(
+      state,
+      finalizedScene,
+      renderPlan,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      viewportSize
+    )
 
   private def renderSpacerColumns(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     val surface = context.surface

@@ -1,11 +1,13 @@
 package com.serenity.state.manager
 
+import java.awt.Font
+
 import com.serenity.config.{AppConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, UiSceneSnapshot, ViewportSize}
+import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -63,10 +65,42 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val state  = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"))
     val size   = ViewportSize(80, 24)
     val cache  = MouseTargetCache.fromState(state, size)
+    val reused = MouseTargetCache.fromState(state, size)
     val layout = LayoutEngine.calculateLayoutWithUI(state, size)
 
     cache.scene.editorContract.workspace.paneLayouts shouldBe cache.scene.paneLayouts
     cache.scene.calculatedLayout shouldBe layout
+    reused.scene should be theSameInstanceAs cache.scene
+  }
+
+  it should "reuse the prepared scene for cursor-only state changes" in {
+    val buffer = Buffer.fromString(bufferId, "alpha beta")
+    val state  = stateWith(buffer.copy(cursors = List(CursorPosition(0, 1))))
+    val moved  = stateWith(buffer.copy(cursors = List(CursorPosition(0, 5))))
+    val size   = ViewportSize(80, 24)
+    val scene  = MouseTargetCache.fromState(state, size).scene
+
+    UiSceneSnapshot.publish(moved, size, scene)
+
+    MouseTargetCache.fromState(moved, size).scene should be theSameInstanceAs scene
+  }
+
+  it should "use the renderer's proportional wrapped snapshot for hit testing" in {
+    val state   = stateWith(Buffer.fromString(bufferId, (1 to 20).map(_ => "proportional").mkString(" ")))
+    val size    = ViewportSize(80, 24)
+    val mono    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val text    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+    val surface = new com.serenity.MockRenderSurface(size.width, size.height)
+
+    Renderer.render(state, cursorVisible = true, surface, size, mono, text, CellMetrics.fromFont(mono), None)
+
+    val cache    = MouseTargetCache.fromState(state, size)
+    val snapshot = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
+
+    snapshot.usesMeasuredLayout shouldBe true
+    snapshot.isProportional shouldBe true
+    snapshot.visualLines.size should be > 1
+    cache.scene should be theSameInstanceAs MouseTargetCache.fromState(state, size).scene
   }
 
   it should "change when layout-affecting content changes with line numbers enabled" in {
@@ -96,30 +130,4 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     List(fontChanged, languageChanged, languageRemoved, viewportChanged, richTextChanged).foreach { changed =>
       MouseTargetLayoutKey.from(changed, size) should not be key
     }
-  }
-
-  "MouseTargetSnapshotKey" should "ignore cursor and selection changes for the same buffer content" in {
-    val buffer = Buffer
-      .fromString(bufferId, "alpha beta")
-      .copy(language = Some(LanguageId.Markdown), cursors = List(CursorPosition(0, 1)))
-    val draggedBuffer = buffer.copy(
-      cursors = List(CursorPosition(0, 5)),
-      selection = Some(Selection(CursorPosition(0, 1), CursorPosition(0, 5)))
-    )
-    val fontConfig = FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)
-
-    MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx = 640) shouldBe
-      MouseTargetSnapshotKey.from(draggedBuffer, fontConfig, panelWidthPx = 640)
-  }
-
-  it should "change when buffer content or font settings change" in {
-    val buffer     = Buffer.fromString(bufferId, "alpha beta")
-    val changed    = Buffer.fromString(bufferId, "alpha beta gamma")
-    val fontConfig = FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)
-
-    MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx = 640) should not be
-      MouseTargetSnapshotKey.from(changed, fontConfig, panelWidthPx = 640)
-
-    MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx = 640) should not be
-      MouseTargetSnapshotKey.from(buffer, fontConfig.copy(fontSize = 14.0f), panelWidthPx = 640)
   }
