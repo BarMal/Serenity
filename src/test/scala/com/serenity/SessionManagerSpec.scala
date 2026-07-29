@@ -8,7 +8,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.session.SessionManager
+import com.serenity.session.{SessionId, SessionIndex, SessionManager, SessionMetadata}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.config.AppThemeManager
@@ -56,6 +56,21 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val bufferId = initial.bufferOrder.head
     val buffer   = Buffer.fromString(bufferId, text)
     initial.copy(buffers = Map(bufferId -> buffer))
+
+  private def writeIndex(sessionRoot: Path, index: SessionIndex): Unit =
+    Files.writeString(
+      sessionRoot.resolve("session-index.json"),
+      _root_.io.circe.syntax.EncoderOps(index).asJson.spaces2
+    )
+
+  private def metadata(id: String, sessionFileName: String): SessionMetadata =
+    SessionMetadata(
+      id = SessionId(id),
+      displayName = id,
+      sessionFileName = sessionFileName,
+      createdAtEpochMillis = 1L,
+      updatedAtEpochMillis = 1L
+    )
 
   private def dirtyFileStateWithText(diskText: String, unsavedText: String): IO[AppState] =
     IO.blocking {
@@ -281,4 +296,117 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       sessions.exists(_.displayName == "Named") shouldBe true
 
     program.unsafeRunSync()
+  }
+
+  it should "never load an absolute legacy session path" in {
+    val sessionRoot = Files.createTempDirectory("session-manager-absolute-path")
+    val outsideFile = Files.createTempFile("session-manager-outside", ".json")
+    val original    = "outside session content"
+    Files.writeString(outsideFile, original)
+    val sessionManager = createManagerAt(sessionRoot)
+    writeIndex(
+      sessionRoot,
+      SessionIndex(List(metadata("unsafe", outsideFile.toAbsolutePath.toString)), Some(SessionId("unsafe")))
+    )
+
+    val loaded = sessionManager.loadSession(SessionId("unsafe")).unsafeRunSync()
+
+    loaded shouldBe None
+    Files.readString(outsideFile) shouldBe original
+    sessionManager.listSessions().unsafeRunSync() shouldBe Nil
+  }
+
+  it should "never follow a session-file symlink outside the session root" in {
+    val sessionRoot = Files.createTempDirectory("session-manager-symlink")
+    val outsideFile = Files.createTempFile("session-manager-symlink-outside", ".json")
+    Files.writeString(outsideFile, "outside")
+    val sessionsDirectory = Files.createDirectories(sessionRoot.resolve("sessions"))
+    Files.createSymbolicLink(sessionsDirectory.resolve("link.json"), outsideFile)
+    val sessionManager = createManagerAt(sessionRoot)
+    writeIndex(
+      sessionRoot,
+      SessionIndex(List(metadata("linked", "link.json")), Some(SessionId("linked")))
+    )
+
+    sessionManager.loadSession(SessionId("linked")).unsafeRunSync() shouldBe None
+    Files.readString(outsideFile) shouldBe "outside"
+  }
+
+  it should "reject traversal expressed with mixed path separators" in {
+    val sessionRoot = Files.createTempDirectory("session-manager-mixed-path")
+    val outsideFile = sessionRoot.getParent.resolve("mixed-session-outside.json")
+    Files.writeString(outsideFile, "outside")
+    val sessionManager = createManagerAt(sessionRoot)
+    writeIndex(
+      sessionRoot,
+      SessionIndex(List(metadata("unsafe", "..\\" + outsideFile.getFileName.toString)), Some(SessionId("unsafe")))
+    )
+
+    sessionManager.deleteSession(SessionId("unsafe")).unsafeRunSync()
+
+    Files.exists(outsideFile) shouldBe true
+  }
+
+  it should "never prune through an unsafe legacy session path" in {
+    val sessionRoot = Files.createTempDirectory("session-manager-unsafe-prune")
+    val outsideFile = Files.createTempFile("session-manager-prune-outside", ".json")
+    Files.writeString(outsideFile, "outside")
+    val sessionManager = createManagerAt(sessionRoot, SessionManager.SessionPolicy(maxSessionHistory = 0))
+    writeIndex(
+      sessionRoot,
+      SessionIndex(List(metadata("unsafe", outsideFile.toAbsolutePath.toString)), None)
+    )
+
+    sessionManager.saveSessionAs("New", stateWithText("new")).unsafeRunSync()
+
+    Files.readString(outsideFile) shouldBe "outside"
+  }
+
+  it should "use the canonical current filename when saving over unsafe legacy metadata" in {
+    val sessionRoot = Files.createTempDirectory("session-manager-canonical-save")
+    val outsideFile = Files.createTempFile("session-manager-canonical-outside", ".json")
+    Files.writeString(outsideFile, "untouched")
+    val sessionManager = createManagerAt(sessionRoot)
+    writeIndex(
+      sessionRoot,
+      SessionIndex(List(metadata("current", outsideFile.toAbsolutePath.toString)), Some(SessionId("current")))
+    )
+
+    sessionManager.saveSession(stateWithText("safe")).unsafeRunSync()
+
+    Files.readString(outsideFile) shouldBe "untouched"
+    Files.exists(currentSessionFile(sessionRoot)) shouldBe true
+    sessionManager.loadSession().unsafeRunSync().map(_.buffers.values.head.content.toString) shouldBe Some("safe")
+  }
+
+  it should "reject a hostile session id before canonicalizing its filename" in {
+    val sessionRoot = Files.createTempDirectory("session-manager-hostile-id")
+    val outsideFile = sessionRoot.getParent.resolve("hostile-session.json")
+    Files.deleteIfExists(outsideFile)
+    val sessionManager = createManagerAt(sessionRoot)
+    writeIndex(
+      sessionRoot,
+      SessionIndex(List(metadata("../hostile", "safe.json")), Some(SessionId("../hostile")))
+    )
+
+    sessionManager.saveSession(stateWithText("must not escape")).attempt.unsafeRunSync().isLeft shouldBe true
+    Files.exists(outsideFile) shouldBe false
+  }
+
+  it should "preserve session files when recovering a corrupt index" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-corrupt-index")
+    val sessionManager = createManagerAt(sessionRoot)
+    val sessionId      = sessionManager.saveSessionAs("Recoverable", stateWithText("preserve me")).unsafeRunSync()
+    Files.writeString(sessionRoot.resolve("session-index.json"), "not valid index json")
+
+    sessionManager.saveSession(stateWithText("current after recovery")).unsafeRunSync()
+
+    sessionManager.loadSession(sessionId).unsafeRunSync().map(_.buffers.values.head.content.toString) shouldBe
+      Some("preserve me")
+    Files
+      .list(sessionRoot)
+      .iterator()
+      .asScala
+      .map(_.getFileName.toString)
+      .exists(_.startsWith("session-index.json.corrupt-")) shouldBe true
   }
