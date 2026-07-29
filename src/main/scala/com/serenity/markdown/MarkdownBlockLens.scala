@@ -37,7 +37,11 @@ object MarkdownBlockLens:
   ): Range.Inclusive =
     currentBlock(LineSource(lineCount, lineAt, fenceProbeWindow = None), activeLine)
 
-  /** Resolves a block with a bounded fence probe for fixed-viewport rendering. */
+  /** Resolves a viewport-limited block for fixed-viewport rendering.
+    *
+    * This overload deliberately limits contiguous block spans to the probe window. Callers that require complete
+    * semantic block membership must use the unbounded overload.
+    */
   def currentBlock(
     lineCount: Int,
     lineAt: Int => Option[String],

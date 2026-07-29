@@ -401,3 +401,48 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
     lineReads.get() should be < 2_500
   }
+
+  it should "bound renderer reads for a long paragraph in a large document" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(1)
+    val lineReads = AtomicInteger(0)
+    val markdown =
+      (Vector.fill(1_000)("paragraph content") ++
+        Vector("") ++
+        Vector.fill(10_000)("trailing prose")).mkString("\n")
+    val content = CountingAccessRope(Rope(markdown), lineReads = lineReads)
+    val buffer = Buffer(bufferId, content).copy(
+      language = Some(LanguageId.Markdown),
+      cursors = List(CursorPosition(500, 0)),
+      viewport = Viewport(topLine = 500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withWordWrap(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    noException should be thrownBy Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
+
+    // The renderer intentionally resolves only the viewport-local lens range for long blocks.
+    lineReads.get() should be < 6_000
+  }
