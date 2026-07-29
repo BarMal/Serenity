@@ -63,6 +63,12 @@ enum SurfacePaintKind:
   case TextInput
   case ActionItem
 
+/** Layout strategy for text carried by a composed paint box. */
+enum SurfacePaintLayout:
+  case Plain
+  case Split
+  case Inline
+
 /** One clipped paint box. Interactive boxes carry the same identity and rectangle as their hit region. */
 case class SurfacePaintBox(
     kind: SurfacePaintKind,
@@ -72,7 +78,9 @@ case class SurfacePaintBox(
     actionId: Option[SurfaceActionId] = None,
     semanticLabel: Option[String] = None,
     selected: Boolean = false,
-    cursorOffset: Option[Int] = None
+    cursorOffset: Option[Int] = None,
+    segments: List[OverlaySegment] = Nil,
+    layout: SurfacePaintLayout = SurfacePaintLayout.Plain
 )
 
 /** One semantic pointer target emitted from the same box used for painting. */

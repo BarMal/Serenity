@@ -148,6 +148,9 @@ final private[manager] class StateManagerEventPipeline(
         applyReducerResult(FileEventReducer.reduce(fileEvent, prevState), prevState)
       case mouse: MouseInputEvent if prevState.hasBlockingModal =>
         handleModalMouseInput(mouse, prevState)
+      case click: MouseClick
+          if focusedFloatingModalWorkflow(prevState).nonEmpty && modalHitAt(click, prevState).nonEmpty =>
+        handleModalMouseInput(click, prevState)
       case click: MouseClick =>
         handleMouseClick(click, prevState)
       case press: MousePress =>
@@ -931,40 +934,62 @@ final private[manager] class StateManagerEventPipeline(
   private def handleModalMouseInput(event: MouseInputEvent, state: AppState): cats.effect.IO[Unit] =
     event match
       case click: MouseClick if click.button == MouseButton.Primary =>
-        modalCloseWorkflowChoiceAt(click, state) match
-          case Some(choice) =>
-            val selected = ModalEventReducer.selectCloseWorkflowChoice(choice, state)
-            applyReducerResult(selected, state) >>
-              stateRef.get.flatMap { updatedState =>
-                applyReducerResult(
-                  ModalEventReducer.reduce(ModalType.CloseWorkflow, ModalSubmit, updatedState),
-                  updatedState
+        modalHitAt(click, state) match
+          case Some((modal, hit)) =>
+            val modalType = this.modalType(modal)
+            val clicked = ModalEventReducer.reduce(
+              modalType,
+              ModalClick(hit.focusId.value, hit.actionId.map(_.value)),
+              state
+            )
+            applyReducerResult(clicked, state) >>
+              Option
+                .when(modalType == ModalType.CloseWorkflow && hit.actionId.nonEmpty)(())
+                .fold(
+                  cats.effect.IO.unit
+                )(_ =>
+                  stateRef.get.flatMap { updatedState =>
+                    applyReducerResult(
+                      ModalEventReducer.reduce(ModalType.CloseWorkflow, ModalSubmit, updatedState),
+                      updatedState
+                    )
+                  }
                 )
-              }
-          case None =>
-            cats.effect.IO.unit
+          case None => cats.effect.IO.unit
       case _ =>
         cats.effect.IO.unit
 
-  private def modalCloseWorkflowChoiceAt(click: MouseClick, state: AppState): Option[CloseWorkflowChoice] =
+  private def modalHitAt(click: MouseClick, state: AppState): Option[(Modal, SurfaceHitRegion)] =
     for
       viewportSize <- state.viewportSize
-      surface      <- state.topModalSurface
+      surface      <- state.topModalSurface.orElse(focusedFloatingModalWorkflow(state))
       node <- UiSceneSnapshot
         .from(state, viewportSize)
-        .modal
+        .nodesInPaintOrder
         .find(_.id == SceneNodeId.Surface(surface.id))
       _ <- Option.when(node.frameRect.contains(click.col, click.row))(())
-      workflow <- surface.content match
-        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-        case _                                                           => None
+      modal <- surface.content match
+        case SurfaceContent.ModalWorkflow(modal) => Some(modal)
+        case _                                   => None
       targetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
-      actionId <- ModalSurfaceComposition
-        .close(workflow, node.frameRect, targetRows)
-        .hitAt(click.col.toDouble, click.row.toDouble)
-        .flatMap(_.actionId)
-      choice <- ModalSurfaceComposition.closeChoice(actionId)
-    yield choice
+      hit <- ModalSurfaceComposition
+        .forModal(modal, node.frameRect, targetRows)
+        .flatMap(_.hitAt(click.col.toDouble, click.row.toDouble))
+    yield (modal, hit)
+
+  private def focusedFloatingModalWorkflow(state: AppState): Option[UiSurface] =
+    for
+      surfaceId <- state.focus match
+        case Focus.Surface(id) => Some(id)
+        case _                 => None
+      surface <- state.uiSurfaces.find(_.id == surfaceId)
+      _ <- surface.presentation match
+        case SurfacePresentation.Floating(_, _) => Some(())
+        case _                                  => None
+      _ <- surface.content match
+        case SurfaceContent.ModalWorkflow(_) => Some(())
+        case _                               => None
+    yield surface
 
   private def handleStartupPageMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
     val action = state.startPageSurface.flatMap { surface =>

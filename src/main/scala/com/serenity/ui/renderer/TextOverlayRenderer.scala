@@ -176,7 +176,12 @@ object TextOverlayRenderer:
         val row = OverlayRow(
           plainText = text,
           selected = box.selected,
-          cursorColumn = box.cursorOffset
+          cursorColumn = box.cursorOffset,
+          segments = box.segments,
+          layout = box.layout match
+            case SurfacePaintLayout.Plain  => OverlayRowLayout.Plain
+            case SurfacePaintLayout.Split  => OverlayRowLayout.Split
+            case SurfacePaintLayout.Inline => OverlayRowLayout.Plain
         )
         renderRow(
           surface,
