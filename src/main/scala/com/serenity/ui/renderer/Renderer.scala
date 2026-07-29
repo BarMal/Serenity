@@ -798,7 +798,10 @@ object Renderer:
       if buffer.language.contains(LanguageId.Markdown) then
         activeLine
           .filter(line => line >= 0 && line < buffer.content.lineCount)
-          .map(line => MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line))
+          .map(line =>
+            MarkdownBlockLens
+              .currentBlock(buffer.content.lineCount, buffer.content.getLine, line, fenceProbeWindow = 512)
+          )
           .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
           .getOrElse((_: Int) => true)
       else
@@ -1110,7 +1113,9 @@ object Renderer:
       val activeLine = buffer.cursors.headOption
         .map(_.line)
         .filter(line => line >= 0 && line < lineCount)
-      val activeBlock = activeLine.map(line => MarkdownBlockLens.currentBlock(lineCount, buffer.content.getLine, line))
+      val activeBlock = activeLine.map(line =>
+        MarkdownBlockLens.currentBlock(lineCount, buffer.content.getLine, line, fenceProbeWindow = 512)
+      )
       val viewportTopLine = buffer.viewport.topLine.max(0).min(lineCount - 1)
       val windowTopLine = activeLine
         .filter(line => line == viewportTopLine && line > 0 && buffer.content.getLine(line).exists(_.trim.isEmpty))
@@ -1151,14 +1156,14 @@ object Renderer:
     val cursorRanges = buffer.cursors
       .map(_.line)
       .filter(line => line >= 0 && line < lineCount)
-      .map(line => MarkdownBlockLens.currentBlock(lineCount, buffer.content.getLine, line))
+      .map(line => MarkdownBlockLens.currentBlock(lineCount, buffer.content.getLine, line, fenceProbeWindow = 512))
     val selectionRanges = buffer.allSelections.flatMap { selection =>
       if lineCount == 0 then Nil
       else
         val startLine = selection.start.line.max(0).min(lineCount - 1)
         val endLine   = selection.end.line.max(0).min(lineCount - 1)
         (startLine to endLine)
-          .map(line => MarkdownBlockLens.currentBlock(lineCount, buffer.content.getLine, line))
+          .map(line => MarkdownBlockLens.currentBlock(lineCount, buffer.content.getLine, line, fenceProbeWindow = 512))
           .toList
     }
     mergeOverlappingMarkdownRanges(cursorRanges ++ selectionRanges)

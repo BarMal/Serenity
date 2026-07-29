@@ -4,12 +4,12 @@ import scala.annotation.tailrec
 
 object MarkdownBlockLens:
 
-  private case class LineSource(lineCount: Int, lineAt: Int => Option[String], boundedFenceProbe: Boolean):
+  private case class LineSource(lineCount: Int, lineAt: Int => Option[String], fenceProbeWindow: Option[Int]):
     def at(index: Int): String =
       lineAt(index).getOrElse("")
 
   def currentBlock(lines: Vector[String], activeLine: Int): Range.Inclusive =
-    currentBlock(LineSource(lines.length, lines.lift, boundedFenceProbe = false), activeLine)
+    currentBlock(LineSource(lines.length, lines.lift, fenceProbeWindow = None), activeLine)
 
   /** Resolves a block using only the source lines inspected by the block parser. */
   def currentBlock(
@@ -17,7 +17,16 @@ object MarkdownBlockLens:
     lineAt: Int => Option[String],
     activeLine: Int
   ): Range.Inclusive =
-    currentBlock(LineSource(lineCount, lineAt, boundedFenceProbe = true), activeLine)
+    currentBlock(LineSource(lineCount, lineAt, fenceProbeWindow = None), activeLine)
+
+  /** Resolves a block with a bounded fence probe for fixed-viewport rendering. */
+  def currentBlock(
+    lineCount: Int,
+    lineAt: Int => Option[String],
+    activeLine: Int,
+    fenceProbeWindow: Int
+  ): Range.Inclusive =
+    currentBlock(LineSource(lineCount, lineAt, Some(fenceProbeWindow.max(1))), activeLine)
 
   private def currentBlock(lines: LineSource, activeLine: Int): Range.Inclusive =
     if lines.lineCount <= 0 then 0 to 0
@@ -74,7 +83,7 @@ object MarkdownBlockLens:
       else if isFenceLine(lines.at(index)) then Some(index)
       else nextFence(index + 1, remaining - 1)
 
-    val fenceProbe = if lines.boundedFenceProbe then 512 else lines.lineCount
+    val fenceProbe = lines.fenceProbeWindow.getOrElse(lines.lineCount)
 
     if isFenceLine(lines.at(activeLine)) then
       if hasFenceInfo(activeLine) then nextFence(activeLine + 1, fenceProbe).filter(isClosingFence).map(activeLine to _)
