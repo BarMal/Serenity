@@ -672,19 +672,8 @@ object CommandRunnerReducer:
                       recordedAtMillis - firstAt <= DoubleTapWindowMillis &&
                       sameKeyStroke(first, info) =>
                   assignRecordedBinding(state, item, first)
-                case Some(_) =>
-                  ReducerResult.noEffects(
-                    replaceRunner(
-                      state,
-                      current =>
-                        current.copy(
-                          activeSubmenu = current.activeSubmenu.map(
-                            _.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))
-                          ),
-                          statusMessage = Some("Press the same key again within 200ms to record a double tap")
-                        )
-                    )
-                  )
+                case Some((first, _)) =>
+                  assignRecordedBinding(state, item, first)
           case _ => ReducerResult.noEffects(state)
       case _ =>
         ReducerResult.noEffects(state)

@@ -246,6 +246,45 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "finalize a pending single key after the double-tap window expires" in {
+    val registry = CommandRegistry.default
+    val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val items    = base.submenuItems("settings-keymap")
+    val runner = base.copy(
+      activeSubmenu = Some(
+        CommandRunnerSubmenuState(
+          "settings-keymap",
+          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
+          recordingItemId = Some("keymap-global-find"),
+          pendingRecordedBinding = Some(
+            KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty) -> 1_000L
+          )
+        )
+      )
+    )
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner"))
+    )
+
+    val result = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty), 1_201L),
+      state,
+      registry
+    )
+
+    result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+      CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "k")
+    )
+    runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
+  }
+
   it should "switch categories with tab and reverse-tab while search is empty" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry

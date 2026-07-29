@@ -117,8 +117,11 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
     FocusedInputTranslator
       .forState(state)
-      .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))) shouldBe
-      RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
+      .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))) match
+      case RunnerRecordBinding(info, _, isDoubleTap) =>
+        info shouldBe KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
+        isDoubleTap shouldBe false
+      case other => fail(s"Expected a recorded binding, got $other")
   }
 
   it should "route a modifier double-tap stroke to a keymap submenu recorder" in {
