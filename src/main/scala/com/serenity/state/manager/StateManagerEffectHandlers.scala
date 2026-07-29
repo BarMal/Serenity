@@ -362,9 +362,11 @@ final private[manager] class StateManagerEffectHandlers(
           case None =>
             configPersistencePath match
               case Some(path) =>
-                IO.blocking(com.serenity.config.ConfigManager.saveConfig(config, path)).flatMap {
-                  case true  => IO.unit
-                  case false => logger.warn(s"[CONFIG] Failed to persist config to $path")
+                com.serenity.config.ConfigManager.saveConfigIO(config, path).flatMap {
+                  case Right(_) => IO.unit
+                  case Left(error) =>
+                    logger
+                      .warn(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
                 }
               case None =>
                 IO.unit
@@ -1745,9 +1747,10 @@ final private[manager] class StateManagerEffectHandlers(
   private def persistConfigFile(config: com.serenity.config.AppConfig): IO[Unit] =
     configPersistencePath match
       case Some(path) =>
-        IO.blocking(com.serenity.config.ConfigManager.saveConfig(config, path)).flatMap {
-          case true  => IO.unit
-          case false => logger.warn(s"[CONFIG] Failed to persist config to $path")
+        com.serenity.config.ConfigManager.saveConfigIO(config, path).flatMap {
+          case Right(_) => IO.unit
+          case Left(error) =>
+            logger.warn(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
         }
       case None =>
         IO.unit

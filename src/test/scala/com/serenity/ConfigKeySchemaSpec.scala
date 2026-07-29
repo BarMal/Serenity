@@ -44,7 +44,7 @@ class ConfigKeySchemaSpec extends AnyFlatSpec with Matchers:
       .map(_.trim)
       .filter(line => line.nonEmpty && !line.startsWith("#"))
       .flatMap(_.split("=", 2).headOption)
-      .map(_.trim.toLowerCase)
+      .map(_.trim.stripPrefix("\"").stripSuffix("\"").toLowerCase)
 
     renderedKeys.filterNot(ConfigKeySchema.isKnownKey) shouldBe Nil
   }

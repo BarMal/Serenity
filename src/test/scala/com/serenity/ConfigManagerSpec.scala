@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.keystroke.{InputKey, Modifier}
-import com.serenity.lsp.config.{LanguageId, LspServerOverride}
+import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -86,9 +86,9 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     )
 
     val written = ConfigManager.configToString(config)
-    written should include("hotkey.command_palette = meta+p")
-    written should include("hotkey.file_search = meta+shift+f")
-    written should include("keymap.command_runner.submit = meta+enter")
+    written should include("hotkey.command_palette = [\"meta+p\"]")
+    written should include("hotkey.file_search = [\"meta+shift+f\"]")
+    written should include("keymap.command_runner.submit = \"meta+enter\"")
   }
 
   it should "load configuration through the effectful blocking-safe API" in {
@@ -260,10 +260,10 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
   it should "write default editor selection-extension keymap bindings" in {
     val written = ConfigManager.configToString(AppConfig.default)
 
-    written should include("keymap.editor.extend_selection_left = shift+left")
-    written should include("keymap.editor.extend_selection_right = shift+right")
-    written should include("keymap.editor.extend_selection_up = shift+up")
-    written should include("keymap.editor.extend_selection_down = shift+down")
+    written should include("keymap.editor.extend_selection_left = \"shift+left\"")
+    written should include("keymap.editor.extend_selection_right = \"shift+right\"")
+    written should include("keymap.editor.extend_selection_up = \"shift+up\"")
+    written should include("keymap.editor.extend_selection_down = \"shift+down\"")
   }
 
   it should "fall back to default editor key bindings when writing sparse keymap config" in {
@@ -271,7 +271,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val written = ConfigManager.configToString(config)
 
     written should include("keymap.editor.page_down = pagedown")
-    written should include("keymap.editor.extend_selection_right = shift+right")
+    written should include("keymap.editor.extend_selection_right = \"shift+right\"")
   }
 
   it should "load legacy shared font size and ligature keys for code and prose fonts" in {
@@ -305,8 +305,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     config.cursorColors.active shouldBe Some(new Color(0x33, 0x66, 0xcc))
     config.cursorColors.inactive shouldBe Some(new Color(0xcc, 0x66, 0x33, 0x80))
-    ConfigManager.configToString(config) should include("cursor.active.color = #3366CC")
-    ConfigManager.configToString(config) should include("cursor.inactive.color = #CC663380")
+    ConfigManager.configToString(config) should include("cursor.active.color = \"#3366CC\"")
+    ConfigManager.configToString(config) should include("cursor.inactive.color = \"#CC663380\"")
   }
 
   it should "load and write cursor mode" in {
@@ -336,7 +336,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
     config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
-    ConfigManager.configToString(config) should include("cursor.info_bar = detailed")
+    ConfigManager.configToString(config) should include("\"cursor.info_bar\" = detailed")
     ConfigManager.configToString(config) should include("cursor.info_bar.placement = pinned-bottom")
   }
 
@@ -558,7 +558,50 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val written = ConfigManager.configToString(config)
     written should include("lsp.scala.enabled = false")
     written should include("lsp.python.command = pylsp")
-    written should include("lsp.python.args = --stdio,--log-file,/tmp/pylsp.log")
+    written should include("lsp.python.args = [\"--stdio\", \"--log-file\", \"/tmp/pylsp.log\"]")
+  }
+
+  it should "preserve commas inside HOCON LSP argument list values" in {
+    val configFile = Files.createTempFile("serenity-lsp-comma-args", ".conf")
+    Files.writeString(configFile, "lsp.python.args = [\"--define=A,B\", \"--stdio\"]\n")
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.lspUserConfig.servers.value(LanguageId.Python.id).args shouldBe Some(
+      List("--define=A,B", "--stdio")
+    )
+    val written = ConfigManager.configToString(config)
+    Files.writeString(configFile, written)
+    ConfigManager
+      .loadConfig(Some(configFile.toString))
+      .lspUserConfig
+      .servers
+      .value(LanguageId.Python.id)
+      .args shouldBe Some(
+      List("--define=A,B", "--stdio")
+    )
+  }
+
+  it should "round-trip an empty HOCON LSP argument list through structured loading" in {
+    val configFile = Files.createTempFile("serenity-lsp-empty-args", ".conf")
+    val config = AppConfig.default.withLspUserConfig(
+      LspUserConfig(
+        servers = Some(
+          Map(
+            LanguageId.Python.id -> LspServerOverride(
+              command = None,
+              args = Some(Nil)
+            )
+          )
+        )
+      )
+    )
+    Files.writeString(configFile, ConfigManager.configToString(config))
+
+    ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
+      case Right(result) =>
+        result.config.lspUserConfig.servers.value(LanguageId.Python.id).args shouldBe Some(Nil)
+      case Left(error) => fail(s"expected structured round-trip success, received $error")
   }
 
   it should "load and write text area inset percentages" in {
@@ -833,7 +876,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
-    serialized should include("ui.motion.family.command_surfaces.animation = custom")
+    serialized should include("\"ui.motion.family.command_surfaces.animation\" = custom")
     serialized should include("ui.motion.family.command_surfaces.animation.duration_ms = 320")
     serialized should include("ui.motion.family.command_surfaces.animation.steps = 7")
     loaded.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.CommandSurfaces).animation shouldBe Some(
@@ -904,16 +947,16 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.characterAnimation shouldBe None
     val serialized = ConfigManager.configToString(config)
     serialized should include("ui.material = crystal")
-    serialized should include("ui.motion = reduced")
+    serialized should include("\"ui.motion\" = reduced")
     serialized should include("ui.motion.accessibility = standard")
     serialized should include("ui.motion.family.editor_text.transition = typed")
     serialized should include("ui.motion.family.editor_text.speed_scale = 0.5")
     serialized should include("ui.motion.family.command_surfaces.transition = outline")
-    serialized should include("ui.motion.family.command_surfaces.animation = subtle")
+    serialized should include("\"ui.motion.family.command_surfaces.animation\" = subtle")
     serialized should include("ui.motion.family.command_surfaces.speed_scale = 2.25")
     serialized should include("ui.motion.family.pinned_panels.open_transition = directional")
     serialized should include("ui.motion.family.pinned_panels.close_transition = off")
-    serialized should include("ui.motion.family.ui_transitions.animation = smooth")
+    serialized should include("\"ui.motion.family.ui_transitions.animation\" = smooth")
     serialized should include("ui.motion.family.cursor.speed_scale = 0.75")
   }
 
@@ -936,7 +979,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     )
     val written = ConfigManager.configToString(AppConfig.default.withCharacterAnimation(customAnimation))
 
-    written should include("character.animation = custom")
+    written should include("\"character.animation\" = custom")
     written should include("character.animation.duration_ms = 320")
     written should include("character.animation.steps = 7")
 
@@ -1013,9 +1056,11 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val written = ConfigManager.configToString(config)
     written should include("spellcheck.enabled = true")
-    written should include("spellcheck.languages = en,fr")
-    written should include("spellcheck.dictionary_paths = C:\\Dictionaries\\en_US.dic,/usr/share/hunspell/fr.dic")
-    written should include("spellcheck.words = serenity,κόσμος,café")
+    written should include("spellcheck.languages = [\"en\", \"fr\"]")
+    written should include(
+      "spellcheck.dictionary_paths = [\"C:\\\\Dictionaries\\\\en_US.dic\", \"/usr/share/hunspell/fr.dic\"]"
+    )
+    written should include("spellcheck.words = [\"serenity\", \"κόσμος\", \"café\"]")
   }
 
   it should "close loaded config files and save using UTF-8" in {
@@ -1034,4 +1079,182 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     ConfigManager.saveConfig(config, configFile) shouldBe true
     Files.readString(configFile, StandardCharsets.UTF_8) should include("font.text.family = Sérif")
+  }
+
+  it should "round-trip HOCON quoting, comments, substitutions, lists, and commas" in {
+    val configFile = Files.createTempFile("serenity-hocon-config", ".conf")
+    Files.writeString(
+      configFile,
+      """font.text.family = "Text Font #1" # trailing comment
+        |spellcheck.languages = ["en", "fr"]
+        |spellcheck.dictionary_paths = ["C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic"]
+        |spellcheck.words = ["hello, world", "Café"]
+        |font.ui.family = ${font.text.family}
+        |""".stripMargin
+    )
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    loaded.fontConfig.textFontFamily shouldBe "Text Font #1"
+    loaded.fontConfig.uiFontFamily shouldBe "Text Font #1"
+    loaded.spellCheck.languages shouldBe List("en", "fr")
+    loaded.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
+    loaded.spellCheck.additionalWords shouldBe List("hello, world", "café")
+
+    ConfigManager.saveConfig(loaded, configFile) shouldBe true
+    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+    reloaded.fontConfig shouldBe loaded.fontConfig
+    reloaded.spellCheck shouldBe loaded.spellCheck
+  }
+
+  it should "preserve inline slash comments without including them in unquoted values" in {
+    val configFile = Files.createTempFile("serenity-hocon-slash-comment", ".conf")
+    Files.writeString(
+      configFile,
+      """font.text.family = SansSerif // use the platform sans-serif font
+        |font.ui.family = ${font.text.family}
+        |""".stripMargin
+    )
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    loaded.fontConfig.textFontFamily shouldBe "SansSerif"
+    loaded.fontConfig.uiFontFamily shouldBe "SansSerif"
+  }
+
+  it should "resolve substitutions inside brace-nested HOCON objects" in {
+    val configFile = Files.createTempFile("serenity-hocon-nested-substitution", ".conf")
+    Files.writeString(
+      configFile,
+      """font {
+        |  text.family = "Nested Serif"
+        |  ui.family = ${font.text.family}
+        |}
+        |""".stripMargin
+    )
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    loaded.fontConfig.textFontFamily shouldBe "Nested Serif"
+    loaded.fontConfig.uiFontFamily shouldBe "Nested Serif"
+  }
+
+  it should "load supported settings from inline HOCON objects" in {
+    val configFile = Files.createTempFile("serenity-hocon-inline-object", ".conf")
+    Files.writeString(
+      configFile,
+      """font = { text = { family = "Inline Serif" }, ui = { family = ${font.text.family} } }
+        |spellcheck = { enabled = true, languages = ["en", "fr"] }
+        |""".stripMargin
+    )
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    loaded.fontConfig.textFontFamily shouldBe "Inline Serif"
+    loaded.fontConfig.uiFontFamily shouldBe "Inline Serif"
+    loaded.spellCheck.enabled shouldBe true
+    loaded.spellCheck.languages shouldBe List("en", "fr")
+  }
+
+  it should "load legacy values through parser fallback without changing valid HOCON" in {
+    val configFile = Files.createTempFile("serenity-hocon-legacy-path", ".conf")
+    Files.writeString(
+      configFile,
+      """font.text.family = Legacy Serif
+        |spellcheck.dictionary_paths = C:\Dictionaries\en_US.dic
+        |viewport.width.max =
+        |""".stripMargin
+    )
+
+    ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
+      case Right(result) =>
+        result.config.fontConfig.textFontFamily shouldBe "Legacy Serif"
+        result.config.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
+        result.config.viewportSizing.width.maxCells shouldBe None
+      case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
+  }
+
+  it should "resolve HOCON substitutions alongside legacy Windows path values" in {
+    val configFile = Files.createTempFile("serenity-mixed-legacy-hocon", ".conf")
+    Files.writeString(
+      configFile,
+      """font.text.family = "Text Font"
+        |font.ui.family = ${font.text.family}
+        |font.code.family = ${?missing.font.family}
+        |spellcheck.dictionary_paths = C:\Dictionaries\en_US.dic
+        |""".stripMargin
+    )
+
+    ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
+      case Right(result) =>
+        result.config.fontConfig.textFontFamily shouldBe "Text Font"
+        result.config.fontConfig.uiFontFamily shouldBe "Text Font"
+        result.config.fontConfig.codeFontFamily shouldBe AppConfig.default.fontConfig.codeFontFamily
+        result.config.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
+      case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
+  }
+
+  it should "return structured errors at the effectful configuration boundary" in {
+    val invalidFile = Files.createTempFile("serenity-invalid-hocon", ".conf")
+    Files.writeString(invalidFile, "font.code.size = [not-a-number]\n")
+
+    ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
+      case Left(error)  => error.message should include("font.code.size")
+      case Right(value) => fail(s"expected a structured load error, received $value")
+
+    val directoryPath = Files.createTempDirectory("serenity-save-error")
+    ConfigManager.saveConfigIO(AppConfig.default, directoryPath).unsafeRunSync() match
+      case Left(error) => error.path shouldBe directoryPath
+      case Right(_)    => fail("expected a structured save error")
+  }
+
+  it should "validate hotkey, keymap, and LSP entries through the structured load API" in {
+    val invalidFile = Files.createTempFile("serenity-invalid-bindings", ".conf")
+    Files.writeString(
+      invalidFile,
+      """hotkey.save = [not-a-real-trigger]
+        |keymap.command_runner.submit = not-a-real-trigger
+        |lsp.python.enabled = maybe
+        |""".stripMargin
+    )
+
+    ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
+      case Left(error) =>
+        error.message should include("hotkey.save")
+        error.message should include("keymap.command_runner.submit")
+        error.message should include("lsp.python.enabled")
+      case Right(value) => fail(s"expected binding validation errors, received $value")
+  }
+
+  it should "resolve file-relative includes and substitutions from the config path" in {
+    val directory = Files.createTempDirectory("serenity-hocon-include")
+    val included  = directory.resolve("included.conf")
+    val root      = directory.resolve("application.conf")
+    Files.writeString(
+      included,
+      """font.text.family = "Included Serif"
+        |spellcheck.dictionary_paths = "C:\\Dictionaries\\en_US.dic"
+        |""".stripMargin
+    )
+    Files.writeString(
+      root,
+      """include required("included.conf")
+        |font.ui.family = ${font.text.family}
+        |""".stripMargin
+    )
+
+    val loaded = ConfigManager.loadConfig(Some(root.toString))
+
+    loaded.fontConfig.textFontFamily shouldBe "Included Serif"
+    loaded.fontConfig.uiFontFamily shouldBe "Included Serif"
+    loaded.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
+  }
+
+  it should "serialize empty and custom key binding collections without crashing" in {
+    val config = AppConfig.default
+      .withHotkeyConfig(HotkeyConfig(Map.empty))
+      .withFocusedKeymapConfig(FocusedKeymapConfig())
+
+    noException should be thrownBy ConfigManager.configToString(config)
+    ConfigManager.configToString(config) should include("keymap.command_runner.submit")
   }
