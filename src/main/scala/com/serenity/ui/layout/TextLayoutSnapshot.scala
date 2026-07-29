@@ -19,7 +19,8 @@ case class TextVisualLine(
     text: String,
     widthPx: Float,
     caretStops: Vector[TextCaretStop],
-    xOffsetPx: Float = 0.0f
+    xOffsetPx: Float = 0.0f,
+    xSortedCaretStops: Vector[TextCaretStop] = Vector.empty
 ):
 
   def xForColumn(column: Int): Option[Float] =
@@ -35,8 +36,22 @@ case class TextVisualLine(
     search(0, caretStops.length - 1, None)
 
   def nearestColumnForXPx(xPx: Float): Int =
-    if caretStops.isEmpty then 0
-    else caretStops.tail.foldLeft(caretStops.head)(closer(_, _, xPx)).column
+    val stops = if xSortedCaretStops.nonEmpty then xSortedCaretStops else caretStops.sortBy(_.xPx)
+
+    @annotation.tailrec
+    def search(low: Int, high: Int): TextCaretStop =
+      if low > high then
+        (stops.lift(high), stops.lift(low)) match
+          case (Some(left), Some(right)) => closer(left, right, xPx)
+          case (Some(left), None)         => left
+          case (None, Some(right))        => right
+          case (None, None)               => stops.head
+      else
+        val middle = (low + high) >>> 1
+        if stops(middle).xPx < xPx then search(middle + 1, high)
+        else search(low, middle - 1)
+
+    if stops.isEmpty then 0 else search(0, stops.length - 1).column
 
   private def closer(first: TextCaretStop, second: TextCaretStop, xPx: Float): TextCaretStop =
     if math.abs(second.xPx - xPx) < math.abs(first.xPx - xPx) then second else first
@@ -337,15 +352,24 @@ object TextLayoutSnapshot:
   ): TextVisualLine =
     val xs              = caretXs(text, font, frc, measuredLayout)
     val boundaryOffsets = graphemeBoundaryOffsets(text)
+    val caretStops = boundaryOffsets.map { offset =>
+      TextCaretStop(startColumn + offset, xs.lift(offset).getOrElse(xs.lastOption.getOrElse(0.0f)))
+    }.toVector
+    val xSortedCaretStops =
+      if caretStops.sliding(2).forall {
+          case Vector(first, second) => first.xPx <= second.xPx
+          case _                     => true
+        }
+      then caretStops
+      else caretStops.sortBy(_.xPx)
     TextVisualLine(
       bufferLine = bufferLine,
       startColumn = startColumn,
       endColumn = endColumn,
       text = text,
       widthPx = xs.lastOption.getOrElse(0.0f),
-      caretStops = boundaryOffsets.map { offset =>
-        TextCaretStop(startColumn + offset, xs.lift(offset).getOrElse(xs.lastOption.getOrElse(0.0f)))
-      }.toVector
+      caretStops = caretStops,
+      xSortedCaretStops = xSortedCaretStops
     )
 
   private def applyParagraphAlignment(
@@ -377,6 +401,7 @@ object TextLayoutSnapshot:
     else
       line.copy(
         caretStops = line.caretStops.map(stop => stop.copy(xPx = stop.xPx + offsetPx)),
+        xSortedCaretStops = line.xSortedCaretStops.map(stop => stop.copy(xPx = stop.xPx + offsetPx)),
         xOffsetPx = offsetPx
       )
 

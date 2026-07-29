@@ -333,22 +333,39 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "hit-test RTL caret stops without assuming x order" in {
+    val caretStops = Vector(
+      com.serenity.ui.layout.TextCaretStop(0, 26.5f),
+      com.serenity.ui.layout.TextCaretStop(1, 15.8f),
+      com.serenity.ui.layout.TextCaretStop(2, 6.6f),
+      com.serenity.ui.layout.TextCaretStop(3, 26.5f)
+    )
     val line = com.serenity.ui.layout.TextVisualLine(
       bufferLine = 0,
       startColumn = 0,
       endColumn = 3,
       text = "אבג",
       widthPx = 26.5f,
-      caretStops = Vector(
-        com.serenity.ui.layout.TextCaretStop(0, 26.5f),
-        com.serenity.ui.layout.TextCaretStop(1, 15.8f),
-        com.serenity.ui.layout.TextCaretStop(2, 6.6f),
-        com.serenity.ui.layout.TextCaretStop(3, 26.5f)
-      )
+      caretStops = caretStops,
+      xSortedCaretStops = caretStops.sortBy(_.xPx)
     )
 
     line.nearestColumnForXPx(15.8f) shouldBe 1
     line.nearestColumnForXPx(6.6f) shouldBe 2
+  }
+
+  it should "hit-test a long line through its x-sorted caret index" in {
+    val caretStops = Vector.tabulate(20_001)(column => com.serenity.ui.layout.TextCaretStop(column, column * 0.5f))
+    val line = com.serenity.ui.layout.TextVisualLine(
+      bufferLine = 0,
+      startColumn = 0,
+      endColumn = 20_000,
+      text = "x" * 20_000,
+      widthPx = 10_000.0f,
+      caretStops = caretStops,
+      xSortedCaretStops = caretStops
+    )
+
+    line.nearestColumnForXPx(6_789.6f) shouldBe 13_579
   }
 
   it should "retain grapheme-boundary caret positions for a long measured line" in {

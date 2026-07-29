@@ -171,11 +171,8 @@ object CharacterRenderer:
           else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
         }
 
-      def stopXPx(localIndex: Int): Float =
-        stopXPxByLocalIndex.lift(localIndex).getOrElse(0.0f)
-
       case class MeasuredRun(
-          startXPx: Float,
+          startLocalIndex: Int,
           foreground: Color,
           background: Color,
           style: TextStyle,
@@ -184,14 +181,16 @@ object CharacterRenderer:
       )
 
       def drawRun(run: MeasuredRun): Unit =
-        val endXPx        = xOriginPx + stopXPx(run.endLocalIndex)
+        val visualExtents = stopXPxByLocalIndex.slice(run.startLocalIndex, run.endLocalIndex + 1)
+        val startXPx      = xOriginPx + visualExtents.minOption.getOrElse(0.0f)
+        val endXPx        = xOriginPx + visualExtents.maxOption.getOrElse(0.0f)
         val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
-        val widthPx       = clippedEndXPx - run.startXPx
+        val widthPx       = clippedEndXPx - startXPx
         if widthPx > 0.0f then
           surface.setForegroundColor(run.foreground)
           surface.setBackgroundColor(run.background)
           withStyle(surface, run.style) {
-            surface.drawRunPx(run.startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text.toString)
+            surface.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text.toString)
           }
 
       val chars = styledSegments0.flatMap(segment =>
@@ -209,7 +208,7 @@ object CharacterRenderer:
           current match
             case None =>
               val run = MeasuredRun(
-                xOriginPx + stopXPx(localIndex),
+                localIndex,
                 foreground,
                 background,
                 style,
@@ -225,7 +224,7 @@ object CharacterRenderer:
 
             case Some(run) =>
               val nextRun = MeasuredRun(
-                xOriginPx + stopXPx(localIndex),
+                localIndex,
                 foreground,
                 background,
                 style,

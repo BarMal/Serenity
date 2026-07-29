@@ -1,9 +1,9 @@
 package com.serenity
 
-import java.awt.Color
+import java.awt.{Color, Font}
 
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
-import com.serenity.ui.layout.{TextCaretStop, TextVisualLine}
+import com.serenity.ui.layout.{TextCaretStop, TextLayoutSnapshot, TextVisualLine}
 import com.serenity.ui.renderer.CharacterRenderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -143,4 +143,30 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
     )
 
     surface.drawRunPxCalls.map(_.s).mkString shouldBe text
+  }
+
+  it should "render an RTL measured line whose logical endpoints share the right edge" in {
+    val text = "אבג"
+    val font       = Font("SansSerif", Font.PLAIN, 12)
+    val visualLine = TextLayoutSnapshot.visualLineForText(text, bufferLine = 0, font)
+    val surface    = new MockRenderSurface(200, 24)
+
+    visualLine.caretStops.head.xPx shouldBe visualLine.caretStops.last.xPx +- 0.001f
+
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      visualLine,
+      Theme.light,
+      AnimationState.empty
+    )
+
+    val calls = surface.drawRunPxCalls
+    calls should have size 1
+    calls.head.s shouldBe text
+    calls.head.xPx shouldBe visualLine.caretStops.map(_.xPx).min +- 0.001f
+    calls.head.bgWidthPx shouldBe (visualLine.caretStops.map(_.xPx).max - visualLine.caretStops.map(_.xPx).min) +- 0.001f
   }
