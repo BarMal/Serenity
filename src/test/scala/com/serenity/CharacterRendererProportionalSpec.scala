@@ -146,7 +146,7 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render an RTL measured line whose logical endpoints share the right edge" in {
-    val text = "אבג"
+    val text       = "אבג"
     val font       = Font("SansSerif", Font.PLAIN, 12)
     val visualLine = TextLayoutSnapshot.visualLineForText(text, bufferLine = 0, font)
     val surface    = new MockRenderSurface(200, 24)
@@ -168,5 +168,7 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
     calls should have size 1
     calls.head.s shouldBe text
     calls.head.xPx shouldBe visualLine.caretStops.map(_.xPx).min +- 0.001f
-    calls.head.bgWidthPx shouldBe (visualLine.caretStops.map(_.xPx).max - visualLine.caretStops.map(_.xPx).min) +- 0.001f
+    calls.head.bgWidthPx shouldBe (visualLine.caretStops.map(_.xPx).max - visualLine.caretStops
+      .map(_.xPx)
+      .min) +- 0.001f
   }

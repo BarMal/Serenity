@@ -43,9 +43,9 @@ case class TextVisualLine(
       if low > high then
         (stops.lift(high), stops.lift(low)) match
           case (Some(left), Some(right)) => closer(left, right, xPx)
-          case (Some(left), None)         => left
-          case (None, Some(right))        => right
-          case (None, None)               => stops.head
+          case (Some(left), None)        => left
+          case (None, Some(right))       => right
+          case (None, None)              => stops.head
       else
         val middle = (low + high) >>> 1
         if stops(middle).xPx < xPx then search(middle + 1, high)
@@ -357,9 +357,9 @@ object TextLayoutSnapshot:
     }.toVector
     val xSortedCaretStops =
       if caretStops.sliding(2).forall {
-          case Vector(first, second) => first.xPx <= second.xPx
-          case _                     => true
-        }
+            case Vector(first, second) => first.xPx <= second.xPx
+            case _                     => true
+          }
       then caretStops
       else caretStops.sortBy(_.xPx)
     TextVisualLine(
