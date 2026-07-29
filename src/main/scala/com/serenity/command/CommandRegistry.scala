@@ -709,10 +709,10 @@ object CommandRegistry:
     ),
     Command.typed(
       "project-debug",
-      "Run the detected project through its debug workflow.",
+      "Launch the detected project through its debug task.",
       CommandIntent.RunProjectTask(ProjectTaskKind.Debug),
       CommandCategory.Project,
-      label = "Debug Project"
+      label = "Run Debug Task"
     ),
     Command.typed(
       "project-dependencies",

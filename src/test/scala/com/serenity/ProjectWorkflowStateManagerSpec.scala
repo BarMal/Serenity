@@ -37,6 +37,14 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "describe the debug command as running a debug task without changing its identity" in {
+    val command = CommandRegistry.default.findCommand("project-debug").getOrElse(fail("Missing project-debug command"))
+
+    command.label shouldBe "Run Debug Task"
+    command.description shouldBe "Launch the detected project through its debug task."
+    command.intent shouldBe CommandIntent.RunProjectTask(ProjectTaskKind.Debug)
+  }
+
   it should "pin a terminal status when no project task can be detected" in {
     val tempRoot = Files.createTempDirectory("no-project-workflow")
     try
