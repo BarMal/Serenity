@@ -10,12 +10,17 @@ import com.serenity.ui.theme.config.ThemeCreatorState
 case class SurfaceId(value: String)
 
 /** An executable option displayed on the startup launch surface. */
+enum StartupActionSection:
+  case Session
+  case Workflow
+
 case class StartupAction(
     id: String,
     label: String,
     command: Command,
     shortcut: Option[Char] = None,
-    detail: Option[String] = None
+    detail: Option[String] = None,
+    section: StartupActionSection = StartupActionSection.Session
 ):
 
   def renderedLabel: String =
@@ -73,6 +78,15 @@ case class StartupPage(
   def selectedAction: Option[StartupAction] =
     launchActions.lift(selectedIndex)
 
+  /** Zero-based render-line index for each launch action, including section spacing and headings. */
+  def actionLineIndices: List[Int] =
+    launchActions.zipWithIndex.foldLeft((List.empty[Int], 3, Option.empty[StartupActionSection])) {
+      case ((indices, nextLine, previousSection), (action, _)) =>
+        val sectionLines =
+          if previousSection.exists(_ != action.section) then 2 else 0
+        (indices :+ (nextLine + sectionLines), nextLine + sectionLines + 1, Some(action.section))
+    }._1
+
   def actionBounds(
     viewportSize: ViewportSize,
     codeMetrics: CellMetrics,
@@ -83,10 +97,10 @@ case class StartupPage(
     val viewportHeightPx = viewportSize.height * codeMetrics.lineHeight
     val startYPx         = math.max(0, (viewportHeightPx - (renderLines.size * lineHeightPx)) / 2)
 
-    launchActions.zipWithIndex.flatMap {
-      case (action, index) =>
+    launchActions.zip(actionLineIndices).zipWithIndex.flatMap {
+      case ((action, lineIndex), index) =>
         val widthPx = math.min(viewportWidthPx, (action.renderedLabel.length + 4) * codeMetrics.charWidth)
-        val yPx     = startYPx + ((index + 3) * lineHeightPx)
+        val yPx     = startYPx + (lineIndex * lineHeightPx)
         Option.when(yPx + lineHeightPx > 0 && yPx < viewportHeightPx)(
           StartupActionBounds(
             index = index,
@@ -108,7 +122,14 @@ case class StartupPage(
     actionBounds(viewportSize, codeMetrics, uiMetrics).find(_.contains(pixelX, pixelY)).map(_.index)
 
   def renderLines: List[String] =
-    val baseLines = List(title, "Choose a starting point", "") ++ launchActions.map(_.renderedLabel)
+    val actionLines = launchActions.zipWithIndex.foldLeft(List.empty[String]) {
+      case (lines, (action, index)) =>
+        val sectionHeader =
+          if index > 0 && launchActions(index - 1).section != action.section then List("", "Workflows")
+          else Nil
+        lines ++ sectionHeader :+ action.renderedLabel
+    }
+    val baseLines = List(title, "Choose a starting point", "") ++ actionLines
     statusMessage match
       case Some(message) => baseLines ++ List("", message, "", "↑↓ Navigate  •  Enter Select  •  Esc Close")
       case None          => baseLines ++ List("", "↑↓ Navigate  •  Enter Select  •  Esc Close")

@@ -1457,9 +1457,7 @@ object Renderer:
     val totalHeightPx = lines.size * lineHeightPx
     val startYPx      = math.max(0, ((viewportSize.height * cellMetrics.lineHeight) - totalHeightPx) / 2)
 
-    val titleLines       = 3
-    val optionStartIndex = titleLines
-    val optionEndIndex   = titleLines + page.launchActions.size - 1
+    val actionLineToIndex = page.actionLineIndices.zipWithIndex.toMap
     val actionBounds =
       page.actionBounds(viewportSize, cellMetrics, uiMetrics).map(bounds => bounds.index -> bounds).toMap
 
@@ -1468,15 +1466,15 @@ object Renderer:
         val yPx = startYPx + (lineIndex * lineHeightPx)
 
         if yPx + lineHeightPx > 0 && yPx < viewportSize.height * cellMetrics.lineHeight then
-          val isOption    = lineIndex >= optionStartIndex && lineIndex <= optionEndIndex
-          val optionIndex = lineIndex - optionStartIndex
-          val isSelected  = isOption && optionIndex == page.selectedIndex
+          val optionIndex = actionLineToIndex.get(lineIndex)
+          val isOption    = optionIndex.nonEmpty
+          val isSelected  = optionIndex.contains(page.selectedIndex)
 
           if isSelected then
             surface.setForegroundColor(theme.highlighted.foreground)
             surface.setBackgroundColor(theme.highlighted.background)
             surface.enableStyle(theme.focusStyle)
-            actionBounds.get(optionIndex).foreach { bounds =>
+            optionIndex.flatMap(actionBounds.get).foreach { bounds =>
               surface.fillPixelRect(
                 xPx = bounds.xPx,
                 yPx = bounds.yPx,

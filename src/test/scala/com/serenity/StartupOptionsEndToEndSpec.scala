@@ -122,3 +122,22 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
 
     program.unsafeRunSync()
   }
+
+  it should "start an editor session when a workflow preset is chosen" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupOptionsEndToEndSpec-workflow")
+      _ <- AppStartup.initializeState(stateManager, Theme.default, ViewportSize(80, 24))
+      _ <- stateManager.applyEvent(MoveDown)
+      _ <- stateManager.applyEvent(MoveDown)
+      _ <- stateManager.applyEvent(Enter)
+      state <- stateManager.getCurrentState
+    yield state
+
+    val state = program.unsafeRunSync()
+    state.startPageSurface shouldBe None
+    state.layout.editorPanes should not be empty
+    state.buffers should not be empty
+    state.focus should matchPattern { case Focus.EditorPane(_) => }
+  }

@@ -71,6 +71,21 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     recents.map(_.label) should not contain missing.toAbsolutePath.toString
   }
 
+  it should "separate workflow presets from session actions in the rendered layout" in {
+    val page = AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
+
+    page.renderLines.slice(0, 7) shouldBe List(
+      "Welcome to Serenity",
+      "Choose a starting point",
+      "",
+      page.actions(0).renderedLabel,
+      page.actions(1).renderedLabel,
+      "",
+      "Workflows"
+    )
+    page.actionLineIndices shouldBe List(3, 4, 7, 8, 9)
+  }
+
   it should "activate only the rendered launch action bounds with taller UI metrics" in {
     val stateManager = createStateManager("StartupLaunchSurfaceSpec-mouse")
     val viewport     = ViewportSize(80, 24)

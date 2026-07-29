@@ -65,7 +65,8 @@ object AppStartup:
         s"Use $name workflow",
         Command
           .typed(s"startup.workflow.${name.toLowerCase}", s"Use the $name workflow", CommandIntent.ApplyUiPreset(name)),
-        detail = Some("Enter")
+        detail = Some("Enter"),
+        section = StartupActionSection.Workflow
       )
     }
     val actions = primaryActions ++ restoreAction.toList ++ recentActions ++ workflowActions
