@@ -16,8 +16,8 @@ import com.serenity.richtext.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, ModalEventReducer}
-import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, Renderer}
+import com.serenity.ui.layout.{CellMetrics, Layout, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.renderer.{CharacterRenderer, Java2DRenderSurface, Renderer}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.Theme
 import io.circe.Json
@@ -67,6 +67,11 @@ object PerformanceBenchmarks:
     val findText       = largeFindDocument(matches = 12_000)
     val markdownLines  = largeMarkdownDocument(sections = 800)
     val markdownSource = markdownLines.mkString("\n")
+    val longMeasuredLine = TextLayoutSnapshot.visualLineForText(
+      "Wi" * 8_000,
+      bufferLine = 0,
+      textFont
+    )
     val richDocument   = largeRichTextDocument(lines = 6_000)
     val richState      = editorStateForRichDocument(richDocument)
     val multilineState = editorState(multilineText, None)
@@ -207,6 +212,7 @@ object PerformanceBenchmarks:
       )
     val markdownHtmlFragment   = MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
     val markdownLensFrame      = renderedFrame(markdownState, deviceScale = 1.0)
+    val longMeasuredLineFrame  = renderedLongMeasuredLine(longMeasuredLine)
     val advancedAnimationState = animationState.advanceAllAnimations()
 
     List(
@@ -245,6 +251,15 @@ object PerformanceBenchmarks:
         8,
         () => assert(renderedFrameHasPixels(fullFrame)),
         () => renderedFrame(richState, deviceScale = 1.0)
+      ),
+      Benchmark(
+        "render.long_measured_line.java2d",
+        2,
+        8,
+        () => assert(renderedFrameHasPixels(longMeasuredLineFrame)),
+        () =>
+          val _ = renderedLongMeasuredLine(longMeasuredLine)
+          ()
       ),
       Benchmark(
         "render.cursor_only.scene_reuse.java2d_overlay",
@@ -433,6 +448,31 @@ object PerformanceBenchmarks:
 
   private def renderedFrameHasPixels(image: BufferedImage): Boolean =
     image.getWidth > 0 && image.getHeight > 0 && ((image.getRGB(0, 0) >>> 24) & 0xff) > 0
+
+  private def renderedLongMeasuredLine(line: com.serenity.ui.layout.TextVisualLine): BufferedImage =
+    val image = new BufferedImage(frameWidthPx, frameHeightPx, BufferedImage.TYPE_INT_ARGB)
+    val surface = new Java2DRenderSurface(
+      image,
+      cellMetrics,
+      textFont,
+      _ => (),
+      logicalWidthPx = frameWidthPx,
+      logicalHeightPx = frameHeightPx
+    )
+    surface.setFont(textFont)
+    surface.clearViewport(Theme.light.background)
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = cellMetrics.lineHeight,
+      ascentPx = cellMetrics.ascent,
+      line,
+      Theme.light,
+      AnimationState.empty,
+      clipRightXPx = Some(frameWidthPx.toFloat)
+    )
+    image
 
   private def prepareCursorBaseFrame(state: AppState, window: SwingWindow): Unit =
     Renderer.render(

@@ -332,6 +332,23 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     snapshot.cursorForVisualRowAndXPx(0, line.widthPx) shouldBe Some(CursorPosition(0, 2))
   }
 
+  it should "retain grapheme-boundary caret positions for a long measured line" in {
+    val text = "Wi" * 1_000
+    val font = FontLoader
+      .loadTextFont(
+        FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
+      )
+      .unsafeRunSync()
+
+    val line = TextLayoutSnapshot.visualLineForText(text, bufferLine = 0, font)
+
+    line.caretStops.map(_.column) shouldBe (0 to text.length).toVector
+    line.caretStops.sliding(2).forall {
+      case Vector(first, second) => second.xPx >= first.xPx
+      case _                     => true
+    } shouldBe true
+  }
+
   it should "move vertically using measured caret x rather than raw logical columns" in {
     val buffer = Buffer
       .fromString(BufferId(5), "WWWW\niiii")

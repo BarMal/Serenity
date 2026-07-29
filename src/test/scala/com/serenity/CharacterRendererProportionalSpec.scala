@@ -118,3 +118,29 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
     calls.head.xPx shouldBe 0.0f +- 0.001f
     calls.head.bgWidthPx shouldBe 15.0f +- 0.001f
   }
+
+  it should "render a long measured line as one run when animation state is empty" in {
+    val text = "Wi" * 2_000
+    val visualLine = TextVisualLine(
+      bufferLine = 0,
+      startColumn = 0,
+      endColumn = text.length,
+      text = text,
+      widthPx = text.length * 6.0f,
+      caretStops = Vector.tabulate(text.length + 1)(index => TextCaretStop(index, index * 6.0f))
+    )
+    val surface = new MockRenderSurface(20_000, 24)
+
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      visualLine,
+      Theme.light,
+      AnimationState.empty
+    )
+
+    surface.drawRunPxCalls.map(_.s).mkString shouldBe text
+  }

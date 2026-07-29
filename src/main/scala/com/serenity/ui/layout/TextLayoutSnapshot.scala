@@ -23,13 +23,32 @@ case class TextVisualLine(
 ):
 
   def xForColumn(column: Int): Option[Float] =
-    caretStops
-      .find(_.column >= column)
-      .orElse(caretStops.lastOption)
-      .map(_.xPx)
+    @annotation.tailrec
+    def search(low: Int, high: Int, best: Option[TextCaretStop]): Option[Float] =
+      if low > high then best.orElse(caretStops.lastOption).map(_.xPx)
+      else
+        val middle = (low + high) >>> 1
+        val stop   = caretStops(middle)
+        if stop.column >= column then search(low, middle - 1, Some(stop))
+        else search(middle + 1, high, best)
+
+    search(0, caretStops.length - 1, None)
 
   def nearestColumnForXPx(xPx: Float): Int =
-    caretStops.minBy(stop => math.abs(stop.xPx - xPx)).column
+    @annotation.tailrec
+    def search(low: Int, high: Int, best: TextCaretStop): TextCaretStop =
+      if low > high then best
+      else
+        val middle = (low + high) >>> 1
+        val stop   = caretStops(middle)
+        if stop.xPx < xPx then search(middle + 1, high, closer(best, stop, xPx))
+        else search(low, middle - 1, closer(best, stop, xPx))
+
+    if caretStops.isEmpty then 0
+    else search(0, caretStops.length - 1, caretStops.head).column
+
+  private def closer(first: TextCaretStop, second: TextCaretStop, xPx: Float): TextCaretStop =
+    if math.abs(second.xPx - xPx) < math.abs(first.xPx - xPx) then second else first
 
 case class TextLayoutSnapshot(
     visualLines: Vector[TextVisualLine],
@@ -68,6 +87,8 @@ case class TextLayoutSnapshot(
 
 object TextLayoutSnapshot:
   private val UnwrappedOverscanColumns = 2
+  private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
+  private val measuredLayoutCache = java.util.concurrent.ConcurrentHashMap[MeasuredLayoutKey, java.lang.Boolean]()
 
   def caretXsForText(
     text: String,
@@ -392,9 +413,13 @@ object TextLayoutSnapshot:
     loop(0, Vector(0))
 
   private def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
-    !FontLoader.isMonospacedFont(font) ||
-      FontLoader.ligaturesEnabled(font) ||
-      hasFractionalAdvanceDrift(font, frc)
+    measuredLayoutCache.computeIfAbsent(
+      MeasuredLayoutKey(font, frc),
+      key =>
+        (!FontLoader.isMonospacedFont(key.font) ||
+          FontLoader.ligaturesEnabled(key.font) ||
+          hasFractionalAdvanceDrift(key.font, key.fontRenderContext)): java.lang.Boolean
+    )
 
   private def hasFractionalAdvanceDrift(font: Font, frc: FontRenderContext): Boolean =
     val sampleText = "iiiiiiiiiiii"
