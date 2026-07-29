@@ -2,9 +2,11 @@ package com.serenity.markdown
 
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font, RenderingHints}
-import java.io.StringReader
+import java.io.{ByteArrayInputStream, StringReader}
 import java.net.URI
-import java.util.LinkedHashMap
+import java.nio.file.{Files, Path, Paths}
+import java.util.{LinkedHashMap, Locale}
+import javax.imageio.ImageIO
 import javax.xml.parsers.DocumentBuilderFactory
 
 import scala.jdk.CollectionConverters.*
@@ -20,7 +22,8 @@ import org.commonmark.node.Image
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.*
 import org.w3c.dom.Document
-import org.xhtmlrenderer.swing.Java2DRenderer
+import org.xhtmlrenderer.resource.ImageResource
+import org.xhtmlrenderer.swing.{AWTFSImage, ImageResourceLoader, Java2DRenderer, SwingReplacedElementFactory}
 import org.xml.sax.InputSource
 
 object MarkdownDocumentPreview:
@@ -45,6 +48,9 @@ object MarkdownDocumentPreview:
   private val MaxCachedImages          = 24
   private val MaxCachedHtmlFragments   = 48
   private val MaxCachedInlineDocuments = 32
+  private val MaxImageBytes            = 2 * 1024 * 1024
+  private val MaxImageDimension        = 4096
+  private val MaxImagePixels           = MaxImageDimension.toLong * MaxImageDimension.toLong
 
   private case class SourceFingerprint(length: Int, hash: Int)
 
@@ -258,6 +264,8 @@ object MarkdownDocumentPreview:
         safeWidth,
         safeHeight
       )
+      val resourcePolicy = new PreviewResourcePolicy(baseUri)
+      renderer.getSharedContext.setReplacedElementFactory(previewReplacedElementFactory(resourcePolicy))
       renderer.getImage()
     catch
       case NonFatal(error) =>
@@ -279,6 +287,8 @@ object MarkdownDocumentPreview:
         safeWidth,
         safeHeight
       )
+      val resourcePolicy = new PreviewResourcePolicy(None)
+      renderer.getSharedContext.setReplacedElementFactory(previewReplacedElementFactory(resourcePolicy))
       renderer.getImage()
     catch
       case NonFatal(error) =>
@@ -661,6 +671,111 @@ object MarkdownDocumentPreview:
     factory.setNamespaceAware(true)
     factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
     factory.newDocumentBuilder().parse(InputSource(StringReader(xhtml)))
+
+  private class PreviewResourcePolicy(baseUri: Option[URI]):
+
+    private val resourceRoot = baseUri
+      .filter(uri => uri.getScheme == "file" && uri.getHost == null)
+      .flatMap(uri => Try(Paths.get(uri).toAbsolutePath.normalize()).toOption)
+
+    def isDataUri(uri: String): Boolean =
+      Option(uri).exists(_.trim.toLowerCase(Locale.ROOT).startsWith("data:"))
+
+    def placeholderImage: BufferedImage =
+      new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+
+    def imageFor(uri: String): BufferedImage =
+      loadImage(uri).getOrElse(placeholderImage)
+
+    private def loadImage(uri: String): Option[BufferedImage] =
+      for
+        parsed <- Try(URI.create(uri)).toOption
+        path   <- permittedFile(parsed)
+        bytes  <- readBounded(path)
+        image  <- decodeImage(bytes)
+      yield image
+
+    private def permittedFile(uri: URI): Option[Path] =
+      Option
+        .when(uri.getScheme == "file" && uri.getHost == null && resourceRoot.nonEmpty) {
+          Try(Paths.get(uri).toAbsolutePath.normalize()).toOption
+        }
+        .flatten
+        .filter { path =>
+          resourceRoot.exists { root =>
+            path.startsWith(root) &&
+            Try(path.toRealPath().startsWith(root.toRealPath())).getOrElse(false) &&
+            Files.isRegularFile(path)
+          }
+        }
+
+    private def readBounded(path: Path): Option[Array[Byte]] =
+      Try {
+        val input = Files.newInputStream(path)
+        try
+          val bytes = input.readNBytes(MaxImageBytes + 1)
+          if bytes.length <= MaxImageBytes then Some(bytes) else None
+        finally input.close()
+      }.toOption.flatten
+
+    private def decodeImage(bytes: Array[Byte]): Option[BufferedImage] =
+      Try {
+        Option(ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))).flatMap { input =>
+          val readers = ImageIO.getImageReaders(input)
+          if !readers.hasNext then
+            input.close()
+            None
+          else
+            val reader = readers.next()
+            try
+              reader.setInput(input, true, true)
+              val width  = reader.getWidth(0)
+              val height = reader.getHeight(0)
+              Option
+                .when(
+                  width > 0 &&
+                    height > 0 &&
+                    width <= MaxImageDimension &&
+                    height <= MaxImageDimension &&
+                    width.toLong * height.toLong <= MaxImagePixels
+                )(Option(ImageIO.read(new ByteArrayInputStream(bytes))))
+                .flatten
+            finally
+              reader.dispose()
+              input.close()
+        }
+      }.toOption.flatten
+
+  private def previewReplacedElementFactory(resourcePolicy: PreviewResourcePolicy): SwingReplacedElementFactory =
+    new PreviewReplacedElementFactory(resourcePolicy)
+
+  private class PreviewReplacedElementFactory(resourcePolicy: PreviewResourcePolicy)
+      extends SwingReplacedElementFactory(
+        ImageResourceLoader.NO_OP_REPAINT_LISTENER,
+        new ImageResourceLoader:
+          override def get(uri: String, width: Int, height: Int): ImageResource =
+            ImageResource(uri, AWTFSImage.createImage(resourcePolicy.imageFor(uri)))
+      ):
+
+    override def createReplacedElement(
+      context: org.xhtmlrenderer.layout.LayoutContext,
+      box: org.xhtmlrenderer.render.BlockBox,
+      userAgent: org.xhtmlrenderer.extend.UserAgentCallback,
+      cssWidth: Int,
+      cssHeight: Int
+    ): org.xhtmlrenderer.extend.ReplacedElement =
+      val element = Option(box.getElement)
+      val dataImage = element
+        .filter(_.getNodeName.equalsIgnoreCase("img"))
+        .map(_.getAttribute("src"))
+        .exists(resourcePolicy.isDataUri)
+      if dataImage then
+        new org.xhtmlrenderer.swing.InstantImageReplacedElement(
+          resourcePolicy.placeholderImage,
+          cssWidth,
+          cssHeight
+        )
+      else super.createReplacedElement(context, box, userAgent, cssWidth, cssHeight)
 
   private def fallbackImage(width: Int, height: Int, theme: Theme, font: Font, message: String): BufferedImage =
     val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
