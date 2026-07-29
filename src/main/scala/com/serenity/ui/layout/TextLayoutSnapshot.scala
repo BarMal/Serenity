@@ -35,17 +35,8 @@ case class TextVisualLine(
     search(0, caretStops.length - 1, None)
 
   def nearestColumnForXPx(xPx: Float): Int =
-    @annotation.tailrec
-    def search(low: Int, high: Int, best: TextCaretStop): TextCaretStop =
-      if low > high then best
-      else
-        val middle = (low + high) >>> 1
-        val stop   = caretStops(middle)
-        if stop.xPx < xPx then search(middle + 1, high, closer(best, stop, xPx))
-        else search(low, middle - 1, closer(best, stop, xPx))
-
     if caretStops.isEmpty then 0
-    else search(0, caretStops.length - 1, caretStops.head).column
+    else caretStops.tail.foldLeft(caretStops.head)(closer(_, _, xPx)).column
 
   private def closer(first: TextCaretStop, second: TextCaretStop, xPx: Float): TextCaretStop =
     if math.abs(second.xPx - xPx) < math.abs(first.xPx - xPx) then second else first

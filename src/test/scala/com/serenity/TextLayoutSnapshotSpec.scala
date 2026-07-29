@@ -332,6 +332,25 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     snapshot.cursorForVisualRowAndXPx(0, line.widthPx) shouldBe Some(CursorPosition(0, 2))
   }
 
+  it should "hit-test RTL caret stops without assuming x order" in {
+    val line = com.serenity.ui.layout.TextVisualLine(
+      bufferLine = 0,
+      startColumn = 0,
+      endColumn = 3,
+      text = "אבג",
+      widthPx = 26.5f,
+      caretStops = Vector(
+        com.serenity.ui.layout.TextCaretStop(0, 26.5f),
+        com.serenity.ui.layout.TextCaretStop(1, 15.8f),
+        com.serenity.ui.layout.TextCaretStop(2, 6.6f),
+        com.serenity.ui.layout.TextCaretStop(3, 26.5f)
+      )
+    )
+
+    line.nearestColumnForXPx(15.8f) shouldBe 1
+    line.nearestColumnForXPx(6.6f) shouldBe 2
+  }
+
   it should "retain grapheme-boundary caret positions for a long measured line" in {
     val text = "Wi" * 1_000
     val font = FontLoader
