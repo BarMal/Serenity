@@ -347,8 +347,9 @@ object Renderer:
       .flatMap { bufferId =>
         state.buffers.get(bufferId).map { _ =>
           val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val cached = state.annotationIndexByBuffer.getOrElse(bufferId, AnnotationLineIndex(Map.empty, Map.empty))
-          val commentsByLine    = visibleAnnotationLines(visibleLines, cached.commentsByLine)
+          val cached =
+            state.annotationIndexByBuffer.get(bufferId).map(_()).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
+          val commentsByLine    = cached.commentsByLine(visibleLines)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
           bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine)
         }

@@ -180,6 +180,18 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     projected.values.flatten.toSet shouldBe visible
   }
 
+  it should "construct a compact scene annotation index for a high-count buffer" in {
+    val bufferId = BufferId(1)
+    val comment  = DocumentComment(CursorPosition(0, 0), CursorPosition(100000, 0), "wide")
+    val buffer   = Buffer.fromString(bufferId, "content").copy(documentComments = List.fill(10000)(comment))
+    val state    = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
+
+    val index = state.annotationIndexByBuffer(bufferId)()
+
+    index.comments should have size 10000
+    index.commentsByLine(Set(100000)).values.flatten should contain only comment
+  }
+
   it should "render a plain large buffer without materialising the whole rope" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)

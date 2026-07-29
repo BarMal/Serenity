@@ -153,9 +153,22 @@ case class SpellCheckCacheEntry(
 
 /** Scene-owned annotation lookup keyed by buffer line. */
 case class AnnotationLineIndex(
-    commentsByLine: Map[Int, List[DocumentComment]],
+    comments: Vector[DocumentComment],
     diagnosticsByLine: Map[Int, List[Diagnostic]]
-)
+):
+
+  def commentsByLine(visibleLines: Set[Int]): Map[Int, List[DocumentComment]] =
+    if visibleLines.isEmpty then Map.empty
+    else
+      val start = visibleLines.min
+      val end   = visibleLines.max
+      comments.iterator
+        .filter(comment => comment.start.line <= end && comment.end.line >= start)
+        .foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
+          (comment.start.line.max(start) to comment.end.line.min(end)).iterator
+            .filter(visibleLines.contains)
+            .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
+        }
 
 case class AppState(
     layout: Layout,
@@ -186,17 +199,13 @@ case class AppState(
   /** Lazily indexes annotations for this immutable state snapshot. A new state snapshot gets a fresh index, while
     * repeated render plans for the same scene reuse the existing one.
     */
-  lazy val annotationIndexByBuffer: Map[BufferId, AnnotationLineIndex] =
+  lazy val annotationIndexByBuffer: Map[BufferId, () => AnnotationLineIndex] =
     buffers.iterator.map {
       case (bufferId, buffer) =>
-        val commentsByLine =
-          buffer.documentComments.foldLeft(Map.empty[Int, List[DocumentComment]]) { (byLine, comment) =>
-            (comment.start.line to comment.end.line).iterator
-              .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
-          }
-        val diagnostics = this.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
-        val diagnosticsByLine = diagnostics.groupMap(_.range.start.line)(identity)
-        bufferId -> AnnotationLineIndex(commentsByLine, diagnosticsByLine)
+        lazy val index =
+          val diagnostics = this.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
+          AnnotationLineIndex(buffer.documentComments.toVector, diagnostics.groupMap(_.range.start.line)(identity))
+        bufferId -> (() => index)
     }.toMap
 
   /** Convenience accessor for syntax highlighting setting */
