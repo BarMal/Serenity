@@ -111,10 +111,35 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     plan.paintBoxes.foreach(box => plan.bounds.containsRect(box.rect) shouldBe true)
   }
 
+  it should "reserve a result row in a frame derived from a matched find workflow" in {
+    val modal = Modal.Find(
+      "needle",
+      List(FindResult(1, 2), FindResult(4, 5), FindResult(7, 8)),
+      currentIndex = 1
+    )
+    val frame = LayoutRect(10, 4, 60, ModalSurfaceComposition.frameHeight(modal, targetRows = 1))
+
+    val plan = ModalSurfaceComposition.forModal(modal, frame, targetRows = 1).getOrElse(fail("expected find plan"))
+
+    plan.paintBoxes.flatMap(_.text) should contain allOf ("Find needle", "2. 5:6", "3 matches, 2/3 at 5:6")
+    plan.paintBoxes.find(_.text.contains("2. 5:6")).exists(_.selected) shouldBe true
+  }
+
   it should "compose a zero-match footer for a non-empty find query" in {
     val plan = planFor(Modal.Find("missing", Nil, currentIndex = 0))
 
     plan.paintBoxes.flatMap(_.text) should contain("0 matches")
+  }
+
+  it should "keep the zero-match footer below the query in a frame derived from the find workflow" in {
+    val modal = Modal.Find("missing", Nil, currentIndex = 0)
+    val frame = LayoutRect(10, 4, 60, ModalSurfaceComposition.frameHeight(modal, targetRows = 1))
+
+    val plan = ModalSurfaceComposition.forModal(modal, frame, targetRows = 1).getOrElse(fail("expected find plan"))
+
+    val query  = plan.paintBoxes.find(_.text.contains("Find missing")).getOrElse(fail("expected query"))
+    val footer = plan.paintBoxes.find(_.text.contains("0 matches")).getOrElse(fail("expected footer"))
+    footer.rect.y should be > query.rect.y
   }
 
   it should "compose replace fields and actions with stable semantic identities" in {
@@ -180,7 +205,8 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   it should "derive preferred frame height from each workflow composition" in {
     ModalSurfaceComposition.frameHeight(Modal.GotoLine(""), targetRows = 1) shouldBe 3
     ModalSurfaceComposition.frameHeight(Modal.Custom("rename", ""), targetRows = 1) shouldBe 4
-    ModalSurfaceComposition.frameHeight(Modal.Find("needle", Nil, 0), targetRows = 1) shouldBe 4
+    ModalSurfaceComposition.frameHeight(Modal.Find("needle", Nil, 0), targetRows = 1) shouldBe 5
+    ModalSurfaceComposition.frameHeight(Modal.Find("needle", List(FindResult(0, 0)), 0), targetRows = 1) shouldBe 6
     ModalSurfaceComposition.frameHeight(
       Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("Nothing to replace"))),
       targetRows = 1

@@ -25,9 +25,9 @@ object ModalSurfaceComposition:
     val actionRows = math.max(1, targetRows)
     modal match
       case Modal.GotoLine(_)               => 3
-      case Modal.Find(_, Nil, _)           => 4
+      case Modal.Find(_, Nil, _)           => 5
       case Modal.Custom(_, _)              => 4
-      case Modal.Find(_, _, _)             => 5
+      case Modal.Find(_, _, _)             => 6
       case Modal.ReplaceWorkflow(workflow) => if workflow.statusMessage.nonEmpty then 8 else 7
       case Modal.FileWorkflow(workflow)    => math.max(8, math.min(12, workflow.suggestions.take(4).size + 6))
       case Modal.CloseWorkflow(_)          => closeFrameHeight(actionRows)

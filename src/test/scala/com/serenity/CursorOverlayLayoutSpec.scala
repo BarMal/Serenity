@@ -484,7 +484,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     layout.collapsedFloatingSurfaceIds should contain(SurfaceId("command-runner"))
   }
 
-  it should "size a find overlay to fit its header, query row, and result footer" in {
+  it should "size a find overlay to fit its header, query row, result, and footer" in {
     val state = baseState().copy(
       uiSurfaces = List(
         UiSurface(
@@ -497,7 +497,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
-    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(5)
+    layout.belowCursorOverlayRect.map(_.height) shouldBe Some(6)
   }
 
   it should "size a close workflow overlay to fit its text and density-aware action targets" in {
