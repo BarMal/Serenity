@@ -1107,6 +1107,23 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     reloaded.spellCheck shouldBe loaded.spellCheck
   }
 
+  it should "normalize legacy Windows paths when resolving HOCON substitutions" in {
+    val configFile = Files.createTempFile("serenity-hocon-legacy-path", ".conf")
+    Files.writeString(
+      configFile,
+      """font.text.family = "Text Font"
+        |font.ui.family = ${font.text.family}
+        |spellcheck.dictionary_paths = C:\Dictionaries\en_US.dic
+        |""".stripMargin
+    )
+
+    ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
+      case Right(result) =>
+        result.config.fontConfig.uiFontFamily shouldBe "Text Font"
+        result.config.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
+      case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
+  }
+
   it should "return structured errors at the effectful configuration boundary" in {
     val invalidFile = Files.createTempFile("serenity-invalid-hocon", ".conf")
     Files.writeString(invalidFile, "font.code.size = [not-a-number]\n")
@@ -1143,7 +1160,12 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val directory = Files.createTempDirectory("serenity-hocon-include")
     val included  = directory.resolve("included.conf")
     val root      = directory.resolve("application.conf")
-    Files.writeString(included, "font.text.family = \"Included Serif\"\n")
+    Files.writeString(
+      included,
+      """font.text.family = "Included Serif"
+        |spellcheck.dictionary_paths = C:\Dictionaries\en_US.dic
+        |""".stripMargin
+    )
     Files.writeString(
       root,
       """include required("included.conf")
@@ -1155,6 +1177,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     loaded.fontConfig.textFontFamily shouldBe "Included Serif"
     loaded.fontConfig.uiFontFamily shouldBe "Included Serif"
+    loaded.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
   }
 
   it should "serialize empty and custom key binding collections without crashing" in {

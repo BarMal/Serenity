@@ -12,7 +12,16 @@ import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
-import com.typesafe.config.{Config, ConfigFactory, ConfigValueType}
+import com.typesafe.config.{
+  Config,
+  ConfigFactory,
+  ConfigIncludeContext,
+  ConfigIncluder,
+  ConfigIncluderFile,
+  ConfigObject,
+  ConfigParseOptions,
+  ConfigValueType
+}
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
@@ -69,11 +78,7 @@ object ConfigManager:
     }
 
   private def parseConfigResult(path: Path): ConfigLoadResult =
-    val content = Files.readString(path, StandardCharsets.UTF_8)
-    val source =
-      if content.contains("include ") || content.contains("${") then ConfigFactory.parseFile(path.toFile).resolve()
-      else parseHocon(content)
-    parseConfigResult(source)
+    parseConfigResult(parseHoconFile(path))
 
   private def parseConfigResult(source: Config): ConfigLoadResult =
     ConfigLoadResult(parseConfig(source), inspectConfig(source))
@@ -500,14 +505,36 @@ object ConfigManager:
       invalidEntries = invalidEntries
     )
 
-  private def parseHocon(content: String): Config =
-    ConfigFactory.parseString(quoteLegacyValues(content)).resolve()
+  private def parseHoconFile(path: Path): Config =
+    val content = Files.readString(path, StandardCharsets.UTF_8)
+    val options = ConfigParseOptions
+      .defaults()
+      .setOriginDescription(path.toString)
+      .prependIncluder(NormalizingFileIncluder(path.getParent))
+    ConfigFactory.parseString(quoteLegacyValues(content), options).resolve()
+
+  private case class NormalizingFileIncluder(
+      baseDirectory: Path,
+      fallback: Option[ConfigIncluder] = None
+  ) extends ConfigIncluder,
+        ConfigIncluderFile:
+
+    override def withFallback(fallback: ConfigIncluder): ConfigIncluder =
+      copy(fallback = Some(fallback))
+
+    override def include(context: ConfigIncludeContext, what: String): ConfigObject =
+      includePath(baseDirectory.resolve(what), context, what)
+
+    override def includeFile(context: ConfigIncludeContext, file: java.io.File): ConfigObject =
+      val path = file.toPath
+      includePath(if path.isAbsolute then path else baseDirectory.resolve(path), context, file.toString)
+
+    private def includePath(path: Path, context: ConfigIncludeContext, fallbackPath: String): ConfigObject =
+      val normalizedPath = path.normalize()
+      if Files.isRegularFile(normalizedPath) then parseHoconFile(normalizedPath).root()
+      else fallback.fold(ConfigFactory.empty().root())(_.include(context, fallbackPath))
 
   private def quoteLegacyValues(content: String): String =
-    val textFamily = content.linesIterator
-      .find(_.trim.startsWith("font.text.family"))
-      .flatMap(line => line.split("=", 2).lift(1).map(_.trim))
-      .getOrElse("")
     content.linesIterator
       .map { line =>
         val trimmed = line.trim
@@ -522,14 +549,20 @@ object ConfigManager:
             .zip(raw.zipWithIndex)
             .collectFirst { case (false, ('#', index)) if index > 0 && raw.charAt(index - 1).isWhitespace => index - 1 }
             .getOrElse(-1)
-          val value         = if commentIndex >= 0 then raw.take(commentIndex).trim else raw
-          val resolvedValue = if value == "${font.text.family}" then textFamily else value
-          if resolvedValue.isEmpty then s"$key \"\""
-          else if resolvedValue.startsWith("\"") || resolvedValue.startsWith("[") || resolvedValue.startsWith("{") ||
-              resolvedValue == "true" || resolvedValue == "false" || resolvedValue.matches("-?[0-9]+(\\.[0-9]+)?")
-          then s"$key $resolvedValue"
+          val value = if commentIndex >= 0 then raw.take(commentIndex).trim else raw
+          val normalizedValue =
+            if value.startsWith("${") && value.endsWith("}") then
+              val referencedKey = value.stripPrefix("${").stripSuffix("}")
+              "${\"" + referencedKey + "\"}"
+            else value
+          if normalizedValue.isEmpty then s"$key \"\""
+          else if normalizedValue.startsWith("\"") || normalizedValue.startsWith("[") ||
+              normalizedValue.startsWith("{") || normalizedValue.startsWith("${") ||
+              normalizedValue == "true" || normalizedValue == "false" ||
+              normalizedValue.matches("-?[0-9]+(\\.[0-9]+)?")
+          then s"$key $normalizedValue"
           else
-            val escaped = resolvedValue.replace("\\", "\\\\").replace("\"", "\\\"")
+            val escaped = normalizedValue.replace("\\", "\\\\").replace("\"", "\\\"")
             s"$key \"$escaped\""
       }
       .mkString("\n")
