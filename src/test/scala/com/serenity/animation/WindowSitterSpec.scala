@@ -25,6 +25,19 @@ class WindowSitterSpec extends AnyFlatSpec with Matchers:
     fast.activeTicks should be > slow.activeTicks
   }
 
+  it should "pulse back through intermediate frames instead of wrapping to rest" in {
+    val settings = WindowSitterConfig(
+      action = WindowSitterAction.Pulse,
+      frames = Vector("rest", "rise", "peak"),
+      activeTicks = 5
+    )
+
+    val awake = WindowSitter.fromConfig(settings).observeTyping(1_000_000_000L, settings)
+
+    Iterator.iterate(awake)(_.advance).take(4).map(_.glyph).toVector shouldBe
+      Vector("rise", "peak", "rise", "rest")
+  }
+
   it should "settle after its activity window completes" in {
     val active  = WindowSitter.default.observeTyping(1_000_000_000L)
     val settled = Iterator.iterate(active)(_.advance).dropWhile(_.isActive).next()

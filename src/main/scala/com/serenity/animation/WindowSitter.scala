@@ -43,7 +43,8 @@ case class WindowSitter(
     frameIndex: Int = 0,
     activeTicks: Int = 0,
     lastTypedAtNanos: Option[Long] = None,
-    action: WindowSitterAction = WindowSitterAction.Pulse
+    action: WindowSitterAction = WindowSitterAction.Pulse,
+    pulseAscending: Boolean = true
 ):
 
   /** Whether the sitter should continue receiving animation ticks. */
@@ -60,28 +61,52 @@ case class WindowSitter(
       if interval <= normalized.fastTypingThresholdMs.toLong * 1_000_000L then normalized.fastActiveTicks
       else normalized.activeTicks
     }
+    val next = nextFrame(
+      frames = normalized.frames,
+      action = normalized.action,
+      ascending = if normalized.action == action then pulseAscending else true
+    )
     copy(
       frames = normalized.frames,
-      frameIndex = if normalized.frames.isEmpty then 0 else (frameIndex + 1) % normalized.frames.size,
+      frameIndex = next.index,
       activeTicks = ticks,
       lastTypedAtNanos = Some(nowNanos),
-      action = normalized.action
+      action = normalized.action,
+      pulseAscending = next.ascending
     )
 
   /** Advance one animation tick, returning to the resting glyph after the activity window. */
   def advance: WindowSitter =
     if !isActive then this
     else if activeTicks == 1 then copy(frameIndex = 0, activeTicks = 0)
-    else copy(frameIndex = nextFrameIndex, activeTicks = activeTicks - 1)
-
-  private def nextFrameIndex: Int =
-    if frames.isEmpty then 0
     else
+      val next = nextFrame(frames, action, pulseAscending)
+      copy(frameIndex = next.index, activeTicks = activeTicks - 1, pulseAscending = next.ascending)
+
+  private def nextFrame(
+    frames: Vector[String],
+    action: WindowSitterAction,
+    ascending: Boolean
+  ): WindowSitter.FrameStep =
+    if frames.isEmpty then WindowSitter.FrameStep(0, ascending)
+    else
+      val currentIndex = frameIndex % frames.size
       action match
-        case WindowSitterAction.Blink                            => if frameIndex == 0 then frames.size - 1 else 0
-        case WindowSitterAction.Cycle | WindowSitterAction.Pulse => (frameIndex + 1) % frames.size
+        case WindowSitterAction.Blink =>
+          WindowSitter.FrameStep(if currentIndex == 0 then frames.size - 1 else 0, ascending)
+        case WindowSitterAction.Cycle =>
+          WindowSitter.FrameStep((currentIndex + 1) % frames.size, ascending)
+        case WindowSitterAction.Pulse =>
+          if frames.size == 1 then WindowSitter.FrameStep(0, true)
+          else if ascending then
+            if currentIndex >= frames.size - 2 then WindowSitter.FrameStep(frames.size - 1, false)
+            else WindowSitter.FrameStep(currentIndex + 1, true)
+          else if currentIndex <= 1 then WindowSitter.FrameStep(0, true)
+          else WindowSitter.FrameStep(currentIndex - 1, false)
 
 object WindowSitter:
+  private case class FrameStep(index: Int, ascending: Boolean)
+
   val default: WindowSitter = fromConfig(WindowSitterConfig.default)
 
   def fromConfig(config: WindowSitterConfig): WindowSitter =
