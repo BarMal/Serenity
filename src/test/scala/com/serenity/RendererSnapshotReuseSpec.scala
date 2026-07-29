@@ -399,7 +399,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       None
     )
 
-    lineReads.get() should be < 6_000
+    lineReads.get() should be < 20_000
   }
 
   it should "bound renderer reads for a long paragraph in a large document" in {
@@ -443,8 +443,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       None
     )
 
-    // The renderer intentionally resolves only the viewport-local lens range for long blocks.
-    lineReads.get() should be < 6_000
+    // Full-block Markdown lens resolution may inspect the enclosing semantic block.
+    lineReads.get() should be < 20_000
   }
 
   it should "bound bare fence classification reads after a long prose prefix" in {

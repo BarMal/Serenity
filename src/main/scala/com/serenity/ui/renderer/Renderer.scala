@@ -37,7 +37,7 @@ case class RenderContext(
 object Renderer:
 
   private def markdownBlockForRenderer(buffer: Buffer, line: Int): Range.Inclusive =
-    MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line, fenceProbeWindow = 512)
+    MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line)
 
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
