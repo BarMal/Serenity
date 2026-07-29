@@ -13,7 +13,15 @@ import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
-import com.serenity.ui.layout.{Layout, PaneSplitDirection}
+import com.serenity.ui.layout.{
+  Layout,
+  PaneSplitDirection,
+  PanelPosition,
+  SplitAxis,
+  WorkspaceNode,
+  WorkspaceNodeId,
+  WorkspaceTree
+}
 import com.serenity.ui.presets.UiPreset.given
 import com.serenity.ui.presets.{UiPreset, UiPresetEditSession}
 import com.serenity.ui.theme.Theme
@@ -33,7 +41,7 @@ case class SessionState(
     themeName: String, // Store theme name instead of full theme object
     recentFiles: List[String] = Nil,
     uiPresetEditSession: Option[SessionUiPresetEditSession] = None,
-    schemaVersion: Int = 1
+    schemaVersion: Int = 2
 )
 
 /** Persistent draft metadata that preserves the pre-preview workspace baseline. */
@@ -75,8 +83,27 @@ case class SessionLayout(
     editorPanes: List[SessionEditorPane],
     activeEditorPaneId: Option[Int],
     paneOrder: List[Int] = Nil,
-    splitDirection: String = PaneSplitDirection.Horizontal.toString
+    splitDirection: String = PaneSplitDirection.Horizontal.toString,
+    workspaceTree: Option[SessionWorkspaceNode] = None,
+    maximizedWorkspaceNodeId: Option[String] = None,
+    dockedPanels: List[SessionDockedPanel] = Nil
 )
+
+/** Versioned session representation of one workspace-tree node. */
+enum SessionWorkspaceNode:
+  case EditorLeaf(id: String, paneId: Int)
+  case DockedSurface(id: String, surfaceId: String, position: String)
+
+  case Split(
+      id: String,
+      axis: String,
+      ratio: Double,
+      first: SessionWorkspaceNode,
+      second: SessionWorkspaceNode
+  )
+
+/** Persistable docked panel content keyed by the surface identity referenced from the workspace tree. */
+case class SessionDockedPanel(surfaceId: String, panel: UiPreset.PinnedPanel)
 
 case class SessionEditorPane(
     id: Int,
@@ -121,14 +148,18 @@ case class SessionDocumentComment(
 
 object SessionState:
 
-  val CurrentSchemaVersion: Int = 1
+  /** Schema version 2 adds workspace trees, docked panel snapshots, and maximised-node identity. Version-1 sessions
+    * continue to decode through `paneOrder` and `splitDirection`, which are converted to an equivalent tree in memory.
+    * Invalid version-2 trees fall back to that legacy topology while preserving buffers and supported panel content.
+    */
+  val CurrentSchemaVersion: Int = 2
 
   /** Convert AppState to SessionState for persistence
     */
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     SessionState(
       buffers = orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)),
-      layout = SessionLayout.fromLayout(appState.layout),
+      layout = SessionLayout.fromAppState(appState),
       focus = SessionFocus.fromFocus(appState.focus),
       bufferOrder = appState.bufferOrder.map(_.value),
       config = appState.config,
@@ -154,32 +185,7 @@ object SessionState:
       BufferId(sessionBuffer.id) -> buffer
     }.toMap
 
-    // Convert session layout back to app layout
-    val layout = SessionLayout.toLayout(sessionState.layout)
-
-    // Convert focus
-    val focus = sessionState.focus
-      .map(SessionFocus.toFocus)
-      .getOrElse(
-        layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(Focus.EditorPane(PaneId(0)))
-      )
-
-    AppState(
-      layout = layout,
-      buffers = bufferMap,
-      bufferOrder = sessionState.bufferOrder.map(BufferId.apply),
-      focus = focus,
-      uiSurfaces = List.empty, // Never restore UI surfaces
-      actionStack = Nil,       // Never restore action stack
-      viewportSize = None,     // Will be set when app starts
-      theme = theme,
-      config = sessionState.config,
-      recentFiles = sessionState.recentFiles.map(Path.of(_)),
-      nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-      nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-      nextSurfaceId = 0,
-      uiPresetEditSession = sessionState.uiPresetEditSession.map(SessionUiPresetEditSession.toSession(_, theme))
-    )
+    toAppStateWithBuffers(sessionState, theme, bufferMap)
 
   /** Convert SessionState back to AppState for restoration, reading file-backed buffers from disk when older or
     * size-conscious session files do not contain persisted text.
@@ -195,7 +201,8 @@ object SessionState:
     theme: Theme,
     bufferMap: Map[BufferId, Buffer]
   ): AppState =
-    val layout = SessionLayout.toLayout(sessionState.layout)
+    val restoredLayout = SessionLayout.restore(sessionState.layout)
+    val layout         = restoredLayout.layout
     val focus = sessionState.focus
       .map(SessionFocus.toFocus)
       .getOrElse(
@@ -207,7 +214,7 @@ object SessionState:
       buffers = bufferMap,
       bufferOrder = sessionState.bufferOrder.map(BufferId.apply),
       focus = focus,
-      uiSurfaces = List.empty,
+      uiSurfaces = restoredLayout.surfaces,
       actionStack = Nil,
       viewportSize = None,
       theme = theme,
@@ -215,7 +222,7 @@ object SessionState:
       recentFiles = sessionState.recentFiles.map(Path.of(_)),
       nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
       nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-      nextSurfaceId = 0,
+      nextSurfaceId = restoredLayout.nextSurfaceId,
       uiPresetEditSession = sessionState.uiPresetEditSession.map(SessionUiPresetEditSession.toSession(_, theme))
     )
 
@@ -314,6 +321,25 @@ object SessionBuffer:
 
 object SessionLayout:
 
+  private[session] case class Restored(layout: Layout, surfaces: List[UiSurface], nextSurfaceId: Int)
+
+  def fromAppState(state: AppState): SessionLayout =
+    val dockedPanels = state.pinnedSurfaces.flatMap { surface =>
+      UiPreset.PinnedPanel.fromSurface(surface).map(SessionDockedPanel(surface.id.value, _))
+    }
+    val persistedSurfaceIds = dockedPanels.map(panel => SurfaceId(panel.surfaceId)).toSet
+    val workspaceTree = state.layout.workspaceTree
+      .filter(_.dockedSurfaceIds.toSet.subsetOf(persistedSurfaceIds))
+      .map(tree => fromWorkspaceNode(tree.root))
+
+    fromLayout(state.layout).copy(
+      workspaceTree = workspaceTree,
+      maximizedWorkspaceNodeId = state.layout.maximizedWorkspaceNodeId
+        .filter(nodeId => workspaceTree.exists(_ => treeContainsNode(state, nodeId)))
+        .map(_.value),
+      dockedPanels = dockedPanels
+    )
+
   def fromLayout(layout: Layout): SessionLayout =
     SessionLayout(
       editorPanes = orderedPanes(layout).map(SessionEditorPane.fromEditorPane),
@@ -331,17 +357,123 @@ object SessionLayout:
     (orderedIds ++ missingIds).flatMap(layout.editorPanes.get)
 
   def toLayout(sessionLayout: SessionLayout): Layout =
+    restore(sessionLayout).layout
+
+  private[session] def restore(sessionLayout: SessionLayout): Restored =
     val editorPanes = sessionLayout.editorPanes.map { sessionPane =>
       val pane = SessionEditorPane.toEditorPane(sessionPane)
       PaneId(sessionPane.id) -> pane
     }.toMap
-
-    Layout(
+    val splitDirection = PaneSplitDirection.fromString(sessionLayout.splitDirection)
+    val orderedPaneIds =
+      val requested = sessionLayout.paneOrder.map(PaneId.apply).filter(editorPanes.contains)
+      requested ++ editorPanes.keys.toList.filterNot(requested.contains).sortBy(_.value)
+    val surfaces = sessionLayout.dockedPanels.foldLeft(List.empty[UiSurface]) { (restored, persisted) =>
+      val surface = persisted.panel.toUiSurface(SurfaceId(persisted.surfaceId))
+      if restored.exists(_.id == surface.id) then restored else restored :+ surface
+    }
+    val pinnedSurfaceIds = surfaces.map(_.id).toSet
+    val decodedTree = sessionLayout.workspaceTree
+      .flatMap(toWorkspaceNode)
+      .map(WorkspaceTree.apply)
+      .filter(_.validationErrors(editorPanes.keySet, pinnedSurfaceIds).isEmpty)
+    val fallbackTree  = fallbackWorkspaceTree(orderedPaneIds, splitDirection, surfaces)
+    val workspaceTree = decodedTree.orElse(fallbackTree)
+    val maximized = sessionLayout.maximizedWorkspaceNodeId
+      .map(WorkspaceNodeId.apply)
+      .filter(nodeId => workspaceTree.exists(_.surfaceIdForNode(nodeId).nonEmpty))
+    val layout = Layout(
       editorPanes = editorPanes,
       activeEditorPaneId = sessionLayout.activeEditorPaneId.map(PaneId.apply),
-      paneOrder = sessionLayout.paneOrder.map(PaneId.apply),
-      splitDirection = PaneSplitDirection.fromString(sessionLayout.splitDirection)
+      paneOrder = orderedPaneIds,
+      splitDirection = splitDirection,
+      workspaceTree = workspaceTree,
+      maximizedWorkspaceNodeId = maximized
     )
+    Restored(layout, surfaces, nextSurfaceId(surfaces))
+
+  private def fromWorkspaceNode(node: WorkspaceNode): SessionWorkspaceNode =
+    node match
+      case WorkspaceNode.Leaf(id, paneId) =>
+        SessionWorkspaceNode.EditorLeaf(id.value, paneId.value)
+      case WorkspaceNode.DockedSurface(id, surfaceId, position) =>
+        SessionWorkspaceNode.DockedSurface(id.value, surfaceId.value, position.toString)
+      case WorkspaceNode.Split(id, axis, ratio, first, second) =>
+        SessionWorkspaceNode.Split(
+          id.value,
+          axis.toString,
+          ratio,
+          fromWorkspaceNode(first),
+          fromWorkspaceNode(second)
+        )
+
+  private def toWorkspaceNode(node: SessionWorkspaceNode): Option[WorkspaceNode] =
+    node match
+      case SessionWorkspaceNode.EditorLeaf(id, paneId) =>
+        Some(WorkspaceNode.Leaf(WorkspaceNodeId(id), PaneId(paneId)))
+      case SessionWorkspaceNode.DockedSurface(id, surfaceId, position) =>
+        panelPosition(position).map(WorkspaceNode.DockedSurface(WorkspaceNodeId(id), SurfaceId(surfaceId), _))
+      case SessionWorkspaceNode.Split(id, axis, ratio, first, second) =>
+        for
+          splitAxis  <- splitAxis(axis)
+          _          <- Option.when(ratio.isFinite)(())
+          firstNode  <- toWorkspaceNode(first)
+          secondNode <- toWorkspaceNode(second)
+        yield WorkspaceNode.Split(
+          WorkspaceNodeId(id),
+          splitAxis,
+          ratio.max(WorkspaceTree.MinimumSplitRatio).min(WorkspaceTree.MaximumSplitRatio),
+          firstNode,
+          secondNode
+        )
+
+  private def fallbackWorkspaceTree(
+    paneIds: List[PaneId],
+    splitDirection: PaneSplitDirection,
+    surfaces: List[UiSurface]
+  ): Option[WorkspaceTree] =
+    surfaces.zipWithIndex.foldLeft(WorkspaceTree.fromLegacy(paneIds, splitDirection)) {
+      case (Some(tree), (surface, index)) =>
+        surface.presentation match
+          case SurfacePresentation.Pinned(position, _) =>
+            tree.dock(
+              surface.id,
+              position,
+              WorkspaceNodeId(s"restored-dock-split-$index"),
+              WorkspaceNodeId(s"restored-dock-${surface.id.value}")
+            )
+          case _ =>
+            Some(tree)
+      case (None, _) =>
+        None
+    }
+
+  private def panelPosition(value: String): Option[PanelPosition] =
+    value match
+      case "Left"   => Some(PanelPosition.Left)
+      case "Right"  => Some(PanelPosition.Right)
+      case "Top"    => Some(PanelPosition.Top)
+      case "Bottom" => Some(PanelPosition.Bottom)
+      case _        => None
+
+  private def splitAxis(value: String): Option[SplitAxis] =
+    value match
+      case "Horizontal" => Some(SplitAxis.Horizontal)
+      case "Vertical"   => Some(SplitAxis.Vertical)
+      case _            => None
+
+  private def nextSurfaceId(surfaces: List[UiSurface]): Int =
+    surfaces
+      .flatMap { surface =>
+        Option
+          .when(surface.id.value.startsWith("surface-"))(surface.id.value.stripPrefix("surface-"))
+          .flatMap(_.toIntOption)
+      }
+      .maxOption
+      .getOrElse(-1) + 1
+
+  private def treeContainsNode(state: AppState, nodeId: WorkspaceNodeId): Boolean =
+    state.layout.workspaceTree.exists(_.nodeIds.contains(nodeId))
 
 object SessionEditorPane:
 
@@ -1018,10 +1150,35 @@ private def formatColor(color: Color): String =
 given Encoder[SessionState] = deriveEncoder
 
 given Encoder[SessionLayout] = deriveEncoder
-given Decoder[SessionLayout] = deriveDecoder
+
+given Encoder[SessionWorkspaceNode] = deriveEncoder
+given Decoder[SessionWorkspaceNode] = deriveDecoder
+
+given Encoder[SessionDockedPanel] = deriveEncoder
+given Decoder[SessionDockedPanel] = deriveDecoder
 
 given Encoder[SessionEditorPane] = deriveEncoder
 given Decoder[SessionEditorPane] = deriveDecoder
+
+given Decoder[SessionLayout] = Decoder.instance { cursor =>
+  for
+    editorPanes              <- cursor.get[List[SessionEditorPane]]("editorPanes")
+    activeEditorPaneId       <- cursor.get[Option[Int]]("activeEditorPaneId")
+    paneOrder                <- cursor.getOrElse[List[Int]]("paneOrder")(Nil)
+    splitDirection           <- cursor.getOrElse[String]("splitDirection")(PaneSplitDirection.Horizontal.toString)
+    workspaceTree            <- cursor.getOrElse[Option[SessionWorkspaceNode]]("workspaceTree")(None)
+    maximizedWorkspaceNodeId <- cursor.getOrElse[Option[String]]("maximizedWorkspaceNodeId")(None)
+    persistedPanels          <- cursor.getOrElse[List[Json]]("dockedPanels")(Nil)
+  yield SessionLayout(
+    editorPanes,
+    activeEditorPaneId,
+    paneOrder,
+    splitDirection,
+    workspaceTree,
+    maximizedWorkspaceNodeId,
+    persistedPanels.flatMap(_.as[SessionDockedPanel].toOption)
+  )
+}
 
 given Encoder[SessionFocus] = deriveEncoder
 given Decoder[SessionFocus] = deriveDecoder
@@ -1097,7 +1254,7 @@ given Decoder[SessionFindState] = Decoder.instance { cursor =>
 
 given Decoder[SessionState] = Decoder.instance { cursor =>
   for
-    schemaVersion <- cursor.getOrElse[Int]("schemaVersion")(SessionState.CurrentSchemaVersion)
+    schemaVersion <- cursor.getOrElse[Int]("schemaVersion")(1)
     _ <- Either.cond(
       schemaVersion <= SessionState.CurrentSchemaVersion,
       (),
