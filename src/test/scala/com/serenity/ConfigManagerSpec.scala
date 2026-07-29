@@ -1099,6 +1099,42 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       case Right(_)    => fail("expected a structured save error")
   }
 
+  it should "validate hotkey, keymap, and LSP entries through the structured load API" in {
+    val invalidFile = Files.createTempFile("serenity-invalid-bindings", ".conf")
+    Files.writeString(
+      invalidFile,
+      """hotkey.save = [not-a-real-trigger]
+        |keymap.command_runner.submit = not-a-real-trigger
+        |lsp.python.enabled = maybe
+        |""".stripMargin
+    )
+
+    ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
+      case Left(error) =>
+        error.message should include("hotkey.save")
+        error.message should include("keymap.command_runner.submit")
+        error.message should include("lsp.python.enabled")
+      case Right(value) => fail(s"expected binding validation errors, received $value")
+  }
+
+  it should "resolve file-relative includes and substitutions from the config path" in {
+    val directory = Files.createTempDirectory("serenity-hocon-include")
+    val included  = directory.resolve("included.conf")
+    val root      = directory.resolve("application.conf")
+    Files.writeString(included, "font.text.family = \"Included Serif\"\n")
+    Files.writeString(
+      root,
+      """include required("included.conf")
+        |font.ui.family = ${font.text.family}
+        |""".stripMargin
+    )
+
+    val loaded = ConfigManager.loadConfig(Some(root.toString))
+
+    loaded.fontConfig.textFontFamily shouldBe "Included Serif"
+    loaded.fontConfig.uiFontFamily shouldBe "Included Serif"
+  }
+
   it should "serialize empty and custom key binding collections without crashing" in {
     val config = AppConfig.default
       .withHotkeyConfig(HotkeyConfig(Map.empty))

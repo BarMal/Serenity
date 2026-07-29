@@ -4,9 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.util.Locale
 
-import scala.io.Source
 import scala.jdk.CollectionConverters.*
-import scala.util.Using
 
 import cats.effect.IO
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
@@ -37,10 +35,7 @@ object ConfigManager:
   def loadConfigResult(configPath: Option[String] = None): ConfigLoadResult =
     val path = configPath.map(Paths.get(_)).getOrElse(defaultConfigPath)
     if Files.exists(path) then
-      try
-        Using.resource(Source.fromFile(path.toFile, StandardCharsets.UTF_8.name())) { source =>
-          parseConfigResult(source.mkString)
-        }
+      try parseConfigResult(path)
       catch
         case _: Exception =>
           System.err.println(s"[CONFIG] Failed to load config from $path, using defaults")
@@ -58,8 +53,7 @@ object ConfigManager:
       if !Files.exists(path) then Right(ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty))
       else
         try
-          val content = Files.readString(path, StandardCharsets.UTF_8)
-          val result  = parseConfigResult(content)
+          val result = parseConfigResult(path)
           if result.report.invalidEntries.nonEmpty then
             Left(
               ConfigError(
@@ -74,8 +68,11 @@ object ConfigManager:
             Left(ConfigError("load", path, s"Failed to load configuration: ${error.getMessage}", Some(error)))
     }
 
-  private def parseConfigResult(content: String): ConfigLoadResult =
-    val source = parseHocon(content)
+  private def parseConfigResult(path: Path): ConfigLoadResult =
+    val content = Files.readString(path, StandardCharsets.UTF_8)
+    val source =
+      if content.contains("include ") || content.contains("${") then ConfigFactory.parseFile(path.toFile).resolve()
+      else parseHocon(content)
     parseConfigResult(source)
 
   private def parseConfigResult(source: Config): ConfigLoadResult =
@@ -622,6 +619,14 @@ object ConfigManager:
           WindowConfig.Schema.invalidValue(key, value)
         case key if InterfaceConfig.Schema.handles(key) =>
           InterfaceConfig.Schema.invalidValue(key, value)
+        case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>
+          value.split(",").toList.map(_.trim).filter(_.nonEmpty).exists(HotkeyTrigger.parse(_).isEmpty)
+        case key if key.startsWith("lsp.") =>
+          key.split("\\.", 3).toList match
+            case "lsp" :: _ :: "enabled" :: Nil => parseBoolean(value).isEmpty
+            case "lsp" :: _ :: "command" :: Nil => value.trim.isEmpty
+            case "lsp" :: _ :: "args" :: Nil    => value.trim.isEmpty
+            case _                              => false
         case _ =>
           false
 
