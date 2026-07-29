@@ -138,7 +138,9 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     )
     plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("replace-all"))).exists(_.selected) shouldBe true
     plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("replace-selection"))).exists(_.selected) shouldBe true
-    plan.paintBoxes.find(_.semanticLabel.contains("Find")).exists(box => !box.selected && box.cursorOffset.isEmpty) shouldBe true
+    plan.paintBoxes
+      .find(_.semanticLabel.contains("Find"))
+      .exists(box => !box.selected && box.cursorOffset.isEmpty) shouldBe true
     plan.paintBoxes
       .find(_.semanticLabel.contains("Replace"))
       .exists(box => box.selected && box.cursorOffset.contains("Replace after".length)) shouldBe true
