@@ -84,6 +84,15 @@ class WorkspaceTreeLifecycleSpec extends AnyFlatSpec with Matchers:
     resized.resize(WorkspaceNodeId("missing"), 0.5) shouldBe None
   }
 
+  it should "normalize non-finite ratios to the default split ratio" in
+    List(Double.NaN, Double.PositiveInfinity, Double.NegativeInfinity).foreach { ratio =>
+      val resized = nested.resize(WorkspaceNodeId("outer"), ratio).getOrElse(fail("expected owning split"))
+
+      resized.root match
+        case split: WorkspaceNode.Split => split.ratio shouldBe WorkspaceTree.DefaultSplitRatio
+        case _: WorkspaceNode.Leaf      => fail("expected split root")
+    }
+
   "WorkspaceTree.validationErrors" should "reject duplicate IDs and pane/tree mismatches" in {
     val duplicate = WorkspaceTree(
       WorkspaceNode.Split(

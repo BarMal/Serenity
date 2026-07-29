@@ -82,8 +82,12 @@ case class WorkspaceTree(root: WorkspaceNode):
 
   /** Updates one split ratio while retaining a usable allocation for both branches. */
   def resize(splitId: WorkspaceNodeId, ratio: Double): Option[WorkspaceTree] =
+    val normalizedRatio =
+      if ratio.isFinite then ratio.max(WorkspaceTree.MinimumSplitRatio).min(WorkspaceTree.MaximumSplitRatio)
+      else WorkspaceTree.DefaultSplitRatio
+
     WorkspaceTree
-      .updateSplit(root, splitId, ratio.max(WorkspaceTree.MinimumSplitRatio).min(WorkspaceTree.MaximumSplitRatio))
+      .updateSplit(root, splitId, normalizedRatio)
       .map(WorkspaceTree.apply)
 
   /** Reports structural errors relative to the editor panes owned by the enclosing layout. */
