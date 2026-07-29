@@ -16,21 +16,21 @@ object ModalSurfaceComposition:
       case Modal.GotoLine(input)         => Some(inputPlan("Go to line", input, "goto-line", frameRect))
       case Modal.Find(query, results, currentIndex) =>
         Some(findPlan(query, results, currentIndex, frameRect))
-      case Modal.Custom(name, input) => Some(inputPlan(name, input, "custom-input", frameRect))
-      case Modal.FileWorkflow(workflow) => Some(filePlan(workflow, frameRect, targetRows))
+      case Modal.Custom(name, input)       => Some(inputPlan(name, input, "custom-input", frameRect))
+      case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect))
       case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows))
 
   /** Return the minimum frame height needed to show a modal workflow at the requested density. */
   def frameHeight(modal: Modal, targetRows: Int): Int =
     val actionRows = math.max(1, targetRows)
     modal match
-      case Modal.GotoLine(_)                         => 3
-      case Modal.Find(_, Nil, _)                     => 4
-      case Modal.Custom(_, _)                        => 4
-      case Modal.Find(_, _, _)                       => 5
-      case Modal.ReplaceWorkflow(workflow)           => if workflow.statusMessage.nonEmpty then 8 else 7
-      case Modal.FileWorkflow(workflow)              => math.max(8, math.min(12, workflow.suggestions.take(4).size + 6))
-      case Modal.CloseWorkflow(_)                    => closeFrameHeight(actionRows)
+      case Modal.GotoLine(_)               => 3
+      case Modal.Find(_, Nil, _)           => 4
+      case Modal.Custom(_, _)              => 4
+      case Modal.Find(_, _, _)             => 5
+      case Modal.ReplaceWorkflow(workflow) => if workflow.statusMessage.nonEmpty then 8 else 7
+      case Modal.FileWorkflow(workflow)    => math.max(8, math.min(12, workflow.suggestions.take(4).size + 6))
+      case Modal.CloseWorkflow(_)          => closeFrameHeight(actionRows)
 
   private val actions: List[(CloseWorkflowChoice, String, SurfaceActionId, SurfaceFocusId)] = List(
     (CloseWorkflowChoice.Save, "Save", SurfaceActionId("close-save"), SurfaceFocusId("close-save")),
@@ -180,14 +180,27 @@ object ModalSurfaceComposition:
 
   private def filePlan(
     workflow: FileWorkflowState,
-    frameRect: LayoutRect,
-    targetRows: Int
+    frameRect: LayoutRect
   ): ResolvedSurfaceComposition =
-    val content    = SurfaceFrameLayout(frameRect).contentRect
-    val bounds     = logicalRect(content.x, content.y, content.width, content.height)
-    val rowHeight  = math.max(1, targetRows)
-    val filename   = inputBox("Filename", workflow.filename, SurfaceFocusId("filename"), rowRect(bounds, 0, rowHeight))
-    val path       = inputBox("Path", workflow.path, SurfaceFocusId("path"), rowRect(bounds, rowHeight, rowHeight))
+    val content   = SurfaceFrameLayout(frameRect).contentRect
+    val bounds    = logicalRect(content.x, content.y, content.width, content.height)
+    val rowHeight = 1
+    val filename = inputBox(
+      "Filename",
+      workflow.filename,
+      SurfaceFocusId("filename"),
+      rowRect(bounds, 1, rowHeight),
+      selected = workflow.activeField == FileWorkflowField.Filename,
+      cursorAtEnd = false
+    )
+    val path = inputBox(
+      "Path",
+      workflow.path,
+      SurfaceFocusId("path"),
+      rowRect(bounds, 2, rowHeight),
+      selected = workflow.activeField == FileWorkflowField.Path,
+      cursorAtEnd = false
+    )
     val suggestions = workflow.suggestions.take(4).zipWithIndex.map {
       case (suggestion, index) =>
         val suffix = if suggestion.isDirectory then "/" else ""
@@ -196,7 +209,7 @@ object ModalSurfaceComposition:
           SurfaceActionId(s"file-suggestion-$index"),
           SurfaceFocusId(s"file-suggestion-$index"),
           selected = index == workflow.selectedSuggestionIndex,
-          rowRect(bounds, rowHeight * (index + 2), rowHeight)
+          rowRect(bounds, index + 3, rowHeight)
         )
     }
     val footer = workflow.statusMessage
@@ -204,7 +217,7 @@ object ModalSurfaceComposition:
         s"Create directories: ${workflow.missingPathSegments.mkString(" / ")}"
       })
       .toList
-      .map(message => textBox(message, rowRect(bounds, rowHeight * (workflow.suggestions.take(4).size + 2), rowHeight)))
+      .map(message => textBox(message, rowRect(bounds, workflow.suggestions.take(4).size + 3, rowHeight)))
     plan(bounds, filename :: path :: suggestions ++ footer)
 
   private def plan(bounds: LogicalPixelRect, boxes: List[SurfacePaintBox]): ResolvedSurfaceComposition =
@@ -230,7 +243,9 @@ object ModalSurfaceComposition:
     label: String,
     value: String,
     focusId: SurfaceFocusId,
-    rect: LogicalPixelRect
+    rect: LogicalPixelRect,
+    selected: Boolean = true,
+    cursorAtEnd: Boolean = true
   ): SurfacePaintBox =
     SurfacePaintBox(
       kind = SurfacePaintKind.TextInput,
@@ -238,8 +253,8 @@ object ModalSurfaceComposition:
       text = Some(s"$label $value"),
       focusId = Some(focusId),
       semanticLabel = Some(label),
-      selected = true,
-      cursorOffset = Some(label.length + 1 + value.length)
+      selected = selected,
+      cursorOffset = Option.when(selected && cursorAtEnd)(label.length + 1 + value.length)
     )
 
   private def actionBox(
@@ -264,19 +279,24 @@ object ModalSurfaceComposition:
     items: List[(String, String, Boolean)]
   ): List[SurfacePaintBox] =
     val width = if items.isEmpty then 0.0 else rect.width / items.length
-    items.zipWithIndex.map { case ((label, id, selected), index) =>
-      actionBox(
-        label,
-        SurfaceActionId(id),
-        SurfaceFocusId(id),
-        selected,
-        LogicalPixelRect(rect.x + index * width, rect.y, width, rect.height)
-      )
+    items.zipWithIndex.map {
+      case ((label, id, selected), index) =>
+        actionBox(
+          label,
+          SurfaceActionId(id),
+          SurfaceFocusId(id),
+          selected,
+          LogicalPixelRect(rect.x + index * width, rect.y, width, rect.height)
+        )
     }
 
   private def rowRect(bounds: LogicalPixelRect, row: Int, height: Int = 1): LogicalPixelRect =
-    LogicalPixelRect(bounds.x, bounds.y + row, bounds.width, math.min(height.toDouble, math.max(0.0, bounds.bottom - bounds.y - row)))
-
+    LogicalPixelRect(
+      bounds.x,
+      bounds.y + row,
+      bounds.width,
+      math.min(height.toDouble, math.max(0.0, bounds.bottom - bounds.y - row))
+    )
 
   private def horizontalActionBoxes(
     workflow: CloseWorkflowState,
