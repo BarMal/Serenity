@@ -1,11 +1,13 @@
 package com.serenity.ui.renderer
 
 import java.awt.{Color, Font}
+import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
+import com.serenity.state.manager.AuthoritativeUiScene
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.*
@@ -35,6 +37,36 @@ case class RenderContext(
     fontForRole(buffer.typographyRole)
 
 object Renderer:
+
+  private case class PreparedScene(
+      scene: UiSceneSnapshot,
+      renderPlan: EditorPaneRenderPlan,
+      codeFont: Font,
+      textFont: Font,
+      uiFont: Font,
+      cellMetrics: CellMetrics,
+      uiMetrics: CellMetrics,
+      viewportSize: ViewportSize
+  ):
+
+    def matches(
+      candidateScene: UiSceneSnapshot,
+      candidateCodeFont: Font,
+      candidateTextFont: Font,
+      candidateUiFont: Font,
+      candidateCellMetrics: CellMetrics,
+      candidateUiMetrics: CellMetrics,
+      candidateViewportSize: ViewportSize
+    ): Boolean =
+      (scene eq candidateScene) &&
+        codeFont == candidateCodeFont &&
+        textFont == candidateTextFont &&
+        uiFont == candidateUiFont &&
+        cellMetrics == candidateCellMetrics &&
+        uiMetrics == candidateUiMetrics &&
+        viewportSize == candidateViewportSize
+
+  private val preparedSceneRef = new AtomicReference[Option[PreparedScene]](None)
 
   private val MarkdownFenceProbeWindow    = 512
   private val MarkdownFenceProbeMaximum   = 8_192
@@ -117,13 +149,13 @@ object Renderer:
     val publishFrame = if repaintOnFlush then swingWin.onImageReady else swingWin.onBaseImageReady
     val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, codeFont, swingWin.canvas, publishFrame)
     val viewportSize = swingWin.viewportSize
-    val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
+    val scene        = AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
     val _ = renderFrame(
       state0,
       cursorVisible,
       surface,
       viewportSize,
-      layout,
+      scene,
       codeFont,
       textFont,
       uiFont,
@@ -144,10 +176,33 @@ object Renderer:
   ): Boolean =
     val state0       = withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
-    val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
     swingWin.onCursorOverlayReady { image =>
       val surface =
         Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
+      val authoritativeScene = AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
+      val prepared = preparedSceneRef
+        .get()
+        .filter(
+          _.matches(authoritativeScene, codeFont, textFont, uiFont, swingWin.metrics, uiMetrics, viewportSize)
+        )
+      val (layout, renderPlan) = prepared match
+        case Some(value) => value.scene.calculatedLayout -> value.renderPlan
+        case None =>
+          val next = prepareScene(
+            state0,
+            surface,
+            viewportSize,
+            authoritativeScene,
+            cursorVisible,
+            cursorColor,
+            codeFont,
+            textFont,
+            uiFont,
+            swingWin.metrics,
+            uiMetrics
+          )
+          preparedSceneRef.set(Some(next))
+          next.scene.calculatedLayout -> next.renderPlan
       val context =
         RenderContext(
           surface,
@@ -160,7 +215,6 @@ object Renderer:
           swingWin.metrics,
           uiMetrics
         )
-      val renderPlan = prepareEditorPaneRenderPlan(state0, context)
       renderEditorCursors(state0, context, renderPlan)
       surface.flush()
     }
@@ -177,7 +231,7 @@ object Renderer:
   ): Boolean =
     val state0       = withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
-    val layout       = LayoutEngine.calculateLayout(state0, viewportSize)
+    val scene        = AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
     val surface = Java2DRenderSurface.forFrame(
       swingWin.metrics,
       codeFont,
@@ -189,7 +243,7 @@ object Renderer:
       cursorVisible = false,
       surface,
       viewportSize,
-      layout,
+      scene,
       codeFont,
       textFont,
       uiFont,
@@ -202,7 +256,7 @@ object Renderer:
           Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
         val cursorContext = RenderContext(
           cursorSurface,
-          layout,
+          scene.calculatedLayout,
           true,
           cursorColor,
           codeFont,
@@ -253,13 +307,13 @@ object Renderer:
     cursorColor: Option[java.awt.Color]
   ): Unit =
     val state0 = withEffectiveTheme(state)
-    val layout = LayoutEngine.calculateLayout(state0, viewportSize)
+    val scene  = AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
     val _ = renderFrame(
       state0,
       cursorVisible,
       surface,
       viewportSize,
-      layout,
+      scene,
       codeFont,
       textFont,
       uiFont,
@@ -292,7 +346,7 @@ object Renderer:
     cursorVisible: Boolean,
     surface: RenderSurface,
     viewportSize: ViewportSize,
-    layout: CalculatedLayout,
+    scene: UiSceneSnapshot,
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
@@ -302,7 +356,6 @@ object Renderer:
   ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
     surface.clearViewport(state.theme.background)
-    val scene = UiSceneSnapshot.from(state, layout)
 
     val editorRenderPlan = state.startPageSurface.flatMap {
       _.content match
@@ -312,25 +365,95 @@ object Renderer:
       case Some(page) =>
         renderStartPage(page, surface, viewportSize, state.theme, uiFont, cellMetrics, uiMetrics)
         val floatContext =
-          RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
+          RenderContext(
+            surface,
+            scene.calculatedLayout,
+            cursorVisible,
+            cursorColor,
+            codeFont,
+            textFont,
+            uiFont,
+            cellMetrics,
+            uiMetrics
+          )
         renderFloatingPanels(state, floatContext, scene)
         None
       case None =>
-        val context =
-          RenderContext(surface, layout, cursorVisible, cursorColor, codeFont, textFont, uiFont, cellMetrics, uiMetrics)
-        val editorRenderPlan = prepareEditorPaneRenderPlan(state, context)
+        val prepared = prepareScene(
+          state,
+          surface,
+          viewportSize,
+          scene,
+          cursorVisible,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics
+        )
+        val finalizedScene   = prepared.scene
+        val editorRenderPlan = prepared.renderPlan
+        preparedSceneRef.set(Some(prepared))
+        val context = RenderContext(
+          surface,
+          finalizedScene.calculatedLayout,
+          cursorVisible,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics
+        )
         renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
         renderLineNumbers(state, context, editorRenderPlan)
         renderGutter(state, context, editorRenderPlan.layoutContract)
-        renderPinnedPanels(state, context)
+        renderPinnedPanels(state, context, finalizedScene.editorContract)
         renderEditorPanes(state, context, editorRenderPlan)
-        renderFloatingPanels(state, context, scene)
-        renderModalLayer(state, context, scene)
+        renderFloatingPanels(state, context, finalizedScene)
+        renderModalLayer(state, context, finalizedScene)
         Some(editorRenderPlan)
 
     surface.applyPostProcessing(state.config.postProcessingEffect)
     surface.flush()
     editorRenderPlan
+
+  private def prepareScene(
+    state: AppState,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    scene: UiSceneSnapshot,
+    cursorVisible: Boolean,
+    cursorColor: Option[java.awt.Color],
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics
+  ): PreparedScene =
+    val context = RenderContext(
+      surface,
+      scene.calculatedLayout,
+      cursorVisible,
+      cursorColor,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics
+    )
+    val renderPlan = prepareEditorPaneRenderPlan(state, context, scene)
+    PreparedScene(
+      scene,
+      renderPlan,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      viewportSize
+    )
 
   private def renderSpacerColumns(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     val surface = context.surface
@@ -339,13 +462,12 @@ object Renderer:
       .filter(rect => rect.width > 0 && rect.height > 0)
       .foreach(rect => surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
 
-  private def prepareEditorPaneRenderPlan(state: AppState, context: RenderContext): EditorPaneRenderPlan =
-    val layoutContract =
-      EditorLayoutContract.from(
-        state,
-        ViewportSize(context.surface.viewportWidth, context.surface.viewportHeight),
-        context.layout
-      )
+  private def prepareEditorPaneRenderPlan(
+    state: AppState,
+    context: RenderContext,
+    scene: UiSceneSnapshot
+  ): EditorPaneRenderPlan =
+    val layoutContract  = scene.editorContract
     val workspaceLayout = layoutContract.workspace
     val snapshots =
       state.layout.editorPanes.flatMap {
@@ -354,7 +476,11 @@ object Renderer:
             paneLayout <- workspaceLayout.paneLayouts.get(paneId)
             bufferId   <- pane.bufferId
             buffer     <- state.buffers.get(bufferId)
-          yield paneId -> snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
+          yield paneId -> scene
+            .textSnapshot(paneId)
+            .getOrElse(
+              snapshotForBuffer(buffer, paneLayout.contentRect, state, context)
+            )
       }
 
     val visibleLinesByBuffer = state.layout.editorPanes.toList
@@ -1700,14 +1826,12 @@ object Renderer:
       )
     }
 
-  private def renderPinnedPanels(state: AppState, context: RenderContext): Unit =
+  private def renderPinnedPanels(
+    state: AppState,
+    context: RenderContext,
+    contract: EditorLayoutContract
+  ): Unit =
     context.surface.setFont(context.uiFont)
-    val contract =
-      EditorLayoutContract.from(
-        state,
-        ViewportSize(context.surface.viewportWidth, context.surface.viewportHeight),
-        context.layout
-      )
     (state.pinnedSurfaces ++ state.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true

@@ -43,6 +43,8 @@ case class SceneNode(
 case class UiSceneSnapshot(
     calculatedLayout: CalculatedLayout,
     paneLayouts: Map[PaneId, EditorPaneLayout],
+    editorContract: EditorLayoutContract,
+    textSnapshots: Map[PaneId, TextLayoutSnapshot],
     workspace: List[SceneNode],
     floating: List[SceneNode],
     modalBackdrop: Option[SceneNode],
@@ -56,13 +58,35 @@ case class UiSceneSnapshot(
   def floatingRect(surfaceId: SurfaceId): Option[LayoutRect] =
     floating.collectFirst { case SceneNode(SceneNodeId.Surface(`surfaceId`), _, frame, _, _, _) => frame }
 
+  def textSnapshot(paneId: PaneId): Option[TextLayoutSnapshot] =
+    textSnapshots.get(paneId)
+
+  def withTextSnapshots(snapshots: Map[PaneId, TextLayoutSnapshot]): UiSceneSnapshot =
+    copy(textSnapshots = snapshots)
+
 object UiSceneSnapshot:
 
   def from(state: AppState, viewportSize: ViewportSize): UiSceneSnapshot =
-    from(state, LayoutEngine.calculateLayoutWithUI(state, viewportSize))
+    from(state, LayoutEngine.calculateLayoutWithUI(state, viewportSize), viewportSize)
 
   def from(state: AppState, calculatedLayout: CalculatedLayout): UiSceneSnapshot =
+    from(
+      state,
+      calculatedLayout,
+      ViewportSize(calculatedLayout.editorPanelRect.right, calculatedLayout.editorPanelRect.bottom)
+    )
+
+  def from(
+    state: AppState,
+    calculatedLayout: CalculatedLayout,
+    viewportSize: ViewportSize
+  ): UiSceneSnapshot =
     val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
+    val editorContract = EditorLayoutContract.from(
+      state,
+      viewportSize,
+      calculatedLayout
+    )
     val workspacePanes = state.layout.orderedPaneIds.flatMap { paneId =>
       paneLayouts.get(paneId).toList.flatMap { pane =>
         val paneNode = SceneNode(
@@ -112,6 +136,8 @@ object UiSceneSnapshot:
     UiSceneSnapshot(
       calculatedLayout = calculatedLayout,
       paneLayouts = paneLayouts,
+      editorContract = editorContract,
+      textSnapshots = Map.empty,
       workspace = workspacePanes ++ workspaceSurfaces,
       floating = floating,
       modalBackdrop = modalBackdrop,

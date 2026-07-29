@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.awt.Font
+
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
@@ -43,6 +45,17 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     scene.nodesInPaintOrder.foreach { node =>
       node.hitRegions.foreach(region => node.frameRect.containsRect(region.rect) shouldBe true)
     }
+  }
+
+  it should "own the editor contract and visible text snapshots consumed by clients" in {
+    val state  = AppState.initial
+    val scene  = UiSceneSnapshot.from(state, viewport)
+    val paneId = state.layout.activeEditorPaneId.getOrElse(fail("expected active pane"))
+    val buffer = state.layout.editorPanes(paneId).bufferId.flatMap(state.buffers.get).getOrElse(fail("expected buffer"))
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 640, Font(Font.MONOSPACED, Font.PLAIN, 12))
+
+    scene.editorContract.paneLayout(paneId) shouldBe scene.paneLayouts.get(paneId)
+    scene.withTextSnapshots(Map(paneId -> snapshot)).textSnapshot(paneId) shouldBe Some(snapshot)
   }
 
   it should "own the rendered active-pane header as a contained workspace node" in {

@@ -15,6 +15,7 @@ Scenarios cover:
 - large JSON rope search and cursor-offset lookup
 - visible multiline layout, normal editing, and deep plain/rich-text scrolling reducers
 - real Java2D full frames, cursor-overlay copying, diagnostics/comments, and HiDPI buffers
+- authoritative-scene reuse for cursor-only Java2D overlays
 - large find/replace result-set presentation and complete find-query updates, including grapheme filtering, offset-to-position conversion, and selected-result application
 - LSP frame decoding and project-task detection/terminal preparation
 - Markdown preview and inline-lens rendering
@@ -52,6 +53,17 @@ Captured on x86_64 Linux 5.15.153.1-microsoft-standard-WSL2, AMD Ryzen 5 5600X 6
 | `markdown.preview.html_fragment` | 0.523 | 0.550 |
 | `render.markdown.inline_lens` | 10.894 | 13.942 |
 | `animation.large_visible_tick` | 1.354 | 1.783 |
+
+## After #833: scene reuse validation — 2026-07-29
+
+Captured with the same WSL2 host and Microsoft OpenJDK 21.0.8+9-LTS runtime under `xvfb-run -a`. The cursor-only
+fixture renders the base frame before timing, so overlay iterations exercise the cached authoritative scene and its
+prepared text snapshots.
+
+| Scenario | p50 | p95 |
+| --- | ---: | ---: |
+| `render.cursor_only.java2d_overlay` (baseline) | 5.158 | 10.270 |
+| `render.cursor_only.scene_reuse.java2d_overlay` | 2.162 | 2.221 |
 
 ## After #827: 2026-07-22
 

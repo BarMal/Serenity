@@ -1,11 +1,13 @@
 package com.serenity.state.manager
 
-import com.serenity.config.{AppConfig, TextAreaInsets}
+import java.awt.Font
+
+import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -55,17 +57,95 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val cache  = MouseTargetCache.fromState(state, size)
     val layout = LayoutEngine.calculateLayoutWithUI(state, size)
 
-    cache.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, layout)
-    cache.paneLayouts(paneId).headerRect.bottom.shouldBe(cache.paneLayouts(paneId).contentRect.y)
+    cache.scene.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, layout)
+    cache.scene.paneLayouts(paneId).headerRect.bottom.shouldBe(cache.scene.paneLayouts(paneId).contentRect.y)
   }
 
   it should "cache the authoritative scene used for mouse-target geometry" in {
-    val state = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"))
-    val size  = ViewportSize(80, 24)
-    val cache = MouseTargetCache.fromState(state, size)
+    val state  = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"))
+    val size   = ViewportSize(80, 24)
+    val cache  = MouseTargetCache.fromState(state, size)
+    val reused = MouseTargetCache.fromState(state, size)
+    val layout = LayoutEngine.calculateLayoutWithUI(state, size)
 
-    cache.scene.paneLayouts shouldBe cache.paneLayouts
-    cache.scene.calculatedLayout shouldBe cache.layout
+    cache.scene.editorContract.workspace.paneLayouts shouldBe cache.scene.paneLayouts
+    cache.scene.calculatedLayout shouldBe layout
+    reused.scene should be theSameInstanceAs cache.scene
+  }
+
+  it should "reuse the prepared scene for cursor-only state changes" in {
+    val buffer = Buffer.fromString(bufferId, "alpha beta")
+    val state  = stateWith(buffer.copy(cursors = List(CursorPosition(0, 1))))
+    val moved  = stateWith(buffer.copy(cursors = List(CursorPosition(0, 5))))
+    val size   = ViewportSize(80, 24)
+    val scene  = MouseTargetCache.fromState(state, size).scene
+
+    MouseTargetCache.fromState(moved, size).scene should be theSameInstanceAs scene
+  }
+
+  it should "use the renderer's proportional wrapped snapshot for hit testing" in {
+    val state   = stateWith(Buffer.fromString(bufferId, (1 to 20).map(_ => "proportional").mkString(" ")))
+    val size    = ViewportSize(80, 24)
+    val mono    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val text    = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
+    val surface = new com.serenity.MockRenderSurface(size.width, size.height)
+
+    Renderer.render(state, cursorVisible = true, surface, size, mono, text, CellMetrics.fromFont(mono), None)
+
+    val cache    = MouseTargetCache.fromState(state, size)
+    val snapshot = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
+
+    snapshot.usesMeasuredLayout shouldBe true
+    snapshot.isProportional shouldBe true
+    snapshot.visualLines.size should be > 1
+    cache.scene should be theSameInstanceAs MouseTargetCache.fromState(state, size).scene
+  }
+
+  it should "give rendering the scene prepared by mouse targeting first" in {
+    val state    = stateWith(Buffer.fromString(bufferId, "alpha beta"))
+    val size     = ViewportSize(80, 24)
+    val scene    = MouseTargetCache.fromState(state, size).scene
+    val codeFont = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Code)
+    val textFont = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
+    val surface  = new com.serenity.MockRenderSurface(size.width, size.height)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      size,
+      codeFont,
+      textFont,
+      CellMetrics.fromFont(codeFont),
+      None
+    )
+
+    MouseTargetCache.fromState(state, size).scene should be theSameInstanceAs scene
+  }
+
+  it should "share a scene when rendering uses an effective theme copy" in {
+    val state = stateWith(Buffer.fromString(bufferId, "alpha beta")).copy(
+      themeTransition = Some(ThemeTransition(com.serenity.ui.theme.Theme.light, currentStep = 1, totalSteps = 4))
+    )
+    val size     = ViewportSize(80, 24)
+    val codeFont = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Code)
+    val textFont = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
+    val surface  = new com.serenity.MockRenderSurface(size.width, size.height)
+
+    Renderer.render(
+      state,
+      cursorVisible = true,
+      surface,
+      size,
+      codeFont,
+      textFont,
+      CellMetrics.fromFont(codeFont),
+      None
+    )
+    val renderedScene = MouseTargetCache.fromState(state, size).scene
+
+    MouseTargetCache.fromState(state.copy(theme = com.serenity.ui.theme.Theme.dark), size).scene should
+      be theSameInstanceAs renderedScene
   }
 
   it should "change when layout-affecting content changes with line numbers enabled" in {
@@ -76,28 +156,47 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       MouseTargetLayoutKey.from(longState, ViewportSize(80, 24))
   }
 
-  "MouseTargetSnapshotKey" should "ignore cursor and selection changes for the same buffer content" in {
+  it should "invalidate prepared snapshots when font, typography, language, viewport, or rich text changes" in {
     val buffer = Buffer
       .fromString(bufferId, "alpha beta")
-      .copy(language = Some(LanguageId.Markdown), cursors = List(CursorPosition(0, 1)))
-    val draggedBuffer = buffer.copy(
-      cursors = List(CursorPosition(0, 5)),
-      selection = Some(Selection(CursorPosition(0, 1), CursorPosition(0, 5)))
-    )
-    val fontConfig = FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)
+      .copy(language = Some(LanguageId.Scala))
+    val state = stateWith(buffer)
+    val size  = ViewportSize(80, 24)
+    val key   = MouseTargetLayoutKey.from(state, size)
 
-    MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx = 640) shouldBe
-      MouseTargetSnapshotKey.from(draggedBuffer, fontConfig, panelWidthPx = 640)
+    val fontChanged     = stateWith(buffer, state.config.withFontConfig(state.config.fontConfig.copy(fontSize = 14.0f)))
+    val languageChanged = stateWith(buffer.copy(language = Some(LanguageId.Markdown)))
+    val languageRemoved = stateWith(buffer.copy(language = None))
+    val viewportChanged = stateWith(buffer.copy(viewport = buffer.viewport.copy(topVisualLine = 1)))
+    val richTextChanged = stateWith(
+      buffer.copy(richTextDocument = Some(com.serenity.richtext.RichTextDocument.fromPlainText("alpha beta")))
+    )
+
+    List(fontChanged, languageChanged, languageRemoved, viewportChanged, richTextChanged).foreach { changed =>
+      MouseTargetLayoutKey.from(changed, size) should not be key
+    }
   }
 
-  it should "change when buffer content or font settings change" in {
-    val buffer     = Buffer.fromString(bufferId, "alpha beta")
-    val changed    = Buffer.fromString(bufferId, "alpha beta gamma")
-    val fontConfig = FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)
+  it should "invalidate scene geometry when text-area insets change" in {
+    val state = stateWith(Buffer.fromString(bufferId, "alpha beta"))
+    val size  = ViewportSize(80, 24)
 
-    MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx = 640) should not be
-      MouseTargetSnapshotKey.from(changed, fontConfig, panelWidthPx = 640)
+    val insetState = state.copy(config = state.config.withTextAreaInsets(TextAreaInsets(0.2, 0.1, 0.1, 0.1)))
 
-    MouseTargetSnapshotKey.from(buffer, fontConfig, panelWidthPx = 640) should not be
-      MouseTargetSnapshotKey.from(buffer, fontConfig.copy(fontSize = 14.0f), panelWidthPx = 640)
+    MouseTargetLayoutKey.from(insetState, size) should not be MouseTargetLayoutKey.from(state, size)
+    MouseTargetCache.fromState(insetState, size).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(state, size).scene
+    )
+  }
+
+  it should "invalidate scene composition when interface density changes" in {
+    val state = stateWith(Buffer.fromString(bufferId, "alpha beta"))
+    val size  = ViewportSize(80, 24)
+
+    val spaciousState = state.copy(config = state.config.withInterfaceDensity(InterfaceDensity.Spacious))
+
+    MouseTargetLayoutKey.from(spaciousState, size) should not be MouseTargetLayoutKey.from(state, size)
+    MouseTargetCache.fromState(spaciousState, size).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(state, size).scene
+    )
   }

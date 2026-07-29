@@ -247,7 +247,7 @@ object PerformanceBenchmarks:
         () => renderedFrame(richState, deviceScale = 1.0)
       ),
       Benchmark(
-        "render.cursor_only.java2d_overlay",
+        "render.cursor_only.scene_reuse.java2d_overlay",
         2,
         8,
         () => assert(renderedCursorOverlay(plainScrollState, cursorWindow)),
