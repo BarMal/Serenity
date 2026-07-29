@@ -37,6 +37,7 @@ case class RenderContext(
 object Renderer:
 
   private val MarkdownFenceProbeWindow    = 512
+  private val MarkdownFenceProbeMaximum   = 8_192
   private val MarkdownSelectionProbeLimit = 512
 
   private def markdownBlockForRenderer(buffer: Buffer, line: Int): Range.Inclusive =
@@ -48,9 +49,9 @@ object Renderer:
     )
     def resolve(window: Int, range: Range.Inclusive): Range.Inclusive =
       val exhausted = range.length == window * 2 + 1
-      if !exhausted || window >= buffer.content.lineCount then range
+      if !exhausted || window >= buffer.content.lineCount || window >= MarkdownFenceProbeMaximum then range
       else
-        val nextWindow = (window * 2).min(buffer.content.lineCount)
+        val nextWindow = (window * 2).min(buffer.content.lineCount).min(MarkdownFenceProbeMaximum)
         val expanded = MarkdownBlockLens.currentBlock(
           buffer.content.lineCount,
           buffer.content.getLine,
@@ -823,7 +824,14 @@ object Renderer:
       if buffer.language.contains(LanguageId.Markdown) then
         activeLine
           .filter(line => line >= 0 && line < buffer.content.lineCount)
-          .map(line => markdownBlockForRenderer(buffer, line))
+          .map(line =>
+            MarkdownBlockLens.currentBlock(
+              buffer.content.lineCount,
+              buffer.content.getLine,
+              line,
+              fenceProbeWindow = MarkdownFenceProbeWindow
+            )
+          )
           .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
           .getOrElse((_: Int) => true)
       else

@@ -447,6 +447,38 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     lineReads.get() should be < 20_000
   }
 
+  it should "keep reads bounded for a large fence-free Markdown document" in {
+    val paneId    = PaneId(0)
+    val bufferId  = BufferId(1)
+    val lineReads = AtomicInteger(0)
+    val markdown  = Vector.fill(11_000)("ordinary prose without fences").mkString("\n")
+    val content   = CountingAccessRope(Rope(markdown), lineReads = lineReads)
+    val buffer = Buffer(bufferId, content).copy(
+      language = Some(LanguageId.Markdown),
+      cursors = List(CursorPosition(5_500, 0)),
+      viewport = Viewport(topLine = 5_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
+    )
+    val state = AppState.initial.copy(
+      buffers = Map(bufferId -> buffer),
+      bufferOrder = List(bufferId),
+      layout = Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId)
+      ),
+      theme = Theme.light,
+      config = AppConfig.default
+        .withLineNumbers(false)
+        .withGutter(false)
+        .withWordWrap(false)
+        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    )
+    val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
+
+    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+
+    lineReads.get() should be < 200_000
+  }
+
   it should "bound bare fence classification reads after a long prose prefix" in {
     val paneId    = PaneId(0)
     val bufferId  = BufferId(1)
