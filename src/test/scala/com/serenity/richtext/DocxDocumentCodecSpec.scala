@@ -117,6 +117,16 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
     singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
   }
 
+  it should "report unsupported DOCX structures before a lossy save" in {
+    val xml = fixture("docx-unsupported-table.xml")
+
+    val imported = DocxDocumentCodec.readBytesWithFidelity(docxBytes(xml))
+
+    imported.document.plainText shouldBe "kept text"
+    imported.fidelity.isLossless shouldBe false
+    imported.fidelity.unsupportedElements should contain("tbl")
+  }
+
   it should "read and write DOCX files through IO" in {
     val path   = Files.createTempFile("serenity-rich-text", ".docx")
     val source = RichTextDocument.oneParagraph("Saved text")
@@ -214,6 +224,9 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
   private def docxBytes(documentXml: String): Array[Byte] =
     docxRawBytes("word/document.xml", documentXml.getBytes(StandardCharsets.UTF_8))
+
+  private def fixture(name: String): String =
+    scala.io.Source.fromResource(s"richtext/$name").mkString
 
   private def emptyZipBytes(): Array[Byte] =
     val output = java.io.ByteArrayOutputStream()

@@ -196,7 +196,7 @@ object DocumentFormat:
           canSave = true,
           canRender = true,
           canEdit = true,
-          preservesRichFormatting = true
+          preservesRichFormatting = fileType == FileType.RichText
         )
       case _ =>
         capabilities(fromFileType(fileType))

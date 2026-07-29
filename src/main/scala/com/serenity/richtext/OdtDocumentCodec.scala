@@ -17,6 +17,22 @@ object OdtDocumentCodec:
   private val StyleNs  = "urn:oasis:names:tc:opendocument:xmlns:style:1.0"
   private val TextNs   = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
   private val FoNs     = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  private val SupportedArchiveEntries = Set("mimetype", "META-INF/manifest.xml", "content.xml")
+  private val SupportedElements = Set(
+    "document-content",
+    "automatic-styles",
+    "style",
+    "text-properties",
+    "paragraph-properties",
+    "body",
+    "text",
+    "p",
+    "h",
+    "span",
+    "s",
+    "tab",
+    "line-break"
+  )
 
   private case class OdtStyles(
       textStyles: Map[String, RichTextStyle],
@@ -54,6 +70,20 @@ object OdtDocumentCodec:
     catch
       case error: RichTextCodecException => throw error
       case NonFatal(error)               => throw RichTextCodecException("ODT document could not be decoded", error)
+
+  /** Decode ODT bytes and report structures that the native model cannot round-trip. */
+  def readBytesWithFidelity(bytes: Array[Byte]): RichTextImport =
+    val document = readBytes(bytes)
+    val content = RichTextArchive.zipEntry(bytes, "content.xml", "ODT").getOrElse(Array.emptyByteArray)
+    val xml     = parseXml(content)
+    val unsupportedElements =
+      (0 until xml.getElementsByTagName("*").getLength)
+        .map(xml.getElementsByTagName("*").item)
+        .collect { case element: Element => element.getLocalName }
+        .filterNot(SupportedElements.contains)
+        .toSet
+    val unsupportedEntries = RichTextArchive.entryNames(bytes, "ODT") -- SupportedArchiveEntries
+    RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries))
 
   /** Encode Serenity's native rich text model as ODT bytes. */
   def writeBytes(document: RichTextDocument): Array[Byte] =

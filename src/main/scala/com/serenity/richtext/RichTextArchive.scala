@@ -53,6 +53,19 @@ object RichTextArchive:
       case NonFatal(error)               => throw RichTextCodecException(s"$format archive could not be read", error)
     finally input.close()
 
+  def entryNames(bytes: Array[Byte], format: String): Set[String] =
+    requireArchiveSize(bytes, format)
+    val input = ZipInputStream(ByteArrayInputStream(bytes))
+    try
+      Iterator
+        .continually(input.getNextEntry)
+        .takeWhile(_ != null)
+        .map(_.getName)
+        .toSet
+    catch
+      case NonFatal(error) => throw RichTextCodecException(s"$format archive could not be read", error)
+    finally input.close()
+
   private def readBoundedEntry(
     input: ZipInputStream,
     name: String,

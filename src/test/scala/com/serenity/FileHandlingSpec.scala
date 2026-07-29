@@ -172,14 +172,14 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       canSave = true,
       canRender = true,
       canEdit = true,
-      preservesRichFormatting = true
+      preservesRichFormatting = false
     )
     DocumentFormat.capabilities(FileType.WordOpenXmlDocument) shouldBe DocumentFormatCapabilities(
       canOpen = true,
       canSave = true,
       canRender = true,
       canEdit = true,
-      preservesRichFormatting = true
+      preservesRichFormatting = false
     )
     DocumentFormat.capabilities(FileType.WordDocument) shouldBe DocumentFormatCapabilities(
       canOpen = false,

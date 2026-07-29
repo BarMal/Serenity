@@ -155,6 +155,16 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
     singleParagraph(OdtDocumentCodec.readBytes(bytes)).plainText shouldBe "alpha  beta"
   }
 
+  it should "report unsupported ODT structures before a lossy save" in {
+    val xml = fixture("odt-unsupported-table.xml")
+
+    val imported = OdtDocumentCodec.readBytesWithFidelity(odtBytes(xml))
+
+    imported.document.plainText shouldBe "kept text"
+    imported.fidelity.isLossless shouldBe false
+    imported.fidelity.unsupportedElements should contain("table")
+  }
+
   it should "read and write ODT files through IO" in {
     val path   = Files.createTempFile("serenity-rich-text", ".odt")
     val source = RichTextDocument.oneParagraph("Saved text")
@@ -259,6 +269,9 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
   private def odtBytes(contentXml: String): Array[Byte] =
     odtRawBytes("content.xml", contentXml.getBytes(StandardCharsets.UTF_8))
+
+  private def fixture(name: String): String =
+    scala.io.Source.fromResource(s"richtext/$name").mkString
 
   private def emptyZipBytes(): Array[Byte] =
     val output = java.io.ByteArrayOutputStream()
