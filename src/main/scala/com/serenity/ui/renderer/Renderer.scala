@@ -154,6 +154,12 @@ object Renderer:
     surface.applyPostProcessing(state.config.postProcessingEffect)
     surface.flush()
 
+  private[serenity] def withSceneIfNeeded[A](
+    state: AppState,
+    buildScene: => UiSceneSnapshot
+  )(startup: StartupPage => A)(editor: UiSceneSnapshot => A): A =
+    startPageOnly(state).fold(editor(buildScene))(startup)
+
   def render(
     state: AppState,
     cursorVisible: Boolean,
@@ -169,23 +175,23 @@ object Renderer:
     val publishFrame = if repaintOnFlush then swingWin.onImageReady else swingWin.onBaseImageReady
     val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, codeFont, swingWin.canvas, publishFrame)
     val viewportSize = swingWin.viewportSize
-    startPageOnly(state0) match
-      case Some(page) => renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics)
-      case None =>
-        val scene = AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
-        val _ = renderFrame(
-          state0,
-          cursorVisible,
-          surface,
-          viewportSize,
-          scene,
-          codeFont,
-          textFont,
-          uiFont,
-          swingWin.metrics,
-          uiMetrics,
-          cursorColor
-        )
+    val _ = withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
+      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics)
+    ) { scene =>
+      renderFrame(
+        state0,
+        cursorVisible,
+        surface,
+        viewportSize,
+        scene,
+        codeFont,
+        textFont,
+        uiFont,
+        swingWin.metrics,
+        uiMetrics,
+        cursorColor
+      )
+    }
 
   def renderCursorOnly(
     state: AppState,
@@ -199,48 +205,49 @@ object Renderer:
   ): Boolean =
     val state0       = withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
-    if startPageOnly(state0).nonEmpty then false
-    else swingWin.onCursorOverlayReady { image =>
-      val surface =
-        Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
-      val authoritativeScene = AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
-      val prepared = preparedSceneRef
-        .get()
-        .filter(
-          _.matches(authoritativeScene, codeFont, textFont, uiFont, swingWin.metrics, uiMetrics, viewportSize)
-        )
-      val (layout, renderPlan) = prepared match
-        case Some(value) => value.scene.calculatedLayout -> value.renderPlan
-        case None =>
-          val next = prepareScene(
-            state0,
-            surface,
-            viewportSize,
-            authoritativeScene,
-            cursorVisible,
-            cursorColor,
-            codeFont,
-            textFont,
-            uiFont,
-            swingWin.metrics,
-            uiMetrics
-          )
-          preparedSceneRef.set(Some(next))
-          next.scene.calculatedLayout -> next.renderPlan
-      val context =
-        RenderContext(
-          surface,
-          layout,
-          cursorVisible,
-          cursorColor,
-          codeFont,
-          textFont,
-          uiFont,
-          swingWin.metrics,
-          uiMetrics
-        )
-      renderEditorCursors(state0, context, renderPlan)
-      surface.flush()
+    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(_ => false) {
+      authoritativeScene =>
+        swingWin.onCursorOverlayReady { image =>
+          val surface =
+            Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
+          val prepared = preparedSceneRef
+            .get()
+            .filter(
+              _.matches(authoritativeScene, codeFont, textFont, uiFont, swingWin.metrics, uiMetrics, viewportSize)
+            )
+          val (layout, renderPlan) = prepared match
+            case Some(value) => value.scene.calculatedLayout -> value.renderPlan
+            case None =>
+              val next = prepareScene(
+                state0,
+                surface,
+                viewportSize,
+                authoritativeScene,
+                cursorVisible,
+                cursorColor,
+                codeFont,
+                textFont,
+                uiFont,
+                swingWin.metrics,
+                uiMetrics
+              )
+              preparedSceneRef.set(Some(next))
+              next.scene.calculatedLayout -> next.renderPlan
+          val context =
+            RenderContext(
+              surface,
+              layout,
+              cursorVisible,
+              cursorColor,
+              codeFont,
+              textFont,
+              uiFont,
+              swingWin.metrics,
+              uiMetrics
+            )
+          renderEditorCursors(state0, context, renderPlan)
+          surface.flush()
+        }
     }
 
   /** Render a base frame and its cursor overlay without recalculating the editor layout. */
@@ -261,43 +268,42 @@ object Renderer:
       swingWin.canvas,
       swingWin.onBaseImageReady
     )
-    startPageOnly(state0) match
-      case Some(page) =>
-        renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics)
-        false
-      case None =>
-        val scene = AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
-        renderFrame(
-          state0,
-          cursorVisible = false,
-          surface,
-          viewportSize,
-          scene,
-          codeFont,
-          textFont,
-          uiFont,
-          swingWin.metrics,
-          uiMetrics,
-          cursorColor = None
-        ).fold(false) { renderPlan =>
-          swingWin.onCursorOverlayReady { image =>
-            val cursorSurface =
-              Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
-            val cursorContext = RenderContext(
-              cursorSurface,
-              scene.calculatedLayout,
-              true,
-              cursorColor,
-              codeFont,
-              textFont,
-              uiFont,
-              swingWin.metrics,
-              uiMetrics
-            )
-            renderEditorCursors(state0, cursorContext, renderPlan)
-            cursorSurface.flush()
-          }
+    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
+      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics)
+      false
+    ) { scene =>
+      renderFrame(
+        state0,
+        cursorVisible = false,
+        surface,
+        viewportSize,
+        scene,
+        codeFont,
+        textFont,
+        uiFont,
+        swingWin.metrics,
+        uiMetrics,
+        cursorColor = None
+      ).fold(false) { renderPlan =>
+        swingWin.onCursorOverlayReady { image =>
+          val cursorSurface =
+            Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
+          val cursorContext = RenderContext(
+            cursorSurface,
+            scene.calculatedLayout,
+            true,
+            cursorColor,
+            codeFont,
+            textFont,
+            uiFont,
+            swingWin.metrics,
+            uiMetrics
+          )
+          renderEditorCursors(state0, cursorContext, renderPlan)
+          cursorSurface.flush()
         }
+      }
+    }
 
   def render(
     state: AppState,
@@ -336,23 +342,23 @@ object Renderer:
     cursorColor: Option[java.awt.Color]
   ): Unit =
     val state0 = withEffectiveTheme(state)
-    startPageOnly(state0) match
-      case Some(page) => renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics)
-      case None =>
-        val scene = AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
-        val _ = renderFrame(
-          state0,
-          cursorVisible,
-          surface,
-          viewportSize,
-          scene,
-          codeFont,
-          textFont,
-          uiFont,
-          cellMetrics,
-          uiMetrics,
-          cursorColor
-        )
+    val _ = withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
+      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics)
+    ) { scene =>
+      renderFrame(
+        state0,
+        cursorVisible,
+        surface,
+        viewportSize,
+        scene,
+        codeFont,
+        textFont,
+        uiFont,
+        cellMetrics,
+        uiMetrics,
+        cursorColor
+      )
+    }
 
   def render(
     state: AppState,
