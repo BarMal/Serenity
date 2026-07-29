@@ -92,6 +92,34 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     sitter.glyph shouldBe "·"
   }
 
+  it should "restore configured resting sitter frames when UI motion is re-enabled" in {
+    val initialConfig = AppConfig.default.withWindowSitterConfig(WindowSitterConfig(frames = Vector("rest", "active")))
+    val stateManager  = createStateManager(initialConfig)
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "motion-accessibility-off",
+          "Disable motion",
+          CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "motion-accessibility-standard",
+          "Enable motion",
+          CommandIntent.SetMotionAccessibility(MotionAccessibility.Standard),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().windowSitter.glyph shouldBe "rest"
+  }
+
   it should "update persisted window sitter controls through settings commands" in {
     val stateManager = createStateManager()
     val commands = List(

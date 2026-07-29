@@ -281,7 +281,16 @@ final private[manager] class StateManagerEffectHandlers(
     else
       com.serenity.config.MotionFamily.values.toList
         .filter(family => previousFamilies.family(family).enabled && !currentFamilies.family(family).enabled)
-        .traverse_(cancelMotionFamily)
+        .traverse_(cancelMotionFamily) >>
+        IO.whenA(
+          !previousFamilies.family(com.serenity.config.MotionFamily.UiTransitions).enabled &&
+            currentFamilies.family(com.serenity.config.MotionFamily.UiTransitions).enabled &&
+            current.windowSitterConfig.enabled
+        )(
+          stateRef.update(state =>
+            state.copy(windowSitter = com.serenity.animation.WindowSitter.fromConfig(current.windowSitterConfig))
+          )
+        )
 
   private def cancelMotionFamily(family: com.serenity.config.MotionFamily): IO[Unit] =
     family match

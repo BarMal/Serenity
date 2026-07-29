@@ -23,7 +23,9 @@ class SwingWindow(
     initialPixelSize: Dimension,
     initialMetrics: CellMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
-    initialChromeMetrics: CellMetrics
+    initialChromeMetrics: CellMetrics,
+    initialWindowSitter: WindowSitter = WindowSitter.default,
+    initialWindowSitterVisible: Boolean = true
 ):
 
   private val usesCustomChrome           = SwingWindow.shouldUseCustomChrome(chromeMode)
@@ -248,7 +250,10 @@ class SwingWindow(
       setPreferredSize(chromeSpacerSize)
     titleSpacerRef.set(Some(spacer))
 
-    val titleLabel = new JLabel(SwingWindow.windowTitle(WindowSitter.default), SwingConstants.CENTER):
+    val titleLabel = new JLabel(
+      SwingWindow.windowTitle(initialWindowSitter, initialWindowSitterVisible),
+      SwingConstants.CENTER
+    ):
       setForeground(chromePaletteRef.get().titleForeground)
       setFont(chromeControlFont)
     titleLabelRef.set(Some(titleLabel))
@@ -417,7 +422,7 @@ class SwingWindow(
       else super.paint(g)
 
   private val frame: JFrame =
-    val f = new JFrame(SwingWindow.windowTitle(WindowSitter.default))
+    val f = new JFrame(SwingWindow.windowTitle(initialWindowSitter, initialWindowSitterVisible))
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
     f.setUndecorated(usesCustomChrome)
     if usesCustomChrome && perPixelTranslucencySupported then f.setBackground(SwingWindow.Transparent)
@@ -529,8 +534,8 @@ class SwingWindow(
     else if usesNativeThemedChrome then updateNativeChromeTheme(SwingWindow.ChromePalette.fromTheme(theme))
 
   /** Update the decorative sitter without changing the window's title-bar interactions. */
-  def updateWindowSitter(sitter: WindowSitter): Unit =
-    val title = SwingWindow.windowTitle(sitter)
+  def updateWindowSitter(sitter: WindowSitter, visible: Boolean): Unit =
+    val title = SwingWindow.windowTitle(sitter, visible)
     val update: Runnable = () =>
       frame.setTitle(title)
       titleLabelRef.get().foreach(_.setText(title))
@@ -615,7 +620,8 @@ object SwingWindow:
   val BaseMinWidth: Int           = 400
   val BaseMinHeight: Int          = 300
 
-  private[serenity] def windowTitle(sitter: WindowSitter): String = s"Serenity  ${sitter.glyph}"
+  private[serenity] def windowTitle(sitter: WindowSitter, visible: Boolean): String =
+    if visible then s"Serenity  ${sitter.glyph}" else "Serenity"
 
   private[serenity] def perPixelTranslucencySupported: Boolean =
     GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice
@@ -1006,7 +1012,9 @@ object SwingWindow:
     metrics: CellMetrics = DefaultMetrics,
     chromeMetrics: CellMetrics = DefaultMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
-    preferredWindowSize: Option[PreferredWindowSize] = None
+    preferredWindowSize: Option[PreferredWindowSize] = None,
+    initialWindowSitter: WindowSitter = WindowSitter.default,
+    initialWindowSitterVisible: Boolean = true
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
@@ -1015,7 +1023,9 @@ object SwingWindow:
           new Dimension(initialSize.width, initialSize.height),
           metrics,
           chromeMode,
-          chromeMetrics
+          chromeMetrics,
+          initialWindowSitter,
+          initialWindowSitterVisible
         )
         win.start()
         win

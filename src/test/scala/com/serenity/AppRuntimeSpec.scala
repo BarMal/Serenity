@@ -8,7 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.animation.WindowSitter
+import com.serenity.animation.{WindowSitter, WindowSitterConfig}
 import com.serenity.app.AppRuntime
 import com.serenity.config.*
 import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
@@ -36,6 +36,14 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L))
 
     AppRuntime.hasActiveAnimations(state) shouldBe true
+  }
+
+  it should "initialize the window sitter from the configured startup frames" in {
+    val config = AppConfig.default.withWindowSitterConfig(
+      WindowSitterConfig(frames = Vector("rest", "active"), activeTicks = 3)
+    )
+
+    AppState.initial(config).windowSitter shouldBe WindowSitter.fromConfig(config.windowSitterConfig)
   }
 
   it should "wake and settle the window sitter through a real typing and tick sequence" in {
