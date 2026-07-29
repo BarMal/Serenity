@@ -149,6 +149,14 @@ class MarkdownBlockLensSpec extends AnyFlatSpec with Matchers:
     MarkdownBlockLens.currentBlock(lines.length, lines.lift, activeLine = 2_200) shouldBe (0 to 2_401)
   }
 
+  it should "query a deep fence range from a high-count index" in {
+    val ranges = (0 until 100000 by 2).map(line => line to line).toVector
+    val index  = MarkdownBlockLens.FenceRangeIndex(ranges)
+
+    index.rangeAt(99998) shouldBe Some(99998 to 99998)
+    index.rangeAt(99999) shouldBe None
+  }
+
   it should "select an interior line beyond 4,096 fenced lines" in {
     val lines = Vector("```") ++ (1 to 4_500).map(index => s"x = $index") ++ Vector("```")
 
