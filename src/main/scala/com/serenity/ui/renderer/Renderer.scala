@@ -36,8 +36,9 @@ case class RenderContext(
 
 object Renderer:
 
-  private val MarkdownFenceProbeWindow    = 512
-  private val MarkdownSelectionProbeLimit = 512
+  private val MarkdownFenceProbeWindow         = 512
+  private val MarkdownFenceFallbackProbeWindow = 1_024
+  private val MarkdownSelectionProbeLimit      = 512
 
   private def markdownBlockForRenderer(buffer: Buffer, line: Int): Range.Inclusive =
     val bounded = MarkdownBlockLens.currentBlock(
@@ -46,7 +47,14 @@ object Renderer:
       line,
       fenceProbeWindow = MarkdownFenceProbeWindow
     )
-    bounded
+    if bounded.length != MarkdownFenceProbeWindow * 2 + 1 then bounded
+    else
+      MarkdownBlockLens.currentBlock(
+        buffer.content.lineCount,
+        buffer.content.getLine,
+        line,
+        fenceProbeWindow = MarkdownFenceFallbackProbeWindow
+      )
 
   private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
@@ -503,7 +511,7 @@ object Renderer:
     val bufferSnapshot = preparedSnapshot.orElse(buffer.map(snapshotForBuffer(_, contentRect, state, context)))
     val markdownLensFrame =
       buffer.collect {
-        case buf if isInlineMarkdownLens(buf, state) => markdownLensFrameFor(buf, state, bufferSnapshot.get)
+        case buf if isInlineMarkdownLens(buf, state) => markdownLensFrameFor(buf, bufferSnapshot.get)
       }
 
     buffer match
@@ -536,7 +544,7 @@ object Renderer:
           state.config,
           cursorContext,
           bufferSnapshot.get,
-          markdownLensFrame.getOrElse(markdownLensFrameFor(buf, state, bufferSnapshot.get))
+          markdownLensFrame.getOrElse(markdownLensFrameFor(buf, bufferSnapshot.get))
         )
       else renderCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
     }
@@ -631,7 +639,7 @@ object Renderer:
   ): Unit =
     context.surface.setFont(context.fontForBuffer(buffer))
     if isInlineMarkdownLens(buffer, state) then
-      val frame = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer, state, snapshot))
+      val frame = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer, snapshot))
       renderInlineMarkdownPreview(buffer, rect, state, context, frame)
       renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
     else renderPlainBufferContent(buffer, rect, state, context, snapshot, annotations)
@@ -1039,7 +1047,7 @@ object Renderer:
   private def isInlineMarkdownLens(buffer: Buffer, state: AppState): Boolean =
     buffer.language.contains(LanguageId.Markdown) && state.config.markdownViewMode == MarkdownViewMode.InlineLens
 
-  private def markdownLensFrameFor(buffer: Buffer, state: AppState, snapshot: TextLayoutSnapshot): MarkdownLensFrame =
+  private def markdownLensFrameFor(buffer: Buffer, snapshot: TextLayoutSnapshot): MarkdownLensFrame =
     val previewWindow = markdownPreviewWindow(buffer, buffer.viewport.visibleLines)
     val lines = buffer.content.linesFrom(
       previewWindow.window.firstSourceLine,

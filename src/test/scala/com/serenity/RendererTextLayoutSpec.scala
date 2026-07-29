@@ -574,7 +574,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     surface.drawRunPxCalls.find(_.s == "unrelated prose").map(_.foreground) shouldBe Some(Theme.light.muted)
   }
 
-  it should "keep a visible fence row active near the cursor" in {
+  it should "keep a visible fence row active when it is more than 512 lines from the cursor" in {
     val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
     val content =
       (Vector.fill(1_000)("unrelated prose") ++
@@ -583,7 +583,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         Vector("```")).mkString("\n")
     val surface = renderState(
       content,
-      CursorPosition(1_200, 0),
+      CursorPosition(1_600, 0),
       font,
       viewport = Viewport(topLine = 1_000, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
       viewportSize = ViewportSize(100, 12),
