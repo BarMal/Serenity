@@ -37,15 +37,9 @@ case class RenderContext(
 object Renderer:
 
   private def markdownBlockForRenderer(buffer: Buffer, state: AppState, line: Int): Range.Inclusive =
-    val bounded = MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line, fenceProbeWindow = 512)
-    val endpointLooksLikeFence =
-      List(bounded.start, bounded.end).exists(index =>
-        buffer.content.getLine(index).exists { sourceLine =>
-          val trimmed = sourceLine.trim
-          trimmed.startsWith("```") || trimmed.startsWith("~~~")
-        }
-      )
-    if !endpointLooksLikeFence then bounded
+    val bounded =
+      MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line, fenceProbeWindow = 512)
+    if bounded.length <= 512 then bounded
     else
       state.markdownFenceIndexByBuffer
         .get(buffer.id)
