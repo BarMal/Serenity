@@ -38,7 +38,7 @@ object Renderer:
 
   private def markdownBlockForRenderer(buffer: Buffer, state: AppState, line: Int): Range.Inclusive =
     val bounded = MarkdownBlockLens.currentBlock(buffer.content.lineCount, buffer.content.getLine, line, fenceProbeWindow = 512)
-    if bounded.start != line || bounded.end != line then bounded
+    if bounded.start == line && bounded.end == line then bounded
     else
       state.markdownFenceIndexByBuffer
         .get(buffer.id)
