@@ -422,10 +422,19 @@ object Java2DRenderSurface:
     canvas: javax.swing.JPanel,
     onFlush: BufferedImage => Unit
   ): Java2DRenderSurface =
+    forFrame(metrics, font, canvas, onFlush, (width, height, imageType) => new BufferedImage(width, height, imageType))
+
+  def forFrame(
+    metrics: CellMetrics,
+    font: Font,
+    canvas: javax.swing.JPanel,
+    onFlush: BufferedImage => Unit,
+    acquireImage: (Int, Int, Int) => BufferedImage
+  ): Java2DRenderSurface =
     val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
     val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
     val scale         = deviceScaleFor(canvas)
-    val image = new BufferedImage(
+    val image = acquireImage(
       deviceImageDimension(logicalWidth, scale.x),
       deviceImageDimension(logicalHeight, scale.y),
       BufferedImage.TYPE_INT_ARGB

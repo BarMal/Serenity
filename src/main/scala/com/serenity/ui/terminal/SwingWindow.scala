@@ -50,7 +50,9 @@ class SwingWindow(
   private val pendingResize          = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch             = new CountDownLatch(1)
   private val baseImageRef           = new AtomicReference[Option[BufferedImage]](None)
-  private val renderedImageRef       = new AtomicReference[Option[BufferedImage]](None)
+  private val publishedImagesRef     = new AtomicReference(SwingWindow.PublishedImages.empty)
+  private val baseImagePool          = new SwingWindow.ReusableImagePool
+  private val cursorOverlayPool      = new SwingWindow.ReusableImagePool
   private val savedBoundsRef         = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef           = new AtomicBoolean(false)
   private val maxBtnRef              = new AtomicReference[Option[ChromeControlButton]](None)
@@ -82,7 +84,9 @@ class SwingWindow(
     override def paintComponent(g: java.awt.Graphics): Unit =
       g.setColor(Color.BLACK)
       g.fillRect(0, 0, getWidth, getHeight)
-      renderedImageRef.get().foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
+      val published = publishedImagesRef.get()
+      published.base.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
+      published.overlay.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
 
   private val accessibilityBridge = new SwingAccessibilityBridge(canvas)
 
@@ -93,33 +97,33 @@ class SwingWindow(
     else SwingUtilities.invokeLater(publish)
 
   def onImageReady(image: BufferedImage): Unit =
+    baseImagePool.publish(image)
     baseImageRef.set(Some(image))
-    SwingWindow.publishRenderedBaseFrame(
-      image,
-      replaceRenderedImage = true,
-      setRenderedImage = renderedImageRef.set,
-      repaint = () => SwingUtilities.invokeLater(() => canvas.repaint())
-    )
+    cursorOverlayPool.clearPublished()
+    publishedImagesRef.set(SwingWindow.PublishedImages(Some(image), None))
+    SwingUtilities.invokeLater(() => canvas.repaint())
 
   def onBaseImageReady(image: BufferedImage): Unit =
+    baseImagePool.publish(image)
     baseImageRef.set(Some(image))
-    SwingWindow.publishRenderedBaseFrame(
-      image,
-      replaceRenderedImage = false,
-      setRenderedImage = renderedImageRef.set,
-      repaint = () => SwingUtilities.invokeLater(() => canvas.repaint())
-    )
+    cursorOverlayPool.clearPublished()
+    publishedImagesRef.set(SwingWindow.PublishedImages(Some(image), None))
 
   def onCursorOverlayReady(drawOverlay: BufferedImage => Unit): Boolean =
     baseImageRef.get() match
       case Some(baseImage) =>
-        val overlayImage = SwingWindow.copyImage(baseImage)
+        val overlayImage = cursorOverlayPool.acquire(baseImage.getWidth, baseImage.getHeight, baseImage.getType)
+        SwingWindow.clearImage(overlayImage)
         drawOverlay(overlayImage)
-        renderedImageRef.set(Some(overlayImage))
+        cursorOverlayPool.publish(overlayImage)
+        publishedImagesRef.set(SwingWindow.PublishedImages(Some(baseImage), Some(overlayImage)))
         SwingUtilities.invokeLater(() => canvas.repaint())
         true
       case None =>
         false
+
+  private[serenity] def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
+    baseImagePool.acquire(width, height, imageType)
 
   private def updateShape(): Unit =
     val roundedCornerMask = SwingWindow.roundedCornerMask(
@@ -605,6 +609,31 @@ object SwingWindow:
   private val RoundedCornerMaskScale  = 2
   private[serenity] val Transparent   = new Color(0, 0, 0, 0)
 
+  private[serenity] case class PublishedImages(
+      base: Option[BufferedImage],
+      overlay: Option[BufferedImage]
+  )
+
+  private[serenity] object PublishedImages:
+    val empty: PublishedImages = PublishedImages(None, None)
+
+  private[serenity] final class ReusableImagePool:
+    private val published = new AtomicReference[Option[BufferedImage]](None)
+    private val spare     = new AtomicReference[Option[BufferedImage]](None)
+
+    def acquire(width: Int, height: Int, imageType: Int): BufferedImage =
+      val candidate = spare.get().filter(image =>
+        image.getWidth == width && image.getHeight == height && image.getType == imageType
+      )
+      candidate.getOrElse(new BufferedImage(width, height, imageType))
+
+    def publish(image: BufferedImage): Unit =
+      val previous = published.getAndSet(Some(image))
+      previous.filterNot(_ eq image).foreach(previousImage => spare.set(Some(previousImage)))
+
+    def clearPublished(): Unit =
+      published.getAndSet(None).foreach(image => spare.set(Some(image)))
+
   private[serenity] lazy val applicationIconImages: scala.List[Image] =
     Option(getClass.getResource(ApplicationIconResource))
       .flatMap(url => Option(ImageIO.read(url)))
@@ -826,6 +855,13 @@ object SwingWindow:
     try g.drawImage(source, 0, 0, null)
     finally g.dispose()
     copy
+
+  private[serenity] def clearImage(image: BufferedImage): Unit =
+    val graphics = image.createGraphics()
+    try
+      graphics.setComposite(AlphaComposite.Clear)
+      graphics.fillRect(0, 0, image.getWidth, image.getHeight)
+    finally graphics.dispose()
 
   private[serenity] def setAccessibleNameIfAvailable(component: JComponent, name: String): Unit =
     Option(component.getAccessibleContext).foreach(_.setAccessibleName(name))

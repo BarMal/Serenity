@@ -173,7 +173,13 @@ object Renderer:
   ): Unit =
     val state0       = withEffectiveTheme(state)
     val publishFrame = if repaintOnFlush then swingWin.onImageReady else swingWin.onBaseImageReady
-    val surface      = Java2DRenderSurface.forFrame(swingWin.metrics, codeFont, swingWin.canvas, publishFrame)
+    val surface = Java2DRenderSurface.forFrame(
+      swingWin.metrics,
+      codeFont,
+      swingWin.canvas,
+      publishFrame,
+      swingWin.acquireBaseImage
+    )
     val viewportSize = swingWin.viewportSize
     val _ = withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
       renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics)

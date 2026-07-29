@@ -189,6 +189,31 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     resizedArc should not be theSameInstanceAs(resized)
   }
 
+  "SwingWindow.ReusableImagePool" should "reuse an unpublished image and alternate after publication" in {
+    val pool    = new SwingWindow.ReusableImagePool
+    val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    pool.publish(initial)
+
+    val next = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    next should not be theSameInstanceAs(initial)
+    pool.publish(next)
+
+    val reused = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    reused should be theSameInstanceAs initial
+  }
+
+  it should "reallocate only when dimensions or image type change" in {
+    val pool    = new SwingWindow.ReusableImagePool
+    val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    pool.publish(initial)
+    val spare = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    pool.publish(spare)
+
+    pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should be theSameInstanceAs initial
+    pool.acquire(width = 80, height = 48, imageType = BufferedImage.TYPE_INT_ARGB) should not be theSameInstanceAs (initial)
+    pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_RGB) should not be theSameInstanceAs (initial)
+  }
+
   it should "clear prior frame pixels before masking a reused rounded buffer" in {
     val buffers = new SwingWindow.RoundedCornerMaskBufferCache().acquire(width = 32, height = 32, cornerArc = 16)
 

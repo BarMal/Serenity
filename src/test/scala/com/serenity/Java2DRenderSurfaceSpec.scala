@@ -2,6 +2,7 @@ package com.serenity
 
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JPanel
 
 import com.serenity.config.{AppConfig, PostProcessingEffect}
@@ -208,6 +209,31 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     surface.viewportWidth shouldBe 80
     surface.viewportHeight shouldBe 30
+  }
+
+  it should "accept a reusable frame-image provider with device-scaled dimensions" in {
+    val canvas = new JPanel()
+    canvas.setPreferredSize(new java.awt.Dimension(640, 480))
+    val metrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val provided = AtomicReference[Option[BufferedImage]](None)
+    val surface = Java2DRenderSurface.forFrame(
+      metrics,
+      font,
+      canvas,
+      _ => (),
+      (width, height, imageType) =>
+        val image = new BufferedImage(width, height, imageType)
+        provided.set(Some(image))
+        image
+    )
+
+    surface.viewportWidth shouldBe 80
+    surface.viewportHeight shouldBe 30
+    val image = provided.get().getOrElse(fail("frame image provider was not called"))
+    image.getWidth shouldBe 640
+    image.getHeight shouldBe 480
+    image.getType shouldBe BufferedImage.TYPE_INT_ARGB
   }
 
   it should "darken alternating device rows for the scanline post-process" in {
