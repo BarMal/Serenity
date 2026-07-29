@@ -206,7 +206,7 @@ object ContextualToolbar:
     ContextualToolbarItem.Button("project-build", "Build", "project-build", "\ue869"),
     ContextualToolbarItem.Button("project-test", "Test", "project-test", "\ue86c"),
     ContextualToolbarItem.Button("project-run", "Run", "project-run", "\ue037"),
-    ContextualToolbarItem.Button("project-debug", "Debug", "project-debug", "\ue868")
+    ContextualToolbarItem.Button("project-debug", "Run Debug Task", "project-debug", "\ue868")
   )
 
   def itemsFor(state: AppState): List[ContextualToolbarItem] =

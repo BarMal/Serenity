@@ -1,8 +1,8 @@
 package com.serenity
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
-import com.serenity.project.{ProjectTaskDetector, ProjectTaskKind}
+import com.serenity.project.{ProjectTaskCommand, ProjectTaskDetector, ProjectTaskKind, ProjectTaskTerminal}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -59,4 +59,13 @@ class ProjectTaskDetectorSpec extends AnyFlatSpec with Matchers:
 
   it should "return no task when no supported project marker exists" in withTempDirectory("plain-directory") { root =>
     ProjectTaskDetector.detect(root.resolve("notes.txt"), ProjectTaskKind.Build) shouldBe None
+  }
+
+  it should "describe debug execution as a task in terminal status text" in {
+    val command = ProjectTaskCommand(ProjectTaskKind.Debug, "sbt", Paths.get("."), "sbt", List("run"))
+
+    ProjectTaskTerminal.started(command) should include("Running debug task")
+    ProjectTaskTerminal.failedToStart(command, RuntimeException("unavailable")) should include(
+      "Failed to start debug task"
+    )
   }

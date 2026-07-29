@@ -1029,6 +1029,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
   it should "use Material Icons Round code points in icon-only mode" in {
     ContextualToolbar.markdownItems.map(_.icon) shouldBe List("\uf1c5", "\ue86f", "\uf06d", "\ue8b6")
     ContextualToolbar.codeItems.map(_.icon) shouldBe List("\ue869", "\ue86c", "\ue037", "\ue868")
+    ContextualToolbar.codeItems.map(_.label) shouldBe List("Build", "Test", "Run", "Run Debug Task")
 
     val stateManager = createStateManager("ContextualToolbarSpec-glyphs")
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
