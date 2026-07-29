@@ -554,6 +554,26 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     surface.drawRunPxCalls.find(_.s == "Gamma").map(_.foreground) shouldBe Some(Theme.light.muted)
   }
 
+  it should "keep a centered long fenced block semantically active at its boundaries" in {
+    val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
+    val content =
+      (Vector.fill(5_000)("unrelated prose") ++
+        Vector("```scala") ++
+        Vector.fill(1_000)("fenced content") ++
+        Vector("```") ++
+        Vector.fill(5_000)("trailing prose")).mkString("\n")
+    val surface = renderState(
+      content,
+      CursorPosition(5_500, 0),
+      font,
+      viewport = Viewport(topLine = 4_900, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
+      viewportSize = ViewportSize(100, 12),
+      config = AppConfig.default.withLineNumbers(false).withGutter(false).withFocusedTextBody(true)
+    )
+
+    surface.drawRunPxCalls.find(_.s == "unrelated prose").map(_.foreground) shouldBe Some(Theme.light.muted)
+  }
+
   it should "clamp stale horizontal scroll when the pane is wider than the stored viewport" in {
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val content =

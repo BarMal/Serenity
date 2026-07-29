@@ -37,11 +37,7 @@ object MarkdownBlockLens:
   ): Range.Inclusive =
     currentBlock(LineSource(lineCount, lineAt, fenceProbeWindow = None), activeLine)
 
-  /** Resolves a viewport-limited block for fixed-viewport rendering.
-    *
-    * This overload deliberately limits contiguous block spans to the probe window. Callers that require complete
-    * semantic block membership must use the unbounded overload.
-    */
+  /** Resolves a block with a bounded fence probe for fixed-viewport rendering. */
   def currentBlock(
     lineCount: Int,
     lineAt: Int => Option[String],
@@ -91,7 +87,12 @@ object MarkdownBlockLens:
             else
               countFencesBefore(cursor - 1, crossedBlank, count + (if isFenceLine(line) then 1 else 0), remaining - 1)
 
-        countFencesBefore(index - 1, crossedBlank = false, count = 0, remaining = lines.lineCount) % 2 == 0
+        countFencesBefore(
+          index - 1,
+          crossedBlank = false,
+          count = 0,
+          remaining = lines.fenceProbeWindow.getOrElse(lines.lineCount)
+        ) % 2 == 0
 
     def isClosingFence(index: Int): Boolean = !hasFenceInfo(index)
 
