@@ -103,7 +103,7 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
   private def renderTitle(label: JLabel): BufferedImage =
     val size = label.getPreferredSize
     label.setSize(size)
-    val image = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB)
+    val image    = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB)
     val graphics = image.createGraphics()
     try
       graphics.setColor(Color.BLACK)
