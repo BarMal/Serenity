@@ -786,11 +786,7 @@ final private[manager] class StateManagerWorkflowCapability(
       }
 
   private[manager] def createStartupSession(): IO[Unit] =
-    updateState(_.copy(uiSurfaces = List.empty)) >>
-      createNewEmptyBuffer().flatMap { bufferId =>
-        updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
-          createPane(Some(bufferId)).flatMap(paneId => switchToPane(paneId))
-      }
+    updateState(state => EditorState.openNewTab(state).copy(uiSurfaces = List.empty))
 
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
     val restored = restoredState.copy(
