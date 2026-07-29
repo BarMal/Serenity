@@ -248,7 +248,7 @@ class SwingWindow(
       setPreferredSize(chromeSpacerSize)
     titleSpacerRef.set(Some(spacer))
 
-    val titleLabel = new JLabel("Serenity  ·", SwingConstants.CENTER):
+    val titleLabel = new JLabel(SwingWindow.windowTitle(WindowSitter.default), SwingConstants.CENTER):
       setForeground(chromePaletteRef.get().titleForeground)
       setFont(chromeControlFont)
     titleLabelRef.set(Some(titleLabel))
@@ -417,7 +417,7 @@ class SwingWindow(
       else super.paint(g)
 
   private val frame: JFrame =
-    val f = new JFrame("Serenity")
+    val f = new JFrame(SwingWindow.windowTitle(WindowSitter.default))
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
     f.setUndecorated(usesCustomChrome)
     if usesCustomChrome && perPixelTranslucencySupported then f.setBackground(SwingWindow.Transparent)
@@ -530,7 +530,10 @@ class SwingWindow(
 
   /** Update the decorative sitter without changing the window's title-bar interactions. */
   def updateWindowSitter(sitter: WindowSitter): Unit =
-    val update: Runnable = () => titleLabelRef.get().foreach(_.setText(s"Serenity  ${sitter.glyph}"))
+    val title = SwingWindow.windowTitle(sitter)
+    val update: Runnable = () =>
+      frame.setTitle(title)
+      titleLabelRef.get().foreach(_.setText(title))
     if SwingUtilities.isEventDispatchThread then update.run()
     else SwingUtilities.invokeLater(update)
 
@@ -611,6 +614,8 @@ object SwingWindow:
   val DefaultMetrics: CellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
   val BaseMinWidth: Int           = 400
   val BaseMinHeight: Int          = 300
+
+  private[serenity] def windowTitle(sitter: WindowSitter): String = s"Serenity  ${sitter.glyph}"
 
   private[serenity] def perPixelTranslucencySupported: Boolean =
     GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice

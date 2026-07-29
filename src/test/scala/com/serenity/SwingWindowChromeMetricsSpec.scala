@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.accessibility.AccessibleContext
 import javax.swing.JComponent
 
+import com.serenity.animation.WindowSitter
 import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.terminal.{SwingWindow, WindowsNativeChrome}
@@ -60,6 +61,12 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.Native, "Linux") shouldBe false
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.NativeThemed, "Linux") shouldBe false
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.Custom, "Linux") shouldBe true
+  }
+
+  it should "include the sitter glyph in the native window title" in {
+    val sitter = WindowSitter.default.observeTyping(1_000_000_000L)
+
+    SwingWindow.windowTitle(sitter) shouldBe s"Serenity  ${sitter.glyph}"
   }
 
   it should "refresh the per-pixel corner mask when chrome metrics change" in {
