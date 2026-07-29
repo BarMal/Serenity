@@ -3,7 +3,8 @@ package com.serenity
 import com.serenity.command.CommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.Layout
+import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -57,5 +58,25 @@ class FloatingSurfaceSpec extends AnyFlatSpec with Matchers:
     )
 
     state.floatingSurfaces.map(_.id) shouldBe List(SurfaceId("peek"), SurfaceId("command"))
+  }
+
+  "Renderer" should "paint an expanded surface above the editor pane it replaces" in {
+    val expanded = UiSurface(
+      SurfaceId("diagnostics"),
+      SurfaceContent.Diagnostics(Nil),
+      SurfacePresentation.Expanded(PanelPosition.Right, 22)
+    )
+    val state   = baseState().copy(uiSurfaces = List(expanded))
+    val surface = new MockRenderSurface(80, 24)
+
+    Renderer.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+
+    val frame = UiSceneSnapshot
+      .from(state, ViewportSize(80, 24))
+      .workspace
+      .find(_.id == SceneNodeId.Surface(expanded.id))
+      .map(_.frameRect)
+      .getOrElse(fail("expected expanded surface frame"))
+    (frame.x until frame.right).map(surface.getChar(_, frame.y)).mkString.trim should include("diagnostics")
   }
 end FloatingSurfaceSpec
