@@ -960,8 +960,8 @@ final private[manager] class StateManagerEventPipeline(
         case _                                                           => None
       targetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
       actionId <- ModalSurfaceComposition
-        .close(workflow, node.frameRect, targetRows)
-        .hitAt(click.col.toDouble, click.row.toDouble)
+        .forModal(Modal.CloseWorkflow(workflow), node.frameRect, targetRows)
+        .flatMap(_.hitAt(click.col.toDouble, click.row.toDouble))
         .flatMap(_.actionId)
       choice <- ModalSurfaceComposition.closeChoice(actionId)
     yield choice

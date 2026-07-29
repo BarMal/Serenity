@@ -204,11 +204,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected close confirmation modal"))
     val targetRows = SurfaceFrameLayout.minimumTargetRows(before.config.interfaceDensity)
     val cancel = ModalSurfaceComposition
-      .close(
-        CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"),
+      .forModal(
+        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
         modal.frameRect,
         targetRows
       )
+      .getOrElse(fail("Expected close confirmation composition"))
       .hitRegions
       .find(_.actionId.contains(SurfaceActionId("close-cancel")))
       .getOrElse(fail("Expected cancel action"))
@@ -244,11 +245,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .lastOption
       .getOrElse(fail("Expected constrained close modal"))
     val cancel = ModalSurfaceComposition
-      .close(
-        workflow,
+      .forModal(
+        Modal.CloseWorkflow(workflow),
         modal.frameRect,
         SurfaceFrameLayout.minimumTargetRows(before.config.interfaceDensity)
       )
+      .getOrElse(fail("Expected close confirmation composition"))
       .hitRegions
       .find(_.actionId.contains(SurfaceActionId("close-cancel")))
       .getOrElse(fail("Expected reflowed cancel action"))
