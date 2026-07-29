@@ -190,6 +190,7 @@ enum CommandIntent:
   case SetBufferLanguage(language: Option[LanguageId])
   case SetGlobalHotkey(action: HotkeyAction, binding: String)
   case ResolveGlobalHotkeyConflict(action: HotkeyAction, binding: String)
+  case ResolveFocusedKeymapConflict(itemId: String, binding: String)
   case SetEditorKeyBinding(action: EditorKeyAction, binding: String)
   case SetCommandRunnerKeyBinding(action: CommandRunnerKeyAction, binding: String)
   case SetModalKeyBinding(action: ModalKeyAction, binding: String)

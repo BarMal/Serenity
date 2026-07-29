@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.*
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
 import com.serenity.ui.layout.Layout
@@ -182,16 +182,148 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val result = CommandRunnerReducer.reduce(
-      RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl))),
+      RunnerRecordBinding(
+        KeyStrokeInfo(InputKey.Ctrl, None, Set.empty),
+        1_000L
+      ),
       state,
       registry
     )
 
-    result.effects.head match
+    result.effects shouldBe List(AppEffect.ScheduleCommandRunnerBindingExpiry(1_000L))
+    runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe Some("keymap-global-find")
+    runnerFrom(result.state).activeSubmenu.flatMap(_.pendingRecordedBinding).map(_._1) shouldBe
+      Some(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty))
+
+    val completed = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(
+        KeyStrokeInfo(InputKey.Ctrl, None, Set.empty),
+        1_200L
+      ),
+      result.state,
+      registry
+    )
+
+    completed.effects.head match
       case AppEffect.ExecuteCommand(command) =>
-        command.intent shouldBe CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+k")
+        command.intent shouldBe CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+ctrl")
       case other => fail(s"Expected setting command, got $other")
+    runnerFrom(completed.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
+  }
+
+  it should "assign a modifier double tap when the matching second stroke arrives within 200ms" in {
+    val registry = CommandRegistry.default
+    val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val items    = base.submenuItems("settings-keymap")
+    val runner = base.copy(
+      activeSubmenu = Some(
+        CommandRunnerSubmenuState(
+          "settings-keymap",
+          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
+          recordingItemId = Some("keymap-global-find")
+        )
+      )
+    )
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner"))
+    )
+
+    val first = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), 1_000L),
+      state,
+      registry
+    )
+    first.effects.collectFirst { case AppEffect.ExecuteCommand(_) => true } shouldBe None
+    runnerFrom(first.state).activeSubmenu.flatMap(_.pendingRecordedBinding).map(_._2) shouldBe Some(1_000L)
+
+    val result = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), 1_200L),
+      first.state,
+      registry
+    )
+
+    result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+      CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+ctrl")
+    )
+  }
+
+  it should "finalize a pending single key after the double-tap window expires" in {
+    val registry = CommandRegistry.default
+    val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val items    = base.submenuItems("settings-keymap")
+    val runner = base.copy(
+      activeSubmenu = Some(
+        CommandRunnerSubmenuState(
+          "settings-keymap",
+          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
+          recordingItemId = Some("keymap-global-find"),
+          pendingRecordedBinding = Some(
+            KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty) -> 1_000L
+          )
+        )
+      )
+    )
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner"))
+    )
+
+    val result = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty), 1_201L),
+      state,
+      registry
+    )
+
+    result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+      CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "k")
+    )
     runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
+  }
+
+  it should "ignore an expiry event for a replaced pending recording" in {
+    val registry = CommandRegistry.default
+    val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val items    = base.submenuItems("settings-keymap")
+    val runner = base.copy(
+      activeSubmenu = Some(
+        CommandRunnerSubmenuState(
+          "settings-keymap",
+          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
+          recordingItemId = Some("keymap-global-find"),
+          pendingRecordedBinding = Some(
+            KeyStrokeInfo(InputKey.Character, Some('j'), Set.empty) -> 2_000L
+          )
+        )
+      )
+    )
+    val state = activeState(registry).copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("command-runner"),
+          SurfaceContent.CommandPalette(runner),
+          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+        )
+      ),
+      focus = Focus.Surface(SurfaceId("command-runner"))
+    )
+
+    val result = CommandRunnerReducer.reduce(RunnerBindingRecordingExpired(1_000L), state, registry)
+
+    result.state shouldBe state
+    result.effects shouldBe Nil
   }
 
   it should "switch categories with tab and reverse-tab while search is empty" in {

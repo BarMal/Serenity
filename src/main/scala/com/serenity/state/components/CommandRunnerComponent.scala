@@ -26,4 +26,4 @@ class CommandRunnerComponent(
         if result.state == currentState then ComponentResult.noChange
         else ComponentResult.updateState(_ => result.state)
       case _ =>
-        ComponentResult.updateState(_ => result.state)
+        ComponentResult.reducerResult(result)

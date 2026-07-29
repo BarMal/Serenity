@@ -17,6 +17,13 @@ private object KeymapBindings:
       bindings
     else bindings + (action -> List(trigger))
 
+  def assignUnbindingConflicts[A](
+    bindings: Map[A, List[HotkeyTrigger]],
+    action: A,
+    trigger: HotkeyTrigger
+  ): Map[A, List[HotkeyTrigger]] =
+    bindings.view.mapValues(_.filterNot(_ == trigger)).toMap + (action -> List(trigger))
+
 enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
   case MoveLeft
   case MoveRight
@@ -245,6 +252,9 @@ case class EditorKeymapConfig(
   def withBinding(action: EditorKeyAction, trigger: HotkeyTrigger): EditorKeymapConfig =
     copy(bindings = KeymapBindings.assign(bindings, action, trigger))
 
+  def withBindingUnbindingConflicts(action: EditorKeyAction, trigger: HotkeyTrigger): EditorKeymapConfig =
+    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
+
   def withBinding(action: EditorKeyAction, binding: String): EditorKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
@@ -337,6 +347,12 @@ case class CommandRunnerKeymapConfig(
   def withBinding(action: CommandRunnerKeyAction, trigger: HotkeyTrigger): CommandRunnerKeymapConfig =
     copy(bindings = KeymapBindings.assign(bindings, action, trigger))
 
+  def withBindingUnbindingConflicts(
+    action: CommandRunnerKeyAction,
+    trigger: HotkeyTrigger
+  ): CommandRunnerKeymapConfig =
+    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
+
   def withBinding(action: CommandRunnerKeyAction, binding: String): CommandRunnerKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
@@ -403,6 +419,9 @@ case class ModalKeymapConfig(
   def withBinding(action: ModalKeyAction, trigger: HotkeyTrigger): ModalKeymapConfig =
     copy(bindings = KeymapBindings.assign(bindings, action, trigger))
 
+  def withBindingUnbindingConflicts(action: ModalKeyAction, trigger: HotkeyTrigger): ModalKeymapConfig =
+    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
+
   def withBinding(action: ModalKeyAction, binding: String): ModalKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
@@ -457,6 +476,9 @@ case class PanelKeymapConfig(
   def withBinding(action: PanelKeyAction, trigger: HotkeyTrigger): PanelKeymapConfig =
     copy(bindings = KeymapBindings.assign(bindings, action, trigger))
 
+  def withBindingUnbindingConflicts(action: PanelKeyAction, trigger: HotkeyTrigger): PanelKeymapConfig =
+    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
+
   def withBinding(action: PanelKeyAction, binding: String): PanelKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
 
@@ -506,6 +528,9 @@ case class PeekKeymapConfig(
 
   def withBinding(action: PeekKeyAction, trigger: HotkeyTrigger): PeekKeymapConfig =
     copy(bindings = KeymapBindings.assign(bindings, action, trigger))
+
+  def withBindingUnbindingConflicts(action: PeekKeyAction, trigger: HotkeyTrigger): PeekKeymapConfig =
+    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
 
   def withBinding(action: PeekKeyAction, binding: String): PeekKeymapConfig =
     HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
@@ -558,17 +583,43 @@ case class FocusedKeymapConfig(
   def withEditorBinding(action: EditorKeyAction, binding: String): FocusedKeymapConfig =
     copy(editor = editor.withBinding(action, binding))
 
+  def withEditorBindingUnbindingConflicts(action: EditorKeyAction, binding: String): FocusedKeymapConfig =
+    HotkeyTrigger
+      .parse(binding)
+      .fold(this)(trigger => copy(editor = editor.withBindingUnbindingConflicts(action, trigger)))
+
   def withCommandRunnerBinding(action: CommandRunnerKeyAction, binding: String): FocusedKeymapConfig =
     copy(commandRunner = commandRunner.withBinding(action, binding))
+
+  def withCommandRunnerBindingUnbindingConflicts(
+    action: CommandRunnerKeyAction,
+    binding: String
+  ): FocusedKeymapConfig =
+    HotkeyTrigger
+      .parse(binding)
+      .fold(this)(trigger => copy(commandRunner = commandRunner.withBindingUnbindingConflicts(action, trigger)))
 
   def withModalBinding(action: ModalKeyAction, binding: String): FocusedKeymapConfig =
     copy(modal = modal.withBinding(action, binding))
 
+  def withModalBindingUnbindingConflicts(action: ModalKeyAction, binding: String): FocusedKeymapConfig =
+    HotkeyTrigger
+      .parse(binding)
+      .fold(this)(trigger => copy(modal = modal.withBindingUnbindingConflicts(action, trigger)))
+
   def withPanelBinding(action: PanelKeyAction, binding: String): FocusedKeymapConfig =
     copy(panel = panel.withBinding(action, binding))
 
+  def withPanelBindingUnbindingConflicts(action: PanelKeyAction, binding: String): FocusedKeymapConfig =
+    HotkeyTrigger
+      .parse(binding)
+      .fold(this)(trigger => copy(panel = panel.withBindingUnbindingConflicts(action, trigger)))
+
   def withPeekBinding(action: PeekKeyAction, binding: String): FocusedKeymapConfig =
     copy(peek = peek.withBinding(action, binding))
+
+  def withPeekBindingUnbindingConflicts(action: PeekKeyAction, binding: String): FocusedKeymapConfig =
+    HotkeyTrigger.parse(binding).fold(this)(trigger => copy(peek = peek.withBindingUnbindingConflicts(action, trigger)))
 
   def resetEditorBinding(action: EditorKeyAction): FocusedKeymapConfig =
     copy(editor = editor.resetBinding(action))
