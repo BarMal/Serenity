@@ -332,6 +332,30 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     Files.readString(outsideFile) shouldBe "outside"
   }
 
+  it should "reject a symlinked sessions directory for every persistence operation" in {
+    val sessionRoot = Files.createTempDirectory("session-manager-sessions-symlink")
+    val outsideRoot = Files.createTempDirectory("session-manager-sessions-target")
+    val outsideFile = outsideRoot.resolve("session.json")
+    Files.writeString(outsideFile, "malformed outside session")
+    Files.createSymbolicLink(sessionRoot.resolve("sessions"), outsideRoot)
+    val sessionManager = createManagerAt(sessionRoot)
+    writeIndex(
+      sessionRoot,
+      SessionIndex(List(metadata("current", "session.json")), Some(SessionId("current")))
+    )
+
+    sessionManager.loadSession().unsafeRunSync() shouldBe None
+    sessionManager.saveSession(stateWithText("must stay inside")).attempt.unsafeRunSync().isLeft shouldBe true
+    sessionManager.deleteSession(SessionId("current")).unsafeRunSync()
+    sessionManager.sessionExists.unsafeRunSync() shouldBe false
+    sessionManager.currentSessionThemeName.unsafeRunSync() shouldBe None
+    Files.writeString(sessionRoot.resolve("session-index.json"), "not valid index json")
+    sessionManager.listSessions().unsafeRunSync() shouldBe Nil
+
+    Files.readString(outsideFile) shouldBe "malformed outside session"
+    Files.list(outsideRoot).iterator().asScala.map(_.getFileName.toString).toList shouldBe List("session.json")
+  }
+
   it should "reject traversal expressed with mixed path separators" in {
     val sessionRoot = Files.createTempDirectory("session-manager-mixed-path")
     val outsideFile = sessionRoot.getParent.resolve("mixed-session-outside.json")

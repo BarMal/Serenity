@@ -301,7 +301,7 @@ class SessionManager(
   private def recoverIndexFromSessionFiles: IO[SessionIndex] =
     IO.blocking {
       val recovered: List[SessionMetadata] =
-        if !Files.isDirectory(sessionsDirectory) then Nil
+        if !Files.isDirectory(sessionsDirectory) || Files.isSymbolicLink(sessionsRootAbsolute) then Nil
         else
           val stream = Files.list(sessionsDirectory)
           try
@@ -363,14 +363,15 @@ class SessionManager(
   private def safeSessionPath(sessionFileName: String): Option[Path] =
     val portableName = sessionFileName.replace('\\', '/')
     Try {
-      val path            = Paths.get(portableName)
-      val resolved        = sessionsRootAbsolute.resolve(portableName).normalize
-      val windowsAbsolute = portableName.matches("^[A-Za-z]:/.*") || portableName.startsWith("//")
-      val relative        = sessionsRootAbsolute.relativize(resolved)
+      val path                = Paths.get(portableName)
+      val resolved            = sessionsRootAbsolute.resolve(portableName).normalize
+      val windowsAbsolute     = portableName.matches("^[A-Za-z]:/.*") || portableName.startsWith("//")
+      val sessionsRootSymlink = Files.isSymbolicLink(sessionsRootAbsolute)
+      val relative            = sessionsRootAbsolute.relativize(resolved)
       val hasSymlink = (0 until relative.getNameCount).exists { index =>
         Files.isSymbolicLink(sessionsRootAbsolute.resolve(relative.subpath(0, index + 1)))
       }
-      if !windowsAbsolute && !path.isAbsolute && resolved.startsWith(
+      if !sessionsRootSymlink && !windowsAbsolute && !path.isAbsolute && resolved.startsWith(
             sessionsRootAbsolute
           ) && resolved != sessionsRootAbsolute && !hasSymlink
       then Some(resolved)
