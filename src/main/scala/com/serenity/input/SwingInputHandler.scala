@@ -1,10 +1,10 @@
 package com.serenity.input
 
 import java.awt.event.*
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import java.util.concurrent.{ConcurrentLinkedQueue, Semaphore}
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
@@ -16,7 +16,7 @@ import fs2.Stream
   * navigation/function keys and Ctrl+letter combinations. Mouse clicks are converted from pixel coords to cell coords
   * via CellMetrics.
   */
-class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
+class SwingInputHandler[F[_] : Sync, E <: Event](
     component: java.awt.Component,
     inputRouter: InputRouter[F, E],
     metrics: () => CellMetrics,
@@ -26,18 +26,82 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
     this(component, inputRouter, metrics, metrics)
 
-  private val infoQueue          = new LinkedBlockingQueue[Option[KeyStrokeInfo]]()
-  private val mouseQueue         = new LinkedBlockingQueue[Option[Event]]()
+  private enum MovementKind:
+    case Move, Drag
+
+  sealed private trait MovementState
+  private case class AvailableMovement(event: Event) extends MovementState
+  private case object ClaimedMovement                extends MovementState
+
+  private class MovementSlot(val kind: MovementKind, event: Event):
+    private val state = new AtomicReference[MovementState](AvailableMovement(event))
+
+    def replace(event: Event): Boolean =
+      def loop(current: MovementState): Boolean = current match
+        case available: AvailableMovement =>
+          if state.compareAndSet(available, AvailableMovement(event)) then true
+          else loop(state.get())
+        case ClaimedMovement => false
+      loop(state.get())
+
+    def claim: Option[Event] =
+      state.getAndSet(ClaimedMovement) match
+        case AvailableMovement(event) => Some(event)
+        case ClaimedMovement          => None
+
+  sealed private trait QueuedInput
+  private case class QueuedKey(info: KeyStrokeInfo)     extends QueuedInput
+  private case class QueuedMouse(event: Event)          extends QueuedInput
+  private case class QueuedMovement(slot: MovementSlot) extends QueuedInput
+  private case object QueuedShutdown                    extends QueuedInput
+
+  private val inputQueue         = new ConcurrentLinkedQueue[QueuedInput]()
+  private val inputAvailable     = new Semaphore(0)
+  private val latestMovement     = new AtomicReference[Option[MovementSlot]](None)
+  private val enqueuesInFlight   = new AtomicInteger(0)
   private val shutdownFlag       = new AtomicBoolean(false)
   private val pendingModifierTap = new AtomicReference[Option[(Int, Long, Boolean)]](None)
 
   private val doubleTapWindowMillis = 200L
 
   private def enqueueInput(info: KeyStrokeInfo): Unit =
-    if !shutdownFlag.get() then infoQueue.put(Some(info))
+    enqueue(QueuedKey(info))
 
   private def enqueueMouse(event: Event): Unit =
-    if !shutdownFlag.get() then mouseQueue.put(Some(event))
+    enqueue(QueuedMouse(event))
+
+  private def enqueue(input: QueuedInput): Unit =
+    if !shutdownFlag.get() then
+      enqueuesInFlight.incrementAndGet()
+      if !shutdownFlag.get() then
+        input match
+          case QueuedMouse(event: MouseMove) => enqueueMovement(MovementKind.Move, event)
+          case QueuedMouse(event: MouseDrag) => enqueueMovement(MovementKind.Drag, event)
+          case _                             => enqueueNonMovement(input)
+      val _ = enqueuesInFlight.decrementAndGet()
+
+  private def enqueueMovement(kind: MovementKind, event: Event): Unit =
+    def loop(): Unit =
+      latestMovement.get() match
+        case Some(slot) if slot.kind == kind && slot.replace(event) => ()
+        case current =>
+          val replacement = new MovementSlot(kind, event)
+          if latestMovement.compareAndSet(current, Some(replacement)) then
+            inputQueue.offer(QueuedMovement(replacement))
+            inputAvailable.release()
+          else loop()
+    loop()
+
+  private def enqueueNonMovement(input: QueuedInput): Unit =
+    latestMovement.set(None)
+    inputQueue.offer(input)
+    inputAvailable.release()
+
+  @annotation.tailrec
+  private def awaitEnqueues(): Unit =
+    if enqueuesInFlight.get() != 0 then
+      Thread.onSpinWait()
+      awaitEnqueues()
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
@@ -107,19 +171,29 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   )
 
   def keyStrokeInfoStream: Stream[F, KeyStrokeInfo] =
-    queueStream(infoQueue)
-
-  private def mouseStream: Stream[F, Event] =
-    queueStream(mouseQueue)
+    orderedInputStream.collect { case QueuedKey(info) => info }
 
   def eventStream: Stream[F, Event] =
-    inputRouter.eventStream(keyStrokeInfoStream).merge(mouseStream)
+    orderedInputStream.flatMap {
+      case QueuedKey(info)      => inputRouter.eventStream(Stream.emit(info))
+      case QueuedMouse(event)   => Stream.emit(event)
+      case QueuedMovement(slot) => Stream.emits(slot.claim.toList)
+      case QueuedShutdown       => Stream.empty
+    }
 
-  private def queueStream[A](queue: LinkedBlockingQueue[Option[A]]): Stream[F, A] =
+  private def orderedInputStream: Stream[F, QueuedInput] =
     Stream.eval(Sync[F].delay(shutdownFlag.get())).flatMap {
       case true  => Stream.empty
-      case false => Stream.repeatEval(Sync[F].blocking(queue.take())).unNoneTerminate
+      case false => Stream.repeatEval(takeInput).takeWhile(_ != QueuedShutdown)
     }
+
+  private def takeInput: F[QueuedInput] =
+    Sync[F].map(
+      Sync[F].blocking {
+        inputAvailable.acquire()
+        inputQueue.poll()
+      }
+    )(input => Option(input).getOrElse(QueuedShutdown))
 
   private def mouseButton(e: MouseEvent): MouseButton =
     e.getButton match
@@ -138,8 +212,10 @@ class SwingInputHandler[F[_] : Sync : Concurrent, E <: Event](
   def shutdown: F[Unit] =
     Sync[F].blocking {
       if shutdownFlag.compareAndSet(false, true) then
-        val _ = infoQueue.offer(None)
-        val _ = mouseQueue.offer(None)
+        awaitEnqueues()
+        latestMovement.set(None)
+        inputQueue.offer(QueuedShutdown)
+        inputAvailable.release()
     }
 
   private def mods(e: KeyEvent): Set[Modifier] =

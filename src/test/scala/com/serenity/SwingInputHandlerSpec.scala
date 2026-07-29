@@ -9,8 +9,17 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
 import cats.syntax.parallel.*
 import com.serenity.input.{InputRouter, SwingInputHandler}
-import com.serenity.keystroke.events.Event
-import com.serenity.keystroke.translators.TextEntryTranslator
+import com.serenity.keystroke.events.{
+  Event,
+  InsertChar,
+  MouseButton,
+  MouseClick,
+  MouseDrag,
+  MouseMove,
+  MousePress,
+  MouseRenderMetrics
+}
+import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
@@ -44,6 +53,104 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     val program = handler.shutdown >> handler.eventStream.compile.drain
 
     program.unsafeRunTimed(StreamObservationTimeout).shouldBe(defined)
+  }
+
+  it should "preserve callback order across keyboard and mouse input" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val key       = component.getKeyListeners.head
+    val mouse     = component.getMouseListeners.head
+    val motion    = component.getMouseMotionListeners.head
+
+    key.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, 1L, 0, KeyEvent.VK_UNDEFINED, 'a'))
+    motion.mouseMoved(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_MOVED, 2L, 0, 8, 16, 0, false)
+    )
+    key.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, 3L, 0, KeyEvent.VK_UNDEFINED, 'b'))
+    mouse.mouseClicked(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_CLICKED, 4L, 0, 16, 32, 1, false)
+    )
+
+    handler.eventStream.take(4).compile.toList.unsafeRunSync() shouldBe List(
+      InsertChar('a'),
+      MouseMove(1, 1, Some(8), Some(16), shiftDown = false),
+      InsertChar('b'),
+      MouseClick(
+        2,
+        2,
+        Some(16),
+        Some(32),
+        clickCount = 1,
+        shiftDown = false,
+        button = MouseButton.Other,
+        renderMetrics = Some(MouseRenderMetrics(CellMetrics(8, 16, 13), CellMetrics(8, 16, 13)))
+      )
+    )
+  }
+
+  it should "coalesce only superseded adjacent mouse moves and drags" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val key       = component.getKeyListeners.head
+    val mouse     = component.getMouseListeners.head
+    val motion    = component.getMouseMotionListeners.head
+
+    motion.mouseMoved(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_MOVED, 1L, 0, 8, 16, 0, false)
+    )
+    motion.mouseMoved(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_MOVED, 2L, 0, 16, 32, 0, false)
+    )
+    mouse.mousePressed(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_PRESSED, 3L, 0, 24, 48, 1, false)
+    )
+    key.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, 4L, 0, KeyEvent.VK_UNDEFINED, 'x'))
+    motion.mouseDragged(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_DRAGGED, 5L, 0, 32, 64, 0, false)
+    )
+    motion.mouseDragged(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_DRAGGED, 6L, 0, 40, 80, 0, false)
+    )
+
+    handler.eventStream.take(4).compile.toList.unsafeRunSync() shouldBe List(
+      MouseMove(2, 2, Some(16), Some(32), shiftDown = false),
+      MousePress(3, 3, Some(24), Some(48), shiftDown = false, button = MouseButton.Other),
+      InsertChar('x'),
+      MouseDrag(5, 5, Some(40), Some(80), shiftDown = false, button = MouseButton.Other)
+    )
+  }
+
+  it should "enqueue callbacks without waiting for event processing" in {
+    val component = new JPanel()
+    val program = for
+      consumerStarted <- Deferred[IO, Unit]
+      releaseConsumer <- Deferred[IO, Unit]
+      callbackDone    <- Deferred[IO, Unit]
+      router = new InputRouter[IO, Event]:
+        override def eventStream(infoStream: fs2.Stream[IO, KeyStrokeInfo]): fs2.Stream[IO, Event] =
+          infoStream.evalMap(_ => consumerStarted.complete(()) >> releaseConsumer.get.as(InsertChar('a')))
+        override def setActiveTranslator(translator: Translator[Event]): IO[Unit] = IO.unit
+        override def getActiveTranslator: IO[Translator[Event]]                   = IO.pure(new TextEntryTranslator)
+      handler = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+      key     = component.getKeyListeners.head
+      motion  = component.getMouseMotionListeners.head
+      eventFiber <- handler.eventStream.compile.drain.start
+      _ = key.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, 1L, 0, KeyEvent.VK_UNDEFINED, 'a'))
+      _ <- consumerStarted.get
+      _ <- IO.blocking(
+        motion.mouseMoved(
+          java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_MOVED, 2L, 0, 8, 16, 0, false)
+        )
+      ) >> callbackDone.complete(())
+      callbackObserved <- callbackDone.get.as(true).timeoutTo(1.second, IO.pure(false))
+      _                <- releaseConsumer.complete(())
+      _                <- handler.shutdown
+      _                <- eventFiber.joinWithNever
+    yield callbackObserved
+
+    program.unsafeRunSync() shouldBe true
   }
 
   it should "emit macOS printable typed characters without command modifiers" in {
