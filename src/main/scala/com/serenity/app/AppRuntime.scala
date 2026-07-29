@@ -262,7 +262,7 @@ object AppRuntime:
         requestFastRender
     }.drain
 
-  private def observeWindowSitterTyping(
+  private[serenity] def observeWindowSitterTyping(
     event: Event,
     stateManager: StateUpdater
   ): IO[Unit] =

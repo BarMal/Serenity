@@ -38,6 +38,26 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     AppRuntime.hasActiveAnimations(state) shouldBe true
   }
 
+  it should "wake and settle the window sitter through a real typing and tick sequence" in {
+    val logger       = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeSpec"))
+    val stateManager = StateManager(logger, initialConfig = AppConfig.default).unsafeRunSync()
+
+    AppRuntime
+      .observeWindowSitterTyping(InsertChar('a'), stateManager)
+      .unsafeRunSync()
+
+    val awakened = stateManager.getCurrentState.unsafeRunSync().windowSitter
+    awakened.isActive shouldBe true
+    awakened.glyph should not be WindowSitter.default.glyph
+
+    Iterator
+      .continually(stateManager.advanceAnimationsOnTick().unsafeRunSync())
+      .takeWhile(identity)
+      .toList
+
+    stateManager.getCurrentState.unsafeRunSync().windowSitter.isActive shouldBe false
+  }
+
   private class SilentInputHandler extends InputHandler[IO]:
     override def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] = Stream.never
     override def eventStream: Stream[IO, Event]                 = Stream.never
