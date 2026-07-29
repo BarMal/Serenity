@@ -181,7 +181,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     compositionRoot should include("StateManagerOperationBoundary")
     effectEditorPort should not include "events."
     effectSurfacePort should not include "events."
-    workflowPort should not include "effects."
+    workflowPort should include("effects.saveBufferEffect")
     workflowPort should not include "events."
     surfacePort should not include "events."
     effectHandlers should include("enqueueEvent")
