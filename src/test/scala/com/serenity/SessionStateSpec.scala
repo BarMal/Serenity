@@ -1021,6 +1021,52 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restored.isValid shouldBe true
   }
 
+  it should "recover stale pane, focus, active-pane, and buffer-order references without losing buffers" in {
+    val state   = AppState.initial
+    val session = SessionState.fromAppState(state)
+    val corrupt = session.copy(
+      layout = session.layout.copy(
+        editorPanes = session.layout.editorPanes.map(_.copy(bufferId = Some(999))),
+        activeEditorPaneId = Some(999)
+      ),
+      focus = Some(com.serenity.session.SessionFocus.EditorPane(999)),
+      bufferOrder = List(999, BufferId(0).value, BufferId(0).value)
+    )
+
+    val restored = SessionState.toAppState(corrupt, Theme.default)
+
+    restored.buffers shouldBe state.buffers
+    restored.layout.editorPanes(PaneId(0)).bufferId shouldBe None
+    restored.layout.activeEditorPaneId shouldBe Some(PaneId(0))
+    restored.focus shouldBe Focus.EditorPane(PaneId(0))
+    restored.bufferOrder shouldBe List(BufferId(0))
+    restored.isValid shouldBe true
+  }
+
+  it should "restore one empty editor fallback when persisted layout panes are empty" in {
+    val state   = AppState.initial
+    val session = SessionState.fromAppState(state)
+    val corrupt = session.copy(
+      layout = session.layout.copy(
+        editorPanes = Nil,
+        activeEditorPaneId = None,
+        paneOrder = Nil,
+        workspaceTree = None
+      ),
+      focus = None
+    )
+
+    val restored = SessionState.toAppState(corrupt, Theme.default)
+
+    restored.buffers shouldBe state.buffers
+    restored.layout.editorPanes.keySet shouldBe Set(PaneId(0))
+    restored.layout.editorPanes(PaneId(0)).bufferId shouldBe None
+    restored.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
+    restored.layout.activeEditorPaneId shouldBe Some(PaneId(0))
+    restored.focus shouldBe Focus.EditorPane(PaneId(0))
+    restored.isValid shouldBe true
+  }
+
   it should "ignore unsupported persisted panel content without losing buffers" in {
     val panel = UiSurface.fromPanelContent(
       SurfaceId("surface-0"),

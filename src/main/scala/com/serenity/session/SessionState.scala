@@ -201,18 +201,25 @@ object SessionState:
     theme: Theme,
     bufferMap: Map[BufferId, Buffer]
   ): AppState =
-    val restoredLayout = SessionLayout.restore(sessionState.layout)
+    val restoredLayout = SessionLayout.restore(sessionState.layout, Some(bufferMap.keySet))
     val layout         = restoredLayout.layout
     val focus = sessionState.focus
       .map(SessionFocus.toFocus)
+      .filter {
+        case Focus.EditorPane(paneId) => layout.editorPanes.contains(paneId)
+        case Focus.Surface(surfaceId) => restoredLayout.surfaces.exists(_.id == surfaceId)
+      }
       .getOrElse(
         layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(Focus.EditorPane(PaneId(0)))
       )
+    val requestedBufferOrder = sessionState.bufferOrder.map(BufferId.apply).filter(bufferMap.contains).distinct
+    val bufferOrder =
+      requestedBufferOrder ++ bufferMap.keys.toList.filterNot(requestedBufferOrder.contains).sortBy(_.value)
 
     AppState(
       layout = layout,
       buffers = bufferMap,
-      bufferOrder = sessionState.bufferOrder.map(BufferId.apply),
+      bufferOrder = bufferOrder,
       focus = focus,
       uiSurfaces = restoredLayout.surfaces,
       actionStack = Nil,
@@ -359,11 +366,19 @@ object SessionLayout:
   def toLayout(sessionLayout: SessionLayout): Layout =
     restore(sessionLayout).layout
 
-  private[session] def restore(sessionLayout: SessionLayout): Restored =
-    val editorPanes = sessionLayout.editorPanes.map { sessionPane =>
-      val pane = SessionEditorPane.toEditorPane(sessionPane)
+  private[session] def restore(
+    sessionLayout: SessionLayout,
+    validBufferIds: Option[Set[BufferId]] = None
+  ): Restored =
+    val decodedEditorPanes = sessionLayout.editorPanes.map { sessionPane =>
+      val pane = SessionEditorPane
+        .toEditorPane(sessionPane)
+        .copy(bufferId = sessionPane.bufferId.map(BufferId.apply).filter(id => validBufferIds.forall(_.contains(id))))
       PaneId(sessionPane.id) -> pane
     }.toMap
+    val editorPanes =
+      if decodedEditorPanes.nonEmpty then decodedEditorPanes
+      else Map(PaneId(0) -> EditorPane.empty(PaneId(0)))
     val splitDirection = PaneSplitDirection.fromString(sessionLayout.splitDirection)
     val orderedPaneIds =
       val requested = sessionLayout.paneOrder.map(PaneId.apply).filter(editorPanes.contains)
@@ -382,9 +397,13 @@ object SessionLayout:
     val maximized = sessionLayout.maximizedWorkspaceNodeId
       .map(WorkspaceNodeId.apply)
       .filter(nodeId => workspaceTree.exists(_.surfaceIdForNode(nodeId).nonEmpty))
+    val activeEditorPaneId = sessionLayout.activeEditorPaneId
+      .map(PaneId.apply)
+      .filter(editorPanes.contains)
+      .orElse(orderedPaneIds.headOption)
     val layout = Layout(
       editorPanes = editorPanes,
-      activeEditorPaneId = sessionLayout.activeEditorPaneId.map(PaneId.apply),
+      activeEditorPaneId = activeEditorPaneId,
       paneOrder = orderedPaneIds,
       splitDirection = splitDirection,
       workspaceTree = workspaceTree,
