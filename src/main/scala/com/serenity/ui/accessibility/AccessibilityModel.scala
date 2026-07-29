@@ -249,8 +249,20 @@ object AccessibilitySnapshot:
   ): List[AccessibleNode] =
     modal match
       case Modal.CloseWorkflow(workflow) =>
-        CloseWorkflowLayout.actionBounds(frameRect, workflow).map {
-          case (choice, name, bounds) =>
+        val targetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+        ModalSurfaceComposition.close(workflow, frameRect, targetRows).hitRegions.flatMap { hit =>
+          for
+            actionId <- hit.actionId
+            choice   <- ModalSurfaceComposition.closeChoice(actionId)
+          yield
+            val name    = hit.semanticLabel
+            val hitRect = hit.rect
+            val bounds = LayoutRect(
+              hitRect.x.toInt,
+              hitRect.y.toInt,
+              hitRect.width.toInt,
+              hitRect.height.toInt
+            )
             val selected = workflow.selectedChoice == choice
             AccessibleNode(
               s"surface:${surfaceId.value}/control:${choice.toString.toLowerCase}",

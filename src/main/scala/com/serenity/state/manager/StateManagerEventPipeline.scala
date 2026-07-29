@@ -958,7 +958,12 @@ final private[manager] class StateManagerEventPipeline(
       workflow <- surface.content match
         case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
         case _                                                           => None
-      choice <- CloseWorkflowLayout.choiceAt(node.frameRect, workflow, click.col, click.row)
+      targetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+      actionId <- ModalSurfaceComposition
+        .close(workflow, node.frameRect, targetRows)
+        .hitAt(click.col.toDouble, click.row.toDouble)
+        .flatMap(_.actionId)
+      choice <- ModalSurfaceComposition.closeChoice(actionId)
     yield choice
 
   private def handleStartupPageMouseClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =

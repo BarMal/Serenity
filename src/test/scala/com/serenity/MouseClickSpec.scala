@@ -202,10 +202,58 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .modal
       .lastOption
       .getOrElse(fail("Expected close confirmation modal"))
-    val cancelX  = modal.contentRect.x + ((modal.contentRect.width * 5) / 6)
-    val choicesY = modal.contentRect.y + 2
+    val targetRows = SurfaceFrameLayout.minimumTargetRows(before.config.interfaceDensity)
+    val cancel = ModalSurfaceComposition
+      .close(
+        CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"),
+        modal.frameRect,
+        targetRows
+      )
+      .hitRegions
+      .find(_.actionId.contains(SurfaceActionId("close-cancel")))
+      .getOrElse(fail("Expected cancel action"))
+    val cancelX  = cancel.rect.x.toInt
+    val choicesY = cancel.rect.y.toInt
 
     sm.applyEvent(MouseClick(cancelX, choicesY)).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.topModalSurface shouldBe None
+    after.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
+  it should "route a reflowed close action inside a constrained modal frame" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("alpha").unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    val viewport = ViewportSize(40, 4)
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+    val workflow = CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")
+    val close = UiSurface(
+      SurfaceId("close-constrained"),
+      SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
+      SurfacePresentation.Modal
+    )
+    sm.updateState(state => state.copy(uiSurfaces = state.uiSurfaces :+ close, focus = Focus.Surface(close.id)))
+      .unsafeRunSync()
+
+    val before = sm.getCurrentState.unsafeRunSync()
+    val modal = UiSceneSnapshot
+      .from(before, viewport)
+      .modal
+      .lastOption
+      .getOrElse(fail("Expected constrained close modal"))
+    val cancel = ModalSurfaceComposition
+      .close(
+        workflow,
+        modal.frameRect,
+        SurfaceFrameLayout.minimumTargetRows(before.config.interfaceDensity)
+      )
+      .hitRegions
+      .find(_.actionId.contains(SurfaceActionId("close-cancel")))
+      .getOrElse(fail("Expected reflowed cancel action"))
+
+    sm.applyEvent(MouseClick(cancel.rect.x.toInt, cancel.rect.y.toInt)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.topModalSurface shouldBe None

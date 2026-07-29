@@ -58,7 +58,11 @@ object TextOverlayRenderer:
         surface.putString(rect.x, y, " " * rect.width)
 
       applyGlassSheen(surface, overlay, theme, config)
-      drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics)
+      overlay.composition match
+        case Some(composition) =>
+          drawComposition(surface, composition, theme, cursorVisible, rowColors, font, cellMetrics, overlay.rect.y)
+        case None =>
+          drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics)
     }
     drawBorder(surface, overlay, theme, config)
 
@@ -150,6 +154,47 @@ object TextOverlayRenderer:
               )
         }
       }
+
+  private def drawComposition(
+    surface: RenderSurface,
+    composition: ResolvedSurfaceComposition,
+    theme: Theme,
+    cursorVisible: Boolean,
+    rowColors: Int => (Color, Color),
+    font: Font,
+    cellMetrics: CellMetrics,
+    frameY: Int
+  ): Unit =
+    composition.paintBoxes.foreach { box =>
+      box.text.foreach { text =>
+        val rect      = box.rect
+        val x         = math.round(rect.x).toInt
+        val y         = math.round(rect.y).toInt
+        val width     = math.round(rect.width).toInt
+        val rowOffset = y - frameY
+        val (fg, bg)  = rowColors(rowOffset)
+        val row = OverlayRow(
+          plainText = text,
+          selected = box.selected,
+          cursorColumn = box.cursorOffset
+        )
+        renderRow(
+          surface,
+          x,
+          y,
+          width,
+          row,
+          theme,
+          cursorVisible,
+          defaultForeground = Some(fg),
+          defaultBackground = Some(bg),
+          font = font,
+          cellMetrics = cellMetrics,
+          pixelY = Some(cellMetrics.toPixelY(y)),
+          pixelHeight = Some(math.max(1, math.round(rect.height).toInt) * cellMetrics.lineHeight)
+        )
+      }
+    }
 
   private def renderRow(
     surface: RenderSurface,

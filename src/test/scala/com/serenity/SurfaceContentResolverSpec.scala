@@ -778,7 +778,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.footer.map(_.plainText) shouldBe Some("File not found: /tmp/project/missing.scala")
   }
 
-  it should "render close workflow modals with the active choice highlighted" in {
+  it should "leave close workflow rendering to the shared modal composition" in {
     val workflow = CloseWorkflowState(
       scope = CloseScope.Current,
       currentBufferId = BufferId(7),
@@ -792,12 +792,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Floating
     )
 
-    floating.header.map(_.plainText) shouldBe Some("unsaved changes")
-    floating.rows.map(_.plainText) should contain("notes.scala")
-    val choiceRow = floating.rows.last
-    choiceRow.layout shouldBe OverlayRowLayout.Distributed
-    choiceRow.segments.map(_.text) shouldBe List("Save", "Close Anyway", "Cancel")
-    choiceRow.segments.find(_.selected).map(_.text) shouldBe Some("Close Anyway")
+    floating shouldBe ResolvedSurfaceContent()
   }
 
   it should "render replace workflow modals with separate find and replace rows" in {
