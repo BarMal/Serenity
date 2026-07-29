@@ -37,6 +37,17 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+  private def animAt(column: Int, fg: Color, bg: Color): AnimationState =
+    AnimationState(
+      Map(
+        CharacterKey(column, 0) -> AnimatedCell(
+          content = Some('?'),
+          foregroundSteps = List(fg),
+          backgroundSteps = List(bg)
+        )
+      )
+    )
+
   "CharacterRenderer.renderMeasuredLineWithAnimation" should
     "produce a single drawRunPx call when all chars share the theme color" in {
       val surface = new MockRenderSurface(200, 24)
@@ -171,4 +182,44 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
     calls.head.bgWidthPx shouldBe (visualLine.caretStops.map(_.xPx).max - visualLine.caretStops
       .map(_.xPx)
       .min) +- 0.001f
+  }
+
+  it should "keep animated emoji and combining graphemes at their measured bounds" in {
+    val text = "😀e\u0301x"
+    val visualLine = TextVisualLine(
+      bufferLine = 0,
+      startColumn = 0,
+      endColumn = text.length,
+      text = text,
+      widthPx = 30.0f,
+      caretStops = Vector(
+        TextCaretStop(0, 0.0f),
+        TextCaretStop(2, 12.0f),
+        TextCaretStop(4, 24.0f),
+        TextCaretStop(5, 30.0f)
+      )
+    )
+    val emojiColor  = Color(200, 80, 40)
+    val accentColor = Color(40, 120, 210)
+    val animations = AnimationState(
+      animAt(0, emojiColor, emojiColor).animations ++ animAt(2, accentColor, accentColor).animations
+    )
+    val surface = new MockRenderSurface(200, 24)
+
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      surface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      visualLine,
+      Theme.light,
+      animations
+    )
+
+    val calls = surface.drawRunPxCalls
+    calls.map(_.s) shouldBe List("😀", "e\u0301", "x")
+    calls.map(_.xPx) shouldBe List(0.0f, 12.0f, 24.0f)
+    calls.map(_.bgWidthPx) shouldBe List(12.0f, 12.0f, 6.0f)
+    calls.take(2).map(_.foreground) shouldBe List(emojiColor, accentColor)
   }

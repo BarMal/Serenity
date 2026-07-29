@@ -4,6 +4,7 @@ import java.awt.Color
 
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
+import com.serenity.text.TextEditing
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
 object CharacterRenderer:
@@ -156,15 +157,6 @@ object CharacterRenderer:
     val text = visualLine.text
     if text.nonEmpty then
       val stops = visualLine.caretStops
-      val stopXPxByLocalIndex =
-        @annotation.tailrec
-        def expand(localIndex: Int, stopIndex: Int, acc: List[Float]): List[Float] =
-          if localIndex > text.length then acc.reverse
-          else if stopIndex < stops.length && stops(stopIndex).column == visualLine.startColumn + localIndex then
-            expand(localIndex + 1, stopIndex + 1, stops(stopIndex).xPx :: acc)
-          else expand(localIndex + 1, stopIndex, 0.0f :: acc)
-
-        expand(0, 0, Nil).toVector
       val styledSegments0 =
         styledSegments.getOrElse {
           if syntaxHighlightingEnabled then com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language)
@@ -180,8 +172,37 @@ object CharacterRenderer:
           endLocalIndex: Int
       )
 
+      val graphemeBounds =
+        @annotation.tailrec
+        def collect(
+          localIndex: Int,
+          stopIndex: Int,
+          acc: List[(Int, Int, Float, Float)]
+        ): List[(Int, Int, Float, Float)] =
+          if localIndex >= text.length || stopIndex + 1 >= stops.length then acc.reverse
+          else
+            val nextIndex = TextEditing.nextGraphemeBoundary(text, localIndex).min(text.length)
+            val startStop = stops.lift(stopIndex).filter(_.column == visualLine.startColumn + localIndex)
+            val endStop   = stops.lift(stopIndex + 1).filter(_.column == visualLine.startColumn + nextIndex)
+            (startStop, endStop) match
+              case (Some(start), Some(end)) =>
+                collect(nextIndex, stopIndex + 1, (localIndex, nextIndex, start.xPx, end.xPx) :: acc)
+              case _ => collect(localIndex, stopIndex + 1, acc)
+
+        collect(0, 0, Nil)
+
+      val graphemeBoundsByLocalIndex = graphemeBounds.flatMap {
+        case (start, end, startXPx, endXPx) =>
+          Vector.fill(end - start)((startXPx, endXPx))
+      }.toVector
+
+      def visualExtentsForRange(startLocalIndex: Int, endLocalIndex: Int): Vector[Float] =
+        graphemeBoundsByLocalIndex
+          .slice(startLocalIndex, endLocalIndex)
+          .flatMap { case (startXPx, endXPx) => Vector(startXPx, endXPx) }
+
       def drawRun(run: MeasuredRun): Unit =
-        val visualExtents = stopXPxByLocalIndex.slice(run.startLocalIndex, run.endLocalIndex + 1)
+        val visualExtents = visualExtentsForRange(run.startLocalIndex, run.endLocalIndex)
         val startXPx      = xOriginPx + visualExtents.minOption.getOrElse(0.0f)
         val endXPx        = xOriginPx + visualExtents.maxOption.getOrElse(0.0f)
         val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
@@ -193,14 +214,45 @@ object CharacterRenderer:
             surface.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text.toString)
           }
 
-      val chars = styledSegments0.flatMap(segment =>
-        segment.content.map(char => (char, segment.foregroundColor, segment.backgroundColor, segment.style))
-      )
+      val chars = styledSegments0
+        .flatMap(segment =>
+          segment.content.map(char => (char, segment.foregroundColor, segment.backgroundColor, segment.style))
+        )
+        .toVector
       val hasAnimations = animations.animations.nonEmpty
 
-      val (runs, currentRun, _) = chars.foldLeft((List.empty[MeasuredRun], Option.empty[MeasuredRun], 0)) {
-        case ((completed, current, localIndex), (char, segmentForeground, segmentBackground, style)) =>
-          val bufferColumn = visualLine.startColumn + localIndex
+      val graphemeChars =
+        @annotation.tailrec
+        def collect(
+          localIndex: Int,
+          acc: List[(String, Color, Color, TextStyle, Int, Int)]
+        ): Vector[(String, Color, Color, TextStyle, Int, Int)] =
+          if localIndex >= text.length then acc.reverse.toVector
+          else
+            val endLocalIndex     = TextEditing.nextGraphemeBoundary(text, localIndex).min(text.length)
+            val segmentStyle      = chars.lift(localIndex).map(_._4).getOrElse(TextStyle.normal)
+            val segmentForeground = chars.lift(localIndex).map(_._2).getOrElse(theme.foreground)
+            val segmentBackground = chars.lift(localIndex).map(_._3).getOrElse(theme.background)
+            collect(
+              endLocalIndex,
+              (
+                text.substring(localIndex, endLocalIndex),
+                segmentForeground,
+                segmentBackground,
+                segmentStyle,
+                localIndex,
+                endLocalIndex
+              ) :: acc
+            )
+
+        collect(0, Nil)
+
+      val (runs, currentRun, _) = graphemeChars.foldLeft((List.empty[MeasuredRun], Option.empty[MeasuredRun], 0)) {
+        case (
+              (completed, current, localIndex),
+              (grapheme, segmentForeground, segmentBackground, style, graphemeStart, graphemeEnd)
+            ) =>
+          val bufferColumn = visualLine.startColumn + graphemeStart
           val cell         = if hasAnimations then animations.getCell(bufferColumn, visualLine.bufferLine) else None
           val foreground   = cell.flatMap(_.currentForeground).getOrElse(segmentForeground)
           val background   = cell.flatMap(_.currentBackground).getOrElse(segmentBackground)
@@ -212,26 +264,26 @@ object CharacterRenderer:
                 foreground,
                 background,
                 style,
-                StringBuilder(char.toString),
-                localIndex + 1
+                StringBuilder(grapheme),
+                graphemeEnd
               )
-              (completed, Some(run), localIndex + 1)
+              (completed, Some(run), graphemeEnd)
 
             case Some(run) if foreground == run.foreground && background == run.background && style == run.style =>
-              run.text.append(char)
-              val updatedRun = run.copy(endLocalIndex = localIndex + 1)
-              (completed, Some(updatedRun), localIndex + 1)
+              run.text.append(grapheme)
+              val updatedRun = run.copy(endLocalIndex = graphemeEnd)
+              (completed, Some(updatedRun), graphemeEnd)
 
             case Some(run) =>
               val nextRun = MeasuredRun(
-                localIndex,
+                graphemeStart,
                 foreground,
                 background,
                 style,
-                StringBuilder(char.toString),
-                localIndex + 1
+                StringBuilder(grapheme),
+                graphemeEnd
               )
-              (run :: completed, Some(nextRun), localIndex + 1)
+              (run :: completed, Some(nextRun), graphemeEnd)
       }
 
       (currentRun.toList ::: runs).reverse.foreach(drawRun)
