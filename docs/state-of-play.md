@@ -77,7 +77,7 @@ Priority labels used in this archived snapshot:
 
 - `[x]` There is a stable hotkey layer for common editor operations, command runner toggle, file search, and tab navigation.[12]
 - `[x]` Focus-aware input routing now cleanly distinguishes editor, modal, command-runner, submenu, panel, and peek input behavior.[40][41]
-- `[~][P0]` Key mappings are now broadly config-driven across the focused input surfaces. Global hotkeys plus editor, command-runner, modal, panel, and peek-local bindings can all be overridden through config-backed bindings, but there is still no user-facing keymap editor in the command runner and the binding model is still limited to existing actions rather than an open-ended command surface.[12][13][40][46][47][49]
+- `[x]` Key mappings are now broadly config-driven across the focused input surfaces. The command runner provides a user-facing keymap editor for global hotkeys plus editor, command-runner, modal, panel, and peek-local bindings, including recorded modifier double taps and explicit conflict resolution; the binding model remains limited to existing actions rather than an open-ended command surface.[12][13][40][46][47][49]
 
 ## 7. Command Runner And Floating Surfaces
 
@@ -164,7 +164,7 @@ Use GitHub Issues as the canonical backlog:
 ## Snapshot Summary
 
 - Strongest implemented areas today: rope-backed editing, session restore/save, typography/layout correctness, nested command-runner overlays, theming/animation, and pinned-panel basics.[1][5][11][17][19][27]
-- Biggest current gaps remain: broader search surfaces such as find-all/project-wide search, a user-facing keymap editing surface beyond the new config-backed bindings, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
+- Biggest current gaps remain: broader search surfaces such as find-all/project-wide search, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
 - These notes describe the 2026-06-05 snapshot. Check GitHub Issues for current gaps, prioritisation, and implementation order.
 
 ## Sources

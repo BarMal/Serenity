@@ -3,6 +3,7 @@ package com.serenity.command
 import java.util.Locale
 
 import com.serenity.config.*
+import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.ui.presets.UiPreset
 
 case class CommandRunnerSubmenuState(
@@ -11,6 +12,7 @@ case class CommandRunnerSubmenuState(
     editingItemId: Option[String] = None,
     editingText: String = "",
     recordingItemId: Option[String] = None,
+    pendingRecordedBinding: Option[(KeyStrokeInfo, Long)] = None,
     pendingGlobalHotkeyConflict: Option[(HotkeyAction, String)] = None,
     pendingFocusedKeymapConflict: Option[(String, String)] = None,
     searchTerm: String = "",
@@ -331,6 +333,7 @@ case class CommandRunner(
                 editingItemId = None,
                 editingText = "",
                 recordingItemId = None,
+                pendingRecordedBinding = None,
                 pendingGlobalHotkeyConflict = None,
                 pendingFocusedKeymapConflict = None
               )
@@ -349,6 +352,7 @@ case class CommandRunner(
                   editingItemId = Some(item.id),
                   editingText = item.currentValue,
                   recordingItemId = None,
+                  pendingRecordedBinding = None,
                   pendingGlobalHotkeyConflict = None,
                   pendingFocusedKeymapConflict = None
                 )
@@ -444,6 +448,7 @@ case class CommandRunner(
                 editingItemId = None,
                 editingText = "",
                 recordingItemId = None,
+                pendingRecordedBinding = None,
                 pendingGlobalHotkeyConflict = None,
                 pendingFocusedKeymapConflict = None
               )
@@ -524,6 +529,7 @@ case class CommandRunner(
                   editingItemId = None,
                   editingText = "",
                   recordingItemId = None,
+                  pendingRecordedBinding = None,
                   pendingGlobalHotkeyConflict = None,
                   pendingFocusedKeymapConflict = None
                 )
@@ -541,6 +547,7 @@ case class CommandRunner(
           editingItemId = None,
           editingText = "",
           recordingItemId = None,
+          pendingRecordedBinding = None,
           pendingGlobalHotkeyConflict = None,
           pendingFocusedKeymapConflict = None
         )

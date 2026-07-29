@@ -20,7 +20,12 @@ case object RunnerNextCategory                                         extends C
 case object RunnerPreviousCategory                                     extends CommandRunnerEvent
 case object RunnerSubmit                                               extends CommandRunnerEvent
 case object RunnerDismiss                                              extends CommandRunnerEvent
-case class RunnerRecordBinding(info: KeyStrokeInfo)                    extends CommandRunnerEvent
+
+case class RunnerRecordBinding(
+    info: KeyStrokeInfo,
+    recordedAtMillis: Long = System.currentTimeMillis(),
+    isDoubleTap: Boolean = false
+) extends CommandRunnerEvent
 
 object CommandRunnerEvent:
 

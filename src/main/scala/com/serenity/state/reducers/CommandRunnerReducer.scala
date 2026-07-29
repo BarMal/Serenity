@@ -7,7 +7,8 @@ import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 
 object CommandRunnerReducer:
-  private val SubmenuSurfaceId = SurfaceId("command-runner-submenu")
+  private val SubmenuSurfaceId      = SurfaceId("command-runner-submenu")
+  private val DoubleTapWindowMillis = 200L
 
   def reducer(registry: CommandRegistry): Reducer[CommandRunnerEvent] =
     Reducer.instance((event, state) => reduce(event, state, registry))
@@ -160,8 +161,8 @@ object CommandRunnerReducer:
                     replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm + char))
                   )
 
-      case RunnerRecordBinding(info) =>
-        recordBinding(state, info)
+      case RunnerRecordBinding(info, recordedAtMillis, isDoubleTap) =>
+        recordBinding(state, info, recordedAtMillis, isDoubleTap)
 
       case RunnerDeleteBackward =>
         if submenuHasFocus(state) then
@@ -535,6 +536,7 @@ object CommandRunnerReducer:
                         editingItemId = None,
                         editingText = "",
                         recordingItemId = None,
+                        pendingRecordedBinding = None,
                         pendingGlobalHotkeyConflict = None,
                         pendingFocusedKeymapConflict = None
                       )
@@ -565,6 +567,7 @@ object CommandRunnerReducer:
                         editingItemId = None,
                         editingText = "",
                         recordingItemId = None,
+                        pendingRecordedBinding = None,
                         pendingFocusedKeymapConflict = None
                       )
                     ),
@@ -595,6 +598,7 @@ object CommandRunnerReducer:
                             editingItemId = None,
                             editingText = "",
                             recordingItemId = None,
+                            pendingRecordedBinding = None,
                             pendingGlobalHotkeyConflict = None,
                             pendingFocusedKeymapConflict = None
                           )
@@ -635,41 +639,94 @@ object CommandRunnerReducer:
     if item.acceptsBindingText then s"Invalid binding: $value"
     else s"Invalid value: $value"
 
-  private def recordBinding(state: AppState, info: com.serenity.keystroke.KeyStrokeInfo): ReducerResult =
+  private def recordBinding(
+    state: AppState,
+    info: com.serenity.keystroke.KeyStrokeInfo,
+    recordedAtMillis: Long,
+    isDoubleTap: Boolean
+  ): ReducerResult =
     currentRunner(state).flatMap(_.activeSubmenu) match
       case Some(submenu) if submenu.recordingItemId.nonEmpty =>
         val runner = currentRunner(state).get
         runner.submenuItems(submenu.groupId).find(_.id == submenu.recordingItemId.get) match
           case Some(item: CommandSurfaceItem.InputItem) =>
-            val binding = HotkeyTrigger(info.keyType, info.character, info.modifiers).render
-            item.parse(binding) match
-              case Some(intent) =>
-                ReducerResult(
-                  state = replaceRunner(
-                    state,
-                    current =>
-                      current.copy(
-                        activeSubmenu = current.activeSubmenu.map(
-                          _.copy(
-                            editingItemId = None,
-                            editingText = "",
-                            recordingItemId = None,
-                            pendingGlobalHotkeyConflict = None,
-                            pendingFocusedKeymapConflict = None
-                          )
-                        ),
-                        statusMessage = None
-                      )
-                  ),
-                  effects = List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
-                )
-              case None =>
-                ReducerResult.noEffects(
-                  replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, binding))))
-                )
+            val pending = submenu.pendingRecordedBinding
+            if isDoubleTap then assignRecordedBinding(state, item, info)
+            else
+              pending match
+                case None =>
+                  ReducerResult.noEffects(
+                    replaceRunner(
+                      state,
+                      current =>
+                        current.copy(
+                          activeSubmenu = current.activeSubmenu.map(
+                            _.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))
+                          ),
+                          statusMessage = Some("Press the same key again within 200ms to record a double tap")
+                        )
+                    )
+                  )
+                case Some((first, firstAt))
+                    if recordedAtMillis >= firstAt &&
+                      recordedAtMillis - firstAt <= DoubleTapWindowMillis &&
+                      sameKeyStroke(first, info) =>
+                  assignRecordedBinding(state, item, first)
+                case Some(_) =>
+                  ReducerResult.noEffects(
+                    replaceRunner(
+                      state,
+                      current =>
+                        current.copy(
+                          activeSubmenu = current.activeSubmenu.map(
+                            _.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))
+                          ),
+                          statusMessage = Some("Press the same key again within 200ms to record a double tap")
+                        )
+                    )
+                  )
           case _ => ReducerResult.noEffects(state)
       case _ =>
         ReducerResult.noEffects(state)
+
+  private def sameKeyStroke(
+    left: com.serenity.keystroke.KeyStrokeInfo,
+    right: com.serenity.keystroke.KeyStrokeInfo
+  ): Boolean =
+    left.keyType == right.keyType && left.character == right.character && left.modifiers == right.modifiers
+
+  private def assignRecordedBinding(
+    state: AppState,
+    item: CommandSurfaceItem.InputItem,
+    first: com.serenity.keystroke.KeyStrokeInfo
+  ): ReducerResult =
+    val binding = HotkeyTrigger(first.keyType, first.character, first.modifiers).render
+    item.parse(binding) match
+      case Some(intent) =>
+        ReducerResult(
+          state = replaceRunner(
+            state,
+            current =>
+              current.copy(
+                activeSubmenu = current.activeSubmenu.map(
+                  _.copy(
+                    editingItemId = None,
+                    editingText = "",
+                    recordingItemId = None,
+                    pendingRecordedBinding = None,
+                    pendingGlobalHotkeyConflict = None,
+                    pendingFocusedKeymapConflict = None
+                  )
+                ),
+                statusMessage = None
+              )
+          ),
+          effects = List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
+        )
+      case None =>
+        ReducerResult.noEffects(
+          replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, binding))))
+        )
 
   private def submenuRecording(state: AppState): Boolean =
     currentRunner(state).exists(_.activeSubmenu.exists(_.recordingItemId.nonEmpty))
@@ -684,6 +741,7 @@ object CommandRunnerReducer:
               editingItemId = None,
               editingText = "",
               recordingItemId = None,
+              pendingRecordedBinding = None,
               pendingGlobalHotkeyConflict = None,
               pendingFocusedKeymapConflict = None
             )
