@@ -40,7 +40,7 @@ lazy val root = (project in file("."))
           case "index.list" :: Nil    => MergeStrategy.discard
           case "dependencies" :: Nil  => MergeStrategy.discard
           case name :: Nil
-              if name.endsWith(".sf") || name.endsWith(".rsa") || name.endsWith(".dsa") =>
+              if name.endsWith(".sf") || name.endsWith(".rsa") || name.endsWith(".dsa") || name.endsWith(".ec") =>
             MergeStrategy.discard
           case _ => (assembly / assemblyMergeStrategy).value(x)
         }

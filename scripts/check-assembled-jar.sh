@@ -15,6 +15,13 @@ if ! jar tf "$jar_path" | grep -Fxq "$service_descriptor"; then
   exit 1
 fi
 
+signature_blocks="$(jar tf "$jar_path" | grep -Ei '^META-INF/[^/]+\.(SF|RSA|DSA|EC)$' || true)"
+if [[ -n "$signature_blocks" ]]; then
+  echo "Assembled JAR contains signature blocks that cannot survive relocation:" >&2
+  echo "$signature_blocks" >&2
+  exit 1
+fi
+
 probe_dir="$(mktemp -d)"
 trap 'rm -rf "$probe_dir"' EXIT
 
