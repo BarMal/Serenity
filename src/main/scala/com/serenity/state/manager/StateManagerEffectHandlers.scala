@@ -9,7 +9,7 @@ import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
-import com.serenity.config.{DefaultDocumentMode, MarkdownViewMode}
+import com.serenity.config.{DefaultDocumentMode, HotkeyTrigger, MarkdownViewMode}
 import com.serenity.document.{CommentRendering, DocumentNavigation, DocumentOutline}
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
@@ -877,8 +877,40 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[Unit] =
     stateRef.get.flatMap { state =>
       val updatedConfig = update(state.config)
-      if updatedConfig == state.config then stateRef.update(withFocusedKeymapConflictMessage(itemId, binding))
+      if updatedConfig == state.config then
+        if currentFocusedKeymapOwnsBinding(state.config, itemId, binding) then IO.unit
+        else stateRef.update(withFocusedKeymapConflictMessage(itemId, binding))
       else updateConfig(_ => updatedConfig).void
+    }
+
+  private def currentFocusedKeymapOwnsBinding(
+    config: com.serenity.config.AppConfig,
+    itemId: String,
+    binding: String
+  ): Boolean =
+    HotkeyTrigger.parse(binding).exists { trigger =>
+      itemId match
+        case id if id.startsWith("keymap-editor-") =>
+          com.serenity.config.EditorKeyAction.values
+            .find(_.configKey == id.stripPrefix("keymap-editor-"))
+            .exists(action => config.focusedKeymapConfig.editor.bindingsFor(action).contains(trigger))
+        case id if id.startsWith("keymap-command-runner-") =>
+          com.serenity.config.CommandRunnerKeyAction.values
+            .find(_.configKey == id.stripPrefix("keymap-command-runner-"))
+            .exists(action => config.focusedKeymapConfig.commandRunner.bindingsFor(action).contains(trigger))
+        case id if id.startsWith("keymap-modal-") =>
+          com.serenity.config.ModalKeyAction.values
+            .find(_.configKey == id.stripPrefix("keymap-modal-"))
+            .exists(action => config.focusedKeymapConfig.modal.bindingsFor(action).contains(trigger))
+        case id if id.startsWith("keymap-panel-") =>
+          com.serenity.config.PanelKeyAction.values
+            .find(_.configKey == id.stripPrefix("keymap-panel-"))
+            .exists(action => config.focusedKeymapConfig.panel.bindingsFor(action).contains(trigger))
+        case id if id.startsWith("keymap-peek-") =>
+          com.serenity.config.PeekKeyAction.values
+            .find(_.configKey == id.stripPrefix("keymap-peek-"))
+            .exists(action => config.focusedKeymapConfig.peek.bindingsFor(action).contains(trigger))
+        case _ => false
     }
 
   private def resolveFocusedKeymapConflict(

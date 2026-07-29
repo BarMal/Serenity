@@ -120,6 +120,32 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     config.hotkeyConfig.bindingsFor(HotkeyAction.OpenFile) shouldBe Nil
   }
 
+  it should "leave an idempotent focused keymap assignment unchanged" in {
+    val stateManager = createLinuxStateManager("FocusedKeymapEditorIdempotentSpec")
+
+    stateManager
+      .updateState(state =>
+        state.copy(
+          config = state.config.withCommandRunnerKeyOverride(CommandRunnerKeyAction.Submit, "ctrl+k")
+        )
+      )
+      .unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    List.fill(3)(MoveDown).foreach(event => stateManager.applyEvent(event).unsafeRunSync())
+    "ctrl+k".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.config.focusedKeymapConfig.commandRunner
+      .bindingsFor(CommandRunnerKeyAction.Submit)
+      .map(_.render) shouldBe List("ctrl+k")
+    state.commandRunnerSurface.flatMap(_.content match
+      case SurfaceContent.CommandPalette(runner) => runner.statusMessage
+      case _                                     => None) shouldBe None
+  }
+
   it should "offer focused keymap conflict resolution by unbinding the previous owner on enter" in {
     val stateManager = createLinuxStateManager("FocusedKeymapEditorConflictResolveSpec")
 
