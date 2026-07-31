@@ -532,8 +532,9 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
   private def docxBytesFromFixture(name: String): Array[Byte] =
     val source = scala.io.Source.fromResource(s"richtext/$name")
-    val xml = try source.mkString
-    finally source.close()
+    val xml =
+      try source.mkString
+      finally source.close()
     val output = java.io.ByteArrayOutputStream()
     val zip    = ZipOutputStream(output)
     try

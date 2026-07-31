@@ -242,7 +242,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
 
     decoded.isRight shouldBe true
-    SessionState.toAppState(decoded.toOption.get, Theme.default).buffers(buffer.id).richTextFidelity shouldBe Some(fidelity)
+    SessionState.toAppState(decoded.toOption.get, Theme.default).buffers(buffer.id).richTextFidelity shouldBe Some(
+      fidelity
+    )
   }
 
   it should "drop stale rich text metadata for dirty buffers" in {

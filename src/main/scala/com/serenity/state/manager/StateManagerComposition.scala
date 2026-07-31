@@ -544,7 +544,13 @@ private[manager] class StateManagerComposition(
     def loadSession(): IO[Option[AppState]]                 = sessionManager.loadSession()
     def ensureCommandRunnerSurface(state: AppState): AppState =
       operations.ensureCommandRunnerSurface(state)
-    def saveBufferEffect(bufferId: BufferId): IO[Unit]               = effects.saveBufferEffect(bufferId)
+    def saveBufferEffect(bufferId: BufferId): IO[Unit] =
+      filePersistence.saveExistingBuffer(bufferId).handleErrorWith {
+        case error: com.serenity.richtext.LossyRichTextOverwriteException =>
+          runtimeStateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, error.getMessage))
+        case error =>
+          runtimeLogger.error(error)(s"[FILE] Failed to save buffer $bufferId")
+      }
     def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] = filePersistence.saveBufferAs(bufferId, path)
 
   private val surfacePort: SurfaceCapabilityPort = new SurfaceCapabilityPort:

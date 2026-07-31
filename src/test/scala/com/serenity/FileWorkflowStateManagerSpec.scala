@@ -6,8 +6,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{Enter, InsertChar, SaveFile, TabKey}
 import com.serenity.richtext.RichTextFidelity
-import com.serenity.rope.Rope
-import com.serenity.rope.Balance
+import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -348,18 +347,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "block a lossy rich-document overwrite and open Save As with a visible reason" in {
     val sourceFile = Files.createTempFile("workflow-lossy-save", ".docx")
-    val reason     = s"Saving $sourceFile would discard unsupported rich document content. Use Save As to write a new file."
+    val reason = s"Saving $sourceFile would discard unsupported rich document content. Use Save As to write a new file."
 
     try
       val stateManager = createStateManager()
       stateManager
         .updateState { state =>
-          val buffer = state.buffers(BufferId(0)).copy(
-            content = Rope("edited text"),
-            filePath = Some(sourceFile),
-            isDirty = true,
-            richTextFidelity = Some(RichTextFidelity(unsupportedElements = Set("tbl")))
-          )
+          val buffer = state
+            .buffers(BufferId(0))
+            .copy(
+              content = Rope("edited text"),
+              filePath = Some(sourceFile),
+              isDirty = true,
+              richTextFidelity = Some(RichTextFidelity(unsupportedElements = Set("tbl")))
+            )
           state.copy(buffers = state.buffers.updated(BufferId(0), buffer))
         }
         .unsafeRunSync()

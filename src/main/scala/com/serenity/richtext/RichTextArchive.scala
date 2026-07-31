@@ -62,8 +62,7 @@ object RichTextArchive:
         .takeWhile(_ != null)
         .map(_.getName)
         .toSet
-    catch
-      case NonFatal(error) => throw RichTextCodecException(s"$format archive could not be read", error)
+    catch case NonFatal(error) => throw RichTextCodecException(s"$format archive could not be read", error)
     finally input.close()
 
   private def readBoundedEntry(
