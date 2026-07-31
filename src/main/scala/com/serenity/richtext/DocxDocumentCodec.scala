@@ -15,9 +15,42 @@ import org.w3c.dom.{Document as XmlDocument, Element, Node}
 object DocxDocumentCodec:
   private val WNs = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
+  private val SupportedArchiveEntries = Set(
+    "[Content_Types].xml",
+    "_rels/.rels",
+    "word/document.xml",
+    "word/_rels/document.xml.rels"
+  )
+
+  private val SupportedElements = Set(
+    "document",
+    "body",
+    "p",
+    "pPr",
+    "jc",
+    "pStyle",
+    "r",
+    "rPr",
+    "b",
+    "i",
+    "u",
+    "rFonts",
+    "sz",
+    "color",
+    "t",
+    "tab",
+    "br",
+    "hyperlink",
+    "sectPr"
+  )
+
   /** Read a DOCX file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(readBytes(RichTextArchive.readFile(path, "DOCX")))
+
+  /** Read a DOCX file and report structures that the native model cannot round-trip. */
+  def readWithFidelity(path: Path): IO[RichTextImport] =
+    IO.blocking(readBytesWithFidelity(RichTextArchive.readFile(path, "DOCX")))
 
   /** Write Serenity's native rich text model to a DOCX file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
@@ -45,6 +78,20 @@ object DocxDocumentCodec:
     catch
       case error: RichTextCodecException => throw error
       case NonFatal(error)               => throw RichTextCodecException("DOCX document could not be decoded", error)
+
+  /** Decode DOCX bytes and report structures that the native model cannot round-trip. */
+  def readBytesWithFidelity(bytes: Array[Byte]): RichTextImport =
+    val document = readBytes(bytes)
+    val content  = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse(Array.emptyByteArray)
+    val xml      = parseXml(content)
+    val unsupportedElements =
+      (0 until xml.getElementsByTagNameNS(WNs, "*").getLength)
+        .map(xml.getElementsByTagNameNS(WNs, "*").item)
+        .collect { case element: Element => element.getLocalName }
+        .filterNot(SupportedElements.contains)
+        .toSet
+    val unsupportedEntries = RichTextArchive.entryNames(bytes, "DOCX") -- SupportedArchiveEntries
+    RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries))
 
   /** Encode Serenity's native rich text model as DOCX bytes. */
   def writeBytes(document: RichTextDocument): Array[Byte] =

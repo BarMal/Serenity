@@ -2446,7 +2446,12 @@ final private[manager] class StateManagerEffectHandlers(
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
         case Some(buffer) if buffer.filePath.isDefined =>
-          saveExistingBuffer(bufferId)
+          saveExistingBuffer(bufferId).handleErrorWith {
+            case error: com.serenity.richtext.LossyRichTextOverwriteException =>
+              stateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, error.getMessage))
+            case error =>
+              logger.error(error)(s"[FILE] Failed to save buffer $bufferId")
+          }
         case Some(_) =>
           logger.debug(s"[FILE] Buffer $bufferId has no file path; opening native Save As dialog") >>
             requestSaveAsFileDialog(state, Some(bufferId))

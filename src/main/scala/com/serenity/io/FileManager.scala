@@ -4,7 +4,13 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.lsp.config.{FileExtension, LanguageId}
-import com.serenity.richtext.{OdtDocumentCodec, RichTextDocument, RtfDocumentCodec}
+import com.serenity.richtext.{
+  LossyRichTextOverwriteException,
+  OdtDocumentCodec,
+  RichTextDocument,
+  RichTextFidelity,
+  RtfDocumentCodec
+}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 
@@ -17,16 +23,20 @@ class FileManager(using balance: Balance):
       case FileType.RichText =>
         RtfDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
       case FileType.OpenDocumentText =>
-        OdtDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
+        OdtDocumentCodec
+          .readWithFidelity(path)
+          .map(imported => bufferFromRichText(bufferId, path, imported.document, Some(imported.fidelity)))
       case FileType.WordOpenXmlDocument =>
-        com.serenity.richtext.DocxDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
+        com.serenity.richtext.DocxDocumentCodec
+          .readWithFidelity(path)
+          .map(imported => bufferFromRichText(bufferId, path, imported.document, Some(imported.fidelity)))
       case _ =>
         ensureSupported(path, _.canOpen, "open") >>
           FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
 
   /** Save buffer to file */
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
-    FileUtils.detectFileType(path) match
+    preventLossyOverwrite(buffer, path) >> (FileUtils.detectFileType(path) match
       case FileType.Markdown =>
         for
           _ <- ensureSupported(path, _.canSave, "save")
@@ -45,7 +55,7 @@ class FileManager(using balance: Balance):
         for
           _ <- ensureSupported(path, _.canSave, "save")
           _ <- FileUtils.writeFileContent(path, buffer.content.collect())
-        yield savedBuffer(buffer, path, None)
+        yield savedBuffer(buffer, path, None))
 
   /** Save buffer to its existing file path */
   def saveBuffer(buffer: Buffer): IO[Buffer] =
@@ -95,7 +105,12 @@ class FileManager(using balance: Balance):
       language = languageFromPath(path)
     )
 
-  private def bufferFromRichText(bufferId: BufferId, path: Path, document: RichTextDocument): Buffer =
+  private def bufferFromRichText(
+    bufferId: BufferId,
+    path: Path,
+    document: RichTextDocument,
+    fidelity: Option[RichTextFidelity] = None
+  ): Buffer =
     val normalized = document.normalized
     Buffer(
       id = bufferId,
@@ -103,7 +118,8 @@ class FileManager(using balance: Balance):
       filePath = Some(path),
       isDirty = false,
       language = None,
-      richTextDocument = Some(normalized)
+      richTextDocument = Some(normalized),
+      richTextFidelity = fidelity
     )
 
   private def savedBuffer(buffer: Buffer, path: Path, richTextDocument: Option[RichTextDocument]): Buffer =
@@ -111,7 +127,17 @@ class FileManager(using balance: Balance):
       filePath = Some(path),
       isDirty = false,
       language = languageFromPath(path),
-      richTextDocument = richTextDocument.map(_.normalized)
+      richTextDocument = richTextDocument.map(_.normalized),
+      richTextFidelity = None
+    )
+
+  private def preventLossyOverwrite(buffer: Buffer, path: Path): IO[Unit] =
+    val replacesImportedFile = buffer.filePath.contains(path)
+    val isLossyImport        = buffer.richTextFidelity.exists(!_.isLossless)
+    IO.raiseWhen(replacesImportedFile && isLossyImport)(
+      LossyRichTextOverwriteException(
+        s"Saving $path would discard unsupported rich document content. Use Save As to write a new file."
+      )
     )
 
   private def richTextDocumentForSave(buffer: Buffer): RichTextDocument =

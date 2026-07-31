@@ -5,7 +5,7 @@ import java.nio.file.Path
 import cats.Order
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.{RichTextDocument, RichTextStyle}
+import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
 
 case class BufferId(value: Int)
@@ -72,6 +72,7 @@ case class Buffer(
     bookmarks: List[CursorPosition] = Nil,
     documentComments: List[DocumentComment] = Nil,
     richTextDocument: Option[RichTextDocument] = None,
+    richTextFidelity: Option[RichTextFidelity] = None,
     insertionRichTextStyle: Option[RichTextStyle] = None
 ):
 

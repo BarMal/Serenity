@@ -34,3 +34,9 @@ Cons:
 ## Decision
 
 Build rich text support around the native model and keep Markdown reuse as an adapter or preview fallback only. That gives Serenity a stable target for `.doc`, `.odt`, clipboard formats, and future native rendering while still allowing cheap preview paths where fidelity is explicitly not required.
+
+## DOCX and ODT Fidelity Contract
+
+The native DOCX and ODT adapters losslessly represent paragraphs, headings, alignment, inline text marks, font metadata, tabs, line breaks, and the archive entries used by Serenity's writers. Tables, lists, images, links, headers, footnotes, metadata, comments, tracked changes, and other package extensions are outside that model. The adapters expose this boundary as `RichTextFidelity`; DOCX and ODT are therefore advertised as editable but not fully rich-format preserving.
+
+The current codec slice detects unsupported imported structures before a caller saves. Buffer/session retention and an explicit lossy-save or Save As decision remain application-layer work. No Apache POI or ODF Toolkit dependency is required for this contract because detection operates on the existing XML/package reader.

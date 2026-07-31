@@ -13,10 +13,27 @@ import org.w3c.dom.{Document as XmlDocument, Element, Node}
 
 /** Reads and writes OpenDocument Text files through Serenity's native rich text model. */
 object OdtDocumentCodec:
-  private val OfficeNs = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-  private val StyleNs  = "urn:oasis:names:tc:opendocument:xmlns:style:1.0"
-  private val TextNs   = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
-  private val FoNs     = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  private val OfficeNs                = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  private val StyleNs                 = "urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+  private val TextNs                  = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  private val FoNs                    = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+  private val SupportedArchiveEntries = Set("mimetype", "META-INF/manifest.xml", "content.xml")
+
+  private val SupportedElements = Set(
+    "document-content",
+    "automatic-styles",
+    "style",
+    "text-properties",
+    "paragraph-properties",
+    "body",
+    "text",
+    "p",
+    "h",
+    "span",
+    "s",
+    "tab",
+    "line-break"
+  )
 
   private case class OdtStyles(
       textStyles: Map[String, RichTextStyle],
@@ -26,6 +43,10 @@ object OdtDocumentCodec:
   /** Read an ODT file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(readBytes(RichTextArchive.readFile(path, "ODT")))
+
+  /** Read an ODT file and report structures that the native model cannot round-trip. */
+  def readWithFidelity(path: Path): IO[RichTextImport] =
+    IO.blocking(readBytesWithFidelity(RichTextArchive.readFile(path, "ODT")))
 
   /** Write Serenity's native rich text model to an ODT file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
@@ -54,6 +75,20 @@ object OdtDocumentCodec:
     catch
       case error: RichTextCodecException => throw error
       case NonFatal(error)               => throw RichTextCodecException("ODT document could not be decoded", error)
+
+  /** Decode ODT bytes and report structures that the native model cannot round-trip. */
+  def readBytesWithFidelity(bytes: Array[Byte]): RichTextImport =
+    val document = readBytes(bytes)
+    val content  = RichTextArchive.zipEntry(bytes, "content.xml", "ODT").getOrElse(Array.emptyByteArray)
+    val xml      = parseXml(content)
+    val unsupportedElements =
+      (0 until xml.getElementsByTagName("*").getLength)
+        .map(xml.getElementsByTagName("*").item)
+        .collect { case element: Element => element.getLocalName }
+        .filterNot(SupportedElements.contains)
+        .toSet
+    val unsupportedEntries = RichTextArchive.entryNames(bytes, "ODT") -- SupportedArchiveEntries
+    RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries))
 
   /** Encode Serenity's native rich text model as ODT bytes. */
   def writeBytes(document: RichTextDocument): Array[Byte] =

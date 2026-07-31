@@ -219,6 +219,34 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.richTextDocument shouldBe Some(richDocument)
   }
 
+  it should "preserve rich document fidelity through JSON round trip" in {
+    val fidelity = RichTextFidelity(
+      unsupportedElements = Set("tbl"),
+      unsupportedArchiveEntries = Set("word/media/image1.png")
+    )
+    val buffer = Buffer
+      .fromString(BufferId(23), "kept text")
+      .copy(richTextDocument = Some(RichTextDocument.oneParagraph("kept text")), richTextFidelity = Some(fidelity))
+    val appState = AppState.initial.copy(
+      buffers = Map(buffer.id -> buffer),
+      bufferOrder = List(buffer.id),
+      layout = Layout(
+        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+        activeEditorPaneId = Some(PaneId(0))
+      ),
+      focus = Focus.EditorPane(PaneId(0)),
+      nextBufferId = BufferId(24),
+      nextPaneId = PaneId(1)
+    )
+
+    val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
+
+    decoded.isRight shouldBe true
+    SessionState.toAppState(decoded.toOption.get, Theme.default).buffers(buffer.id).richTextFidelity shouldBe Some(
+      fidelity
+    )
+  }
+
   it should "drop stale rich text metadata for dirty buffers" in {
     val richDocument = RichTextDocument.oneParagraph("old text")
     val buffer = Buffer
