@@ -6,7 +6,7 @@ import com.serenity.lsp.model.Diagnostic
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.rope.Rope
 import com.serenity.text.TextEditing
-import com.serenity.ui.layout.{Layout, ViewportSize}
+import com.serenity.ui.layout.{Layout, SplitAxis, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.presets.UiPresetEditSession
 import com.serenity.ui.theme.Theme
 
@@ -549,7 +549,81 @@ case class AppState(
     errors.result()
 
   def validated: Either[List[String], AppState] =
-    if isValid then Right(this) else Left(validationErrors)
+    val reconciled = reconcileWorkspaceTree
+    if reconciled.isValid then Right(reconciled) else Left(reconciled.validationErrors)
+
+  private def reconcileWorkspaceTree: AppState =
+    layout.workspaceTree match
+      case None => this
+      case Some(tree) =>
+        val paneIds = layout.editorPanes.keySet
+        val prunedPanes = tree.paneIds
+          .filterNot(paneIds.contains)
+          .foldLeft(Option(tree)) {
+            case (Some(currentTree), paneId) => currentTree.remove(paneId)
+            case (None, _)                   => None
+          }
+        val paneReconciledTree = layout.paneOrder
+          .filter(paneIds.contains)
+          .foldLeft(prunedPanes) {
+            case (Some(currentTree), paneId) if !currentTree.paneIds.contains(paneId) =>
+              val splitId = WorkspaceNodeId(s"reconcile-pane-${paneId.value}")
+              currentTree
+                .split(
+                  currentTree.paneIds.lastOption.getOrElse(paneId),
+                  paneId,
+                  SplitAxis.fromLegacy(layout.splitDirection),
+                  splitId,
+                  WorkspaceNodeId(s"reconcile-pane-leaf-${paneId.value}")
+                )
+            case (currentTree, _) => currentTree
+          }
+          .getOrElse(tree)
+        val pinned = uiSurfaces.collect {
+          case UiSurface(id, _, SurfacePresentation.Pinned(position, _), _) => id -> position
+        }
+        val pinnedIds = pinned.map(_._1).toSet
+        val prunedTree = paneReconciledTree.dockedSurfaceIds
+          .filterNot(pinnedIds.contains)
+          .foldLeft(paneReconciledTree) {
+            case (currentTree, surfaceId) =>
+              currentTree.removeSurface(surfaceId).getOrElse(currentTree)
+          }
+        val reconciledTree = pinned.zipWithIndex.foldLeft(prunedTree) {
+          case (currentTree, ((surfaceId, position), index)) =>
+            if currentTree.dockedSurfaceIds.contains(surfaceId) then
+              if currentTree.positionForSurface(surfaceId).contains(position) then currentTree
+              else
+                currentTree
+                  .moveSurface(surfaceId, position, WorkspaceNodeId(s"reconcile-dock-$index-${surfaceId.value}"))
+                  .getOrElse(currentTree)
+            else
+              val splitId = WorkspaceNodeId(s"dock-${surfaceId.value}")
+              val leafId  = WorkspaceNodeId(s"dock-leaf-${surfaceId.value}")
+              currentTree.dock(surfaceId, position, splitId, leafId).getOrElse(currentTree)
+        }
+        val orderedTree = pinned
+          .groupBy(_._2)
+          .foldLeft(reconciledTree) {
+            case (currentTree, (position, surfacesAtPosition)) =>
+              val desiredOrder = surfacesAtPosition.map(_._1)
+              val currentOrder = currentTree.dockedSurfaceIds.filter { surfaceId =>
+                currentTree.positionForSurface(surfaceId).contains(position)
+              }
+              if currentOrder == desiredOrder then currentTree
+              else
+                desiredOrder.zipWithIndex.foldLeft(currentTree) {
+                  case (tree, (surfaceId, index)) =>
+                    tree
+                      .moveSurface(
+                        surfaceId,
+                        position,
+                        WorkspaceNodeId(s"reconcile-order-${position.toString.toLowerCase}-$index-${surfaceId.value}")
+                      )
+                      .getOrElse(tree)
+                }
+          }
+        copy(layout = layout.copy(workspaceTree = Some(orderedTree), paneOrder = orderedTree.paneIds))
 
 object AppState:
 
@@ -562,7 +636,8 @@ object AppState:
     val layout = Layout(
       editorPanes = Map(PaneId(0) -> initialPane),
       activeEditorPaneId = Some(PaneId(0)),
-      paneOrder = List(PaneId(0))
+      paneOrder = List(PaneId(0)),
+      workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
     )
     AppState(
       layout = layout,

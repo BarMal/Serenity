@@ -1,11 +1,30 @@
 package com.serenity
 
-import com.serenity.state.models.{EditorPane, PaneId}
-import com.serenity.ui.layout.{Layout, PaneSplitDirection, SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.rope.Balance
+import com.serenity.state.models.{
+  AppState,
+  EditorPane,
+  PaneId,
+  SurfaceContent,
+  SurfaceId,
+  SurfacePresentation,
+  UiSurface
+}
+import com.serenity.ui.layout.{
+  Layout,
+  PaneSplitDirection,
+  PanelPosition,
+  SplitAxis,
+  WorkspaceNode,
+  WorkspaceNodeId,
+  WorkspaceTree
+}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   "WorkspaceTree" should "retain stable node and pane identities through nested splits" in {
     val first  = WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))
@@ -56,5 +75,33 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     layout.orderedPaneIds shouldBe List(PaneId(1), PaneId(0))
     layout.effectiveWorkspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(1), PaneId(0)))
     layout.effectiveWorkspaceTree.flatMap(_.root.axis) shouldBe Some(SplitAxis.Vertical)
+  }
+
+  it should "initialize the default layout as one explicit editor leaf" in {
+    Layout.initial.workspaceTree shouldBe Some(
+      WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
+    )
+  }
+
+  it should "initialize the default app state with one explicit editor leaf" in {
+    AppState.initial.layout.workspaceTree shouldBe Some(
+      WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
+    )
+  }
+
+  it should "reconcile pinned surfaces added to an explicit default tree" in {
+    val state = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("surface-0"),
+          SurfaceContent.Outline(Nil, None),
+          SurfacePresentation.Pinned(PanelPosition.Left, 30)
+        )
+      )
+    )
+
+    state.validated.map(_.layout.workspaceTree.map(_.dockedSurfaceIds)) shouldBe Right(
+      Some(List(SurfaceId("surface-0")))
+    )
   }
 end WorkspaceTreeSpec

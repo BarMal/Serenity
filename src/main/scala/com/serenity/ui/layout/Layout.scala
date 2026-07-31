@@ -23,14 +23,17 @@ case class Layout(
 ):
 
   def orderedPaneIds: List[PaneId] =
-    workspaceTree.map(_.paneIds).getOrElse {
-      if paneOrder.nonEmpty then paneOrder
-      else editorPanes.keys.toList.sortBy(_.value)
-    }
+    treeCoveringCurrentPanes.map(_.paneIds).getOrElse(paneOrderOrSorted)
 
-  /** Uses the explicit workspace tree when present, otherwise adapts the legacy flat pane model in memory. */
+  /** Uses the explicit workspace tree when present and current, otherwise adapts the legacy flat pane model in memory.
+    */
   def effectiveWorkspaceTree: Option[WorkspaceTree] =
-    workspaceTree.orElse(WorkspaceTree.fromLegacy(paneOrderOrSorted, splitDirection))
+    treeCoveringCurrentPanes.orElse(WorkspaceTree.fromLegacy(paneOrderOrSorted, splitDirection))
+
+  // A stored tree that predates a direct state update (e.g. a raw pane addition) can omit panes the
+  // update just added. Trust it only while it still accounts for every current editor pane.
+  private def treeCoveringCurrentPanes: Option[WorkspaceTree] =
+    workspaceTree.filter(tree => editorPanes.keySet.subsetOf(tree.paneIds.toSet))
 
   private def paneOrderOrSorted: List[PaneId] =
     if paneOrder.nonEmpty then paneOrder
@@ -43,7 +46,8 @@ object Layout:
     Layout(
       editorPanes = Map(PaneId(0) -> initialPane),
       activeEditorPaneId = Some(PaneId(0)),
-      paneOrder = List(PaneId(0))
+      paneOrder = List(PaneId(0)),
+      workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
     )
 
   def empty: Layout =

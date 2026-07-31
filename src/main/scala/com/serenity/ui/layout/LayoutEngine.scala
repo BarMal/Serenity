@@ -1279,10 +1279,13 @@ object LayoutEngine:
     calculatedLayout: CalculatedLayout,
     minWidth: Int
   ): Map[PaneId, LayoutRect] =
-    state.layout.workspaceTree match
+    // A stored tree that predates a direct state update can omit panes the update just added; trust it
+    // only when it still accounts for every current editor pane, matching Layout.effectiveWorkspaceTree.
+    val editorPaneIds = state.layout.editorPanes.keySet
+    state.layout.workspaceTree.filter(tree => editorPaneIds.subsetOf(tree.paneIds.toSet)) match
       case Some(tree) =>
         calculateWorkspaceTreePaneRects(tree, calculatedLayout.editorPanelRect, minWidth)
-          .filter { case (paneId, _) => state.layout.editorPanes.contains(paneId) }
+          .filter { case (paneId, _) => editorPaneIds.contains(paneId) }
       case None =>
         val editorRect = calculatedLayout.editorPanelRect
         val paneIds    = state.layout.orderedPaneIds
