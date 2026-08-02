@@ -104,4 +104,12 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
       Some(List(SurfaceId("surface-0")))
     )
   }
+
+  it should "skip rebuilding an already-reconciled workspace tree" in {
+    val state = AppState.initial
+    val tree  = state.layout.workspaceTree
+
+    state.validated.map(_.layout.workspaceTree) shouldBe Right(tree)
+    state.validated.toOption.flatMap(_.layout.workspaceTree).get should be theSameInstanceAs tree.get
+  }
 end WorkspaceTreeSpec

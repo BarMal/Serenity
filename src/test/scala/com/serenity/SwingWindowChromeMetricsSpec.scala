@@ -218,6 +218,19 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "never hand out the same spare image to two acquisitions before it is republished" in {
+    val pool    = new SwingWindow.ReusableImagePool
+    val initial = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    pool.publish(initial)
+    val spare = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    pool.publish(spare)
+
+    val first  = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+    val second = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
+
+    second should not be theSameInstanceAs(first)
+  }
+
   it should "clear prior frame pixels before masking a reused rounded buffer" in {
     val buffers = new SwingWindow.RoundedCornerMaskBufferCache().acquire(width = 32, height = 32, cornerArc = 16)
 

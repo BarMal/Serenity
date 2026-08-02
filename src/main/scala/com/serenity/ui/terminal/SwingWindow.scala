@@ -622,9 +622,10 @@ object SwingWindow:
     private val spare     = new AtomicReference[Option[BufferedImage]](None)
 
     def acquire(width: Int, height: Int, imageType: Int): BufferedImage =
-      val candidate =
-        spare.get().filter(image => image.getWidth == width && image.getHeight == height && image.getType == imageType)
-      candidate.getOrElse(new BufferedImage(width, height, imageType))
+      spare
+        .getAndSet(None)
+        .filter(image => image.getWidth == width && image.getHeight == height && image.getType == imageType)
+        .getOrElse(new BufferedImage(width, height, imageType))
 
     def publish(image: BufferedImage): Unit =
       val previous = published.getAndSet(Some(image))
