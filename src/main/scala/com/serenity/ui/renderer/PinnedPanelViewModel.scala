@@ -78,7 +78,13 @@ object PinnedPanelViewModel:
           SurfaceContentResolver.resolveMarkdownPreview(title, content, rect, SurfaceRenderMode.Pinned)
         case SurfaceContent.Outline(symbols, activeLocation) =>
           SurfaceContentResolver.resolve(
-            SurfaceContent.Outline(symbols, activeOutlineLocation(symbols, activeLocation, state)),
+            SurfaceContent.Outline(symbols, activeSymbolLocation(symbols, activeLocation, state)),
+            rect,
+            SurfaceRenderMode.Pinned
+          )
+        case SurfaceContent.Comments(symbols, activeLocation) =>
+          SurfaceContentResolver.resolve(
+            SurfaceContent.Comments(symbols, activeSymbolLocation(symbols, activeLocation, state)),
             rect,
             SurfaceRenderMode.Pinned
           )
@@ -100,7 +106,7 @@ object PinnedPanelViewModel:
       selected = row.selected
     )
 
-  private def activeOutlineLocation(
+  private def activeSymbolLocation(
     symbols: List[Symbol],
     fallback: Option[Location],
     state: Option[AppState]

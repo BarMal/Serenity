@@ -617,6 +617,8 @@ final private[manager] class StateManagerEffectHandlers(
         setPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))
       case CommandIntent.PinOutlinePanel =>
         setPanelPin(PanelKind.Outline, Some(PanelPosition.Right))
+      case CommandIntent.PinCommentsPanel =>
+        setPanelPin(PanelKind.Comments, Some(PanelPosition.Right))
       case CommandIntent.PinDiagnosticsPanel =>
         setPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
       case CommandIntent.OpenMarkdownPreview =>
@@ -1343,7 +1345,7 @@ final private[manager] class StateManagerEffectHandlers(
                           restoredPresetState,
                           preset.config.defaultDocumentMode
                         )
-                      val restoredOutlineState = hydratePresetOutlinePanels(restoredDocumentState)
+                      val restoredOutlineState = hydratePresetSymbolPanels(restoredDocumentState)
                       val restored = withUpdatedRunnerConfig(restoredOutlineState, restoredOutlineState.config)
                       (restored, restored.config)
                     }
@@ -1423,12 +1425,16 @@ final private[manager] class StateManagerEffectHandlers(
       case _ =>
         state
 
-  private def hydratePresetOutlinePanels(state: AppState): AppState =
-    val symbols        = outlineSymbols(state)
-    val activeLocation = currentOutlineActiveLocation(symbols, state)
+  private def hydratePresetSymbolPanels(state: AppState): AppState =
+    val outlineSymbolsList = outlineSymbols(state)
+    val outlineActive      = currentSymbolActiveLocation(outlineSymbolsList, state)
+    val commentSymbolsList = commentPanelSymbols(state)
+    val commentActive      = currentSymbolActiveLocation(commentSymbolsList, state)
     val hydratedSurfaces = state.uiSurfaces.map {
       case surface @ UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Pinned(_, _), _) =>
-        surface.copy(content = SurfaceContent.Outline(symbols, activeLocation))
+        surface.copy(content = SurfaceContent.Outline(outlineSymbolsList, outlineActive))
+      case surface @ UiSurface(_, SurfaceContent.Comments(_, _), SurfacePresentation.Pinned(_, _), _) =>
+        surface.copy(content = SurfaceContent.Comments(commentSymbolsList, commentActive))
       case surface =>
         surface
     }
@@ -1807,41 +1813,11 @@ final private[manager] class StateManagerEffectHandlers(
       case Some(_) =>
         updateState(dismissCommentLens)
       case None =>
-        activeEditorComment(state) match
-          case Some((cursor, lens)) =>
-            updateState { current =>
-              val surface = UiSurface(
-                id = SurfaceId("comment-lens"),
-                content = SurfaceContent.CommentLens(lens),
-                presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
-              )
-              current
-                .copy(uiSurfaces = current.uiSurfaces.filterNot(isCommentLensSurface) :+ surface)
-                .pushFocus(Focus.Surface(surface.id))
-            }
+        CommentRendering.activeEditorComment(state) match
+          case Some(_) =>
+            updateState(CommentRendering.openLensAtCursor)
           case None =>
             logger.debug("[CMD] Comment lens requested without an active comment")
-
-  private def activeEditorComment(state: AppState): Option[(CursorPosition, CommentLensState)] =
-    for
-      paneId   <- state.layout.activeEditorPaneId
-      pane     <- state.layout.editorPanes.get(paneId)
-      bufferId <- pane.bufferId
-      buffer   <- state.buffers.get(bufferId)
-      cursor   <- buffer.cursors.headOption
-      comment  <- CommentRendering.atCursor(buffer)
-    yield
-      val target = buffer.documentComments.find(_.contains(cursor))
-      val draft  = target.map(_.text).getOrElse(comment.raw)
-      (
-        cursor,
-        CommentLensState(
-          comment = comment,
-          draft = draft,
-          cursor = draft.length,
-          target = target
-        )
-      )
 
   private def dismissCommentLens(state: AppState): AppState =
     state.copy(uiSurfaces = state.uiSurfaces.filterNot(isCommentLensSurface)).popFocus
@@ -1885,7 +1861,19 @@ final private[manager] class StateManagerEffectHandlers(
           updatePanelState(
             upsertPanelKind(
               kind,
-              SurfaceContent.Outline(symbols, currentOutlineActiveLocation(symbols, state)),
+              SurfaceContent.Outline(symbols, currentSymbolActiveLocation(symbols, state)),
+              position,
+              defaultPanelSize(kind, position)
+            )
+          )
+        }
+      case PanelKind.Comments =>
+        stateRef.get.flatMap { state =>
+          val symbols = commentPanelSymbols(state)
+          updatePanelState(
+            upsertPanelKind(
+              kind,
+              SurfaceContent.Comments(symbols, currentSymbolActiveLocation(symbols, state)),
               position,
               defaultPanelSize(kind, position)
             )
@@ -2008,6 +1996,7 @@ final private[manager] class StateManagerEffectHandlers(
     content match
       case SurfaceContent.DirectoryTree(_, _)   => Some(PanelKind.Explorer)
       case SurfaceContent.Outline(_, _)         => Some(PanelKind.Outline)
+      case SurfaceContent.Comments(_, _)        => Some(PanelKind.Comments)
       case SurfaceContent.Diagnostics(_, _)     => Some(PanelKind.Diagnostics)
       case SurfaceContent.MarkdownPreview(_, _) => Some(PanelKind.MarkdownPreview)
       case _                                    => None
@@ -2019,7 +2008,7 @@ final private[manager] class StateManagerEffectHandlers(
         position match
           case PanelPosition.Top | PanelPosition.Bottom => 10
           case PanelPosition.Left | PanelPosition.Right => 30
-      case PanelKind.Explorer | PanelKind.Outline =>
+      case PanelKind.Explorer | PanelKind.Outline | PanelKind.Comments =>
         position match
           case PanelPosition.Top | PanelPosition.Bottom => 10
           case PanelPosition.Left | PanelPosition.Right => 30
@@ -2054,15 +2043,20 @@ final private[manager] class StateManagerEffectHandlers(
   private def outlineSymbolsForBuffer(buffer: Buffer): List[Symbol] =
     (
       DocumentOutline.forBuffer(buffer) ++
-        DocumentNavigation.bookmarkSymbols(buffer.bookmarks) ++
-        DocumentNavigation.commentSymbols(buffer.documentComments)
+        DocumentNavigation.bookmarkSymbols(buffer.bookmarks)
     )
       .sortBy(symbol => (symbol.location.line, symbol.location.column, symbol.name))
 
-  private def currentOutlineActiveLocation(symbols: List[Symbol], state: AppState): Option[Location] =
+  private def currentSymbolActiveLocation(symbols: List[Symbol], state: AppState): Option[Location] =
     state.activeCursorPosition
       .flatMap(cursor => DocumentNavigation.currentSymbol(symbols, cursor))
       .map(_.location)
+
+  private def commentPanelSymbols(state: AppState): List[Symbol] =
+    state.focusedBufferId
+      .flatMap(state.buffers.get)
+      .map(buffer => DocumentNavigation.commentSymbols(buffer.documentComments))
+      .getOrElse(Nil)
 
   private def navigateDocumentSymbol(
     state: AppState,
@@ -2084,14 +2078,16 @@ final private[manager] class StateManagerEffectHandlers(
       state,
       buffer => DocumentNavigation.commentSymbols(buffer.documentComments),
       chooseSymbol,
-      "Document comment"
+      "Document comment",
+      onTargetResolved = Some(CommentRendering.openLensAtCursor)
     )
 
   private def navigateSymbols(
     state: AppState,
     symbolsForBuffer: Buffer => List[Symbol],
     chooseSymbol: (List[Symbol], CursorPosition) => Option[Symbol],
-    label: String
+    label: String,
+    onTargetResolved: Option[AppState => AppState] = None
   ): IO[Unit] =
     activeEditorBuffer(state)
       .flatMap {
@@ -2107,7 +2103,7 @@ final private[manager] class StateManagerEffectHandlers(
       case Some((before, after)) if before != after =>
         val sweep = navigationSweep(before, after)
         updateState { current =>
-          animateNavigationTarget(
+          val navigated = animateNavigationTarget(
             moveToNavigationPoint(current, after).copy(
               navigationBackStack = pushNavigationPoint(before, current.navigationBackStack),
               navigationForwardStack = Nil
@@ -2115,9 +2111,12 @@ final private[manager] class StateManagerEffectHandlers(
             after,
             sweep
           )
+          onTargetResolved.fold(navigated)(_(navigated))
         }
       case Some(_) =>
-        logger.debug(s"[CMD] $label navigation requested for the current location")
+        onTargetResolved match
+          case Some(transform) => updateState(transform)
+          case None            => logger.debug(s"[CMD] $label navigation requested for the current location")
       case None =>
         logger.debug(s"[CMD] $label navigation requested without a target")
 

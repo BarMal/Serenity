@@ -628,6 +628,37 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.pinnedSurfaces.exists(_.content == SurfaceContent.Outline(Nil)) shouldBe true
   }
 
+  it should "pin the comments panel from the command runner" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph"),
+            documentComments = List(DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this"))
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "pin-comments", "pin-comments")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    updatedState.pinnedSurfaces.exists {
+      _.presentation == com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Right, 30)
+    } shouldBe true
+    val commentSymbols = updatedState.pinnedSurfaces.collectFirst {
+      case UiSurface(_, SurfaceContent.Comments(symbols, _), SurfacePresentation.Pinned(PanelPosition.Right, 30), _) =>
+        symbols
+    }
+    commentSymbols shouldBe Some(
+      List(Symbol("Comment: Tighten this", SymbolKind.Comment, Location(1, 0)))
+    )
+  }
+
   it should "pin Markdown headings in the outline panel from the command runner" in {
     val stateManager = createStateManager()
 
@@ -910,7 +941,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     afterForward.navigationForwardStack shouldBe Nil
   }
 
-  it should "include explicit bookmarks and document comments in the outline panel" in {
+  it should "include explicit bookmarks but not document comments in the outline panel" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
@@ -940,7 +971,6 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       List(
         Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
         Symbol("Bookmark 3:5", SymbolKind.Bookmark, Location(2, 4)),
-        Symbol("Comment: Revise bridge", SymbolKind.Comment, Location(3, 0)),
         Symbol("Scene Two", SymbolKind.Heading, Location(4, 0))
       )
     )
@@ -1210,6 +1240,47 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "delete-document-comment", "delete-document-comment")
 
     stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments shouldBe Nil
+  }
+
+  it should "open the comment lens when navigating between document comments with the keyboard" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph"),
+            cursors = List(CursorPosition(1, 0)),
+            documentComments = List(
+              DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"),
+              DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
+            )
+          )
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "previous-document-comment", "previous-document-comment")
+
+    val afterPrevious = stateManager.getCurrentState.unsafeRunSync()
+    afterPrevious.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+    val previousLens = afterPrevious.commentLensSurface
+      .collect { case UiSurface(_, SurfaceContent.CommentLens(lens), _, _) => lens }
+      .getOrElse(fail("Expected the comment lens to open after previous-document-comment"))
+    previousLens.draft shouldBe "Revise opening"
+    previousLens.target shouldBe Some(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"))
+
+    executeCommandThroughRunner(stateManager, "next-document-comment", "next-document-comment")
+
+    val afterNext = stateManager.getCurrentState.unsafeRunSync()
+    afterNext.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 0))
+    val nextLens = afterNext.commentLensSurface
+      .collect { case UiSurface(_, SurfaceContent.CommentLens(lens), _, _) => lens }
+      .getOrElse(fail("Expected the comment lens to open after next-document-comment"))
+    nextLens.draft shouldBe "Tighten this"
+    nextLens.target shouldBe Some(DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this"))
   }
 
   it should "add custom authored document comments and update existing comments at the cursor" in {

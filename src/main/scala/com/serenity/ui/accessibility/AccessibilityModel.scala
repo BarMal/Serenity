@@ -426,6 +426,7 @@ object AccessibilitySnapshot:
       case SurfaceContent.CommentLens(_)               => "Comment"
       case SurfaceContent.Terminal(_, _)               => "Terminal"
       case SurfaceContent.Outline(_, _)                => "Outline"
+      case SurfaceContent.Comments(_, _)               => "Comments"
       case SurfaceContent.Diagnostics(_, _)            => "Diagnostics"
       case SurfaceContent.GhostOverlay(original, _)    => surfaceName(original)
 

@@ -419,6 +419,7 @@ object UiPreset:
     case DirectoryTree(rootPath: String, selectedPath: Option[String], expandedPaths: List[String])
     case Terminal(buffer: String, cursor: Int)
     case Outline(symbols: List[Symbol])
+    case Comments(symbols: List[Symbol])
     case Diagnostics(issues: List[Diagnostic])
     case MarkdownPreview(bufferId: Int, title: String)
 
@@ -437,6 +438,8 @@ object UiPreset:
           SurfaceContent.Terminal(buffer, cursor)
         case Outline(symbols) =>
           SurfaceContent.Outline(symbols)
+        case Comments(symbols) =>
+          SurfaceContent.Comments(symbols)
         case Diagnostics(issues) =>
           SurfaceContent.Diagnostics(issues)
         case MarkdownPreview(bufferId, title) =>
@@ -456,6 +459,7 @@ object UiPreset:
         case PanelContent.DirectoryTree(tree, selectedPath) => SurfaceContent.DirectoryTree(tree, selectedPath)
         case PanelContent.Terminal(buffer, cursor)          => SurfaceContent.Terminal(buffer, cursor)
         case PanelContent.Outline(symbols, activeLocation)  => SurfaceContent.Outline(symbols, activeLocation)
+        case PanelContent.Comments(symbols, activeLocation) => SurfaceContent.Comments(symbols, activeLocation)
         case PanelContent.Diagnostics(issues)               => SurfaceContent.Diagnostics(issues)
         case PanelContent.MarkdownPreview(bufferId, title)  => SurfaceContent.MarkdownPreview(bufferId, title)
 
@@ -482,6 +486,8 @@ object UiPreset:
           Some(PanelContentSnapshot.Terminal(buffer, cursor))
         case SurfaceContent.Outline(symbols, _) =>
           Some(PanelContentSnapshot.Outline(symbols))
+        case SurfaceContent.Comments(symbols, _) =>
+          Some(PanelContentSnapshot.Comments(symbols))
         case SurfaceContent.Diagnostics(issues, _) =>
           Some(PanelContentSnapshot.Diagnostics(issues))
         case SurfaceContent.MarkdownPreview(bufferId, title) =>

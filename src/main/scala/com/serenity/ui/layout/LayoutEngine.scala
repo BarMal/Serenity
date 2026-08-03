@@ -1062,8 +1062,8 @@ object LayoutEngine:
           modal,
           SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
         )
-      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Diagnostics(_, _) |
-          SurfaceContent.MarkdownPreview(_, _) =>
+      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
+          SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
         math.min(8, math.max(4, maxHeight - 1))
       case SurfaceContent.GhostOverlay(_, cachedRect) =>
         cachedRect.height

@@ -469,6 +469,16 @@ object EditorLayoutContract:
           )
         )
         SurfaceContentResolver.resolve(resolvedOutline, frameRect, SurfaceRenderMode.Pinned)
+      case SurfaceContent.Comments(symbols, activeLocation) =>
+        val resolvedComments = SurfaceContent.Comments(
+          symbols,
+          activeLocation.orElse(
+            state.activeCursorPosition.flatMap(cursor =>
+              com.serenity.document.DocumentNavigation.currentSymbol(symbols, cursor).map(_.location)
+            )
+          )
+        )
+        SurfaceContentResolver.resolve(resolvedComments, frameRect, SurfaceRenderMode.Pinned)
       case content =>
         SurfaceContentResolver.resolve(content, frameRect, SurfaceRenderMode.Pinned)
     surfaceGeometry(surface.content, frameRect, resolved, itemGapRows = 0.0, itemTargetRows = 1)

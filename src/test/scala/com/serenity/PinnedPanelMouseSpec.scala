@@ -5,6 +5,7 @@ import java.nio.file.Paths
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
+import com.serenity.document.DocumentNavigation
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -290,6 +291,66 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe before.focus
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.Outline(symbols, Some(Location(1, 2))))
+  }
+
+  it should "navigate to a comments row on primary click and open the comment lens" in {
+    val sm       = makeStateManager()
+    val bufferId = withActiveBuffer(sm, "intro\nmiddle\nend")
+    val comment  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
+    sm.updateState(state =>
+      state
+        .copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(documentComments = List(comment))))
+    ).unsafeRunSync()
+
+    val symbols = DocumentNavigation.commentSymbols(List(comment))
+    val surface = UiSurface(
+      id = SurfaceId("comments"),
+      content = SurfaceContent.Comments(symbols),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
+    )
+    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 0)
+    sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 0))
+
+    val lensSurface = updated.commentLensSurface.getOrElse(fail("Expected the comment lens to open"))
+    val lensState = lensSurface.content match
+      case SurfaceContent.CommentLens(lens) => lens
+      case other                            => fail(s"Expected CommentLens content, got $other")
+    lensState.draft shouldBe "Tighten this"
+    lensState.target shouldBe Some(comment)
+    updated.focus shouldBe Focus.Surface(lensSurface.id)
+  }
+
+  it should "highlight a comments row on hover without stealing focus" in {
+    val sm       = makeStateManager()
+    val bufferId = withActiveBuffer(sm, "intro\nmiddle\nend")
+    val comment  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
+    sm.updateState(state =>
+      state
+        .copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(documentComments = List(comment))))
+    ).unsafeRunSync()
+
+    val symbols = DocumentNavigation.commentSymbols(List(comment))
+    val surface = UiSurface(
+      id = SurfaceId("comments"),
+      content = SurfaceContent.Comments(symbols),
+      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
+    )
+    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+
+    val before = sm.getCurrentState.unsafeRunSync()
+    val point  = panelItemPoint(before, surface.id, displayedItemRow = 0)
+    sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
+
+    val updated = sm.getCurrentState.unsafeRunSync()
+    updated.focus shouldBe before.focus
+    updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.Comments(symbols, Some(Location(1, 0))))
   }
 
   it should "navigate to a diagnostics row on primary click" in {

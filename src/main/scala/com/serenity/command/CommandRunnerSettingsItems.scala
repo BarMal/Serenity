@@ -471,6 +471,7 @@ object CommandRunnerSettingsItems:
     val panelDefinitions = List(
       ("Explorer", PanelKind.Explorer, "panel-explorer-pin"),
       ("Outline", PanelKind.Outline, "panel-outline-pin"),
+      ("Comments", PanelKind.Comments, "panel-comments-pin"),
       ("Diagnostics", PanelKind.Diagnostics, "panel-diagnostics-pin"),
       ("Markdown Preview", PanelKind.MarkdownPreview, "panel-markdown-preview-pin")
     )

@@ -173,8 +173,8 @@ object PanelStateReducer:
             dismissOnMove = false
           )
         )
-      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Diagnostics(_, _) |
-          SurfaceContent.MarkdownPreview(_, _) =>
+      case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
+          SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
         Some(surface.copy(presentation = SurfacePresentation.Pinned(position, 30), dismissOnMove = false))
       case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) |
           SurfaceContent.CommandPaletteSubmenu(_, _, _) | SurfaceContent.ThemePicker(_) |
