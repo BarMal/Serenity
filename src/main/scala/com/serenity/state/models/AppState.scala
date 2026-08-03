@@ -554,7 +554,7 @@ case class AppState(
 
   private def reconcileWorkspaceTree: AppState =
     layout.workspaceTree match
-      case None                                          => this
+      case None                                               => this
       case Some(tree) if workspaceTreeAlreadyReconciled(tree) => this
       case Some(tree) =>
         val paneIds = layout.editorPanes.keySet
