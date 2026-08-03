@@ -298,9 +298,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val bufferId = withActiveBuffer(sm, "intro\nmiddle\nend")
     val comment  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
     sm.updateState(state =>
-      state.copy(buffers =
-        state.buffers.updated(bufferId, state.buffers(bufferId).copy(documentComments = List(comment)))
-      )
+      state
+        .copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(documentComments = List(comment))))
     ).unsafeRunSync()
 
     val symbols = DocumentNavigation.commentSymbols(List(comment))
@@ -332,9 +331,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val bufferId = withActiveBuffer(sm, "intro\nmiddle\nend")
     val comment  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
     sm.updateState(state =>
-      state.copy(buffers =
-        state.buffers.updated(bufferId, state.buffers(bufferId).copy(documentComments = List(comment)))
-      )
+      state
+        .copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(documentComments = List(comment))))
     ).unsafeRunSync()
 
     val symbols = DocumentNavigation.commentSymbols(List(comment))

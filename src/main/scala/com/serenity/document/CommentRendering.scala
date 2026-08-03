@@ -49,7 +49,7 @@ object CommentRendering:
   private def isCommentLensSurface(surface: UiSurface): Boolean =
     surface.content match
       case SurfaceContent.CommentLens(_) => true
-      case _                              => false
+      case _                             => false
 
   private def authoredCommentAt(
     buffer: Buffer,

@@ -13,9 +13,7 @@ private[serenity] object CommandRunnerPanelSelections:
       PanelKind.Comments,
       PanelKind.Diagnostics,
       PanelKind.MarkdownPreview
-    ).map { kind =>
-      optionId(kind) -> selectedIndex(kind, state)
-    }.toMap
+    ).map(kind => optionId(kind) -> selectedIndex(kind, state)).toMap
 
   private def selectedIndex(kind: PanelKind, state: AppState): Int =
     state.uiSurfaces.reverse
