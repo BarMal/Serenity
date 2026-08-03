@@ -554,7 +554,8 @@ case class AppState(
 
   private def reconcileWorkspaceTree: AppState =
     layout.workspaceTree match
-      case None => this
+      case None                                               => this
+      case Some(tree) if workspaceTreeAlreadyReconciled(tree) => this
       case Some(tree) =>
         val paneIds = layout.editorPanes.keySet
         val prunedPanes = tree.paneIds
@@ -624,6 +625,17 @@ case class AppState(
                 }
           }
         copy(layout = layout.copy(workspaceTree = Some(orderedTree), paneOrder = orderedTree.paneIds))
+
+  // Cheap pre-check for the common case where no pane or pinned-surface change requires rebuilding the tree,
+  // so events that don't touch panes/docking (e.g. command-palette navigation) skip the full reconciliation pass.
+  private def workspaceTreeAlreadyReconciled(tree: WorkspaceTree): Boolean =
+    tree.dockedSurfaceIds.isEmpty &&
+      !uiSurfaces.exists {
+        case UiSurface(_, _, SurfacePresentation.Pinned(_, _), _) => true
+        case _                                                    => false
+      } &&
+      tree.paneIds.toSet == layout.editorPanes.keySet &&
+      layout.paneOrder.filter(layout.editorPanes.keySet.contains) == tree.paneIds
 
 object AppState:
 
