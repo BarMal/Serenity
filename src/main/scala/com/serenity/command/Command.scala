@@ -31,6 +31,7 @@ enum CommandRunnerMode:
 enum PanelKind:
   case Explorer
   case Outline
+  case Comments
   case Diagnostics
   case MarkdownPreview
 
@@ -135,6 +136,7 @@ enum CommandIntent:
   case ReloadThemes
   case PinExplorerPanel
   case PinOutlinePanel
+  case PinCommentsPanel
   case PinDiagnosticsPanel
   case OpenMarkdownPreview
   case SetPanelPin(kind: PanelKind, position: Option[PanelPosition])

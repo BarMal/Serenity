@@ -7,7 +7,13 @@ import com.serenity.ui.layout.PanelPosition
 private[serenity] object CommandRunnerPanelSelections:
 
   def fromState(state: AppState): Map[String, Int] =
-    List(PanelKind.Explorer, PanelKind.Outline, PanelKind.Diagnostics, PanelKind.MarkdownPreview).map { kind =>
+    List(
+      PanelKind.Explorer,
+      PanelKind.Outline,
+      PanelKind.Comments,
+      PanelKind.Diagnostics,
+      PanelKind.MarkdownPreview
+    ).map { kind =>
       optionId(kind) -> selectedIndex(kind, state)
     }.toMap
 
@@ -22,6 +28,7 @@ private[serenity] object CommandRunnerPanelSelections:
     kind match
       case PanelKind.Explorer        => "panel-explorer-pin"
       case PanelKind.Outline         => "panel-outline-pin"
+      case PanelKind.Comments        => "panel-comments-pin"
       case PanelKind.Diagnostics     => "panel-diagnostics-pin"
       case PanelKind.MarkdownPreview => "panel-markdown-preview-pin"
 
@@ -29,6 +36,7 @@ private[serenity] object CommandRunnerPanelSelections:
     content match
       case SurfaceContent.DirectoryTree(_, _)            => Some(PanelKind.Explorer)
       case SurfaceContent.Outline(_, _)                  => Some(PanelKind.Outline)
+      case SurfaceContent.Comments(_, _)                 => Some(PanelKind.Comments)
       case SurfaceContent.Diagnostics(_, _)              => Some(PanelKind.Diagnostics)
       case SurfaceContent.MarkdownPreview(_, _)          => Some(PanelKind.MarkdownPreview)
       case SurfaceContent.StartPage(_)                   => None

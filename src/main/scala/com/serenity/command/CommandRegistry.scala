@@ -570,6 +570,13 @@ object CommandRegistry:
       label = "Pin Outline Panel"
     ),
     Command.typed(
+      "pin-comments",
+      "Pin the comments panel on the right.",
+      CommandIntent.PinCommentsPanel,
+      CommandCategory.View,
+      label = "Pin Comments Panel"
+    ),
+    Command.typed(
       "pin-diagnostics",
       "Pin the diagnostics panel at the bottom.",
       CommandIntent.PinDiagnosticsPanel,

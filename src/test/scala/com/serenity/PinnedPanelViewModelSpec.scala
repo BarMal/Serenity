@@ -59,6 +59,17 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     presentation = SurfacePresentation.Pinned(PanelPosition.Right, 20)
   )
 
+  private val commentSymbols = List(
+    Symbol("Comment: Revise opening", SymbolKind.Comment, Location(2, 0)),
+    Symbol("Comment: Tighten pacing", SymbolKind.Comment, Location(15, 4))
+  )
+
+  private val commentsPanel = UiSurface(
+    id = SurfaceId("comments"),
+    content = SurfaceContent.Comments(commentSymbols),
+    presentation = SurfacePresentation.Pinned(PanelPosition.Right, 20)
+  )
+
   private val diagnosticsPanel = UiSurface(
     id = SurfaceId("diagnostics"),
     content = SurfaceContent.Diagnostics(
@@ -262,6 +273,51 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       "Method render",
       "Variable state",
       "> Heading Chapter 1"
+    )
+  }
+
+  it should "shape comments content differently for tall and wide geometry" in {
+    val tall = PinnedPanelViewModel.resolve(commentsPanel, LayoutRect(0, 0, 18, 40))
+    val wide = PinnedPanelViewModel.resolve(commentsPanel, LayoutRect(0, 0, 60, 10))
+
+    tall.title shouldBe "comments"
+    tall.rows.map(_.plainText) shouldBe List(
+      "Comment: Revise opening",
+      "Comment: Tighten pacing"
+    )
+
+    wide.title shouldBe "comments"
+    wide.rows.map(_.plainText) shouldBe List("Comment: Revise opening | Comment: Tighten pacing")
+  }
+
+  it should "mark the active comment in tall and wide panel geometry" in {
+    val activePanel = commentsPanel.copy(content = SurfaceContent.Comments(commentSymbols, Some(Location(15, 4))))
+    val tall        = PinnedPanelViewModel.resolve(activePanel, LayoutRect(0, 0, 18, 40))
+    val wide        = PinnedPanelViewModel.resolve(activePanel, LayoutRect(0, 0, 60, 10))
+
+    tall.rows.map(_.plainText) shouldBe List(
+      "Comment: Revise opening",
+      "> Comment: Tighten pacing"
+    )
+    tall.rows.map(_.selected) shouldBe List(false, true)
+    wide.rows.map(_.plainText) shouldBe List("Comment: Revise opening | [Comment: Tighten pacing]")
+    wide.rows.map(_.selected) shouldBe List(true)
+  }
+
+  it should "derive the active comment location from the editor cursor when state is available" in {
+    val initialState = AppState.initial
+    val state = initialState.copy(
+      buffers = initialState.buffers.updated(
+        BufferId(0),
+        initialState.buffers(BufferId(0)).copy(cursors = List(CursorPosition(15, 4)))
+      )
+    )
+
+    val view = PinnedPanelViewModel.resolve(commentsPanel, LayoutRect(0, 0, 18, 40), state)
+
+    view.rows.map(_.plainText) shouldBe List(
+      "Comment: Revise opening",
+      "> Comment: Tighten pacing"
     )
   }
 

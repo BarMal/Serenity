@@ -110,6 +110,8 @@ object SurfaceContentResolver:
         resolveTerminal(rect, mode, buffer, cursor)
       case SurfaceContent.Outline(symbols, activeLocation) =>
         resolveOutline(rect, mode, symbols, activeLocation)
+      case SurfaceContent.Comments(symbols, activeLocation) =>
+        resolveComments(rect, mode, symbols, activeLocation)
       case SurfaceContent.Diagnostics(issues, activeLocation) =>
         resolveDiagnostics(rect, mode, issues, activeLocation)
       case SurfaceContent.ThemePicker(state) =>
@@ -865,6 +867,35 @@ object SurfaceContentResolver:
           case None       => List(OverlayRow(s"${symbols.length} symbols"))
 
     ResolvedSurfaceContent(titleFor(mode, "outline"), rows = shaped)
+
+  private def resolveComments(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    symbols: List[Symbol],
+    activeLocation: Option[Location]
+  ): ResolvedSurfaceContent =
+    val shaped: List[OverlayRow] = SurfaceLayoutKind.classify(rect) match
+      case SurfaceLayoutKind.Horizontal =>
+        val visibleSymbols = symbols.take(4)
+        val activeVisible  = visibleSymbols.exists(symbol => activeLocation.contains(symbol.location))
+        List(
+          visibleSymbols
+            .map(symbol => if activeLocation.contains(symbol.location) then s"[${symbol.name}]" else symbol.name)
+            .mkString(" | ")
+        ).filter(_.nonEmpty).map(text => OverlayRow(text, selected = activeVisible))
+      case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
+        symbols.take(math.max(1, rect.height - 2)).map { symbol =>
+          val active = activeLocation.contains(symbol.location)
+          val prefix = if active then "> " else ""
+          OverlayRow(s"$prefix${symbol.name}", selected = active)
+        }
+      case SurfaceLayoutKind.Compact =>
+        val current = activeLocation.flatMap(location => symbols.find(_.location == location)).map(_.name)
+        current match
+          case Some(name) => List(OverlayRow(s"${symbols.length} comments", selected = true), OverlayRow(name))
+          case None       => List(OverlayRow(s"${symbols.length} comments"))
+
+    ResolvedSurfaceContent(titleFor(mode, "comments"), rows = shaped)
 
   private def resolveDiagnostics(
     rect: LayoutRect,

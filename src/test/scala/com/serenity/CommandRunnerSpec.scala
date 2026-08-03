@@ -370,6 +370,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     panelPins.children.map(_.id) shouldBe List(
       "panel-explorer-pin",
       "panel-outline-pin",
+      "panel-comments-pin",
       "panel-diagnostics-pin",
       "panel-markdown-preview-pin"
     )
@@ -530,6 +531,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     pinOptions.map(_.id) shouldBe List(
       "panel-explorer-pin",
       "panel-outline-pin",
+      "panel-comments-pin",
       "panel-diagnostics-pin",
       "panel-markdown-preview-pin"
     )

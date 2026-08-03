@@ -5,6 +5,7 @@ import java.awt.Color
 import cats.syntax.foldable.*
 import com.serenity.animation.*
 import com.serenity.command.{CommandCategory, CommandRegistry, CommandRunner, CommandSurfaceItem}
+import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
@@ -1168,21 +1169,31 @@ final private[manager] class StateManagerEventPipeline(
           case Some((surface, symbols, location)) =>
             stateRef.update(selectPinnedOutlineLocation(_, surface, symbols, location)).as(true)
           case None =>
-            pinnedDiagnosticsMouseHitAt(event, state) match
-              case Some((surface, issues, location)) =>
-                stateRef.update(selectPinnedDiagnosticsLocation(_, surface, issues, location)).as(true)
+            pinnedCommentsMouseHitAt(event, state) match
+              case Some((surface, symbols, location)) =>
+                stateRef.update(selectPinnedCommentsLocation(_, surface, symbols, location)).as(true)
               case None =>
-                cats.effect.IO.pure(false)
+                pinnedDiagnosticsMouseHitAt(event, state) match
+                  case Some((surface, issues, location)) =>
+                    stateRef.update(selectPinnedDiagnosticsLocation(_, surface, issues, location)).as(true)
+                  case None =>
+                    cats.effect.IO.pure(false)
     }
 
   private def handlePinnedPanelLocationClick(click: MouseClick, state: AppState): cats.effect.IO[Boolean] =
     if click.button != MouseButton.Primary then cats.effect.IO.pure(false)
     else
-      pinnedLocationMouseHitAt(click, state) match
-        case Some(location) =>
-          stateRef.update(current => navigateActiveEditorToLocation(current, location)).as(true)
+      pinnedCommentsMouseHitAt(click, state) match
+        case Some((_, _, location)) =>
+          stateRef
+            .update(current => CommentRendering.openLensAtCursor(navigateActiveEditorToLocation(current, location)))
+            .as(true)
         case None =>
-          cats.effect.IO.pure(false)
+          pinnedLocationMouseHitAt(click, state) match
+            case Some(location) =>
+              stateRef.update(current => navigateActiveEditorToLocation(current, location)).as(true)
+            case None =>
+              cats.effect.IO.pure(false)
 
   private def selectPinnedDirectoryRow(
     state: AppState,
@@ -1206,6 +1217,19 @@ final private[manager] class StateManagerEventPipeline(
     state.copy(uiSurfaces = state.uiSurfaces.map {
       case existing if existing.id == surface.id =>
         existing.copy(content = SurfaceContent.Outline(symbols, Some(location)))
+      case existing =>
+        existing
+    })
+
+  private def selectPinnedCommentsLocation(
+    state: AppState,
+    surface: UiSurface,
+    symbols: List[Symbol],
+    location: Location
+  ): AppState =
+    state.copy(uiSurfaces = state.uiSurfaces.map {
+      case existing if existing.id == surface.id =>
+        existing.copy(content = SurfaceContent.Comments(symbols, Some(location)))
       case existing =>
         existing
     })
@@ -1246,6 +1270,23 @@ final private[manager] class StateManagerEventPipeline(
       hit <- pinnedPanelRowHitAt(event, state)
       locationHit <- hit.surface.content match
         case SurfaceContent.Outline(symbols, _) =>
+          hit.layoutKind match
+            case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
+              symbols.lift(hit.rowIndex).map(symbol => (hit.surface, symbols, symbol.location))
+            case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Compact =>
+              None
+        case _ =>
+          None
+    yield locationHit
+
+  private def pinnedCommentsMouseHitAt(
+    event: MouseInputEvent,
+    state: AppState
+  ): Option[(UiSurface, List[Symbol], Location)] =
+    for
+      hit <- pinnedPanelRowHitAt(event, state)
+      locationHit <- hit.surface.content match
+        case SurfaceContent.Comments(symbols, _) =>
           hit.layoutKind match
             case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
               symbols.lift(hit.rowIndex).map(symbol => (hit.surface, symbols, symbol.location))

@@ -2,7 +2,7 @@ package com.serenity.document
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownDocumentPreview
-import com.serenity.state.models.Buffer
+import com.serenity.state.models.*
 
 case class RenderedComment(
     sourceLine: Int,
@@ -17,6 +17,39 @@ object CommentRendering:
       cursor  <- buffer.cursors.headOption
       comment <- authoredCommentAt(buffer, cursor).orElse(commentAtLine(buffer, cursor.line))
     yield comment
+
+  /** Opens the above-cursor Comment Lens for the comment at the active editor's cursor, replacing any existing one. */
+  def openLensAtCursor(state: AppState): AppState =
+    activeEditorComment(state) match
+      case Some((cursor, lens)) =>
+        val surface = UiSurface(
+          id = SurfaceId("comment-lens"),
+          content = SurfaceContent.CommentLens(lens),
+          presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
+        )
+        state
+          .copy(uiSurfaces = state.uiSurfaces.filterNot(isCommentLensSurface) :+ surface)
+          .pushFocus(Focus.Surface(surface.id))
+      case None =>
+        state
+
+  def activeEditorComment(state: AppState): Option[(CursorPosition, CommentLensState)] =
+    for
+      paneId   <- state.layout.activeEditorPaneId
+      pane     <- state.layout.editorPanes.get(paneId)
+      bufferId <- pane.bufferId
+      buffer   <- state.buffers.get(bufferId)
+      cursor   <- buffer.cursors.headOption
+      comment  <- atCursor(buffer)
+    yield
+      val target = buffer.documentComments.find(_.contains(cursor))
+      val draft  = target.map(_.text).getOrElse(comment.raw)
+      (cursor, CommentLensState(comment = comment, draft = draft, cursor = draft.length, target = target))
+
+  private def isCommentLensSurface(surface: UiSurface): Boolean =
+    surface.content match
+      case SurfaceContent.CommentLens(_) => true
+      case _                              => false
 
   private def authoredCommentAt(
     buffer: Buffer,

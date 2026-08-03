@@ -207,6 +207,7 @@ enum SurfaceContent:
   case ModalWorkflow(modal: Modal)
   case Terminal(buffer: String, cursor: Int)
   case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None)
+  case Comments(symbols: List[Symbol], activeLocation: Option[Location] = None)
   case Diagnostics(issues: List[Diagnostic], activeLocation: Option[Location] = None)
 
   /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
@@ -234,6 +235,8 @@ object UiSurface:
         SurfaceContent.Terminal(buffer, cursor)
       case PanelContent.Outline(symbols, activeLocation) =>
         SurfaceContent.Outline(symbols, activeLocation)
+      case PanelContent.Comments(symbols, activeLocation) =>
+        SurfaceContent.Comments(symbols, activeLocation)
       case PanelContent.Diagnostics(issues) =>
         SurfaceContent.Diagnostics(issues)
       case PanelContent.MarkdownPreview(bufferId, title) =>
