@@ -7,8 +7,8 @@ import com.serenity.state.models.{Buffer, BufferId, EditorPane, PaneId}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Regression coverage for #892/#930: closing the command runner from a nested settings edit must stay fast and
-  * must settle its close animation, even with a large document open in the background.
+/** Regression coverage for #892/#930: closing the command runner from a nested settings edit must stay fast and must
+  * settle its close animation, even with a large document open in the background.
   */
 class CommandRunnerCloseAnimationPerformanceSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
@@ -47,7 +47,7 @@ class CommandRunnerCloseAnimationPerformanceSpec extends AnyFlatSpec with Matche
     driver.dispatch(Escape).unsafeRunSync()
     val dispatchMillis = (System.nanoTime() - dispatchStart) / 1000000L
 
-    val settleStart = System.nanoTime()
+    val settleStart  = System.nanoTime()
     val settled      = driver.advanceToSettled().unsafeRunSync()
     val settleMillis = (System.nanoTime() - settleStart) / 1000000L
 

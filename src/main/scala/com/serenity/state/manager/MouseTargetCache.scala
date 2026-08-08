@@ -30,8 +30,8 @@ private[manager] object RopeIdentity:
   * [[com.serenity.ui.layout.LayoutEngine]] geometry (frame size/position). Command-palette surfaces carry a
   * `CommandRunner` that changes on every keystroke (search text, selection, edit state) without affecting layout, so
   * comparing full [[SurfaceContent]] equality here would defeat scene caching for the most input-heavy overlay in the
-  * app. Every other surface kind keeps its full content, since several of them (context menus, comment lens,
-  * directory listings, etc.) do size themselves from content.
+  * app. Every other surface kind keeps its full content, since several of them (context menus, comment lens, directory
+  * listings, etc.) do size themselves from content.
   */
 private[manager] case class SurfaceGeometryKey(
     id: SurfaceId,

@@ -289,7 +289,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "invalidate the prepared scene when a submenu search changes its visible item count" in {
-    val size      = ViewportSize(80, 24)
+    val size       = ViewportSize(80, 24)
     val unfiltered = stateWithSubmenu("settings-animation", submenuSearchTerm = "")
     val filtered   = stateWithSubmenu("settings-animation", submenuSearchTerm = "duration")
 
