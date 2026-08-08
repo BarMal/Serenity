@@ -10,6 +10,7 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.artifact_suffix }}
+    if: "!startsWith(github.head_ref, 'claude/')"
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
