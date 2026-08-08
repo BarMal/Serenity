@@ -423,22 +423,28 @@ object Renderer:
         renderFloatingPanels(state, floatContext, scene)
         None
       case None =>
-        val prepared = prepareScene(
-          state,
-          surface,
-          viewportSize,
-          scene,
-          cursorVisible,
-          cursorColor,
-          codeFont,
-          textFont,
-          uiFont,
-          cellMetrics,
-          uiMetrics
-        )
+        val prepared = preparedSceneRef
+          .get()
+          .filter(_.matches(scene, codeFont, textFont, uiFont, cellMetrics, uiMetrics, viewportSize))
+          .getOrElse {
+            val next = prepareScene(
+              state,
+              surface,
+              viewportSize,
+              scene,
+              cursorVisible,
+              cursorColor,
+              codeFont,
+              textFont,
+              uiFont,
+              cellMetrics,
+              uiMetrics
+            )
+            preparedSceneRef.set(Some(next))
+            next
+          }
         val finalizedScene   = prepared.scene
         val editorRenderPlan = prepared.renderPlan
-        preparedSceneRef.set(Some(prepared))
         val context = RenderContext(
           surface,
           finalizedScene.calculatedLayout,
