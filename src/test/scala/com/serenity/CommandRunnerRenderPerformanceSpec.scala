@@ -11,27 +11,38 @@ import org.scalatest.matchers.should.Matchers
   * editor-scene rebuild per keystroke. See MouseTargetCacheSpec for the cache-key-level coverage this depends on; this
   * spec measures the actual per-keystroke render cost end to end.
   *
-  * The bounds here are deliberately loose -- they exist to catch a regression back toward the pre-fix cost (measured
-  * ~575ms average / ~2.3s max on a 50,000-line document), not to enforce a specific target. The remaining per-keystroke
-  * cost (measured ~277ms average / ~700ms max after this fix) has a further, unidentified cause -- see the #892 comment
-  * thread.
+  * This compares the large-document cost against a same-run, same-hardware small-document baseline rather than an
+  * absolute wall-clock bound -- an earlier version used fixed millisecond thresholds calibrated to one machine and
+  * failed as a false positive on a slower CI runner (Windows: ~1000ms average against a 500ms bound, despite the fix
+  * being correctly in place). The regression this guards against is the large document costing disproportionately more
+  * per keystroke than a small one on the *same* hardware, which is hardware-speed-independent.
   */
 class CommandRunnerRenderPerformanceSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
-  private val AverageBoundMillis = 500L
-  private val MaxBoundMillis     = 1200L
+  private val MaxAllowedRatio     = 8.0
+  private val AbsoluteSlackMillis = 50L
 
-  "rendering while the command runner is open over a large document" should "stay well under the pre-fix per-keystroke cost" in {
-    val driver = UiScenarioDriver.create("command-runner-render-perf-large-document").unsafeRunSync()
+  "typing into the command runner over a large document" should "not cost disproportionately more per keystroke than typing over a small one" in {
+    val smallAverage = averageKeystrokeMillis(lineCount = 1, scenarioName = "command-runner-render-perf-small-document")
+    val largeAverage =
+      averageKeystrokeMillis(lineCount = 50000, scenarioName = "command-runner-render-perf-large-document")
 
-    val bigLine    = "x" * 120
-    val bigContent = (1 to 50000).map(_ => bigLine).mkString("\n")
+    info(s"small-document average: ${smallAverage}ms, large-document average: ${largeAverage}ms")
+
+    largeAverage.toDouble should be < (smallAverage * MaxAllowedRatio + AbsoluteSlackMillis)
+  }
+
+  private def averageKeystrokeMillis(lineCount: Int, scenarioName: String): Long =
+    val driver = UiScenarioDriver.create(scenarioName).unsafeRunSync()
+
+    val bigLine = "x" * 120
+    val content = (1 to lineCount).map(_ => bigLine).mkString("\n")
     driver
       .updateState { state =>
         val bufferId = BufferId(1)
         val paneId   = state.layout.activeEditorPaneId.getOrElse(PaneId(1))
-        val buffer   = Buffer.fromString(bufferId, bigContent)
+        val buffer   = Buffer.fromString(bufferId, content)
         state.copy(
           buffers = Map(bufferId -> buffer),
           bufferOrder = List(bufferId),
@@ -52,11 +63,5 @@ class CommandRunnerRenderPerformanceSpec extends AnyFlatSpec with Matchers:
       driver.renderFrame(s"keystroke-$char").unsafeRunSync()
       (System.nanoTime() - start) / 1000000L
     }
-    val average = timings.sum / timings.length
 
-    info(s"per-keystroke render timings (ms): ${timings.mkString(", ")}")
-    info(s"max: ${timings.max}ms, avg: ${average}ms")
-
-    average should be < AverageBoundMillis
-    timings.max should be < MaxBoundMillis
-  }
+    timings.sum / timings.length
