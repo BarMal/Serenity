@@ -26,6 +26,41 @@ private[manager] object RopeIdentity:
   def apply(value: Rope): RopeIdentity =
     new RopeIdentity(value)
 
+/** A surface's identity and presentation, plus only the content fields that actually feed its
+  * [[com.serenity.ui.layout.LayoutEngine]] geometry (frame size/position). Command-palette surfaces carry a
+  * `CommandRunner` that changes on every keystroke (search text, selection, edit state) without affecting layout, so
+  * comparing full [[SurfaceContent]] equality here would defeat scene caching for the most input-heavy overlay in the
+  * app. Every other surface kind keeps its full content, since several of them (context menus, comment lens,
+  * directory listings, etc.) do size themselves from content.
+  */
+private[manager] case class SurfaceGeometryKey(
+    id: SurfaceId,
+    presentation: SurfacePresentation,
+    contentKey: Any
+)
+
+private[manager] object SurfaceGeometryKey:
+
+  def from(surface: UiSurface): SurfaceGeometryKey =
+    val contentKey: Any = surface.content match
+      case SurfaceContent.CommandPalette(_) =>
+        // Verified against every LayoutEngine consumer of CommandPalette content: none read the runner's
+        // fields, only the surface's presence/type, so no runner-derived data belongs in the geometry key.
+        "command-palette"
+      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
+        // LayoutEngine.calculateFloatingSurfaceHeight sizes this surface from the visible item count after the
+        // submenu's own search filter (see CommandPaletteSubmenu height case) -- that's the only content-derived
+        // input to its geometry.
+        val allItems = runner.submenuItems(groupId)
+        val itemCount = runner.activeSubmenu
+          .filter(_.groupId == groupId)
+          .map(_.filteredItems(allItems).size)
+          .getOrElse(allItems.size)
+        ("command-palette-submenu", groupId, previewOnly, itemCount)
+      case other =>
+        other
+    SurfaceGeometryKey(surface.id, surface.presentation, contentKey)
+
 private[manager] case class MouseTargetLayoutKey(
     viewportSize: ViewportSize,
     fontConfig: FontConfig,
@@ -53,7 +88,7 @@ private[manager] case class MouseTargetLayoutKey(
         Option[(RopeIdentity, Viewport, TypographyRole, Option[LanguageId], Option[RichTextDocument])]
       )
     ],
-    uiSurfaces: List[UiSurface],
+    uiSurfaces: List[SurfaceGeometryKey],
     derivedCursorInfoBarSurface: Option[UiSurface],
     pinnedPanels: List[(SurfaceId, PanelPosition, Int)],
     lineNumberContent: List[(BufferId, RopeIdentity)]
@@ -101,7 +136,7 @@ private[manager] object MouseTargetLayoutKey:
             )
           )
       },
-      uiSurfaces = state.uiSurfaces,
+      uiSurfaces = state.uiSurfaces.map(SurfaceGeometryKey.from),
       derivedCursorInfoBarSurface = state.cursorInfoBarSurface,
       pinnedPanels = state.uiSurfaces.collect {
         case UiSurface(id, _, SurfacePresentation.Pinned(position, size), _) => (id, position, size)

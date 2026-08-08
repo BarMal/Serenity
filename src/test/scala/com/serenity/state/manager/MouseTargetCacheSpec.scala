@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import java.awt.Font
 
+import com.serenity.command.{CommandRegistry, CommandRunner, CommandRunnerSubmenuState}
 import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -198,5 +199,102 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     MouseTargetLayoutKey.from(spaciousState, size) should not be MouseTargetLayoutKey.from(state, size)
     MouseTargetCache.fromState(spaciousState, size).scene should not be theSameInstanceAs(
       MouseTargetCache.fromState(state, size).scene
+    )
+  }
+
+  private val commandPaletteBaseState =
+    stateWith(Buffer.fromString(bufferId, "alpha beta"))
+
+  private def stateWithCommandPalette(searchTerm: String, selectedIndex: Int = 0): AppState =
+    val registry = CommandRegistry.default
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(searchTerm = searchTerm, selectedIndex = selectedIndex)
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    commandPaletteBaseState.copy(
+      focus = Focus.Surface(surface.id),
+      uiSurfaces = List(surface)
+    )
+
+  it should "reuse the prepared scene when only the command palette's search text changes" in {
+    val size   = ViewportSize(80, 24)
+    val typing = stateWithCommandPalette(searchTerm = "b")
+    val more   = stateWithCommandPalette(searchTerm = "bl")
+
+    MouseTargetLayoutKey.from(typing, size) shouldBe MouseTargetLayoutKey.from(more, size)
+    MouseTargetCache.fromState(more, size).scene should be theSameInstanceAs
+      MouseTargetCache.fromState(typing, size).scene
+  }
+
+  it should "reuse the prepared scene when only the command palette's selected row changes" in {
+    val size     = ViewportSize(80, 24)
+    val selected = stateWithCommandPalette(searchTerm = "", selectedIndex = 0)
+    val moved    = stateWithCommandPalette(searchTerm = "", selectedIndex = 1)
+
+    MouseTargetLayoutKey.from(selected, size) shouldBe MouseTargetLayoutKey.from(moved, size)
+    MouseTargetCache.fromState(moved, size).scene should be theSameInstanceAs
+      MouseTargetCache.fromState(selected, size).scene
+  }
+
+  private def stateWithSubmenu(groupId: String, submenuSearchTerm: String): AppState =
+    val registry = CommandRegistry.default
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default.withMotionPreset(com.serenity.config.MotionPreset.Custom))
+      .openSettings
+      .copy(activeSubmenu = Some(CommandRunnerSubmenuState(groupId, searchTerm = submenuSearchTerm)))
+    val mainSurface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val submenuSurface = UiSurface(
+      SurfaceId("command-runner-submenu"),
+      SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly = false),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    commandPaletteBaseState.copy(
+      focus = Focus.Surface(submenuSurface.id),
+      uiSurfaces = List(mainSurface, submenuSurface)
+    )
+
+  it should "reuse the prepared scene when a submenu edit doesn't change its visible item count" in {
+    val size = ViewportSize(80, 24)
+    val base = stateWithSubmenu("settings-animation", submenuSearchTerm = "")
+    val runner = base.commandRunnerSurface.get.content match
+      case SurfaceContent.CommandPalette(r) => r
+      case _                                => fail("expected command palette")
+    val editing = base.copy(
+      uiSurfaces = base.uiSurfaces.map {
+        case s if s.id == SurfaceId("command-runner-submenu") =>
+          s.copy(content =
+            SurfaceContent.CommandPaletteSubmenu(
+              runner.copy(activeSubmenu =
+                runner.activeSubmenu.map(_.copy(editingItemId = Some("animation-duration"), editingText = "1"))
+              ),
+              "settings-animation",
+              previewOnly = false
+            )
+          )
+        case s => s
+      }
+    )
+
+    MouseTargetLayoutKey.from(editing, size) shouldBe MouseTargetLayoutKey.from(base, size)
+    MouseTargetCache.fromState(editing, size).scene should be theSameInstanceAs
+      MouseTargetCache.fromState(base, size).scene
+  }
+
+  it should "invalidate the prepared scene when a submenu search changes its visible item count" in {
+    val size      = ViewportSize(80, 24)
+    val unfiltered = stateWithSubmenu("settings-animation", submenuSearchTerm = "")
+    val filtered   = stateWithSubmenu("settings-animation", submenuSearchTerm = "duration")
+
+    MouseTargetLayoutKey.from(unfiltered, size) should not be MouseTargetLayoutKey.from(filtered, size)
+    MouseTargetCache.fromState(filtered, size).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(unfiltered, size).scene
     )
   }
