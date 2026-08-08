@@ -1489,8 +1489,9 @@ final private[manager] class StateManagerEventPipeline(
       menu <- surface.content match
         case SurfaceContent.ContextMenu(menu) => Some(menu)
         case _                                => None
-      layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      contract = EditorLayoutContract.from(state, viewportSize, layout)
+      scene    = AuthoritativeUiScene.forState(state, viewportSize)
+      layout   = scene.calculatedLayout
+      contract = scene.editorContract
       contentRect <- contract.overlayContentRect(surface.id)
       index <- overlayItemIndex(
         event,
@@ -1511,8 +1512,9 @@ final private[manager] class StateManagerEventPipeline(
     (for
       viewportSize <- state.viewportSize
       surface      <- state.contextMenuSurface
-      layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      contract = EditorLayoutContract.from(state, viewportSize, layout)
+      scene    = AuthoritativeUiScene.forState(state, viewportSize)
+      layout   = scene.calculatedLayout
+      contract = scene.editorContract
       contentRect <- contract.overlayContentRect(surface.id)
     yield contentRect.contains(event.col, event.row) &&
       !contract.overlayRowSlots(surface.id).exists(_.y == event.row)).getOrElse(false)
@@ -1603,8 +1605,9 @@ final private[manager] class StateManagerEventPipeline(
       toolbarState <- surface.content match
         case SurfaceContent.ContextualToolbar(toolbarState) => Some(toolbarState)
         case _                                              => None
-      layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      contract = EditorLayoutContract.from(state, viewportSize, layout)
+      scene    = AuthoritativeUiScene.forState(state, viewportSize)
+      layout   = scene.calculatedLayout
+      contract = scene.editorContract
       contentRect <- contract.overlayContentRect(surface.id)
       hit <- contextualToolbarItemHit(
         event,
@@ -1673,8 +1676,9 @@ final private[manager] class StateManagerEventPipeline(
 
   private def isInsideFloatingSurface(event: MouseInputEvent, state: AppState): Boolean =
     state.viewportSize.exists { viewportSize =>
-      val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      val contract = EditorLayoutContract.from(state, viewportSize, layout)
+      val scene    = AuthoritativeUiScene.forState(state, viewportSize)
+      val layout   = scene.calculatedLayout
+      val contract = scene.editorContract
       val metrics  = floatingCellMetrics(state)
       state.floatingSurfaces.exists { surface =>
         contract.overlayRect(surface.id).exists { rect =>
@@ -1748,20 +1752,23 @@ final private[manager] class StateManagerEventPipeline(
         cats.effect.IO.pure(false)
 
   private def commandRunnerSelectionAt(event: MouseInputEvent, state: AppState): Option[CommandRunnerEvent] =
-    state.viewportSize.flatMap { viewportSize =>
-      val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      val contract = EditorLayoutContract.from(state, viewportSize, layout)
-      val surfaces =
-        event match
-          case _: MouseMove
-              if state.commandRunnerSubmenuSurface.exists(surface => state.focus == Focus.Surface(surface.id)) =>
-            state.commandRunnerSubmenuSurface.toList
-          case _ =>
-            List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
-      surfaces.view
-        .flatMap(surface => commandRunnerSelectionForSurface(event, surface, layout, contract, state))
-        .headOption
-    }
+    val surfaces =
+      event match
+        case _: MouseMove
+            if state.commandRunnerSubmenuSurface.exists(surface => state.focus == Focus.Surface(surface.id)) =>
+          state.commandRunnerSubmenuSurface.toList
+        case _ =>
+          List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
+    if surfaces.isEmpty then None
+    else
+      state.viewportSize.flatMap { viewportSize =>
+        val scene    = AuthoritativeUiScene.forState(state, viewportSize)
+        val layout   = scene.calculatedLayout
+        val contract = scene.editorContract
+        surfaces.view
+          .flatMap(surface => commandRunnerSelectionForSurface(event, surface, layout, contract, state))
+          .headOption
+      }
 
   private def handleTextAreaResizeDrag(drag: MouseDrag, state: AppState): cats.effect.IO[Boolean] =
     textAreaInsetFromDrag(drag, state) match
