@@ -12,7 +12,6 @@ object CommandRunnerSettingsGroups:
     uiPresetPreviews: List[UiPreset.Preview],
     editingPresetName: Option[String]
   ): List[CommandSurfaceItem.GroupItem] =
-    val animationItem           = CommandRunnerSettingsItems.animationOptionItem(optionSelections)
     val cursorModeItem          = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
     val cursorInfoBarItem       = CommandRunnerSettingsItems.cursorInfoBarOptionItem(optionSelections)
     val cursorInfoPlacement     = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
@@ -329,7 +328,6 @@ object CommandRunnerSettingsGroups:
       label = "UI Surface Motion",
       children = List(
         motionPresetItem,
-        animationItem,
         panelOpenItem,
         panelCloseItem,
         commandRunnerReveal,

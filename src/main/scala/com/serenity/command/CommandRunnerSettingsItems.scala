@@ -385,20 +385,6 @@ object CommandRunnerSettingsItems:
       hint = Some("Check prose buffers")
     )
 
-  private[command] def animationOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
-      id = "animation-mode",
-      label = "Animation Style",
-      options = List(
-        CommandOption("None", CommandIntent.SetAnimationMode(AnimationMode.None)),
-        CommandOption("Subtle", CommandIntent.SetAnimationMode(AnimationMode.Subtle)),
-        CommandOption("Full", CommandIntent.SetAnimationMode(AnimationMode.Smooth))
-      ),
-      selectedIndex = optionSelections.getOrElse("animation-mode", 2),
-      category = CommandCategory.Settings,
-      hint = Some("None, subtle, or full")
-    )
-
   private[command] def uiPresetSelectOptionItem(
     previews: List[UiPreset.Preview],
     optionSelections: Map[String, Int] = Map.empty
@@ -684,7 +670,7 @@ object CommandRunnerSettingsItems:
   ): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "contextual-toolbar-display",
-      label = "Contextual Toolbar",
+      label = "Contextual Toolbar Style",
       options = List(
         CommandOption("Icon Only", CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)),
         CommandOption("Text Only", CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)),
@@ -898,7 +884,7 @@ object CommandRunnerSettingsItems:
   private[command] def codeLigaturesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "code-ligatures",
-      label = "Ligature Shaping",
+      label = "Code Ligatures",
       options = List(
         CommandOption("On", CommandIntent.SetCodeLigatures(true)),
         CommandOption("Off", CommandIntent.SetCodeLigatures(false))
@@ -911,7 +897,7 @@ object CommandRunnerSettingsItems:
   private[command] def textLigaturesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "text-ligatures",
-      label = "Ligature Shaping",
+      label = "Prose Ligatures",
       options = List(
         CommandOption("On", CommandIntent.SetTextLigatures(true)),
         CommandOption("Off", CommandIntent.SetTextLigatures(false))
@@ -924,7 +910,7 @@ object CommandRunnerSettingsItems:
   private[command] def uiLigaturesOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "ui-ligatures",
-      label = "Ligature Shaping",
+      label = "UI Ligatures",
       options = List(
         CommandOption("On", CommandIntent.SetUiLigatures(true)),
         CommandOption("Off", CommandIntent.SetUiLigatures(false))

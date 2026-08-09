@@ -65,7 +65,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
 
     val selections = CommandRunnerOptionSelections.default(config)
 
-    selections("animation-mode") shouldBe 1
     selections("material-preset") shouldBe 3
     selections("post-processing") shouldBe 3
     selections("ui-shadows") shouldBe 0

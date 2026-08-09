@@ -206,7 +206,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     groupById(groups, "settings-preset-ui-surface-motion").children.map(_.id) should contain allOf (
       "motion-preset",
-      "animation-mode",
       "panel-open-transition",
       "panel-close-transition",
       "command-runner-transition",

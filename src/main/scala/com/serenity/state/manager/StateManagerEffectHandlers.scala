@@ -667,14 +667,6 @@ final private[manager] class StateManagerEffectHandlers(
         collapseExpandedPanel()
       case CommandIntent.FormatCurrentFile =>
         logger.debug("[CMD] Format command requested")
-      case CommandIntent.SetAnimationMode(mode) =>
-        updateMotionConfig { config =>
-          mode match
-            case AnimationMode.None   => config.withoutCharacterAnimation
-            case AnimationMode.Quick  => config.withMotionPreset(com.serenity.config.MotionPreset.Expressive)
-            case AnimationMode.Smooth => config.withMotionPreset(com.serenity.config.MotionPreset.Smooth)
-            case AnimationMode.Subtle => config.withMotionPreset(com.serenity.config.MotionPreset.Subtle)
-        }.void
       case CommandIntent.SetMaterialPreset(preset) =>
         updateAppearanceConfig(_.withMaterialPreset(preset)).void
       case CommandIntent.SetPostProcessingEffect(effect) =>

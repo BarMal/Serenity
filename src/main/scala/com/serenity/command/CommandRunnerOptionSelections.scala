@@ -16,7 +16,6 @@ object CommandRunnerOptionSelections:
     val languageToolsConfig = config.languageToolsConfig
 
     Map(
-      "animation-mode"  -> animationModeIndex(editorConfig.characterAnimation),
       "material-preset" -> materialPresetIndex(surfaceConfig.materialPreset),
       "post-processing" -> postProcessingEffectIndex(surfaceConfig.postProcessingEffect),
       "ui-shadows"      -> (if surfaceConfig.uiShadowsEnabled then 1 else 0),
@@ -88,12 +87,6 @@ object CommandRunnerOptionSelections:
         .families(family)
         .transitionKindFor(scope)
     }
-
-  private def animationModeIndex(animation: Option[AnimationConfig]): Int =
-    animation match
-      case None                                                          => 0
-      case Some(animation) if AnimationConfig.subtle.contains(animation) => 1
-      case _                                                             => 2
 
   private def cursorModeIndex(mode: CursorMode): Int =
     mode match
