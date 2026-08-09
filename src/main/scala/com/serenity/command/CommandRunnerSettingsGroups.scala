@@ -81,6 +81,12 @@ object CommandRunnerSettingsGroups:
     val advancedMotionInputIds =
       if optionSelections.get("motion-preset").contains(4) then Set("animation-duration", "animation-steps")
       else Set.empty[String]
+    val windowSitterInputIds = Set(
+      "window-sitter-frames",
+      "window-sitter-active-ticks",
+      "window-sitter-fast-active-ticks",
+      "window-sitter-fast-threshold-ms"
+    )
     val animationGroup = CommandSurfaceItem.GroupItem(
       id = "settings-animation",
       label = "Motion & Animation",
@@ -93,15 +99,16 @@ object CommandRunnerSettingsGroups:
         commandRunnerReveal,
         commandRunnerFade,
         uiAnimationItem
-      ) ++ inputItems.filter(item => motionInputIds.contains(item.id) || advancedMotionInputIds.contains(item.id)),
+      ) ++ inputItems.filter(item => item.id == "cursor-speed-scale" || motionInputIds.contains(item.id)) ++
+        List(windowSitterEnabledItem, windowSitterActionItem) ++
+        inputItems.filter(item => windowSitterInputIds.contains(item.id) || advancedMotionInputIds.contains(item.id)),
       category = CommandCategory.Settings,
-      hint = Some("Reveal style, timing, and speed")
+      hint = Some("Reveal style, timing, speed, and window sitter")
     )
     val cursorGroup = CommandSurfaceItem.GroupItem(
       id = "settings-cursor",
       label = "Cursor",
-      children = List(cursorModeItem, cursorInfoBarItem, cursorInfoPlacement) ++
-        inputItems.filter(_.id == "cursor-speed-scale"),
+      children = List(cursorModeItem, cursorInfoBarItem, cursorInfoPlacement),
       category = CommandCategory.Settings,
       hint = Some("Cursor style, info bar, placement")
     )
@@ -117,20 +124,14 @@ object CommandRunnerSettingsGroups:
     val interfaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-interface-layout",
       label = "Interface Layout",
-      children =
-        List(interfaceDensityItem, windowChromeItem, windowSitterEnabledItem, windowSitterActionItem) ++ inputItems
-          .filter(item =>
-            item.id == "ui-element-gap" ||
-              item.id == "ui-corner-radius" ||
-              item.id == "ui-outline-thickness" ||
-              item.id == "command-runner-visible-rows" ||
-              item.id == "command-runner-item-gap-rows" ||
-              item.id == "command-runner-cursor-gap-rows"
-              || item.id == "window-sitter-frames"
-              || item.id == "window-sitter-active-ticks"
-              || item.id == "window-sitter-fast-active-ticks"
-              || item.id == "window-sitter-fast-threshold-ms"
-          ),
+      children = List(interfaceDensityItem, windowChromeItem) ++ inputItems.filter(item =>
+        item.id == "ui-element-gap" ||
+          item.id == "ui-corner-radius" ||
+          item.id == "ui-outline-thickness" ||
+          item.id == "command-runner-visible-rows" ||
+          item.id == "command-runner-item-gap-rows" ||
+          item.id == "command-runner-cursor-gap-rows"
+      ),
       category = CommandCategory.Settings,
       hint = Some("Density, spacing, window chrome, command rows")
     )

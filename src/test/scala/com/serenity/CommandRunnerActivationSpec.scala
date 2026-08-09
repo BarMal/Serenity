@@ -109,18 +109,12 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       List(
         "interface-density",
         "window-chrome",
-        "window-sitter-enabled",
-        "window-sitter-action",
         "ui-element-gap",
         "ui-corner-radius",
         "ui-outline-thickness",
         "command-runner-visible-rows",
         "command-runner-item-gap-rows",
-        "command-runner-cursor-gap-rows",
-        "window-sitter-frames",
-        "window-sitter-active-ticks",
-        "window-sitter-fast-active-ticks",
-        "window-sitter-fast-threshold-ms"
+        "command-runner-cursor-gap-rows"
       )
     )
     settingsGroup(runner, "settings-interface-layout")
@@ -195,8 +189,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       List(
         "cursor-mode",
         "cursor-info-bar",
-        "cursor-info-bar-placement",
-        "cursor-speed-scale"
+        "cursor-info-bar-placement"
       )
     )
   }
@@ -282,10 +275,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-fade" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Off" -> List("Off", "Subtle", "Smooth", "Expressive"))
-    val cursorGroup = settingsGroup(runner, "settings-cursor").getOrElse {
-      fail("Expected cursor settings group")
-    }
-    cursorGroup.children.collectFirst {
+    motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "cursor-speed-scale" =>
         (item.currentValue, item.hint, item.parse("0.25"))
     } shouldBe Some(("0.75", "Cursor scale (0.0-4.0)", Some(CommandIntent.SetCursorTransitionSpeedScale(0.25))))
