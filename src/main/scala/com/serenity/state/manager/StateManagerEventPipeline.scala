@@ -164,7 +164,7 @@ final private[manager] class StateManagerEventPipeline(
         val logCommandRunnerEvent =
           focusedCommandRunner(prevState) match
             case Some(runner) =>
-              logger.info(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
+              logger.debug(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
             case None =>
               cats.effect.IO.unit
 

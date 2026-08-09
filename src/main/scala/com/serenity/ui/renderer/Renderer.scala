@@ -276,7 +276,10 @@ object Renderer:
     )
     withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
       renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics)
-      false
+      // The base frame published above went through onBaseImageReady, which does not repaint the canvas by
+      // itself -- only onCursorOverlayReady does. The editor branch below reaches it naturally via its cursor
+      // composite step; the startup page has no cursor to draw, but still needs this call to actually get painted.
+      swingWin.onCursorOverlayReady(_ => ())
     ) { scene =>
       renderFrame(
         state0,
