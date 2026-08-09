@@ -575,8 +575,9 @@ case class CommandRunner(
     else
       val leafResults = matchingSettingLeaves(lowerTerm)
       exactSettingsGroup(lowerTerm) match
-        case Some(exactGroup)                                                                => List(exactGroup)
-        case None if leafResults.exists(CommandRunner.isExactSettingsTarget(_, lowerTerm))   => leafResults
+        case Some(exactGroup) => List(exactGroup)
+        case None if leafResults.exists(CommandRunner.isExactSettingsTarget(_, lowerTerm)) =>
+          leafResults.filter(CommandRunner.isExactSettingsTarget(_, lowerTerm))
         case None if CommandRunner.isSpecificSettingQuery(lowerTerm) && leafResults.nonEmpty => leafResults
         case None => matchingSettingsGroups(lowerTerm)
 

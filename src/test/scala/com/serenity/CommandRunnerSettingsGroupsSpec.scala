@@ -75,18 +75,12 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "window-chrome",
-      "window-sitter-enabled",
-      "window-sitter-action",
       "ui-element-gap",
       "ui-corner-radius",
       "ui-outline-thickness",
       "command-runner-visible-rows",
       "command-runner-item-gap-rows",
-      "command-runner-cursor-gap-rows",
-      "window-sitter-frames",
-      "window-sitter-active-ticks",
-      "window-sitter-fast-active-ticks",
-      "window-sitter-fast-threshold-ms"
+      "command-runner-cursor-gap-rows"
     )
     groupById(groups, "settings-surface-appearance").children.map(_.id) shouldBe List(
       "background-style",
@@ -96,7 +90,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "blur-radius"
     )
     groupById(groups, "settings-rendering").children.map(_.id) shouldBe List("render-fps")
-    groupById(groups, "settings-animation").children.map(_.id) should contain allOf (
+    groupById(groups, "settings-animation").children.map(_.id) shouldBe List(
       "motion-accessibility",
       "motion-preset",
       "editor-text-transition",
@@ -105,7 +99,17 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "command-runner-transition",
       "command-runner-fade",
       "ui-animation",
-      "element-transition-speed-scale"
+      "element-transition-speed-scale",
+      "editor-text-speed-scale",
+      "command-runner-speed-scale",
+      "ui-speed-scale",
+      "cursor-speed-scale",
+      "window-sitter-enabled",
+      "window-sitter-action",
+      "window-sitter-frames",
+      "window-sitter-active-ticks",
+      "window-sitter-fast-active-ticks",
+      "window-sitter-fast-threshold-ms"
     )
     groupById(groups, "settings-animation").children.map(_.id) should not contain "render-fps"
     groupById(groups, "settings-animation").children.map(_.id) should not contain "animation-duration"
@@ -113,8 +117,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-cursor").children.map(_.id) shouldBe List(
       "cursor-mode",
       "cursor-info-bar",
-      "cursor-info-bar-placement",
-      "cursor-speed-scale"
+      "cursor-info-bar-placement"
     )
     groupById(groups, "settings-text-area").children.map(_.id) shouldBe List(
       "text-area-left",

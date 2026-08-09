@@ -235,7 +235,14 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "element-transition-speed-scale",
       "editor-text-speed-scale",
       "command-runner-speed-scale",
-      "ui-speed-scale"
+      "ui-speed-scale",
+      "cursor-speed-scale",
+      "window-sitter-enabled",
+      "window-sitter-action",
+      "window-sitter-frames",
+      "window-sitter-active-ticks",
+      "window-sitter-fast-active-ticks",
+      "window-sitter-fast-threshold-ms"
     )
   }
 
@@ -247,11 +254,10 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(CommandCategory.Settings)
       .updateSearchTerm("animation")
 
+    // Window-sitter settings now live inside Motion & Animation (consolidated from Interface Layout),
+    // so "settings-animation" is the sole direct global match and the search short-circuits to it.
     runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe List(
-      "settings-animation",
-      "settings-interface-layout",
-      "settings-preset-animations",
-      "settings-preset-ui-surface-motion"
+      "settings-animation"
     )
   }
 
@@ -402,8 +408,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-cursor").children.map(_.id) should contain allOf (
       "cursor-mode",
       "cursor-info-bar",
-      "cursor-info-bar-placement",
-      "cursor-speed-scale"
+      "cursor-info-bar-placement"
     )
     nestedGroup("settings-surface-appearance").label shouldBe "Surface Appearance"
     nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List(
@@ -417,18 +422,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "window-chrome",
-      "window-sitter-enabled",
-      "window-sitter-action",
       "ui-element-gap",
       "ui-corner-radius",
       "ui-outline-thickness",
       "command-runner-visible-rows",
       "command-runner-item-gap-rows",
-      "command-runner-cursor-gap-rows",
-      "window-sitter-frames",
-      "window-sitter-active-ticks",
-      "window-sitter-fast-active-ticks",
-      "window-sitter-fast-threshold-ms"
+      "command-runner-cursor-gap-rows"
     )
     nestedGroup("settings-rendering").children.map(_.id) shouldBe List("render-fps")
     nestedGroup("settings-animation").children.map(_.id) should contain allOf (
