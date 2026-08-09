@@ -41,7 +41,6 @@ class CommandRegistry(private val commands: List[Command]):
     val optionItems =
       if category == CommandCategory.Settings then
         List(
-          CommandRunnerSettingsItems.animationOptionItem(optionSelections),
           CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections),
           CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections),
           CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections),
@@ -58,7 +57,6 @@ class CommandRegistry(private val commands: List[Command]):
   ): List[CommandSurfaceItem] =
     val commandItems = searchCommands(term, maxResults).map(CommandItem(_))
     val optionItems = List(
-      CommandRunnerSettingsItems.animationOptionItem(optionSelections),
       CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections),
       CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections),
       CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections),

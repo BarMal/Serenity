@@ -10,12 +10,6 @@ import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
-enum AnimationMode:
-  case None
-  case Quick
-  case Smooth
-  case Subtle
-
 enum CommandCategory:
   case All
   case File
@@ -88,7 +82,6 @@ enum CommandIntent:
   case ToggleTheme
   case ReloadTheme
   case FormatCurrentFile
-  case SetAnimationMode(mode: AnimationMode)
   case SetMaterialPreset(preset: MaterialPreset)
   case SetPostProcessingEffect(effect: PostProcessingEffect)
   case SetUiShadowsEnabled(enabled: Boolean)
