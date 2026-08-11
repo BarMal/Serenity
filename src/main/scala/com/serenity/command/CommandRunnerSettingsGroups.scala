@@ -457,6 +457,13 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Save or apply named layouts")
     )
+    val accessibilityGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-accessibility",
+      label = "Accessibility",
+      children = List(motionAccessibilityItem),
+      category = CommandCategory.Settings,
+      hint = Some("Motion accessibility and reading comfort")
+    )
     List(
       workspaceLayoutGroup,
       documentWritingGroup,
@@ -464,6 +471,7 @@ object CommandRunnerSettingsGroups:
       typographyGroup,
       appearanceMotionGroup,
       uiPresetsGroup,
+      accessibilityGroup,
       keymapGroup
     )
 

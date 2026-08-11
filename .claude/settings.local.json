@@ -157,7 +157,8 @@
       "PowerShell(cd C:\\\\Users\\\\barna\\\\.Git\\\\Serenity; $content = Get-Content src\\\\main\\\\scala\\\\Main.scala -Raw -Encoding UTF8; $section = $content.Substring\\($content.IndexOf\\(\"isSystemEvent\"\\)\\); $section.Substring\\(0, 300\\) | Format-Hex | Select-Object -First 30)",
       "PowerShell(cd C:\\\\Users\\\\barna\\\\.Git\\\\Serenity; $content = Get-Content src\\\\main\\\\scala\\\\Main.scala -Raw -Encoding UTF8; $idx = $content.IndexOf\\(\"isSystemEvent\\(event: UnhandledEvent\"\\); $section = $content.Substring\\($idx\\); $section.Substring\\(0, 400\\) | Format-Hex | Select-Object -First 40)",
       "PowerShell(cd C:\\\\Users\\\\barna\\\\.Git\\\\Serenity; \\(Get-Content src\\\\main\\\\scala\\\\Main.scala -Raw -Encoding UTF8\\) | Select-String -Pattern \"char ==\" | Select-Object -First 5)",
-      "PowerShell(sbt test *)"
+      "PowerShell(sbt test *)",
+      "mcp__Claude_Code_Remote__subscribe_pr_activity"
     ],
     "additionalDirectories": [
       "/home/barney/.serenity"

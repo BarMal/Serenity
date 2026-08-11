@@ -34,9 +34,9 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     runner.settingsSurfaceItems.collect {
       case group: CommandSurfaceItem.GroupItem => group.label
     } should contain allOf (
-      "Prose & Documents",
-      "Code & IDE",
-      "Terminal & Workspace",
+      "Document Writing",
+      "Editor View",
+      "Panels & Workspace",
       "Appearance & Motion",
       "Accessibility"
     )
@@ -46,7 +46,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
       .collectFirst { case item: CommandSurfaceItem.SettingSearchItem => item }
       .getOrElse(fail("Expected matching setting"))
     result.effectiveValue shouldBe Some("Plain Text")
-    result.breadcrumb should include("Prose & Documents")
+    result.breadcrumb should include("Document Writing")
   }
 
   it should "use Back for one level and Escape to dismiss at every depth" in {
