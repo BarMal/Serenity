@@ -3,7 +3,6 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.{Files, Path}
 
-import _root_.io.circe.syntax.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.*
