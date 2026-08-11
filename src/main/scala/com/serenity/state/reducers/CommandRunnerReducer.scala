@@ -183,7 +183,7 @@ object CommandRunnerReducer:
               )
             case Some(submenu) if submenu.searchTerm.nonEmpty =>
               ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm.dropRight(1))))
-            case Some(_) if currentRunner(state).exists(_.isSettingsSurface) =>
+            case Some(_) =>
               ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
             case _ =>
               ReducerResult.noEffects(state)

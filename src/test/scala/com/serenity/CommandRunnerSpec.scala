@@ -357,6 +357,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "settings-typography",
       "settings-appearance-motion",
       "settings-ui-presets",
+      "settings-accessibility",
       "settings-keymap"
     )
     def group(id: String): CommandSurfaceItem.GroupItem =

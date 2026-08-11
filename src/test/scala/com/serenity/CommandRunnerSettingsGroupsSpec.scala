@@ -40,6 +40,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-typography",
       "settings-appearance-motion",
       "settings-ui-presets",
+      "settings-accessibility",
       "settings-keymap"
     )
     groupById(groups, "settings-workspace-layout").children.map(_.id) shouldBe List(
@@ -129,6 +130,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "keymap-global-command_palette",
       "keymap-command-runner-submit"
     )
+    groupById(groups, "settings-accessibility").children.map(_.id) shouldBe List("motion-accessibility")
   }
 
   it should "show advanced motion timing only for a custom baseline" in {

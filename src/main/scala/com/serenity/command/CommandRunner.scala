@@ -117,29 +117,6 @@ case class CommandRunner(
       editingPresetName = editingPresetName
     )
 
-  private lazy val settingsSurfaceGroups: List[CommandSurfaceItem.GroupItem] =
-    val labels = Map(
-      "settings-workspace-layout"  -> "Terminal & Workspace",
-      "settings-document-writing"  -> "Prose & Documents",
-      "settings-editor-view"       -> "Code & IDE",
-      "settings-appearance-motion" -> "Appearance & Motion"
-    )
-    val motionAccessibilityItems = settingsGroups
-      .find(_.id == "settings-appearance-motion")
-      .toList
-      .flatMap(_.children.collect {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-animation" => group
-      })
-      .flatMap(_.children.collect { case item if item.id == "motion-accessibility" => item })
-    val accessibility = CommandSurfaceItem.GroupItem(
-      id = "settings-accessibility",
-      label = "Accessibility",
-      children = motionAccessibilityItems,
-      category = CommandCategory.Settings,
-      hint = Some("Motion accessibility and reading comfort")
-    )
-    settingsGroups.map(group => group.copy(label = labels.getOrElse(group.id, group.label))) :+ accessibility
-
   def openSettings: CommandRunner =
     copy(
       mode = CommandRunnerMode.Settings,
@@ -153,19 +130,9 @@ case class CommandRunner(
 
   def settingsSurfaceItems: List[CommandSurfaceItem] =
     activeSubmenu match
-      case Some(submenu) => submenu.filteredItems(submenuItems(submenu.groupId))
-      case None if searchTerm.nonEmpty =>
-        matchingSettingsResults(searchTerm).map {
-          case item: CommandSurfaceItem.SettingSearchItem =>
-            item.copy(
-              breadcrumb = item.breadcrumb
-                .replace("Settings > Document Writing", "Settings > Prose & Documents")
-                .replace("Settings > Editor View", "Settings > Code & IDE")
-                .replace("Settings > Panels & Workspace", "Settings > Terminal & Workspace")
-            )
-          case item => item
-        }
-      case None => settingsSurfaceGroups
+      case Some(submenu)               => submenu.filteredItems(submenuItems(submenu.groupId))
+      case None if searchTerm.nonEmpty => matchingSettingsResults(searchTerm)
+      case None                        => settingsGroups
 
   def settingsSurfaceSelectedIndex: Int =
     activeSubmenu.map(_.selectedIndex).getOrElse(selectedIndex)
@@ -261,7 +228,7 @@ case class CommandRunner(
     submenuGroup(groupId).map(_.children).getOrElse(Nil)
 
   def submenuGroup(groupId: String): Option[CommandSurfaceItem.GroupItem] =
-    findGroup(groupId, if isSettingsSurface then settingsSurfaceGroups else settingsGroups)
+    findGroup(groupId, settingsGroups)
 
   private def findGroup(
     groupId: String,
