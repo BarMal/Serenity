@@ -22,8 +22,8 @@ import com.serenity.ui.layout.{
   WorkspaceNodeId,
   WorkspaceTree
 }
+import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.presets.UiPreset.given
-import com.serenity.ui.presets.{UiPreset, UiPresetEditSession}
 import com.serenity.ui.theme.Theme
 import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
@@ -40,23 +40,7 @@ case class SessionState(
     config: AppConfig,
     themeName: String, // Store theme name instead of full theme object
     recentFiles: List[String] = Nil,
-    uiPresetEditSession: Option[SessionUiPresetEditSession] = None,
     schemaVersion: Int = 2
-)
-
-/** Persistent draft metadata that preserves the pre-preview workspace baseline. */
-case class SessionUiPresetEditSession(
-    id: String,
-    draftName: String,
-    sourceName: Option[String],
-    sourceRevision: Option[String] = None,
-    baseline: UiPreset,
-    baselineThemeName: String,
-    dirty: Boolean,
-    draft: UiPreset,
-    baselineLayout: Option[SessionLayout] = None,
-    baselineFocus: Option[SessionFocus] = None,
-    baselineNextPaneId: Option[Int] = None
 )
 
 /** Persistent representation of a buffer
@@ -165,8 +149,7 @@ object SessionState:
       bufferOrder = appState.bufferOrder.map(_.value),
       config = appState.config,
       themeName = appState.theme.name,
-      recentFiles = appState.recentFiles.map(_.toString),
-      uiPresetEditSession = appState.uiPresetEditSession.map(SessionUiPresetEditSession.fromSession)
+      recentFiles = appState.recentFiles.map(_.toString)
     )
 
   private def orderedBuffers(appState: AppState): List[Buffer] =
@@ -230,40 +213,7 @@ object SessionState:
       recentFiles = sessionState.recentFiles.map(Path.of(_)),
       nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
       nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-      nextSurfaceId = restoredLayout.nextSurfaceId,
-      uiPresetEditSession = sessionState.uiPresetEditSession.map(SessionUiPresetEditSession.toSession(_, theme))
-    )
-
-object SessionUiPresetEditSession:
-
-  def fromSession(session: UiPresetEditSession): SessionUiPresetEditSession =
-    SessionUiPresetEditSession(
-      id = session.id,
-      draftName = session.draftName,
-      sourceName = session.sourceName,
-      sourceRevision = session.sourceRevision,
-      baseline = session.baseline,
-      baselineThemeName = session.baselineTheme.name,
-      dirty = session.dirty,
-      draft = session.draft,
-      baselineLayout = session.baselineLayout.map(SessionLayout.fromLayout),
-      baselineFocus = session.baselineFocus.flatMap(SessionFocus.fromFocus),
-      baselineNextPaneId = session.baselineNextPaneId.map(_.value)
-    )
-
-  def toSession(session: SessionUiPresetEditSession, baselineTheme: Theme): UiPresetEditSession =
-    UiPresetEditSession(
-      id = session.id,
-      draftName = session.draftName,
-      sourceName = session.sourceName,
-      sourceRevision = session.sourceRevision,
-      baseline = session.baseline,
-      baselineTheme = baselineTheme,
-      dirty = session.dirty,
-      draft = session.draft,
-      baselineLayout = session.baselineLayout.map(SessionLayout.toLayout),
-      baselineFocus = session.baselineFocus.map(SessionFocus.toFocus),
-      baselineNextPaneId = session.baselineNextPaneId.map(PaneId.apply)
+      nextSurfaceId = restoredLayout.nextSurfaceId
     )
 
 object SessionBuffer:
@@ -1205,36 +1155,6 @@ given Decoder[SessionLayout] = Decoder.instance { cursor =>
 given Encoder[SessionFocus] = deriveEncoder
 given Decoder[SessionFocus] = deriveDecoder
 
-given Encoder[SessionUiPresetEditSession] = deriveEncoder
-
-given Decoder[SessionUiPresetEditSession] = Decoder.instance { cursor =>
-  for
-    id                 <- cursor.get[String]("id")
-    draftName          <- cursor.get[String]("draftName")
-    sourceName         <- cursor.get[Option[String]]("sourceName")
-    sourceRevision     <- cursor.getOrElse[Option[String]]("sourceRevision")(None)
-    baseline           <- cursor.get[UiPreset]("baseline")
-    baselineThemeName  <- cursor.get[String]("baselineThemeName")
-    dirty              <- cursor.get[Boolean]("dirty")
-    draft              <- cursor.getOrElse[UiPreset]("draft")(baseline)
-    baselineLayout     <- cursor.getOrElse[Option[SessionLayout]]("baselineLayout")(None)
-    baselineFocus      <- cursor.getOrElse[Option[SessionFocus]]("baselineFocus")(None)
-    baselineNextPaneId <- cursor.getOrElse[Option[Int]]("baselineNextPaneId")(None)
-  yield SessionUiPresetEditSession(
-    id,
-    draftName,
-    sourceName,
-    sourceRevision,
-    baseline,
-    baselineThemeName,
-    dirty,
-    draft,
-    baselineLayout,
-    baselineFocus,
-    baselineNextPaneId
-  )
-}
-
 given Encoder[SessionBuffer]    = deriveEncoder
 given Decoder[SessionBuffer]    = deriveDecoder
 given Encoder[RichTextFidelity] = deriveEncoder
@@ -1287,14 +1207,13 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
         cursor.history
       )
     )
-    buffers             <- cursor.get[List[SessionBuffer]]("buffers")
-    layout              <- cursor.get[SessionLayout]("layout")
-    focus               <- cursor.get[Option[SessionFocus]]("focus")
-    bufferOrder         <- cursor.get[List[Int]]("bufferOrder")
-    config              <- cursor.get[AppConfig]("config")
-    themeName           <- cursor.get[String]("themeName")
-    recentFiles         <- cursor.getOrElse[List[String]]("recentFiles")(Nil)
-    uiPresetEditSession <- cursor.getOrElse[Option[SessionUiPresetEditSession]]("uiPresetEditSession")(None)
+    buffers     <- cursor.get[List[SessionBuffer]]("buffers")
+    layout      <- cursor.get[SessionLayout]("layout")
+    focus       <- cursor.get[Option[SessionFocus]]("focus")
+    bufferOrder <- cursor.get[List[Int]]("bufferOrder")
+    config      <- cursor.get[AppConfig]("config")
+    themeName   <- cursor.get[String]("themeName")
+    recentFiles <- cursor.getOrElse[List[String]]("recentFiles")(Nil)
   yield SessionState(
     buffers = buffers,
     layout = layout,
@@ -1303,7 +1222,6 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
     config = config,
     themeName = themeName,
     recentFiles = recentFiles,
-    uiPresetEditSession = uiPresetEditSession,
     schemaVersion = schemaVersion
   )
 }

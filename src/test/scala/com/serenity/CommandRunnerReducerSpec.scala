@@ -440,7 +440,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .updateSearchTerm("save preset")
+      .updateSearchTerm("overwrite preset")
     val state = activeState(registry).copy(
       uiSurfaces = List(
         UiSurface(
@@ -454,7 +454,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runner.selectedItem.collect {
       case item: CommandSurfaceItem.SettingSearchItem =>
         (item.targetGroupId, item.targetItemId, item.sourceScope)
-    } shouldBe Some(("settings-preset-actions", "ui-preset-save", "Preset"))
+    } shouldBe Some(("settings-preset-actions", "ui-preset-overwrite", "Preset"))
 
     val opened       = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
     val openedRunner = runnerFrom(opened)
@@ -463,7 +463,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     }
 
     openedRunner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-actions")
-    selectedItem.map(_.id) shouldBe Some("ui-preset-save")
+    selectedItem.map(_.id) shouldBe Some("ui-preset-overwrite")
   }
 
   it should "search globally even when opened on a narrower category" in {

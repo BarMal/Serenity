@@ -14,7 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-import com.serenity.ui.presets.{UiPreset, UiPresetStore, UiPresetStoreConflict}
+import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -599,27 +599,8 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     store.find("Cafe\u0301").unsafeRunSync().map(_.name) shouldBe Some("Caf\u00e9")
   }
 
-  it should "reject replacement when the draft source was changed or removed" in {
-    val path    = Files.createTempDirectory("ui-preset-store-conflict").resolve("ui-presets.json")
-    val store   = UiPresetStore(path)
-    val source  = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
-    val changed = source.copy(config = AppConfig.default.withLineNumbers(false))
-
-    store.upsert(source).unsafeRunSync()
-    store.upsert(changed).unsafeRunSync()
-    store
-      .replace("Focus", UiPresetStore.revisionOf(source), source.copy(name = "Focus Updated"))
-      .attempt
-      .unsafeRunSync()
-      .isLeft shouldBe true
-    store.rename("Focus", "Focus Renamed").unsafeRunSync()
-    store.replace("Focus", UiPresetStore.revisionOf(changed), changed).attempt.unsafeRunSync().isLeft shouldBe true
-    store.delete("Focus Renamed").unsafeRunSync()
-    store.replace("Focus", UiPresetStore.revisionOf(changed), changed).attempt.unsafeRunSync().isLeft shouldBe true
-  }
-
-  it should "preserve compatible unknown fields when saving an edited preset draft" in {
-    val path  = Files.createTempDirectory("ui-preset-store-replace-unknown").resolve("ui-presets.json")
+  it should "preserve compatible unknown fields when overwriting a preset" in {
+    val path  = Files.createTempDirectory("ui-preset-store-overwrite-unknown").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val source = UiPreset(
       "Focus",
@@ -636,7 +617,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     )
 
     store.upsert(source).unsafeRunSync()
-    store.replace("Focus", UiPresetStore.revisionOf(source), replacement).unsafeRunSync()
+    store.upsert(replacement).unsafeRunSync()
 
     val saved = store.find("Focus").unsafeRunSync().getOrElse(fail("replacement should be saved"))
     saved.config.showLineNumbers shouldBe false
@@ -644,78 +625,57 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     saved.configUnknownFields("futureConfigField") shouldBe Some(Json.fromString("keep"))
   }
 
-  it should "allow only one concurrent replacement from the same source revision" in
+  it should "keep the last write when two overwrites race for the same preset" in
     (1 to 20).foreach { attempt =>
-      val path   = Files.createTempDirectory(s"ui-preset-store-concurrent-replace-$attempt").resolve("ui-presets.json")
+      val path = Files.createTempDirectory(s"ui-preset-store-concurrent-overwrite-$attempt").resolve("ui-presets.json")
       val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
       val storeA = UiPresetStore(path)
       val storeB = UiPresetStore(path)
       val first  = source.copy(config = AppConfig.default.withLineNumbers(false))
       val second = source.copy(config = AppConfig.default.withWordWrap(false))
-      val revision = UiPresetStore.revisionOf(source)
 
       storeA.upsert(source).unsafeRunSync()
-      val results = (
-        storeA.replace("Focus", revision, first).attempt,
-        storeB.replace("Focus", revision, second).attempt
-      ).parTupled.unsafeRunSync()
+      val results = (storeA.upsert(first).attempt, storeB.upsert(second).attempt).parTupled.unsafeRunSync()
 
-      List(results._1, results._2).count(_.isRight) shouldBe 1
-      List(results._1, results._2).collect { case Left(error) => error } should contain only UiPresetStoreConflict
-        .SourceChanged(
-          "Focus"
-        )
-      storeA.find("Focus").unsafeRunSync() shouldBe Some(if results._1.isRight then first else second)
+      results._1 shouldBe Right(())
+      results._2 shouldBe Right(())
+      List(first, second) should contain(storeA.find("Focus").unsafeRunSync().getOrElse(fail("preset should exist")))
     }
 
-  it should "serialize replacement with concurrent deletion" in
+  it should "serialize an overwrite with a concurrent deletion" in
     (1 to 20).foreach { attempt =>
-      val path   = Files.createTempDirectory(s"ui-preset-store-replace-delete-$attempt").resolve("ui-presets.json")
+      val path   = Files.createTempDirectory(s"ui-preset-store-overwrite-delete-$attempt").resolve("ui-presets.json")
       val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
       val storeA = UiPresetStore(path)
       val storeB = UiPresetStore(path)
 
       storeA.upsert(source).unsafeRunSync()
       val results = (
-        storeA
-          .replace(
-            "Focus",
-            UiPresetStore.revisionOf(source),
-            source.copy(config = AppConfig.default.withLineNumbers(false))
-          )
-          .attempt,
+        storeA.upsert(source.copy(config = AppConfig.default.withLineNumbers(false))).attempt,
         storeB.delete("Focus").attempt
       ).parTupled.unsafeRunSync()
 
+      results._1 shouldBe Right(())
       results._2 shouldBe Right(())
-      results._1 match
-        case Right(_) | Left(UiPresetStoreConflict.SourceMissing("Focus")) => succeed
-        case other => fail(s"unexpected replacement outcome: $other")
-      storeA.find("Focus").unsafeRunSync() shouldBe None
+      storeA.load().unsafeRunSync().names should contain theSameElementsAs
+        storeA.find("Focus").unsafeRunSync().map(_.name).toList
     }
 
-  it should "serialize replacement with concurrent rename" in
+  it should "serialize an overwrite with a concurrent rename" in
     (1 to 20).foreach { attempt =>
-      val path   = Files.createTempDirectory(s"ui-preset-store-replace-rename-$attempt").resolve("ui-presets.json")
+      val path   = Files.createTempDirectory(s"ui-preset-store-overwrite-rename-$attempt").resolve("ui-presets.json")
       val source = UiPreset("Focus", AppConfig.default, Theme.dark.name, Nil)
       val storeA = UiPresetStore(path)
       val storeB = UiPresetStore(path)
 
       storeA.upsert(source).unsafeRunSync()
       val results = (
-        storeA
-          .replace(
-            "Focus",
-            UiPresetStore.revisionOf(source),
-            source.copy(config = AppConfig.default.withLineNumbers(false))
-          )
-          .attempt,
+        storeA.upsert(source.copy(config = AppConfig.default.withLineNumbers(false))).attempt,
         storeB.rename("Focus", "Renamed").attempt
       ).parTupled.unsafeRunSync()
 
       results._2 shouldBe Right(())
-      results._1 match
-        case Right(_) | Left(UiPresetStoreConflict.SourceMissing("Focus")) => succeed
-        case other => fail(s"unexpected replacement outcome: $other")
-      storeA.load().unsafeRunSync().names shouldBe List("Renamed")
+      val names = storeA.load().unsafeRunSync().names
+      names should contain("Renamed")
+      names.distinct shouldBe names
     }

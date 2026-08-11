@@ -33,21 +33,6 @@ case class UiPreset(
     configUnknownFields: JsonObject = JsonObject.empty
 )
 
-/** The authoritative, unsaved workspace edit session for a UI preset. */
-case class UiPresetEditSession(
-    id: String,
-    draftName: String,
-    sourceName: Option[String],
-    sourceRevision: Option[String] = None,
-    baseline: UiPreset,
-    baselineTheme: Theme,
-    dirty: Boolean = false,
-    draft: UiPreset,
-    baselineLayout: Option[Layout] = None,
-    baselineFocus: Option[Focus] = None,
-    baselineNextPaneId: Option[PaneId] = None
-)
-
 object UiPreset:
 
   def normalizedName(name: String): String =
@@ -745,11 +730,6 @@ object UiPresetIndex:
     }
   }
 
-enum UiPresetStoreConflict(message: String) extends RuntimeException(message):
-  case SourceChanged(name: String) extends UiPresetStoreConflict(s"Preset '$name' changed outside this draft")
-  case SourceMissing(name: String)
-      extends UiPresetStoreConflict(s"Preset '$name' was deleted or renamed outside this draft")
-
 class UiPresetStore private (path: Path):
   import UiPresetIndex.given
 
@@ -849,26 +829,6 @@ class UiPresetStore private (path: Path):
   def list(): IO[List[UiPreset]] =
     load().map(_.presets)
 
-  /** Replaces a custom preset only when its persisted source has not changed since the draft was opened. */
-  def replace(sourceName: String, sourceRevision: String, replacement: UiPreset): IO[Unit] =
-    withExclusiveMutationLock {
-      load().flatMap { index =>
-        index.find(sourceName) match
-          case None => IO.raiseError(UiPresetStoreConflict.SourceMissing(sourceName))
-          case Some(source) if revisionOf(source) != sourceRevision =>
-            IO.raiseError(UiPresetStoreConflict.SourceChanged(sourceName))
-          case Some(source) =>
-            val withoutSource = index.copy(presets = index.presets.filterNot(_ == source))
-            val preservingUnknownFields = replacement.copy(
-              unknownFields = source.unknownFields.deepMerge(replacement.unknownFields),
-              configUnknownFields = source.configUnknownFields.deepMerge(replacement.configUnknownFields)
-            )
-            IO.fromEither(validateForUpsert(preservingUnknownFields, withoutSource)).flatMap { valid =>
-              saveUnlocked(withoutSource.copy(presets = withoutSource.presets :+ valid))
-            }
-      }
-    }
-
   private def validateForUpsert(preset: UiPreset, index: UiPresetIndex): Either[IllegalArgumentException, UiPreset] =
     val name = UiPreset.normalizedName(preset.name)
     Either
@@ -892,9 +852,6 @@ class UiPresetStore private (path: Path):
       }
       .map(presets => UiPresetIndex(presets, index.unknownFields))
 
-  def revisionOf(preset: UiPreset): String =
-    preset.asJson.noSpaces
-
 object UiPresetStore:
   val defaultPath: Path = Paths.get(System.getProperty("user.home"), ".serenity", "ui-presets.json")
 
@@ -902,9 +859,6 @@ object UiPresetStore:
 
   private def inProcessLock(path: Path): ReentrantLock =
     inProcessLocks.computeIfAbsent(path.toAbsolutePath.normalize, _ => new ReentrantLock())
-
-  def revisionOf(preset: UiPreset): String =
-    preset.asJson.noSpaces
 
   def apply(path: Path): UiPresetStore =
     new UiPresetStore(path)

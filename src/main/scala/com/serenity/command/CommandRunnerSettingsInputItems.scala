@@ -95,42 +95,12 @@ object CommandRunnerSettingsInputItems:
 
     val presetItems = List(
       CommandSurfaceItem.InputItem(
-        id = "ui-preset-create",
-        label = "Create Preset",
+        id = "ui-preset-save-as-new",
+        label = "Save As New Preset",
         hint = "New preset name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.StartUiPresetDraft(_)),
-        category = CommandCategory.Settings,
-        acceptsFreeText = true
-      ),
-      CommandSurfaceItem.InputItem(
-        id = "ui-preset-save",
-        label = "Save Current Preset",
-        hint = "Preset name",
-        currentValue = "",
-        isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.SaveUiPreset(_)),
-        category = CommandCategory.Settings,
-        acceptsFreeText = true
-      ),
-      CommandSurfaceItem.InputItem(
-        id = "ui-preset-discard",
-        label = "Discard Preset Draft",
-        hint = "Restore the workspace from before editing",
-        currentValue = "",
-        isDecimal = false,
-        parse = _ => Some(CommandIntent.DiscardUiPresetDraft),
-        category = CommandCategory.Settings,
-        acceptsFreeText = true
-      ),
-      CommandSurfaceItem.InputItem(
-        id = "ui-preset-cancel-switch",
-        label = "Cancel Preset Switch",
-        hint = "Keep editing the current draft",
-        currentValue = "",
-        isDecimal = false,
-        parse = _ => Some(CommandIntent.CancelUiPresetSwitch),
+        parse = text => nonEmptyText(text).map(CommandIntent.SaveUiPresetAsNew(_)),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -145,12 +115,12 @@ object CommandRunnerSettingsInputItems:
         acceptsFreeText = true
       ),
       CommandSurfaceItem.InputItem(
-        id = "ui-preset-edit",
-        label = "Edit Preset",
-        hint = "Custom preset name",
+        id = "ui-preset-overwrite",
+        label = "Overwrite Preset",
+        hint = "Existing custom preset name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.EditUiPreset(_)),
+        parse = text => nonEmptyText(text).map(CommandIntent.OverwriteUiPreset(_)),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),

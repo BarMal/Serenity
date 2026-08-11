@@ -203,17 +203,7 @@ class SessionManager(
                     logger.warn(s"[SESSION] Theme '${sessionState.themeName}' not found, using default") >>
                       themeManager.initializeWithTheme("dark")
                   )
-                baselineTheme <- sessionState.uiPresetEditSession.traverse { session =>
-                  themeManager.initializeWithTheme(session.baselineThemeName).handleErrorWith(_ => IO.pure(theme))
-                }
-                appState <- SessionState.toAppStateIO(sessionState, theme)
-                restored = baselineTheme.fold(appState)(baseline =>
-                  appState.copy(
-                    uiPresetEditSession = sessionState.uiPresetEditSession.map(
-                      SessionUiPresetEditSession.toSession(_, baseline)
-                    )
-                  )
-                )
+                restored <- SessionState.toAppStateIO(sessionState, theme)
                 _ <- logger.info(s"[SESSION] Session loaded successfully with ${sessionState.buffers.size} buffers")
               yield Some(restored)
           }
