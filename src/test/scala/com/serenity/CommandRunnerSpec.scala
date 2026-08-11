@@ -792,7 +792,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
         case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-create-name" => group
       }
       .getOrElse(fail("missing create preset name group"))
-    createName.children.map(_.id) shouldBe List("ui-preset-create")
+    createName.children.map(_.id) shouldBe List("ui-preset-save-as-new")
 
     val presetName = editPreset.children
       .collectFirst {
@@ -808,11 +808,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("missing preset actions group"))
     presetActions.label shouldBe "Preset Actions"
     presetActions.children.map(_.id) shouldBe List(
-      "ui-preset-save",
-      "ui-preset-discard",
-      "ui-preset-cancel-switch",
       "ui-preset-apply",
-      "ui-preset-edit",
+      "ui-preset-overwrite",
       "ui-preset-duplicate",
       "ui-preset-delete",
       "ui-preset-reset"
@@ -874,31 +871,32 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.InputItem if item.id.startsWith("ui-preset-") => item
     }
     inputs.map(_.id) should contain allOf (
-      "ui-preset-create",
-      "ui-preset-save",
+      "ui-preset-save-as-new",
       "ui-preset-apply",
+      "ui-preset-overwrite",
       "ui-preset-duplicate",
       "ui-preset-rename",
       "ui-preset-delete",
       "ui-preset-reset"
     )
-    val createInput = inputs.find(_.id == "ui-preset-create").getOrElse(fail("missing create input"))
-    val saveInput   = inputs.find(_.id == "ui-preset-save").getOrElse(fail("missing save input"))
-    val applyInput  = inputs.find(_.id == "ui-preset-apply").getOrElse(fail("missing apply input"))
-    val dupeInput   = inputs.find(_.id == "ui-preset-duplicate").getOrElse(fail("missing duplicate input"))
-    val renameInput = inputs.find(_.id == "ui-preset-rename").getOrElse(fail("missing rename input"))
-    val deleteInput = inputs.find(_.id == "ui-preset-delete").getOrElse(fail("missing delete input"))
-    val resetInput  = inputs.find(_.id == "ui-preset-reset").getOrElse(fail("missing reset input"))
+    val saveAsNewInput = inputs.find(_.id == "ui-preset-save-as-new").getOrElse(fail("missing save-as-new input"))
+    val overwriteInput = inputs.find(_.id == "ui-preset-overwrite").getOrElse(fail("missing overwrite input"))
+    val applyInput     = inputs.find(_.id == "ui-preset-apply").getOrElse(fail("missing apply input"))
+    val dupeInput      = inputs.find(_.id == "ui-preset-duplicate").getOrElse(fail("missing duplicate input"))
+    val renameInput    = inputs.find(_.id == "ui-preset-rename").getOrElse(fail("missing rename input"))
+    val deleteInput    = inputs.find(_.id == "ui-preset-delete").getOrElse(fail("missing delete input"))
+    val resetInput     = inputs.find(_.id == "ui-preset-reset").getOrElse(fail("missing reset input"))
 
-    createInput.label shouldBe "Create Preset"
-    createInput.hint shouldBe "New preset name"
-    saveInput.currentValue shouldBe "Writing"
+    saveAsNewInput.label shouldBe "Save As New Preset"
+    saveAsNewInput.hint shouldBe "New preset name"
+    overwriteInput.currentValue shouldBe "Writing"
     applyInput.currentValue shouldBe "Writing"
     dupeInput.currentValue shouldBe "Writing -> "
     renameInput.currentValue shouldBe "Writing -> "
     deleteInput.currentValue shouldBe "Writing"
     resetInput.currentValue shouldBe "Writing"
-    createInput.parse("Longform Writing") shouldBe Some(CommandIntent.StartUiPresetDraft("Longform Writing"))
+    saveAsNewInput.parse("Longform Writing") shouldBe Some(CommandIntent.SaveUiPresetAsNew("Longform Writing"))
+    overwriteInput.parse("Writing") shouldBe Some(CommandIntent.OverwriteUiPreset("Writing"))
     dupeInput.parse("Writing -> My Writing") shouldBe Some(CommandIntent.DuplicateUiPreset("Writing", "My Writing"))
     renameInput.parse("Draft -> Final") shouldBe Some(CommandIntent.RenameUiPreset("Draft", "Final"))
     deleteInput.parse("Old Preset") shouldBe Some(CommandIntent.DeleteUiPreset("Old Preset"))
@@ -951,7 +949,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val inputs = descendants(presetGroup).collect {
       case item: CommandSurfaceItem.InputItem if item.id.startsWith("ui-preset-") => item
     }
-    inputs.find(_.id == "ui-preset-save").map(_.currentValue) shouldBe Some("Research Notes")
+    inputs.find(_.id == "ui-preset-overwrite").map(_.currentValue) shouldBe Some("Research Notes")
     inputs.find(_.id == "ui-preset-apply").map(_.currentValue) shouldBe Some("Research Notes")
     inputs.find(_.id == "ui-preset-duplicate").map(_.currentValue) shouldBe Some("Research Notes -> ")
     inputs.find(_.id == "ui-preset-rename").map(_.currentValue) shouldBe Some("Research Notes -> ")

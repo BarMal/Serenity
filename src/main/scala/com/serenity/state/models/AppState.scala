@@ -7,7 +7,6 @@ import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.rope.Rope
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.{Layout, SplitAxis, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.presets.UiPresetEditSession
 import com.serenity.ui.theme.Theme
 
 enum SurfacePhase:
@@ -222,7 +221,6 @@ case class AppState(
     navigationBackStack: List[NavigationPoint] = Nil,
     navigationForwardStack: List[NavigationPoint] = Nil,
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
-    uiPresetEditSession: Option[UiPresetEditSession] = None,
     windowSitter: WindowSitter = WindowSitter.default
 ):
 

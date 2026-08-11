@@ -23,7 +23,6 @@ import com.serenity.ui.layout.{
   WorkspaceNodeId,
   WorkspaceTree
 }
-import com.serenity.ui.presets.{UiPreset, UiPresetEditSession}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -1184,81 +1183,25 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restored.buffers(buffer2.id).findState shouldBe Some(FindState("elephant", List(FindResult(1, 0)), 0))
   }
 
-  it should "persist a dirty UI preset draft separately from its preview workspace" in {
-    val baseline = UiPreset(
-      name = "Drafting",
-      config = AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid),
-      themeName = Theme.dark.name,
-      pinnedPanels = Nil
-    )
-    val baselineLayout = Layout(
-      editorPanes = Map(PaneId(3) -> EditorPane.withBuffer(PaneId(3), BufferId(0))),
-      activeEditorPaneId = Some(PaneId(3)),
-      paneOrder = List(PaneId(3)),
-      splitDirection = PaneSplitDirection.Vertical
-    )
+  it should "ignore a legacy UI preset draft field when restoring a session" in {
     val state = AppState.initial.copy(
-      config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike),
-      uiPresetEditSession = Some(
-        UiPresetEditSession(
-          "draft-1",
-          "Drafting",
-          Some("Drafting"),
-          None,
-          baseline,
-          Theme.dark,
-          dirty = true,
-          draft = baseline.copy(config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike)),
-          baselineLayout = Some(baselineLayout),
-          baselineFocus = Some(Focus.EditorPane(PaneId(3))),
-          baselineNextPaneId = Some(PaneId(4))
+      config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike)
+    )
+    val legacy = SessionState.fromAppState(state).asJson.mapObject { session =>
+      session.add(
+        "uiPresetEditSession",
+        Json.obj(
+          "id"                -> Json.fromString("draft-1"),
+          "draftName"         -> Json.fromString("Drafting"),
+          "sourceName"        -> Json.fromString("Drafting"),
+          "baselineThemeName" -> Json.fromString(Theme.dark.name),
+          "dirty"             -> Json.True
         )
       )
-    )
-
-    val restored = SessionState.toAppState(
-      SessionState.fromAppState(state).asJson.as[SessionState].toOption.getOrElse(fail("session should decode")),
-      Theme.dark
-    )
-
-    restored.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
-    restored.uiPresetEditSession.map(_.baseline.config.backgroundStyle) shouldBe Some(BackgroundStyle.Solid)
-    restored.uiPresetEditSession.map(_.draft.config.backgroundStyle) shouldBe Some(BackgroundStyle.GlassLike)
-    restored.uiPresetEditSession.map(_.dirty) shouldBe Some(true)
-    restored.uiPresetEditSession.map(_.baselineLayout) shouldBe Some(
-      Some(baselineLayout.copy(workspaceTree = baselineLayout.effectiveWorkspaceTree))
-    )
-    restored.uiPresetEditSession.map(_.baselineFocus) shouldBe Some(Some(Focus.EditorPane(PaneId(3))))
-    restored.uiPresetEditSession.map(_.baselineNextPaneId) shouldBe Some(Some(PaneId(4)))
-  }
-
-  it should "restore pre-transaction sessions without a persisted draft snapshot" in {
-    val baseline = UiPreset(
-      "Drafting",
-      AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid),
-      Theme.dark.name,
-      Nil
-    )
-    val state = AppState.initial.copy(
-      uiPresetEditSession = Some(
-        UiPresetEditSession(
-          "draft-1",
-          "Drafting",
-          Some("Drafting"),
-          None,
-          baseline,
-          Theme.dark,
-          draft = baseline
-        )
-      )
-    )
-    val encoded = SessionState.fromAppState(state).asJson
-    val legacy = encoded.mapObject { session =>
-      val legacyDraft = encoded.hcursor.downField("uiPresetEditSession").focus.map(_.mapObject(_.remove("draft")))
-      session.add("uiPresetEditSession", legacyDraft.getOrElse(fail("draft session should encode")))
     }
 
-    val restored = legacy.as[SessionState].toOption.getOrElse(fail("legacy session should decode"))
+    val decoded  = legacy.as[SessionState].toOption.getOrElse(fail("legacy session should decode"))
+    val restored = SessionState.toAppState(decoded, Theme.dark)
 
-    restored.uiPresetEditSession.map(_.draft) shouldBe Some(baseline)
+    restored.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
   }

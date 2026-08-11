@@ -266,14 +266,11 @@ object CommandRunnerSettingsGroups:
     val editingPreset = presetEditContextName(optionSelections, uiPresetPreviews, editingPresetName)
     val presetInputItems =
       inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
-    val createPresetItems = presetInputItems.filter(_.id == "ui-preset-create")
+    val createPresetItems = presetInputItems.filter(_.id == "ui-preset-save-as-new")
     val renamePresetItems = presetInputItems.filter(_.id == "ui-preset-rename")
     val presetActionItems = presetInputItems.filter(item =>
-      item.id == "ui-preset-save" ||
-        item.id == "ui-preset-discard" ||
-        item.id == "ui-preset-cancel-switch" ||
-        item.id == "ui-preset-apply" ||
-        item.id == "ui-preset-edit" ||
+      item.id == "ui-preset-apply" ||
+        item.id == "ui-preset-overwrite" ||
         item.id == "ui-preset-duplicate" ||
         item.id == "ui-preset-delete" ||
         item.id == "ui-preset-reset"
@@ -290,14 +287,14 @@ object CommandRunnerSettingsGroups:
       label = "Preset Actions",
       children = presetActionItems,
       category = CommandCategory.Settings,
-      hint = Some("Save, discard, cancel, apply, duplicate, delete, or reset")
+      hint = Some("Apply, overwrite, duplicate, delete, or reset")
     )
     val createPresetNameGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-create-name",
       label = "Name",
       children = createPresetItems,
       category = CommandCategory.Settings,
-      hint = Some("Name and save the current workspace")
+      hint = Some("Save the current workspace as a new preset")
     )
     val activePanelsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-active-panels",
@@ -504,7 +501,7 @@ object CommandRunnerSettingsGroups:
     presetName match
       case Some(name) =>
         item.id match
-          case "ui-preset-save" | "ui-preset-apply" | "ui-preset-edit" | "ui-preset-delete" | "ui-preset-reset" =>
+          case "ui-preset-overwrite" | "ui-preset-apply" | "ui-preset-delete" | "ui-preset-reset" =>
             item.copy(currentValue = name)
           case "ui-preset-duplicate" | "ui-preset-rename" =>
             item.copy(currentValue = s"$name -> ")
