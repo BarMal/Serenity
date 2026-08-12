@@ -1,4 +1,5 @@
 import cats.effect.*
+import cats.syntax.all.*
 import com.serenity.animation.WindowSitter
 import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, MotionFamily}
@@ -7,7 +8,7 @@ import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
 import com.serenity.ui.accessibility.AccessibilitySnapshot
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.{PaintExecutionContext, Renderer}
 import com.serenity.ui.terminal.SwingWindow
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
@@ -39,8 +40,8 @@ object Main extends IOApp:
         .fold(IO.unit)(message => logger.warn(message))
       appConfig = resolveAutoTextScale(configLoad.config, DisplayScale.defaultDeviceScale.textScale)
       displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
-      _ <- SwingWindow
-        .resource(
+      _ <- (
+        SwingWindow.resource(
           displayState.primaryMetrics,
           displayState.uiMetrics,
           appConfig.windowChromeMode,
@@ -48,8 +49,10 @@ object Main extends IOApp:
           initialWindowSitter = WindowSitter.fromConfig(appConfig.windowSitterConfig),
           initialWindowSitterVisible = appConfig.windowSitterConfig.enabled &&
             appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).enabled
-        )
-        .use { swingWin =>
+        ),
+        PaintExecutionContext.resource
+      ).tupled
+        .use { (swingWin, paintEc) =>
           val actualAppConfig =
             resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
           val initialScaleSync =
@@ -59,21 +62,22 @@ object Main extends IOApp:
             else IO.unit
 
           def syncDisplayMetrics(): IO[Unit] =
-            IO.blocking {
+            IO {
               val metrics = displayState.primaryMetrics
               if swingWin.metrics != metrics then swingWin.updateMetrics(metrics, displayState.uiMetrics)
-            }
+            }.evalOn(paintEc)
 
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
-            IO.blocking {
+            IO {
               swingWin.updateChromeTheme(state.theme)
               val sitterVisible = state.config.windowSitterConfig.enabled &&
                 state.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).enabled
               swingWin.updateWindowSitter(state.windowSitter, sitterVisible)
-            }
+            }.evalOn(paintEc)
 
           def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
-            IO.blocking(swingWin.updateAccessibility(AccessibilitySnapshot.from(state, swingWin.viewportSize)))
+            IO(swingWin.updateAccessibility(AccessibilitySnapshot.from(state, swingWin.viewportSize)))
+              .evalOn(paintEc)
 
           initialScaleSync >> AppRuntime.run(
             initialViewportSize = swingWin.viewportSize,
@@ -86,7 +90,7 @@ object Main extends IOApp:
               ),
             checkResize = IO(swingWin.doResizeIfNecessary()),
             renderFull = (state, vis, cc) =>
-              syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO.blocking {
+              syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO {
                 if vis then
                   val _ = Renderer.renderWithCursorOverlay(
                     state,
@@ -110,9 +114,9 @@ object Main extends IOApp:
                     None,
                     repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(vis)
                   )
-              },
+              }.evalOn(paintEc),
             renderCursorOnly = (state, vis, cc) =>
-              syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO.blocking {
+              syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO {
                 val rendered = Renderer.renderCursorOnly(
                   state,
                   vis,
@@ -135,7 +139,7 @@ object Main extends IOApp:
                     cc,
                     repaintOnFlush = true
                   )
-              },
+              }.evalOn(paintEc),
             appConfig = actualAppConfig,
             makeStateManager = Some(logger =>
               com.serenity.state.manager.StateManager.apply(
