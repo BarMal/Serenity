@@ -202,6 +202,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           IO.unit,
           (_: AppState, _: Boolean, _: Option[Color]) =>
             animationTicks.get.flatMap(tickCount => rendered.update(_ :+ tickCount)),
+          (_: AppState, _: Boolean, _: Option[Color]) =>
+            IO.raiseError(new AssertionError("expected full render while a surface animation is active")),
           delay => requestedDelays.update(_ :+ delay)
         )
         .take(2)
@@ -213,6 +215,51 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       frames should have size 2
       delays shouldBe Vector(Duration.Zero, frameInterval)
       frames shouldBe Vector(0, 1)
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "route fast-mode frames through the cursor-only render path when only the window sitter is active" in {
+    val state = AppState.initial.copy(
+      config = AppState.initial.config.copy(renderFpsTarget = RenderFpsTarget.Fps30),
+      windowSitter = WindowSitter.default.observeTyping(1_000_000_000L)
+    )
+    state.windowSitter.isActive shouldBe true
+    AppRuntime.needsFullContentRender(state) shouldBe false
+
+    val program = for
+      fastMode               <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      fastRenderRequestEpoch <- Ref.of[IO, Long](0L)
+      animationTickCadence   <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
+      cursorOnlyFrames       <- Ref.of[IO, Int](0)
+      stateManager = new com.serenity.state.manager.StateReader
+        with com.serenity.state.manager.StateUpdater
+        with com.serenity.state.manager.EventApplier
+        with com.serenity.state.manager.AnimationTicker:
+        def getCurrentState: IO[AppState]                       = IO.pure(state)
+        def updateState(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                  = IO.unit
+        def advanceAnimationFrames(): IO[Unit]                  = IO.unit
+        def advanceAnimationsOnTick(): IO[Boolean]              = IO.pure(true)
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      _ <- AppRuntime
+        .fastRenderPhase(
+          stateManager,
+          fastMode,
+          fastRenderRequestEpoch,
+          animationTickCadence,
+          IO.pure(Some(state)),
+          IO.unit,
+          (_: AppState, _: Boolean, _: Option[Color]) =>
+            IO.raiseError(new AssertionError("expected cursor-only render while only the window sitter is active")),
+          (_: AppState, _: Boolean, _: Option[Color]) => cursorOnlyFrames.update(_ + 1),
+          _ => IO.unit
+        )
+        .take(2)
+        .compile
+        .drain
+      frames <- cursorOnlyFrames.get
+    yield frames shouldBe 2
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
