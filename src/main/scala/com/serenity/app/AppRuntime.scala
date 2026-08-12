@@ -146,7 +146,8 @@ object AppRuntime:
                   animationTickCadence,
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
-                  renderFull
+                  renderFull,
+                  renderCursorOnly
                 )
 
                 val renderLoop: Stream[IO, Unit] =
@@ -302,6 +303,7 @@ object AppRuntime:
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
     renderFull: (AppState, Boolean, Option[Color]) => IO[Unit],
+    renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
     sleep: FiniteDuration => IO[Unit] = IO.sleep
   ): Stream[IO, Unit] =
     Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
@@ -328,9 +330,15 @@ object AppRuntime:
               state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
                 stateManager.getCurrentState
               )
-              _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
-                renderFull(state, true, None)
-              )
+              _ <-
+                if state.windowSitter.isActive && !needsFullContentRender(state) then
+                  withRuntimeDiagnostics("render loop", "fast.cursor-only-render", IO.pure(Some(state)))(
+                    renderCursorOnly(state, true, None)
+                  )
+                else
+                  withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
+                    renderFull(state, true, None)
+                  )
             yield active
         }
         .takeWhile(identity)
@@ -460,10 +468,21 @@ object AppRuntime:
       }
 
   private[serenity] def hasActiveAnimations(state: AppState): Boolean =
+    needsFullContentRender(state) || state.windowSitter.isActive
+
+  /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
+    * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every
+    * visible glyph/background colour (see Renderer.withEffectiveTheme) -- both require the full canvas. Surface
+    * animations (command palette, panel fades) are drawn through the same overlay-scene machinery as full renders, not
+    * the cursor-only path, so they need it too. The window sitter is the one exception: its glyph lives entirely in the
+    * window chrome (SwingWindow.updateWindowSitter, driven by syncChromeTheme, which runs before either render path
+    * every frame regardless) and never touches the canvas -- so it alone keeps the fast loop running (see
+    * hasActiveAnimations) without forcing a full repaint each frame.
+    */
+  private[serenity] def needsFullContentRender(state: AppState): Boolean =
     state.buffers.values.exists(_.animations.hasActiveAnimations) ||
       state.themeTransition.isDefined ||
-      state.surfaceAnimations.nonEmpty ||
-      state.windowSitter.isActive
+      state.surfaceAnimations.nonEmpty
 
   private def logSelectiveEvents(
     event: Event,
