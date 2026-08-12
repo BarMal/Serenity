@@ -58,8 +58,11 @@ object AppRuntime:
   final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
 
     def advance(frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
+      // The tick bucket follows the caller's own frame interval (i.e. the configured renderFpsTarget) rather than a
+      // fixed 60Hz constant, so animation state advances once per actual paint frame -- lowering render FPS also
+      // lowers animation-tick CPU cost instead of ticking internally at 60Hz regardless of paint rate.
       val totalNanos     = remainderNanos + frameInterval.toNanos
-      val animationNanos = fastFrameInterval(RenderFpsTarget.Fps60).toNanos
+      val animationNanos = math.max(1L, frameInterval.toNanos)
       val ticks          = (totalNanos / animationNanos).toInt
       val nextRemainder  = totalNanos % animationNanos
       (AnimationTickCadence(nextRemainder), ticks)

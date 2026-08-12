@@ -212,33 +212,22 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     yield
       frames should have size 2
       delays shouldBe Vector(Duration.Zero, frameInterval)
-      frames shouldBe Vector(0, 2)
+      frames shouldBe Vector(0, 1)
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
 
-  it should "advance animations at a stable 60 FPS cadence across render targets" in {
-    val sixtyFpsCadence = AppRuntime.AnimationTickCadence.empty
-    val (after60, ticks60) =
-      sixtyFpsCadence.advance(AppRuntime.fastFrameInterval(RenderFpsTarget.Fps60))
+  it should "advance animations once per frame at whatever render FPS is configured, not a fixed 60Hz rate" in
+    List(RenderFpsTarget.Fps30, RenderFpsTarget.Fps60, RenderFpsTarget.Fps90, RenderFpsTarget.Fps120).foreach {
+      target =>
+        val interval       = AppRuntime.fastFrameInterval(target)
+        val (after, ticks) = AppRuntime.AnimationTickCadence.empty.advance(interval)
 
-    ticks60 shouldBe 1
-    after60.remainderNanos shouldBe 0L
-
-    val (afterFirst120, first120Ticks) =
-      AppRuntime.AnimationTickCadence.empty.advance(AppRuntime.fastFrameInterval(RenderFpsTarget.Fps120))
-    val (afterSecond120, second120Ticks) =
-      afterFirst120.advance(AppRuntime.fastFrameInterval(RenderFpsTarget.Fps120))
-
-    first120Ticks shouldBe 0
-    second120Ticks shouldBe 1
-    afterSecond120.remainderNanos shouldBe 0L
-
-    val (_, ticks30) =
-      AppRuntime.AnimationTickCadence.empty.advance(AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30))
-
-    ticks30 shouldBe 2
-  }
+        withClue(s"target=$target ") {
+          ticks shouldBe 1
+          after.remainderNanos shouldBe 0L
+        }
+    }
 
   it should "derive cursor idle cadence from the cursor motion speed scale" in {
     AppRuntime.cursorIdleInterval(AppConfig.default) shouldBe Some(500.millis)
