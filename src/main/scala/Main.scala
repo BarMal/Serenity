@@ -6,7 +6,7 @@ import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, Mo
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
-import com.serenity.ui.accessibility.AccessibilitySnapshot
+import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.{PaintExecutionContext, Renderer}
 import com.serenity.ui.terminal.SwingWindow
@@ -75,8 +75,11 @@ object Main extends IOApp:
               swingWin.updateWindowSitter(state.windowSitter, sitterVisible)
             }.evalOn(paintEc)
 
+          AccessibilitySync.empty.flatMap { accessibilitySync =>
           def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
-            IO(swingWin.updateAccessibility(AccessibilitySnapshot.from(state, swingWin.viewportSize)))
+            accessibilitySync
+              .sync(state)(previous => IO(AccessibilitySnapshot.from(state, swingWin.viewportSize, previous)))
+              .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
               .evalOn(paintEc)
 
           initialScaleSync >> AppRuntime.run(
@@ -158,6 +161,7 @@ object Main extends IOApp:
             registerResizeCallback = cb => swingWin.setOnResize(cb),
             openPath = launchOptions.openPath
           )
+          }
         }
     yield ExitCode.Success
 
