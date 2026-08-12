@@ -97,11 +97,25 @@ class SwingWindow(
     else SwingUtilities.invokeLater(publish)
 
   def onImageReady(image: BufferedImage): Unit =
+    onImageReady(image, None)
+
+  /** Publish a finished base frame, repainting only `dirtyRegion` when the rest of the frame is known to be identical
+    * to what is already on screen.
+    *
+    * The bounded repaint is dropped whenever a cursor overlay was part of the displayed frame: dropping that overlay
+    * changes pixels outside the region, and stale caret pixels would survive a partial repaint.
+    */
+  def onImageReady(image: BufferedImage, dirtyRegion: Option[Rectangle]): Unit =
+    val displayedOverlay = publishedImagesRef.get().overlay
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
     cursorOverlayPool.clearPublished()
     publishedImagesRef.set(SwingWindow.PublishedImages(Some(image), None))
-    SwingUtilities.invokeLater(() => canvas.repaint())
+    dirtyRegion.filter(_ => displayedOverlay.isEmpty) match
+      case Some(region) if region.width > 0 && region.height > 0 =>
+        SwingUtilities.invokeLater(() => canvas.repaint(region.x, region.y, region.width, region.height))
+      case Some(_) => ()
+      case None    => SwingUtilities.invokeLater(() => canvas.repaint())
 
   def onBaseImageReady(image: BufferedImage): Unit =
     baseImagePool.publish(image)
