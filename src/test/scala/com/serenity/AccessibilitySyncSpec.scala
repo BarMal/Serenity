@@ -35,9 +35,9 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     val stateA = AppState.initial
     val stateB = AppState.initial.copy(focus = Focus.Surface(SurfaceId("changed")))
     val program = for
-      sync          <- AccessibilitySync.empty
-      seenPrevious  <- IO.ref(List.empty[Option[AccessibilitySnapshot]])
-      callCount     <- IO.ref(0)
+      sync         <- AccessibilitySync.empty
+      seenPrevious <- IO.ref(List.empty[Option[AccessibilitySnapshot]])
+      callCount    <- IO.ref(0)
       compute = (state: AppState) =>
         (previous: Option[AccessibilitySnapshot]) =>
           seenPrevious.update(_ :+ previous) >>
