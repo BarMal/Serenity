@@ -5,9 +5,19 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 
 import com.serenity.config.PostProcessingEffect
+import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.theme.TextStyle
 
 trait RenderSurface:
+
+  /** Identity of the pixels this surface accumulates into, when it preserves what earlier frames drew.
+    *
+    * `Some(key)` promises two things: the surface still holds the pixels of the last frame flushed through a surface
+    * reporting the same key, and [[clearViewportExcept]] genuinely preserves the rectangles it is handed. Renderers may
+    * only skip redrawing unchanged content when a key is present. `None` — the default — means every frame starts from
+    * unknown pixels and everything must be drawn.
+    */
+  def persistentContentKey: Option[AnyRef]         = None
   def setFont(font: Font): Unit                    = ()
   def fontRenderContext: Option[FontRenderContext] = None
   def setForegroundColor(color: Color): Unit
@@ -17,6 +27,14 @@ trait RenderSurface:
   def clearViewport(color: Color): Unit =
     setBackgroundColor(color)
     fillRect(0, 0, viewportWidth, viewportHeight, ' ')
+
+  /** Clear the viewport to `color` while leaving the given logical-pixel rectangles untouched.
+    *
+    * The default clears everything, which is why callers must check [[persistentContentKey]] first: a surface without a
+    * persistent key preserves nothing, so its caller has to redraw the content it would otherwise have skipped.
+    */
+  def clearViewportExcept(color: Color, preserved: List[PixelRect]): Unit =
+    clearViewport(color)
 
   def putString(x: Int, y: Int, s: String): Unit
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit

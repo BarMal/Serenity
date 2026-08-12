@@ -2,14 +2,14 @@ package com.serenity.ui.renderer
 
 import java.awt.*
 import java.awt.font.{FontRenderContext, TextAttribute}
-import java.awt.geom.{Rectangle2D, RoundRectangle2D}
+import java.awt.geom.{Area, Rectangle2D, RoundRectangle2D}
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.jdk.CollectionConverters.*
 
 import com.serenity.config.PostProcessingEffect
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.theme.TextStyle
 
 /** A RenderSurface backed by a BufferedImage via Graphics2D.
@@ -28,7 +28,8 @@ class Java2DRenderSurface(
     logicalWidthPx: Int = -1,
     logicalHeightPx: Int = -1,
     deviceScaleX: Double = 1.0,
-    deviceScaleY: Double = 1.0
+    deviceScaleY: Double = 1.0,
+    contentPersists: Boolean = false
 ) extends RenderSurface:
   private val g: Graphics2D = image.createGraphics()
   private val effectiveLogicalWidthPx =
@@ -94,10 +95,32 @@ class Java2DRenderSurface(
   def setBackgroundColor(color: Color): Unit = bgRef.set(color)
   def getBackgroundColor: Color              = bgRef.get()
 
+  /** The backing image doubles as the persistence key: whoever hands the same image back next frame gets the pixels
+    * this frame leaves behind. Only surfaces built with `contentPersists` advertise it, because an image the caller
+    * intends to hand out once carries no promise about what it will contain next time.
+    */
+  override def persistentContentKey: Option[AnyRef] =
+    Option.when(contentPersists)(image)
+
   override def clearViewport(color: Color): Unit =
     bgRef.set(color)
     g.setColor(color)
     g.fillRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
+
+  override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
+    if preserved.isEmpty then clearViewport(color)
+    else
+      bgRef.set(color)
+      val clearable = new Area(new Rectangle(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx))
+      preserved.foreach(rect =>
+        clearable.subtract(new Area(new Rectangle(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)))
+      )
+      val savedClip = g.getClip
+      try
+        g.clip(clearable)
+        g.setColor(color)
+        g.fillRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
+      finally g.setClip(savedClip)
 
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
@@ -422,14 +445,28 @@ object Java2DRenderSurface:
     canvas: javax.swing.JPanel,
     onFlush: BufferedImage => Unit
   ): Java2DRenderSurface =
-    forFrame(metrics, font, canvas, onFlush, (width, height, imageType) => new BufferedImage(width, height, imageType))
+    forFrame(
+      metrics,
+      font,
+      canvas,
+      onFlush,
+      (width, height, imageType) => new BufferedImage(width, height, imageType),
+      contentPersists = false
+    )
 
+  /** Build a frame surface over an image supplied by `acquireImage`.
+    *
+    * `contentPersists` says the acquired image is recycled rather than freshly allocated, so whatever was drawn into
+    * that same image instance previously is still there. Callers pass a pooled acquirer together with `true`; a
+    * single-use image must stay `false` so nothing downstream tries to reuse pixels that were never kept.
+    */
   def forFrame(
     metrics: CellMetrics,
     font: Font,
     canvas: javax.swing.JPanel,
     onFlush: BufferedImage => Unit,
-    acquireImage: (Int, Int, Int) => BufferedImage
+    acquireImage: (Int, Int, Int) => BufferedImage,
+    contentPersists: Boolean = true
   ): Java2DRenderSurface =
     val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
     val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
@@ -447,7 +484,8 @@ object Java2DRenderSurface:
       logicalWidthPx = logicalWidth,
       logicalHeightPx = logicalHeight,
       deviceScaleX = scale.x,
-      deviceScaleY = scale.y
+      deviceScaleY = scale.y,
+      contentPersists = contentPersists
     )
 
   def forImage(

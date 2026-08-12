@@ -5,14 +5,17 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, PixelRect, TextLayoutSnapshot}
 import com.serenity.ui.renderer.RenderSurface
 import com.serenity.ui.theme.TextStyle
 
 /** In-memory RenderSurface for renderer tests. Records putString calls so assertions can inspect what was drawn at each
   * (x, y) position.
+  *
+  * `persistentContent` models a surface whose pixels survive between frames, which is what lets a test drive the
+  * renderer's dirty-region path. It is off by default so that a plain mock behaves like a fresh image every frame.
   */
-class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
+class MockRenderSurface(val width: Int, val height: Int, persistentContent: Boolean = false) extends RenderSurface:
   case class PixelTranslationCall(xPx: Double, yPx: Double)
   private val pixelTranslationCallsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
   private val currentPixelTranslation     = AtomicReference(PixelTranslationCall(0.0, 0.0))
@@ -41,6 +44,25 @@ class MockRenderSurface(val width: Int, val height: Int) extends RenderSurface:
     Some(TextLayoutSnapshot.defaultFontRenderContext())
 
   def setFontCalls: List[Font] = setFontCallsBuffer.toList
+
+  override def persistentContentKey: Option[AnyRef] =
+    Option.when(persistentContent)(this)
+
+  override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
+    if preserved.isEmpty then clearViewport(color)
+    else
+      val metrics = CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12))
+      setBackgroundColor(color)
+      for y <- 0 until height; x <- 0 until width do
+        val cellLeftPx = x * metrics.charWidth
+        val cellTopPx  = y * metrics.lineHeight
+        val kept = preserved.exists { rect =>
+          cellLeftPx >= rect.xPx && cellLeftPx < rect.rightPx &&
+          cellTopPx >= rect.yPx && cellTopPx < rect.bottomPx
+        }
+        if !kept then
+          chars(y)(x) = ' '
+          bgs(y)(x) = color
 
   def setForegroundColor(color: Color): Unit = currentFg.set(color)
   def setBackgroundColor(color: Color): Unit = currentBg.set(color)
