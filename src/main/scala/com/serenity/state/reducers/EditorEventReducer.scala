@@ -1665,17 +1665,21 @@ object EditorEventReducer:
   private def insertedTransitionCells(
     content: Rope,
     edits: List[MultiCursorEdit],
-    state: AppState
+    state: AppState,
+    maxAnimatedCells: Int = com.serenity.state.manager.VisibleBufferAnimationCells.DefaultMaxAnimatedCells
   ): Map[CharacterKey, CellAnimation] =
     edits.foldLeft(Map.empty[CharacterKey, CellAnimation]) { (cells, edit) =>
-      val finalStartOffset = remapEditBoundary(edit.start, edits, insertionAtBoundaryMoves = false)
-      cells ++ insertedCellsFromText(
-        content,
-        finalStartOffset,
-        edit.insertedText,
-        state.theme.backgroundColor,
-        state.theme.foregroundColor
-      )
+      val remainingBudget = maxAnimatedCells - cells.size
+      if remainingBudget <= 0 then cells
+      else
+        val finalStartOffset = remapEditBoundary(edit.start, edits, insertionAtBoundaryMoves = false)
+        cells ++ insertedCellsFromText(
+          content,
+          finalStartOffset,
+          edit.insertedText.take(remainingBudget),
+          state.theme.backgroundColor,
+          state.theme.foregroundColor
+        )
     }
 
   private def insertedCellsFromText(

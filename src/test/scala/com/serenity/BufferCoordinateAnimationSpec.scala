@@ -266,6 +266,32 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  it should "cap animation cells generated for a large paste, without truncating the pasted content" in {
+    val largeText = "x" * 5000
+    val program = for
+      sm <- IO.pure(makeStateManager())
+      _ <- sm.updateState(state =>
+        state.copy(
+          config = AppConfig.default.withMotionPreset(MotionPreset.Subtle),
+          clipboard = Some(largeText)
+        )
+      )
+      bufferId <- sm.createBuffer("")
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 0, 0)
+      _        <- sm.applyEvent(Paste)
+      newState <- sm.getCurrentState
+    yield
+      val buffer = newState.buffers(bufferId)
+      buffer.content.collect() shouldBe largeText
+      buffer.animations.animations.size should be <=
+        com.serenity.state.manager.VisibleBufferAnimationCells.DefaultMaxAnimatedCells
+
+    program.unsafeRunSync()
+  }
+
   "AnimationState" should "be queryable by buffer column and line" in {
     val anim = AnimationState.empty.addCharacterAnimation(
       'a',

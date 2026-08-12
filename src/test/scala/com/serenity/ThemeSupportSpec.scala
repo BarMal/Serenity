@@ -81,6 +81,31 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     quote(1).style.isItalic shouldBe true
   }
 
+  it should "reuse cached highlighting for the same line, theme, and language" in {
+    val theme = Theme.dark
+
+    val first  = ThemeManager.highlightLine("val x = 1", theme, None)
+    val second = ThemeManager.highlightLine("val x = 1", theme, None)
+
+    second should be theSameInstanceAs first
+  }
+
+  it should "reuse cached markdown highlighting for the same line, theme, and language" in {
+    val theme = Theme.dark
+
+    val first  = ThemeManager.highlightLine("# Heading", theme, Some(LanguageId.Markdown))
+    val second = ThemeManager.highlightLine("# Heading", theme, Some(LanguageId.Markdown))
+
+    second should be theSameInstanceAs first
+  }
+
+  it should "not reuse cached highlighting when the theme differs" in {
+    val first  = ThemeManager.highlightLine("val x = 1", Theme.dark, None)
+    val second = ThemeManager.highlightLine("val x = 1", Theme.light, None)
+
+    second should not be theSameInstanceAs(first)
+  }
+
   "StyledText" should "combine content with styling information" in {
     val styledText = StyledText("hello", TextStyle(isBold = true, isItalic = false))
 
