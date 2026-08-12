@@ -33,3 +33,9 @@ case class Leaf(value: String)(using balance: Balance) extends Rope:
     Leaf(pre + post.drop(count))
 
   override def collect(): String = value
+
+  override def equals(obj: Any): Boolean =
+    obj match
+      case that: AnyRef if this.asInstanceOf[AnyRef].eq(that) => true
+      case that: Leaf                                         => value == that.value
+      case _                                                  => false

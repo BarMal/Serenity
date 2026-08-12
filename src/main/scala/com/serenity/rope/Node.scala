@@ -42,3 +42,14 @@ case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
 
   override def index(i: Int): Option[Char] =
     if i < left.weight then left.index(i) else right.index(i - left.weight)
+
+  // The compiler-generated equals recurses through left == that.left && right == that.right with no fast path,
+  // so comparing two large ropes -- even the very same object to itself -- walks the entire tree and can stack
+  // overflow on deeply skewed trees. Short-circuiting on reference identity and on a cheap weight mismatch avoids
+  // that descent for the two most common comparisons: "is this literally the same content" and "clearly different
+  // length".
+  override def equals(obj: Any): Boolean =
+    obj match
+      case that: AnyRef if this.asInstanceOf[AnyRef].eq(that) => true
+      case that: Node => weight == that.weight && left == that.left && right == that.right
+      case _          => false
