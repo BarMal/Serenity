@@ -1,5 +1,7 @@
 package com.serenity.ui.theme
 
+import java.util.LinkedHashMap
+
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
 
@@ -11,6 +13,22 @@ case class StyledSegment(
 )
 
 object ThemeManager:
+
+  private val headingPattern       = raw"^(#{1,6}\s+)(.*)$$".r
+  private val unorderedListPattern = raw"^(\s*[-*+]\s+)(.*)$$".r
+  private val orderedListPattern   = raw"^(\s*\d+\.\s+)(.*)$$".r
+  private val blockQuotePattern    = raw"^(\s*>\s?)(.*)$$".r
+  private val inlineCodePattern    = "`[^`]+`".r
+  private val linkPattern          = raw"\[([^\]]+)\]\(([^)]+)\)".r
+
+  private val MaxHighlightCacheEntries = 4096
+
+  private val highlightCache =
+    new LinkedHashMap[(String, Theme, Option[LanguageId]), List[StyledText]](16, 0.75f, true):
+      override def removeEldestEntry(
+        eldest: java.util.Map.Entry[(String, Theme, Option[LanguageId]), List[StyledText]]
+      ): Boolean =
+        size() > MaxHighlightCacheEntries
 
   /** Apply theme styling to rope content, returning styled segments */
   def applyTheme(rope: Rope, theme: Theme): List[StyledSegment] =
@@ -102,8 +120,17 @@ object ThemeManager:
           // Unknown character - take as single character
           (content.head.toString, content.tail)
 
-  /** Apply syntax highlighting to a line of text */
+  /** Apply syntax highlighting to a line of text, memoized by (line, theme, language). */
   def highlightLine(line: String, theme: Theme, language: Option[LanguageId] = None): List[StyledText] =
+    val key    = (line, theme, language)
+    val cached = highlightCache.synchronized(Option(highlightCache.get(key)))
+    cached.getOrElse {
+      val computed = computeHighlightLine(line, theme, language)
+      highlightCache.synchronized(highlightCache.put(key, computed): Unit)
+      computed
+    }
+
+  private def computeHighlightLine(line: String, theme: Theme, language: Option[LanguageId]): List[StyledText] =
     language match
       case Some(LanguageId.Markdown) => highlightMarkdownLine(line, theme)
       case _ =>
@@ -119,17 +146,11 @@ object ThemeManager:
         }
 
   private def highlightMarkdownLine(line: String, theme: Theme): List[StyledText] =
-    val headingPattern       = raw"^(#{1,6}\s+)(.*)$$".r
-    val unorderedListPattern = raw"^(\s*[-*+]\s+)(.*)$$".r
-    val orderedListPattern   = raw"^(\s*\d+\.\s+)(.*)$$".r
-    val blockQuotePattern    = raw"^(\s*>\s?)(.*)$$".r
-    val inlineCodePattern    = "`[^`]+`".r
-    val linkPattern          = raw"\[([^\]]+)\]\(([^)]+)\)".r
-    val markerColor          = theme.colorFor(SyntaxElement.Delimiter)
-    val headingColor         = theme.colorFor(SyntaxElement.Keyword)
-    val inlineCodeColor      = theme.colorFor(SyntaxElement.String)
-    val linkTextColor        = theme.colorFor(SyntaxElement.Keyword)
-    val linkUrlColor         = theme.colorFor(SyntaxElement.String)
+    val markerColor     = theme.colorFor(SyntaxElement.Delimiter)
+    val headingColor    = theme.colorFor(SyntaxElement.Keyword)
+    val inlineCodeColor = theme.colorFor(SyntaxElement.String)
+    val linkTextColor   = theme.colorFor(SyntaxElement.Keyword)
+    val linkUrlColor    = theme.colorFor(SyntaxElement.String)
 
     def withInlineMarkdownStyling(
       text: String,
