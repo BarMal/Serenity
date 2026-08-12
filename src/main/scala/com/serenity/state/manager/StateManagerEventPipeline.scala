@@ -28,6 +28,21 @@ final private[manager] class ResizeEventHandler(port: ResizeEventPort):
     port.applyReducerResult(SystemEventReducer.reduce(event, previousState), previousState) >>
       port.rebalancePanes()
 
+private[manager] object StateManagerEventPipeline:
+
+  private def focusedBufferId(state: AppState): Option[BufferId] =
+    state.focus match
+      case Focus.EditorPane(paneId) => state.layout.editorPanes.get(paneId).flatMap(_.bufferId)
+      case _                        => None
+
+  /** The buffer(s) a single event dispatch could plausibly have changed: the focused buffer before dispatch, and the
+    * focused buffer after (covering focus-snapping events like undo/redo). Every content-mutating reducer in this
+    * codebase updates exactly one buffer per event -- always the one it's targeting via focus -- so checking these two
+    * candidates instead of every open buffer is exhaustive, not a heuristic.
+    */
+  private[manager] def candidateLspBufferIds(previousState: AppState, currentState: AppState): Set[BufferId] =
+    Set(focusedBufferId(previousState), focusedBufferId(currentState)).flatten
+
 final private[manager] class StateManagerEventPipeline(
     state: EventStatePort,
     effects: EventEffectPort,
@@ -176,16 +191,19 @@ final private[manager] class StateManagerEventPipeline(
 
   private def enqueueChangedLspDocuments(previousState: AppState): cats.effect.IO[Unit] =
     stateRef.get.flatMap { currentState =>
-      currentState.buffers.values.toList.traverse_ { buffer =>
-        val changedContent = previousState.buffers.get(buffer.id).exists(_.content != buffer.content)
-        (for
-          path       <- buffer.filePath
-          languageId <- buffer.language
-          if changedContent
-        yield AppEffect.LspQueue(
-          LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.content.collect())
-        ))
-          .fold(cats.effect.IO.unit)(effects.interpretEffect)
+      StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState).toList.traverse_ { bufferId =>
+        currentState.buffers.get(bufferId) match
+          case None => cats.effect.IO.unit
+          case Some(buffer) =>
+            val changedContent = previousState.buffers.get(bufferId).exists(_.content != buffer.content)
+            (for
+              path       <- buffer.filePath
+              languageId <- buffer.language
+              if changedContent
+            yield AppEffect.LspQueue(
+              LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.content.collect())
+            ))
+              .fold(cats.effect.IO.unit)(effects.interpretEffect)
       }
     }
 
