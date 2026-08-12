@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.awt.Font
 import java.util.LinkedHashMap
 
-import com.serenity.config.{CursorInfoBarMode, CursorInfoBarPlacement, InterfaceDensity, TextAreaInsets}
+import com.serenity.config.{AppConfig, CursorInfoBarMode, CursorInfoBarPlacement, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
@@ -96,7 +96,42 @@ private[manager] case class MouseTargetLayoutKey(
 
 private[manager] object MouseTargetLayoutKey:
 
+  /** The state fields [[from]] actually reads. Everything else it derives (focusPaneId, orderedPaneIds, paneBuffers,
+    * paneSnapshotInputs, pinnedPanels, lineNumberContent, derivedCursorInfoBarSurface) is a pure function of these plus
+    * viewportSize, so if none of these references changed since the last call, the previously computed key is still
+    * correct and the full pane/buffer/surface walk can be skipped.
+    */
+  private case class FastPathInputs(
+      viewportSize: ViewportSize,
+      config: AppConfig,
+      layout: Layout,
+      focus: Focus,
+      buffers: Map[BufferId, Buffer],
+      uiSurfaces: List[UiSurface]
+  )
+
+  private val lastComputation =
+    new java.util.concurrent.atomic.AtomicReference[Option[(FastPathInputs, MouseTargetLayoutKey)]](None)
+
+  private def unchangedSince(previous: FastPathInputs, current: FastPathInputs): Boolean =
+    (previous.viewportSize == current.viewportSize) &&
+      previous.config.eq(current.config) &&
+      previous.layout.eq(current.layout) &&
+      (previous.focus == current.focus) &&
+      previous.buffers.eq(current.buffers) &&
+      previous.uiSurfaces.eq(current.uiSurfaces)
+
   def from(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
+    val inputs = FastPathInputs(viewportSize, state.config, state.layout, state.focus, state.buffers, state.uiSurfaces)
+    lastComputation.get() match
+      case Some((previousInputs, previousResult)) if unchangedSince(previousInputs, inputs) =>
+        previousResult
+      case _ =>
+        val computed = compute(state, viewportSize)
+        lastComputation.set(Some(inputs -> computed))
+        computed
+
+  private def compute(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     MouseTargetLayoutKey(
       viewportSize = viewportSize,
       fontConfig = state.config.fontConfig,
