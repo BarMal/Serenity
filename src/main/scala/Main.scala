@@ -6,7 +6,7 @@ import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, Mo
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
-import com.serenity.ui.accessibility.AccessibilitySnapshot
+import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.{PaintExecutionContext, Renderer}
 import com.serenity.ui.terminal.SwingWindow
@@ -75,60 +75,52 @@ object Main extends IOApp:
               swingWin.updateWindowSitter(state.windowSitter, sitterVisible)
             }.evalOn(paintEc)
 
-          def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
-            IO(swingWin.updateAccessibility(AccessibilitySnapshot.from(state, swingWin.viewportSize)))
-              .evalOn(paintEc)
+          AccessibilitySync.empty.flatMap { accessibilitySync =>
+            def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
+              accessibilitySync
+                .sync(state)(previous => IO(AccessibilitySnapshot.from(state, swingWin.viewportSize, previous)))
+                .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
+                .evalOn(paintEc)
 
-          initialScaleSync >> AppRuntime.run(
-            initialViewportSize = swingWin.viewportSize,
-            makeInputHandler = router =>
-              new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
-                swingWin.canvas,
-                router,
-                () => swingWin.metrics,
-                () => displayState.uiMetrics
-              ),
-            checkResize = IO(swingWin.doResizeIfNecessary()),
-            renderFull = (state, vis, cc) =>
-              syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO {
-                if vis then
-                  val _ = Renderer.renderWithCursorOverlay(
-                    state,
-                    swingWin,
-                    displayState.codeFont,
-                    displayState.textFont,
-                    displayState.uiFont,
-                    displayState.uiMetrics,
-                    cc
-                  )
-                  ()
-                else
-                  Renderer.render(
-                    state,
-                    cursorVisible = false,
-                    swingWin,
-                    displayState.codeFont,
-                    displayState.textFont,
-                    displayState.uiFont,
-                    displayState.uiMetrics,
-                    None,
-                    repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(vis)
-                  )
-              }.evalOn(paintEc),
-            renderCursorOnly = (state, vis, cc) =>
-              syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO {
-                val rendered = Renderer.renderCursorOnly(
-                  state,
-                  vis,
-                  swingWin,
-                  displayState.codeFont,
-                  displayState.textFont,
-                  displayState.uiFont,
-                  displayState.uiMetrics,
-                  cc
-                )
-                if !rendered then
-                  Renderer.render(
+            initialScaleSync >> AppRuntime.run(
+              initialViewportSize = swingWin.viewportSize,
+              makeInputHandler = router =>
+                new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
+                  swingWin.canvas,
+                  router,
+                  () => swingWin.metrics,
+                  () => displayState.uiMetrics
+                ),
+              checkResize = IO(swingWin.doResizeIfNecessary()),
+              renderFull = (state, vis, cc) =>
+                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO {
+                  if vis then
+                    val _ = Renderer.renderWithCursorOverlay(
+                      state,
+                      swingWin,
+                      displayState.codeFont,
+                      displayState.textFont,
+                      displayState.uiFont,
+                      displayState.uiMetrics,
+                      cc
+                    )
+                    ()
+                  else
+                    Renderer.render(
+                      state,
+                      cursorVisible = false,
+                      swingWin,
+                      displayState.codeFont,
+                      displayState.textFont,
+                      displayState.uiFont,
+                      displayState.uiMetrics,
+                      None,
+                      repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(vis)
+                    )
+                }.evalOn(paintEc),
+              renderCursorOnly = (state, vis, cc) =>
+                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO {
+                  val rendered = Renderer.renderCursorOnly(
                     state,
                     vis,
                     swingWin,
@@ -136,28 +128,40 @@ object Main extends IOApp:
                     displayState.textFont,
                     displayState.uiFont,
                     displayState.uiMetrics,
-                    cc,
-                    repaintOnFlush = true
+                    cc
                   )
-              }.evalOn(paintEc),
-            appConfig = actualAppConfig,
-            makeStateManager = Some(logger =>
-              com.serenity.state.manager.StateManager.apply(
-                logger,
-                onFontConfigChanged = config =>
-                  displayState.update(config) >>
-                    IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics, displayState.uiMetrics)),
-                deviceTextScaleProvider = IO.blocking(swingWin.detectedDeviceTextScale),
-                configPersistencePath = Some(ConfigManager.defaultConfigPath),
-                windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
-                onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
-                fileDialog = SwingFileDialog(swingWin.canvas)
-              )
-            ),
-            awaitExternalQuit = swingWin.awaitClose,
-            registerResizeCallback = cb => swingWin.setOnResize(cb),
-            openPath = launchOptions.openPath
-          )
+                  if !rendered then
+                    Renderer.render(
+                      state,
+                      vis,
+                      swingWin,
+                      displayState.codeFont,
+                      displayState.textFont,
+                      displayState.uiFont,
+                      displayState.uiMetrics,
+                      cc,
+                      repaintOnFlush = true
+                    )
+                }.evalOn(paintEc),
+              appConfig = actualAppConfig,
+              makeStateManager = Some(logger =>
+                com.serenity.state.manager.StateManager.apply(
+                  logger,
+                  onFontConfigChanged = config =>
+                    displayState.update(config) >>
+                      IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics, displayState.uiMetrics)),
+                  deviceTextScaleProvider = IO.blocking(swingWin.detectedDeviceTextScale),
+                  configPersistencePath = Some(ConfigManager.defaultConfigPath),
+                  windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
+                  onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
+                  fileDialog = SwingFileDialog(swingWin.canvas)
+                )
+              ),
+              awaitExternalQuit = swingWin.awaitClose,
+              registerResizeCallback = cb => swingWin.setOnResize(cb),
+              openPath = launchOptions.openPath
+            )
+          }
         }
     yield ExitCode.Success
 
