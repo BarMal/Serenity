@@ -37,7 +37,9 @@ object LspManager:
     logger: Logger[IO],
     userConfig: LspUserConfig = LspUserConfig.empty
   ): IO[Unit] =
-    runWithProvider(effects, applyEvent, logger, connectionProvider(userConfig, logger))
+    LspResolutionCache.empty.flatMap { resolutionCache =>
+      runWithProvider(effects, applyEvent, logger, connectionProvider(userConfig, logger, resolutionCache))
+    }
 
   private[lsp] def runWithProvider(
     effects: Stream[IO, LspEffect],
@@ -297,23 +299,35 @@ object LspManager:
           .flatMap(_.traverse_(_.release.handleErrorWith(ex => logger.error(ex)("[LSP] release failed"))))
     }
 
-  private def connectionProvider(userConfig: LspUserConfig, logger: Logger[IO]): ConnectionProvider =
+  private def connectionProvider(
+    userConfig: LspUserConfig,
+    logger: Logger[IO],
+    resolutionCache: LspResolutionCache
+  ): ConnectionProvider =
     new ConnectionProvider:
       def resolve(
         languageId: LanguageId,
         fileUri: String,
         onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
       ): IO[Option[ResolvedConnection]] =
-        LspServerRegistry.resolve(languageId, userConfig).flatMap {
-          case None =>
-            logger.info(s"[LSP] No server available for ${languageId.id}").as(None)
-          case Some(config) =>
-            val filePath = uriToPath(fileUri)
-            WorkspaceRootDetector.detect(filePath, languageId).map { rootOpt =>
-              val rootUri = rootOpt.map(_.toUri.toString).getOrElse(parentUri(fileUri))
-              Some(ResolvedConnection(ConnectionIdentity(rootUri, config), LspConnection(config, rootUri, logger)))
+        resolutionCache
+          .resolve(languageId, fileUri) {
+            LspServerRegistry.resolve(languageId, userConfig).flatMap {
+              case None =>
+                logger.info(s"[LSP] No server available for ${languageId.id}").as(None)
+              case Some(config) =>
+                val filePath = uriToPath(fileUri)
+                WorkspaceRootDetector.detect(filePath, languageId).map { rootOpt =>
+                  val rootUri = rootOpt.map(_.toUri.toString).getOrElse(parentUri(fileUri))
+                  Some(config -> rootUri)
+                }
             }
-        }
+          }
+          .map {
+            case None => None
+            case Some((config, rootUri)) =>
+              Some(ResolvedConnection(ConnectionIdentity(rootUri, config), LspConnection(config, rootUri, logger)))
+          }
 
   private def ensureConnection(
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
