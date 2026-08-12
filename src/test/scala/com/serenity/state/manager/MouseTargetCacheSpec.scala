@@ -51,6 +51,19 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       MouseTargetLayoutKey.from(draggedState, ViewportSize(80, 24))
   }
 
+  it should "reuse the same key instance without rewalking panes/buffers/surfaces when nothing layout-relevant changed" in {
+    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma")
+    val state  = stateWith(buffer)
+    // Touches only a field MouseTargetLayoutKey.from never reads, so layout/buffers/uiSurfaces/config/focus
+    // all stay reference-identical to the previous call.
+    val unrelatedChange = state.copy(clipboard = Some("copied text"))
+
+    val first  = MouseTargetLayoutKey.from(state, ViewportSize(80, 24))
+    val second = MouseTargetLayoutKey.from(unrelatedChange, ViewportSize(80, 24))
+
+    second should be theSameInstanceAs first
+  }
+
   it should "cache full editor pane layouts for mouse hit testing" in {
     val config = AppConfig.default.withTextAreaInsets(TextAreaInsets(0.15, 0.10))
     val state  = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"), config)
