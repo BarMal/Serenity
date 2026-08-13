@@ -20,6 +20,12 @@ final private[lsp] class LspResolutionCache private (
       case None         => compute.flatTap(result => ref.update(_.updated(key, result)))
     }
 
+  /** Drop the cached resolution for a (languageId, fileUri), so the next `resolve` for it recomputes rather than
+    * reusing a resolution left over from before the document closed.
+    */
+  def evict(languageId: LanguageId, fileUri: String): IO[Unit] =
+    ref.update(_ - Key(languageId, fileUri))
+
 private[lsp] object LspResolutionCache:
   private case class Key(languageId: LanguageId, fileUri: String)
 

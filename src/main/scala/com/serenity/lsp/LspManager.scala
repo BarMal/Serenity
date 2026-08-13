@@ -31,6 +31,12 @@ object LspManager:
       onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
     ): IO[Option[ResolvedConnection]]
 
+    /** Drop any cached resolution for a document that's closing, so a later reopen re-resolves the workspace root
+      * instead of reusing a stale one. No-op by default -- only the real, cache-backed provider needs to do anything
+      * here.
+      */
+    def evictResolution(languageId: LanguageId, fileUri: String): IO[Unit] = IO.unit
+
   def run(
     effects: Stream[IO, LspEffect],
     applyEvent: Event => IO[Unit],
@@ -116,6 +122,7 @@ object LspManager:
       case LspEffect.FileClosed(uri, languageId) =>
         invalidateDocument(uri, requestContexts, requestFibers) >>
           documentVersions.update(_ - uri) >>
+          connectionProvider.evictResolution(languageId, uri) >>
           connectionForDocument(uri, documentConnections, connectionsRef).flatMap {
             case Some(managed) =>
               managed.connection
@@ -328,6 +335,9 @@ object LspManager:
             case Some((config, rootUri)) =>
               Some(ResolvedConnection(ConnectionIdentity(rootUri, config), LspConnection(config, rootUri, logger)))
           }
+
+      override def evictResolution(languageId: LanguageId, fileUri: String): IO[Unit] =
+        resolutionCache.evict(languageId, fileUri)
 
   private def ensureConnection(
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
