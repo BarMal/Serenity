@@ -67,3 +67,43 @@ class LspResolutionCacheSpec extends AnyFlatSpec with Matchers:
     second shouldBe None
     calls shouldBe 1
   }
+
+  it should "recompute after the entry for a (languageId, fileUri) is evicted" in {
+    val program = for
+      cache     <- LspResolutionCache.empty
+      callCount <- IO.ref(0)
+      compute = callCount.update(_ + 1).as(Some(config -> "file:///workspace"))
+      _      <- cache.resolve(LanguageId.Scala, "file:///workspace/Foo.scala")(compute)
+      _      <- cache.evict(LanguageId.Scala, "file:///workspace/Foo.scala")
+      second <- cache.resolve(LanguageId.Scala, "file:///workspace/Foo.scala")(compute)
+      calls  <- callCount.get
+    yield (second, calls)
+
+    val (second, calls) = program.unsafeRunSync()
+    second shouldBe Some(config -> "file:///workspace")
+    calls shouldBe 2
+  }
+
+  it should "leave other documents' cached entries untouched when evicting one" in {
+    val program = for
+      cache     <- LspResolutionCache.empty
+      callCount <- IO.ref(0)
+      compute = callCount.update(_ + 1).as(Some(config -> "file:///workspace"))
+      _     <- cache.resolve(LanguageId.Scala, "file:///workspace/Foo.scala")(compute)
+      _     <- cache.resolve(LanguageId.Scala, "file:///workspace/Bar.scala")(compute)
+      _     <- cache.evict(LanguageId.Scala, "file:///workspace/Foo.scala")
+      _     <- cache.resolve(LanguageId.Scala, "file:///workspace/Bar.scala")(compute)
+      calls <- callCount.get
+    yield calls
+
+    program.unsafeRunSync() shouldBe 2
+  }
+
+  it should "no-op when evicting a (languageId, fileUri) with no cached entry" in {
+    val program = for
+      cache <- LspResolutionCache.empty
+      _     <- cache.evict(LanguageId.Scala, "file:///workspace/Never.scala")
+    yield ()
+
+    noException should be thrownBy program.unsafeRunSync()
+  }

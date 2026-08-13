@@ -267,6 +267,38 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     program.timeout(5.seconds).unsafeRunSync()
   }
 
+  it should "evict the resolution cache for a document exactly when it closes" in {
+    val program = for
+      effects    <- Queue.unbounded[IO, Option[LspEffect]]
+      connection <- LspConnection.create(LanguageId.Scala, logger)
+      evictions  <- Ref.of[IO, List[(LanguageId, String)]](Nil)
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: String,
+          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] =
+          IO.pure(Some(resolvedConnection("file:///workspace", connection)))
+        override def evictResolution(languageId: LanguageId, fileUri: String): IO[Unit] =
+          evictions.update(_ :+ (languageId -> fileUri))
+      managerFiber <- LspManager
+        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+        .start
+      _           <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
+      _           <- takeMessage(connection)
+      beforeClose <- evictions.get
+      _           <- effects.offer(Some(LspEffect.FileClosed(uri, LanguageId.Scala)))
+      _           <- takeMessage(connection)
+      afterClose  <- evictions.get
+      _           <- effects.offer(None)
+      _           <- managerFiber.joinWithNever
+    yield
+      beforeClose shouldBe Nil
+      afterClose shouldBe List(LanguageId.Scala -> uri)
+
+    program.timeout(3.seconds).unsafeRunSync()
+  }
+
   it should "reuse a workspace connection until its last document closes" in {
     val firstUri  = "file:///workspace/Foo.scala"
     val secondUri = "file:///workspace/Bar.scala"
