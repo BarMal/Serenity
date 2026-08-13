@@ -558,12 +558,15 @@ final private[manager] class StateManagerEventPipeline(
     val borderCell =
       CharacterKey(-1, -1) -> CellAnimation(' ', transparentBorder, state.theme.border)
     val contentCells =
-      (0 until math.max(0, height - 1)).flatMap { row =>
-        (0 until math.max(1, width - 2)).map { column =>
-          CharacterKey(column, row) ->
-            CellAnimation(' ', transparentPanelForeground, state.theme.panel.foreground)
+      (0 until math.max(0, height - 1))
+        .flatMap { row =>
+          (0 until math.max(1, width - 2)).map { column =>
+            CharacterKey(column, row) ->
+              CellAnimation(' ', transparentPanelForeground, state.theme.panel.foreground)
+          }
         }
-      }.toMap
+        .take(VisibleBufferAnimationCells.DefaultMaxAnimatedCells)
+        .toMap
     ElementTransitionCells(frame = Map(borderCell), content = contentCells)
 
   private def applyCommandRunnerCloseAnimation(
@@ -748,12 +751,15 @@ final private[manager] class StateManagerEventPipeline(
     val borderCell =
       CharacterKey(-1, -1) -> CellAnimation(' ', transparentBorder, state.theme.border)
     val contentCells =
-      (0 until math.max(0, rect.height - 1)).flatMap { row =>
-        (0 until math.max(0, rect.width - 2)).map { column =>
-          CharacterKey(column, row) ->
-            CellAnimation(' ', transparentPanelForeground, state.theme.panel.foreground)
+      (0 until math.max(0, rect.height - 1))
+        .flatMap { row =>
+          (0 until math.max(0, rect.width - 2)).map { column =>
+            CharacterKey(column, row) ->
+              CellAnimation(' ', transparentPanelForeground, state.theme.panel.foreground)
+          }
         }
-      }.toMap
+        .take(VisibleBufferAnimationCells.DefaultMaxAnimatedCells)
+        .toMap
     ElementTransitionCells(frame = Map(borderCell), content = contentCells)
 
   private def pinnedPanelCloseCells(rect: LayoutRect, state: AppState): ElementTransitionCells =
@@ -762,12 +768,15 @@ final private[manager] class StateManagerEventPipeline(
     val borderCell =
       CharacterKey(-1, -1) -> CellAnimation(' ', state.theme.border, transparentBorder)
     val contentCells =
-      (0 until math.max(0, rect.height - 1)).flatMap { row =>
-        (0 until math.max(0, rect.width - 2)).map { column =>
-          CharacterKey(column, row) ->
-            CellAnimation(' ', state.theme.panel.foreground, transparentPanelForeground)
+      (0 until math.max(0, rect.height - 1))
+        .flatMap { row =>
+          (0 until math.max(0, rect.width - 2)).map { column =>
+            CharacterKey(column, row) ->
+              CellAnimation(' ', state.theme.panel.foreground, transparentPanelForeground)
+          }
         }
-      }.toMap
+        .take(VisibleBufferAnimationCells.DefaultMaxAnimatedCells)
+        .toMap
     ElementTransitionCells(frame = Map(borderCell), content = contentCells)
 
   private def transparent(color: Color): Color =
