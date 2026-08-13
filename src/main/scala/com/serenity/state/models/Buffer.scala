@@ -98,6 +98,17 @@ case class Buffer(
   def hasUnsavedChanges: Boolean =
     isDirty || (filePath.isEmpty && !isNewEmpty)
 
+  // The compiler-generated equals walks every one of this class's ~19 fields with no fast path -- paid once per
+  // open buffer on every dispatched event via AppState's buffers map. Short-circuiting on reference identity
+  // covers the common "this buffer wasn't touched by this event" case in O(1). Comparing via productIterator
+  // rather than hand-listing fields avoids the risk of silently dropping a field from the comparison as the case
+  // class evolves.
+  override def equals(obj: Any): Boolean =
+    obj match
+      case that: AnyRef if this.asInstanceOf[AnyRef].eq(that) => true
+      case that: Buffer                                       => productIterator.sameElements(that.productIterator)
+      case _                                                  => false
+
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =
     Buffer(id, Rope.empty)
