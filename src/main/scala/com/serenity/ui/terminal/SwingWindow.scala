@@ -51,6 +51,7 @@ class SwingWindow(
   private val closeLatch             = new CountDownLatch(1)
   private val baseImageRef           = new AtomicReference[Option[BufferedImage]](None)
   private val publishedImagesRef     = new AtomicReference(SwingWindow.PublishedImages.empty)
+  private val previousCursorRectsRef = new AtomicReference[scala.List[Rectangle]](Nil)
   private val baseImagePool          = new SwingWindow.ReusableImagePool
   private val cursorOverlayPool      = new SwingWindow.ReusableImagePool
   private val savedBoundsRef         = new AtomicReference[Option[Rectangle]](None)
@@ -123,15 +124,30 @@ class SwingWindow(
     cursorOverlayPool.clearPublished()
     publishedImagesRef.set(SwingWindow.PublishedImages(Some(image), None))
 
-  def onCursorOverlayReady(drawOverlay: BufferedImage => Unit): Boolean =
+  /** Publish a freshly-painted cursor overlay and repaint just the pixels it actually changed.
+    *
+    * The overlay image is cleared and redrawn from scratch every call, so a caret that moved needs both its old and new
+    * position repainted -- not just whatever the base frame changed. `baseDirtyRegion` is the caller's own
+    * bounded-repaint region for the base frame (`None` for "the whole canvas changed"); `drawOverlay` paints the
+    * overlay and reports back the pixel rects it painted. The final repaint is bounded to the union of all three, or
+    * unbounded whenever `baseDirtyRegion` itself is `None`.
+    */
+  def onCursorOverlayReady(baseDirtyRegion: Option[Rectangle])(
+    drawOverlay: BufferedImage => scala.List[Rectangle]
+  ): Boolean =
     baseImageRef.get() match
       case Some(baseImage) =>
         val overlayImage = cursorOverlayPool.acquire(baseImage.getWidth, baseImage.getHeight, baseImage.getType)
         SwingWindow.clearImage(overlayImage)
-        drawOverlay(overlayImage)
+        val currentCursorRects = drawOverlay(overlayImage)
         cursorOverlayPool.publish(overlayImage)
         publishedImagesRef.set(SwingWindow.PublishedImages(Some(baseImage), Some(overlayImage)))
-        SwingUtilities.invokeLater(() => canvas.repaint())
+        val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
+        SwingWindow.combinedCursorRepaintRegion(baseDirtyRegion, previousCursorRects, currentCursorRects) match
+          case Some(region) if region.width > 0 && region.height > 0 =>
+            SwingUtilities.invokeLater(() => canvas.repaint(region.x, region.y, region.width, region.height))
+          case Some(_) => ()
+          case None    => SwingUtilities.invokeLater(() => canvas.repaint())
         true
       case None =>
         false
@@ -852,6 +868,27 @@ object SwingWindow:
 
   def shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible: Boolean): Boolean =
     !cursorVisible
+
+  /** The bound `onCursorOverlayReady` should pass to `canvas.repaint(...)`.
+    *
+    * `None` (an unbounded base frame) always wins, since a structural change may have moved pixels the cursor rects
+    * alone wouldn't cover. Otherwise the result covers the base region plus every cursor rect from both the previous
+    * and current frame -- a rect that isn't part of the union is either off-screen or zero-sized, since a cursor that
+    * stopped being drawn still needs its last position repainted. Zero-sized rects (including the `(0, 0, 0, 0)`
+    * sentinel callers use for "nothing" and "no cursor") are dropped before unioning: `Rectangle` still treats a
+    * zero-sized rect as covering its `(x, y)` corner, which would otherwise drag every union back to the origin.
+    */
+  private[serenity] def combinedCursorRepaintRegion(
+    baseDirtyRegion: Option[Rectangle],
+    previousCursorRects: scala.List[Rectangle],
+    currentCursorRects: scala.List[Rectangle]
+  ): Option[Rectangle] =
+    baseDirtyRegion.map { base =>
+      (base :: previousCursorRects ::: currentCursorRects)
+        .filter(rect => rect.width > 0 && rect.height > 0)
+        .reduceOption(_.union(_))
+        .getOrElse(new Rectangle(0, 0, 0, 0))
+    }
 
   private[serenity] def publishRenderedBaseFrame(
     image: BufferedImage,

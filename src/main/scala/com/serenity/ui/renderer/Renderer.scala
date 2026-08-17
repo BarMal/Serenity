@@ -350,7 +350,9 @@ object Renderer:
     val viewportSize = swingWin.viewportSize
     withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(_ => false) {
       authoritativeScene =>
-        swingWin.onCursorOverlayReady { image =>
+        // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
+        // only the cursor's own old and new pixel rects can have changed on screen.
+        swingWin.onCursorOverlayReady(Some(new java.awt.Rectangle(0, 0, 0, 0))) { image =>
           val surface =
             Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
           val prepared = preparedSceneRef
@@ -388,8 +390,9 @@ object Renderer:
               swingWin.metrics,
               uiMetrics
             )
-          renderEditorCursors(state0, context, renderPlan)
+          val cursorRects = renderEditorCursors(state0, context, renderPlan)
           surface.flush()
+          cursorRects.map(toAwtRectangle)
         }
     }
 
@@ -407,7 +410,8 @@ object Renderer:
     val viewportSize = swingWin.viewportSize
     // The caret is composited from a separate overlay image, so this base frame is repainted whole every time; the
     // record is still kept up to date so the next frame knows what the screen is showing.
-    val output = Some(FrameOutput(swingWin.canvas, new AtomicReference[Option[PixelRect]](None)))
+    val repaintRegion = new AtomicReference[Option[PixelRect]](None)
+    val output        = Some(FrameOutput(swingWin.canvas, repaintRegion))
     // The pooled acquirer is what lets this frame reuse the pixels of the last frame drawn into the same image; the
     // cursor rides on a separate overlay image, so the base frame here is pure pane content and chrome.
     val surface = Java2DRenderSurface.forFrame(
@@ -422,7 +426,8 @@ object Renderer:
       // The base frame published above went through onBaseImageReady, which does not repaint the canvas by
       // itself -- only onCursorOverlayReady does. The editor branch below reaches it naturally via its cursor
       // composite step; the startup page has no cursor to draw, but still needs this call to actually get painted.
-      swingWin.onCursorOverlayReady(_ => ())
+      // A start page also has no persisted content to reason about, so this always forces a full repaint.
+      swingWin.onCursorOverlayReady(None)(_ => Nil)
     ) { scene =>
       renderFrame(
         state0,
@@ -438,7 +443,8 @@ object Renderer:
         cursorColor = None,
         output
       ).fold(false) { renderPlan =>
-        swingWin.onCursorOverlayReady { image =>
+        val baseDirtyRegion = repaintRegion.get().map(toAwtRectangle)
+        swingWin.onCursorOverlayReady(baseDirtyRegion) { image =>
           val cursorSurface =
             Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
           val cursorContext = RenderContext(
@@ -452,8 +458,9 @@ object Renderer:
             swingWin.metrics,
             uiMetrics
           )
-          renderEditorCursors(state0, cursorContext, renderPlan)
+          val cursorRects = renderEditorCursors(state0, cursorContext, renderPlan)
           cursorSurface.flush()
+          cursorRects.map(toAwtRectangle)
         }
       }
     }
@@ -546,6 +553,51 @@ object Renderer:
       )
     }
     repaintRegion.get()
+
+  /** Report the pixel rects the visible cursors in `state` would be painted at, without needing a real `SwingWindow`.
+    * Exposed for testing #963's bounded-repaint region: `onCursorOverlayReady` unions this same geometry (from both the
+    * previous and current frame) with the base frame's own dirty region.
+    */
+  private[serenity] def cursorRepaintRects(
+    state: AppState,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color]
+  ): List[PixelRect] =
+    val state0 = withEffectiveTheme(state)
+    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(_ => Nil) {
+      scene =>
+        val prepared = prepareScene(
+          state0,
+          surface,
+          viewportSize,
+          scene,
+          cursorVisible = true,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics
+        )
+        val context = RenderContext(
+          surface,
+          prepared.scene.calculatedLayout,
+          true,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics
+        )
+        renderEditorCursors(state0, context, prepared.renderPlan)
+    }
 
   def render(
     state: AppState,
@@ -1152,20 +1204,26 @@ object Renderer:
         case None => ()
     }
 
-  private def renderEditorCursors(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
+  /** Paint every pane's visible cursors and report the union of pixel rects painted across all of them. */
+  private def renderEditorCursors(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan
+  ): List[PixelRect] =
     val activePaneId = state.layout.activeEditorPaneId
     val orderedPanes =
       activePaneId.toList.flatMap(id => state.layout.editorPanes.get(id).map(id -> _)) ++
         state.layout.editorPanes.toList.filterNot((id, _) => activePaneId.contains(id)).sortBy(_._1.value)
 
-    orderedPanes.foreach {
+    orderedPanes.flatMap {
       case (paneId, pane) =>
-        for
+        (for
           paneLayout <- renderPlan.paneLayouts.get(paneId)
           bufferId   <- pane.bufferId
           buffer     <- state.buffers.get(bufferId)
           snapshot   <- renderPlan.snapshots.get(paneId)
-        do renderCursors(buffer, paneLayout.contentRect, state.theme, state.config, context, snapshot)
+        yield renderCursors(buffer, paneLayout.contentRect, state.theme, state.config, context, snapshot))
+          .getOrElse(Nil)
     }
 
   private def renderEditorPane(
@@ -1224,7 +1282,8 @@ object Renderer:
           bufferSnapshot.get,
           markdownLensFrame.getOrElse(markdownLensFrameFor(buf, bufferSnapshot.get))
         )
-      else renderCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
+      else
+        val _ = renderCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
     }
 
   private def renderBufferHeader(
@@ -2221,6 +2280,9 @@ object Renderer:
     val contentHeightPx = rect.height * cellMetrics.lineHeight
     contentTopPx + math.max(0, (contentHeightPx - (lineCount * lineHeightPx)) / 2)
 
+  /** Paint every visible cursor in `buffer` and report the pixel rect each one occupies, so a caller can bound a
+    * repaint to cover them.
+    */
   private def renderCursors(
     buffer: Buffer,
     rect: LayoutRect,
@@ -2228,9 +2290,9 @@ object Renderer:
     config: AppConfig,
     context: RenderContext,
     snapshot: TextLayoutSnapshot
-  ): Unit =
+  ): List[PixelRect] =
 
-    buffer.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
+    buffer.cursors.zipWithIndex.flatMap { (cursor, cursorIndex) =>
       val isPrimaryCursor = cursorIndex == 0
       val shouldRenderCursor =
         context.cursorVisible || (buffer.cursors.size > 1 && !isPrimaryCursor)
@@ -2243,16 +2305,19 @@ object Renderer:
             val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
             val screenYPx =
               textRowMetrics(rect, context, snapshot).cursorTopPx(visualLine)
-            caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx).foreach { (caretXPx, widthPx) =>
-              context.surface.fillPixelRect(
-                caretXPx,
-                screenYPx,
-                widthPx,
-                snapshot.lineHeightPx,
-                effectiveCursorColor
-              )
-            }
-        case _ => ()
+            caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx) match
+              case Some((caretXPx, widthPx)) =>
+                context.surface.fillPixelRect(
+                  caretXPx,
+                  screenYPx,
+                  widthPx,
+                  snapshot.lineHeightPx,
+                  effectiveCursorColor
+                )
+                List(PixelRect(caretXPx, screenYPx, widthPx, snapshot.lineHeightPx))
+              case None => Nil
+          else Nil
+        case _ => Nil
     }
 
   private def calculateCursorVisualPosition(
