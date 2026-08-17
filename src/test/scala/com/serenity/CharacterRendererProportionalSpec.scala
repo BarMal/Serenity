@@ -184,6 +184,86 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
       .min) +- 0.001f
   }
 
+  it should "reflect a changed animation color on a later render of the same text" in {
+    val plainSurface = new MockRenderSurface(200, 24)
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      plainSurface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      makeVisualLine(),
+      Theme.light,
+      AnimationState.empty
+    )
+    plainSurface.drawRunPxCalls.head.foreground shouldBe Theme.light.foreground
+
+    val animatedColor   = Color(10, 20, 30)
+    val animatedSurface = new MockRenderSurface(200, 24)
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      animatedSurface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      makeVisualLine(),
+      Theme.light,
+      animWithMiddleChar(animatedColor, animatedColor)
+    )
+    val calls = animatedSurface.drawRunPxCalls
+    calls should have size 3
+    calls(1).s shouldBe "b"
+    calls(1).foreground shouldBe animatedColor
+  }
+
+  it should "measure the same text correctly against two different sets of caret stops" in {
+    val text = "abc"
+    val narrowLine = TextVisualLine(
+      bufferLine = 0,
+      startColumn = 0,
+      endColumn = 3,
+      text = text,
+      widthPx = 15.0f,
+      caretStops =
+        Vector(TextCaretStop(0, 0.0f), TextCaretStop(1, 5.0f), TextCaretStop(2, 10.0f), TextCaretStop(3, 15.0f))
+    )
+    val wideLine = TextVisualLine(
+      bufferLine = 0,
+      startColumn = 0,
+      endColumn = 3,
+      text = text,
+      widthPx = 30.0f,
+      caretStops =
+        Vector(TextCaretStop(0, 0.0f), TextCaretStop(1, 10.0f), TextCaretStop(2, 20.0f), TextCaretStop(3, 30.0f))
+    )
+
+    val narrowSurface = new MockRenderSurface(200, 24)
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      narrowSurface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      narrowLine,
+      Theme.light,
+      AnimationState.empty
+    )
+    narrowSurface.drawRunPxCalls.head.bgWidthPx shouldBe 15.0f +- 0.001f
+
+    val wideSurface = new MockRenderSurface(200, 24)
+    CharacterRenderer.renderMeasuredLineWithAnimation(
+      wideSurface,
+      xOriginPx = 0.0f,
+      yPx = 0,
+      lineHeightPx = 14,
+      ascentPx = 10,
+      wideLine,
+      Theme.light,
+      AnimationState.empty
+    )
+    wideSurface.drawRunPxCalls.head.bgWidthPx shouldBe 30.0f +- 0.001f
+  }
+
   it should "keep animated emoji and combining graphemes at their measured bounds" in {
     val text = "😀e\u0301x"
     val visualLine = TextVisualLine(
