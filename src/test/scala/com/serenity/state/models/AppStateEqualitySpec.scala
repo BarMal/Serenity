@@ -63,3 +63,10 @@ class AppStateEqualitySpec extends AnyFlatSpec with Matchers:
 
     (base == changed) shouldBe false
   }
+
+  it should "detect a difference confined to its new last declared field (markdownPreviewCommittedGeneration)" in {
+    val base    = Buffer.fromString(BufferId(1), "hello")
+    val changed = base.copy(markdownPreviewCommittedGeneration = 1L)
+
+    (base == changed) shouldBe false
+  }

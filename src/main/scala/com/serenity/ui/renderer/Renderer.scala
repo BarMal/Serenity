@@ -1615,7 +1615,8 @@ object Renderer:
       inlineLineHeightPx = MarkdownDocumentPreview.lineHeightForDeviceScale(
         context.cellMetrics.lineHeight,
         context.surface.devicePixelScaleY
-      )
+      ),
+      reuseLastRenderWhileEditing = buffer.markdownPreviewEditGeneration != buffer.markdownPreviewCommittedGeneration
     )
     context.surface.drawImage(image, rect.x, rect.y, rect.width, rect.height)
 
@@ -2567,7 +2568,9 @@ object Renderer:
       heightPx = heightPx,
       theme = state.theme,
       font = context.textFont,
-      baseUri = baseUri
+      baseUri = baseUri,
+      reuseLastRenderWhileEditing =
+        buffer.exists(b => b.markdownPreviewEditGeneration != b.markdownPreviewCommittedGeneration)
     )
     context.surface.drawImage(image, imageRect.x, imageRect.y, contentWidthCells, contentHeightCells)
 

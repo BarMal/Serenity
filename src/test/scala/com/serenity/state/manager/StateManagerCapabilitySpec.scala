@@ -2,6 +2,8 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration.*
+
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
@@ -443,4 +445,160 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
     stateRef.get.unsafeRunSync().clipboard.shouldBe(Some("pasted"))
     applied.get.unsafeRunSync().shouldBe(List(Paste))
+  }
+
+  "StateManagerOperationBoundary" should "commit a markdown preview render generation after the debounce settles" in {
+    val bufferId     = BufferId(1)
+    val initialState = AppState.initial.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "# hello")))
+    val program = for
+      stateRef <- Ref.of[IO, AppState](initialState)
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      )
+      _          <- operations.scheduleMarkdownPreviewCommit(bufferId, 1L)
+      _          <- IO.sleep(250.millis)
+      afterState <- stateRef.get
+    yield afterState.buffers(bufferId).markdownPreviewCommittedGeneration
+
+    program.unsafeRunSync() shouldBe 1L
+  }
+
+  it should "cancel a pending markdown preview commit when superseded by a newer edit" in {
+    val bufferId     = BufferId(1)
+    val initialState = AppState.initial.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "# hello")))
+    val program = for
+      stateRef <- Ref.of[IO, AppState](initialState)
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      )
+      _          <- operations.scheduleMarkdownPreviewCommit(bufferId, 1L)
+      _          <- operations.scheduleMarkdownPreviewCommit(bufferId, 2L)
+      _          <- IO.sleep(250.millis)
+      afterState <- stateRef.get
+    yield afterState.buffers(bufferId).markdownPreviewCommittedGeneration
+
+    program.unsafeRunSync() shouldBe 2L
+  }
+
+  "StateManagerEventPipeline" should "recognize a live markdown preview via a pinned panel surface" in {
+    val bufferId = BufferId(1)
+    val state = AppState.initial.copy(
+      uiSurfaces = List(
+        UiSurface(
+          SurfaceId("markdown-preview"),
+          SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+          SurfacePresentation.Pinned(com.serenity.ui.layout.PanelPosition.Right, 40)
+        )
+      )
+    )
+    val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
+    val fiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
+    val operations = StateManagerOperationBoundary
+      .create(stateRef, fiberRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
+      .unsafeRunSync()
+    val pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+
+    pipeline.hasLiveMarkdownPreview(state, bufferId) shouldBe true
+    pipeline.hasLiveMarkdownPreview(state, BufferId(2)) shouldBe false
+  }
+
+  private def focusedOnBuffer(state: AppState, paneId: PaneId, bufferId: BufferId): AppState =
+    state.copy(
+      layout = com.serenity.ui.layout.Layout(
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+        activeEditorPaneId = Some(paneId),
+        paneOrder = List(paneId)
+      ),
+      focus = Focus.EditorPane(paneId)
+    )
+
+  it should "bump markdownPreviewEditGeneration when an edit changes a buffer with a live inline markdown preview" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val before =
+      Buffer.fromString(bufferId, "# Before").copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
+    val after = before.copy(content = Rope("# After"))
+    val prevState = focusedOnBuffer(
+      AppState.initial.copy(
+        buffers = Map(bufferId -> before),
+        config = AppConfig.default.withMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)
+      ),
+      paneId,
+      bufferId
+    )
+    val currentState = prevState.copy(buffers = Map(bufferId -> after))
+    val program = for
+      stateRef <- Ref.of[IO, AppState](currentState)
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      )
+      pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+      _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
+      afterState <- stateRef.get
+    yield afterState.buffers(bufferId).markdownPreviewEditGeneration
+
+    program.unsafeRunSync() shouldBe 1L
+  }
+
+  it should "leave markdownPreviewEditGeneration untouched when the buffer has no live markdown preview" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val before =
+      Buffer.fromString(bufferId, "# Before").copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
+    val after = before.copy(content = Rope("# After"))
+    // No withMarkdownViewMode(InlineLens) and no MarkdownPreview surface -- markdownViewMode defaults to Source.
+    val prevState    = focusedOnBuffer(AppState.initial.copy(buffers = Map(bufferId -> before)), paneId, bufferId)
+    val currentState = prevState.copy(buffers = Map(bufferId -> after))
+    val program = for
+      stateRef <- Ref.of[IO, AppState](currentState)
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      )
+      pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+      _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
+      afterState <- stateRef.get
+    yield afterState.buffers(bufferId).markdownPreviewEditGeneration
+
+    program.unsafeRunSync() shouldBe 0L
+  }
+
+  it should "leave markdownPreviewEditGeneration untouched when the buffer's content did not change" in {
+    val bufferId = BufferId(1)
+    val paneId   = PaneId(1)
+    val buffer =
+      Buffer.fromString(bufferId, "# Same").copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
+    val prevState = focusedOnBuffer(
+      AppState.initial.copy(
+        buffers = Map(bufferId -> buffer),
+        config = AppConfig.default.withMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)
+      ),
+      paneId,
+      bufferId
+    )
+    val program = for
+      stateRef <- Ref.of[IO, AppState](prevState)
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        fiberRef,
+        org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      )
+      pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+      _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
+      afterState <- stateRef.get
+    yield afterState.buffers(bufferId).markdownPreviewEditGeneration
+
+    program.unsafeRunSync() shouldBe 0L
   }

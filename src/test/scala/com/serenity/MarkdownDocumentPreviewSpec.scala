@@ -618,11 +618,11 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     second should not be theSameInstanceAs(first)
   }
 
-  it should "leave rendering unaffected by default -- debouncing is opt-in via debounceWindowNanos" in {
+  it should "leave rendering unaffected by default -- reuse is opt-in via reuseLastRenderWhileEditing" in {
     val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
     val first = MarkdownDocumentPreview.renderImage(
       source = "# Default first",
-      title = "debounce-default.md",
+      title = "reuse-default.md",
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
@@ -630,7 +630,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     )
     val second = MarkdownDocumentPreview.renderImage(
       source = "# Default second, totally different content",
-      title = "debounce-default.md",
+      title = "reuse-default.md",
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
@@ -640,85 +640,73 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     second should not be theSameInstanceAs(first)
   }
 
-  it should "reuse the last rendered image for rapidly changing markdown content within an opted-in debounce window" in {
-    val font        = Font(Font.SANS_SERIF, Font.PLAIN, 14)
-    val firstNanos  = 0L
-    val secondNanos = firstNanos + 1_000_000L // 1ms later, well within the debounce window
+  it should "reuse the last rendered image for changing markdown content while an edit burst is signalled in flight" in {
+    val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
     val first = MarkdownDocumentPreview.renderImage(
-      source = "# Debounce first",
-      title = "debounce.md",
+      source = "# Edit burst first",
+      title = "edit-burst.md",
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
-      nowNanos = () => firstNanos
+      reuseLastRenderWhileEditing = true
     )
     val second = MarkdownDocumentPreview.renderImage(
-      source = "# Debounce second, totally different content",
-      title = "debounce.md",
+      source = "# Edit burst second, totally different content",
+      title = "edit-burst.md",
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
-      nowNanos = () => secondNanos
+      reuseLastRenderWhileEditing = true
     )
 
     second should be theSameInstanceAs first
   }
 
-  it should "re-render after an opted-in debounce window elapses" in {
-    val font        = Font(Font.SANS_SERIF, Font.PLAIN, 14)
-    val firstNanos  = 0L
-    val secondNanos = firstNanos + MarkdownDocumentPreview.DefaultDebounceWindowNanos + 1
+  it should "render fresh once the caller signals the edit burst has settled" in {
+    val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
     val first = MarkdownDocumentPreview.renderImage(
-      source = "# Debounce elapsed first",
-      title = "debounce-elapsed.md",
+      source = "# Settled first",
+      title = "settled.md",
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
-      nowNanos = () => firstNanos
+      reuseLastRenderWhileEditing = true
     )
     val second = MarkdownDocumentPreview.renderImage(
-      source = "# Debounce elapsed second",
-      title = "debounce-elapsed.md",
+      source = "# Settled second",
+      title = "settled.md",
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
-      nowNanos = () => secondNanos
+      reuseLastRenderWhileEditing = false
     )
 
     second should not be theSameInstanceAs(first)
   }
 
-  it should "not reuse a stale rendered image across a different rendered size" in {
-    val font        = Font(Font.SANS_SERIF, Font.PLAIN, 14)
-    val firstNanos  = 0L
-    val secondNanos = firstNanos + 1_000_000L
+  it should "not reuse a rendered image across a different rendered size even while mid-edit" in {
+    val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
     val _ = MarkdownDocumentPreview.renderImage(
-      source = "# Debounce sizing",
-      title = "debounce-sizing.md",
+      source = "# Edit-burst sizing",
+      title = "edit-burst-sizing.md",
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
-      nowNanos = () => firstNanos
+      reuseLastRenderWhileEditing = true
     )
     val resized = MarkdownDocumentPreview.renderImage(
-      source = "# Debounce sizing",
-      title = "debounce-sizing.md",
+      source = "# Edit-burst sizing",
+      title = "edit-burst-sizing.md",
       widthPx = 320,
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
-      nowNanos = () => secondNanos
+      reuseLastRenderWhileEditing = true
     )
 
     resized.getWidth shouldBe 320
@@ -727,12 +715,12 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
   it should "render fresh content immediately when no prior render exists for that slot" in {
     val image = MarkdownDocumentPreview.renderImage(
       source = "# First ever render for this slot",
-      title = "debounce-fresh.md",
+      title = "reuse-fresh.md",
       widthPx = 200,
       heightPx = 140,
       theme = Theme.default,
       font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos
+      reuseLastRenderWhileEditing = true
     )
 
     image.getWidth shouldBe 200

@@ -51,14 +51,7 @@ object MarkdownDocumentPreview:
   private val MaxImageBytes            = 2 * 1024 * 1024
   private val MaxImageDimension        = 4096
   private val MaxImagePixels           = MaxImageDimension.toLong * MaxImageDimension.toLong
-  private val MaxDebounceSlots         = 24
-
-  /** Recommended window for callers that opt into debouncing via `renderImage`/`renderInlineImage`'s
-    * `debounceWindowNanos` parameter (which defaults to 0, i.e. off, so existing callers are unaffected). Matches
-    * StateManagerComposition's DocumentAnalysisDebounce -- the same "don't redo expensive work on every single
-    * keystroke" interval used elsewhere in the codebase.
-    */
-  private[serenity] val DefaultDebounceWindowNanos = 150_000_000L
+  private val MaxEditSlotCacheEntries  = 24
 
   final private case class SourceFingerprint(length: Int, hash: Int)
 
@@ -110,7 +103,7 @@ object MarkdownDocumentPreview:
         key.inlineRows
       )
 
-  final private case class SlotRender(renderedAtNanos: Long, image: BufferedImage)
+  final private case class SlotRender(image: BufferedImage)
 
   final private case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
 
@@ -138,30 +131,30 @@ object MarkdownDocumentPreview:
       override def removeEldestEntry(eldest: java.util.Map.Entry[ImageCacheKey, BufferedImage]): Boolean =
         size() > MaxCachedImages
 
-  private val renderSlots =
-    new LinkedHashMap[ImageSlotKey, SlotRender](MaxDebounceSlots, 0.75f, true):
+  private val editSlotCache =
+    new LinkedHashMap[ImageSlotKey, SlotRender](MaxEditSlotCacheEntries, 0.75f, true):
       override def removeEldestEntry(eldest: java.util.Map.Entry[ImageSlotKey, SlotRender]): Boolean =
-        size() > MaxDebounceSlots
+        size() > MaxEditSlotCacheEntries
 
-  /** Runs the expensive `render` thunk at most once per `debounceWindowNanos` for a given preview slot (same
-    * title/size/theme/font/etc), reusing the last rendered image for calls that land within the window. This bounds how
-    * often the flying-saucer layout pipeline actually runs while the user is typing continuously in preview mode, at
-    * the cost of the preview lagging the live source by up to one window.
+  /** While `reuseLastRenderWhileEditing` is true, reuses the last image rendered for this preview slot (same
+    * title/size/theme/font/etc, only the markdown content differing) instead of paying for a fresh flying-saucer layout
+    * pass. Callers set this from an explicit, event-driven signal decided upstream -- e.g. "an edit landed for this
+    * buffer more recently than the last settled render" -- never from wall-clock proximity, so the result is fully
+    * deterministic given the caller's inputs. `false` (every direct caller's default) always renders fresh, exactly as
+    * if this cache didn't exist.
     */
-  private def renderOrReuseStale(key: ImageCacheKey, debounceWindowNanos: Long, nowNanos: () => Long)(
+  private def renderOrReuseCommitted(key: ImageCacheKey, reuseLastRenderWhileEditing: Boolean)(
     render: => BufferedImage
   ): BufferedImage =
     val slotKey = ImageSlotKey.from(key)
-    val now     = nowNanos()
-    val stale = renderSlots
-      .synchronized(Option(renderSlots.get(slotKey)))
-      .filter(entry => now >= entry.renderedAtNanos && now - entry.renderedAtNanos < debounceWindowNanos)
-    stale match
+    val reused =
+      if reuseLastRenderWhileEditing then editSlotCache.synchronized(Option(editSlotCache.get(slotKey))) else None
+    reused match
       case Some(entry) => entry.image
       case None =>
         val rendered = render
-        renderSlots.synchronized {
-          val _ = renderSlots.put(slotKey, SlotRender(now, rendered))
+        editSlotCache.synchronized {
+          val _ = editSlotCache.put(slotKey, SlotRender(rendered))
         }
         rendered
 
@@ -217,8 +210,7 @@ object MarkdownDocumentPreview:
     baseUri: Option[URI] = None,
     panelChrome: Boolean = true,
     inlineLineHeightPx: Option[Int] = None,
-    debounceWindowNanos: Long = 0L,
-    nowNanos: () => Long = () => System.nanoTime()
+    reuseLastRenderWhileEditing: Boolean = false
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
@@ -239,7 +231,7 @@ object MarkdownDocumentPreview:
         Option(imageCache.get(key))
       }
       .getOrElse {
-        renderOrReuseStale(key, debounceWindowNanos, nowNanos) {
+        renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
           val rendered = renderImageUncached(
             source,
             title,
@@ -269,8 +261,7 @@ object MarkdownDocumentPreview:
     theme: Theme,
     font: Font,
     inlineLineHeightPx: Int,
-    debounceWindowNanos: Long = 0L,
-    nowNanos: () => Long = () => System.nanoTime()
+    reuseLastRenderWhileEditing: Boolean = false
   ): BufferedImage =
     val rows = inlinePreviewRows(sourceLines, firstSourceLine, maxSourceLines)
     renderInlineRowsImage(
@@ -282,8 +273,7 @@ object MarkdownDocumentPreview:
       theme,
       font,
       inlineLineHeightPx,
-      debounceWindowNanos,
-      nowNanos
+      reuseLastRenderWhileEditing
     )
 
   /** Renders a caller-composed inline Lens row sequence. */
@@ -296,8 +286,7 @@ object MarkdownDocumentPreview:
     theme: Theme,
     font: Font,
     inlineLineHeightPx: Int,
-    debounceWindowNanos: Long = 0L,
-    nowNanos: () => Long = () => System.nanoTime()
+    reuseLastRenderWhileEditing: Boolean = false
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
@@ -318,7 +307,7 @@ object MarkdownDocumentPreview:
         Option(imageCache.get(key))
       }
       .getOrElse {
-        renderOrReuseStale(key, debounceWindowNanos, nowNanos) {
+        renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
           val rendered = renderInlineImageUncached(
             rows,
             sourceLines,

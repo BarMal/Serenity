@@ -73,7 +73,16 @@ final case class Buffer(
     documentComments: List[DocumentComment] = Nil,
     richTextDocument: Option[RichTextDocument] = None,
     richTextFidelity: Option[RichTextFidelity] = None,
-    insertionRichTextStyle: Option[RichTextStyle] = None
+    insertionRichTextStyle: Option[RichTextStyle] = None,
+    /** Bumped synchronously whenever an edit lands on this buffer while it has a live markdown preview. Compared
+      * against `markdownPreviewCommittedGeneration` to tell the renderer whether an edit burst is still in flight.
+      */
+    markdownPreviewEditGeneration: Long = 0L,
+    /** Set by a debounced, cancelable job ~150ms after the edit burst that produced `markdownPreviewEditGeneration`
+      * settles. While the two differ, the renderer reuses its last markdown preview image instead of re-running the
+      * expensive HTML/CSS layout pass on every keystroke.
+      */
+    markdownPreviewCommittedGeneration: Long = 0L
 ):
 
   def typographyRole: TypographyRole =

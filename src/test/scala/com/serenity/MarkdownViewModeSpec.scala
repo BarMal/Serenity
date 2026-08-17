@@ -309,6 +309,40 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     laterImage should not be theSameInstanceAs(firstImage)
   }
 
+  it should "reuse the last preview image mid-burst, then render fresh once the commit generation catches up" in {
+    val bufferId = BufferId(1)
+    def withGenerations(state: AppState, editGeneration: Long, committedGeneration: Long): AppState =
+      state.copy(buffers =
+        state.buffers.updatedWith(bufferId)(
+          _.map(
+            _.copy(
+              markdownPreviewEditGeneration = editGeneration,
+              markdownPreviewCommittedGeneration = committedGeneration
+            )
+          )
+        )
+      )
+
+    val settledFirst = markdownPreviewPanelState("# First settled render", CursorPosition(0, 0))
+    val midBurst = withGenerations(
+      markdownPreviewPanelState("# Totally different content mid-burst", CursorPosition(0, 0)),
+      editGeneration = 1L,
+      committedGeneration = 0L
+    )
+    val settledAgain = withGenerations(
+      markdownPreviewPanelState("# Totally different content mid-burst", CursorPosition(0, 0)),
+      editGeneration = 1L,
+      committedGeneration = 1L
+    )
+
+    val firstImage   = renderSplitPreviewImage(settledFirst)
+    val burstImage   = renderSplitPreviewImage(midBurst)
+    val settledImage = renderSplitPreviewImage(settledAgain)
+
+    burstImage should be theSameInstanceAs firstImage
+    settledImage should not be theSameInstanceAs(firstImage)
+  }
+
   "Markdown inline lens mode" should "leave markdown source untouched in source mode" in {
     val surface = new MockRenderSurface(100, 20)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
