@@ -9,6 +9,7 @@ import cats.effect.std.Semaphore
 import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.PreferredWindowSize
+import com.serenity.diagnostics.Trace
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.{Direction, Event}
 import com.serenity.lsp.LspEffect
@@ -162,11 +163,14 @@ final private[manager] class StateManagerOperationBoundary private (
         }).start.flatMap(fiber => findSearchFiberRef.set(Some(fiber)))
 
   private def documentAnalysisJob: IO[Unit] =
+    given Logger[IO] = logger
     (IO.sleep(DocumentAnalysisDebounce) >>
-      stateRef.get.flatMap { snapshot =>
-        val expected = SpellChecker.analysisFingerprints(snapshot)
-        IO.blocking(SpellChecker.refreshDiagnostics(snapshot))
-          .flatMap(analyzed => stateRef.update(current => SpellChecker.applyIfCurrent(current, analyzed, expected)))
+      Trace.timed("analysis.documentAnalysisJob") {
+        stateRef.get.flatMap { snapshot =>
+          val expected = SpellChecker.analysisFingerprints(snapshot)
+          IO.blocking(SpellChecker.refreshDiagnostics(snapshot))
+            .flatMap(analyzed => stateRef.update(current => SpellChecker.applyIfCurrent(current, analyzed, expected)))
+        }
       }).handleErrorWith(error =>
       documentAnalysisInputsRef.set(None) >> logger.error(error)("[ANALYSIS] Document analysis refresh failed")
     )

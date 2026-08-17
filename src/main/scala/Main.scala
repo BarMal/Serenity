@@ -3,6 +3,7 @@ import cats.syntax.all.*
 import com.serenity.animation.WindowSitter
 import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, MotionFamily}
+import com.serenity.diagnostics.Trace
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
@@ -62,25 +63,31 @@ object Main extends IOApp:
             else IO.unit
 
           def syncDisplayMetrics(): IO[Unit] =
-            IO {
-              val metrics = displayState.primaryMetrics
-              if swingWin.metrics != metrics then swingWin.updateMetrics(metrics, displayState.uiMetrics)
-            }.evalOn(paintEc)
+            Trace.timed("render.syncDisplayMetrics") {
+              IO {
+                val metrics = displayState.primaryMetrics
+                if swingWin.metrics != metrics then swingWin.updateMetrics(metrics, displayState.uiMetrics)
+              }.evalOn(paintEc)
+            }
 
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
-            IO {
-              swingWin.updateChromeTheme(state.theme)
-              val sitterVisible = state.config.windowSitterConfig.enabled &&
-                state.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).enabled
-              swingWin.updateWindowSitter(state.windowSitter, sitterVisible)
-            }.evalOn(paintEc)
+            Trace.timed("render.syncChromeTheme") {
+              IO {
+                swingWin.updateChromeTheme(state.theme)
+                val sitterVisible = state.config.windowSitterConfig.enabled &&
+                  state.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).enabled
+                swingWin.updateWindowSitter(state.windowSitter, sitterVisible)
+              }.evalOn(paintEc)
+            }
 
           AccessibilitySync.empty.flatMap { accessibilitySync =>
             def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
-              accessibilitySync
-                .sync(state)(previous => IO(AccessibilitySnapshot.from(state, swingWin.viewportSize, previous)))
-                .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
-                .evalOn(paintEc)
+              Trace.timed("render.syncAccessibility") {
+                accessibilitySync
+                  .sync(state)(previous => IO(AccessibilitySnapshot.from(state, swingWin.viewportSize, previous)))
+                  .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
+                  .evalOn(paintEc)
+              }
 
             initialScaleSync >> AppRuntime.run(
               initialViewportSize = swingWin.viewportSize,

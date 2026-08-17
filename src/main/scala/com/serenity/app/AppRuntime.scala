@@ -9,6 +9,7 @@ import cats.effect.*
 import cats.effect.std.Dispatcher
 import cats.syntax.parallel.*
 import com.serenity.config.{AppConfig, CursorMode, MotionFamily, RenderFpsTarget}
+import com.serenity.diagnostics.Trace
 import com.serenity.input.*
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -305,7 +306,7 @@ object AppRuntime:
     renderFull: (AppState, Boolean, Option[Color]) => IO[Unit],
     renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
     sleep: FiniteDuration => IO[Unit] = IO.sleep
-  ): Stream[IO, Unit] =
+  )(using logger: Logger[IO]): Stream[IO, Unit] =
     Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
       Stream
         .repeatEval(stateManager.getCurrentState)
@@ -358,20 +359,22 @@ object AppRuntime:
     loopName: String,
     phase: String,
     stateForDiagnostics: IO[Option[AppState]]
-  )(effect: IO[A]): IO[A] =
-    effect.handleErrorWith {
-      case failure: RuntimeFailure =>
-        IO.raiseError(failure)
-      case error =>
-        stateForDiagnostics.attempt.flatMap {
-          case Right(Some(state)) =>
-            IO.raiseError(RuntimeFailure(loopName, phase, describeStateForDiagnostics(state), error))
-          case Right(None) =>
-            IO.raiseError(RuntimeFailure(loopName, phase, "state=unavailable", error))
-          case Left(stateError) =>
-            val reason = Option(stateError.getMessage).getOrElse(stateError.getClass.getSimpleName)
-            IO.raiseError(RuntimeFailure(loopName, phase, s"state=unavailable reason=$reason", error))
-        }
+  )(effect: IO[A])(using logger: Logger[IO]): IO[A] =
+    Trace.timed(s"$loopName.$phase") {
+      effect.handleErrorWith {
+        case failure: RuntimeFailure =>
+          IO.raiseError(failure)
+        case error =>
+          stateForDiagnostics.attempt.flatMap {
+            case Right(Some(state)) =>
+              IO.raiseError(RuntimeFailure(loopName, phase, describeStateForDiagnostics(state), error))
+            case Right(None) =>
+              IO.raiseError(RuntimeFailure(loopName, phase, "state=unavailable", error))
+            case Left(stateError) =>
+              val reason = Option(stateError.getMessage).getOrElse(stateError.getClass.getSimpleName)
+              IO.raiseError(RuntimeFailure(loopName, phase, s"state=unavailable reason=$reason", error))
+          }
+      }
     }
 
   private[serenity] def superviseLoop(
