@@ -132,6 +132,7 @@ final private[manager] class StateManagerEventPipeline(
         syncFocus >> handleEvent >>
           recordUndoableEdit(event, prevState) >>
           Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(enqueueChangedLspDocuments(prevState)) >>
+          Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState)) >>
           Trace.timed(s"$eventLabel.applyAnimationHooks")(applyAnimationHooks(prevState))
       }
     }
@@ -211,6 +212,38 @@ final private[manager] class StateManagerEventPipeline(
               .fold(cats.effect.IO.unit)(effects.interpretEffect)
       }
     }
+
+  /** Bumps `markdownPreviewEditGeneration` synchronously for any buffer this event's dispatch changed the content of,
+    * provided that buffer currently has a live markdown preview -- and schedules a debounced commit of that generation
+    * via the operation boundary (cancel-and-restart, mirroring `scheduleFindSearch`). While a buffer's edit generation
+    * and committed generation differ, the renderer reuses its last preview image instead of paying for a fresh
+    * flying-saucer layout pass on every keystroke. See `MarkdownDocumentPreview.renderOrReuseCommitted`.
+    */
+  private[manager] def scheduleMarkdownPreviewCommits(previousState: AppState): cats.effect.IO[Unit] =
+    stateRef.get.flatMap { currentState =>
+      StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState).toList.traverse_ { bufferId =>
+        currentState.buffers.get(bufferId) match
+          case Some(buffer)
+              if hasLiveMarkdownPreview(currentState, bufferId) &&
+                previousState.buffers.get(bufferId).exists(_.content != buffer.content) =>
+            val nextGeneration = buffer.markdownPreviewEditGeneration + 1
+            stateRef.update { s =>
+              s.buffers.get(bufferId).fold(s) { b =>
+                s.copy(buffers = s.buffers.updated(bufferId, b.copy(markdownPreviewEditGeneration = nextGeneration)))
+              }
+            } >> operations.scheduleMarkdownPreviewCommit(bufferId, nextGeneration)
+          case _ => cats.effect.IO.unit
+      }
+    }
+
+  private[manager] def hasLiveMarkdownPreview(state: AppState, bufferId: BufferId): Boolean =
+    state.uiSurfaces.exists {
+      case UiSurface(_, SurfaceContent.MarkdownPreview(id, _), _, _) => id == bufferId
+      case _                                                         => false
+    } || (
+      state.config.markdownViewMode == com.serenity.config.MarkdownViewMode.InlineLens &&
+        state.buffers.get(bufferId).exists(_.language.contains(com.serenity.lsp.config.LanguageId.Markdown))
+    )
 
   private def recordUndoableEdit(event: Event, prevState: AppState): cats.effect.IO[Unit] =
     focusedBufferAndPane(prevState) match

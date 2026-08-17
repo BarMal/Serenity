@@ -76,14 +76,16 @@ final private[manager] class StateManagerOperationBoundary private (
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     documentAnalysisInputsRef: Ref[IO, Option[Map[String, SpellCheckFingerprint]]],
     findSearchFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    markdownPreviewCommitFibersRef: Ref[IO, Map[BufferId, Fiber[IO, Throwable, Unit]]],
     logger: Logger[IO],
     analysisLifecycleLock: Semaphore[IO],
     documentAnalysisShutdownRef: Ref[IO, Boolean],
     beforeDocumentAnalysisStart: IO[Unit],
     beforeDocumentAnalysisShutdown: IO[Unit]
 ):
-  private val DocumentAnalysisDebounce = 150.millis
-  private val FindSearchDebounce       = 50.millis
+  private val DocumentAnalysisDebounce      = 150.millis
+  private val FindSearchDebounce            = 50.millis
+  private val MarkdownPreviewCommitDebounce = 150.millis
 
   def enqueueEvent(event: Event): IO[Unit] =
     pendingOperations.update(_ :+ StateManagerOperation.Event(event))
@@ -162,6 +164,24 @@ final private[manager] class StateManagerOperationBoundary private (
           stateRef.update(ModalEventReducer.applyFindSearchResults(_, request, results))
         }).start.flatMap(fiber => findSearchFiberRef.set(Some(fiber)))
 
+  /** Cancels any pending markdown-preview commit for `bufferId` and schedules a new one that, after
+    * `MarkdownPreviewCommitDebounce` of no further supersession, records `generation` as this buffer's committed
+    * markdown-preview generation. The renderer compares this against `Buffer.markdownPreviewEditGeneration` to decide
+    * whether an edit burst is still in flight -- see `MarkdownDocumentPreview.renderOrReuseCommitted`.
+    */
+  def scheduleMarkdownPreviewCommit(bufferId: BufferId, generation: Long): IO[Unit] =
+    markdownPreviewCommitFibersRef.modify(fibers => (fibers - bufferId, fibers.get(bufferId))).flatMap { prior =>
+      prior.traverse_(_.cancel) >>
+        (IO.sleep(MarkdownPreviewCommitDebounce) >>
+          stateRef.update { state =>
+            state.buffers.get(bufferId).fold(state) { buffer =>
+              state.copy(buffers =
+                state.buffers.updated(bufferId, buffer.copy(markdownPreviewCommittedGeneration = generation))
+              )
+            }
+          }).start.flatMap(fiber => markdownPreviewCommitFibersRef.update(_ + (bufferId -> fiber)))
+    }
+
   private def documentAnalysisJob: IO[Unit] =
     given Logger[IO] = logger
     (IO.sleep(DocumentAnalysisDebounce) >>
@@ -193,17 +213,19 @@ private[manager] object StateManagerOperationBoundary:
     beforeDocumentAnalysisShutdown: IO[Unit] = IO.unit
   ): IO[StateManagerOperationBoundary] =
     for
-      pendingOperations           <- Ref.of[IO, List[StateManagerOperation]](Nil)
-      analysisLifecycleLock       <- Semaphore[IO](1)
-      documentAnalysisShutdownRef <- Ref.of[IO, Boolean](false)
-      documentAnalysisInputsRef   <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
-      findSearchFiberRef          <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      pendingOperations              <- Ref.of[IO, List[StateManagerOperation]](Nil)
+      analysisLifecycleLock          <- Semaphore[IO](1)
+      documentAnalysisShutdownRef    <- Ref.of[IO, Boolean](false)
+      documentAnalysisInputsRef      <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
+      findSearchFiberRef             <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      markdownPreviewCommitFibersRef <- Ref.of[IO, Map[BufferId, Fiber[IO, Throwable, Unit]]](Map.empty)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       stateRef,
       documentAnalysisFiberRef,
       documentAnalysisInputsRef,
       findSearchFiberRef,
+      markdownPreviewCommitFibersRef,
       logger,
       analysisLifecycleLock,
       documentAnalysisShutdownRef,

@@ -44,7 +44,15 @@ object AccessibilitySync:
   /** Blanks the fields ticked by decorative animations but never read when projecting the accessibility snapshot. */
   private[accessibility] def normalize(state: AppState): AppState =
     state.copy(
-      buffers = state.buffers.view.mapValues(buffer => buffer.copy(animations = AnimationState.empty)).toMap,
+      buffers = state.buffers.view
+        .mapValues(buffer =>
+          buffer.copy(
+            animations = AnimationState.empty,
+            markdownPreviewEditGeneration = 0L,
+            markdownPreviewCommittedGeneration = 0L
+          )
+        )
+        .toMap,
       windowSitter = WindowSitter.default,
       themeTransition = None,
       surfaceAnimations = Map.empty
