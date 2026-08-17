@@ -51,6 +51,14 @@ object MarkdownDocumentPreview:
   private val MaxImageBytes            = 2 * 1024 * 1024
   private val MaxImageDimension        = 4096
   private val MaxImagePixels           = MaxImageDimension.toLong * MaxImageDimension.toLong
+  private val MaxDebounceSlots         = 24
+
+  /** Recommended window for callers that opt into debouncing via `renderImage`/`renderInlineImage`'s
+    * `debounceWindowNanos` parameter (which defaults to 0, i.e. off, so existing callers are unaffected). Matches
+    * StateManagerComposition's DocumentAnalysisDebounce -- the same "don't redo expensive work on every single
+    * keystroke" interval used elsewhere in the codebase.
+    */
+  private[serenity] val DefaultDebounceWindowNanos = 150_000_000L
 
   private case class SourceFingerprint(length: Int, hash: Int)
 
@@ -70,6 +78,39 @@ object MarkdownDocumentPreview:
       inlineLineHeightPx: Option[Int],
       inlineRows: Boolean
   )
+
+  /** Identifies an `ImageCacheKey` without its `source` fingerprint, so rapid successive renders of the same preview
+    * slot (same title/size/theme/font/etc, only the markdown content changing keystroke to keystroke) can be recognised
+    * as "the same thing being retyped" rather than unrelated cache entries.
+    */
+  private case class ImageSlotKey(
+      title: String,
+      widthPx: Int,
+      heightPx: Int,
+      theme: Theme,
+      font: Font,
+      baseUri: Option[String],
+      panelChrome: Boolean,
+      inlineLineHeightPx: Option[Int],
+      inlineRows: Boolean
+  )
+
+  private object ImageSlotKey:
+
+    def from(key: ImageCacheKey): ImageSlotKey =
+      ImageSlotKey(
+        key.title,
+        key.widthPx,
+        key.heightPx,
+        key.theme,
+        key.font,
+        key.baseUri,
+        key.panelChrome,
+        key.inlineLineHeightPx,
+        key.inlineRows
+      )
+
+  private case class SlotRender(renderedAtNanos: Long, image: BufferedImage)
 
   private case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
 
@@ -96,6 +137,33 @@ object MarkdownDocumentPreview:
     new LinkedHashMap[ImageCacheKey, BufferedImage](MaxCachedImages, 0.75f, true):
       override def removeEldestEntry(eldest: java.util.Map.Entry[ImageCacheKey, BufferedImage]): Boolean =
         size() > MaxCachedImages
+
+  private val renderSlots =
+    new LinkedHashMap[ImageSlotKey, SlotRender](MaxDebounceSlots, 0.75f, true):
+      override def removeEldestEntry(eldest: java.util.Map.Entry[ImageSlotKey, SlotRender]): Boolean =
+        size() > MaxDebounceSlots
+
+  /** Runs the expensive `render` thunk at most once per `debounceWindowNanos` for a given preview slot (same
+    * title/size/theme/font/etc), reusing the last rendered image for calls that land within the window. This bounds how
+    * often the flying-saucer layout pipeline actually runs while the user is typing continuously in preview mode, at
+    * the cost of the preview lagging the live source by up to one window.
+    */
+  private def renderOrReuseStale(key: ImageCacheKey, debounceWindowNanos: Long, nowNanos: () => Long)(
+    render: => BufferedImage
+  ): BufferedImage =
+    val slotKey = ImageSlotKey.from(key)
+    val now     = nowNanos()
+    val stale = renderSlots
+      .synchronized(Option(renderSlots.get(slotKey)))
+      .filter(entry => now >= entry.renderedAtNanos && now - entry.renderedAtNanos < debounceWindowNanos)
+    stale match
+      case Some(entry) => entry.image
+      case None =>
+        val rendered = render
+        renderSlots.synchronized {
+          val _ = renderSlots.put(slotKey, SlotRender(now, rendered))
+        }
+        rendered
 
   private val htmlFragmentCache =
     new LinkedHashMap[HtmlFragmentCacheKey, String](MaxCachedHtmlFragments, 0.75f, true):
@@ -148,7 +216,9 @@ object MarkdownDocumentPreview:
     font: Font,
     baseUri: Option[URI] = None,
     panelChrome: Boolean = true,
-    inlineLineHeightPx: Option[Int] = None
+    inlineLineHeightPx: Option[Int] = None,
+    debounceWindowNanos: Long = 0L,
+    nowNanos: () => Long = () => System.nanoTime()
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
@@ -169,21 +239,23 @@ object MarkdownDocumentPreview:
         Option(imageCache.get(key))
       }
       .getOrElse {
-        val rendered = renderImageUncached(
-          source,
-          title,
-          safeWidth,
-          safeHeight,
-          theme,
-          font,
-          baseUri,
-          panelChrome,
-          inlineLineHeightPx
-        )
-        imageCache.synchronized {
-          val _ = imageCache.put(key, rendered)
+        renderOrReuseStale(key, debounceWindowNanos, nowNanos) {
+          val rendered = renderImageUncached(
+            source,
+            title,
+            safeWidth,
+            safeHeight,
+            theme,
+            font,
+            baseUri,
+            panelChrome,
+            inlineLineHeightPx
+          )
+          imageCache.synchronized {
+            val _ = imageCache.put(key, rendered)
+          }
+          rendered
         }
-        rendered
       }
 
   /** Renders the inline lens directly from its preview rows without reparsing them as Markdown. */
@@ -196,10 +268,23 @@ object MarkdownDocumentPreview:
     heightPx: Int,
     theme: Theme,
     font: Font,
-    inlineLineHeightPx: Int
+    inlineLineHeightPx: Int,
+    debounceWindowNanos: Long = 0L,
+    nowNanos: () => Long = () => System.nanoTime()
   ): BufferedImage =
     val rows = inlinePreviewRows(sourceLines, firstSourceLine, maxSourceLines)
-    renderInlineRowsImage(rows, sourceLines, title, widthPx, heightPx, theme, font, inlineLineHeightPx)
+    renderInlineRowsImage(
+      rows,
+      sourceLines,
+      title,
+      widthPx,
+      heightPx,
+      theme,
+      font,
+      inlineLineHeightPx,
+      debounceWindowNanos,
+      nowNanos
+    )
 
   /** Renders a caller-composed inline Lens row sequence. */
   private[serenity] def renderInlineRowsImage(
@@ -210,7 +295,9 @@ object MarkdownDocumentPreview:
     heightPx: Int,
     theme: Theme,
     font: Font,
-    inlineLineHeightPx: Int
+    inlineLineHeightPx: Int,
+    debounceWindowNanos: Long = 0L,
+    nowNanos: () => Long = () => System.nanoTime()
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
@@ -231,20 +318,22 @@ object MarkdownDocumentPreview:
         Option(imageCache.get(key))
       }
       .getOrElse {
-        val rendered = renderInlineImageUncached(
-          rows,
-          sourceLines,
-          title,
-          safeWidth,
-          safeHeight,
-          theme,
-          font,
-          inlineLineHeightPx.max(1)
-        )
-        imageCache.synchronized {
-          val _ = imageCache.put(key, rendered)
+        renderOrReuseStale(key, debounceWindowNanos, nowNanos) {
+          val rendered = renderInlineImageUncached(
+            rows,
+            sourceLines,
+            title,
+            safeWidth,
+            safeHeight,
+            theme,
+            font,
+            inlineLineHeightPx.max(1)
+          )
+          imageCache.synchronized {
+            val _ = imageCache.put(key, rendered)
+          }
+          rendered
         }
-        rendered
       }
 
   private def renderImageUncached(

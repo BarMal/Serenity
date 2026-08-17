@@ -618,6 +618,127 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     second should not be theSameInstanceAs(first)
   }
 
+  it should "leave rendering unaffected by default -- debouncing is opt-in via debounceWindowNanos" in {
+    val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    val first = MarkdownDocumentPreview.renderImage(
+      source = "# Default first",
+      title = "debounce-default.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font
+    )
+    val second = MarkdownDocumentPreview.renderImage(
+      source = "# Default second, totally different content",
+      title = "debounce-default.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font
+    )
+
+    second should not be theSameInstanceAs(first)
+  }
+
+  it should "reuse the last rendered image for rapidly changing markdown content within an opted-in debounce window" in {
+    val font        = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    val firstNanos  = 0L
+    val secondNanos = firstNanos + 1_000_000L // 1ms later, well within the debounce window
+    val first = MarkdownDocumentPreview.renderImage(
+      source = "# Debounce first",
+      title = "debounce.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font,
+      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
+      nowNanos = () => firstNanos
+    )
+    val second = MarkdownDocumentPreview.renderImage(
+      source = "# Debounce second, totally different content",
+      title = "debounce.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font,
+      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
+      nowNanos = () => secondNanos
+    )
+
+    second should be theSameInstanceAs first
+  }
+
+  it should "re-render after an opted-in debounce window elapses" in {
+    val font        = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    val firstNanos  = 0L
+    val secondNanos = firstNanos + MarkdownDocumentPreview.DefaultDebounceWindowNanos + 1
+    val first = MarkdownDocumentPreview.renderImage(
+      source = "# Debounce elapsed first",
+      title = "debounce-elapsed.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font,
+      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
+      nowNanos = () => firstNanos
+    )
+    val second = MarkdownDocumentPreview.renderImage(
+      source = "# Debounce elapsed second",
+      title = "debounce-elapsed.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font,
+      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
+      nowNanos = () => secondNanos
+    )
+
+    second should not be theSameInstanceAs(first)
+  }
+
+  it should "not reuse a stale rendered image across a different rendered size" in {
+    val font        = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+    val firstNanos  = 0L
+    val secondNanos = firstNanos + 1_000_000L
+    val _ = MarkdownDocumentPreview.renderImage(
+      source = "# Debounce sizing",
+      title = "debounce-sizing.md",
+      widthPx = 240,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font,
+      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
+      nowNanos = () => firstNanos
+    )
+    val resized = MarkdownDocumentPreview.renderImage(
+      source = "# Debounce sizing",
+      title = "debounce-sizing.md",
+      widthPx = 320,
+      heightPx = 160,
+      theme = Theme.default,
+      font = font,
+      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos,
+      nowNanos = () => secondNanos
+    )
+
+    resized.getWidth shouldBe 320
+  }
+
+  it should "render fresh content immediately when no prior render exists for that slot" in {
+    val image = MarkdownDocumentPreview.renderImage(
+      source = "# First ever render for this slot",
+      title = "debounce-fresh.md",
+      widthPx = 200,
+      heightPx = 140,
+      theme = Theme.default,
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      debounceWindowNanos = MarkdownDocumentPreview.DefaultDebounceWindowNanos
+    )
+
+    image.getWidth shouldBe 200
+    image.getHeight shouldBe 140
+  }
+
   private def writeSolidImage(path: Path, color: Color, width: Int, height: Int): Unit =
     val image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
     for
