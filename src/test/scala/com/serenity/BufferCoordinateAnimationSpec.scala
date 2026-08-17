@@ -106,11 +106,13 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     yield
       val buffer = newState.buffers(bufferId)
       val cell   = buffer.animations.getCell(5, 0).get
-      cell.foregroundSteps.length shouldBe AppConfig.default
-        .withMotionPreset(MotionPreset.Smooth)
-        .characterAnimation
-        .get
-        .steps * 2
+      cell.foregroundAnimation.map(_.steps) shouldBe Some(
+        AppConfig.default
+          .withMotionPreset(MotionPreset.Smooth)
+          .characterAnimation
+          .get
+          .steps * 2
+      )
 
     program.unsafeRunSync()
   }
