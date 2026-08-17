@@ -174,3 +174,52 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
 
     state.getCharacterColor(5, 10) should be(empty)
   }
+
+  it should "advance every cell when no relevance predicate is given, matching prior behavior" in {
+    val state = AnimationState.empty
+      .addCharacterAnimation('a', 1, 1, black, white, 3)
+      .addCharacterAnimation('b', 2, 1, red, yellow, 3)
+
+    val advanced = state.advanceAnimations()
+
+    advanced.getCell(1, 1).get should not equal state.getCell(1, 1).get
+    advanced.getCell(2, 1).get should not equal state.getCell(2, 1).get
+  }
+
+  it should "leave cells excluded by the relevance predicate untouched while advancing the rest" in {
+    val state = AnimationState.empty
+      .addCharacterAnimation('a', 1, 1, black, white, 3)
+      .addCharacterAnimation('b', 2, 1, red, yellow, 3)
+
+    val onlyFirstColumnRelevant: CharacterKey => Boolean = _.column == 1
+    val advanced                                         = state.advanceAnimations(onlyFirstColumnRelevant)
+
+    advanced.getCell(1, 1).get should not equal state.getCell(1, 1).get
+    advanced.getCell(2, 1).get shouldEqual state.getCell(2, 1).get
+  }
+
+  it should "never complete an excluded cell no matter how many ticks pass while it stays excluded" in {
+    val state = AnimationState.empty
+      .addCharacterAnimation('a', 1, 1, black, white, 1)
+
+    val neverRelevant: CharacterKey => Boolean = _ => false
+    val advanced = state.advanceAllAnimations(neverRelevant).advanceAllAnimations(neverRelevant)
+
+    advanced.getCell(1, 1) should be(defined)
+    advanced.getCell(1, 1).get.isComplete should be(false)
+    advanced.hasActiveAnimations should be(true)
+  }
+
+  it should "resume and complete an excluded cell once it becomes relevant again" in {
+    val state = AnimationState.empty
+      .addCharacterAnimation('a', 1, 1, black, white, 1)
+
+    val excluded = state.advanceAllAnimations(_ => false)
+    excluded.getCell(1, 1).get.isComplete should be(false)
+    excluded.hasActiveAnimations should be(true)
+
+    // A single-step animation completes (and is cleaned up) on its first real advance.
+    val resumed = excluded.advanceAllAnimations(_ => true)
+    resumed.getCell(1, 1) should be(empty)
+    resumed.hasActiveAnimations should be(false)
+  }
