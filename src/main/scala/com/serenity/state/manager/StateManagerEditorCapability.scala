@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
+import com.serenity.animation.CharacterKey
 import com.serenity.keystroke.events.Direction
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Rope
@@ -45,7 +46,7 @@ final private[manager] class StateManagerEditorCapability(
       if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasWindowSitter then IO.pure(false)
       else
         val updatedBuffers = state.buffers.view.mapValues { buffer =>
-          val updatedAnimations = buffer.animations.advanceAllAnimations()
+          val updatedAnimations = buffer.animations.advanceAllAnimations(isWithinViewport(buffer.viewport))
           if updatedAnimations eq buffer.animations then buffer
           else buffer.copy(animations = updatedAnimations)
         }.toMap
@@ -63,6 +64,13 @@ final private[manager] class StateManagerEditorCapability(
             newState.windowSitter.isActive
         stateRef.set(newState).as(stillActive)
     }
+
+  /** A cell outside the buffer's currently visible viewport isn't rendered, so there's no need to pay its
+    * interpolation/allocation cost on every tick -- it simply resumes advancing once scrolled back into view.
+    */
+  private def isWithinViewport(viewport: Viewport)(key: CharacterKey): Boolean =
+    key.line >= viewport.topLine && key.line < viewport.topLine + viewport.visibleLines &&
+      key.column >= viewport.leftColumn && key.column < viewport.leftColumn + viewport.visibleColumns
 
   def getActiveBuffer: IO[Option[Buffer]] =
     for

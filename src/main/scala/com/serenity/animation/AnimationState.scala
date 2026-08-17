@@ -50,15 +50,21 @@ case class AnimationState(
     }
     mergeAnimations(nonConflicting)
 
-  /** Advance all animations by one step */
-  def advanceAnimations(): AnimationState =
+  /** Advance all animations by one step. Cells for which `isRelevant` returns false (e.g. scrolled out of the current
+    * viewport) are left untouched rather than advanced -- they simply resume from where they left off once relevant
+    * again, instead of paying per-tick interpolation/allocation cost while nothing is rendering them.
+    */
+  def advanceAnimations(isRelevant: CharacterKey => Boolean = _ => true): AnimationState =
     if !hasActiveAnimations then this
-    else copy(animations = animations.map((key, cell) => key -> (if cell.isComplete then cell else cell.advance())))
+    else
+      copy(animations = animations.map { (key, cell) =>
+        if cell.isComplete || !isRelevant(key) then key -> cell else key -> cell.advance()
+      })
 
-  /** Advance all animations and automatically clean up completed ones */
-  def advanceAllAnimations(): AnimationState =
+  /** Advance all animations and automatically clean up completed ones. */
+  def advanceAllAnimations(isRelevant: CharacterKey => Boolean = _ => true): AnimationState =
     if !hasActiveAnimations then cleanupCompleted()
-    else advanceAnimations().cleanupCompleted()
+    else advanceAnimations(isRelevant).cleanupCompleted()
 
   /** Mark all animations as completed (snap to end state) */
   def onThemeChange(): AnimationState =
