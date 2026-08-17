@@ -638,7 +638,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "wrap runtime loop failures with current state diagnostics" in {
-    val state = AppState.initial.copy(viewportSize = Some(ViewportSize(120, 40)))
+    given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+    val state        = AppState.initial.copy(viewportSize = Some(ViewportSize(120, 40)))
 
     val result = AppRuntime
       .withRuntimeDiagnostics(
@@ -662,6 +663,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve existing runtime failures without rewrapping them" in {
+    given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
     val existing = AppRuntime.RuntimeFailure(
       loopName = "render loop",
       phase = "idle.state",

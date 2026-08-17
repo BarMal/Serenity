@@ -3,6 +3,7 @@ package com.serenity.lsp
 import cats.effect.std.Supervisor
 import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
+import com.serenity.diagnostics.Trace
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{LspConnection, LspProtocol}
 import com.serenity.lsp.config.*
@@ -94,6 +95,7 @@ object LspManager:
     logger: Logger[IO],
     connectionProvider: ConnectionProvider
   ): IO[Unit] =
+    given Logger[IO] = logger
     effect match
       case LspEffect.FileOpened(uri, languageId, text) =>
         invalidateDocument(uri, requestContexts, requestFibers) >>
@@ -146,8 +148,10 @@ object LspManager:
           logger,
           connectionProvider
         ) { (conn, context) =>
-          conn
-            .sendRequest("textDocument/hover", LspProtocol.textDocumentPositionParams(uri, line, character))
+          Trace
+            .timed(s"lsp.hover.$uri")(
+              conn.sendRequest("textDocument/hover", LspProtocol.textDocumentPositionParams(uri, line, character))
+            )
             .flatMap(response =>
               LspProtocol.parseHoverText(response).fold(IO.unit) { text =>
                 isCurrent(RequestKey(uri, RequestKind.Hover), context, documentVersions, requestContexts)
@@ -160,8 +164,10 @@ object LspManager:
       case LspEffect.CompletionRequested(uri, languageId, line, character, anchor) =>
         ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, connectionProvider).flatMap {
           case Some((_, conn)) =>
-            conn
-              .sendRequest("textDocument/completion", LspProtocol.completionParams(uri, line, character))
+            Trace
+              .timed(s"lsp.completion.$uri")(
+                conn.sendRequest("textDocument/completion", LspProtocol.completionParams(uri, line, character))
+              )
               .flatMap(response =>
                 LspProtocol
                   .parseCompletionItems(response)
@@ -187,8 +193,10 @@ object LspManager:
           logger,
           connectionProvider
         ) { (conn, context) =>
-          conn
-            .sendRequest("textDocument/definition", LspProtocol.textDocumentPositionParams(uri, line, character))
+          Trace
+            .timed(s"lsp.definition.$uri")(
+              conn.sendRequest("textDocument/definition", LspProtocol.textDocumentPositionParams(uri, line, character))
+            )
             .flatMap(response =>
               LspProtocol.parseDefinitionLocation(response).fold(IO.unit) { location =>
                 isCurrent(RequestKey(uri, RequestKind.Definition), context, documentVersions, requestContexts)

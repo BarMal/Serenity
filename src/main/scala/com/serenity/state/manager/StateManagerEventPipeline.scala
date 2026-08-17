@@ -5,6 +5,7 @@ import java.awt.Color
 import cats.syntax.foldable.*
 import com.serenity.animation.*
 import com.serenity.command.{CommandCategory, CommandRegistry, CommandRunner, CommandSurfaceItem}
+import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
@@ -119,16 +120,20 @@ final private[manager] class StateManagerEventPipeline(
     )
 
   def applyEvent(event: Event): cats.effect.IO[Unit] =
-    stateRef.get.flatMap { rawState =>
-      val prevState = normalizeCommandRunnerFocus(rawState)
-      val syncFocus = if prevState == rawState then cats.effect.IO.unit else stateRef.set(prevState)
-      val handleEvent: cats.effect.IO[Unit] =
-        if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
-        else dispatchEvent(event, prevState)
-      syncFocus >> handleEvent >>
-        recordUndoableEdit(event, prevState) >>
-        enqueueChangedLspDocuments(prevState) >>
-        applyAnimationHooks(prevState)
+    given org.typelevel.log4cats.Logger[cats.effect.IO] = logger
+    val eventLabel                                      = s"event.${event.getClass.getSimpleName}"
+    Trace.timed(eventLabel) {
+      stateRef.get.flatMap { rawState =>
+        val prevState = normalizeCommandRunnerFocus(rawState)
+        val syncFocus = if prevState == rawState then cats.effect.IO.unit else stateRef.set(prevState)
+        val handleEvent: cats.effect.IO[Unit] =
+          if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
+          else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))
+        syncFocus >> handleEvent >>
+          recordUndoableEdit(event, prevState) >>
+          Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(enqueueChangedLspDocuments(prevState)) >>
+          Trace.timed(s"$eventLabel.applyAnimationHooks")(applyAnimationHooks(prevState))
+      }
     }
 
   private def allowedWhileBlockingModal(event: Event): Boolean =
