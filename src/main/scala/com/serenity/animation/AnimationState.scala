@@ -29,7 +29,7 @@ case class AnimationState(
     steps: Int
   ): AnimationState =
     val key  = CharacterKey(x, y)
-    val cell = AnimatedCell.fromForegroundInterpolation(char, startColor, endColor, steps)
+    val cell = AnimatedCell.parametricForeground(char, startColor, endColor, steps)
     copy(animations = animations + (key -> cell))
 
   def addCompletedCharacter(char: Char, x: Int, y: Int, color: Color): AnimationState =
