@@ -191,22 +191,28 @@ object CharacterRenderer:
 
         collect(0, 0, Nil)
 
-      val graphemeBoundsByLocalIndex = graphemeBounds.flatMap {
-        case (start, end, startXPx, endXPx) =>
-          Vector.fill(end - start)((startXPx, endXPx))
-      }.toVector
-
-      def visualExtentsForRange(startLocalIndex: Int, endLocalIndex: Int): Vector[Float] =
-        graphemeBoundsByLocalIndex
-          .slice(startLocalIndex, endLocalIndex)
-          .flatMap { case (startXPx, endXPx) => Vector(startXPx, endXPx) }
+      // Every local index within a grapheme cluster's [start, end) shares that cluster's pixel bounds, so a run's
+      // extent only needs the clusters it overlaps -- not a Vector expanded to one entry per character, which
+      // `graphemeBoundsByLocalIndex` used to allocate before this was inlined into a single pass over the (much
+      // smaller) cluster list.
+      def visualExtentsForRange(startLocalIndex: Int, endLocalIndex: Int): (Float, Float) =
+        graphemeBounds
+          .foldLeft(Option.empty[(Float, Float)]) {
+            case (acc, (clusterStart, clusterEnd, startXPx, endXPx))
+                if clusterStart < endLocalIndex && clusterEnd > startLocalIndex =>
+              acc match
+                case Some((minXPx, maxXPx)) => Some((minXPx.min(startXPx), maxXPx.max(endXPx)))
+                case None                   => Some((startXPx, endXPx))
+            case (acc, _) => acc
+          }
+          .getOrElse((0.0f, 0.0f))
 
       def drawRun(run: MeasuredRun): Unit =
-        val visualExtents = visualExtentsForRange(run.startLocalIndex, run.endLocalIndex)
-        val startXPx      = xOriginPx + visualExtents.minOption.getOrElse(0.0f)
-        val endXPx        = xOriginPx + visualExtents.maxOption.getOrElse(0.0f)
-        val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
-        val widthPx       = clippedEndXPx - startXPx
+        val (minXPx, maxXPx) = visualExtentsForRange(run.startLocalIndex, run.endLocalIndex)
+        val startXPx         = xOriginPx + minXPx
+        val endXPx           = xOriginPx + maxXPx
+        val clippedEndXPx    = clipRightXPx.fold(endXPx)(_.min(endXPx))
+        val widthPx          = clippedEndXPx - startXPx
         if widthPx > 0.0f then
           surface.setForegroundColor(run.foreground)
           surface.setBackgroundColor(run.background)
