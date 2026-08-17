@@ -238,10 +238,22 @@ class Java2DRenderSurface(
     }
     new Color(counts.maxBy(_._2)._1, true)
 
-  private def contrastFrom(color: Color, background: Color): Int =
-    math.abs(color.getRed - background.getRed) +
-      math.abs(color.getGreen - background.getGreen) +
-      math.abs(color.getBlue - background.getBlue)
+  /** Standard Porter-Duff SRC_OVER, matching what `Graphics2D`'s default composite computes for opaque-source draws
+    * onto a `TYPE_INT_ARGB` destination -- reimplemented here so `applyGlow` can blend directly on a raw pixel array
+    * instead of issuing one `Graphics2D` draw call per pixel.
+    */
+  private def blendSrcOver(destArgb: Int, srcR: Int, srcG: Int, srcB: Int, srcA: Int): Int =
+    if srcA <= 0 then destArgb
+    else
+      val dstA = (destArgb >>> 24) & 0xff
+      val dstR = (destArgb >>> 16) & 0xff
+      val dstG = (destArgb >>> 8) & 0xff
+      val dstB = destArgb & 0xff
+      val outA = srcA + dstA * (255 - srcA) / 255
+      def blendChannel(srcC: Int, dstC: Int): Int =
+        if outA == 0 then 0
+        else ((srcC * srcA + dstC * dstA * (255 - srcA) / 255) / outA).min(255).max(0)
+      (outA << 24) | (blendChannel(srcR, dstR) << 16) | (blendChannel(srcG, dstG) << 8) | blendChannel(srcB, dstB)
 
   override def applyPostProcessing(effect: PostProcessingEffect): Unit =
     applyPostProcessing(effect, System.nanoTime() / 50000000L)
@@ -286,18 +298,39 @@ class Java2DRenderSurface(
       val spacing = 3 + math.floorMod(y + phase, 4)
       drawScanlines(rawGraphics, y + thickness + spacing, phase)
 
+  /** Spreads bright (or, on a light background, dark) pixels into a soft halo.
+    *
+    * Operates on raw ARGB `int[]` pixel arrays end to end -- one bulk `getRGB`/`setRGB` transfer in, one out -- and
+    * blends with [[blendSrcOver]] instead of per-pixel `Graphics2D` calls: the previous implementation issued up to 24
+    * `setColor`/`fillRect`/`drawImage` calls per masked source pixel, which is a well-known Java2D anti-pattern for
+    * full-image compositing.
+    */
   private def applyGlow(): Unit =
-    val background = estimatedBackgroundColor
-    val source     = new BufferedImage(image.getWidth, image.getHeight, BufferedImage.TYPE_INT_ARGB)
-    val sourceMask = Array.ofDim[Boolean](image.getHeight, image.getWidth)
-    (0 until image.getHeight).foreach { y =>
-      (0 until image.getWidth).foreach { x =>
-        val color = new Color(image.getRGB(x, y), true)
-        if contrastFrom(color, background) >= 96 then
-          source.setRGB(x, y, color.getRGB)
-          sourceMask(y)(x) = true
-      }
+    val width       = image.getWidth
+    val height      = image.getHeight
+    val background  = estimatedBackgroundColor
+    val backgroundR = background.getRed
+    val backgroundG = background.getGreen
+    val backgroundB = background.getBlue
+
+    val basePixels   = image.getRGB(0, 0, width, height, null, 0, width)
+    val sourcePixels = new Array[Int](width * height)
+    val sourceMask   = new Array[Boolean](width * height)
+
+    (0 until basePixels.length).foreach { index =>
+      val argb     = basePixels(index)
+      val r        = (argb >>> 16) & 0xff
+      val g        = (argb >>> 8) & 0xff
+      val b        = argb & 0xff
+      val contrast = math.abs(r - backgroundR) + math.abs(g - backgroundG) + math.abs(b - backgroundB)
+      if contrast >= 96 then
+        sourcePixels(index) = argb
+        sourceMask(index) = true
     }
+
+    val source = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+    source.setRGB(0, 0, width, height, sourcePixels, 0, width)
+
     val blurred = new ConvolveOp(
       new Kernel(
         5,
@@ -308,41 +341,58 @@ class Java2DRenderSurface(
       ConvolveOp.EDGE_NO_OP,
       null
     ).filter(source, null)
-    val rawGraphics = image.createGraphics()
-    try
-      (0 until image.getHeight).foreach { y =>
-        (0 until image.getWidth).foreach { x =>
-          if sourceMask(y)(x) then
-            val sourceColor = new Color(source.getRGB(x, y), true)
-            (-2 to 2).foreach { yOffset =>
-              (-2 to 2).foreach { xOffset =>
-                val distance = math.max(math.abs(xOffset), math.abs(yOffset))
-                if distance > 0 then
-                  val alpha = if distance == 1 then 14 else 6
-                  rawGraphics.setColor(new Color(sourceColor.getRed, sourceColor.getGreen, sourceColor.getBlue, alpha))
-                  rawGraphics.fillRect(x + xOffset, y + yOffset, 1, 1)
-              }
+    val blurredPixels = blurred.getRGB(0, 0, width, height, null, 0, width)
+
+    val result = basePixels.clone()
+
+    // Spread each masked source pixel into a soft halo across its 5x5 neighborhood.
+    (0 until height).foreach { y =>
+      (0 until width).foreach { x =>
+        val index = y * width + x
+        if sourceMask(index) then
+          val srcColor = sourcePixels(index)
+          val srcR     = (srcColor >>> 16) & 0xff
+          val srcG     = (srcColor >>> 8) & 0xff
+          val srcB     = srcColor & 0xff
+          (-2 to 2).foreach { yOffset =>
+            (-2 to 2).foreach { xOffset =>
+              val distance = math.max(math.abs(xOffset), math.abs(yOffset))
+              val nx       = x + xOffset
+              val ny       = y + yOffset
+              if distance > 0 && nx >= 0 && nx < width && ny >= 0 && ny < height then
+                val alpha       = if distance == 1 then 14 else 6
+                val targetIndex = ny * width + nx
+                result(targetIndex) = blendSrcOver(result(targetIndex), srcR, srcG, srcB, alpha)
             }
-        }
+          }
       }
-      (0 until image.getHeight).foreach { y =>
-        (0 until image.getWidth).foreach { x =>
-          val color = new Color(blurred.getRGB(x, y), true)
-          val intensity =
-            scala.collection.immutable.List(color.getAlpha, color.getRed, color.getGreen, color.getBlue).max
-          if intensity > 0 then
-            val alpha = math.max(1, (intensity * 0.8f).toInt)
-            rawGraphics.setColor(new Color(color.getRed, color.getGreen, color.getBlue, alpha))
-            rawGraphics.fillRect(x, y, 1, 1)
-        }
-      }
-      (0 until image.getHeight).foreach { y =>
-        (0 until image.getWidth).foreach { x =>
-          if sourceMask(y)(x) then
-            val _ = rawGraphics.drawImage(source, x, y, x + 1, y + 1, x, y, x + 1, y + 1, null)
-        }
-      }
-    finally rawGraphics.dispose()
+    }
+
+    // Composite the Gaussian-blurred glow on top, with per-pixel alpha derived from its brightest channel.
+    (0 until blurredPixels.length).foreach { index =>
+      val bc        = blurredPixels(index)
+      val ba        = (bc >>> 24) & 0xff
+      val br        = (bc >>> 16) & 0xff
+      val bg        = (bc >>> 8) & 0xff
+      val bb        = bc & 0xff
+      val intensity = ba.max(br).max(bg).max(bb)
+      if intensity > 0 then
+        val alpha = math.max(1, (intensity * 0.8f).toInt)
+        result(index) = blendSrcOver(result(index), br, bg, bb, alpha)
+    }
+
+    // Restore the sharp original source pixels exactly where masked, undoing any halo/blur bleed on top of them.
+    (0 until sourcePixels.length).foreach { index =>
+      if sourceMask(index) then
+        val srcColor = sourcePixels(index)
+        val srcA     = (srcColor >>> 24) & 0xff
+        val srcR     = (srcColor >>> 16) & 0xff
+        val srcG     = (srcColor >>> 8) & 0xff
+        val srcB     = srcColor & 0xff
+        result(index) = blendSrcOver(result(index), srcR, srcG, srcB, srcA)
+    }
+
+    image.setRGB(0, 0, width, height, result, 0, width)
 
   override def drawRoundRectShadow(
     x: Int,
