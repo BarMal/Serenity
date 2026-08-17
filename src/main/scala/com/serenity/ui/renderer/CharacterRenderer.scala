@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import java.awt.Color
+import java.util.LinkedHashMap
 
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
@@ -12,6 +13,57 @@ object CharacterRenderer:
 
   final private case class TextRun(startX: Int, content: String)
   final private case class CollectedRuns(runs: List[TextRun], endX: Int)
+
+  /** A grapheme cluster's boundaries within a line's text, as local character indices. */
+  private case class GraphemeSpan(startLocalIndex: Int, endLocalIndex: Int)
+
+  /** A grapheme cluster paired with the effective style it should draw with, before any per-frame animation override is
+    * applied.
+    */
+  private case class MeasuredGrapheme(
+      text: String,
+      foreground: Color,
+      background: Color,
+      style: TextStyle,
+      startLocalIndex: Int,
+      endLocalIndex: Int
+  )
+
+  /** A grapheme cluster's measured pixel extent along a specific set of caret stops. */
+  private case class GraphemeBounds(startLocalIndex: Int, endLocalIndex: Int, startXPx: Float, endXPx: Float)
+
+  private val MaxGraphemeSegmentationCacheEntries = 4096
+
+  /** Grapheme-cluster boundaries are a pure function of a line's text content alone -- independent of theme, animation
+    * state, or caret-stop layout -- so they're memoized the same way `ThemeManager.highlightCache` caches syntax
+    * highlighting: same input, forever the same output, nothing to invalidate. This also removes the redundant double
+    * walk that used to happen every render call, where `graphemeBounds` and `graphemeChars` each independently re-ran
+    * `TextEditing.nextGraphemeBoundary` over the same text.
+    */
+  private val graphemeSegmentationCache =
+    new LinkedHashMap[String, Vector[GraphemeSpan]](16, 0.75f, true):
+      override def removeEldestEntry(eldest: java.util.Map.Entry[String, Vector[GraphemeSpan]]): Boolean =
+        size() > MaxGraphemeSegmentationCacheEntries
+
+  private def graphemeSpans(text: String): Vector[GraphemeSpan] =
+    graphemeSegmentationCache.synchronized(Option(graphemeSegmentationCache.get(text))) match
+      case Some(cached) => cached
+      case None =>
+        val computed = computeGraphemeSpans(text)
+        graphemeSegmentationCache.synchronized {
+          val _ = graphemeSegmentationCache.put(text, computed)
+        }
+        computed
+
+  private def computeGraphemeSpans(text: String): Vector[GraphemeSpan] =
+    @annotation.tailrec
+    def collect(localIndex: Int, acc: List[GraphemeSpan]): Vector[GraphemeSpan] =
+      if localIndex >= text.length then acc.reverse.toVector
+      else
+        val nextIndex = TextEditing.nextGraphemeBoundary(text, localIndex).min(text.length)
+        collect(nextIndex, GraphemeSpan(localIndex, nextIndex) :: acc)
+
+    collect(0, Nil)
 
   def renderString(
     surface: RenderSurface,
@@ -173,22 +225,28 @@ object CharacterRenderer:
           endLocalIndex: Int
       )
 
+      val spans = graphemeSpans(text)
+
       val graphemeBounds =
         @annotation.tailrec
         def collect(
-          localIndex: Int,
+          spanIndex: Int,
           stopIndex: Int,
-          acc: List[(Int, Int, Float, Float)]
-        ): List[(Int, Int, Float, Float)] =
-          if localIndex >= text.length || stopIndex + 1 >= stops.length then acc.reverse
+          acc: List[GraphemeBounds]
+        ): List[GraphemeBounds] =
+          if spanIndex >= spans.length || stopIndex + 1 >= stops.length then acc.reverse
           else
-            val nextIndex = TextEditing.nextGraphemeBoundary(text, localIndex).min(text.length)
-            val startStop = stops.lift(stopIndex).filter(_.column == visualLine.startColumn + localIndex)
-            val endStop   = stops.lift(stopIndex + 1).filter(_.column == visualLine.startColumn + nextIndex)
+            val span      = spans(spanIndex)
+            val startStop = stops.lift(stopIndex).filter(_.column == visualLine.startColumn + span.startLocalIndex)
+            val endStop   = stops.lift(stopIndex + 1).filter(_.column == visualLine.startColumn + span.endLocalIndex)
             (startStop, endStop) match
               case (Some(start), Some(end)) =>
-                collect(nextIndex, stopIndex + 1, (localIndex, nextIndex, start.xPx, end.xPx) :: acc)
-              case _ => collect(localIndex, stopIndex + 1, acc)
+                collect(
+                  spanIndex + 1,
+                  stopIndex + 1,
+                  GraphemeBounds(span.startLocalIndex, span.endLocalIndex, start.xPx, end.xPx) :: acc
+                )
+              case _ => collect(spanIndex, stopIndex + 1, acc)
 
         collect(0, 0, Nil)
 
@@ -199,7 +257,7 @@ object CharacterRenderer:
       def visualExtentsForRange(startLocalIndex: Int, endLocalIndex: Int): (Float, Float) =
         graphemeBounds
           .foldLeft(Option.empty[(Float, Float)]) {
-            case (acc, (clusterStart, clusterEnd, startXPx, endXPx))
+            case (acc, GraphemeBounds(clusterStart, clusterEnd, startXPx, endXPx))
                 if clusterStart < endLocalIndex && clusterEnd > startLocalIndex =>
               acc match
                 case Some((minXPx, maxXPx)) => Some((minXPx.min(startXPx), maxXPx.max(endXPx)))
@@ -228,36 +286,25 @@ object CharacterRenderer:
         .toVector
       val hasAnimations = animations.animations.nonEmpty
 
-      val graphemeChars =
-        @annotation.tailrec
-        def collect(
-          localIndex: Int,
-          acc: List[(String, Color, Color, TextStyle, Int, Int)]
-        ): Vector[(String, Color, Color, TextStyle, Int, Int)] =
-          if localIndex >= text.length then acc.reverse.toVector
-          else
-            val endLocalIndex     = TextEditing.nextGraphemeBoundary(text, localIndex).min(text.length)
-            val segmentStyle      = chars.lift(localIndex).map(_._4).getOrElse(TextStyle.normal)
-            val segmentForeground = chars.lift(localIndex).map(_._2).getOrElse(theme.foreground)
-            val segmentBackground = chars.lift(localIndex).map(_._3).getOrElse(theme.background)
-            collect(
-              endLocalIndex,
-              (
-                text.substring(localIndex, endLocalIndex),
-                segmentForeground,
-                segmentBackground,
-                segmentStyle,
-                localIndex,
-                endLocalIndex
-              ) :: acc
-            )
-
-        collect(0, Nil)
+      val graphemeChars: Vector[MeasuredGrapheme] =
+        spans.map { span =>
+          val segmentStyle      = chars.lift(span.startLocalIndex).map(_._4).getOrElse(TextStyle.normal)
+          val segmentForeground = chars.lift(span.startLocalIndex).map(_._2).getOrElse(theme.foreground)
+          val segmentBackground = chars.lift(span.startLocalIndex).map(_._3).getOrElse(theme.background)
+          MeasuredGrapheme(
+            text.substring(span.startLocalIndex, span.endLocalIndex),
+            segmentForeground,
+            segmentBackground,
+            segmentStyle,
+            span.startLocalIndex,
+            span.endLocalIndex
+          )
+        }
 
       val (runs, currentRun, _) = graphemeChars.foldLeft((List.empty[MeasuredRun], Option.empty[MeasuredRun], 0)) {
         case (
               (completed, current, localIndex),
-              (grapheme, segmentForeground, segmentBackground, style, graphemeStart, graphemeEnd)
+              MeasuredGrapheme(grapheme, segmentForeground, segmentBackground, style, graphemeStart, graphemeEnd)
             ) =>
           val bufferColumn = visualLine.startColumn + graphemeStart
           val cell         = if hasAnimations then animations.getCell(bufferColumn, visualLine.bufferLine) else None
