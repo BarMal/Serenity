@@ -5,7 +5,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import org.slf4j.LoggerFactory
 
-case class TextOverlayView(
+final case class TextOverlayView(
     rect: LayoutRect,
     contentRect: Option[LayoutRect] = None,
     borderCells: Int = 1,
@@ -35,7 +35,7 @@ case class TextOverlayView(
       itemTargetRows
     )
 
-case class OverlayViews(
+final case class OverlayViews(
     aboveCursor: Option[TextOverlayView] = None,
     belowCursor: Option[TextOverlayView] = None,
     belowCursorStack: List[TextOverlayView] = Nil,

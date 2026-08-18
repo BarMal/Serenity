@@ -10,9 +10,9 @@ import com.serenity.state.models.Buffer
 import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
 
-case class TextCaretStop(column: Int, xPx: Float)
+final case class TextCaretStop(column: Int, xPx: Float)
 
-case class TextVisualLine(
+final case class TextVisualLine(
     bufferLine: Int,
     startColumn: Int,
     endColumn: Int,
@@ -56,7 +56,7 @@ case class TextVisualLine(
   private def closer(first: TextCaretStop, second: TextCaretStop, xPx: Float): TextCaretStop =
     if math.abs(second.xPx - xPx) < math.abs(first.xPx - xPx) then second else first
 
-case class TextLayoutSnapshot(
+final case class TextLayoutSnapshot(
     visualLines: Vector[TextVisualLine],
     panelWidthPx: Int,
     lineHeightPx: Int,
@@ -93,7 +93,7 @@ case class TextLayoutSnapshot(
 
 object TextLayoutSnapshot:
   private val UnwrappedOverscanColumns = 2
-  private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
+  final private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
   private val measuredLayoutCache = java.util.concurrent.ConcurrentHashMap[MeasuredLayoutKey, java.lang.Boolean]()
 
   def caretXsForText(

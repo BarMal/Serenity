@@ -3,7 +3,7 @@ package com.serenity.animation
 import scala.concurrent.duration.FiniteDuration
 
 /** Animation configuration for list-based color interpolation system */
-case class AnimationConfig(
+final case class AnimationConfig(
     steps: Int,
     totalDuration: FiniteDuration
 ):

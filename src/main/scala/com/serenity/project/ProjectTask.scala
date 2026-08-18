@@ -16,7 +16,7 @@ enum ProjectTaskKind(val label: String, val lowerLabel: String):
   case Dependencies extends ProjectTaskKind("Dependencies", "dependency")
 
 /** Shell command selected for a project workflow. */
-case class ProjectTaskCommand(
+final case class ProjectTaskCommand(
     kind: ProjectTaskKind,
     ecosystemLabel: String,
     workingDirectory: Path,
@@ -30,7 +30,7 @@ case class ProjectTaskCommand(
     commandLine.mkString(" ")
 
 /** Completed project workflow process result. */
-case class ProjectTaskResult(
+final case class ProjectTaskResult(
     command: ProjectTaskCommand,
     exitCode: Int,
     output: String
@@ -39,7 +39,7 @@ case class ProjectTaskResult(
 /** Detects project roots and maps them to conventional build/test/run/debug/dependency commands. */
 object ProjectTaskDetector:
 
-  private case class Provider(
+  final private case class Provider(
       ecosystemLabel: String,
       markers: List[String],
       commands: Map[ProjectTaskKind, List[String]]

@@ -13,9 +13,9 @@ enum TextVerticalAlignment:
   case Middle
   case Bottom
 
-case class TextAreaPx(xPx: Float, yPx: Int, widthPx: Float, heightPx: Int)
+final case class TextAreaPx(xPx: Float, yPx: Int, widthPx: Float, heightPx: Int)
 
-case class AlignedTextPlacement(
+final case class AlignedTextPlacement(
     xPx: Float,
     yPx: Int,
     widthPx: Float,

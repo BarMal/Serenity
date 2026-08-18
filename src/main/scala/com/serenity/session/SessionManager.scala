@@ -420,7 +420,7 @@ object SessionManager:
 
   /** Session persistence policy configuration.
     */
-  case class SessionPolicy(
+  final case class SessionPolicy(
       saveOnFileChange: Boolean = true,
       saveOnAppClose: Boolean = true,
       saveInterval: Option[scala.concurrent.duration.FiniteDuration] = None,

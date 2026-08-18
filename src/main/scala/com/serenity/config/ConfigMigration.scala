@@ -2,24 +2,24 @@ package com.serenity.config
 
 import java.nio.file.Path
 
-case class ConfigVersion(value: Int) extends AnyVal:
+final case class ConfigVersion(value: Int) extends AnyVal:
   override def toString: String = value.toString
 
 object ConfigVersion:
   val Current: ConfigVersion = ConfigVersion(1)
 
-case class DeprecatedConfigEntry(
+final case class DeprecatedConfigEntry(
     key: String,
     replacement: String
 )
 
-case class InvalidConfigEntry(
+final case class InvalidConfigEntry(
     key: String,
     value: String,
     reason: String
 )
 
-case class ConfigMigrationReport(
+final case class ConfigMigrationReport(
     version: ConfigVersion,
     deprecatedEntries: List[DeprecatedConfigEntry] = Nil,
     unknownKeys: List[String] = Nil,
@@ -32,13 +32,13 @@ case class ConfigMigrationReport(
 object ConfigMigrationReport:
   val empty: ConfigMigrationReport = ConfigMigrationReport(ConfigVersion.Current)
 
-case class ConfigLoadResult(
+final case class ConfigLoadResult(
     config: AppConfig,
     report: ConfigMigrationReport
 )
 
 /** A structured configuration failure surfaced at the effectful IO boundary. */
-case class ConfigError(
+final case class ConfigError(
     operation: String,
     path: Path,
     message: String,

@@ -4,7 +4,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
 
-case class RenderedComment(
+final case class RenderedComment(
     sourceLine: Int,
     raw: String,
     inlineMarkdown: String
@@ -114,7 +114,7 @@ object CommentRendering:
       case None =>
         None
 
-  private case class BlockCommentSyntax(start: String, end: String, stripLeadingStars: Boolean = false)
+  final private case class BlockCommentSyntax(start: String, end: String, stripLeadingStars: Boolean = false)
 
   private def blockCommentAt(
     buffer: Buffer,

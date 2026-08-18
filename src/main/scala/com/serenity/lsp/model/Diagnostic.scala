@@ -1,6 +1,6 @@
 package com.serenity.lsp.model
 
-case class Diagnostic(
+final case class Diagnostic(
     range: LspRange,
     severity: Option[DiagnosticSeverity],
     message: String,

@@ -2,17 +2,17 @@ package com.serenity.state.models
 
 import cats.Order
 
-case class PaneId(value: Int)
+final case class PaneId(value: Int)
 
 object PaneId:
   given Order[PaneId] = Order.by(_.value)
 
-case class SmoothScrollState(
+final case class SmoothScrollState(
     targetTopLine: Int,
     progress: Double
 )
 
-case class EditorPane(
+final case class EditorPane(
     id: PaneId,
     bufferId: Option[BufferId],
     viewport: Viewport,

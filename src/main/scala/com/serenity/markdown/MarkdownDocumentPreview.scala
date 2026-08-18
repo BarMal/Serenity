@@ -28,9 +28,9 @@ import org.xml.sax.InputSource
 
 object MarkdownDocumentPreview:
 
-  case class InlinePreviewLine(sourceLine: Option[Int], text: String)
+  final case class InlinePreviewLine(sourceLine: Option[Int], text: String)
 
-  case class PreviewWindow(firstSourceLine: Int, firstPreviewRow: Int, source: String)
+  final case class PreviewWindow(firstSourceLine: Int, firstPreviewRow: Int, source: String)
 
   /** Scales preview typography to match a device-scaled preview image. */
   private[serenity] def fontForDeviceScale(font: Font, deviceScale: Double): Font =
@@ -60,13 +60,13 @@ object MarkdownDocumentPreview:
     */
   private[serenity] val DefaultDebounceWindowNanos = 150_000_000L
 
-  private case class SourceFingerprint(length: Int, hash: Int)
+  final private case class SourceFingerprint(length: Int, hash: Int)
 
   private object SourceFingerprint:
     def from(source: String): SourceFingerprint =
       SourceFingerprint(source.length, MurmurHash3.stringHash(source))
 
-  private case class ImageCacheKey(
+  final private case class ImageCacheKey(
       source: SourceFingerprint,
       title: String,
       widthPx: Int,
@@ -83,7 +83,7 @@ object MarkdownDocumentPreview:
     * slot (same title/size/theme/font/etc, only the markdown content changing keystroke to keystroke) can be recognised
     * as "the same thing being retyped" rather than unrelated cache entries.
     */
-  private case class ImageSlotKey(
+  final private case class ImageSlotKey(
       title: String,
       widthPx: Int,
       heightPx: Int,
@@ -110,11 +110,11 @@ object MarkdownDocumentPreview:
         key.inlineRows
       )
 
-  private case class SlotRender(renderedAtNanos: Long, image: BufferedImage)
+  final private case class SlotRender(renderedAtNanos: Long, image: BufferedImage)
 
-  private case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
+  final private case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
 
-  private case class SourceLinesFingerprint(lineCount: Int, totalLength: Int, hash: Int)
+  final private case class SourceLinesFingerprint(lineCount: Int, totalLength: Int, hash: Int)
 
   private object SourceLinesFingerprint:
 
@@ -125,9 +125,9 @@ object MarkdownDocumentPreview:
         hash = MurmurHash3.orderedHash(sourceLines)
       )
 
-  private case class InlineDocumentCacheKey(source: SourceLinesFingerprint)
+  final private case class InlineDocumentCacheKey(source: SourceLinesFingerprint)
 
-  private case class InlinePreviewIndex(
+  final private case class InlinePreviewIndex(
       previewLines: Vector[InlinePreviewLine],
       rowsBySourceLine: Map[Int, Vector[Int]],
       tableLineIndexes: Set[Int]
@@ -894,7 +894,7 @@ object MarkdownDocumentPreview:
     )
     "`([^`]+)`".r.replaceAllIn(withoutLinks, matched => matched.group(1))
 
-  private case class InlineTableBlock(endIndex: Int, previewLines: Vector[InlinePreviewLine])
+  final private case class InlineTableBlock(endIndex: Int, previewLines: Vector[InlinePreviewLine])
 
   private def previewSource(sourceLines: Vector[String], firstSourceLine: Int, maxSourceLines: Int): String =
     val safeMax = maxSourceLines.max(1)

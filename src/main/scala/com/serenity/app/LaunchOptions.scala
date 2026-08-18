@@ -2,7 +2,7 @@ package com.serenity.app
 
 import java.nio.file.Path
 
-case class LaunchOptions(openPath: Option[Path] = None)
+final case class LaunchOptions(openPath: Option[Path] = None)
 
 object LaunchOptions:
 

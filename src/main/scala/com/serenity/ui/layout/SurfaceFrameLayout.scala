@@ -4,7 +4,7 @@ import com.serenity.config.InterfaceDensity
 import com.serenity.state.models.SurfaceContent
 
 /** A device-independent rectangle used at the floating-surface boundary. */
-case class LogicalPixelRect(x: Double, y: Double, width: Double, height: Double):
+final case class LogicalPixelRect(x: Double, y: Double, width: Double, height: Double):
   /** Exclusive right edge. */
   def right: Double = x + width
 
@@ -32,7 +32,7 @@ case class LogicalPixelRect(x: Double, y: Double, width: Double, height: Double)
     copy(x = x + deltaX, y = y + deltaY)
 
 /** Shared pixel geometry for a framed floating surface and its selectable rows. */
-case class FloatingSurfaceGeometry(
+final case class FloatingSurfaceGeometry(
     frame: LogicalPixelRect,
     content: LogicalPixelRect,
     itemRects: List[LogicalPixelRect]
@@ -98,7 +98,7 @@ object FloatingSurfaceGeometry:
         .map(index => LogicalPixelRect(contentRect.x, itemStart + index * step, contentRect.width, targetHeight))
     FloatingSurfaceGeometry(frameRect, contentRect, items)
 
-case class SurfaceFrameLayout(
+final case class SurfaceFrameLayout(
     frameRect: LayoutRect,
     borderCells: Int = SurfaceFrameLayout.DefaultBorderCells
 ):
@@ -177,7 +177,7 @@ case class SurfaceFrameLayout(
   ): List[SurfaceContentRowSlot] =
     SurfaceFrameLayout.contentRowSlotsFor(contentRect, itemCount, hasHeader, hasFooter, itemGapRows, itemTargetRows)
 
-case class SurfaceItemWindow(offset: Int, rowCount: Int):
+final case class SurfaceItemWindow(offset: Int, rowCount: Int):
   def slice[A](items: List[A]): List[A] =
     items.slice(offset, offset + rowCount)
 
@@ -192,7 +192,7 @@ enum SurfaceContentRowKind:
   case Item(index: Int)
   case Footer
 
-case class SurfaceContentRowSlot(kind: SurfaceContentRowKind, y: Int)
+final case class SurfaceContentRowSlot(kind: SurfaceContentRowKind, y: Int)
 
 object SurfaceFrameLayout:
   val DefaultBorderCells: Int        = 1

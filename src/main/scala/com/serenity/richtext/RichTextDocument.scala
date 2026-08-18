@@ -19,7 +19,7 @@ enum ParagraphRole:
   case Heading(level: Int)
 
 /** Inline style for a contiguous text run. */
-case class RichTextStyle(
+final case class RichTextStyle(
     marks: Set[InlineMark] = Set.empty,
     fontFamily: Option[String] = None,
     fontSize: Option[Float] = None,
@@ -48,15 +48,15 @@ object RichTextStyle:
   val empty: RichTextStyle = RichTextStyle()
 
 /** A contiguous span of text sharing the same inline style. */
-case class RichTextRun(text: String, style: RichTextStyle = RichTextStyle.empty):
+final case class RichTextRun(text: String, style: RichTextStyle = RichTextStyle.empty):
   def isEmpty: Boolean =
     text.isEmpty
 
 /** Position inside a rich text document, measured as a UTF-16 offset within one paragraph. */
-case class RichTextPosition(paragraphIndex: Int, offset: Int)
+final case class RichTextPosition(paragraphIndex: Int, offset: Int)
 
 /** Half-open range inside a rich text document. */
-case class RichTextRange(start: RichTextPosition, end: RichTextPosition):
+final case class RichTextRange(start: RichTextPosition, end: RichTextPosition):
   def normalized: RichTextRange =
     if startsBeforeOrAt(start, end) then this else RichTextRange(end, start)
 
@@ -65,7 +65,7 @@ case class RichTextRange(start: RichTextPosition, end: RichTextPosition):
       (left.paragraphIndex == right.paragraphIndex && left.offset <= right.offset)
 
 /** One paragraph of rich text with inline runs and paragraph formatting. */
-case class RichTextParagraph(
+final case class RichTextParagraph(
     runs: List[RichTextRun],
     alignment: ParagraphAlignment = ParagraphAlignment.Left,
     role: ParagraphRole = ParagraphRole.Body
@@ -213,7 +213,7 @@ object RichTextParagraph:
     RichTextParagraph(List(RichTextRun(text)), alignment, role)
 
 /** Rich text document model for document-format adapters and future rich editing surfaces. */
-case class RichTextDocument(paragraphs: List[RichTextParagraph]):
+final case class RichTextDocument(paragraphs: List[RichTextParagraph]):
   private lazy val indexedParagraphs: Vector[RichTextParagraph] =
     paragraphs.toVector
 

@@ -36,12 +36,7 @@ object CommandRunnerReducer:
 
       case RunnerSubmit =>
         if submenuHasFocus(state) then submitSubmenu(state)
-        else if currentRunner(state).exists(
-              _.selectedItem.exists(item =>
-                item.isInstanceOf[CommandSurfaceItem.GroupItem] || item
-                  .isInstanceOf[CommandSurfaceItem.SettingSearchItem]
-              )
-            )
+        else if currentRunner(state).exists(_.selectedItem.exists(entersGroupOnSubmit))
         then ReducerResult.noEffects(replaceRunner(state, _.enterSelectedGroup))
         else
           currentRunner(state).flatMap(_.editingItemId) match
@@ -461,6 +456,12 @@ object CommandRunnerReducer:
         case SurfaceContent.CommandPalette(runner) => Some(runner)
         case _                                     => None
     }
+
+  /** Items that open a nested surface on submit rather than executing an action. */
+  private def entersGroupOnSubmit(item: CommandSurfaceItem): Boolean =
+    item match
+      case _: CommandSurfaceItem.GroupItem | _: CommandSurfaceItem.SettingSearchItem => true
+      case _                                                                         => false
 
   private def submenuHasFocus(state: AppState): Boolean =
     state.focus == Focus.Surface(SubmenuSurfaceId) ||

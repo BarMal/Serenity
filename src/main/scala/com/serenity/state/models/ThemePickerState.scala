@@ -1,6 +1,6 @@
 package com.serenity.state.models
 
-case class ThemePickerState(
+final case class ThemePickerState(
     themes: List[String],
     selectedIndex: Int,
     originalTheme: String

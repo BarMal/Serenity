@@ -4,7 +4,7 @@ import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
 
 /** Named layout ownership violation for editor and surface rectangles. */
-case class LayoutContractViolation(
+final case class LayoutContractViolation(
     ownerName: String,
     childName: String,
     ownerRect: LayoutRect,
@@ -12,7 +12,7 @@ case class LayoutContractViolation(
 )
 
 /** Reusable snapshot of the editor layout ownership contract for renderers and tests. */
-case class EditorLayoutContract(
+final case class EditorLayoutContract(
     viewportRect: LayoutRect,
     contentAreaRect: LayoutRect,
     leftSpacerRect: LayoutRect,
@@ -327,7 +327,7 @@ case class EditorLayoutContract(
 
 object EditorLayoutContract:
 
-  private case class SurfaceGeometry(
+  final private case class SurfaceGeometry(
       titleRect: LayoutRect,
       contentRect: LayoutRect,
       rowSlots: List[SurfaceContentRowSlot],

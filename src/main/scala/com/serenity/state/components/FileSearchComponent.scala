@@ -101,7 +101,7 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
     val newSurface = surface.copy(content = newContent)
     state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface)
 
-  private case class FileSearchBatch(results: List[FileSearchResult], nextCursor: Option[FileSearchCursor])
+  final private case class FileSearchBatch(results: List[FileSearchResult], nextCursor: Option[FileSearchCursor])
 
   private def appendNextBatch(state: AppState, searchState: FileSearchState): FileSearchState =
     searchState.nextCursor match

@@ -1463,7 +1463,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     movedUp.detailState shouldBe Some(ContextualToolbarDetailState.Dropdown("paragraph-role", 1))
   }
 
-  private case class Point(x: Int, y: Int, pixelX: Int = 0, pixelY: Int = 0)
+  final private case class Point(x: Int, y: Int, pixelX: Int = 0, pixelY: Int = 0)
 
   private def seedToolbarDocument(
     stateManager: com.serenity.state.manager.StateManager,

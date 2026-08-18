@@ -4,14 +4,14 @@ import pureconfig.*
 import pureconfig.generic.derivation.default.*
 
 /** Configuration representation of a theme that can be loaded from config files */
-case class ThemeConfig(
+final case class ThemeConfig(
     name: String,
     ui: UiColors,
     syntax: SyntaxColors
 ) derives ConfigReader
 
 /** Semantic UI colors for the theme */
-case class UiColors(
+final case class UiColors(
     foreground: String,
     background: String,
     cursor: String,
@@ -27,7 +27,7 @@ case class UiColors(
     placeholder: String
 ) derives ConfigReader
 
-case class UiTokenConfig(
+final case class UiTokenConfig(
     foreground: String,
     background: String,
     alpha: Option[Double] = None,
@@ -35,7 +35,7 @@ case class UiTokenConfig(
 ) derives ConfigReader
 
 /** Syntax highlighting colors for different code elements */
-case class SyntaxColors(
+final case class SyntaxColors(
     keyword: SyntaxElementConfig,
     string: SyntaxElementConfig,
     comment: SyntaxElementConfig,
@@ -50,14 +50,14 @@ case class SyntaxColors(
 ) derives ConfigReader
 
 /** Configuration for a specific syntax element (color + style) */
-case class SyntaxElementConfig(
+final case class SyntaxElementConfig(
     foreground: String,
     background: Option[String] = None,
     style: StyleConfig = StyleConfig()
 ) derives ConfigReader
 
 /** Text styling configuration (bold, italic, underline) */
-case class StyleConfig(
+final case class StyleConfig(
     bold: Boolean = false,
     italic: Boolean = false,
     underline: Boolean = false

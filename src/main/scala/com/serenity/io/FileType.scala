@@ -109,7 +109,7 @@ enum DocumentFormat:
   case StructuredText
   case Unknown
 
-case class DocumentFormatCapabilities(
+final case class DocumentFormatCapabilities(
     canOpen: Boolean,
     canSave: Boolean,
     canRender: Boolean,

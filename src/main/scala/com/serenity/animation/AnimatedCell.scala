@@ -2,7 +2,7 @@ package com.serenity.animation
 
 import java.awt.Color
 
-case class ColorTimeline(
+final case class ColorTimeline(
     startColor: Color,
     endColor: Color,
     steps: Int,
@@ -21,7 +21,7 @@ case class ColorTimeline(
   def isComplete: Boolean =
     steps <= 0 || currentFrame >= delayFrames.max(0) + steps
 
-case class AnimatedCell(
+final case class AnimatedCell(
     content: Option[Char],
     foregroundSteps: List[Color],
     backgroundSteps: List[Color],

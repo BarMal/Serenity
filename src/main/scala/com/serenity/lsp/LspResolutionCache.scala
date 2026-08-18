@@ -27,7 +27,7 @@ final private[lsp] class LspResolutionCache private (
     ref.update(_ - Key(languageId, fileUri))
 
 private[lsp] object LspResolutionCache:
-  private case class Key(languageId: LanguageId, fileUri: String)
+  final private case class Key(languageId: LanguageId, fileUri: String)
 
   def empty: IO[LspResolutionCache] =
     Ref.of[IO, Map[Key, Option[(LspServerConfig, String)]]](Map.empty).map(new LspResolutionCache(_))

@@ -14,7 +14,7 @@ enum SurfacePhase:
   case Visible         // surface rendered (may have fade-in animation)
   case Exiting         // ghost surface fading out; focus already restored
 
-case class SurfaceAnimationState(
+final case class SurfaceAnimationState(
     phase: SurfacePhase = SurfacePhase.Visible,
     animationState: AnimationState = AnimationState.empty,
     overlayHeight: Int = 0,    // rows in overlay (excluding border) for building fade-in
@@ -22,10 +22,10 @@ case class SurfaceAnimationState(
     phaseTick: Int = 0         // ticks elapsed in current phase
 )
 
-case class FindResult(line: Int, column: Int)
+final case class FindResult(line: Int, column: Int)
 
 /** Immutable identity for a background find operation. */
-case class FindSearchRequest(
+final case class FindSearchRequest(
     surfaceId: SurfaceId,
     bufferId: BufferId,
     query: String,
@@ -44,12 +44,12 @@ object FindSearch:
           FindResult(line, column)
       }
 
-  private case class RopeCharacterSource(content: Rope) extends TextEditing.CharacterSource:
+  final private case class RopeCharacterSource(content: Rope) extends TextEditing.CharacterSource:
     override def length: Int = content.weight
 
     override def charAt(index: Int): Char = content.index(index).getOrElse('\u0000')
 
-case class FindResultSet private (
+final case class FindResultSet private (
     query: String,
     results: List[FindResult],
     currentIndex: Int
@@ -94,7 +94,7 @@ object FindResultSet:
       val raw = index % resultCount
       if raw < 0 then raw + resultCount else raw
 
-case class FindState(
+final case class FindState(
     query: String,
     results: List[FindResult],
     currentIndex: Int
@@ -106,24 +106,24 @@ object FindState:
   def fromResultSet(resultSet: FindResultSet): FindState =
     FindState(resultSet.query, resultSet.results, resultSet.currentIndex)
 
-case class ThemeTransition(previousTheme: Theme, currentStep: Int, totalSteps: Int):
+final case class ThemeTransition(previousTheme: Theme, currentStep: Int, totalSteps: Int):
   def progress: Double         = if totalSteps <= 0 then 1.0 else currentStep.toDouble / totalSteps
   def advance: ThemeTransition = copy(currentStep = currentStep + 1)
   def isComplete: Boolean      = currentStep >= totalSteps
 
-case class NavigationPoint(
+final case class NavigationPoint(
     paneId: PaneId,
     bufferId: BufferId,
     cursor: CursorPosition
 )
 
-case class HoveredEditorTarget(
+final case class HoveredEditorTarget(
     paneId: PaneId,
     bufferId: BufferId,
     cursor: CursorPosition
 )
 
-case class SpellCheckFingerprint(
+final case class SpellCheckFingerprint(
     contentIdentity: Int,
     contentWeight: Int,
     contentNewlineCount: Int,
@@ -146,13 +146,13 @@ object SpellCheckFingerprint:
       config = config.normalized
     )
 
-case class SpellCheckCacheEntry(
+final case class SpellCheckCacheEntry(
     fingerprint: SpellCheckFingerprint,
     diagnostics: List[Diagnostic]
 )
 
 /** Scene-owned interval node for bounded comment overlap queries. */
-private case class CommentIntervalNode(
+final private case class CommentIntervalNode(
     comment: DocumentComment,
     maxEnd: Int,
     left: Option[CommentIntervalNode],
@@ -160,7 +160,7 @@ private case class CommentIntervalNode(
 )
 
 /** Scene-owned annotation lookup keyed by buffer line. */
-case class AnnotationLineIndex(
+final case class AnnotationLineIndex(
     comments: Vector[DocumentComment],
     diagnosticsByLine: Map[Int, List[Diagnostic]]
 ):
@@ -198,7 +198,7 @@ case class AnnotationLineIndex(
           .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
       }
 
-case class AppState(
+final case class AppState(
     layout: Layout,
     buffers: Map[BufferId, Buffer],
     bufferOrder: List[BufferId] = List.empty, // Tracks buffer creation and navigation order
@@ -642,9 +642,9 @@ case class AppState(
   // of silently dropping a field from the comparison as the case class evolves.
   override def equals(obj: Any): Boolean =
     obj match
-      case that: AnyRef if this.asInstanceOf[AnyRef].eq(that) => true
-      case that: AppState                                     => productIterator.sameElements(that.productIterator)
-      case _                                                  => false
+      case that: AnyRef if (this: AnyRef).eq(that) => true
+      case that: AppState                          => productIterator.sameElements(that.productIterator)
+      case _                                       => false
 
 object AppState:
 

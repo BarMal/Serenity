@@ -6,7 +6,7 @@ import java.nio.file.Path
 trait FileEvent extends AppEvent
 
 // OpenFile and SaveFile are defined in HotkeyEvent.scala
-case object SaveAsFile            extends FileEvent
-case object OpenFileBrowser       extends FileEvent
-case class LoadFile(path: Path)   extends FileEvent
-case class SaveFileAs(path: Path) extends FileEvent
+case object SaveAsFile                  extends FileEvent
+case object OpenFileBrowser             extends FileEvent
+final case class LoadFile(path: Path)   extends FileEvent
+final case class SaveFileAs(path: Path) extends FileEvent

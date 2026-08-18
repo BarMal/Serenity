@@ -51,7 +51,7 @@ enum HotkeyAction:
       case GoToLine                 => "go_to_line"
       case SaveAs                   => "save_as"
 
-case class HotkeyTrigger(
+final case class HotkeyTrigger(
     keyType: InputKey,
     character: Option[Char],
     modifiers: Set[Modifier]
@@ -206,7 +206,7 @@ object HotkeyTrigger:
       case "meta" | "cmd" | "command" => Some(InputKey.Meta)
       case _                          => None
 
-case class HotkeyConfig(
+final case class HotkeyConfig(
     bindings: Map[HotkeyAction, List[HotkeyTrigger]] = HotkeyConfig.defaultBindings
 ):
   def bindingsFor(action: HotkeyAction): List[HotkeyTrigger] =

@@ -8,7 +8,7 @@ enum FlowDirection:
 enum SweepDirection:
   case Forward, Backward
 
-case class CellAnimation(char: Char, startColor: Color, endColor: Color)
+final case class CellAnimation(char: Char, startColor: Color, endColor: Color)
 
 object FlowAnimationBuilder:
 

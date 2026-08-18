@@ -512,7 +512,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
       wrapLine(text, List.empty)
 
-  case class VisualLinePosition(visualLine: Int, visualColumn: Int)
+  final case class VisualLinePosition(visualLine: Int, visualColumn: Int)
 
   private def calculateVisualLinePosition(bufferColumn: Int, panelWidth: Int): VisualLinePosition =
     if panelWidth <= 0 then VisualLinePosition(0, 0)

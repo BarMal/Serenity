@@ -327,9 +327,9 @@ object TextOverlayRenderer:
 
     if rowView.row.selected then surface.disableStyle(theme.focusStyle)
 
-  private case class OverlayRowView(row: OverlayRow, useMeasuredCursor: Boolean)
+  final private case class OverlayRowView(row: OverlayRow, useMeasuredCursor: Boolean)
 
-  private case class CursorPlacement(x: Int, textBeforeCursor: String, useMeasured: Boolean = false):
+  final private case class CursorPlacement(x: Int, textBeforeCursor: String, useMeasured: Boolean = false):
     def cellColumn: Int =
       textBeforeCursor.length
 

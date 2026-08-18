@@ -16,11 +16,11 @@ import com.serenity.ui.theme.TextStyle
   * renderer's dirty-region path. It is off by default so that a plain mock behaves like a fresh image every frame.
   */
 class MockRenderSurface(val width: Int, val height: Int, persistentContent: Boolean = false) extends RenderSurface:
-  case class PixelTranslationCall(xPx: Double, yPx: Double)
+  final case class PixelTranslationCall(xPx: Double, yPx: Double)
   private val pixelTranslationCallsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
   private val currentPixelTranslation     = AtomicReference(PixelTranslationCall(0.0, 0.0))
-  case class PutStringCall(x: Int, y: Int, s: String)
-  case class PutStringPixelYCall(x: Int, y: Int, pixelY: Int, text: String)
+  final case class PutStringCall(x: Int, y: Int, s: String)
+  final case class PutStringPixelYCall(x: Int, y: Int, pixelY: Int, text: String)
 
   private val chars                      = Array.fill(height, width)(' ')
   private val fgs                        = Array.fill(height, width)(Color.WHITE)
@@ -33,7 +33,7 @@ class MockRenderSurface(val width: Int, val height: Int, persistentContent: Bool
   private val currentAlpha       = AtomicReference[Float](1.0f)
   private val currentFont        = AtomicReference[Option[Font]](None)
   private val setFontCallsBuffer = scala.collection.mutable.ListBuffer.empty[Font]
-  case class StyleCall(action: String, style: TextStyle)
+  final case class StyleCall(action: String, style: TextStyle)
   private val styleCallsBuffer = scala.collection.mutable.ListBuffer.empty[StyleCall]
 
   override def setFont(font: Font): Unit =
@@ -87,7 +87,7 @@ class MockRenderSurface(val width: Int, val height: Int, persistentContent: Bool
         chars(py)(px) = char
         bgs(py)(px) = currentBg.get()
 
-  case class DrawRunPxCall(
+  final case class DrawRunPxCall(
       xPx: Float,
       yPx: Int,
       bgWidthPx: Float,
@@ -165,15 +165,15 @@ class MockRenderSurface(val width: Int, val height: Int, persistentContent: Bool
       CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)).toPixelY(row)
     }
 
-  case class StrokeRoundRectCall(x: Int, y: Int, w: Int, h: Int, arcPx: Int, color: Color, strokeWidth: Float)
+  final case class StrokeRoundRectCall(x: Int, y: Int, w: Int, h: Int, arcPx: Int, color: Color, strokeWidth: Float)
   private val strokeRoundRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRoundRectCall]
-  case class RoundRectShadowCall(rect: com.serenity.ui.layout.LayoutRect, arcPx: Int, color: Color)
+  final case class RoundRectShadowCall(rect: com.serenity.ui.layout.LayoutRect, arcPx: Int, color: Color)
   private val roundRectShadowCallsBuffer = scala.collection.mutable.ListBuffer.empty[RoundRectShadowCall]
-  case class BlurRegionCall(x: Int, y: Int, width: Int, height: Int, radius: Float)
+  final case class BlurRegionCall(x: Int, y: Int, width: Int, height: Int, radius: Float)
   private val blurRegionCallsBuffer        = scala.collection.mutable.ListBuffer.empty[BlurRegionCall]
   private val blurRegionTranslationsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
-  case class FillPixelRectCall(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color)
-  case class DrawImageCall(image: BufferedImage, x: Int, y: Int, width: Int, height: Int)
+  final case class FillPixelRectCall(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color)
+  final case class DrawImageCall(image: BufferedImage, x: Int, y: Int, width: Int, height: Int)
   private val fillPixelRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[FillPixelRectCall]
   private val drawImageCallsBuffer     = scala.collection.mutable.ListBuffer.empty[DrawImageCall]
   private val alphaCallsBuffer         = scala.collection.mutable.ListBuffer.empty[Float]

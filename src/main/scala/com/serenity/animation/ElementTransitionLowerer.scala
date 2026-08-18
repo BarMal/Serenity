@@ -1,7 +1,7 @@
 package com.serenity.animation
 
 /** Character groups that can be lowered from a semantic transition plan into animation primitives. */
-case class ElementTransitionCells(
+final case class ElementTransitionCells(
     frame: Map[CharacterKey, CellAnimation] = Map.empty,
     content: Map[CharacterKey, CellAnimation] = Map.empty
 ):

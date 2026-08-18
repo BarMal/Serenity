@@ -1,6 +1,6 @@
 package com.serenity.state.models
 
-case class Viewport(
+final case class Viewport(
     topLine: Int = 0,
     leftColumn: Int = 0,
     visibleLines: Int,

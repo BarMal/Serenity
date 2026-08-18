@@ -527,7 +527,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
   // Helper functions that will need to be implemented
 
-  case class GutterInfo(cursorPosition: String, filePath: String)
+  final case class GutterInfo(cursorPosition: String, filePath: String)
 
   private def calculateGutterInfo(buffer: Buffer, pane: EditorPane, filePath: Option[java.nio.file.Path]): GutterInfo =
     val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))

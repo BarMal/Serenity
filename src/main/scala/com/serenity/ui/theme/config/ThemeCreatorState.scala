@@ -4,7 +4,7 @@ import java.awt.Color
 
 import com.serenity.ui.theme.Theme
 
-case class ThemeCreatorRow(
+final case class ThemeCreatorRow(
     path: String,
     label: String,
     value: String,
@@ -12,7 +12,7 @@ case class ThemeCreatorRow(
     previewColor: Option[Color]
 )
 
-case class ThemeCreatorState(
+final case class ThemeCreatorState(
     originalTheme: Theme,
     draftConfig: ThemeConfig,
     selectedIndex: Int,
@@ -85,7 +85,7 @@ object ThemeCreatorState:
       selectedIndex = 0
     )
 
-  private[config] case class Descriptor(
+  final private[config] case class Descriptor(
       path: String,
       label: String,
       read: ThemeConfig => String,

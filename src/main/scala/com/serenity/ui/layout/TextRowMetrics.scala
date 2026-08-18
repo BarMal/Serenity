@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-case class TextRowMetrics(
+final case class TextRowMetrics(
     contentRect: LayoutRect,
     gridMetrics: CellMetrics,
     rowLineHeightPx: Int,

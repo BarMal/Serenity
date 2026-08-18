@@ -235,7 +235,7 @@ object InterfaceDensity:
       case "spacious"    => Some(InterfaceDensity.Spacious)
       case _             => None
 
-case class InterfaceDensityMetrics(
+final case class InterfaceDensityMetrics(
     gutterHeight: Int,
     overlayGapRows: Int,
     commandSurfaceMaxHeight: Int,
@@ -272,7 +272,7 @@ object InterfaceDensityMetrics:
           commandSurfaceVerticalPadding = 4
         )
 
-case class SpellCheckDictionaryFingerprint(
+final case class SpellCheckDictionaryFingerprint(
     path: String,
     exists: Boolean,
     isDirectory: Boolean,
@@ -303,7 +303,7 @@ object SpellCheckDictionaryFingerprint:
           lastModifiedMillis = 0L
         )
 
-case class SpellCheckConfig(
+final case class SpellCheckConfig(
     enabled: Boolean = false,
     languages: List[String] = List("en"),
     dictionaryPaths: List[String] = Nil,
@@ -364,7 +364,7 @@ object SpellCheckConfig:
     try Some(Paths.get(path))
     catch case NonFatal(_) => None
 
-case class LanguageToolsConfig(
+final case class LanguageToolsConfig(
     syntaxHighlightingEnabled: Boolean = false,
     lspUserConfig: LspUserConfig = LspUserConfig.empty,
     spellCheck: SpellCheckConfig = SpellCheckConfig()
@@ -446,11 +446,11 @@ object LanguageToolsConfig:
     private def parseCommaListPreserveCase(value: String): List[String] =
       value.split(',').toList.map(_.trim).filter(_.nonEmpty)
 
-case class PreferredWindowSize(width: Int, height: Int):
+final case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =
     PreferredWindowSize(width.max(400), height.max(300))
 
-case class WindowConfig(
+final case class WindowConfig(
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     preferredSize: Option[PreferredWindowSize] = None
 ):
@@ -513,7 +513,7 @@ object WindowConfig:
         trimmed.nonEmpty && trimmed.toIntOption.isEmpty
       else false
 
-case class CursorColorConfig(
+final case class CursorColorConfig(
     active: Option[Color] = None,
     inactive: Option[Color] = None
 ):
@@ -523,7 +523,7 @@ case class CursorColorConfig(
   def inactiveOr(activeColor: Color): Color =
     inactive.getOrElse(activeColor)
 
-case class CursorConfig(
+final case class CursorConfig(
     mode: CursorMode = CursorMode.Blink,
     colors: CursorColorConfig = CursorColorConfig(),
     infoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
@@ -606,7 +606,7 @@ object CursorConfig:
           }.toOption
         }
 
-case class EditorConfig(
+final case class EditorConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     fontConfig: FontConfig = FontConfig(),
     minimumPaneWidth: Int = 50
@@ -661,7 +661,7 @@ object EditorConfig:
       "font_ui_ligatures"               -> "font.ui.ligatures"
     )
 
-case class DocumentConfig(
+final case class DocumentConfig(
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     defaultMode: DefaultDocumentMode = DefaultDocumentMode.PlainText
 )
@@ -705,7 +705,7 @@ object DocumentConfig:
     def invalidValue(key: String, value: String): Boolean =
       parse(AppConfig.default, key, value).isEmpty
 
-case class InterfaceConfig(
+final case class InterfaceConfig(
     density: InterfaceDensity = InterfaceDensity.Comfortable,
     elementGap: Double = 0.0,
     cornerRadiusPx: Int = 8,
@@ -777,7 +777,7 @@ object InterfaceConfig:
     def invalidValue(key: String, value: String): Boolean =
       parse(AppConfig.default, key, value).isEmpty
 
-case class InputConfig(
+final case class InputConfig(
     hotkeyConfig: HotkeyConfig = HotkeyConfig(),
     focusedKeymapConfig: FocusedKeymapConfig = FocusedKeymapConfig()
 )
@@ -795,7 +795,7 @@ object InputConfig:
       "keymap.peek."
     )
 
-case class TextAreaInsets(
+final case class TextAreaInsets(
     left: Double = TextAreaInsets.DefaultInset,
     right: Double = TextAreaInsets.DefaultInset,
     top: Double = TextAreaInsets.DefaultInset,
@@ -852,7 +852,7 @@ object TextAreaInsets:
     value.max(0.0).min(MaxInset)
 
 /** Relative plus optional bounded sizing for one viewport axis. */
-case class ViewportAxisSizing(
+final case class ViewportAxisSizing(
     percent: Double = 1.0,
     maxCells: Option[Int] = None
 ):
@@ -881,7 +881,7 @@ object ViewportAxisSizing:
     value.max(MinPercent).min(MaxPercent)
 
 /** Configurable editor viewport sizing within each pane's available text area. */
-case class ViewportSizing(
+final case class ViewportSizing(
     width: ViewportAxisSizing = ViewportAxisSizing(),
     height: ViewportAxisSizing = ViewportAxisSizing()
 ):
@@ -889,7 +889,7 @@ case class ViewportSizing(
   def normalized: ViewportSizing =
     copy(width = width.normalized, height = height.normalized)
 
-case class SurfaceConfig(
+final case class SurfaceConfig(
     showLineNumbers: Boolean = true,
     showGutter: Boolean = true,
     showPaneHeaders: Boolean = true,
@@ -1522,7 +1522,7 @@ object SurfaceConfig:
         )
 
 /** Global application configuration */
-case class AppConfig(
+final case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     syntaxHighlightingEnabled: Boolean = false,
     hotkeyConfig: HotkeyConfig = HotkeyConfig(),

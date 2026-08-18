@@ -3,10 +3,10 @@ package com.serenity.keystroke.events
 sealed trait PanelInputEvent extends Event
 
 object PanelInputEvent:
-  case class Navigate(direction: Direction) extends PanelInputEvent
-  case object ReturnFocus                   extends PanelInputEvent
-  case object Activate                      extends PanelInputEvent
-  case object NoOp                          extends PanelInputEvent
+  final case class Navigate(direction: Direction) extends PanelInputEvent
+  case object ReturnFocus                         extends PanelInputEvent
+  case object Activate                            extends PanelInputEvent
+  case object NoOp                                extends PanelInputEvent
 
   def fromEvent(event: Event): Option[PanelInputEvent] =
     event match

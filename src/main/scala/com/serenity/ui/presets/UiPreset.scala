@@ -23,7 +23,7 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.parser.decode
 import io.circe.syntax.*
 
-case class UiPreset(
+final case class UiPreset(
     name: String,
     config: AppConfig,
     themeName: String,
@@ -204,7 +204,7 @@ object UiPreset:
       }
     )
 
-  case class Preview(name: String, hint: String)
+  final case class Preview(name: String, hint: String)
 
   object Preview:
 
@@ -387,7 +387,7 @@ object UiPreset:
       )
     )
 
-  case class PinnedPanel(
+  final case class PinnedPanel(
       position: PanelPosition,
       size: Int,
       content: PanelContentSnapshot
@@ -671,7 +671,7 @@ object UiPreset:
       UiPreset(name, config, themeName, pinnedPanels, targetEditorPaneCount, unknown, configUnknownFields)
   }
 
-case class UiPresetIndex(presets: List[UiPreset], unknownFields: JsonObject = JsonObject.empty):
+final case class UiPresetIndex(presets: List[UiPreset], unknownFields: JsonObject = JsonObject.empty):
 
   def upsert(preset: UiPreset): UiPresetIndex =
     val existing = find(preset.name)

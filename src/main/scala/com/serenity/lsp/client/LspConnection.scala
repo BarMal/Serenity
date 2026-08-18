@@ -119,7 +119,7 @@ object LspConnection:
   final case class LspRequestTimeout(languageId: LanguageId, method: String, timeout: FiniteDuration)
       extends RuntimeException(s"LSP request timed out: ${languageId.id} $method after ${timeout.toMillis} ms")
 
-  private case class ConnectionFibers(
+  final private case class ConnectionFibers(
       writer: Fiber[IO, Throwable, Unit],
       reader: Fiber[IO, Throwable, Unit]
   )

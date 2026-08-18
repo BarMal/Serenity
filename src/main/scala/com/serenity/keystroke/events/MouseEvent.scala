@@ -14,9 +14,9 @@ enum MouseButton:
   case Primary, Secondary, Middle, Other
 
 /** Metrics used by the renderer when this mouse input was captured. */
-case class MouseRenderMetrics(code: CellMetrics, ui: CellMetrics)
+final case class MouseRenderMetrics(code: CellMetrics, ui: CellMetrics)
 
-case class MouseClick(
+final case class MouseClick(
     col: Int,
     row: Int,
     pixelX: Option[Int] = None,
@@ -27,7 +27,7 @@ case class MouseClick(
     renderMetrics: Option[MouseRenderMetrics] = None
 ) extends MouseInputEvent
 
-case class MousePress(
+final case class MousePress(
     col: Int,
     row: Int,
     pixelX: Option[Int] = None,
@@ -36,7 +36,7 @@ case class MousePress(
     button: MouseButton = MouseButton.Primary
 ) extends MouseInputEvent
 
-case class MouseDrag(
+final case class MouseDrag(
     col: Int,
     row: Int,
     pixelX: Option[Int] = None,
@@ -45,7 +45,7 @@ case class MouseDrag(
     button: MouseButton = MouseButton.Primary
 ) extends MouseInputEvent
 
-case class MouseMove(
+final case class MouseMove(
     col: Int,
     row: Int,
     pixelX: Option[Int] = None,

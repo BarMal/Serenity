@@ -23,10 +23,10 @@ enum SceneHitKind:
   case Content
 
 /** A named interactive rectangle whose owner is the enclosing [[SceneNode]]. */
-case class SceneHitRegion(kind: SceneHitKind, rect: LayoutRect)
+final case class SceneHitRegion(kind: SceneHitKind, rect: LayoutRect)
 
 /** Geometry for one visible pane or surface in a rendered UI frame. */
-case class SceneNode(
+final case class SceneNode(
     id: SceneNodeId,
     layer: SceneLayer,
     frameRect: LayoutRect,
@@ -40,7 +40,7 @@ case class SceneNode(
   * `calculatedLayout` remains available temporarily for callers that have not yet migrated away from the legacy layout
   * API.
   */
-case class UiSceneSnapshot(
+final case class UiSceneSnapshot(
     calculatedLayout: CalculatedLayout,
     paneLayouts: Map[PaneId, EditorPaneLayout],
     editorContract: EditorLayoutContract,

@@ -13,16 +13,16 @@ import org.typelevel.log4cats.Logger
 
 object LspManager:
 
-  private[lsp] case class ConnectionIdentity(rootUri: String, serverConfig: LspServerConfig)
-  private[lsp] case class ResolvedConnection(identity: ConnectionIdentity, resource: Resource[IO, LspConnection])
+  final private[lsp] case class ConnectionIdentity(rootUri: String, serverConfig: LspServerConfig)
+  final private[lsp] case class ResolvedConnection(identity: ConnectionIdentity, resource: Resource[IO, LspConnection])
 
-  private case class ManagedConnection(connection: LspConnection, release: IO[Unit])
+  final private case class ManagedConnection(connection: LspConnection, release: IO[Unit])
 
   private enum RequestKind:
     case Hover, Definition
 
-  private case class RequestKey(uri: String, kind: RequestKind)
-  private case class RequestContext(version: Int, anchor: CursorPosition)
+  final private case class RequestKey(uri: String, kind: RequestKind)
+  final private case class RequestContext(version: Int, anchor: CursorPosition)
 
   private[lsp] trait ConnectionProvider:
 

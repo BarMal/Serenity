@@ -9,8 +9,8 @@ import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
 object CharacterRenderer:
 
-  private case class TextRun(startX: Int, content: String)
-  private case class CollectedRuns(runs: List[TextRun], endX: Int)
+  final private case class TextRun(startX: Int, content: String)
+  final private case class CollectedRuns(runs: List[TextRun], endX: Int)
 
   def renderString(
     surface: RenderSurface,
@@ -163,7 +163,7 @@ object CharacterRenderer:
           else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
         }
 
-      case class MeasuredRun(
+      final case class MeasuredRun(
           startLocalIndex: Int,
           foreground: Color,
           background: Color,
@@ -335,7 +335,7 @@ object CharacterRenderer:
     content: String,
     tabWidth: Int
   ): CollectedRuns =
-    case class PlainRunState(
+    final case class PlainRunState(
         completed: List[TextRun],
         currentText: StringBuilder,
         currentStartX: Int,
@@ -426,7 +426,7 @@ object CharacterRenderer:
   ): List[(Int, String, Color, Color)] =
     val text = run.content
 
-    case class ColorRunState(
+    final case class ColorRunState(
         completed: List[(Int, String, Color, Color)],
         currentText: StringBuilder,
         currentStartX: Int,

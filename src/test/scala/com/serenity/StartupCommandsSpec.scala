@@ -17,7 +17,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
   behavior of "Startup Commands"
 
-  private case class TestFileDialog(openSelection: Option[java.nio.file.Path]) extends FileDialog:
+  final private case class TestFileDialog(openSelection: Option[java.nio.file.Path]) extends FileDialog:
     override def chooseOpenFile(initialDirectory: Option[java.nio.file.Path]): IO[Option[java.nio.file.Path]] =
       IO.pure(openSelection)
 

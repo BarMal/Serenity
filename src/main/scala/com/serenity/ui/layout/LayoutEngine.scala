@@ -4,9 +4,9 @@ import com.serenity.config.{AppConfig, InterfaceDensityMetrics, TextAreaInsets}
 import com.serenity.keystroke.events.Direction
 import com.serenity.state.models.*
 
-case class ViewportSize(width: Int, height: Int)
+final case class ViewportSize(width: Int, height: Int)
 
-case class LayoutRect(x: Int, y: Int, width: Int, height: Int):
+final case class LayoutRect(x: Int, y: Int, width: Int, height: Int):
   def right: Int   = x + width
   def bottom: Int  = y + height
   def centerX: Int = x + width / 2
@@ -18,7 +18,7 @@ case class LayoutRect(x: Int, y: Int, width: Int, height: Int):
   def containsRect(rect: LayoutRect): Boolean =
     rect.x >= x && rect.y >= y && rect.right <= right && rect.bottom <= bottom
 
-case class EditorPaneLayout(
+final case class EditorPaneLayout(
     paneRect: LayoutRect,
     headerRect: LayoutRect,
     titleRect: LayoutRect,
@@ -27,7 +27,7 @@ case class EditorPaneLayout(
     bottomSpacerRect: LayoutRect = LayoutRect(0, 0, 0, 0)
 )
 
-case class EditorWorkspaceLayout(
+final case class EditorWorkspaceLayout(
     editorPanelRect: LayoutRect,
     lineNumberRect: Option[LayoutRect],
     gutterRect: Option[LayoutRect],
@@ -52,7 +52,7 @@ case class EditorWorkspaceLayout(
       )
     )
 
-case class CalculatedLayout(
+final case class CalculatedLayout(
     editorPanelRect: LayoutRect,
     leftSpacerRect: LayoutRect,
     rightSpacerRect: LayoutRect,
@@ -274,12 +274,12 @@ object LayoutEngine:
   private def paneHeaderHeight(state: AppState): Int =
     if state.config.showPaneHeaders then EditorPaneHeaderHeight else 0
 
-  private case class PinnedPanelLayout(
+  final private case class PinnedPanelLayout(
       panelRects: Map[PanelPosition, LayoutRect],
       surfaceRects: Map[SurfaceId, LayoutRect]
   )
 
-  private case class PinnedAxisSizes(start: Int, end: Int)
+  final private case class PinnedAxisSizes(start: Int, end: Int)
 
   final case class PinnedPanelDragResize(position: PanelPosition, size: Int)
 
@@ -782,7 +782,7 @@ object LayoutEngine:
       case _ =>
         None
 
-  private case class FloatingAnchorFrame(contentRect: LayoutRect, screenPosition: ScreenPosition)
+  final private case class FloatingAnchorFrame(contentRect: LayoutRect, screenPosition: ScreenPosition)
 
   private def calculateFloatingAnchorFrame(
     surface: UiSurface,
@@ -805,7 +805,7 @@ object LayoutEngine:
       )
     yield FloatingAnchorFrame(paneLayout.contentRect, screenPosition)
 
-  private case class BelowOverlayLayout(
+  final private case class BelowOverlayLayout(
       stack: List[(SurfaceId, LayoutRect)],
       collapsedSurfaceIds: Set[SurfaceId]
   )

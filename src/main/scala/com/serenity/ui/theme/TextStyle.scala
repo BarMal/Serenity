@@ -2,7 +2,7 @@ package com.serenity.ui.theme
 
 import java.awt.{Color, Font}
 
-case class TextStyle(
+final case class TextStyle(
     isBold: Boolean = false,
     isItalic: Boolean = false,
     isUnderlined: Boolean = false,
@@ -30,7 +30,7 @@ object TextStyle:
   def underlined: TextStyle = TextStyle(isUnderlined = true)
   def boldItalic: TextStyle = TextStyle(isBold = true, isItalic = true)
 
-case class StyledText(
+final case class StyledText(
     content: String,
     style: TextStyle = TextStyle.normal,
     foregroundColor: Color = Color.WHITE,

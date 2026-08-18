@@ -21,15 +21,15 @@ object SpellChecker:
   private val DictionaryCache                   = ConcurrentHashMap[DictionaryCacheKey, DictionaryLoadResult]()
   private val DefaultDictionaryCharset: Charset = StandardCharsets.UTF_8
 
-  private case class DictionaryCacheKey(fingerprints: List[SpellCheckDictionaryFingerprint])
+  final private case class DictionaryCacheKey(fingerprints: List[SpellCheckDictionaryFingerprint])
 
-  private case class DictionaryLoadResult(
+  final private case class DictionaryLoadResult(
       words: Set[String],
       replacements: Map[String, List[String]],
       failures: List[String]
   )
 
-  private case class DictionaryContext(
+  final private case class DictionaryContext(
       words: Set[String],
       replacements: Map[String, List[String]],
       failures: List[String]
@@ -40,7 +40,7 @@ object SpellChecker:
     case Long
     case Num
 
-  private case class HunspellAffixRules(
+  final private case class HunspellAffixRules(
       flagMode: HunspellFlagMode,
       flagAliases: Map[String, Set[String]],
       prefixes: Map[String, List[HunspellAffixRule]],
@@ -52,8 +52,8 @@ object SpellChecker:
     val empty: HunspellAffixRules =
       HunspellAffixRules(HunspellFlagMode.Simple, Map.empty, Map.empty, Map.empty, Map.empty)
 
-  private case class HunspellAffixRule(strip: String, append: String, condition: String, combineable: Boolean)
-  private case class HunspellEntry(word: String, flags: Set[String])
+  final private case class HunspellAffixRule(strip: String, append: String, condition: String, combineable: Boolean)
+  final private case class HunspellEntry(word: String, flags: Set[String])
 
   private val BuiltInDictionaries: Map[String, Set[String]] = Map(
     "en" -> Set(

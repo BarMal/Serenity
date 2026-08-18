@@ -254,7 +254,7 @@ final private[manager] class StateManagerEffectHandlers(
       state.copy(
         buffers = clearBufferAnimations(state),
         themeTransition = None,
-        uiSurfaces = state.uiSurfaces.filterNot(_.content.isInstanceOf[SurfaceContent.GhostOverlay]),
+        uiSurfaces = state.uiSurfaces.filterNot(isGhostOverlay),
         surfaceAnimations = Map.empty,
         windowSitter = com.serenity.animation.WindowSitter.default
       )
@@ -291,10 +291,7 @@ final private[manager] class StateManagerEffectHandlers(
       case com.serenity.config.MotionFamily.CommandSurfaces =>
         cancelSurfaceMotion(isCommandSurface)
       case com.serenity.config.MotionFamily.PinnedPanels =>
-        cancelSurfaceMotion(surface =>
-          surface.presentation.isInstanceOf[SurfacePresentation.Pinned] ||
-            surface.presentation.isInstanceOf[SurfacePresentation.Expanded]
-        )
+        cancelSurfaceMotion(isDockedSurface)
       case com.serenity.config.MotionFamily.UiTransitions =>
         stateRef.update(state =>
           state.copy(
@@ -325,9 +322,7 @@ final private[manager] class StateManagerEffectHandlers(
     stateRef.update { state =>
       val matchingIds = state.uiSurfaces.collect { case surface if matches(surface) => surface.id }.toSet
       state.copy(
-        uiSurfaces = state.uiSurfaces.filterNot(surface =>
-          matches(surface) && surface.content.isInstanceOf[SurfaceContent.GhostOverlay]
-        ),
+        uiSurfaces = state.uiSurfaces.filterNot(surface => matches(surface) && isGhostOverlay(surface)),
         surfaceAnimations = state.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
       )
     }
@@ -340,6 +335,18 @@ final private[manager] class StateManagerEffectHandlers(
           case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
           case _                                                                                => false
       case _ => false
+
+  /** A transient close-fade ghost, which is discarded rather than animated when motion is cancelled. */
+  private def isGhostOverlay(surface: UiSurface): Boolean =
+    surface.content match
+      case SurfaceContent.GhostOverlay(_, _) => true
+      case _                                 => false
+
+  /** A surface occupying a workspace dock, whether at its pinned size or expanded over the editor. */
+  private def isDockedSurface(surface: UiSurface): Boolean =
+    surface.presentation match
+      case SurfacePresentation.Pinned(_, _) | SurfacePresentation.Expanded(_, _) => true
+      case _                                                                     => false
 
   private def updateCustomMotionConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig

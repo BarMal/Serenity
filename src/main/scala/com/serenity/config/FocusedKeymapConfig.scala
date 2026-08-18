@@ -243,7 +243,7 @@ enum PeekKeyAction extends KeymapEventAction[PeekInputEvent]:
       case Dismiss       => PeekInputEvent.Dismiss
       case OtherInput    => PeekInputEvent.OtherInput
 
-case class EditorKeymapConfig(
+final case class EditorKeymapConfig(
     bindings: Map[EditorKeyAction, List[HotkeyTrigger]] = EditorKeymapConfig.defaultBindings
 ):
   def bindingsFor(action: EditorKeyAction): List[HotkeyTrigger] =
@@ -338,7 +338,7 @@ object EditorKeymapConfig:
           .map(EditorKeymapConfig(_))
       )
 
-case class CommandRunnerKeymapConfig(
+final case class CommandRunnerKeymapConfig(
     bindings: Map[CommandRunnerKeyAction, List[HotkeyTrigger]] = CommandRunnerKeymapConfig.defaultBindings
 ):
   def bindingsFor(action: CommandRunnerKeyAction): List[HotkeyTrigger] =
@@ -410,7 +410,7 @@ object CommandRunnerKeymapConfig:
           .map(CommandRunnerKeymapConfig(_))
       )
 
-case class ModalKeymapConfig(
+final case class ModalKeymapConfig(
     bindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeymapConfig.defaultBindings
 ):
   def bindingsFor(action: ModalKeyAction): List[HotkeyTrigger] =
@@ -467,7 +467,7 @@ object ModalKeymapConfig:
           .map(ModalKeymapConfig(_))
       )
 
-case class PanelKeymapConfig(
+final case class PanelKeymapConfig(
     bindings: Map[PanelKeyAction, List[HotkeyTrigger]] = PanelKeymapConfig.defaultBindings
 ):
   def bindingsFor(action: PanelKeyAction): List[HotkeyTrigger] =
@@ -520,7 +520,7 @@ object PanelKeymapConfig:
           .map(PanelKeymapConfig(_))
       )
 
-case class PeekKeymapConfig(
+final case class PeekKeymapConfig(
     bindings: Map[PeekKeyAction, List[HotkeyTrigger]] = PeekKeymapConfig.defaultBindings
 ):
   def bindingsFor(action: PeekKeyAction): List[HotkeyTrigger] =
@@ -573,7 +573,7 @@ object PeekKeymapConfig:
           .map(PeekKeymapConfig(_))
       )
 
-case class FocusedKeymapConfig(
+final case class FocusedKeymapConfig(
     editor: EditorKeymapConfig = EditorKeymapConfig(),
     commandRunner: CommandRunnerKeymapConfig = CommandRunnerKeymapConfig(),
     modal: ModalKeymapConfig = ModalKeymapConfig(),

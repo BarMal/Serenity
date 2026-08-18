@@ -21,7 +21,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  private case class TestFileDialog(saveSelection: Option[java.nio.file.Path]) extends FileDialog:
+  final private case class TestFileDialog(saveSelection: Option[java.nio.file.Path]) extends FileDialog:
     override def chooseOpenFile(initialDirectory: Option[java.nio.file.Path]): IO[Option[java.nio.file.Path]] =
       IO.pure(None)
 

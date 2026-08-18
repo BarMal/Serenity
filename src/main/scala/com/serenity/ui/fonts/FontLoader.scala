@@ -17,7 +17,7 @@ object FontLoader:
     case Manual extends TextScaleMode("manual")
     case Off    extends TextScaleMode("off")
 
-  case class FontConfig(
+  final case class FontConfig(
       codeFontFamily: String = BundledCodeFontFamily,
       textFontFamily: String = Font.SANS_SERIF,
       uiFontFamily: String = Font.SANS_SERIF,

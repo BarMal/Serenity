@@ -72,7 +72,7 @@ private[manager] object LspEffectQueue:
     case Immediate(effect: LspEffect)
     case Change(uri: String)
 
-  private case class PendingChange(languageId: com.serenity.lsp.config.LanguageId, text: String)
+  final private case class PendingChange(languageId: com.serenity.lsp.config.LanguageId, text: String)
 
   def create: IO[LspEffectQueue] =
     for
@@ -81,7 +81,7 @@ private[manager] object LspEffectQueue:
       documentVersions <- Ref.of[IO, Map[String, Int]](Map.empty)
     yield new LspEffectQueue(queue, pendingChanges, documentVersions)
 
-private[manager] case class ManagedProjectTask(
+final private[manager] case class ManagedProjectTask(
     finished: Deferred[IO, Unit],
     fiber: Fiber[IO, Throwable, Unit]
 )
@@ -105,7 +105,7 @@ private[manager] object ProjectTaskOwnership:
       }
     }
 
-private[manager] case class StateManagerRuntime(
+final private[manager] case class StateManagerRuntime(
     stateRef: Ref[IO, AppState],
     undoRef: Ref[IO, UndoState],
     themeNamesRef: Ref[IO, List[String]],

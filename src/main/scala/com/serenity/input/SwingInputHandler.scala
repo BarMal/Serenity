@@ -30,8 +30,8 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     case Move, Drag
 
   sealed private trait MovementState
-  private case class AvailableMovement(event: Event) extends MovementState
-  private case object ClaimedMovement                extends MovementState
+  final private case class AvailableMovement(event: Event) extends MovementState
+  private case object ClaimedMovement                      extends MovementState
 
   private class MovementSlot(val kind: MovementKind, event: Event):
     private val state = new AtomicReference[MovementState](AvailableMovement(event))
@@ -50,10 +50,10 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
         case ClaimedMovement          => None
 
   sealed private trait QueuedInput
-  private case class QueuedKey(info: KeyStrokeInfo)     extends QueuedInput
-  private case class QueuedMouse(event: Event)          extends QueuedInput
-  private case class QueuedMovement(slot: MovementSlot) extends QueuedInput
-  private case object QueuedShutdown                    extends QueuedInput
+  final private case class QueuedKey(info: KeyStrokeInfo)     extends QueuedInput
+  final private case class QueuedMouse(event: Event)          extends QueuedInput
+  final private case class QueuedMovement(slot: MovementSlot) extends QueuedInput
+  private case object QueuedShutdown                          extends QueuedInput
 
   private val inputQueue         = new ConcurrentLinkedQueue[QueuedInput]()
   private val inputAvailable     = new Semaphore(0)

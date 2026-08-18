@@ -1,18 +1,18 @@
 package com.serenity.state.models
 
-case class FileSearchResult(
+final case class FileSearchResult(
     bufferId: BufferId,
     bufferName: String,
     line: Int,
     lineContent: String
 )
 
-case class FileSearchCursor(
+final case class FileSearchCursor(
     bufferId: BufferId,
     line: Int
 )
 
-case class FileSearchState(
+final case class FileSearchState(
     query: String,
     results: List[FileSearchResult],
     selectedIndex: Int,

@@ -6,7 +6,7 @@ enum Modifier:
   case Shift
   case Meta
 
-case class KeyStrokeInfo(
+final case class KeyStrokeInfo(
     keyType: InputKey,
     character: Option[Char],
     modifiers: Set[Modifier]

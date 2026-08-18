@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 /** Font-derived cell dimensions. Constant with respect to window size — resizing changes the cell count, not the cell
   * size. Derived from FontMetrics at startup and font changes only.
   */
-case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int):
+final case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int):
   def isValid: Boolean        = charWidth > 0 && lineHeight > 0
   def toPixelX(col: Int): Int = col * charWidth
   def toPixelY(row: Int): Int = row * lineHeight

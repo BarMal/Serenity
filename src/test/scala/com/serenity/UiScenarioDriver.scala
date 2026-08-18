@@ -21,7 +21,7 @@ import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 /** Fixed rendering environment for a deterministic, headless UI scenario. */
-case class UiScenarioEnvironment(
+final case class UiScenarioEnvironment(
     viewport: ViewportSize = ViewportSize(100, 30),
     cellMetrics: CellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12),
     deviceScale: Double = 1.0,
@@ -29,7 +29,7 @@ case class UiScenarioEnvironment(
 )
 
 /** Semantic data captured with each rendered scenario frame. */
-case class ScenarioFrameEvidence(
+final case class ScenarioFrameEvidence(
     focus: Focus,
     surfaceRects: Map[SurfaceId, LayoutRect],
     itemRects: Map[SurfaceId, List[LayoutRect]],
@@ -49,25 +49,25 @@ case class ScenarioFrameEvidence(
 )
 
 /** Text and its cell bounds as actually submitted to the render surface. */
-case class ScenarioDrawnText(text: String, bounds: LayoutRect)
+final case class ScenarioDrawnText(text: String, bounds: LayoutRect)
 
 /** A renderer region paired with the semantic colours active while it was painted. */
-case class ScenarioPaintedRegion(bounds: LayoutRect, foreground: Color, background: Color)
+final case class ScenarioPaintedRegion(bounds: LayoutRect, foreground: Color, background: Color)
 
 /** A rounded surface border submitted with its semantic focus or elevation colour. */
-case class ScenarioBorder(bounds: LayoutRect, color: Color)
+final case class ScenarioBorder(bounds: LayoutRect, color: Color)
 
 /** A text-style transition submitted while rendering a scenario frame. */
-case class ScenarioStyleCall(action: String, style: TextStyle)
+final case class ScenarioStyleCall(action: String, style: TextStyle)
 
 /** A layout hit target paired with the text bounds actually drawn into it. */
-case class ScenarioDrawnItem(hitTarget: LayoutRect, textBounds: List[ScenarioDrawnText])
+final case class ScenarioDrawnItem(hitTarget: LayoutRect, textBounds: List[ScenarioDrawnText])
 
 /** The actual preview draw bounds and source window used to compose an inline Markdown frame. */
-case class ScenarioPreviewPlacement(firstSourceLine: Int, firstPreviewRow: Int, bounds: LayoutRect)
+final case class ScenarioPreviewPlacement(firstSourceLine: Int, firstPreviewRow: Int, bounds: LayoutRect)
 
 /** A rendered frame and the semantic evidence used to diagnose assertion failures. */
-case class ScenarioFrame(image: BufferedImage, evidence: ScenarioFrameEvidence)
+final case class ScenarioFrame(image: BufferedImage, evidence: ScenarioFrameEvidence)
 
 /** Deterministic state-pipeline and Java2D renderer driver for UI regression scenarios. */
 final class UiScenarioDriver private (
@@ -407,7 +407,7 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
   private def recordPaint(bounds: LayoutRect): Unit =
     paintedRegionsBuffer += ScenarioPaintedRegion(bounds, foregroundColor.get, backgroundColor.get)
 
-private case class ScenarioDrawnImage(image: BufferedImage, bounds: LayoutRect)
+final private case class ScenarioDrawnImage(image: BufferedImage, bounds: LayoutRect)
 
 object UiScenarioDriver:
 

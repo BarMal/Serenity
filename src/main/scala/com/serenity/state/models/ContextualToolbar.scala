@@ -42,7 +42,7 @@ enum ContextualToolbarHit:
   case DropdownOption(itemId: String, optionIndex: Int)
   case InputDetail(itemId: String)
 
-case class ContextualToolbarState(
+final case class ContextualToolbarState(
     focusedIndex: Int = 0,
     displayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
     detailState: Option[ContextualToolbarDetailState] = None

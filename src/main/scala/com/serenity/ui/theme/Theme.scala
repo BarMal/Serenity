@@ -2,7 +2,7 @@ package com.serenity.ui.theme
 
 import java.awt.Color
 
-case class Theme(
+final case class Theme(
     name: String,
     foreground: Color,
     background: Color,
@@ -63,7 +63,7 @@ case class Theme(
   def backgroundColor: Color = background
   def cursorColor: Color     = cursor
 
-case class ThemeColor(
+final case class ThemeColor(
     foreground: Color,
     background: Color,
     style: TextStyle = TextStyle.normal,
@@ -71,7 +71,7 @@ case class ThemeColor(
 )
 
 /** Semantic status treatments kept distinct from selection, focus, and regular text roles. */
-case class ThemeStatus(error: ThemeColor, warning: ThemeColor)
+final case class ThemeStatus(error: ThemeColor, warning: ThemeColor)
 
 object Theme:
 
