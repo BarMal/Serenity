@@ -9,79 +9,61 @@ import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
 import org.typelevel.log4cats.Logger
 
+/** The fonts and cell metrics the renderer is currently drawing with.
+  *
+  * Held as a single reference to one immutable [[RuntimeDisplayState.Snapshot]]. The six values move together -- each
+  * metric is derived from its font -- so publishing them independently would let a reader observe a new font beside a
+  * stale metric and lay text out at the wrong advance. Callers that read more than one value should take [[snapshot]]
+  * once and read from it, rather than calling several accessors in turn.
+  */
 final class RuntimeDisplayState private (
-    codeFontRef: AtomicReference[Font],
-    textFontRef: AtomicReference[Font],
-    uiFontRef: AtomicReference[Font],
-    codeMetricsRef: AtomicReference[CellMetrics],
-    textMetricsRef: AtomicReference[CellMetrics],
-    uiMetricsRef: AtomicReference[CellMetrics]
+    current: AtomicReference[RuntimeDisplayState.Snapshot]
 ):
 
-  def codeFont: Font =
-    codeFontRef.get()
+  /** The current fonts and metrics as one coherent value. Prefer this wherever more than one is needed. */
+  def snapshot: RuntimeDisplayState.Snapshot =
+    current.get()
 
-  def textFont: Font =
-    textFontRef.get()
+  def codeFont: Font = snapshot.codeFont
+  def textFont: Font = snapshot.textFont
+  def uiFont: Font   = snapshot.uiFont
 
-  def uiFont: Font =
-    uiFontRef.get()
+  def codeMetrics: CellMetrics = snapshot.codeMetrics
+  def textMetrics: CellMetrics = snapshot.textMetrics
+  def uiMetrics: CellMetrics   = snapshot.uiMetrics
 
-  def codeMetrics: CellMetrics =
-    codeMetricsRef.get()
+  /** Metrics for the primary editor grid, which is sized by the code font. */
+  def primaryMetrics: CellMetrics = snapshot.codeMetrics
 
-  def textMetrics: CellMetrics =
-    textMetricsRef.get()
-
-  def uiMetrics: CellMetrics =
-    uiMetricsRef.get()
-
-  def primaryMetrics: CellMetrics =
-    codeMetricsRef.get()
-
+  /** Load `config` and publish it as one generation, or keep the current one if its metrics are unusable. */
   def update(config: FontConfig)(using logger: Logger[IO]): IO[Unit] =
     RuntimeDisplayState
       .load(config)
-      .flatMap { snapshot =>
-        if snapshot.codeMetrics.isValid && snapshot.textMetrics.isValid && snapshot.uiMetrics.isValid then
-          IO {
-            codeFontRef.set(snapshot.codeFont)
-            textFontRef.set(snapshot.textFont)
-            uiFontRef.set(snapshot.uiFont)
-            codeMetricsRef.set(snapshot.codeMetrics)
-            textMetricsRef.set(snapshot.textMetrics)
-            uiMetricsRef.set(snapshot.uiMetrics)
-          }
+      .flatMap { next =>
+        if next.isValid then IO(current.set(next))
         else
           logger.warn(
             "Rejecting font config: invalid metrics " +
-              s"(code charWidth=${snapshot.codeMetrics.charWidth}, text charWidth=${snapshot.textMetrics.charWidth}, ui charWidth=${snapshot.uiMetrics.charWidth}). " +
+              s"(code charWidth=${next.codeMetrics.charWidth}, text charWidth=${next.textMetrics.charWidth}, ui charWidth=${next.uiMetrics.charWidth}). " +
               "Keeping previous fonts."
           )
       }
 
 object RuntimeDisplayState:
 
-  final private case class Snapshot(
+  /** One generation of runtime typography: three fonts and the cell metrics derived from them. */
+  final case class Snapshot(
       codeFont: Font,
       textFont: Font,
       uiFont: Font,
       codeMetrics: CellMetrics,
       textMetrics: CellMetrics,
       uiMetrics: CellMetrics
-  )
+  ):
+    def isValid: Boolean = codeMetrics.isValid && textMetrics.isValid && uiMetrics.isValid
 
   def create(config: FontConfig)(using logger: Logger[IO]): IO[RuntimeDisplayState] =
-    load(config).map { snapshot =>
-      new RuntimeDisplayState(
-        new AtomicReference(snapshot.codeFont),
-        new AtomicReference(snapshot.textFont),
-        new AtomicReference(snapshot.uiFont),
-        new AtomicReference(snapshot.codeMetrics),
-        new AtomicReference(snapshot.textMetrics),
-        new AtomicReference(snapshot.uiMetrics)
-      )
-    }
+    load(config).map(snapshot => new RuntimeDisplayState(new AtomicReference(snapshot)))
 
   private def load(config: FontConfig)(using logger: Logger[IO]): IO[Snapshot] =
     for

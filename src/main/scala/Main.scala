@@ -41,10 +41,11 @@ object Main extends IOApp:
         .fold(IO.unit)(message => logger.warn(message))
       appConfig = resolveAutoTextScale(configLoad.config, DisplayScale.defaultDeviceScale.textScale)
       displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
+      initialDisplay = displayState.snapshot
       _ <- (
         SwingWindow.resource(
-          displayState.primaryMetrics,
-          displayState.uiMetrics,
+          initialDisplay.codeMetrics,
+          initialDisplay.uiMetrics,
           appConfig.windowChromeMode,
           appConfig.preferredWindowSize,
           initialWindowSitter = WindowSitter.fromConfig(appConfig.windowSitterConfig),
@@ -59,14 +60,18 @@ object Main extends IOApp:
           val initialScaleSync =
             if actualAppConfig.fontConfig != appConfig.fontConfig then
               displayState.update(actualAppConfig.fontConfig) >>
-                IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics, displayState.uiMetrics))
+                IO.blocking {
+                  val display = displayState.snapshot
+                  swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
+                }
             else IO.unit
 
           def syncDisplayMetrics(): IO[Unit] =
             Trace.timed("render.syncDisplayMetrics") {
               IO {
-                val metrics = displayState.primaryMetrics
-                if swingWin.metrics != metrics then swingWin.updateMetrics(metrics, displayState.uiMetrics)
+                val display = displayState.snapshot
+                if swingWin.metrics != display.codeMetrics then
+                  swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
               }.evalOn(paintEc)
             }
 
@@ -100,63 +105,21 @@ object Main extends IOApp:
                 ),
               checkResize = IO(swingWin.doResizeIfNecessary()),
               renderFull = (state, vis, cc) =>
-                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO {
-                  if vis then
-                    val _ = Renderer.renderWithCursorOverlay(
-                      state,
-                      swingWin,
-                      displayState.codeFont,
-                      displayState.textFont,
-                      displayState.uiFont,
-                      displayState.uiMetrics,
-                      cc
-                    )
-                    ()
-                  else
-                    Renderer.render(
-                      state,
-                      cursorVisible = false,
-                      swingWin,
-                      displayState.codeFont,
-                      displayState.textFont,
-                      displayState.uiFont,
-                      displayState.uiMetrics,
-                      None,
-                      repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(vis)
-                    )
-                }.evalOn(paintEc),
+                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
+                  IO(paintFullFrame(state, vis, cc, swingWin, displayState.snapshot)).evalOn(paintEc),
               renderCursorOnly = (state, vis, cc) =>
-                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> IO {
-                  val rendered = Renderer.renderCursorOnly(
-                    state,
-                    vis,
-                    swingWin,
-                    displayState.codeFont,
-                    displayState.textFont,
-                    displayState.uiFont,
-                    displayState.uiMetrics,
-                    cc
-                  )
-                  if !rendered then
-                    Renderer.render(
-                      state,
-                      vis,
-                      swingWin,
-                      displayState.codeFont,
-                      displayState.textFont,
-                      displayState.uiFont,
-                      displayState.uiMetrics,
-                      cc,
-                      repaintOnFlush = true
-                    )
-                }.evalOn(paintEc),
+                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
+                  IO(paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot)).evalOn(paintEc),
               appConfig = actualAppConfig,
               makeStateManager = Some(logger =>
                 com.serenity.state.manager.StateManager.apply(
                   logger,
                   onFontConfigChanged = config =>
                     displayState.update(config) >>
-                      IO.blocking(swingWin.updateMetrics(displayState.primaryMetrics, displayState.uiMetrics)),
+                      IO.blocking {
+                        val display = displayState.snapshot
+                        swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
+                      },
                   deviceTextScaleProvider = IO.blocking(swingWin.detectedDeviceTextScale),
                   configPersistencePath = Some(ConfigManager.defaultConfigPath),
                   windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
@@ -174,3 +137,71 @@ object Main extends IOApp:
 
   private def resolveAutoTextScale(config: AppConfig, detectedTextScale: Double): AppConfig =
     config.withFontConfig(config.fontConfig.resolveAutoTextScale(detectedTextScale))
+
+  /** Paint a whole frame.
+    *
+    * `display` is taken once by the caller and threaded through: reading each font and metric from the runtime
+    * separately would let a concurrent font-config change land mid-frame and paint glyphs at one generation's advance
+    * with another's metrics.
+    */
+  private def paintFullFrame(
+    state: com.serenity.state.models.AppState,
+    cursorVisible: Boolean,
+    cursorColor: Option[java.awt.Color],
+    window: SwingWindow,
+    display: RuntimeDisplayState.Snapshot
+  ): Unit =
+    if cursorVisible then
+      val _ = Renderer.renderWithCursorOverlay(
+        state,
+        window,
+        display.codeFont,
+        display.textFont,
+        display.uiFont,
+        display.uiMetrics,
+        cursorColor
+      )
+      ()
+    else
+      Renderer.render(
+        state,
+        cursorVisible = false,
+        window,
+        display.codeFont,
+        display.textFont,
+        display.uiFont,
+        display.uiMetrics,
+        None,
+        repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible)
+      )
+
+  /** Repaint only the cursor overlay, falling back to a full frame when the overlay path declines. */
+  private def paintCursorFrame(
+    state: com.serenity.state.models.AppState,
+    cursorVisible: Boolean,
+    cursorColor: Option[java.awt.Color],
+    window: SwingWindow,
+    display: RuntimeDisplayState.Snapshot
+  ): Unit =
+    val rendered = Renderer.renderCursorOnly(
+      state,
+      cursorVisible,
+      window,
+      display.codeFont,
+      display.textFont,
+      display.uiFont,
+      display.uiMetrics,
+      cursorColor
+    )
+    if !rendered then
+      Renderer.render(
+        state,
+        cursorVisible,
+        window,
+        display.codeFont,
+        display.textFont,
+        display.uiFont,
+        display.uiMetrics,
+        cursorColor,
+        repaintOnFlush = true
+      )
