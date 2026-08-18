@@ -1,0 +1,14 @@
+# JVM options for sbt, read by the launcher script (including sbt/setup-sbt in CI).
+#
+# The project previously ran on the JVM's default heap. That was already marginal for the style job,
+# which runs `scalafmtAll "Compile / scalafix" "Test / scalafix"` and so holds SemanticDB output for
+# all 505 source files plus the Scalafix rule classpath in memory at once. Adding three test-scope
+# dependencies in #1013 pushed it over into `OutOfMemoryError: Java heap space`.
+#
+# 4g leaves headroom on a standard GitHub runner. Metaspace is raised because sbt loads the compiler,
+# the Scalafix rules and the WartRemover plugin into separate classloaders. The larger stack is for
+# the Scala 3 typer, which recurses deeply on this codebase's larger files.
+-Xmx4g
+-Xss16m
+-XX:MaxMetaspaceSize=1g
+-XX:+UseG1GC

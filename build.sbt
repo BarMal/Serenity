@@ -163,6 +163,12 @@ libraryDependencies ++= Seq(
   "co.fs2"                %% "fs2-core"        % "3.13.0",
   "co.fs2"                %% "fs2-io"          % "3.13.0",
   "org.scalatest"         %% "scalatest"       % "3.2.19" % "test",
+  // Property and law testing, test scope only -- the assembled JAR is unchanged.
+  // scalatestplus is pinned to the release matching ScalaTest 3.2.19 and brings ScalaCheck with it.
+  // cats-laws tracks the cats-core 2.13.0 that cats-effect 3.7.0 already resolves, so no eviction.
+  "org.scalatestplus"     %% "scalacheck-1-18" % "3.2.19.0" % "test",
+  "org.typelevel"         %% "cats-laws"       % "2.13.0"   % "test",
+  "org.typelevel"         %% "discipline-scalatest" % "2.3.0" % "test",
   "com.github.pureconfig" %% "pureconfig-core" % "0.17.9"
 )
 

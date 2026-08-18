@@ -69,6 +69,23 @@ To take a deliberate exception, annotate the declaration and say why:
 case class Leaf(...)   // subclassed by RopeSpec to prove search never materialises the rope
 ```
 
+**Property and law testing** covers the contracts examples cannot. Most suites are example-based and
+should stay that way — "this keystroke sequence produces this buffer" is exactly what an example is
+for. Reach for a property when the claim holds over *all* inputs rather than chosen ones:
+
+- Typeclass instances have laws. `checkAll("Order[BufferId]", OrderTests[BufferId].order)` in
+  `testkit/IdentifierLawSpec.scala` is the pattern; mix in `FunSuiteDiscipline` and `Configuration`.
+- Data structures have representation invariants. `rope/RopePropertySpec.scala` generates tree shapes
+  rather than hand-building them, so rope behaviour is tested independently of shape as
+  `docs/coding-standards.md` requires.
+
+Shared generators live in `testkit/Generators.scala` — add to that rather than defining `Arbitrary`
+instances per suite. If you write a generator whose output could silently degenerate, assert its
+variety: `RopePropertySpec` has a property doing exactly that, because a generator that only emitted
+flat leaves would make every shape-independence claim in the file pass while testing nothing.
+
+Dependencies (`scalacheck-1-18`, `cats-laws`, `discipline-scalatest`) are `% Test` only.
+
 **`architectureCheck`** enforces size and layering against `project/architecture-baseline.tsv`:
 methods ≤ 80 lines, files ≤ 600 lines, and no `java.awt`/layout-engine imports inside
 `state/reducers`. It is a ratchet, not a threshold — the baseline lists what is already over, and the
