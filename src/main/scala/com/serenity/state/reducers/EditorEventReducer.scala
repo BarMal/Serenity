@@ -1767,7 +1767,7 @@ object EditorEventReducer:
     direction: Int
   ): Option[CursorPosition] =
     Option
-      .when(usesMeasuredVerticalNavigation(currentState.config.wordWrapEnabled)) {
+      .when(currentState.config.wordWrapEnabled) {
         moveVerticalByLayout(cursor, buffer, currentState, preferredXPx, direction)
       }
       .flatten
@@ -1807,13 +1807,10 @@ object EditorEventReducer:
     direction: Int
   ): Option[CursorPosition] =
     Option
-      .when(usesMeasuredVerticalNavigation(wordWrapEnabled)) {
+      .when(wordWrapEnabled) {
         moveVerticalBySnapshot(cursor, snap, preferredXPx, direction)
       }
       .flatten
-
-  private def usesMeasuredVerticalNavigation(wordWrapEnabled: Boolean): Boolean =
-    wordWrapEnabled
 
   private def previewFontForBuffer(
     buffer: Buffer,

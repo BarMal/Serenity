@@ -34,8 +34,3 @@ object NoOpLocalEventHandler extends LocalEventHandler:
 
 trait TypedFocusedComponent[E0 <: Event] extends FocusedComponent, LocalEventHandler:
   final type E = E0
-
-trait ComponentState
-
-object ComponentState:
-  case object Empty extends ComponentState
