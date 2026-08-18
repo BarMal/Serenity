@@ -7,7 +7,7 @@ import com.serenity.keystroke.events.*
 object TextHotkeyConverters:
 
   private val actionEvents: List[(HotkeyAction, Event)] = List(
-    HotkeyAction.Save                     -> Save,
+    HotkeyAction.Save                     -> SaveFile,
     HotkeyAction.Quit                     -> Quit,
     HotkeyAction.Undo                     -> Undo,
     HotkeyAction.Redo                     -> Redo,

@@ -7,6 +7,34 @@ import org.scalatest.matchers.should.Matchers
 
 class EventHierarchySpec extends AnyFlatSpec with Matchers:
 
+  /** Every trait in the event sum. An event may extend exactly one of these directly; mixing two makes dispatch depend
+    * on the order its cases happen to appear in, which is what #988 removes.
+    */
+  private val eventTraits: Set[Class[?]] =
+    Set(
+      classOf[AppEvent],
+      classOf[GlobalAppEvent],
+      classOf[EditorEvent],
+      classOf[SystemEvent],
+      classOf[TextEntryEvent],
+      classOf[TextInputEvent],
+      classOf[DeletionEvent],
+      classOf[NavigationEvent],
+      classOf[ScrollEvent],
+      classOf[ModalRequestEvent],
+      classOf[FileEvent],
+      classOf[ThemeEvent],
+      classOf[CommandRunnerEvent],
+      classOf[ModalInputEvent],
+      classOf[StartupPageEvent],
+      classOf[PanelInputEvent],
+      classOf[PeekInputEvent],
+      classOf[MouseInputEvent]
+    )
+
+  private def directEventParents(event: Event): List[String] =
+    event.getClass.getInterfaces.filter(eventTraits.contains).map(_.getSimpleName).toList.sorted
+
   "Event hierarchy" should "classify editor input events with strong types" in {
     InsertChar('a').isInstanceOf[EditorEvent] shouldBe true
     InsertChar('a').isInstanceOf[TextInputEvent] shouldBe true
@@ -22,15 +50,78 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
     MoveLeft.isInstanceOf[NavigationEvent] shouldBe true
   }
 
-  it should "classify hotkeys as application events while preserving text-entry compatibility" in {
-    Save.isInstanceOf[AppEvent] shouldBe true
-    Save.isInstanceOf[HotkeyEvent] shouldBe true
-    Save.isInstanceOf[TextEntryEvent] shouldBe true
+  it should "give every event exactly one direct parent in the sum" in {
+    val events: List[Event] =
+      List(
+        InsertChar('a'),
+        DeleteBackward,
+        MoveLeft,
+        ScrollUp(1),
+        OpenFind,
+        SelectAll,
+        Copy,
+        Paste,
+        Cut,
+        Undo,
+        Redo,
+        ToggleSyntaxHighlighting,
+        OpenFile,
+        SaveFile,
+        SaveAsFile,
+        Quit,
+        ToggleCommandRunner,
+        ToggleContextualToolbar,
+        NewTab,
+        CloseTab,
+        NextTab,
+        PreviousTab,
+        FileSearch,
+        SwitchTheme("dark"),
+        RunnerSubmit,
+        ModalSubmit,
+        StartupPageSubmit,
+        ResizeEvent(ViewportSize(120, 40))
+      )
 
-    ToggleCommandRunner.isInstanceOf[AppEvent] shouldBe true
-    NextTab.isInstanceOf[AppEvent] shouldBe true
-    PreviousTab.isInstanceOf[AppEvent] shouldBe true
+    val offenders = events.map(event => event.toString -> directEventParents(event)).filter(_._2.sizeIs != 1)
+
+    offenders shouldBe empty
   }
+
+  it should "route tab and window hotkeys as global application events" in {
+    val globals: List[Event] =
+      List(Quit, ToggleCommandRunner, ToggleContextualToolbar, NewTab, CloseTab, NextTab, PreviousTab, FileSearch)
+
+    globals.foreach { event =>
+      withClue(s"$event should be a GlobalAppEvent: ") {
+        event.isInstanceOf[GlobalAppEvent] shouldBe true
+      }
+      withClue(s"$event should not also be an editor event: ") {
+        event.isInstanceOf[EditorEvent] shouldBe false
+      }
+    }
+  }
+
+  it should "route file hotkeys as file events rather than editor events" in {
+    OpenFile.isInstanceOf[FileEvent] shouldBe true
+    SaveFile.isInstanceOf[FileEvent] shouldBe true
+
+    // The negative direction is not asserted here because it no longer can be: with FileEvent sealed and disjoint from
+    // EditorEvent, `OpenFile.isInstanceOf[EditorEvent]` is a compile error (E030, unreachable), not a false assertion.
+    // The compiler proves it, which is what sealing bought.
+    directEventParents(OpenFile) shouldBe List("FileEvent")
+    directEventParents(SaveFile) shouldBe List("FileEvent")
+  }
+
+  it should "keep clipboard and editing hotkeys in the text-entry family" in
+    List(Copy, Paste, Cut, Undo, Redo, ToggleSyntaxHighlighting).foreach { event =>
+      withClue(s"$event should be a TextEntryEvent: ") {
+        event.isInstanceOf[TextEntryEvent] shouldBe true
+      }
+      withClue(s"$event should not be an application event: ") {
+        event.isInstanceOf[AppEvent] shouldBe false
+      }
+    }
 
   it should "classify system-originated events separately from editor actions" in {
     ResizeEvent(ViewportSize(120, 40)).isInstanceOf[SystemEvent] shouldBe true

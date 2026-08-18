@@ -1,6 +1,6 @@
 package com.serenity.keystroke.events
 
-trait TextEntryEvent extends EditorEvent
+sealed trait TextEntryEvent extends EditorEvent
 
 sealed trait TextInputEvent extends TextEntryEvent
 
@@ -45,3 +45,9 @@ case object OpenFind                    extends ModalRequestEvent
 case object Escape                      extends TextEntryEvent
 case object TabKey                      extends TextEntryEvent
 case object ReverseTabKey               extends TextEntryEvent
+case object Copy                        extends TextEntryEvent
+case object Paste                       extends TextEntryEvent
+case object Cut                         extends TextEntryEvent
+case object Undo                        extends TextEntryEvent
+case object Redo                        extends TextEntryEvent
+case object ToggleSyntaxHighlighting    extends TextEntryEvent

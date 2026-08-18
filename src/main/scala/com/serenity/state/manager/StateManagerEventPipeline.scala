@@ -143,26 +143,12 @@ final private[manager] class StateManagerEventPipeline(
 
   private def dispatchEvent(event: Event, prevState: AppState): cats.effect.IO[Unit] =
     event match
-      case Undo => applyUndo(prevState)
-      case Redo => applyRedo(prevState)
-      case resize: com.serenity.keystroke.events.ResizeEvent =>
-        resizeEvents.apply(resize, prevState)
+      case Undo                     => applyUndo(prevState)
+      case Redo                     => applyRedo(prevState)
+      case resize: ResizeEvent      => resizeEvents.apply(resize, prevState)
+      case appEvent: GlobalAppEvent => dispatchGlobalAppEvent(appEvent, prevState)
       case systemEvent: SystemEvent =>
         applyReducerResult(SystemEventReducer.reduce(systemEvent, prevState), prevState)
-      case com.serenity.keystroke.events.CloseTab =>
-        beginCloseAction(CloseScope.Current, prevState)
-      case com.serenity.keystroke.events.Quit =>
-        beginCloseAction(CloseScope.Quit, prevState)
-      case appEvent: GlobalAppEvent =>
-        val registry = CommandRegistry.withToggleUI
-        applyReducerResult(AppEventReducer.reduce(appEvent, prevState, registry)(using balance), prevState) >>
-          (appEvent match
-            case ToggleCommandRunner => hydrateCommandRunnerUiPresets
-            case _                   => cats.effect.IO.unit) >>
-          (appEvent match
-            case NextTab     => applyPaneFlowAnimation(SweepDirection.Backward)
-            case PreviousTab => applyPaneFlowAnimation(SweepDirection.Forward)
-            case _           => cats.effect.IO.unit)
       case themeEvent: ThemeEvent =>
         applyReducerResult(ThemeEventReducer.reduce(themeEvent, prevState), prevState)
       case fileEvent: FileEvent =>
@@ -193,6 +179,20 @@ final private[manager] class StateManagerEventPipeline(
 
         logCommandRunnerEvent >>
           applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
+
+  /** Routes a global application event by type alone: `CloseTab` and `Quit` previously had to precede the
+    * `GlobalAppEvent` branch or they silently took the reducer path instead of closing anything.
+    */
+  private def dispatchGlobalAppEvent(event: GlobalAppEvent, prevState: AppState): cats.effect.IO[Unit] =
+    val registry = CommandRegistry.withToggleUI
+    def reduced  = applyReducerResult(AppEventReducer.reduce(event, prevState, registry)(using balance), prevState)
+    event match
+      case CloseTab                                      => beginCloseAction(CloseScope.Current, prevState)
+      case Quit                                          => beginCloseAction(CloseScope.Quit, prevState)
+      case ToggleCommandRunner                           => reduced >> hydrateCommandRunnerUiPresets
+      case NextTab                                       => reduced >> applyPaneFlowAnimation(SweepDirection.Backward)
+      case PreviousTab                                   => reduced >> applyPaneFlowAnimation(SweepDirection.Forward)
+      case ToggleContextualToolbar | NewTab | FileSearch => reduced
 
   private def enqueueChangedLspDocuments(previousState: AppState): cats.effect.IO[Unit] =
     stateRef.get.flatMap { currentState =>
