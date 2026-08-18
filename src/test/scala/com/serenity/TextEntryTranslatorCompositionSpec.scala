@@ -49,6 +49,13 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     quit.isInstanceOf[AppEvent] shouldBe true
   }
 
+  it should "translate the save hotkey into a file-save event" in {
+    val save = translator.translate(KeyStrokeInfo(InputKey.Character, Some('s'), Set(Modifier.Ctrl)))
+
+    save shouldBe SaveFile
+    save.isInstanceOf[FileEvent] shouldBe true
+  }
+
   it should "translate Ctrl+A into select-all in the editor event family" in {
     val selectAll = translator.translate(KeyStrokeInfo(InputKey.Character, Some('a'), Set(Modifier.Ctrl)))
 
