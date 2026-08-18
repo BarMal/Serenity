@@ -1,6 +1,6 @@
 package com.serenity.keystroke.events
 
-trait ModalInputEvent extends Event
+sealed trait ModalInputEvent extends Event
 
 final case class ModalInsertChar(char: Char)                           extends ModalInputEvent
 case object ModalDeleteBackward                                        extends ModalInputEvent
