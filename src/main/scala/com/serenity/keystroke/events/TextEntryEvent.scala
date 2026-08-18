@@ -2,15 +2,15 @@ package com.serenity.keystroke.events
 
 trait TextEntryEvent extends EditorEvent
 
-trait TextInputEvent extends TextEntryEvent
+sealed trait TextInputEvent extends TextEntryEvent
 
-trait DeletionEvent extends TextEntryEvent
+sealed trait DeletionEvent extends TextEntryEvent
 
-trait NavigationEvent extends TextEntryEvent
+sealed trait NavigationEvent extends TextEntryEvent
 
-trait ScrollEvent extends TextEntryEvent
+sealed trait ScrollEvent extends TextEntryEvent
 
-trait ModalRequestEvent extends TextEntryEvent
+sealed trait ModalRequestEvent extends TextEntryEvent
 
 final case class InsertChar(char: Char) extends TextInputEvent
 case object DeleteBackward              extends DeletionEvent
