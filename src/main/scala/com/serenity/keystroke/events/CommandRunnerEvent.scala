@@ -29,21 +29,24 @@ final case class RunnerRecordBinding(
 
 object CommandRunnerEvent:
 
+  /** Tab moves between command categories here; the runner is the only surface that accepts a paste. */
+  given SurfaceInput[CommandRunnerEvent] with
+
+    def fromIntent(intent: FocusIntent): Option[CommandRunnerEvent] =
+      intent match
+        case FocusIntent.Insert(char)        => Some(RunnerInsertChar(char))
+        case FocusIntent.DeleteBackward      => Some(RunnerDeleteBackward)
+        case FocusIntent.DeleteForward       => Some(RunnerDeleteForward)
+        case FocusIntent.DeleteWordBackward  => Some(RunnerDeleteWordBackward)
+        case FocusIntent.DeleteWordForward   => Some(RunnerDeleteWordForward)
+        case FocusIntent.Paste               => Some(RunnerPaste)
+        case FocusIntent.Navigate(direction) => Some(RunnerNavigate(direction))
+        case FocusIntent.NextGroup           => Some(RunnerNextCategory)
+        case FocusIntent.PreviousGroup       => Some(RunnerPreviousCategory)
+        case FocusIntent.Submit              => Some(RunnerSubmit)
+        case FocusIntent.Dismiss             => Some(RunnerDismiss)
+
   def fromEvent(event: Event): Option[CommandRunnerEvent] =
     event match
-      case InsertChar(char)                => Some(RunnerInsertChar(char))
-      case DeleteBackward                  => Some(RunnerDeleteBackward)
-      case DeleteForward                   => Some(RunnerDeleteForward)
-      case DeleteWordBackward              => Some(RunnerDeleteWordBackward)
-      case DeleteWordForward               => Some(RunnerDeleteWordForward)
-      case Paste                           => Some(RunnerPaste)
-      case MoveUp                          => Some(RunnerNavigate(Direction.Up))
-      case MoveDown                        => Some(RunnerNavigate(Direction.Down))
-      case MoveLeft                        => Some(RunnerNavigate(Direction.Left))
-      case MoveRight                       => Some(RunnerNavigate(Direction.Right))
-      case TabKey                          => Some(RunnerNextCategory)
-      case ReverseTabKey                   => Some(RunnerPreviousCategory)
-      case Enter | NewLine                 => Some(RunnerSubmit)
-      case Escape                          => Some(RunnerDismiss)
       case runnerEvent: CommandRunnerEvent => Some(runnerEvent)
-      case _                               => None
+      case other                           => SurfaceInput.translate[CommandRunnerEvent](other)
