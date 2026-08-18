@@ -4,13 +4,13 @@ import java.awt.Font
 import java.awt.font.FontRenderContext
 
 /** Stable keyboard-focus identity for an interactive surface primitive. */
-case class SurfaceFocusId(value: String)
+final case class SurfaceFocusId(value: String)
 
 /** Stable action identity for a selectable surface item. */
-case class SurfaceActionId(value: String)
+final case class SurfaceActionId(value: String)
 
 /** One selectable item in a declarative surface action list. */
-case class SurfaceActionItem(
+final case class SurfaceActionItem(
     text: String,
     actionId: SurfaceActionId,
     focusId: SurfaceFocusId,
@@ -36,10 +36,10 @@ enum SurfacePrimitive:
   case ActionList(items: List[SurfaceActionItem])
 
 /** Device-independent intrinsic size produced by the pure surface layout pass. */
-case class SurfaceIntrinsicSize(width: Double, height: Double)
+final case class SurfaceIntrinsicSize(width: Double, height: Double)
 
 /** Immutable text metrics used to resolve proportional surface content in logical pixels. */
-case class SurfaceCompositionMetrics(
+final case class SurfaceCompositionMetrics(
     font: Font,
     fontRenderContext: FontRenderContext,
     lineHeightPx: Double
@@ -70,7 +70,7 @@ enum SurfacePaintLayout:
   case Inline
 
 /** One clipped paint box. Interactive boxes carry the same identity and rectangle as their hit region. */
-case class SurfacePaintBox(
+final case class SurfacePaintBox(
     kind: SurfacePaintKind,
     rect: LogicalPixelRect,
     text: Option[String] = None,
@@ -84,7 +84,7 @@ case class SurfacePaintBox(
 )
 
 /** One semantic pointer target emitted from the same box used for painting. */
-case class SurfaceHitRegion(
+final case class SurfaceHitRegion(
     rect: LogicalPixelRect,
     focusId: SurfaceFocusId,
     actionId: Option[SurfaceActionId],
@@ -100,7 +100,7 @@ enum SurfaceCompositionError:
   case DuplicateActionId(id: SurfaceActionId)
 
 /** Pure, immutable surface layout output shared by rendering, focus traversal, and pointer hit testing. */
-case class ResolvedSurfaceComposition(
+final case class ResolvedSurfaceComposition(
     bounds: LogicalPixelRect,
     intrinsicSize: SurfaceIntrinsicSize,
     paintBoxes: List[SurfacePaintBox],
@@ -135,7 +135,7 @@ object SurfaceComposition:
         )
       )
 
-  private case class ResolvedChildren(
+  final private case class ResolvedChildren(
       paintBoxes: List[SurfacePaintBox],
       hitRegions: List[SurfaceHitRegion],
       focusOrder: List[SurfaceFocusId]

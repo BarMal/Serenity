@@ -3,10 +3,10 @@ package com.serenity.animation
 import java.awt.Color
 
 /** Buffer coordinate key for character animations (column, line) */
-case class CharacterKey(column: Int, line: Int)
+final case class CharacterKey(column: Int, line: Int)
 
 /** Manages animations for all characters using buffer coordinates as keys */
-case class AnimationState(
+final case class AnimationState(
     animations: Map[CharacterKey, AnimatedCell] = Map.empty
 ):
 

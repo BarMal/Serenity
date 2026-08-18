@@ -909,9 +909,9 @@ object EditorEventReducer:
   private def countLines(rope: Rope): Int =
     rope.lineCount
 
-  private case class CursorEntry(cursor: CursorPosition, offset: Int)
-  private case class MultiCursorEdit(ownerIndex: Int, start: Int, end: Int, insertedText: String)
-  private case class MultiCursorVerticalState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
+  final private case class CursorEntry(cursor: CursorPosition, offset: Int)
+  final private case class MultiCursorEdit(ownerIndex: Int, start: Int, end: Int, insertedText: String)
+  final private case class MultiCursorVerticalState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
 
   private def applyMultiCursorInsertion(
     buffer: Buffer,

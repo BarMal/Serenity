@@ -7,14 +7,14 @@ import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ThemeCreatorState
 
-case class SurfaceId(value: String)
+final case class SurfaceId(value: String)
 
 /** An executable option displayed on the startup launch surface. */
 enum StartupActionSection:
   case Session
   case Workflow
 
-case class StartupAction(
+final case class StartupAction(
     id: String,
     label: String,
     command: Command,
@@ -29,11 +29,11 @@ case class StartupAction(
     s"$prefix$label$suffix"
 
 /** Pixel-space click target for an action rendered on the startup page. */
-case class StartupActionBounds(index: Int, xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
+final case class StartupActionBounds(index: Int, xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
   def contains(pixelX: Int, pixelY: Int): Boolean =
     pixelX >= xPx && pixelX < xPx + widthPx && pixelY >= yPx && pixelY < yPx + heightPx
 
-case class StartupPage(
+final case class StartupPage(
     title: String,
     options: List[String] = Nil,
     statusMessage: Option[String] = None,
@@ -147,13 +147,13 @@ case class StartupPage(
   def moveSelectionDown: StartupPage =
     withSelectedIndex(selectedIndex + 1)
 
-case class ContextMenuItem(
+final case class ContextMenuItem(
     id: String,
     label: String,
     command: Command
 )
 
-case class ContextMenu(
+final case class ContextMenu(
     title: String,
     targetFocus: Focus,
     items: List[ContextMenuItem],
@@ -178,7 +178,7 @@ enum SurfacePresentation:
   case Expanded(originalPosition: PanelPosition, originalSize: Int)
 
 /** Focused draft state for editing an authored document comment from the above-cursor lens. */
-case class CommentLensState(
+final case class CommentLensState(
     comment: RenderedComment,
     draft: String,
     cursor: Int,
@@ -213,7 +213,7 @@ enum SurfaceContent:
   /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
   case GhostOverlay(originalContent: SurfaceContent, cachedRect: LayoutRect)
 
-case class UiSurface(
+final case class UiSurface(
     id: SurfaceId,
     content: SurfaceContent,
     presentation: SurfacePresentation,

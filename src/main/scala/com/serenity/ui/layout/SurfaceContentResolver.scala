@@ -25,7 +25,7 @@ enum OverlayRowLayout:
   case Columns
   case PriorityColumns
 
-case class OverlaySegment(
+final case class OverlaySegment(
     text: String,
     selected: Boolean = false,
     tone: OverlayTone = OverlayTone.Normal,
@@ -38,7 +38,7 @@ case class OverlaySegment(
     allocatedWidth: Option[Int] = None
 )
 
-case class OverlayRow(
+final case class OverlayRow(
     plainText: String,
     selected: Boolean = false,
     cursorColumn: Option[Int] = None,
@@ -49,7 +49,7 @@ case class OverlayRow(
     leadingPadding: Int = 0
 )
 
-case class ResolvedSurfaceContent(
+final case class ResolvedSurfaceContent(
     title: Option[String] = None,
     header: Option[OverlayRow] = None,
     rows: List[OverlayRow] = Nil,

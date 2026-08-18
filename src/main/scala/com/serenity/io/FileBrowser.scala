@@ -5,7 +5,7 @@ import java.nio.file.{Path, Paths}
 import cats.effect.IO
 import cats.syntax.traverse.*
 
-case class FileEntry(
+final case class FileEntry(
     path: Path,
     name: String,
     isDirectory: Boolean,
@@ -13,7 +13,7 @@ case class FileEntry(
     size: Long
 )
 
-case class FileBrowser(currentDirectory: Path = Paths.get(System.getProperty("user.dir"))):
+final case class FileBrowser(currentDirectory: Path = Paths.get(System.getProperty("user.dir"))):
 
   /** Get current directory */
   def getCurrentDirectory: IO[Path] = IO.pure(currentDirectory)

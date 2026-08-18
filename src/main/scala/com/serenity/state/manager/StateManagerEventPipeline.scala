@@ -1151,7 +1151,7 @@ final private[manager] class StateManagerEventPipeline(
         }
     }
 
-  private case class PinnedDirectoryMouseHit(
+  final private case class PinnedDirectoryMouseHit(
       surface: UiSurface,
       position: PanelPosition,
       tree: DirectoryTreeData,
@@ -1403,7 +1403,7 @@ final private[manager] class StateManagerEventPipeline(
       case None =>
         state
 
-  private case class PinnedPanelRowHit(
+  final private case class PinnedPanelRowHit(
       surface: UiSurface,
       position: PanelPosition,
       rowIndex: Int,

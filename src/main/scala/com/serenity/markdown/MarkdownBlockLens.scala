@@ -22,7 +22,7 @@ object MarkdownBlockLens:
     val fences = (0 until lineCount).iterator.filter(index => isFenceLine(lineAt(index).getOrElse(""))).toVector
     FenceRangeIndex(fences.grouped(2).collect { case pair if pair.size == 2 => pair.head to pair(1) }.toVector)
 
-  private case class LineSource(lineCount: Int, lineAt: Int => Option[String], fenceProbeWindow: Option[Int]):
+  final private case class LineSource(lineCount: Int, lineAt: Int => Option[String], fenceProbeWindow: Option[Int]):
     def at(index: Int): String =
       lineAt(index).getOrElse("")
 

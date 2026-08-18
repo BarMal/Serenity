@@ -71,7 +71,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     override def eventStream: Stream[IO, Event]                 = Stream.never
     override def shutdown: IO[Unit]                             = IO.unit
 
-  private case class LogEntry(level: String, message: String, error: Option[Throwable])
+  final private case class LogEntry(level: String, message: String, error: Option[Throwable])
 
   private class RecordingLogger(ref: Ref[IO, Vector[LogEntry]]) extends Logger[IO]:
     private def record(level: String, message: String, error: Option[Throwable]): IO[Unit] =

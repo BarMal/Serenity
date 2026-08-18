@@ -4,7 +4,7 @@ import java.awt.{Component, GraphicsEnvironment}
 
 object DisplayScale:
 
-  case class DeviceScale(x: Double, y: Double):
+  final case class DeviceScale(x: Double, y: Double):
     def textScale: Double =
       x.max(y).max(1.0)
 

@@ -8,7 +8,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
 
-case class BufferId(value: Int)
+final case class BufferId(value: Int)
 
 object BufferId:
   given Order[BufferId] = Order.by(_.value)
@@ -26,7 +26,7 @@ enum TypographyRole:
       case Prose | MarkdownSource | MarkdownPreview | Mixed => true
       case Code | Ui                                        => false
 
-case class Selection(anchor: CursorPosition, focus: CursorPosition):
+final case class Selection(anchor: CursorPosition, focus: CursorPosition):
 
   def start: CursorPosition =
     if anchor.line < focus.line || (anchor.line == focus.line && anchor.column <= focus.column) then anchor
@@ -35,7 +35,7 @@ case class Selection(anchor: CursorPosition, focus: CursorPosition):
   def end: CursorPosition =
     if start == anchor then focus else anchor
 
-case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: String):
+final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: String):
 
   def start: CursorPosition =
     if anchor.line < focus.line || (anchor.line == focus.line && anchor.column <= focus.column) then anchor
@@ -51,9 +51,9 @@ case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: 
       cursor.line < end.line || (cursor.line == end.line && cursor.column <= end.column)
     afterStart && beforeEnd
 
-case class VerticalCursorState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
+final case class VerticalCursorState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
 
-case class Buffer(
+final case class Buffer(
     id: BufferId,
     content: Rope,
     filePath: Option[Path] = None,
@@ -105,9 +105,9 @@ case class Buffer(
   // class evolves.
   override def equals(obj: Any): Boolean =
     obj match
-      case that: AnyRef if this.asInstanceOf[AnyRef].eq(that) => true
-      case that: Buffer                                       => productIterator.sameElements(that.productIterator)
-      case _                                                  => false
+      case that: AnyRef if (this: AnyRef).eq(that) => true
+      case that: Buffer                            => productIterator.sameElements(that.productIterator)
+      case _                                       => false
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =

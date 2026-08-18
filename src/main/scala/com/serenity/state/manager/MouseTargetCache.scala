@@ -16,11 +16,11 @@ final private[manager] case class RopeIdentity private (value: Rope):
 
   override def equals(obj: Any): Boolean =
     obj match
-      case that: RopeIdentity => value.asInstanceOf[AnyRef] eq that.value.asInstanceOf[AnyRef]
+      case that: RopeIdentity => (value: AnyRef) eq (that.value: AnyRef)
       case _                  => false
 
   override def hashCode(): Int =
-    System.identityHashCode(value.asInstanceOf[AnyRef])
+    System.identityHashCode(value: AnyRef)
 
 private[manager] object RopeIdentity:
   def apply(value: Rope): RopeIdentity =
@@ -33,7 +33,7 @@ private[manager] object RopeIdentity:
   * app. Every other surface kind keeps its full content, since several of them (context menus, comment lens, directory
   * listings, etc.) do size themselves from content.
   */
-private[manager] case class SurfaceGeometryKey(
+final private[manager] case class SurfaceGeometryKey(
     id: SurfaceId,
     presentation: SurfacePresentation,
     contentKey: Any
@@ -61,7 +61,7 @@ private[manager] object SurfaceGeometryKey:
         other
     SurfaceGeometryKey(surface.id, surface.presentation, contentKey)
 
-private[manager] case class MouseTargetLayoutKey(
+final private[manager] case class MouseTargetLayoutKey(
     viewportSize: ViewportSize,
     fontConfig: FontConfig,
     showGutter: Boolean,
@@ -101,7 +101,7 @@ private[manager] object MouseTargetLayoutKey:
     * viewportSize, so if none of these references changed since the last call, the previously computed key is still
     * correct and the full pane/buffer/surface walk can be skipped.
     */
-  private case class FastPathInputs(
+  final private case class FastPathInputs(
       viewportSize: ViewportSize,
       config: AppConfig,
       layout: Layout,
@@ -185,8 +185,8 @@ private[manager] object MouseTargetLayoutKey:
 /** The single owner of the prepared scene shared by rendering and mouse targeting. */
 private[serenity] object AuthoritativeUiScene:
 
-  private case class SceneFontKey(family: String, style: Int, size: Float)
-  private case class SceneKey(layout: MouseTargetLayoutKey, paneFonts: List[(PaneId, SceneFontKey)])
+  final private case class SceneFontKey(family: String, style: Int, size: Float)
+  final private case class SceneKey(layout: MouseTargetLayoutKey, paneFonts: List[(PaneId, SceneFontKey)])
 
   private val prepared = new LinkedHashMap[SceneKey, UiSceneSnapshot](16, 0.75f, true):
     override def removeEldestEntry(
@@ -276,7 +276,7 @@ private[serenity] object AuthoritativeUiScene:
       FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
     )
 
-private[manager] case class MouseTargetCache(
+final private[manager] case class MouseTargetCache(
     layoutKey: MouseTargetLayoutKey,
     scene: UiSceneSnapshot
 )

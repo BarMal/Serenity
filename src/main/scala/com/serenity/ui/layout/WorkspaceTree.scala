@@ -33,21 +33,22 @@ sealed trait WorkspaceNode:
 object WorkspaceNode:
 
   /** An editor pane occupying one workspace leaf. */
-  case class Leaf(id: WorkspaceNodeId, paneId: PaneId) extends WorkspaceNode:
+  final case class Leaf(id: WorkspaceNodeId, paneId: PaneId) extends WorkspaceNode:
     val paneIds: List[PaneId]             = List(paneId)
     val dockedSurfaceIds: List[SurfaceId] = Nil
     val nodeIds: List[WorkspaceNodeId]    = List(id)
     val axis: Option[SplitAxis]           = None
 
   /** A pinned UI surface occupying one workspace leaf. */
-  case class DockedSurface(id: WorkspaceNodeId, surfaceId: SurfaceId, position: PanelPosition) extends WorkspaceNode:
+  final case class DockedSurface(id: WorkspaceNodeId, surfaceId: SurfaceId, position: PanelPosition)
+      extends WorkspaceNode:
     val paneIds: List[PaneId]             = Nil
     val dockedSurfaceIds: List[SurfaceId] = List(surfaceId)
     val nodeIds: List[WorkspaceNodeId]    = List(id)
     val axis: Option[SplitAxis]           = None
 
   /** A ratio-controlled binary split of two workspace branches. */
-  case class Split(
+  final case class Split(
       id: WorkspaceNodeId,
       splitAxis: SplitAxis,
       ratio: Double,
@@ -60,7 +61,7 @@ object WorkspaceNode:
     val axis: Option[SplitAxis]           = Some(splitAxis)
 
 /** Persistent binary composition of editor-pane workspace leaves. */
-case class WorkspaceTree(root: WorkspaceNode):
+final case class WorkspaceTree(root: WorkspaceNode):
   def paneIds: List[PaneId]             = root.paneIds
   def dockedSurfaceIds: List[SurfaceId] = root.dockedSurfaceIds
   def nodeIds: List[WorkspaceNodeId]    = root.nodeIds

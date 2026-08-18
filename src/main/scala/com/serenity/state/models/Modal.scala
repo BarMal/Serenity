@@ -2,7 +2,7 @@ package com.serenity.state.models
 
 import com.serenity.text.TextEditing
 
-case class FileWorkflowSuggestion(
+final case class FileWorkflowSuggestion(
     value: String,
     isDirectory: Boolean = false
 )
@@ -60,7 +60,7 @@ enum CloseWorkflowChoice:
   case Discard
   case Cancel
 
-case class CloseWorkflowState(
+final case class CloseWorkflowState(
     scope: CloseScope,
     currentBufferId: BufferId,
     currentBufferLabel: String,
@@ -79,7 +79,7 @@ case class CloseWorkflowState(
     val wrappedIndex = if rawIndex < 0 then choices.length + rawIndex else rawIndex
     copy(selectedChoice = choices(wrappedIndex))
 
-case class ReplaceWorkflowState(
+final case class ReplaceWorkflowState(
     findText: String = "",
     replacementText: String = "",
     activeField: ReplaceWorkflowField = ReplaceWorkflowField.Find,
@@ -238,7 +238,7 @@ sealed trait FileWorkflowState:
             updated(filename = normalizedValue, statusMessage = None)
       case None => this
 
-case class OpenFileWorkflowState(
+final case class OpenFileWorkflowState(
     filename: String = "",
     path: String = "",
     activeField: FileWorkflowField = FileWorkflowField.Filename,
@@ -273,7 +273,7 @@ case class OpenFileWorkflowState(
       statusMessage = statusMessage
     )
 
-case class SaveAsFileWorkflowState(
+final case class SaveAsFileWorkflowState(
     filename: String = "",
     path: String = "",
     activeField: FileWorkflowField = FileWorkflowField.Filename,

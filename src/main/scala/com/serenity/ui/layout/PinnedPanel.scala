@@ -7,7 +7,7 @@ import com.serenity.state.models.BufferId
 enum PanelPosition:
   case Left, Right, Bottom, Top
 
-case class PinnedPanel(
+final case class PinnedPanel(
     position: PanelPosition,
     content: PanelContent,
     size: Int
@@ -21,13 +21,13 @@ enum PanelContent:
   case Diagnostics(issues: List[Diagnostic])
   case MarkdownPreview(bufferId: BufferId, title: String)
 
-case class DirectoryTreeData(
+final case class DirectoryTreeData(
     rootPath: Path,
     expandedPaths: Set[Path] = Set.empty,
     entries: Map[Path, List[DirEntry]] = Map.empty
 )
 
-case class DirectoryTreeRow(
+final case class DirectoryTreeRow(
     path: Path,
     name: String,
     isDirectory: Boolean,
@@ -76,14 +76,14 @@ object DirectoryTreeData:
       else current
     }
 
-case class DirEntry(
+final case class DirEntry(
     path: Path,
     name: String,
     isDirectory: Boolean,
     isHidden: Boolean = false
 )
 
-case class Symbol(
+final case class Symbol(
     name: String,
     kind: SymbolKind,
     location: Location
@@ -92,12 +92,12 @@ case class Symbol(
 enum SymbolKind:
   case Function, Class, Method, Variable, Constant, Heading, Bookmark, Comment, Section
 
-case class Location(
+final case class Location(
     line: Int,
     column: Int
 )
 
-case class Diagnostic(
+final case class Diagnostic(
     message: String,
     severity: DiagnosticSeverity,
     location: Location

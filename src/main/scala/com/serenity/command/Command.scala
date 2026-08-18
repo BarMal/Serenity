@@ -202,7 +202,7 @@ enum CommandIntent:
   case ResetPeekKeyBinding(action: PeekKeyAction)
 
 /** A command that can be executed in the command runner */
-case class Command private (
+final case class Command private (
     name: String,
     label: String,
     description: String,
@@ -229,7 +229,7 @@ object Command:
       .map(word => word.head.toUpper + word.drop(1))
       .mkString(" ")
 
-case class CommandOption(
+final case class CommandOption(
     label: String,
     intent: CommandIntent,
     hint: Option[String] = None
@@ -242,12 +242,12 @@ sealed trait CommandSurfaceItem:
 
 object CommandSurfaceItem:
 
-  case class CommandItem(command: Command) extends CommandSurfaceItem:
+  final case class CommandItem(command: Command) extends CommandSurfaceItem:
     override def id: String                = command.name
     override def category: CommandCategory = command.category
     override lazy val searchText: String   = s"${command.name} ${command.label} ${command.description}"
 
-  case class OptionItem(
+  final case class OptionItem(
       id: String,
       label: String,
       options: List[CommandOption],
@@ -274,7 +274,7 @@ object CommandSurfaceItem:
         val wrappedIndex = if rawIndex < 0 then options.length + rawIndex else rawIndex
         copy(selectedIndex = wrappedIndex)
 
-  case class InputItem(
+  final case class InputItem(
       id: String,
       label: String,
       hint: String,
@@ -298,7 +298,7 @@ object CommandSurfaceItem:
     def withCurrentValue(v: String): InputItem = copy(currentValue = v)
 
   /** A direct search target for a setting leaf, independent of its rendered label. */
-  case class SettingSearchItem(
+  final case class SettingSearchItem(
       id: String,
       targetGroupId: String,
       targetItemId: String,
@@ -312,7 +312,7 @@ object CommandSurfaceItem:
     override lazy val searchText: String =
       s"$label ${effectiveValue.getOrElse("")} $sourceScope $breadcrumb ${hint.getOrElse("")}".trim
 
-  case class GroupItem(
+  final case class GroupItem(
       id: String,
       label: String,
       children: List[CommandSurfaceItem],
@@ -323,7 +323,7 @@ object CommandSurfaceItem:
       s"$label ${children.map(_.searchText).mkString(" ")}"
 
 /** Search result for a command with relevance scoring */
-case class CommandSearchResult(
+final case class CommandSearchResult(
     command: Command,
     relevance: Double
 ):

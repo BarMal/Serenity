@@ -572,7 +572,7 @@ object ConfigManager:
       ConfigFactory.parseMap(resolvedEntries.toMap.asJava)
     }
 
-  private case class LegacyEntry(key: String, value: String)
+  final private case class LegacyEntry(key: String, value: String)
 
   private val substitutionPattern = """\$\{\??([^}]+)\}""".r
 
@@ -585,7 +585,7 @@ object ConfigManager:
       case _: ConfigException.Parse =>
         ConfigFactory.parseMap(Map(entry.key -> entry.value).asJava)
 
-  private case class HoconEntry(key: String, value: String, valueType: ConfigValueType)
+  final private case class HoconEntry(key: String, value: String, valueType: ConfigValueType)
 
   private def hoconEntries(source: Config): List[HoconEntry] =
     source

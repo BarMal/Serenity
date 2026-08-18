@@ -1,6 +1,6 @@
 package com.serenity.rope
 
-case class Balance(weightBalance: Int, heightBalance: Int, leafChunkSize: Int)
+final case class Balance(weightBalance: Int, heightBalance: Int, leafChunkSize: Int)
 
 object Balance:
 

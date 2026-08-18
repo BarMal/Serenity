@@ -32,7 +32,7 @@ import io.circe.syntax.given
 /** Represents the persistent session state that survives application restarts. This is a subset of AppState containing
   * only the information needed to restore the user's workspace.
   */
-case class SessionState(
+final case class SessionState(
     buffers: List[SessionBuffer],
     layout: SessionLayout,
     focus: Option[SessionFocus],
@@ -45,7 +45,7 @@ case class SessionState(
 
 /** Persistent representation of a buffer
   */
-case class SessionBuffer(
+final case class SessionBuffer(
     id: Int,
     filePath: Option[String], // Use String instead of Path for JSON serialization
     isDirty: Boolean,
@@ -64,7 +64,7 @@ case class SessionBuffer(
 
 /** Persistent layout information
   */
-case class SessionLayout(
+final case class SessionLayout(
     editorPanes: List[SessionEditorPane],
     activeEditorPaneId: Option[Int],
     paneOrder: List[Int] = Nil,
@@ -88,9 +88,9 @@ enum SessionWorkspaceNode:
   )
 
 /** Persistable docked panel content keyed by the surface identity referenced from the workspace tree. */
-case class SessionDockedPanel(surfaceId: String, panel: UiPreset.PinnedPanel)
+final case class SessionDockedPanel(surfaceId: String, panel: UiPreset.PinnedPanel)
 
-case class SessionEditorPane(
+final case class SessionEditorPane(
     id: Int,
     bufferId: Option[Int]
 )
@@ -101,12 +101,12 @@ enum SessionFocus:
   case EditorPane(paneId: Int)
   // Note: We don't persist Surface focus as UI surfaces are not persistent
 
-case class SessionCursorPosition(
+final case class SessionCursorPosition(
     line: Int,
     column: Int
 )
 
-case class SessionViewport(
+final case class SessionViewport(
     leftColumn: Int,
     topLine: Int,
     visibleColumns: Int,
@@ -114,18 +114,18 @@ case class SessionViewport(
     topVisualLine: Int = 0
 )
 
-case class SessionFindState(
+final case class SessionFindState(
     query: String,
     results: List[SessionFindResult],
     currentIndex: Int
 )
 
-case class SessionFindResult(
+final case class SessionFindResult(
     line: Int,
     column: Int
 )
 
-case class SessionDocumentComment(
+final case class SessionDocumentComment(
     anchor: SessionCursorPosition,
     focus: SessionCursorPosition,
     text: String
@@ -281,7 +281,7 @@ object SessionBuffer:
 
 object SessionLayout:
 
-  private[session] case class Restored(layout: Layout, surfaces: List[UiSurface], nextSurfaceId: Int)
+  final private[session] case class Restored(layout: Layout, surfaces: List[UiSurface], nextSurfaceId: Int)
 
   def fromAppState(state: AppState): SessionLayout =
     val dockedPanels = state.pinnedSurfaces.flatMap { surface =>

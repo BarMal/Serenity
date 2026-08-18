@@ -245,7 +245,7 @@ trait Rope(using balance: Balance):
 
     loop(0, 0)
 
-  private case class LineTraversal(
+  final private case class LineTraversal(
       chunks: Iterator[(Int, String)],
       chunk: String,
       chunkIndex: Int,

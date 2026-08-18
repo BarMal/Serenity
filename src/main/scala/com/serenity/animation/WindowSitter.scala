@@ -16,7 +16,7 @@ object WindowSitterAction:
       case _       => None
 
 /** Persisted controls for the typing-reactive window sitter. */
-case class WindowSitterConfig(
+final case class WindowSitterConfig(
     enabled: Boolean = true,
     action: WindowSitterAction = WindowSitterAction.Pulse,
     frames: Vector[String] = Vector("·", "o", "O", "o"),
@@ -38,7 +38,7 @@ object WindowSitterConfig:
   val default: WindowSitterConfig = WindowSitterConfig()
 
 /** Immutable decorative state for the small animated character shown in custom window chrome. */
-case class WindowSitter(
+final case class WindowSitter(
     frames: Vector[String],
     frameIndex: Int = 0,
     activeTicks: Int = 0,
@@ -105,7 +105,7 @@ case class WindowSitter(
           else WindowSitter.FrameStep(currentIndex - 1, false)
 
 object WindowSitter:
-  private case class FrameStep(index: Int, ascending: Boolean)
+  final private case class FrameStep(index: Int, ascending: Boolean)
 
   val default: WindowSitter = fromConfig(WindowSitterConfig.default)
 

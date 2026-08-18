@@ -15,7 +15,7 @@ enum AccessibilityRole:
   case Status
 
 /** Stable semantic description of one canvas region. */
-case class AccessibleNode(
+final case class AccessibleNode(
     id: String,
     role: AccessibilityRole,
     name: String,
@@ -26,10 +26,10 @@ case class AccessibleNode(
 )
 
 /** A polite, deduplicated update intended for an assistive technology bridge. */
-case class AccessibilityAnnouncement(message: String)
+final case class AccessibilityAnnouncement(message: String)
 
 /** Complete semantic projection of the custom-painted interface. */
-case class AccessibilitySnapshot(
+final case class AccessibilitySnapshot(
     nodes: List[AccessibleNode],
     announcements: List[AccessibilityAnnouncement]
 ):

@@ -1,6 +1,6 @@
 package com.serenity.rope
 
-case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
+final case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
 
   override val weight: Int       = left.weight + right.weight
   override val height: Int       = Math.max(left.height, right.height) + 1
@@ -50,6 +50,6 @@ case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
   // length".
   override def equals(obj: Any): Boolean =
     obj match
-      case that: AnyRef if this.asInstanceOf[AnyRef].eq(that) => true
-      case that: Node => weight == that.weight && left == that.left && right == that.right
-      case _          => false
+      case that: AnyRef if (this: AnyRef).eq(that) => true
+      case that: Node                              => weight == that.weight && left == that.left && right == that.right
+      case _                                       => false

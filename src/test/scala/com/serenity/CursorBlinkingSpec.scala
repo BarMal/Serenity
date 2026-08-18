@@ -9,13 +9,13 @@ class CursorBlinkingSpec extends AnyFunSpec with Matchers:
   describe("Cursor blinking behavior"):
     it("should have a blinking state that toggles periodically"):
       // Cursor should have a visible/hidden state for blinking
-      case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis())
+      final case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis())
 
       val cursor = CursorState()
       cursor.visible shouldEqual true
 
     it("should track time since last blink"):
-      case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis())
+      final case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis())
 
       val cursor             = CursorState()
       val now                = System.currentTimeMillis()
@@ -24,7 +24,7 @@ class CursorBlinkingSpec extends AnyFunSpec with Matchers:
       timeSinceLastBlink should be >= 0L
 
     it("should toggle visibility after blink interval"):
-      case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis()):
+      final case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis()):
         def shouldBlink(now: Long, interval: Long): Boolean =
           (now - lastBlink) >= interval
 
@@ -43,7 +43,7 @@ class CursorBlinkingSpec extends AnyFunSpec with Matchers:
       blinkedCursor.lastBlink shouldEqual now
 
     it("should not blink before interval"):
-      case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis()):
+      final case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis()):
         def shouldBlink(now: Long, interval: Long): Boolean =
           (now - lastBlink) >= interval
 
@@ -55,7 +55,7 @@ class CursorBlinkingSpec extends AnyFunSpec with Matchers:
       cursor.shouldBlink(now, blinkInterval) shouldEqual false
 
     it("should reset blink state when cursor moves"):
-      case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis()):
+      final case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis()):
         def resetBlink(now: Long): CursorState =
           copy(visible = true, lastBlink = now)
 
@@ -67,7 +67,7 @@ class CursorBlinkingSpec extends AnyFunSpec with Matchers:
       resetCursor.lastBlink shouldEqual now
 
     it("should integrate cursor blinking with editor pane"):
-      case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis())
+      final case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis())
 
       // EditorPane should have cursor blinking state
       val enhancedPane = EditorPane(
@@ -83,7 +83,7 @@ class CursorBlinkingSpec extends AnyFunSpec with Matchers:
       enhancedPane.cursors should not be empty
 
     it("should pause blinking when typing"):
-      case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis()):
+      final case class CursorState(visible: Boolean = true, lastBlink: Long = System.currentTimeMillis()):
         def pauseBlinking(now: Long): CursorState =
           copy(visible = true, lastBlink = now) // Reset to visible and restart timer
 

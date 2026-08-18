@@ -35,7 +35,7 @@ object OdtDocumentCodec:
     "line-break"
   )
 
-  private case class OdtStyles(
+  final private case class OdtStyles(
       textStyles: Map[String, RichTextStyle],
       paragraphStyles: Map[String, ParagraphAlignment]
   )

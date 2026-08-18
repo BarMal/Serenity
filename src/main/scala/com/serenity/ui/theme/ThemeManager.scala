@@ -5,7 +5,7 @@ import java.util.LinkedHashMap
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
 
-case class StyledSegment(
+final case class StyledSegment(
     content: String,
     element: SyntaxElement,
     startOffset: Int,

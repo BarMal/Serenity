@@ -290,7 +290,7 @@ class SwingWindow(
     titleLabelRef.set(Some(titleLabel))
 
     val dragAdapter = new MouseAdapter:
-      private case class DragAnchor(x: Int, y: Int)
+      final private case class DragAnchor(x: Int, y: Int)
       private val anchorRef = new AtomicReference(DragAnchor(0, 0))
 
       override def mousePressed(e: MouseEvent): Unit =
@@ -343,7 +343,7 @@ class SwingWindow(
     setOpaque(false)
     setFocusable(false)
 
-    private case class ResizeState(
+    final private case class ResizeState(
         resizing: Boolean = false,
         resizeDir: Int = 0,
         pressX: Int = 0,
@@ -351,7 +351,7 @@ class SwingWindow(
         pressBounds: Rectangle = new Rectangle()
     )
 
-    private case class BoundsBox(x: Int, y: Int, width: Int, height: Int)
+    final private case class BoundsBox(x: Int, y: Int, width: Int, height: Int)
     private val resizeStateRef = new AtomicReference(ResizeState())
 
     override def contains(x: Int, y: Int): Boolean =
@@ -639,7 +639,7 @@ object SwingWindow:
   private val RoundedCornerMaskScale  = 2
   private[serenity] val Transparent   = new Color(0, 0, 0, 0)
 
-  private[serenity] case class PublishedImages(
+  final private[serenity] case class PublishedImages(
       base: Option[BufferedImage],
       overlay: Option[BufferedImage]
   )
@@ -836,7 +836,7 @@ object SwingWindow:
               update()
         )
 
-  case class ChromeMetrics(
+  final case class ChromeMetrics(
       titleBarHeight: Int,
       buttonWidth: Int,
       margin: Int,
@@ -846,7 +846,7 @@ object SwingWindow:
       titleFontSize: Int
   )
 
-  case class CanvasResizeSnapshot(pixelSize: Dimension, viewportSize: ViewportSize)
+  final case class CanvasResizeSnapshot(pixelSize: Dimension, viewportSize: ViewportSize)
 
   private[serenity] def shouldPublishCanvasResize(
     previous: CanvasResizeSnapshot,
@@ -854,7 +854,7 @@ object SwingWindow:
   ): Boolean =
     previous.viewportSize != current.viewportSize
 
-  case class TitleBarDragDecision(restoreFirst: Boolean, moveDelta: Option[(Int, Int)])
+  final case class TitleBarDragDecision(restoreFirst: Boolean, moveDelta: Option[(Int, Int)])
 
   private[serenity] def titleBarDragDecision(
     maximized: Boolean,
@@ -927,7 +927,7 @@ object SwingWindow:
     case Left
     case Right
 
-  case class ChromeControlLayout(placement: ChromeControlPlacement, controls: scala.List[ChromeControlKind]):
+  final case class ChromeControlLayout(placement: ChromeControlPlacement, controls: scala.List[ChromeControlKind]):
 
     def flowAlignment: Int =
       placement match
@@ -948,9 +948,9 @@ object SwingWindow:
         ChromeControlLayout(ChromeControlPlacement.Left, MacOrder)
       else ChromeControlLayout(ChromeControlPlacement.Right, WindowsOrder)
 
-  case class ChromeIconLine(x1: Int, y1: Int, x2: Int, y2: Int)
+  final case class ChromeIconLine(x1: Int, y1: Int, x2: Int, y2: Int)
 
-  case class ChromeControlState(
+  final case class ChromeControlState(
       hovered: Boolean = false,
       pressed: Boolean = false,
       focused: Boolean = false
@@ -1014,7 +1014,7 @@ object SwingWindow:
       val size = math.max(8, math.min(width, height) / 3)
       new Rectangle((width - size) / 2, (height - size) / 2, size, size)
 
-  case class ChromePalette(
+  final case class ChromePalette(
       titleBackground: Color,
       titleForeground: Color,
       border: Color,

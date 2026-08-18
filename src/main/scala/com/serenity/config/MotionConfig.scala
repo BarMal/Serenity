@@ -26,7 +26,7 @@ enum MotionFamily(val configKey: String):
   case UiTransitions   extends MotionFamily("ui_transitions")
 
 /** Motion policy for one family before accessibility policy is applied. */
-case class MotionFamilyConfig(
+final case class MotionFamilyConfig(
     enabled: Boolean,
     transitionKind: TransitionKind,
     animation: Option[AnimationConfig],
@@ -53,13 +53,13 @@ object MotionFamilyConfig:
   val disabled: MotionFamilyConfig = MotionFamilyConfig(false, TransitionKind.Disabled, None, 0.0)
 
 /** Fully resolved policy consumed by runtime animation paths. */
-case class EffectiveMotionConfig(families: Map[MotionFamily, MotionFamilyConfig]):
+final case class EffectiveMotionConfig(families: Map[MotionFamily, MotionFamilyConfig]):
 
   def family(kind: MotionFamily): MotionFamilyConfig =
     families.getOrElse(kind, MotionFamilyConfig.disabled)
 
 /** One authoritative hierarchy for baseline, per-family values, and accessibility override. */
-case class MotionConfig(
+final case class MotionConfig(
     accessibility: MotionAccessibility,
     baseline: MotionPreset,
     families: Map[MotionFamily, MotionFamilyConfig]

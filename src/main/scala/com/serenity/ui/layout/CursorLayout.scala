@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import com.serenity.rope.Rope
 import com.serenity.state.models.{CursorPosition, Viewport}
 
-case class ScreenPosition(x: Int, y: Int)
+final case class ScreenPosition(x: Int, y: Int)
 
 object CursorLayout:
 

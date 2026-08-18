@@ -1,5 +1,13 @@
 package com.serenity.rope
 
+/** Deliberately not `final`, unlike every other case class in the codebase.
+  *
+  * `RopeSpec` subclasses this to override `collect()` and `index()` with assertion-throwing versions, proving that
+  * search and sequential traversal never materialise the whole rope or walk it character by character. That is the
+  * representation-invariance coverage `docs/coding-standards.md` requires, and it needs a real subclass -- a stub
+  * cannot observe which methods the rope chose to call.
+  */
+@SuppressWarnings(Array("org.wartremover.warts.FinalCaseClass"))
 case class Leaf(value: String)(using balance: Balance) extends Rope:
   override def weight: Int               = value.length
   override def height: Int               = 1
@@ -36,6 +44,6 @@ case class Leaf(value: String)(using balance: Balance) extends Rope:
 
   override def equals(obj: Any): Boolean =
     obj match
-      case that: AnyRef if this.asInstanceOf[AnyRef].eq(that) => true
-      case that: Leaf                                         => value == that.value
-      case _                                                  => false
+      case that: AnyRef if (this: AnyRef).eq(that) => true
+      case that: Leaf                              => value == that.value
+      case _                                       => false

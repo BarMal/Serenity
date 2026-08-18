@@ -12,7 +12,7 @@ enum FloatingSurfaceContent:
   case CommandPalette(runner: CommandRunner)
   case ModalWorkflow(modal: Modal)
 
-case class FloatingSurface(
+final case class FloatingSurface(
     anchor: Option[CursorPosition],
     placement: FloatingSurfacePlacement,
     content: FloatingSurfaceContent

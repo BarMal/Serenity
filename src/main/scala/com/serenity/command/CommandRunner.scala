@@ -6,7 +6,7 @@ import com.serenity.config.*
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.ui.presets.UiPreset
 
-case class CommandRunnerSubmenuState(
+final case class CommandRunnerSubmenuState(
     groupId: String,
     selectedIndex: Int = 0,
     editingItemId: Option[String] = None,
@@ -31,7 +31,7 @@ case class CommandRunnerSubmenuState(
     selectedItem(filteredItems(items))
 
 /** State for the command runner overlay */
-case class CommandRunner(
+final case class CommandRunner(
     isActive: Boolean,
     searchTerm: String,
     selectedIndex: Int,
@@ -609,7 +609,7 @@ case class CommandRunner(
       .distinctBy(_.targetItemId)
       .take(CommandRunner.MaximumSettingSearchResults)
 
-  private case class SettingLeaf(
+  final private case class SettingLeaf(
       group: CommandSurfaceItem.GroupItem,
       item: CommandSurfaceItem,
       breadcrumb: String,

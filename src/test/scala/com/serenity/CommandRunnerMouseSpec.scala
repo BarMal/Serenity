@@ -242,7 +242,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     after.commandRunnerSurface shouldBe None
   }
 
-  private case class Point(x: Int, y: Int, pixelX: Int = 0, pixelY: Int = 0)
+  final private case class Point(x: Int, y: Int, pixelX: Int = 0, pixelY: Int = 0)
 
   private def commandRunnerItemPoint(state: AppState, displayedItemRow: Int): Point =
     val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))

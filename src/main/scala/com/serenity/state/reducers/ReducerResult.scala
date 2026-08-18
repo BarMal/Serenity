@@ -239,7 +239,7 @@ object AppEffect:
         case AppEffect.LspQueue(LspQueueEffect.Enqueue(effect)) => Some(effect)
         case _                                                  => None
 
-case class ReducerResult(
+final case class ReducerResult(
     state: AppState,
     effects: List[AppEffect] = Nil
 )

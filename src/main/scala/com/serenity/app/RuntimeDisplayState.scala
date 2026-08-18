@@ -62,7 +62,7 @@ final class RuntimeDisplayState private (
 
 object RuntimeDisplayState:
 
-  private case class Snapshot(
+  final private case class Snapshot(
       codeFont: Font,
       textFont: Font,
       uiFont: Font,

@@ -35,7 +35,7 @@ final class AccessibilitySync private (ref: Ref[IO, Option[AccessibilitySync.Cac
 
 object AccessibilitySync:
 
-  private[accessibility] case class CacheEntry(
+  final private[accessibility] case class CacheEntry(
       rawState: AppState,
       normalizedState: AppState,
       snapshot: AccessibilitySnapshot

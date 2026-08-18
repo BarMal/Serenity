@@ -486,8 +486,8 @@ class Java2DRenderSurface(
 
 object Java2DRenderSurface:
 
-  private[serenity] case class DeviceScale(x: Double, y: Double)
-  private[serenity] case class DeviceRegion(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)
+  final private[serenity] case class DeviceScale(x: Double, y: Double)
+  final private[serenity] case class DeviceRegion(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)
 
   def forFrame(
     metrics: CellMetrics,

@@ -45,7 +45,7 @@ object ThemeRegistry:
         else IO.unit
     yield ()
 
-case class ThemesBySource(
+final case class ThemesBySource(
     internal: List[String],
     user: List[String],
     bundled: List[String]

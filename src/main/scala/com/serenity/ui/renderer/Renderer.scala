@@ -12,7 +12,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.*
 
-case class RenderContext(
+final case class RenderContext(
     surface: RenderSurface,
     layout: CalculatedLayout,
     cursorVisible: Boolean = true,
@@ -38,7 +38,7 @@ case class RenderContext(
 
 object Renderer:
 
-  private case class PreparedScene(
+  final private case class PreparedScene(
       scene: UiSceneSnapshot,
       renderPlan: EditorPaneRenderPlan,
       codeFont: Font,
@@ -98,7 +98,7 @@ object Renderer:
 
     resolve(MarkdownFenceProbeWindow, bounded)
 
-  private case class EditorPaneRenderPlan(
+  final private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
       layoutContract: EditorLayoutContract,
       snapshots: Map[PaneId, TextLayoutSnapshot],
@@ -106,12 +106,12 @@ object Renderer:
   ):
     def paneLayouts: Map[PaneId, EditorPaneLayout] = workspaceLayout.paneLayouts
 
-  private case class BufferRenderAnnotations(
+  final private case class BufferRenderAnnotations(
       commentsByLine: Map[Int, List[DocumentComment]],
       diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]]
   )
 
-  private case class MarkdownLensFrame(
+  final private case class MarkdownLensFrame(
       firstSourceLine: Int,
       lines: Vector[String],
       previewWindow: MarkdownDocumentPreview.PreviewWindow,
@@ -120,7 +120,7 @@ object Renderer:
       placements: Map[Range.Inclusive, MarkdownLensPlacement]
   )
 
-  private case class MarkdownLensPreviewWindow(
+  final private case class MarkdownLensPreviewWindow(
       window: MarkdownDocumentPreview.PreviewWindow,
       sourceLineCount: Int
   )
@@ -143,7 +143,7 @@ object Renderer:
   /** Everything outside a pane's own visible rows that changes how those rows are drawn. Any difference retires the
     * whole pane rather than being reasoned about per row.
     */
-  private case class PaneContentKey(
+  final private case class PaneContentKey(
       contentRect: LayoutRect,
       theme: Theme,
       config: ReferenceIdentity,
@@ -158,14 +158,14 @@ object Renderer:
     * any caret this surface draws itself. [[com.serenity.animation.AnimatedCell]] is pure frame-counter state, so value
     * equality implies the same rendered colours.
     */
-  private case class PaneRowKey(
+  final private case class PaneRowKey(
       focusedBody: Boolean,
       comments: List[DocumentComment],
       animations: Map[Int, com.serenity.animation.AnimatedCell],
       caretPixels: List[(Int, Int, Int)]
   )
 
-  private case class PaneFrameRecord(
+  final private case class PaneFrameRecord(
       key: PaneContentKey,
       snapshot: TextLayoutSnapshot,
       rowKeys: Vector[PaneRowKey],
@@ -177,7 +177,7 @@ object Renderer:
     * visibility that feeds them. Two frames sharing a chrome key paint identical pixels everywhere except pane rows,
     * which is what makes a bounded repaint safe.
     */
-  private case class ChromeKey(
+  final private case class ChromeKey(
       contract: EditorLayoutContract,
       theme: Theme,
       config: ReferenceIdentity,
@@ -198,12 +198,12 @@ object Renderer:
       headers: List[(PaneId, Boolean, Option[String], Boolean, Option[Int])]
   )
 
-  private case class FrameRecord(panes: Map[PaneId, PaneFrameRecord], chrome: ChromeKey)
+  final private case class FrameRecord(panes: Map[PaneId, PaneFrameRecord], chrome: ChromeKey)
 
   /** What a frame decided to reuse: the rows it still has to draw per pane, the pixel bands it kept, and the record to
     * remember once the frame has been drawn.
     */
-  private case class FramePlan(
+  final private case class FramePlan(
       dirtyRowsByPane: Map[PaneId, Set[Int]],
       preserved: List[PixelRect],
       record: FrameRecord,
@@ -220,7 +220,7 @@ object Renderer:
   private val frameRecords = new java.util.WeakHashMap[AnyRef, FrameRecord]()
 
   /** Where a frame goes: the screen it will be shown on, and the region sink that screen's repaint should honour. */
-  private case class FrameOutput(screenToken: AnyRef, repaintRegion: AtomicReference[Option[PixelRect]])
+  final private case class FrameOutput(screenToken: AnyRef, repaintRegion: AtomicReference[Option[PixelRect]])
 
   /** The record of the frame currently on screen, per screen, used to bound repaints. Distinct from [[frameRecords]]
     * because base images alternate: the pixels a surface preserves come from two frames ago, while the screen shows the
@@ -1941,7 +1941,7 @@ object Renderer:
       }
       .reverse
 
-  private case class MarkdownLensPlacement(top: Int, height: Int)
+  final private case class MarkdownLensPlacement(top: Int, height: Int)
 
   private def renderMarkdownRawLenses(
     buffer: Buffer,

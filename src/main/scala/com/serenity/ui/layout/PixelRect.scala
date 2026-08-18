@@ -1,7 +1,7 @@
 package com.serenity.ui.layout
 
 /** An axis-aligned rectangle in logical (device-scale independent) pixels. */
-case class PixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
+final case class PixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
 
   def rightPx: Int = xPx + widthPx
 

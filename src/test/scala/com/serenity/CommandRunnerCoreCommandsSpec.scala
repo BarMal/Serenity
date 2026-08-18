@@ -29,7 +29,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
-  private case class TestFileDialog(
+  final private case class TestFileDialog(
       openSelection: Option[Path] = None,
       saveSelection: Option[Path] = None
   ) extends FileDialog:

@@ -2,18 +2,18 @@ package com.serenity.keystroke.events
 
 trait ModalInputEvent extends Event
 
-case class ModalInsertChar(char: Char)                           extends ModalInputEvent
-case object ModalDeleteBackward                                  extends ModalInputEvent
-case object ModalDeleteForward                                   extends ModalInputEvent
-case object ModalDeleteWordBackward                              extends ModalInputEvent
-case object ModalDeleteWordForward                               extends ModalInputEvent
-case class ModalNavigate(direction: Direction)                   extends ModalInputEvent
-case object ModalNextField                                       extends ModalInputEvent
-case object ModalPreviousField                                   extends ModalInputEvent
-case object ModalSubmit                                          extends ModalInputEvent
-case object ModalFindNext                                        extends ModalInputEvent
-case object ModalDismiss                                         extends ModalInputEvent
-case class ModalClick(focusId: String, actionId: Option[String]) extends ModalInputEvent
+final case class ModalInsertChar(char: Char)                           extends ModalInputEvent
+case object ModalDeleteBackward                                        extends ModalInputEvent
+case object ModalDeleteForward                                         extends ModalInputEvent
+case object ModalDeleteWordBackward                                    extends ModalInputEvent
+case object ModalDeleteWordForward                                     extends ModalInputEvent
+final case class ModalNavigate(direction: Direction)                   extends ModalInputEvent
+case object ModalNextField                                             extends ModalInputEvent
+case object ModalPreviousField                                         extends ModalInputEvent
+case object ModalSubmit                                                extends ModalInputEvent
+case object ModalFindNext                                              extends ModalInputEvent
+case object ModalDismiss                                               extends ModalInputEvent
+final case class ModalClick(focusId: String, actionId: Option[String]) extends ModalInputEvent
 
 object ModalInputEvent:
 

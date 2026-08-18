@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.state.models.CursorPosition
 
-case class PeekOverlay(
+final case class PeekOverlay(
     content: PeekContent,
     position: CursorPosition,
     dismissOnMove: Boolean = true

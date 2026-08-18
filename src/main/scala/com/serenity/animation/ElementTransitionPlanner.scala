@@ -32,7 +32,7 @@ enum TransitionDirection:
   case AnchorOut
 
 /** Timing values used by deterministic transition planning. */
-case class TransitionTiming(
+final case class TransitionTiming(
     durationMs: Int,
     staggerMs: Int,
     delayMs: Int,
@@ -43,7 +43,7 @@ object TransitionTiming:
   val immediate: TransitionTiming = TransitionTiming(durationMs = 0, staggerMs = 0, delayMs = 0, speedScale = 0.0)
 
 /** Transition configuration independent of rendering or runtime ticking. */
-case class ElementTransitionSettings(
+final case class ElementTransitionSettings(
     enabled: Boolean,
     baseTiming: TransitionTiming,
     speedScale: Double,
@@ -76,13 +76,13 @@ object ElementTransitionSettings:
     )
 
 /** Semantic request for a transition plan. */
-case class ElementTransitionRequest(
+final case class ElementTransitionRequest(
     scope: TransitionScope,
     placement: Option[PanelPosition] = None
 )
 
 /** Pure transition plan. Later renderer integration can lower this into existing animation primitives. */
-case class ElementTransitionPlan(
+final case class ElementTransitionPlan(
     scope: TransitionScope,
     kind: TransitionKind,
     direction: TransitionDirection,

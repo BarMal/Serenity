@@ -13,7 +13,7 @@ object PaneSplitDirection:
       case "Vertical" => Vertical
       case _          => Horizontal
 
-case class Layout(
+final case class Layout(
     editorPanes: Map[PaneId, EditorPane],
     activeEditorPaneId: Option[PaneId],
     paneOrder: List[PaneId] = Nil,

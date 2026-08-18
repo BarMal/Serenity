@@ -2,7 +2,7 @@ package com.serenity.lsp.config
 
 import io.circe.Json
 
-case class LspServerConfig(
+final case class LspServerConfig(
     languageId: LanguageId,
     binary: LspServerBinary,
     defaultArgs: List[String] = Nil,

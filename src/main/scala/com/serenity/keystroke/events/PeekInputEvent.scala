@@ -3,10 +3,10 @@ package com.serenity.keystroke.events
 sealed trait PeekInputEvent extends Event
 
 object PeekInputEvent:
-  case class Navigate(direction: Direction) extends PeekInputEvent
-  case object Accept                        extends PeekInputEvent
-  case object Dismiss                       extends PeekInputEvent
-  case object OtherInput                    extends PeekInputEvent
+  final case class Navigate(direction: Direction) extends PeekInputEvent
+  case object Accept                              extends PeekInputEvent
+  case object Dismiss                             extends PeekInputEvent
+  case object OtherInput                          extends PeekInputEvent
 
   def fromEvent(event: Event): Option[PeekInputEvent] =
     event match

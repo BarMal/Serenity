@@ -582,7 +582,7 @@ object CommandRunnerSettingsItems:
       )
     )
 
-  private case class PinnedPanelRow(label: String, kind: PanelKind, position: PanelPosition)
+  final private case class PinnedPanelRow(label: String, kind: PanelKind, position: PanelPosition)
 
   private def selectedPanelPosition(optionSelections: Map[String, Int], optionId: String): Option[PanelPosition] =
     List(None, Some(PanelPosition.Top), Some(PanelPosition.Right), Some(PanelPosition.Bottom), Some(PanelPosition.Left))

@@ -35,7 +35,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       Resource.make(IO.pure(connection))(_ => release)
     )
 
-  private case class Harness(
+  final private case class Harness(
       effects: Queue[IO, Option[LspEffect]],
       events: Ref[IO, List[Event]],
       eventApplied: Deferred[IO, Unit],

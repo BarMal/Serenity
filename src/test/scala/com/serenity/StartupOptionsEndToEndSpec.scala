@@ -17,7 +17,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
 
   behavior of "Startup Options End-to-End"
 
-  private case class TestFileDialog(openSelection: Option[java.nio.file.Path]) extends FileDialog:
+  final private case class TestFileDialog(openSelection: Option[java.nio.file.Path]) extends FileDialog:
     override def chooseOpenFile(initialDirectory: Option[java.nio.file.Path]): IO[Option[java.nio.file.Path]] =
       IO.pure(openSelection)
 

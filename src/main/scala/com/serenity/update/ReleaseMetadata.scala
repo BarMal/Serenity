@@ -4,7 +4,7 @@ import io.circe.Decoder
 import io.circe.parser.decode
 
 /** Downloadable asset published with an application release. */
-case class ReleaseAsset(name: String, downloadUrl: String)
+final case class ReleaseAsset(name: String, downloadUrl: String)
 
 /** Target runtime package for an update download. */
 enum UpdatePlatform:
@@ -14,7 +14,7 @@ enum UpdatePlatform:
   case MacOs
 
 /** Metadata needed to present a published update without downloading it. */
-case class ReleaseMetadata(tag: String, targetCommit: Option[String], assets: List[ReleaseAsset]):
+final case class ReleaseMetadata(tag: String, targetCommit: Option[String], assets: List[ReleaseAsset]):
 
   def isNewerThan(currentCommit: String): Boolean =
     targetCommit.exists(_ != currentCommit)
@@ -28,8 +28,8 @@ case class ReleaseMetadata(tag: String, targetCommit: Option[String], assets: Li
     assets.find(_.name == expectedName)
 
 object ReleaseMetadata:
-  private case class GitHubAsset(name: String, browser_download_url: String)
-  private case class GitHubRelease(tag_name: String, target_commitish: Option[String], assets: List[GitHubAsset])
+  final private case class GitHubAsset(name: String, browser_download_url: String)
+  final private case class GitHubRelease(tag_name: String, target_commitish: Option[String], assets: List[GitHubAsset])
 
   private given Decoder[GitHubAsset] = Decoder.forProduct2("name", "browser_download_url")(GitHubAsset.apply)
   private given Decoder[GitHubRelease] =

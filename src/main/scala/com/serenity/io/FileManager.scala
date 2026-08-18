@@ -189,7 +189,7 @@ class FileManager(using balance: Balance):
       IO.raiseError(new RuntimeException(s"Unsupported document format for $operationName: ${fileType.displayName}"))
     )
 
-case class FileInfo(
+final case class FileInfo(
     path: Path,
     size: Long,
     lastModified: Long,

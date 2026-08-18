@@ -4,12 +4,12 @@ import com.serenity.document.DocumentNavigation
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
-case class TextPanelRow(
+final case class TextPanelRow(
     plainText: String,
     selected: Boolean = false
 )
 
-case class TextPanelView(
+final case class TextPanelView(
     rect: LayoutRect,
     contentRect: Option[LayoutRect] = None,
     title: String,

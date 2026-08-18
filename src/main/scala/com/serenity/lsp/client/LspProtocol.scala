@@ -6,9 +6,9 @@ import io.circe.syntax.*
 
 object LspProtocol:
 
-  case class JsonRpcRequest(id: Long, method: String, params: Json)
-  case class JsonRpcNotification(method: String, params: Json)
-  case class LspLocation(uri: String, range: LspRange)
+  final case class JsonRpcRequest(id: Long, method: String, params: Json)
+  final case class JsonRpcNotification(method: String, params: Json)
+  final case class LspLocation(uri: String, range: LspRange)
 
   def request(id: Long, method: String, params: Json): Json =
     Json.obj(

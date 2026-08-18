@@ -6,7 +6,7 @@ package com.serenity.state.models
   * measured text layout APIs. User-facing movement/edit commands should snap through grapheme helpers before
   * constructing or mutating a `CursorPosition`.
   */
-case class CursorPosition(line: Int, column: Int):
+final case class CursorPosition(line: Int, column: Int):
   def moveRight: CursorPosition = copy(column = column + 1)
   def moveLeft: CursorPosition  = copy(column = Math.max(0, column - 1))
   def moveDown: CursorPosition  = copy(line = line + 1)

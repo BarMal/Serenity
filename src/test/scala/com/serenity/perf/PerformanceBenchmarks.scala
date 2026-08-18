@@ -30,7 +30,7 @@ object PerformanceBenchmarks:
     2.0 -> new SwingWindow.ReusableImagePool
   )
 
-  private case class Benchmark(
+  final private case class Benchmark(
       name: String,
       warmups: Int,
       iterations: Int,
@@ -39,7 +39,7 @@ object PerformanceBenchmarks:
       measureAllocation: Boolean = false
   )
 
-  private case class BenchmarkResult(
+  final private case class BenchmarkResult(
       name: String,
       iterations: Int,
       minMs: Double,

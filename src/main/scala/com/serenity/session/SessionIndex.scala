@@ -3,9 +3,9 @@ package com.serenity.session
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.{Decoder, Encoder}
 
-case class SessionId(value: String)
+final case class SessionId(value: String)
 
-case class SessionMetadata(
+final case class SessionMetadata(
     id: SessionId,
     displayName: String,
     sessionFileName: String,
@@ -16,7 +16,7 @@ case class SessionMetadata(
   def renamed(newDisplayName: String, updatedAt: Long): SessionMetadata =
     copy(displayName = newDisplayName, updatedAtEpochMillis = updatedAt)
 
-case class SessionIndex(
+final case class SessionIndex(
     sessions: List[SessionMetadata],
     currentSessionId: Option[SessionId] = None
 ):
