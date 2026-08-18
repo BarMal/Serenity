@@ -121,7 +121,7 @@ final private[manager] class StateManagerEventPipeline(
 
   def applyEvent(event: Event): cats.effect.IO[Unit] =
     given org.typelevel.log4cats.Logger[cats.effect.IO] = logger
-    val eventLabel                                      = s"event.${event.getClass.getSimpleName}"
+    def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {
       stateRef.get.flatMap { rawState =>
         val prevState = normalizeCommandRunnerFocus(rawState)

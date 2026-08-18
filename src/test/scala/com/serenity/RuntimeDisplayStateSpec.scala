@@ -169,6 +169,48 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
     runtime.uiMetrics shouldBe originalUiMetrics
   }
 
+  it should "expose fonts and metrics as one immutable snapshot" in {
+    val runtime = RuntimeDisplayState
+      .create(FontConfig(codeFontFamily = "Monospaced", fontSize = 12.0f, uiFontSize = 14.0f))
+      .unsafeRunSync()
+
+    val before = runtime.snapshot
+
+    runtime
+      .update(FontConfig(codeFontFamily = "Monospaced", fontSize = 24.0f, uiFontSize = 28.0f))
+      .unsafeRunSync()
+
+    // A reader holding one snapshot cannot observe a font from one generation beside a metric from
+    // another, which is exactly what six independently-set references allowed.
+    before.codeFont.getSize2D shouldBe 12.0f
+    before.codeMetrics shouldBe CellMetrics.fromFont(before.codeFont)
+    before.uiMetrics shouldBe CellMetrics.fromFont(before.uiFont)
+
+    val after = runtime.snapshot
+    after.codeFont.getSize2D shouldBe 24.0f
+    after.codeMetrics shouldBe CellMetrics.fromFont(after.codeFont)
+    after.uiMetrics shouldBe CellMetrics.fromFont(after.uiFont)
+  }
+
+  it should "keep every accessor agreeing with the current snapshot" in {
+    val runtime = RuntimeDisplayState
+      .create(FontConfig(codeFontFamily = "Monospaced", fontSize = 12.0f, uiFontSize = 14.0f))
+      .unsafeRunSync()
+
+    runtime
+      .update(FontConfig(codeFontFamily = "Monospaced", fontSize = 24.0f, uiFontSize = 28.0f))
+      .unsafeRunSync()
+
+    val display = runtime.snapshot
+    runtime.codeFont shouldBe display.codeFont
+    runtime.textFont shouldBe display.textFont
+    runtime.uiFont shouldBe display.uiFont
+    runtime.codeMetrics shouldBe display.codeMetrics
+    runtime.textMetrics shouldBe display.textMetrics
+    runtime.uiMetrics shouldBe display.uiMetrics
+    runtime.primaryMetrics shouldBe display.codeMetrics
+  }
+
   it should "always produce valid metrics after update" in {
     val runtime = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f, uiFontSize = 14.0f)).unsafeRunSync()
 
