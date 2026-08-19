@@ -7,16 +7,32 @@ import java.nio.file.{Files, Path}
 import cats.effect.{IO, Resource}
 import com.serenity.animation.*
 import com.serenity.config.{AppConfig, MarkdownViewMode}
-import com.serenity.keystroke.events.{DeleteBackward, DeleteWordBackward, InsertChar, ScrollDown}
+import com.serenity.keystroke.events.{
+  DeleteBackward,
+  DeleteWordBackward,
+  ExtendSelectionRight,
+  InsertChar,
+  MoveRight,
+  ScrollDown
+}
 import com.serenity.lsp.client.LspFramer
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownDocumentPreview
+import com.serenity.perf.BenchmarkFixtures.{
+  deepViewport,
+  editorState,
+  editorStateForRichDocument,
+  largeFindDocument,
+  largeMarkdownDocument,
+  largeMultilineDocument,
+  largeRichTextDocument,
+  largeSingleLineJson
+}
 import com.serenity.project.{ProjectTaskDetector, ProjectTaskKind, ProjectTaskTerminal}
-import com.serenity.richtext.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, ModalEventReducer}
-import com.serenity.ui.layout.{CellMetrics, Layout, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{CharacterRenderer, Java2DRenderSurface, Renderer}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.Theme
@@ -36,7 +52,7 @@ object PerformanceBenchmarks:
   private val uiFont        = Font(Font.SANS_SERIF, Font.PLAIN, 12)
   private val cellMetrics   = CellMetrics.fromFont(monoFont)
   private val uiMetrics     = CellMetrics.fromFont(uiFont)
-  private val viewportSize  = ViewportSize(120, 40)
+  private val viewportSize  = BenchmarkFixtures.viewportSize
   private val frameWidthPx  = viewportSize.width * cellMetrics.charWidth
   private val frameHeightPx = viewportSize.height * cellMetrics.lineHeight
 
@@ -67,6 +83,8 @@ object PerformanceBenchmarks:
     val normalEditingResult    = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
     val backspaceResult        = EditorEventReducer.reduce(DeleteBackward, PaneId(0), editingState)
     val wordDeleteResult       = EditorEventReducer.reduce(DeleteWordBackward, PaneId(0), editingState)
+    val moveRightResult        = EditorEventReducer.reduce(MoveRight, PaneId(0), editingState)
+    val extendRightResult      = EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
     val plainScrollResult      = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
     val richScrollResult       = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
     val originalLine           = editingState.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000))
@@ -75,6 +93,15 @@ object PerformanceBenchmarks:
 
     def editedLine(result: com.serenity.state.reducers.ReducerResult): Option[String] =
       result.state.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000))
+
+    def reducedBuffer(result: com.serenity.state.reducers.ReducerResult): Option[Buffer] =
+      result.state.buffers.get(BufferId(1))
+
+    def reducedCursor(result: com.serenity.state.reducers.ReducerResult): Option[CursorPosition] =
+      reducedBuffer(result).flatMap(_.cursors.headOption)
+
+    def reducedSelection(result: com.serenity.state.reducers.ReducerResult): Option[Selection] =
+      reducedBuffer(result).flatMap(_.primarySelection)
 
     List(
       BenchmarkRunner.Benchmark(
@@ -106,6 +133,20 @@ object PerformanceBenchmarks:
             editedLine(wordDeleteResult).exists(_.length < expectedBackspacedLine.fold(0)(_.length))
           ),
         () => EditorEventReducer.reduce(DeleteWordBackward, PaneId(0), editingState)
+      ),
+      BenchmarkRunner.Benchmark(
+        "reducer.arrow_navigation",
+        3,
+        20,
+        () => assert(reducedCursor(moveRightResult).exists(_.column == 13)),
+        () => EditorEventReducer.reduce(MoveRight, PaneId(0), editingState)
+      ),
+      BenchmarkRunner.Benchmark(
+        "reducer.extend_selection",
+        3,
+        20,
+        () => assert(reducedSelection(extendRightResult).exists(_.focus.column == 13)),
+        () => EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.deep_scroll.plain",
@@ -511,69 +552,6 @@ object PerformanceBenchmarks:
         val _ = Files.deleteIfExists(root)
         ()
       }
-    )
-
-  private def editorState(content: String, language: Option[LanguageId]): AppState =
-    val paneId   = PaneId(0)
-    val bufferId = BufferId(1)
-    val buffer = Buffer
-      .fromString(bufferId, content)
-      .copy(
-        language = language,
-        viewport =
-          Viewport(topLine = 0, leftColumn = 0, visibleColumns = viewportSize.width, visibleLines = viewportSize.height)
-      )
-    AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout =
-        Layout(editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)), activeEditorPaneId = Some(paneId)),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
-    )
-
-  private def editorStateForRichDocument(document: RichTextDocument): AppState =
-    val base = editorState(document.plainText, None)
-    base.copy(buffers = base.buffers.view.mapValues(_.copy(richTextDocument = Some(document))).toMap)
-
-  private def deepViewport: Viewport =
-    Viewport(topLine = 10_000, leftColumn = 0, visibleColumns = viewportSize.width, visibleLines = viewportSize.height)
-
-  private def largeSingleLineJson(entries: Int): String =
-    (1 to entries).map(i => s""""k$i":$i""").mkString("{", ",", "}")
-
-  private def largeMultilineDocument(lines: Int): String =
-    (1 to lines)
-      .map(i => s"Line $i with enough text to exercise wrapping, comments, and cursor movement.")
-      .mkString("\n")
-
-  private def largeFindDocument(matches: Int): String =
-    (1 to matches).map(index => s"needle $index with replacement candidate").mkString("\n")
-
-  private def largeMarkdownDocument(sections: Int): Vector[String] =
-    (1 to sections).toVector.flatMap { section =>
-      Vector(
-        s"## Section $section",
-        "",
-        s"Paragraph with **bold** text, `code`, and [a link](https://example.com/$section).",
-        "",
-        "| Name | Value |",
-        "| --- | ---: |",
-        s"| item-$section | $section |",
-        ""
-      )
-    }
-
-  private def largeRichTextDocument(lines: Int): RichTextDocument =
-    RichTextDocument(
-      (1 to lines).map { line =>
-        RichTextParagraph(
-          List(
-            RichTextRun(s"Rich paragraph $line ", RichTextStyle.empty.withMark(InlineMark.Bold)),
-            RichTextRun("with styled content")
-          )
-        )
-      }.toList
     )
 
 end PerformanceBenchmarks

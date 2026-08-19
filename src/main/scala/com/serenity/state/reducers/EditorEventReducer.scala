@@ -207,12 +207,18 @@ object EditorEventReducer:
       }
     )
 
+  /** Callers adjust the buffer on the way in -- collapsing selections, clearing in-flight vertical state -- and the
+    * arms read it back out of the state, so the adjusted buffer has to be seeded there or the adjustment is silently
+    * lost.
+    */
   private def reduceSingleCursorTextEvent(
     event: TextEntryEvent,
     buffer: Buffer,
     paneId: PaneId,
-    currentState: AppState
+    incomingState: AppState
   ): ReducerResult =
+    val currentState = Focused.replaceBuffer(incomingState, buffer)
+
     buffer.cursors.headOption match
       case Some(cursor) =>
         event match
@@ -240,210 +246,65 @@ object EditorEventReducer:
             reduceDeletion(buffer, currentState, wordForwardDeletion(_, cursor, currentState))
 
           case MoveLeft =>
-            val movementStart   = selectionFocusOrCursor(buffer, cursor)
-            val newCursor       = moveCursorLeft(movementStart, buffer.content)
-            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
-            val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
-              preferredColumn = Some(newCursor.column),
-              preferredXPx = None,
-              viewport = updatedViewport
-            )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(leftTarget)
 
           case MoveRight =>
-            val movementStart   = selectionFocusOrCursor(buffer, cursor)
-            val newCursor       = moveCursorRight(movementStart, buffer.content)
-            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
-            val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
-              preferredColumn = Some(newCursor.column),
-              preferredXPx = None,
-              viewport = updatedViewport
-            )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(rightTarget)
 
           case MoveWordLeft =>
-            val movementStart   = selectionFocusOrCursor(buffer, cursor)
-            val offset          = lineColumnToOffset(buffer.content, movementStart.line, movementStart.column)
-            val newCursor       = offsetToCursorPosition(buffer.content, previousWordBoundary(buffer.content, offset))
-            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
-            val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
-              preferredColumn = Some(newCursor.column),
-              preferredXPx = None,
-              viewport = updatedViewport
-            )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(wordLeftTarget)
 
           case MoveWordRight =>
-            val movementStart   = selectionFocusOrCursor(buffer, cursor)
-            val offset          = lineColumnToOffset(buffer.content, movementStart.line, movementStart.column)
-            val newCursor       = offsetToCursorPosition(buffer.content, nextWordBoundary(buffer.content, offset))
-            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
-            val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
-              preferredColumn = Some(newCursor.column),
-              preferredXPx = None,
-              viewport = updatedViewport
-            )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(wordRightTarget)
 
           case MoveUp =>
-            val movementStart         = selectionFocusOrCursor(buffer, cursor)
-            val preferredColumn       = buffer.preferredColumn.getOrElse(movementStart.column)
-            val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
-            val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
-            val newCursor =
-              measuredVerticalMoveBySnapshot(
-                currentState.config.wordWrapEnabled,
-                movementStart,
-                navSnap,
-                preferredXPx,
-                direction = -1
-              )
-                .getOrElse(
-                  fallbackVerticalMove(movementStart, buffer, currentState, preferredColumn, direction = -1)
-                )
-            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
-            val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
-              preferredColumn = Some(preferredColumn),
-              preferredXPx = Some(preferredXPx),
-              viewport = updatedViewport
+            reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(
+              verticalTarget(currentState, -1)
             )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case MoveDown =>
-            val movementStart         = selectionFocusOrCursor(buffer, cursor)
-            val preferredColumn       = buffer.preferredColumn.getOrElse(movementStart.column)
-            val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
-            val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, movementStart))
-            val newCursor =
-              measuredVerticalMoveBySnapshot(
-                currentState.config.wordWrapEnabled,
-                movementStart,
-                navSnap,
-                preferredXPx,
-                direction = 1
-              )
-                .getOrElse(
-                  fallbackVerticalMove(movementStart, buffer, currentState, preferredColumn, direction = 1)
-                )
-            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
-            val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
-              preferredColumn = Some(preferredColumn),
-              preferredXPx = Some(preferredXPx),
-              viewport = updatedViewport
+            reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(
+              verticalTarget(currentState, 1)
             )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case ExtendSelectionLeft =>
-            val newCursor = moveCursorLeft(cursor, buffer.content)
-            val updatedBuffer =
-              extendSelection(buffer, currentState, cursor, newCursor, preferredColumn = Some(newCursor.column))
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceSelectionExtension(buffer, cursor, currentState)(leftTarget)
 
           case ExtendSelectionRight =>
-            val newCursor = moveCursorRight(cursor, buffer.content)
-            val updatedBuffer =
-              extendSelection(buffer, currentState, cursor, newCursor, preferredColumn = Some(newCursor.column))
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceSelectionExtension(buffer, cursor, currentState)(rightTarget)
 
           case ExtendSelectionUp =>
-            val preferredColumn       = buffer.preferredColumn.getOrElse(cursor.column)
-            val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
-            val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
-            val newCursor =
-              measuredVerticalMoveBySnapshot(
-                currentState.config.wordWrapEnabled,
-                cursor,
-                navSnap,
-                preferredXPx,
-                direction = -1
-              )
-                .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction = -1))
-            val updatedBuffer = extendSelection(
-              buffer,
-              currentState,
-              cursor,
-              newCursor,
-              preferredColumn = Some(preferredColumn),
-              preferredXPx = Some(preferredXPx)
-            )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceSelectionExtension(buffer, cursor, currentState)(verticalTarget(currentState, -1))
 
           case ExtendSelectionDown =>
-            val preferredColumn       = buffer.preferredColumn.getOrElse(cursor.column)
-            val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
-            val preferredXPx = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, cursor))
-            val newCursor =
-              measuredVerticalMoveBySnapshot(
-                currentState.config.wordWrapEnabled,
-                cursor,
-                navSnap,
-                preferredXPx,
-                direction = 1
-              )
-                .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction = 1))
-            val updatedBuffer = extendSelection(
-              buffer,
-              currentState,
-              cursor,
-              newCursor,
-              preferredColumn = Some(preferredColumn),
-              preferredXPx = Some(preferredXPx)
-            )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceSelectionExtension(buffer, cursor, currentState)(verticalTarget(currentState, 1))
 
           case NewLine | Enter =>
             insertAtCursor(buffer, cursor, "\n", currentState)
 
           case MoveToStart =>
-            val newCursor       = cursor.copy(column = 0)
-            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
-            val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
-              preferredColumn = Some(newCursor.column),
-              preferredXPx = None,
-              viewport = updatedViewport
-            )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceMovement(buffer, cursor, currentState)((_, from) => horizontalTarget(from.copy(column = 0)))
 
           case MoveToEnd =>
-            val lineEnd         = findLineEnd(buffer.content, cursor.line)
-            val newCursor       = cursor.copy(column = lineEnd)
-            val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
-            val updatedBuffer = buffer.copy(
-              cursors = newCursor :: buffer.cursors.tail,
-              selection = None,
-              preferredColumn = Some(newCursor.column),
-              preferredXPx = None,
-              viewport = updatedViewport
-            )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            reduceMovement(buffer, cursor, currentState) { (current, from) =>
+              horizontalTarget(from.copy(column = findLineEnd(current.content, from.line)))
+            }
 
           case SelectAll =>
-            val lastLine    = math.max(0, countLines(buffer.content) - 1)
-            val lastColumn  = findLineEnd(buffer.content, lastLine)
-            val startCursor = CursorPosition(0, 0)
-            val endCursor   = CursorPosition(lastLine, lastColumn)
-            val updatedBuffer = buffer.copy(
-              cursors = List(endCursor),
-              selection = Some(Selection(startCursor, endCursor)),
-              preferredColumn = Some(endCursor.column),
-              preferredXPx = None,
-              viewport = adjustViewportForCursor(buffer, currentState, endCursor)
+            ReducerResult.fromTransition(
+              currentState,
+              Focused.modifyBufferWithId(buffer.id) { current =>
+                val lastLine  = math.max(0, countLines(current.content) - 1)
+                val endCursor = CursorPosition(lastLine, findLineEnd(current.content, lastLine))
+                current.copy(
+                  cursors = List(endCursor),
+                  selection = Some(Selection(CursorPosition(0, 0), endCursor)),
+                  preferredColumn = Some(endCursor.column),
+                  preferredXPx = None,
+                  viewport = adjustViewportForCursor(current, currentState, endCursor)
+                )
+              }
             )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case PageDown =>
             val totalLines    = countLines(buffer.content)
@@ -1672,6 +1533,74 @@ object EditorEventReducer:
       }
       ._1
 
+  /** Where a movement key lands, plus the column and measured x-offset a later vertical move should resume from.
+    * Movement and shift-movement compute this identically and differ only in what they do with it.
+    */
+  final private case class CursorTarget(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Option[Float])
+
+  private def horizontalTarget(landed: CursorPosition): CursorTarget =
+    CursorTarget(landed, landed.column, preferredXPx = None)
+
+  private def leftTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(moveCursorLeft(from, buffer.content))
+
+  private def rightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(moveCursorRight(from, buffer.content))
+
+  private def wordLeftTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(wordBoundaryFrom(buffer, from, previousWordBoundary))
+
+  private def wordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(wordBoundaryFrom(buffer, from, nextWordBoundary))
+
+  private def wordBoundaryFrom(buffer: Buffer, from: CursorPosition, boundary: (Rope, Int) => Int): CursorPosition =
+    val offset = lineColumnToOffset(buffer.content, from.line, from.column)
+    offsetToCursorPosition(buffer.content, boundary(buffer.content, offset))
+
+  private def verticalTarget(currentState: AppState, direction: Int)(
+    buffer: Buffer,
+    from: CursorPosition
+  ): CursorTarget =
+    val preferredColumn       = buffer.preferredColumn.getOrElse(from.column)
+    val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
+    val preferredXPx          = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, from))
+    val landed =
+      measuredVerticalMoveBySnapshot(currentState.config.wordWrapEnabled, from, navSnap, preferredXPx, direction)
+        .getOrElse(fallbackVerticalMove(from, buffer, currentState, preferredColumn, direction))
+
+    CursorTarget(landed, preferredColumn, Some(preferredXPx))
+
+  /** `from` is passed rather than derived: arrow keys resume from the selection focus so a right-arrow off a selection
+    * lands past its end, while Home and End resume from the head cursor.
+    */
+  private def reduceMovement(buffer: Buffer, from: CursorPosition, currentState: AppState)(
+    target: (Buffer, CursorPosition) => CursorTarget
+  ): ReducerResult =
+    ReducerResult.fromTransition(
+      currentState,
+      Focused.modifyBufferWithId(buffer.id) { current =>
+        val landed = target(current, from)
+        current.copy(
+          cursors = landed.cursor :: current.cursors.tail,
+          selection = None,
+          preferredColumn = Some(landed.preferredColumn),
+          preferredXPx = landed.preferredXPx,
+          viewport = adjustViewportForCursor(current, currentState, landed.cursor)
+        )
+      }
+    )
+
+  private def reduceSelectionExtension(buffer: Buffer, cursor: CursorPosition, currentState: AppState)(
+    target: (Buffer, CursorPosition) => CursorTarget
+  ): ReducerResult =
+    ReducerResult.fromTransition(
+      currentState,
+      Focused.modifyBufferWithId(buffer.id) { current =>
+        val landed = target(current, cursor)
+        extendSelection(current, currentState, cursor, landed.cursor, Some(landed.preferredColumn), landed.preferredXPx)
+      }
+    )
+
   private def selectionFocusOrCursor(buffer: Buffer, cursor: CursorPosition): CursorPosition =
     buffer.primarySelection.map(_.focus).getOrElse(cursor)
 
@@ -1681,7 +1610,7 @@ object EditorEventReducer:
     anchor: CursorPosition,
     focus: CursorPosition,
     preferredColumn: Option[Int],
-    preferredXPx: Option[Float] = None
+    preferredXPx: Option[Float]
   ): Buffer =
     val selectionAnchor = buffer.primarySelection.map(_.anchor).getOrElse(anchor)
     val baseBuffer = buffer.copy(
