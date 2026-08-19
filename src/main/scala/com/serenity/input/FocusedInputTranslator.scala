@@ -6,7 +6,13 @@ import com.serenity.state.models.{AppState, SurfaceContent}
 
 object FocusedInputTranslator:
 
+  /** Reads the system clock for binding-recording stamps. The overload below takes the clock explicitly; this is the
+    * one place the real one is sampled.
+    */
   def forState(state: AppState): Translator[Event] =
+    forState(state, () => System.currentTimeMillis())
+
+  def forState(state: AppState, now: () => Long): Translator[Event] =
     val recordingBinding = state.activeSurface.exists { surface =>
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
@@ -48,5 +54,5 @@ object FocusedInputTranslator:
             editorTranslator
 
     if state.hasBlockingModal then formTranslator
-    else if recordingBinding then new HotkeyRecordingTranslator
+    else if recordingBinding then new HotkeyRecordingTranslator(now)
     else CompositeTranslator(new GlobalHotkeyTranslator(state.config), localTranslator)
