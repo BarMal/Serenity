@@ -4,14 +4,9 @@ import com.serenity.keystroke.events.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Characterisation of focused-surface input translation, written against the five hand-rolled `fromEvent` tables
-  * before #989 replaced them with one `FocusIntent` vocabulary plus a `SurfaceInput` instance per surface.
-  *
-  * The point of pinning every cell -- including the misses -- is that the surfaces are not uniform, and a refactor that
-  * "tidies" them into uniformity would be a behaviour change wearing a cleanup's clothes. The deliberate asymmetries
-  * are: the command runner accepts `Paste` and the modal does not; the panel and peek overlays accept the plain deletes
-  * but not the word deletes; and the startup page accepts only vertical navigation, submit, dismiss and a digit,
-  * ignoring everything else.
+/** Every cell is pinned, including the misses, because the surfaces are not uniform and tidying them into uniformity
+  * would be a behaviour change. The asymmetries are deliberate: the runner takes `Paste` and the modal does not; the
+  * panel and peek overlays take the plain deletes but not the word deletes.
   */
 class SurfaceInputTranslationSpec extends AnyFlatSpec with Matchers:
 

@@ -180,9 +180,7 @@ final private[manager] class StateManagerEventPipeline(
         logCommandRunnerEvent >>
           applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
 
-  /** Routes a global application event by type alone: `CloseTab` and `Quit` previously had to precede the
-    * `GlobalAppEvent` branch or they silently took the reducer path instead of closing anything.
-    */
+  /** Routed by type alone: `CloseTab` and `Quit` previously had to precede the `GlobalAppEvent` branch. */
   private def dispatchGlobalAppEvent(event: GlobalAppEvent, prevState: AppState): cats.effect.IO[Unit] =
     val registry = CommandRegistry.withToggleUI
     def reduced  = applyReducerResult(AppEventReducer.reduce(event, prevState, registry)(using balance), prevState)

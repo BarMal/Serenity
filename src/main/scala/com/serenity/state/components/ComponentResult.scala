@@ -16,14 +16,7 @@ enum ComponentResult:
 
 object ComponentResult:
 
-  /** `NoChange` is an identity and `Composite` is a combine, so this algebra was already a monoid written longhand.
-    * Naming the instance lets results be folded with the standard combinators instead of each call site special-casing
-    * "nothing happened" and "several things happened".
-    *
-    * `combine` flattens rather than nesting: combining two composites yields one composite of both, so associativity
-    * holds structurally -- `(a |+| b) |+| c` and `a |+| (b |+| c)` produce the same three-element composite rather than
-    * differently-shaped trees that merely behave alike.
-    */
+  /** `combine` flattens rather than nesting, so associativity holds structurally rather than merely behaviourally. */
   given Monoid[ComponentResult] with
     def empty: ComponentResult = NoChange
 

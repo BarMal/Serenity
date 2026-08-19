@@ -6,9 +6,7 @@ import com.serenity.state.models.{AppState, SurfaceContent}
 
 object FocusedInputTranslator:
 
-  /** Reads the system clock for binding-recording stamps. The overload below takes the clock explicitly; this is the
-    * one place the real one is sampled.
-    */
+  /** The one place the real clock is sampled; the overload below takes it explicitly. */
   def forState(state: AppState): Translator[Event] =
     forState(state, () => System.currentTimeMillis())
 

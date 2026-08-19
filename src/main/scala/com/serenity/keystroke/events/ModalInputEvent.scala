@@ -17,7 +17,6 @@ final case class ModalClick(focusId: String, actionId: Option[String]) extends M
 
 object ModalInputEvent:
 
-  /** Tab moves between fields here. The modal has no clipboard target, so it declines a paste. */
   given SurfaceInput[ModalInputEvent] with
 
     def fromIntent(intent: FocusIntent): Option[ModalInputEvent] =
@@ -34,7 +33,6 @@ object ModalInputEvent:
         case FocusIntent.Dismiss             => Some(ModalDismiss)
         case FocusIntent.Paste               => None
 
-  /** `FindNext` stays here rather than joining the shared vocabulary: the modal is its only consumer. */
   def fromEvent(event: Event): Option[ModalInputEvent] =
     event match
       case modalEvent: ModalInputEvent => Some(modalEvent)

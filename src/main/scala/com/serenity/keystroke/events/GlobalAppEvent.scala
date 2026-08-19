@@ -1,9 +1,7 @@
 package com.serenity.keystroke.events
 
-/** Application-wide actions: window chrome, tab lifecycle and the command runner.
-  *
-  * These are handled by `AppEventReducer` and are deliberately *not* editor events -- routing is decided by this parent
-  * alone, never by where a case happens to sit in a match.
+/** Handled by `AppEventReducer`. Deliberately not editor events: routing is decided by this parent, never by case order
+  * in a match.
   */
 sealed trait GlobalAppEvent
 

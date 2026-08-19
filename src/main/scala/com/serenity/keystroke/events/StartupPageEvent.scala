@@ -10,9 +10,6 @@ final case class StartupPageSelect(index: Int) extends StartupPageEvent
 
 object StartupPageEvent:
 
-  /** A list of numbered choices: vertical navigation, submit, dismiss, and a digit selecting an entry directly.
-    * Horizontal navigation, editing and grouping have no meaning on it and are declined.
-    */
   given SurfaceInput[StartupPageEvent] with
 
     def fromIntent(intent: FocusIntent): Option[StartupPageEvent] =

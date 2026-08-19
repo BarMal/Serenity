@@ -12,10 +12,8 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.Configuration
 import org.typelevel.discipline.scalatest.FunSuiteDiscipline
 
-/** `Transition` is a type alias, so its `Monad` is inherited rather than written -- but "inherited" is worth proving
-  * rather than assuming, since the instance only exists if the effect log is a lawful `Monoid` and the `Writer` beneath
-  * `StateT` is a lawful `Monad`. If either were wrong, reducers migrated onto it in #993 and #994 would compose
-  * incorrectly in ways example tests would not localise.
+/** The `Monad` is inherited, which is worth proving rather than assuming: it only exists if the effect log is a lawful
+  * `Monoid`. If it were not, reducers migrated in #993 and #994 would compose wrongly.
   */
 class TransitionLawSpec extends AnyFunSuite with FunSuiteDiscipline with Configuration with Matchers:
 
@@ -23,8 +21,8 @@ class TransitionLawSpec extends AnyFunSuite with FunSuiteDiscipline with Configu
 
   private def effect(id: Long): AppEffect = AppEffect.ScheduleCommandRunnerBindingExpiry(id)
 
-  /** Two transitions are equal when, run from the same state, they produce the same state and the same effect log.
-    * `StateT` wraps a function, so there is no structural equality to fall back on; sampling is the standard approach.
+  /** `StateT` wraps a function, so there is no structural equality; sampling one state is the standard approach, and
+    * bounds how much the law check proves.
     */
   private given transitionEq[A : Eq]: Eq[Transition[A]] =
     Eq.instance { (left, right) =>

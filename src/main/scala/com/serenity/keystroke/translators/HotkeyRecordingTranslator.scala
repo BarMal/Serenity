@@ -3,10 +3,8 @@ package com.serenity.keystroke.translators
 import com.serenity.keystroke.events.{CommandRunnerEvent, RunnerDismiss, RunnerRecordBinding}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 
-/** Converts the next physical key stroke into a command-runner binding record.
-  *
-  * `now` is supplied by the caller so the stamp is visible at the construction site rather than hidden in the event's
-  * constructor, and so a test can freeze it.
+/** Converts the next physical key stroke into a command-runner binding record. `now` is supplied so the stamp is
+  * visible here rather than hidden in the event's constructor, and so a test can freeze it.
   */
 class HotkeyRecordingTranslator(now: () => Long) extends Translator[CommandRunnerEvent]:
 
