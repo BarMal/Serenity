@@ -78,6 +78,32 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
     }
   }
 
+  /** Depth is what `index` and `splitAt` descend, so the Fibonacci bound is the invariant that actually protects
+    * traversal cost. A long run of edits is where a rope degenerates, so it is asserted after every one.
+    */
+  property("a long run of edits never leaves the rope depth-unbalanced") {
+    forAll(Generators.genText) { inserted =>
+      val edited = (1 to 200).foldLeft(Rope("")) { (rope, step) =>
+        val grown   = rope.insert(rope.weight, if inserted.isEmpty then "x" else inserted)
+        val trimmed = if grown.weight > 4 then grown.deleteRight(step % (grown.weight - 3), 1) else grown
+
+        withClue(s"after $step edits, weight ${trimmed.weight} at height ${trimmed.height}: ") {
+          trimmed.isDepthBalanced shouldBe true
+        }
+        trimmed
+      }
+
+      edited.weight should be > 0
+    }
+  }
+
+  property("appending in place keeps depth logarithmic in the text length") {
+    val appended = (1 to 2_000).foldLeft(Rope(""))((rope, step) => rope.insert(rope.weight, s"line $step "))
+
+    appended.isDepthBalanced shouldBe true
+    appended.height should be <= 4 * (31 - Integer.numberOfLeadingZeros(appended.weight))
+  }
+
   property("splitAt partitions the text and recombines to the original") {
     forAll(Generators.ropeWithText) { (rope, text) =>
       (0 to text.length).foreach { at =>
