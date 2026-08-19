@@ -1,6 +1,6 @@
 package com.serenity.keystroke.events
 
-sealed trait PeekInputEvent extends Event
+sealed trait PeekInputEvent
 
 object PeekInputEvent:
   final case class Navigate(direction: Direction) extends PeekInputEvent

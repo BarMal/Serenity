@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.ui.layout.{DirEntry, PanelPosition}
 
-enum ExplorerEvent extends SystemEvent:
+enum ExplorerEvent:
 
   case RootDirectoryLoaded(
       position: PanelPosition,

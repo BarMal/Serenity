@@ -166,7 +166,7 @@ final private[manager] class StateManagerEventPipeline(
         handleMouseDrag(drag, prevState)
       case move: MouseMove =>
         handleMouseMove(move, prevState)
-      case _ =>
+      case _: (TextEntryEvent | SurfaceEvent) =>
         val logCommandRunnerEvent =
           focusedCommandRunner(prevState) match
             case Some(runner) =>

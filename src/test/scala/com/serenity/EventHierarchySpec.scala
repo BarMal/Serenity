@@ -12,10 +12,7 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
     */
   private val eventTraits: Set[Class[?]] =
     Set(
-      classOf[AppEvent],
       classOf[GlobalAppEvent],
-      classOf[EditorEvent],
-      classOf[SystemEvent],
       classOf[TextEntryEvent],
       classOf[TextInputEvent],
       classOf[DeletionEvent],
@@ -36,17 +33,12 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
     event.getClass.getInterfaces.filter(eventTraits.contains).map(_.getSimpleName).toList.sorted
 
   "Event hierarchy" should "classify editor input events with strong types" in {
-    InsertChar('a').isInstanceOf[EditorEvent] shouldBe true
     InsertChar('a').isInstanceOf[TextInputEvent] shouldBe true
 
-    DeleteBackward.isInstanceOf[EditorEvent] shouldBe true
     DeleteBackward.isInstanceOf[DeletionEvent] shouldBe true
-    DeleteWordBackward.isInstanceOf[EditorEvent] shouldBe true
     DeleteWordBackward.isInstanceOf[DeletionEvent] shouldBe true
-    DeleteWordForward.isInstanceOf[EditorEvent] shouldBe true
     DeleteWordForward.isInstanceOf[DeletionEvent] shouldBe true
 
-    MoveLeft.isInstanceOf[EditorEvent] shouldBe true
     MoveLeft.isInstanceOf[NavigationEvent] shouldBe true
   }
 
@@ -83,7 +75,12 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
         ResizeEvent(ViewportSize(120, 40))
       )
 
-    val offenders = events.map(event => event.toString -> directEventParents(event)).filter(_._2.sizeIs != 1)
+    // The invariant is "never more than one", not "exactly one". Since Event became a union of the families, a type
+    // that *is* its own family -- ResizeEvent, LspEvent, ExplorerEvent, UnhandledEvent -- belongs to Event by union
+    // membership rather than by inheriting anything, so it legitimately reports no parent at all. Two parents is the
+    // lattice #988 removed, and that is what this guards against; the positive direction is covered by the
+    // family-specific assertions below.
+    val offenders = events.map(event => event.toString -> directEventParents(event)).filter(_._2.sizeIs > 1)
 
     offenders shouldBe empty
   }
@@ -97,7 +94,7 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
         event.isInstanceOf[GlobalAppEvent] shouldBe true
       }
       withClue(s"$event should not also be an editor event: ") {
-        event.isInstanceOf[EditorEvent] shouldBe false
+        event.isInstanceOf[TextEntryEvent] shouldBe false
       }
     }
   }
@@ -107,8 +104,8 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
     SaveFile.isInstanceOf[FileEvent] shouldBe true
 
     // The negative direction is not asserted here because it no longer can be: with FileEvent sealed and disjoint from
-    // EditorEvent, `OpenFile.isInstanceOf[EditorEvent]` is a compile error (E030, unreachable), not a false assertion.
-    // The compiler proves it, which is what sealing bought.
+    // TextEntryEvent, `OpenFile.isInstanceOf[TextEntryEvent]` is a compile error (E030, unreachable), not a false
+    // assertion. The compiler proves it, which is what sealing bought.
     directEventParents(OpenFile) shouldBe List("FileEvent")
     directEventParents(SaveFile) shouldBe List("FileEvent")
   }
@@ -119,10 +116,10 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
         event.isInstanceOf[TextEntryEvent] shouldBe true
       }
       withClue(s"$event should not be an application event: ") {
-        event.isInstanceOf[AppEvent] shouldBe false
+        event.isInstanceOf[GlobalAppEvent] shouldBe false
       }
     }
 
   it should "classify system-originated events separately from editor actions" in {
-    ResizeEvent(ViewportSize(120, 40)).isInstanceOf[SystemEvent] shouldBe true
+    ResizeEvent(ViewportSize(120, 40)).isInstanceOf[ResizeEvent] shouldBe true
   }

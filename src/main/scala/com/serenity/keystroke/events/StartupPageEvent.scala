@@ -1,6 +1,6 @@
 package com.serenity.keystroke.events
 
-sealed trait StartupPageEvent extends Event
+sealed trait StartupPageEvent
 
 case object StartupPageMoveUp                  extends StartupPageEvent
 case object StartupPageMoveDown                extends StartupPageEvent

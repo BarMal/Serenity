@@ -3,7 +3,7 @@ package com.serenity.keystroke.events
 import com.serenity.command.CommandCategory
 import com.serenity.keystroke.KeyStrokeInfo
 
-sealed trait CommandRunnerEvent extends Event
+sealed trait CommandRunnerEvent
 
 final case class RunnerInsertChar(char: Char)                                extends CommandRunnerEvent
 case object RunnerDeleteBackward                                             extends CommandRunnerEvent
