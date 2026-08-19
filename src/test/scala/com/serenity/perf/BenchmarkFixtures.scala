@@ -4,7 +4,7 @@ import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{InlineMark, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, Buffer, BufferId, EditorPane, PaneId, Viewport}
+import com.serenity.state.models.{AppState, Buffer, BufferId, CursorPosition, EditorPane, PaneId, Viewport}
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
 
@@ -79,5 +79,9 @@ private[perf] object BenchmarkFixtures:
         )
       }.toList
     )
+
+  def withCursorsOnConsecutiveLines(state: AppState, count: Int, fromLine: Int, column: Int): AppState =
+    val cursors = (0 until count).toList.map(row => CursorPosition(fromLine + row, column))
+    state.copy(buffers = state.buffers.view.mapValues(_.copy(cursors = cursors)).toMap)
 
 end BenchmarkFixtures

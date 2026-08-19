@@ -26,7 +26,8 @@ import com.serenity.perf.BenchmarkFixtures.{
   largeMarkdownDocument,
   largeMultilineDocument,
   largeRichTextDocument,
-  largeSingleLineJson
+  largeSingleLineJson,
+  withCursorsOnConsecutiveLines
 }
 import com.serenity.project.{ProjectTaskDetector, ProjectTaskKind, ProjectTaskTerminal}
 import com.serenity.rope.{Balance, Rope}
@@ -85,6 +86,9 @@ object PerformanceBenchmarks:
     val wordDeleteResult       = EditorEventReducer.reduce(DeleteWordBackward, PaneId(0), editingState)
     val moveRightResult        = EditorEventReducer.reduce(MoveRight, PaneId(0), editingState)
     val extendRightResult      = EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
+    val multiCursorState       = withCursorsOnConsecutiveLines(editingState, 50, fromLine = 5_000, column = 4)
+    val multiInsertResult      = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
+    val multiMoveResult        = EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
     val plainScrollResult      = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
     val richScrollResult       = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
     val originalLine           = editingState.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000))
@@ -147,6 +151,20 @@ object PerformanceBenchmarks:
         20,
         () => assert(reducedSelection(extendRightResult).exists(_.focus.column == 13)),
         () => EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
+      ),
+      BenchmarkRunner.Benchmark(
+        "reducer.multi_cursor_insert",
+        3,
+        20,
+        () => assert(reducedBuffer(multiInsertResult).exists(_.cursors.sizeIs == 50)),
+        () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
+      ),
+      BenchmarkRunner.Benchmark(
+        "reducer.multi_cursor_move",
+        3,
+        20,
+        () => assert(reducedBuffer(multiMoveResult).exists(_.cursors.forall(_.column == 5))),
+        () => EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.deep_scroll.plain",
