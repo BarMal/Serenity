@@ -191,4 +191,35 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     afterLeft.multiCursorVerticalStates shouldBe Nil
   }
+
+  /** Multi-selection movement collapses the selections to their focuses and hands the collapsed buffer to the
+    * multi-cursor arms, which is an adjustment the state it travels with does not carry. Any arm that reads the buffer
+    * back out of the state instead of using the one it was handed loses the collapse.
+    */
+  "Collapsing multiple selections for movement" should "survive the multi-cursor arm reading the buffer back" in {
+    val state = stateWithBuffer(
+      "abcdef",
+      Nil,
+      List(Selection(CursorPosition(0, 1), CursorPosition(0, 3)), Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
+    )
+
+    val buffer = reduce(MoveLeft, state)
+
+    buffer.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 4))
+    buffer.selection shouldBe None
+    buffer.selections shouldBe Nil
+  }
+
+  it should "survive it for vertical movement too" in {
+    val state = stateWithBuffer(
+      "abcdef\nabcdef",
+      Nil,
+      List(Selection(CursorPosition(1, 1), CursorPosition(1, 3)), Selection(CursorPosition(1, 4), CursorPosition(1, 5)))
+    )
+
+    val buffer = reduce(MoveUp, state)
+
+    buffer.cursors shouldBe List(CursorPosition(0, 3), CursorPosition(0, 5))
+    buffer.selections shouldBe Nil
+  }
 end MultiCursorEditingSpec

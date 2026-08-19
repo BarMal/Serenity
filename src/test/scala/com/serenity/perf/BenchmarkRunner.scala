@@ -15,6 +15,8 @@ object BenchmarkRunner:
       "reducer.delete_word_backward",
       "reducer.arrow_navigation",
       "reducer.extend_selection",
+      "reducer.multi_cursor_insert",
+      "reducer.multi_cursor_move",
       "reducer.deep_scroll.plain",
       "reducer.deep_scroll.rich_text",
       "render.long_measured_line.java2d"
