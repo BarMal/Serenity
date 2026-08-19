@@ -60,7 +60,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager
-      .applyEvent(RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty)))
+      .applyEvent(RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty), 1_000L))
       .unsafeRunSync()
 
     stateManager.getCurrentState

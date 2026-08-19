@@ -22,9 +22,13 @@ case object RunnerSubmit                                                     ext
 case object RunnerDismiss                                                    extends CommandRunnerEvent
 final case class RunnerBindingRecordingExpired(recordedAtMillis: Long)       extends CommandRunnerEvent
 
+/** The timestamp is required rather than defaulted to the clock: it identifies the recording session across the
+  * double-tap window, and a default would make constructing this event an effect, so no two constructions of the "same"
+  * binding would ever be equal.
+  */
 final case class RunnerRecordBinding(
     info: KeyStrokeInfo,
-    recordedAtMillis: Long = System.currentTimeMillis()
+    recordedAtMillis: Long
 ) extends CommandRunnerEvent
 
 object CommandRunnerEvent:

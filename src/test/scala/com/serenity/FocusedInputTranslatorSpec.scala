@@ -145,7 +145,10 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val doubleTap = KeyStrokeInfo(InputKey.Ctrl, None, Set.empty)
 
-    FocusedInputTranslator.forState(state).translate(doubleTap) shouldBe RunnerRecordBinding(doubleTap)
+    // Both sides used to stamp System.currentTimeMillis() independently, so this only passed when the two
+    // constructions landed in the same millisecond. With the clock supplied by the caller it is deterministic.
+    FocusedInputTranslator.forState(state, () => 4_200L).translate(doubleTap) shouldBe
+      RunnerRecordBinding(doubleTap, 4_200L)
   }
 
   it should "reject conflicting loaded hotkeys instead of dispatching the first matching action" in {
