@@ -14,7 +14,28 @@ trait Rope(using balance: Balance):
 
   def concat(that: Rope): Rope = Node(this, that).rebalance
 
-  def rebuild: Rope = Rope(this.collect())
+  /** Reorganises the leaves the rope already holds rather than flattening it to a string and re-splitting.
+    *
+    * Every unbalanced `concat` and `splitAt` falls back here, so this is the cost of an edit. Going via `collect()`
+    * copied every character of the document each time; leaves that are already the right size are now reused as they
+    * are, and only fragments are touched.
+    */
+  def rebuild: Rope = Rope.fromLeafValues(leafValues)
+
+  /** The non-empty leaf strings, left to right. */
+  private[rope] def leafValues: Vector[String] =
+    @tailrec
+    def go(stack: List[Rope], acc: List[String]): List[String] = stack match
+      case Nil => acc
+      case head :: rest =>
+        head match
+          case Node(left, right)            => go(left :: right :: rest, acc)
+          case Leaf(value) if value.isEmpty => go(rest, acc)
+          case Leaf(value)                  => go(rest, value :: acc)
+          case other if other.weight == 0   => go(rest, acc)
+          case other                        => go(rest, other.collect() :: acc)
+
+    go(List(this), Nil).reverse.toVector
 
   def rebalance: Rope
 
@@ -418,6 +439,46 @@ object Rope:
   // (WrapEngine, RenderEngine, cursor arithmetic) only ever sees '\n'.
   def apply(in: String)(using balance: Balance): Rope =
     build(in.replace("\r\n", "\n").replace("\r", "\n"))
+
+  /** Rebuilds a rope over leaf strings that are already in hand.
+    *
+    * Oversized leaves are split and adjacent fragments merged, so the leaves stay near the chunk size no matter how
+    * ragged the edits that produced them; without that, repeated splitting leaves a tail of one-character leaves and
+    * the tree deepens even though it is nominally rebuilt.
+    */
+  private[rope] def fromLeafValues(values: Vector[String])(using balance: Balance): Rope =
+    combineBalanced(values.filter(_.nonEmpty))
+
+  /** Splits at the exact character midpoint, cutting the one leaf that straddles it.
+    *
+    * Splitting on a leaf boundary instead would leave the halves up to a chunk apart, and `isWeightBalanced` is checked
+    * after every edit against a threshold far tighter than that. Cutting the straddling leaf keeps the halves within
+    * one character while every other leaf passes through untouched, so the characters copied are bounded by the chunk
+    * size times the depth rather than by the size of the document.
+    */
+  private def combineBalanced(values: Vector[String])(using balance: Balance): Rope =
+    values match
+      case Vector()                                                 => Leaf("")
+      case Vector(single) if single.length <= balance.leafChunkSize => Leaf(single)
+      case _ =>
+        val total = values.foldLeft(0)((running, value) => running + value.length)
+        if total <= balance.leafChunkSize then Leaf(values.mkString)
+        else
+          val (left, right) = splitAtWeight(values, total / 2, Vector.empty)
+          Node(combineBalanced(left), combineBalanced(right))
+
+  @tailrec
+  private def splitAtWeight(
+    values: Vector[String],
+    target: Int,
+    taken: Vector[String]
+  ): (Vector[String], Vector[String]) =
+    if values.isEmpty then (taken, Vector.empty)
+    else
+      val value = values(0)
+      if value.length <= target then splitAtWeight(values.drop(1), target - value.length, taken :+ value)
+      else if target == 0 then (taken, values)
+      else (taken :+ value.take(target), value.drop(target) +: values.drop(1))
 
   private def build(in: String)(using balance: Balance): Rope =
     if in.length <= balance.leafChunkSize then Leaf(in)
