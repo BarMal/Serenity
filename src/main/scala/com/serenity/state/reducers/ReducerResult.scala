@@ -2,6 +2,7 @@ package com.serenity.state.reducers
 
 import java.nio.file.Path
 
+import cats.syntax.all.*
 import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
@@ -248,5 +249,18 @@ object ReducerResult:
   def noEffects(state: AppState): ReducerResult =
     ReducerResult(state, Nil)
 
+  /** Run a [[Transition]] from `initial` and collect it into the boundary type. The inverse direction, turning a result
+    * back into a transition, is [[toTransition]].
+    */
+  def fromTransition(initial: AppState, transition: Transition[Unit]): ReducerResult =
+    Transition.run(initial)(transition)
+
   def withEffect(state: AppState, effect: AppEffect): ReducerResult =
     ReducerResult(state, List(effect))
+
+extension (result: ReducerResult)
+  /** Lift an already-computed result back into a transition, so migrated and unmigrated reducers can compose while #993
+    * and #994 are in progress.
+    */
+  def toTransition: Transition[Unit] =
+    Transition.set(result.state) *> Transition.emitAll(result.effects)
