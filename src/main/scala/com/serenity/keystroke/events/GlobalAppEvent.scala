@@ -5,7 +5,7 @@ package com.serenity.keystroke.events
   * These are handled by `AppEventReducer` and are deliberately *not* editor events -- routing is decided by this parent
   * alone, never by where a case happens to sit in a match.
   */
-sealed trait GlobalAppEvent extends AppEvent
+sealed trait GlobalAppEvent
 
 case object Quit                    extends GlobalAppEvent
 case object ToggleCommandRunner     extends GlobalAppEvent

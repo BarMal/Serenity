@@ -2,7 +2,7 @@ package com.serenity.keystroke.events
 
 import com.serenity.ui.layout.CellMetrics
 
-sealed trait MouseInputEvent extends Event:
+sealed trait MouseInputEvent:
   def col: Int
   def row: Int
   def pixelX: Option[Int]

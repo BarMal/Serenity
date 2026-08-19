@@ -1,6 +1,6 @@
 package com.serenity.keystroke.events
 
-sealed trait PanelInputEvent extends Event
+sealed trait PanelInputEvent
 
 object PanelInputEvent:
   final case class Navigate(direction: Direction) extends PanelInputEvent

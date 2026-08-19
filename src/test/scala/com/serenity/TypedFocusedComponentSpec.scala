@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.keystroke.events.Event
+import com.serenity.keystroke.events.{Escape, Event, MoveUp}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, TypedFocusedComponent}
 import com.serenity.state.models.{AppState, Focus, PaneId}
@@ -11,14 +11,16 @@ class TypedFocusedComponentSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private case object TypedEvent extends Event
-  private case object OtherEvent extends Event
+  // `Event` is a union of the event families, so it cannot be extended and this spec cannot mint throwaway events of
+  // its own. Two real events stand in: the machinery under test only cares that one decodes and the other does not.
+  private val TypedEvent = MoveUp
+  private val OtherEvent = Escape
 
-  private class TestComponent extends TypedFocusedComponent[TypedEvent.type]:
-    protected def decodeEvent(event: Event): Option[TypedEvent.type] =
-      Option.when(event == TypedEvent)(TypedEvent)
+  private class TestComponent extends TypedFocusedComponent[MoveUp.type]:
+    protected def decodeEvent(event: Event): Option[MoveUp.type] =
+      Option.when(event == TypedEvent)(MoveUp)
 
-    protected def processTypedEvent(event: TypedEvent.type, currentState: AppState): ComponentResult =
+    protected def processTypedEvent(event: MoveUp.type, currentState: AppState): ComponentResult =
       ComponentResult.dismiss
 
     override protected def processFallbackEvent(event: Event, currentState: AppState): ComponentResult =

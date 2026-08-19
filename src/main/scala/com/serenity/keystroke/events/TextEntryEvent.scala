@@ -1,6 +1,6 @@
 package com.serenity.keystroke.events
 
-sealed trait TextEntryEvent extends EditorEvent
+sealed trait TextEntryEvent
 
 sealed trait TextInputEvent extends TextEntryEvent
 
