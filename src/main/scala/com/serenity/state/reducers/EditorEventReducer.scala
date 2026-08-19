@@ -113,6 +113,84 @@ object EditorEventReducer:
     if buffer.multiCursorVerticalStates.isEmpty then buffer
     else buffer.copy(multiCursorVerticalStates = Nil)
 
+  /** All four deletions share a selection arm and differ only in the range they delete when there is none. */
+  private def reduceDeletion(
+    buffer: Buffer,
+    currentState: AppState,
+    withoutSelection: Buffer => Option[Buffer]
+  ): ReducerResult =
+    ReducerResult.fromTransition(
+      currentState,
+      Focused.modifyBufferWithId(buffer.id) { current =>
+        current.primarySelection match
+          case Some(selection) => deleteSelectedRange(current, selection, currentState)
+          case None            => withoutSelection(current).getOrElse(current)
+      }
+    )
+
+  private def graphemeBackwardDeletion(
+    buffer: Buffer,
+    cursor: CursorPosition,
+    currentState: AppState
+  ): Option[Buffer] =
+    val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+    backwardGraphemeDeletionRange(buffer.content, offset).map {
+      case (start, end) =>
+        val newContent = buffer.content.delete(start, end)
+        val newCursor  = offsetToCursorPosition(newContent, start)
+        buffer.copy(
+          content = newContent,
+          isDirty = true,
+          isNewEmpty = false,
+          cursors = newCursor :: buffer.cursors.tail,
+          selection = None,
+          preferredColumn = Some(newCursor.column),
+          preferredXPx = None,
+          viewport = adjustViewportForCursor(buffer, currentState, newCursor),
+          documentComments = adjustDocumentComments(
+            buffer.documentComments,
+            buffer.content,
+            newContent,
+            List(MultiCursorEdit(0, start, end, ""))
+          ),
+          richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
+        )
+    }
+
+  /** Forward deletion leaves the cursor where it is, so unlike the backward case it does not adjust the viewport. */
+  private def graphemeForwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[Buffer] =
+    val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+    forwardGraphemeDeletionRange(buffer.content, offset).map {
+      case (start, end) =>
+        val newContent = buffer.content.delete(start, end)
+        val newCursor  = offsetToCursorPosition(newContent, start)
+        buffer.copy(
+          content = newContent,
+          isDirty = true,
+          isNewEmpty = false,
+          cursors = newCursor :: buffer.cursors.tail,
+          preferredColumn = Some(newCursor.column),
+          preferredXPx = None,
+          documentComments = adjustDocumentComments(
+            buffer.documentComments,
+            buffer.content,
+            newContent,
+            List(MultiCursorEdit(0, start, end, ""))
+          ),
+          richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
+        )
+    }
+
+  private def wordBackwardDeletion(buffer: Buffer, cursor: CursorPosition, currentState: AppState): Option[Buffer] =
+    val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+    val start  = previousWordBoundary(buffer.content, offset)
+    Option.when(start < offset)(deleteOffsetRange(buffer, currentState, start, offset, start))
+
+  private def wordForwardDeletion(buffer: Buffer, cursor: CursorPosition, currentState: AppState): Option[Buffer] =
+    val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
+    val end    = nextWordBoundary(buffer.content, offset)
+    Option.when(offset < end)(deleteOffsetRange(buffer, currentState, offset, end, offset))
+
   private def insertAtCursor(
     buffer: Buffer,
     cursor: CursorPosition,
@@ -150,109 +228,16 @@ object EditorEventReducer:
             )
 
           case DeleteBackward =>
-            buffer.primarySelection match
-              case Some(selection) =>
-                val updatedBuffer = deleteSelectedRange(buffer, selection, currentState)
-                ReducerResult.noEffects(
-                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
-                )
-              case None =>
-                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-                backwardGraphemeDeletionRange(buffer.content, offset) match
-                  case Some((start, end)) =>
-                    val newContent      = buffer.content.delete(start, end)
-                    val newCursor       = offsetToCursorPosition(newContent, start)
-                    val updatedViewport = adjustViewportForCursor(buffer, currentState, newCursor)
-                    val updatedBuffer = buffer.copy(
-                      content = newContent,
-                      isDirty = true,
-                      isNewEmpty = false,
-                      cursors = newCursor :: buffer.cursors.tail,
-                      selection = None,
-                      preferredColumn = Some(newCursor.column),
-                      preferredXPx = None,
-                      viewport = updatedViewport,
-                      documentComments = adjustDocumentComments(
-                        buffer.documentComments,
-                        buffer.content,
-                        newContent,
-                        List(MultiCursorEdit(0, start, end, ""))
-                      ),
-                      richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
-                    )
-                    ReducerResult.noEffects(
-                      currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
-                    )
-                  case None =>
-                    ReducerResult.noEffects(currentState)
+            reduceDeletion(buffer, currentState, graphemeBackwardDeletion(_, cursor, currentState))
 
           case DeleteForward =>
-            buffer.primarySelection match
-              case Some(selection) =>
-                val updatedBuffer = deleteSelectedRange(buffer, selection, currentState)
-                ReducerResult.noEffects(
-                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
-                )
-              case None =>
-                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-                forwardGraphemeDeletionRange(buffer.content, offset) match
-                  case Some((start, end)) =>
-                    val newContent = buffer.content.delete(start, end)
-                    val newCursor  = offsetToCursorPosition(newContent, start)
-                    val updatedBuffer = buffer.copy(
-                      content = newContent,
-                      isDirty = true,
-                      isNewEmpty = false,
-                      cursors = newCursor :: buffer.cursors.tail,
-                      preferredColumn = Some(newCursor.column),
-                      preferredXPx = None,
-                      documentComments = adjustDocumentComments(
-                        buffer.documentComments,
-                        buffer.content,
-                        newContent,
-                        List(MultiCursorEdit(0, start, end, ""))
-                      ),
-                      richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
-                    )
-                    ReducerResult.noEffects(
-                      currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
-                    )
-                  case None =>
-                    ReducerResult.noEffects(currentState)
+            reduceDeletion(buffer, currentState, graphemeForwardDeletion(_, cursor))
 
           case DeleteWordBackward =>
-            buffer.primarySelection match
-              case Some(selection) =>
-                val updatedBuffer = deleteSelectedRange(buffer, selection, currentState)
-                ReducerResult.noEffects(
-                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
-                )
-              case None =>
-                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-                val start  = previousWordBoundary(buffer.content, offset)
-                if start < offset then
-                  val updatedBuffer = deleteOffsetRange(buffer, currentState, start, offset, start)
-                  ReducerResult.noEffects(
-                    currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
-                  )
-                else ReducerResult.noEffects(currentState)
+            reduceDeletion(buffer, currentState, wordBackwardDeletion(_, cursor, currentState))
 
           case DeleteWordForward =>
-            buffer.primarySelection match
-              case Some(selection) =>
-                val updatedBuffer = deleteSelectedRange(buffer, selection, currentState)
-                ReducerResult.noEffects(
-                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
-                )
-              case None =>
-                val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-                val end    = nextWordBoundary(buffer.content, offset)
-                if offset < end then
-                  val updatedBuffer = deleteOffsetRange(buffer, currentState, offset, end, offset)
-                  ReducerResult.noEffects(
-                    currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
-                  )
-                else ReducerResult.noEffects(currentState)
+            reduceDeletion(buffer, currentState, wordForwardDeletion(_, cursor, currentState))
 
           case MoveLeft =>
             val movementStart   = selectionFocusOrCursor(buffer, cursor)

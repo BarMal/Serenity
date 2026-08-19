@@ -7,7 +7,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.{IO, Resource}
 import com.serenity.animation.*
 import com.serenity.config.{AppConfig, MarkdownViewMode}
-import com.serenity.keystroke.events.{InsertChar, ScrollDown}
+import com.serenity.keystroke.events.{DeleteBackward, DeleteWordBackward, InsertChar, ScrollDown}
 import com.serenity.lsp.client.LspFramer
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownDocumentPreview
@@ -54,6 +54,74 @@ object PerformanceBenchmarks:
           }
       }
       .unsafeRunSync()
+
+  /** Reducer benchmarks, extracted so `benchmarks` is not a single monolith and so the per-family coverage #993 depends
+    * on is visible in one place.
+    */
+  private def reducerBenchmarks(
+    editingState: AppState,
+    plainScrollState: AppState,
+    richScrollState: AppState,
+    deepViewport: Viewport
+  ): List[BenchmarkRunner.Benchmark] =
+    val normalEditingResult    = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
+    val backspaceResult        = EditorEventReducer.reduce(DeleteBackward, PaneId(0), editingState)
+    val wordDeleteResult       = EditorEventReducer.reduce(DeleteWordBackward, PaneId(0), editingState)
+    val plainScrollResult      = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
+    val richScrollResult       = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
+    val originalLine           = editingState.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000))
+    val expectedEditedLine     = originalLine.map(_.patch(12, "x", 0))
+    val expectedBackspacedLine = originalLine.map(_.patch(11, "", 1))
+
+    def editedLine(result: com.serenity.state.reducers.ReducerResult): Option[String] =
+      result.state.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000))
+
+    List(
+      BenchmarkRunner.Benchmark(
+        "reducer.normal_editing",
+        3,
+        20,
+        () =>
+          assert(
+            expectedEditedLine.exists(line => editedLine(normalEditingResult).contains(line))
+          ),
+        () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
+      ),
+      BenchmarkRunner.Benchmark(
+        "reducer.backspace",
+        3,
+        20,
+        () =>
+          assert(
+            expectedBackspacedLine.exists(line => editedLine(backspaceResult).contains(line))
+          ),
+        () => EditorEventReducer.reduce(DeleteBackward, PaneId(0), editingState)
+      ),
+      BenchmarkRunner.Benchmark(
+        "reducer.delete_word_backward",
+        3,
+        20,
+        () =>
+          assert(
+            editedLine(wordDeleteResult).exists(_.length < expectedBackspacedLine.fold(0)(_.length))
+          ),
+        () => EditorEventReducer.reduce(DeleteWordBackward, PaneId(0), editingState)
+      ),
+      BenchmarkRunner.Benchmark(
+        "reducer.deep_scroll.plain",
+        3,
+        20,
+        () => assert(reducedTopLine(plainScrollResult) == Some(deepViewport.topLine + 40)),
+        () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
+      ),
+      BenchmarkRunner.Benchmark(
+        "reducer.deep_scroll.rich_text",
+        3,
+        20,
+        () => assert(reducedTopLine(richScrollResult) == Some(deepViewport.topLine + 40)),
+        () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
+      )
+    )
 
   private def benchmarks(cursorWindow: SwingWindow, projectRoot: Path): List[BenchmarkRunner.Benchmark] =
     val jsonText       = largeSingleLineJson(entries = 20_000)
@@ -115,13 +183,6 @@ object PerformanceBenchmarks:
     val editingState = findState.copy(
       buffers = findState.buffers.view.mapValues(buffer => buffer.copy(cursors = List(CursorPosition(6_000, 12)))).toMap
     )
-    val normalEditingResult = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
-    val plainScrollResult   = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
-    val richScrollResult    = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
-    val expectedEditedLine = editingState.buffers
-      .get(BufferId(1))
-      .flatMap(_.content.getLine(6_000))
-      .map(_.patch(12, "x", 0))
     val jsonSearchResults = Rope(jsonText).searchAll("\"k19999\"")
     val jsonCursorOffset  = Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
     val layoutSnapshot = plainScrollState.buffers
@@ -282,33 +343,8 @@ object PerformanceBenchmarks:
               renderedFrameHasPixels(hidpiFrame)
           ),
         () => renderedFrame(commentsState, deviceScale = 2.0)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.normal_editing",
-        3,
-        20,
-        () =>
-          assert(
-            expectedEditedLine.exists(line =>
-              normalEditingResult.state.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000)).contains(line)
-            )
-          ),
-        () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.deep_scroll.plain",
-        3,
-        20,
-        () => assert(reducedTopLine(plainScrollResult) == Some(deepViewport.topLine + 40)),
-        () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "reducer.deep_scroll.rich_text",
-        3,
-        20,
-        () => assert(reducedTopLine(richScrollResult) == Some(deepViewport.topLine + 40)),
-        () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
-      ),
+      )
+    ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++ List(
       BenchmarkRunner.Benchmark(
         "find_replace.large_result_set",
         3,

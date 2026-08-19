@@ -11,6 +11,8 @@ object BenchmarkRunner:
   private val AllocationTracked =
     Set(
       "reducer.normal_editing",
+      "reducer.backspace",
+      "reducer.delete_word_backward",
       "reducer.deep_scroll.plain",
       "reducer.deep_scroll.rich_text",
       "render.long_measured_line.java2d"
