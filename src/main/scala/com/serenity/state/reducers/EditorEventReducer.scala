@@ -113,6 +113,22 @@ object EditorEventReducer:
     if buffer.multiCursorVerticalStates.isEmpty then buffer
     else buffer.copy(multiCursorVerticalStates = Nil)
 
+  private def insertAtCursor(
+    buffer: Buffer,
+    cursor: CursorPosition,
+    text: String,
+    currentState: AppState
+  ): ReducerResult =
+    ReducerResult.fromTransition(
+      currentState,
+      Focused.modifyBufferWithId(buffer.id) { current =>
+        val (replaced, edit) = replaceSelectionOrInsert(current, cursor, text)
+        val newCursor        = replaced.cursors.headOption.getOrElse(cursor)
+        val viewport         = adjustViewportForCursor(replaced, currentState, newCursor)
+        addInsertionAnimations(replaced.copy(viewport = viewport), currentState, List(edit))
+      }
+    )
+
   private def reduceSingleCursorTextEvent(
     event: TextEntryEvent,
     buffer: Buffer,
@@ -123,31 +139,10 @@ object EditorEventReducer:
       case Some(cursor) =>
         event match
           case InsertChar(char) =>
-            val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, cursor, char.toString)
-            val newCursor                         = replacedBuffer.cursors.headOption.getOrElse(cursor)
-            val updatedViewport                   = adjustViewportForCursor(replacedBuffer, currentState, newCursor)
-            val updatedBuffer = addInsertionAnimations(
-              replacedBuffer.copy(viewport = updatedViewport),
-              currentState,
-              List(replacementEdit)
-            )
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            insertAtCursor(buffer, cursor, char.toString, currentState)
 
           case TabKey =>
-            val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, cursor, TabInsertion)
-            val newCursor                         = replacedBuffer.cursors.headOption.getOrElse(cursor)
-            val updatedViewport                   = adjustViewportForCursor(replacedBuffer, currentState, newCursor)
-            ReducerResult.noEffects(
-              currentState.copy(buffers =
-                currentState.buffers + (
-                  buffer.id -> addInsertionAnimations(
-                    replacedBuffer.copy(viewport = updatedViewport),
-                    currentState,
-                    List(replacementEdit)
-                  )
-                )
-              )
-            )
+            insertAtCursor(buffer, cursor, TabInsertion, currentState)
 
           case ReverseTabKey =>
             ReducerResult.noEffects(
@@ -424,17 +419,7 @@ object EditorEventReducer:
             ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
 
           case NewLine | Enter =>
-            val (updatedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, cursor, "\n")
-            val newCursor                        = updatedBuffer.cursors.headOption.getOrElse(cursor)
-            val updatedViewport                  = adjustViewportForCursor(updatedBuffer, currentState, newCursor)
-            val updatedBufferWithViewport = addInsertionAnimations(
-              updatedBuffer.copy(viewport = updatedViewport),
-              currentState,
-              List(replacementEdit)
-            )
-            ReducerResult.noEffects(
-              currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBufferWithViewport))
-            )
+            insertAtCursor(buffer, cursor, "\n", currentState)
 
           case MoveToStart =>
             val newCursor       = cursor.copy(column = 0)
