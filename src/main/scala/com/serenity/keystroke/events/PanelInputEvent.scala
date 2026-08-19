@@ -8,9 +8,6 @@ object PanelInputEvent:
   case object Activate                            extends PanelInputEvent
   case object NoOp                                extends PanelInputEvent
 
-  /** Input the panel cannot use hands focus back to the editor rather than being swallowed. The word deletes are
-    * declined outright: the panel has no text to delete, so returning focus on them would be a guess.
-    */
   given SurfaceInput[PanelInputEvent] with
 
     def fromIntent(intent: FocusIntent): Option[PanelInputEvent] =

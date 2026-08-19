@@ -8,9 +8,6 @@ object PeekInputEvent:
   case object Dismiss                             extends PeekInputEvent
   case object OtherInput                          extends PeekInputEvent
 
-  /** The overlay accepts or dismisses; anything else it recognises is marked foreign so the caller can decide. The word
-    * deletes are declined outright, matching the pinned panel.
-    */
   given SurfaceInput[PeekInputEvent] with
 
     def fromIntent(intent: FocusIntent): Option[PeekInputEvent] =

@@ -22,9 +22,8 @@ case object RunnerSubmit                                                     ext
 case object RunnerDismiss                                                    extends CommandRunnerEvent
 final case class RunnerBindingRecordingExpired(recordedAtMillis: Long)       extends CommandRunnerEvent
 
-/** The timestamp is required rather than defaulted to the clock: it identifies the recording session across the
-  * double-tap window, and a default would make constructing this event an effect, so no two constructions of the "same"
-  * binding would ever be equal.
+/** The timestamp is required, not defaulted to the clock: a default makes construction an effect, so no two
+  * constructions of the "same" binding are ever equal.
   */
 final case class RunnerRecordBinding(
     info: KeyStrokeInfo,
@@ -33,7 +32,6 @@ final case class RunnerRecordBinding(
 
 object CommandRunnerEvent:
 
-  /** Tab moves between command categories here; the runner is the only surface that accepts a paste. */
   given SurfaceInput[CommandRunnerEvent] with
 
     def fromIntent(intent: FocusIntent): Option[CommandRunnerEvent] =
