@@ -31,7 +31,7 @@ class RopeIntegrationSpec extends AnyFlatSpec with Matchers:
     // Then: Rope should remain balanced or be rebalanceable
     val finalRope = currentBuffer.content
     finalRope.isHeightBalanced shouldBe true
-    finalRope.isWeightBalanced shouldBe true
+    finalRope.isDepthBalanced shouldBe true
 
   it should "handle rope splitting efficiently for cursor operations" in new RopeIntegrationFixture:
     // Given: Text with various line lengths

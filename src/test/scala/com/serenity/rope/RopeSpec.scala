@@ -286,13 +286,13 @@ class RopeSpec extends AnyFlatSpec with Matchers:
       if i % 100 == 0 then
         // Periodically check balance
         newRope.isHeightBalanced shouldBe true
-        newRope.isWeightBalanced shouldBe true
+        newRope.isDepthBalanced shouldBe true
       newRope
     }
 
     // Final check
     finalRope.isHeightBalanced shouldBe true
-    finalRope.isWeightBalanced shouldBe true
+    finalRope.isDepthBalanced shouldBe true
     finalRope.weight should be > 6000 // Rough check for content
 
   it should "handle deletion at various positions efficiently" in new ChunkedRopeSpecScope:
@@ -321,7 +321,7 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     // Should trigger rebalancing to maintain performance
     rope.isHeightBalanced shouldBe true
-    rope.isWeightBalanced shouldBe true
+    rope.isDepthBalanced shouldBe true
 
     // Verify content is still correct after rebalancing
     val content = rope.collect()
@@ -431,14 +431,14 @@ class RopeSpec extends AnyFlatSpec with Matchers:
       if i % 20 == 0 then
         step4.weight should be > 0
         step4.collect() should not be empty
-        step4.isWeightBalanced shouldBe true
+        step4.isDepthBalanced shouldBe true
 
       step4
     }
 
     // Final verification
     finalRope.weight should be > 0
-    finalRope.isWeightBalanced shouldBe true
+    finalRope.isDepthBalanced shouldBe true
 
   it should "handle degenerate cases" in new RopeSpecScope:
     // Test with empty search terms

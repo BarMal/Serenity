@@ -12,6 +12,15 @@ trait Rope(using balance: Balance):
   def isWeightBalanced: Boolean
   def isHeightBalanced: Boolean
 
+  /** Boehm, Atkinson and Plass: a rope of depth n is balanced when its length is at least the (n+2)th Fibonacci number.
+    *
+    * This is the invariant that protects traversal, because `index` and `splitAt` descend by depth. A weight comparison
+    * between two children says nothing about depth and cannot be held without rebuilding on every edit.
+    */
+  def isDepthBalanced: Boolean =
+    val index = height + 1 // a leaf is height 1 here where the paper counts it depth 0
+    weight == 0 || (index < Rope.minimumWeightsByHeight.size && weight >= Rope.minimumWeightsByHeight(index))
+
   def concat(that: Rope): Rope = Node(this, that).rebalance
 
   /** Reorganises the leaves the rope already holds rather than flattening it to a string and re-splitting.
@@ -446,6 +455,12 @@ object Rope:
     * ragged the edits that produced them; without that, repeated splitting leaves a tail of one-character leaves and
     * the tree deepens even though it is nominally rebuilt.
     */
+  /** F(0) to F(45). A rope deeper than that is degenerate under any criterion, so it is reported unbalanced rather than
+    * overflowing the bound.
+    */
+  private[rope] val minimumWeightsByHeight: Vector[Int] =
+    Vector.iterate((0, 1), 46) { case (current, next) => (next, current + next) }.map((current, _) => current)
+
   private[rope] def fromLeafValues(values: Vector[String])(using balance: Balance): Rope =
     combineBalanced(values.filter(_.nonEmpty))
 
