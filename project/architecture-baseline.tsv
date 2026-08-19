@@ -18,7 +18,7 @@ main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	994
 main/scala/com/serenity/session/SessionState.scala	file length	1227
 main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	770
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2422
-main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala	file length	2148
+main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala	file length	2146
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	807
 main/scala/com/serenity/state/models/AppState.scala	file length	687
 main/scala/com/serenity/state/models/ContextualToolbar.scala	file length	905
@@ -27,7 +27,7 @@ main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	79
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceActive	419
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitSubmenu	134
 main/scala/com/serenity/state/reducers/CursorViewport.scala	forbidden import at line 4: reducers must stay pure: take measured geometry as a parameter instead of reaching for AWT or the layout engine	1
-main/scala/com/serenity/state/reducers/EditorEventReducer.scala	file length	2005
+main/scala/com/serenity/state/reducers/EditorEventReducer.scala	file length	2002
 main/scala/com/serenity/state/reducers/EditorEventReducer.scala	forbidden import at line 9: reducers must stay pure: take measured geometry as a parameter instead of reaching for AWT or the layout engine	1
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	619
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	113
@@ -62,6 +62,5 @@ test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	969
 test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1174
 test/scala/com/serenity/TextOverlayRendererSpec.scala	file length	673
 test/scala/com/serenity/UiPresetSpec.scala	file length	681
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	632
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	332
+test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	330
 test/scala/com/serenity/rope/RopeSpec.scala	file length	724
