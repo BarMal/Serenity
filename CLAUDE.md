@@ -57,7 +57,10 @@ This applies to: guesses about runtime behaviour, inferences from incomplete rea
 - Keep functions small and single-purpose; prefer composition over inheritance
 - Companion objects for smart constructors and `apply`/`empty` helpers
 - Meaningful names that reflect the domain, not the implementation (`AnimationState`, not `StateData`)
-- Doc comments (`/** ... */`) on public API methods and types; inline comments only when the *why* isn't obvious from the code
+- **Prefer self-commenting code.** Names, types and small functions should carry the meaning. A comment that restates what the code already says is noise — delete it rather than maintain it
+- Comment only to record what the code *cannot* say: a non-obvious why, a constraint that will bite the next person, or a decision someone would otherwise "fix" back. Keep these to a sentence or two
+- Doc comments (`/** ... */`) where a public signature genuinely leaves something unsaid — not as a routine header on every member. A `/** Returns the name. */` above `def name: String` is worse than nothing
+- Rule of thumb: if deleting the comment loses no information, it should not have been written
 - Keep imports explicit — no wildcard imports except for `cats.syntax.all._` or `cats.implicits._`
 - Run `scalafix` for unused import cleanup (semanticdb is enabled)
 
