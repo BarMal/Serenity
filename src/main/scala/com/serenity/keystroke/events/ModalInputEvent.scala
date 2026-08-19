@@ -17,21 +17,26 @@ final case class ModalClick(focusId: String, actionId: Option[String]) extends M
 
 object ModalInputEvent:
 
+  /** Tab moves between fields here. The modal has no clipboard target, so it declines a paste. */
+  given SurfaceInput[ModalInputEvent] with
+
+    def fromIntent(intent: FocusIntent): Option[ModalInputEvent] =
+      intent match
+        case FocusIntent.Insert(char)        => Some(ModalInsertChar(char))
+        case FocusIntent.DeleteBackward      => Some(ModalDeleteBackward)
+        case FocusIntent.DeleteForward       => Some(ModalDeleteForward)
+        case FocusIntent.DeleteWordBackward  => Some(ModalDeleteWordBackward)
+        case FocusIntent.DeleteWordForward   => Some(ModalDeleteWordForward)
+        case FocusIntent.Navigate(direction) => Some(ModalNavigate(direction))
+        case FocusIntent.NextGroup           => Some(ModalNextField)
+        case FocusIntent.PreviousGroup       => Some(ModalPreviousField)
+        case FocusIntent.Submit              => Some(ModalSubmit)
+        case FocusIntent.Dismiss             => Some(ModalDismiss)
+        case FocusIntent.Paste               => None
+
+  /** `FindNext` stays here rather than joining the shared vocabulary: the modal is its only consumer. */
   def fromEvent(event: Event): Option[ModalInputEvent] =
     event match
-      case InsertChar(char)            => Some(ModalInsertChar(char))
-      case DeleteBackward              => Some(ModalDeleteBackward)
-      case DeleteForward               => Some(ModalDeleteForward)
-      case DeleteWordBackward          => Some(ModalDeleteWordBackward)
-      case DeleteWordForward           => Some(ModalDeleteWordForward)
-      case MoveUp                      => Some(ModalNavigate(Direction.Up))
-      case MoveDown                    => Some(ModalNavigate(Direction.Down))
-      case MoveLeft                    => Some(ModalNavigate(Direction.Left))
-      case MoveRight                   => Some(ModalNavigate(Direction.Right))
-      case TabKey                      => Some(ModalNextField)
-      case ReverseTabKey               => Some(ModalPreviousField)
-      case Enter | NewLine             => Some(ModalSubmit)
-      case FindNext                    => Some(ModalFindNext)
-      case Escape                      => Some(ModalDismiss)
       case modalEvent: ModalInputEvent => Some(modalEvent)
-      case _                           => None
+      case FindNext                    => Some(ModalFindNext)
+      case other                       => SurfaceInput.translate[ModalInputEvent](other)
