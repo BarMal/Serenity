@@ -2,7 +2,6 @@ package com.serenity.perf
 
 import java.awt.Font
 import java.awt.image.BufferedImage
-import java.lang.management.ManagementFactory
 import java.nio.file.{Files, Path}
 
 import cats.effect.{IO, Resource}
@@ -30,32 +29,6 @@ object PerformanceBenchmarks:
     2.0 -> new SwingWindow.ReusableImagePool
   )
 
-  final private case class Benchmark(
-      name: String,
-      warmups: Int,
-      iterations: Int,
-      verify: () => Unit,
-      run: () => Unit,
-      measureAllocation: Boolean = false
-  )
-
-  final private case class BenchmarkResult(
-      name: String,
-      iterations: Int,
-      minMs: Double,
-      p50Ms: Double,
-      p95Ms: Double,
-      maxMs: Double,
-      allocationP50Bytes: Option[Long],
-      allocationP95Bytes: Option[Long]
-  )
-
-  private val allocationBean = ManagementFactory.getThreadMXBean match
-    case bean: com.sun.management.ThreadMXBean if bean.isThreadAllocatedMemorySupported =>
-      if !bean.isThreadAllocatedMemoryEnabled then bean.setThreadAllocatedMemoryEnabled(true)
-      Some(bean)
-    case _ => None
-
   given Balance = Balance.default
 
   private val monoFont      = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -76,13 +49,13 @@ object PerformanceBenchmarks:
       .use {
         case (window, projectRoot) =>
           IO {
-            val results = benchmarks(window, projectRoot).map(runBenchmark)
-            printResults(results)
+            val results = benchmarks(window, projectRoot).map(BenchmarkRunner.runBenchmark)
+            BenchmarkRunner.printResults(results)
           }
       }
       .unsafeRunSync()
 
-  private def benchmarks(cursorWindow: SwingWindow, projectRoot: Path): List[Benchmark] =
+  private def benchmarks(cursorWindow: SwingWindow, projectRoot: Path): List[BenchmarkRunner.Benchmark] =
     val jsonText       = largeSingleLineJson(entries = 20_000)
     val multilineText  = largeMultilineDocument(lines = 15_000)
     val findText       = largeFindDocument(matches = 12_000)
@@ -237,21 +210,21 @@ object PerformanceBenchmarks:
     val advancedAnimationState = animationState.advanceAllAnimations()
 
     List(
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "rope.large_json.search",
         3,
         12,
         () => assert(jsonSearchResults.nonEmpty),
         () => Rope(jsonText).searchAll("\"k19999\"")
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "rope.large_json.cursor_offset",
         3,
         20,
         () => assert(jsonCursorOffset == jsonText.length - 5),
         () => Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "layout.large_multiline.visible_viewport",
         3,
         20,
@@ -266,14 +239,14 @@ object PerformanceBenchmarks:
             )
           }
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "render.full_frame.java2d",
         2,
         8,
         () => assert(renderedFrameHasPixels(fullFrame)),
         () => renderedFrame(richState, deviceScale = 1.0)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "render.long_measured_line.java2d",
         2,
         8,
@@ -281,10 +254,8 @@ object PerformanceBenchmarks:
         () =>
           val _ = renderedLongMeasuredLine(longMeasuredLine)
           ()
-        ,
-        measureAllocation = true
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "render.cursor_only.scene_reuse.java2d_overlay",
         2,
         8,
@@ -293,14 +264,14 @@ object PerformanceBenchmarks:
           val _ = renderedCursorOverlay(plainScrollState, cursorWindow)
           ()
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "render.diagnostics_and_comments.java2d",
         2,
         8,
         () => assert(renderedFrameHasPixels(diagnosticsAndComments)),
         () => renderedFrame(diagnosticsState, deviceScale = 1.0)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "render.hidpi_frame.java2d",
         2,
         8,
@@ -312,7 +283,7 @@ object PerformanceBenchmarks:
           ),
         () => renderedFrame(commentsState, deviceScale = 2.0)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "reducer.normal_editing",
         3,
         20,
@@ -324,28 +295,28 @@ object PerformanceBenchmarks:
           ),
         () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "reducer.deep_scroll.plain",
         3,
         20,
         () => assert(reducedTopLine(plainScrollResult) == Some(deepViewport.topLine + 40)),
         () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "reducer.deep_scroll.rich_text",
         3,
         20,
         () => assert(reducedTopLine(richScrollResult) == Some(deepViewport.topLine + 40)),
         () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "find_replace.large_result_set",
         3,
         20,
         () => assert(visibleFindResults.size == 80 && visibleFindResults.exists(_._1 == FindResult(6_000, 10))),
         () => findResultSet.visibleResults(maxResults = 80)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "find_replace.large_query_update",
         3,
         20,
@@ -357,21 +328,21 @@ object PerformanceBenchmarks:
             FindSearch.results(findQueryRequest.content, findQueryRequest.query)
           )
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "find_replace.large_query_keystroke",
         3,
         20,
         () => assert(findKeystrokeResult.effects.nonEmpty),
         () => ModalEventReducer.reduce(ModalType.Find, InsertChar('e'), findKeystrokeState)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "lsp.framer.large_batch",
         3,
         12,
         () => assert(decodedLspMessages == lspMessages),
         () => decodeLspMessages(framedLspMessages)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "project_task.responsiveness",
         3,
         20,
@@ -382,7 +353,7 @@ object PerformanceBenchmarks:
           ),
         () => ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test).map(ProjectTaskTerminal.started)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "markdown.preview.window_mapping",
         3,
         20,
@@ -391,21 +362,21 @@ object PerformanceBenchmarks:
           MarkdownDocumentPreview
             .previewWindow(markdownLines, activeLine = Some(1_200), fallbackTopLine = 1_000, maxSourceLines = 80)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "markdown.preview.html_fragment",
         2,
         8,
         () => assert(markdownHtmlFragment.contains("<h2>")),
         () => MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "render.markdown.inline_lens",
         2,
         8,
         () => assert(renderedFrameHasPixels(markdownLensFrame)),
         () => renderedFrame(markdownState, deviceScale = 1.0)
       ),
-      Benchmark(
+      BenchmarkRunner.Benchmark(
         "animation.large_visible_tick",
         3,
         30,
@@ -413,66 +384,6 @@ object PerformanceBenchmarks:
         () => animationState.advanceAllAnimations()
       )
     )
-
-  private def runBenchmark(benchmark: Benchmark): BenchmarkResult =
-    benchmark.verify()
-    (0 until benchmark.warmups).foreach(_ => benchmark.run())
-    val samples = (0 until benchmark.iterations).map { _ =>
-      val started = System.nanoTime()
-      benchmark.run()
-      (System.nanoTime() - started).toDouble / 1_000_000.0
-    }.sorted
-    val allocationSamples =
-      if benchmark.measureAllocation then
-        allocationBean
-          .map { bean =>
-            val threadId = Thread.currentThread().getId
-            (0 until benchmark.iterations).map { _ =>
-              val started = bean.getThreadAllocatedBytes(threadId)
-              benchmark.run()
-              (bean.getThreadAllocatedBytes(threadId) - started).max(0L)
-            }
-          }
-          .getOrElse(Vector.empty[Long])
-          .sorted
-      else Vector.empty[Long]
-    BenchmarkResult(
-      name = benchmark.name,
-      iterations = benchmark.iterations,
-      minMs = samples.headOption.getOrElse(0.0),
-      p50Ms = percentile(samples, 0.50),
-      p95Ms = percentile(samples, 0.95),
-      maxMs = samples.lastOption.getOrElse(0.0),
-      allocationP50Bytes = allocationSamples.headOption.map(_ => percentileLong(allocationSamples, 0.50)),
-      allocationP95Bytes = allocationSamples.headOption.map(_ => percentileLong(allocationSamples, 0.95))
-    )
-
-  private def percentile(samples: IndexedSeq[Double], percentile: Double): Double =
-    if samples.isEmpty then 0.0
-    else
-      val index = math.ceil(percentile.max(0.0).min(1.0) * samples.length).toInt - 1
-      samples(index.max(0).min(samples.length - 1))
-
-  private def percentileLong(samples: IndexedSeq[Long], percentile: Double): Long =
-    if samples.isEmpty then 0L
-    else
-      val index = math.ceil(percentile.max(0.0).min(1.0) * samples.length).toInt - 1
-      samples(index.max(0).min(samples.length - 1))
-
-  private def printResults(results: List[BenchmarkResult]): Unit =
-    println("Serenity performance benchmarks")
-    println(s"context,java_runtime,${System.getProperty("java.runtime.version", "unknown")}")
-    println(s"context,java_vendor,${System.getProperty("java.vendor", "unknown")}")
-    println(s"context,os,${System.getProperty("os.name", "unknown")} ${System.getProperty("os.version", "unknown")}")
-    println(s"context,available_processors,${Runtime.getRuntime.availableProcessors()}")
-    println("name,iterations,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes")
-    results.foreach { result =>
-      val allocationP50 = result.allocationP50Bytes.fold("")(_.toString)
-      val allocationP95 = result.allocationP95Bytes.fold("")(_.toString)
-      println(
-        f"${result.name},${result.iterations},${result.minMs}%.3f,${result.p50Ms}%.3f,${result.p95Ms}%.3f,${result.maxMs}%.3f,$allocationP50,$allocationP95"
-      )
-    }
 
   private def renderedFrame(state: AppState, deviceScale: Double): BufferedImage =
     val image = reusableFramePools(deviceScale).acquire(
