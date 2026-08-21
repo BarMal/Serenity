@@ -11,6 +11,7 @@ import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 
 object EditorEventReducer:
   private val TabInsertion = "    "
+  private val OriginCursor = CursorPosition(0, 0)
 
   def reducer(paneId: PaneId)(using balance: com.serenity.rope.Balance): Reducer[EditorEvent] =
     Reducer.instance((event, state) => reduce(event, paneId, state))
@@ -230,7 +231,7 @@ object EditorEventReducer:
 
           case ReverseTabKey =>
             ReducerResult.noEffects(
-              updateBufferInState(currentState, applyLineUnindent(buffer, currentState, List(cursor.line)))
+              Focused.replaceBuffer(currentState, applyLineUnindent(buffer, currentState, List(cursor.line)))
             )
 
           case DeleteBackward =>
@@ -508,36 +509,37 @@ object EditorEventReducer:
     event: TextEntryEvent,
     buffer: Buffer,
     paneId: PaneId,
-    currentState: AppState
+    incomingState: AppState
   ): ReducerResult =
+    val currentState = Focused.replaceBuffer(incomingState, buffer)
     event match
       case InsertChar(char) =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiSelectionReplacement(buffer, currentState, char.toString))
+          Focused.replaceBuffer(currentState, applyMultiSelectionReplacement(buffer, currentState, char.toString))
         )
       case TabKey =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyLineIndent(buffer, currentState, selectionLines(buffer)))
+          Focused.replaceBuffer(currentState, applyLineIndent(buffer, currentState, selectionLines(buffer)))
         )
       case NewLine | Enter =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiSelectionReplacement(buffer, currentState, "\n"))
+          Focused.replaceBuffer(currentState, applyMultiSelectionReplacement(buffer, currentState, "\n"))
         )
       case Paste =>
         currentState.clipboard.filter(_.nonEmpty) match
           case Some(text) =>
             ReducerResult.noEffects(
-              updateBufferInState(currentState, applyMultiSelectionReplacement(buffer, currentState, text))
+              Focused.replaceBuffer(currentState, applyMultiSelectionReplacement(buffer, currentState, text))
             )
           case None =>
             ReducerResult.noEffects(currentState)
       case ReverseTabKey =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyLineUnindent(buffer, currentState, selectionLines(buffer)))
+          Focused.replaceBuffer(currentState, applyLineUnindent(buffer, currentState, selectionLines(buffer)))
         )
       case DeleteBackward | DeleteForward | DeleteWordBackward | DeleteWordForward =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, deleteSelectedRanges(buffer, currentState))
+          Focused.replaceBuffer(currentState, deleteSelectedRanges(buffer, currentState))
         )
       case Copy =>
         ReducerResult.noEffects(currentState.copy(clipboard = Some(selectedTexts(buffer).mkString("\n"))))
@@ -560,73 +562,74 @@ object EditorEventReducer:
     event: TextEntryEvent,
     buffer: Buffer,
     paneId: PaneId,
-    currentState: AppState
+    incomingState: AppState
   ): ReducerResult =
+    val currentState = Focused.replaceBuffer(incomingState, buffer)
     event match
       case InsertChar(char) =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorInsertion(buffer, currentState, char.toString))
+          Focused.replaceBuffer(currentState, applyMultiCursorInsertion(buffer, currentState, char.toString))
         )
       case TabKey =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorInsertion(buffer, currentState, TabInsertion))
+          Focused.replaceBuffer(currentState, applyMultiCursorInsertion(buffer, currentState, TabInsertion))
         )
       case NewLine | Enter =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorInsertion(buffer, currentState, "\n"))
+          Focused.replaceBuffer(currentState, applyMultiCursorInsertion(buffer, currentState, "\n"))
         )
       case Paste =>
         currentState.clipboard.filter(_.nonEmpty) match
           case Some(text) =>
             ReducerResult.noEffects(
-              updateBufferInState(currentState, applyMultiCursorInsertion(buffer, currentState, text))
+              Focused.replaceBuffer(currentState, applyMultiCursorInsertion(buffer, currentState, text))
             )
           case None =>
             ReducerResult.noEffects(currentState)
       case DeleteBackward =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorDeletion(buffer, currentState, backward = true))
+          Focused.replaceBuffer(currentState, applyMultiCursorDeletion(buffer, currentState, backward = true))
         )
       case DeleteForward =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorDeletion(buffer, currentState, backward = false))
+          Focused.replaceBuffer(currentState, applyMultiCursorDeletion(buffer, currentState, backward = false))
         )
       case DeleteWordBackward =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorWordDeletion(buffer, currentState, backward = true))
+          Focused.replaceBuffer(currentState, applyMultiCursorWordDeletion(buffer, currentState, backward = true))
         )
       case DeleteWordForward =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorWordDeletion(buffer, currentState, backward = false))
+          Focused.replaceBuffer(currentState, applyMultiCursorWordDeletion(buffer, currentState, backward = false))
         )
       case ReverseTabKey =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyLineUnindent(buffer, currentState, distinctCursorLines(buffer)))
+          Focused.replaceBuffer(currentState, applyLineUnindent(buffer, currentState, distinctCursorLines(buffer)))
         )
       case MoveLeft =>
         ReducerResult.noEffects(
-          updateBufferInState(
+          Focused.replaceBuffer(
             currentState,
             applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorLeft(cursor, buffer.content))
           )
         )
       case MoveRight =>
         ReducerResult.noEffects(
-          updateBufferInState(
+          Focused.replaceBuffer(
             currentState,
             applyMultiCursorNavigation(buffer, currentState)(cursor => moveCursorRight(cursor, buffer.content))
           )
         )
       case MoveToStart =>
         ReducerResult.noEffects(
-          updateBufferInState(
+          Focused.replaceBuffer(
             currentState,
             applyMultiCursorNavigation(buffer, currentState)(cursor => cursor.copy(column = 0))
           )
         )
       case MoveToEnd =>
         ReducerResult.noEffects(
-          updateBufferInState(
+          Focused.replaceBuffer(
             currentState,
             applyMultiCursorNavigation(buffer, currentState)(cursor =>
               cursor.copy(column = findLineEnd(buffer.content, cursor.line))
@@ -635,23 +638,23 @@ object EditorEventReducer:
         )
       case MoveUp =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorVerticalNavigation(buffer, currentState, direction = -1))
+          Focused.replaceBuffer(currentState, applyMultiCursorVerticalNavigation(buffer, currentState, direction = -1))
         )
       case MoveDown =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorVerticalNavigation(buffer, currentState, direction = 1))
+          Focused.replaceBuffer(currentState, applyMultiCursorVerticalNavigation(buffer, currentState, direction = 1))
         )
       case PageUp =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorPageNavigation(buffer, direction = -1))
+          Focused.replaceBuffer(currentState, applyMultiCursorPageNavigation(buffer, direction = -1))
         )
       case PageDown =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorPageNavigation(buffer, direction = 1))
+          Focused.replaceBuffer(currentState, applyMultiCursorPageNavigation(buffer, direction = 1))
         )
       case MoveToStartOfFile =>
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorNavigation(buffer, currentState)(_ => CursorPosition(0, 0)))
+          Focused.replaceBuffer(currentState, applyMultiCursorNavigation(buffer, currentState)(_ => OriginCursor))
         )
       case MoveToEndOfFile =>
         val totalLines  = countLines(buffer.content)
@@ -659,7 +662,7 @@ object EditorEventReducer:
         val lastLineEnd = findLineEnd(buffer.content, lastLine)
         val target      = CursorPosition(lastLine, lastLineEnd)
         ReducerResult.noEffects(
-          updateBufferInState(currentState, applyMultiCursorNavigation(buffer, currentState)(_ => target))
+          Focused.replaceBuffer(currentState, applyMultiCursorNavigation(buffer, currentState)(_ => target))
         )
       case Copy =>
         val clipboardText = distinctCursorLines(buffer)
@@ -1224,9 +1227,6 @@ object EditorEventReducer:
       .flatMap(selection => selection.start.line to selection.end.line)
       .distinct
       .sorted
-
-  private def updateBufferInState(state: AppState, buffer: Buffer): AppState =
-    state.copy(buffers = state.buffers + (buffer.id -> buffer))
 
   private def deleteOffsetRange(
     buffer: Buffer,
