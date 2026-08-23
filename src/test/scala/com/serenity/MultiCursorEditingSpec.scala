@@ -3,7 +3,6 @@ package com.serenity
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.EditorEventReducer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -31,8 +30,8 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
       )
     AppState.initial.copy(buffers = AppState.initial.buffers.updated(bufferId, buffer))
 
-  private def reduce(event: TextEntryEvent, state: AppState): Buffer =
-    EditorEventReducer.reduce(event, paneId, state).state.buffers(bufferId)
+  private def reduce(event: EditorEvent, state: AppState): Buffer =
+    VerticalNavSupport.dispatch(event, paneId, state).state.buffers(bufferId)
 
   "Multi-cursor editing" should "sort and deduplicate cursors before inserting text" in {
     val state = stateWithBuffer(

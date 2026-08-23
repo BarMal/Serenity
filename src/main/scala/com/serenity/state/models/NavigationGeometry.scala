@@ -49,6 +49,12 @@ final case class TextVisualLine(
   private def closer(first: TextCaretStop, second: TextCaretStop, xPx: Float): TextCaretStop =
     if math.abs(second.xPx - xPx) < math.abs(first.xPx - xPx) then second else first
 
+/** The immutable geometry a vertical cursor move needs, produced once at the effect boundary and handed to the pure
+  * reducer. `charWidthPx` and `panelWidthColumns` back the monospace fallbacks used when the measured layout has no
+  * caret stop for a cursor or when word wrap is off.
+  */
+final case class EditorGeometry(navigation: NavigationGeometry, charWidthPx: Int, panelWidthColumns: Int)
+
 final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
 
   def xPxForCursor(cursor: CursorPosition): Option[Float] =

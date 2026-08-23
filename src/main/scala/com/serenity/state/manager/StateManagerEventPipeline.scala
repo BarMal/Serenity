@@ -166,19 +166,34 @@ final private[manager] class StateManagerEventPipeline(
         handleMouseDrag(drag, prevState)
       case move: MouseMove =>
         handleMouseMove(move, prevState)
+      case vertical: VerticalNavigationEvent =>
+        prevState.focus match
+          case Focus.EditorPane(paneId) =>
+            EditorGeometryProducer.forPane(prevState, paneId) match
+              case Some(geometry) =>
+                validateAndUpdateState(
+                  EditorEventReducer.reduceVerticalNavigation(vertical, paneId, prevState, geometry).state,
+                  prevState
+                )
+              case None => dispatchToFocusedHandler(vertical, prevState)
+          case _ => dispatchToFocusedHandler(vertical, prevState)
+
       case _: (TextEntryEvent | SurfaceEvent) =>
-        val logCommandRunnerEvent =
-          focusedCommandRunner(prevState) match
-            case Some(runner) =>
-              logger.debug(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
-            case None =>
-              cats.effect.IO.unit
+        dispatchToFocusedHandler(event, prevState)
 
-        val result =
-          getLocalHandlerForFocus(prevState.focus, prevState).processEvent(event, prevState)
+  private def dispatchToFocusedHandler(event: Event, prevState: AppState): cats.effect.IO[Unit] =
+    val logCommandRunnerEvent =
+      focusedCommandRunner(prevState) match
+        case Some(runner) =>
+          logger.debug(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
+        case None =>
+          cats.effect.IO.unit
 
-        logCommandRunnerEvent >>
-          applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
+    val result =
+      getLocalHandlerForFocus(prevState.focus, prevState).processEvent(event, prevState)
+
+    logCommandRunnerEvent >>
+      applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
 
   /** Routed by type alone: `CloseTab` and `Quit` previously had to precede the `GlobalAppEvent` branch. */
   private def dispatchGlobalAppEvent(event: GlobalAppEvent, prevState: AppState): cats.effect.IO[Unit] =

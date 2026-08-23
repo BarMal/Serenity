@@ -6,18 +6,16 @@ import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.text.TextEditing
-import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 
 object EditorEventReducer:
   private val TabInsertion = "    "
   private val OriginCursor = CursorPosition(0, 0)
 
-  def reducer(paneId: PaneId)(using balance: com.serenity.rope.Balance): Reducer[EditorEvent] =
+  def reducer(paneId: PaneId)(using balance: com.serenity.rope.Balance): Reducer[TextEntryEvent] =
     Reducer.instance((event, state) => reduce(event, paneId, state))
 
   def reduce(
-    event: EditorEvent,
+    event: TextEntryEvent,
     paneId: PaneId,
     currentState: AppState
   )(using balance: com.serenity.rope.Balance): ReducerResult =
@@ -25,8 +23,82 @@ object EditorEventReducer:
       case Some(pane) => reduceForPane(event, paneId, pane, currentState)
       case None       => ReducerResult.noEffects(currentState)
 
+  /** Vertical movement is the one editor reduction whose result depends on measured text geometry, so it is separated
+    * from the geometry-free `reduce` and takes the geometry the effect boundary produced for this pane. Routing mirrors
+    * `reduceTextEventForBuffer`: extend-selection stays single-cursor, multi-selection collapses to its focuses, and a
+    * multi-cursor buffer (or one carrying in-flight vertical state) moves every cursor.
+    */
+  def reduceVerticalNavigation(
+    event: VerticalNavigationEvent,
+    paneId: PaneId,
+    currentState: AppState,
+    geometry: EditorGeometry
+  ): ReducerResult =
+    currentState.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(currentState.buffers.get) match
+      case Some(buffer) =>
+        val direction = event match
+          case MoveUp | ExtendSelectionUp     => -1
+          case MoveDown | ExtendSelectionDown => 1
+        event match
+          case ExtendSelectionUp | ExtendSelectionDown =>
+            extendVertical(clearInFlightMultiCursorVerticalState(buffer), currentState, geometry, direction)
+          case MoveUp | MoveDown =>
+            moveVerticalForBuffer(buffer, currentState, geometry, direction)
+      case None => ReducerResult.noEffects(currentState)
+
+  private def extendVertical(
+    buffer: Buffer,
+    incomingState: AppState,
+    geometry: EditorGeometry,
+    direction: Int
+  ): ReducerResult =
+    val currentState = Focused.replaceBuffer(incomingState, buffer)
+    buffer.cursors.headOption match
+      case Some(cursor) =>
+        reduceSelectionExtension(buffer, cursor, currentState)(verticalTarget(currentState, geometry, direction))
+      case None => ReducerResult.noEffects(currentState)
+
+  private def moveVerticalForBuffer(
+    buffer: Buffer,
+    incomingState: AppState,
+    geometry: EditorGeometry,
+    direction: Int
+  ): ReducerResult =
+    if buffer.allSelections.nonEmpty then
+      val seeded    = Focused.replaceBuffer(incomingState, buffer)
+      val collapsed = collapseSelectionsToFocus(buffer, seeded)
+      multiVertical(collapsed, seeded, geometry, direction)
+    else if buffer.multiCursorVerticalStates.size > 1 || buffer.cursors.size > 1 then
+      multiVertical(buffer, incomingState, geometry, direction)
+    else singleVertical(clearInFlightMultiCursorVerticalState(buffer), incomingState, geometry, direction)
+
+  private def singleVertical(
+    buffer: Buffer,
+    incomingState: AppState,
+    geometry: EditorGeometry,
+    direction: Int
+  ): ReducerResult =
+    val currentState = Focused.replaceBuffer(incomingState, buffer)
+    buffer.cursors.headOption match
+      case Some(cursor) =>
+        reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(
+          verticalTarget(currentState, geometry, direction)
+        )
+      case None => ReducerResult.noEffects(currentState)
+
+  private def multiVertical(
+    buffer: Buffer,
+    incomingState: AppState,
+    geometry: EditorGeometry,
+    direction: Int
+  ): ReducerResult =
+    val currentState = Focused.replaceBuffer(incomingState, buffer)
+    ReducerResult.noEffects(
+      Focused.replaceBuffer(currentState, applyMultiCursorVerticalNavigation(buffer, currentState, geometry, direction))
+    )
+
   private def reduceForPane(
-    event: EditorEvent,
+    event: TextEntryEvent,
     paneId: PaneId,
     pane: EditorPane,
     currentState: AppState
@@ -79,8 +151,6 @@ object EditorEventReducer:
       if isExtendSelectionEvent(event) then
         reduceSingleCursorTextEvent(event, clearInFlightMultiCursorVerticalState(buffer), paneId, currentState)
       else if buffer.allSelections.nonEmpty then reduceMultiSelectionTextEvent(event, buffer, paneId, currentState)
-      else if preservesInFlightMultiCursorVerticalState(event, buffer) then
-        reduceMultiCursorTextEvent(event, buffer, paneId, currentState)
       else if buffer.cursors.size > 1 then reduceMultiCursorTextEvent(event, buffer, paneId, currentState)
       else reduceSingleCursorTextEvent(event, clearInFlightMultiCursorVerticalState(buffer), paneId, currentState)
 
@@ -97,8 +167,8 @@ object EditorEventReducer:
 
   private def isExtendSelectionEvent(event: TextEntryEvent): Boolean =
     event match
-      case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionUp | ExtendSelectionDown => true
-      case _                                                                                    => false
+      case ExtendSelectionLeft | ExtendSelectionRight => true
+      case _                                          => false
 
   private def invalidateFindState(state: AppState, bufferId: BufferId): AppState =
     state.buffers.get(bufferId) match
@@ -106,9 +176,6 @@ object EditorEventReducer:
         state.copy(buffers = state.buffers + (bufferId -> buffer.copy(findState = None)))
       case _ =>
         state
-
-  private def preservesInFlightMultiCursorVerticalState(event: TextEntryEvent, buffer: Buffer): Boolean =
-    buffer.multiCursorVerticalStates.size > 1 && (event == MoveUp || event == MoveDown)
 
   private def clearInFlightMultiCursorVerticalState(buffer: Buffer): Buffer =
     if buffer.multiCursorVerticalStates.isEmpty then buffer
@@ -258,27 +325,11 @@ object EditorEventReducer:
           case MoveWordRight =>
             reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(wordRightTarget)
 
-          case MoveUp =>
-            reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(
-              verticalTarget(currentState, -1)
-            )
-
-          case MoveDown =>
-            reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(
-              verticalTarget(currentState, 1)
-            )
-
           case ExtendSelectionLeft =>
             reduceSelectionExtension(buffer, cursor, currentState)(leftTarget)
 
           case ExtendSelectionRight =>
             reduceSelectionExtension(buffer, cursor, currentState)(rightTarget)
-
-          case ExtendSelectionUp =>
-            reduceSelectionExtension(buffer, cursor, currentState)(verticalTarget(currentState, -1))
-
-          case ExtendSelectionDown =>
-            reduceSelectionExtension(buffer, cursor, currentState)(verticalTarget(currentState, 1))
 
           case NewLine | Enter =>
             insertAtCursor(buffer, cursor, "\n", currentState)
@@ -550,8 +601,7 @@ object EditorEventReducer:
             clipboard = Some(selectedTexts(buffer).mkString("\n"))
           )
         )
-      case MoveLeft | MoveRight | MoveUp | MoveDown | MoveToStart | MoveToEnd | PageUp | PageDown | MoveToStartOfFile |
-          MoveToEndOfFile =>
+      case MoveLeft | MoveRight | MoveToStart | MoveToEnd | PageUp | PageDown | MoveToStartOfFile | MoveToEndOfFile =>
         reduceMultiCursorTextEvent(event, collapseSelectionsToFocus(buffer, currentState), paneId, currentState)
       case SelectAll | OpenGotoLine | OpenFind | OpenReplace | FindNext | Escape =>
         reduceGlobalTextEvent(event, buffer, paneId, currentState)
@@ -635,14 +685,6 @@ object EditorEventReducer:
               cursor.copy(column = findLineEnd(buffer.content, cursor.line))
             )
           )
-        )
-      case MoveUp =>
-        ReducerResult.noEffects(
-          Focused.replaceBuffer(currentState, applyMultiCursorVerticalNavigation(buffer, currentState, direction = -1))
-        )
-      case MoveDown =>
-        ReducerResult.noEffects(
-          Focused.replaceBuffer(currentState, applyMultiCursorVerticalNavigation(buffer, currentState, direction = 1))
         )
       case PageUp =>
         ReducerResult.noEffects(
@@ -1148,17 +1190,17 @@ object EditorEventReducer:
   private def applyMultiCursorVerticalNavigation(
     buffer: Buffer,
     currentState: AppState,
+    geometry: EditorGeometry,
     direction: Int
   ): Buffer =
-    val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
-    val cursorStates          = multiCursorVerticalStates(buffer, navSnap, navMetrics)
+    val cursorStates = multiCursorVerticalStates(buffer, geometry)
     val movedStates = cursorStates.map { cursorState =>
       cursorState.copy(
         cursor = moveMultiCursorVertical(
           cursorState.cursor,
           buffer,
           currentState,
-          navSnap,
+          geometry,
           cursorState.preferredColumn,
           cursorState.preferredXPx,
           direction
@@ -1331,18 +1373,25 @@ object EditorEventReducer:
     cursor: CursorPosition,
     buffer: Buffer,
     currentState: AppState,
-    navSnap: TextLayoutSnapshot,
+    geometry: EditorGeometry,
     preferredColumn: Int,
     preferredXPx: Float,
     direction: Int
   ): CursorPosition =
-    measuredVerticalMoveBySnapshot(currentState.config.wordWrapEnabled, cursor, navSnap, preferredXPx, direction)
-      .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction))
+    measuredVerticalMoveBySnapshot(
+      currentState.config.wordWrapEnabled,
+      cursor,
+      geometry.navigation,
+      preferredXPx,
+      direction
+    )
+      .getOrElse(
+        fallbackVerticalMove(cursor, buffer, geometry, currentState.config.wordWrapEnabled, preferredColumn, direction)
+      )
 
   private def multiCursorVerticalStates(
     buffer: Buffer,
-    navSnap: TextLayoutSnapshot,
-    navMetrics: CellMetrics
+    geometry: EditorGeometry
   ): List[MultiCursorVerticalState] =
     val visibleCursors = buffer.cursors.distinct
       .sortBy(cursor => (cursor.line, cursor.column))
@@ -1357,7 +1406,7 @@ object EditorEventReducer:
       )
     else
       visibleCursors.map(cursor =>
-        MultiCursorVerticalState(cursor, cursor.column, measuredCursorXPxFrom(navSnap, navMetrics, cursor))
+        MultiCursorVerticalState(cursor, cursor.column, measuredCursorXPxFrom(geometry, cursor))
       )
 
   private def adjustViewportForCursor(
@@ -1415,13 +1464,14 @@ object EditorEventReducer:
   private def fallbackVerticalMove(
     cursor: CursorPosition,
     buffer: Buffer,
-    currentState: AppState,
+    geometry: EditorGeometry,
+    wordWrapEnabled: Boolean,
     preferredColumn: Int,
     direction: Int
   ): CursorPosition =
-    if currentState.config.wordWrapEnabled then
-      if direction < 0 then moveUpVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn)
-      else moveDownVisualLine(cursor, buffer.content, effectivePanelWidth(currentState), preferredColumn)
+    if wordWrapEnabled then
+      if direction < 0 then moveUpVisualLine(cursor, buffer.content, geometry.panelWidthColumns, preferredColumn)
+      else moveDownVisualLine(cursor, buffer.content, geometry.panelWidthColumns, preferredColumn)
     else if direction < 0 then moveUpLogicalLine(cursor, buffer.content, preferredColumn)
     else moveDownLogicalLine(cursor, buffer.content, preferredColumn)
 
@@ -1560,16 +1610,23 @@ object EditorEventReducer:
     val offset = lineColumnToOffset(buffer.content, from.line, from.column)
     offsetToCursorPosition(buffer.content, boundary(buffer.content, offset))
 
-  private def verticalTarget(currentState: AppState, direction: Int)(
+  private def verticalTarget(currentState: AppState, geometry: EditorGeometry, direction: Int)(
     buffer: Buffer,
     from: CursorPosition
   ): CursorTarget =
-    val preferredColumn       = buffer.preferredColumn.getOrElse(from.column)
-    val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
-    val preferredXPx          = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(navSnap, navMetrics, from))
+    val preferredColumn = buffer.preferredColumn.getOrElse(from.column)
+    val preferredXPx    = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(geometry, from))
     val landed =
-      measuredVerticalMoveBySnapshot(currentState.config.wordWrapEnabled, from, navSnap, preferredXPx, direction)
-        .getOrElse(fallbackVerticalMove(from, buffer, currentState, preferredColumn, direction))
+      measuredVerticalMoveBySnapshot(
+        currentState.config.wordWrapEnabled,
+        from,
+        geometry.navigation,
+        preferredXPx,
+        direction
+      )
+        .getOrElse(
+          fallbackVerticalMove(from, buffer, geometry, currentState.config.wordWrapEnabled, preferredColumn, direction)
+        )
 
     CursorTarget(landed, preferredColumn, Some(preferredXPx))
 
@@ -1625,56 +1682,17 @@ object EditorEventReducer:
     )
     baseBuffer.copy(viewport = adjustViewportForCursor(baseBuffer, currentState, focus))
 
-  private def effectivePanelWidth(currentState: AppState): Int =
-    val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
-    val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
-    layout.editorPanelRect.width
-
-  /** Compute the single shared snapshot + metrics for single-cursor vertical navigation. Both preferredXPx measurement
-    * and vertical movement use the same snapshot.
-    */
-  private def navigationSnapshot(buffer: Buffer, state: AppState): (TextLayoutSnapshot, CellMetrics) =
-    val font    = previewFontForBuffer(buffer, state.config.fontConfig)
-    val metrics = CellMetrics.fromFont(font)
-    val widthPx = effectivePanelWidth(state) * metrics.charWidth
-    val snap =
-      TextLayoutSnapshot.fromBuffer(
-        buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
-        widthPx,
-        font,
-        wordWrapEnabled = state.config.wordWrapEnabled
-      )
-    (snap, metrics)
-
-  private def measuredCursorXPxFrom(snap: TextLayoutSnapshot, metrics: CellMetrics, cursor: CursorPosition): Float =
-    snap.xPxForCursor(cursor).getOrElse(cursor.column.toFloat * metrics.charWidth.toFloat)
-
-  private def moveVerticalBySnapshot(
-    cursor: CursorPosition,
-    snap: TextLayoutSnapshot,
-    preferredXPx: Float,
-    direction: Int
-  ): Option[CursorPosition] =
-    snap.moveVertical(cursor, direction, preferredXPx)
+  private def measuredCursorXPxFrom(geometry: EditorGeometry, cursor: CursorPosition): Float =
+    geometry.navigation.xPxForCursor(cursor).getOrElse(cursor.column.toFloat * geometry.charWidthPx.toFloat)
 
   private def measuredVerticalMoveBySnapshot(
     wordWrapEnabled: Boolean,
     cursor: CursorPosition,
-    snap: TextLayoutSnapshot,
+    navigation: NavigationGeometry,
     preferredXPx: Float,
     direction: Int
   ): Option[CursorPosition] =
-    Option
-      .when(wordWrapEnabled) {
-        moveVerticalBySnapshot(cursor, snap, preferredXPx, direction)
-      }
-      .flatten
-
-  private def previewFontForBuffer(
-    buffer: Buffer,
-    config: com.serenity.ui.fonts.FontLoader.FontConfig
-  ): java.awt.Font =
-    FontLoader.previewFontForRole(config, buffer.typographyRole)
+    Option.when(wordWrapEnabled)(navigation.moveVertical(cursor, direction, preferredXPx)).flatten
 
   private def replaceSelectionOrInsert(
     buffer: Buffer,

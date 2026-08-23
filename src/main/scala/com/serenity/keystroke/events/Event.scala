@@ -7,7 +7,7 @@ package com.serenity.keystroke.events
   */
 type Event = EditorEvent | AppEvent | SystemEvent | SurfaceEvent | MouseInputEvent
 
-type EditorEvent = TextEntryEvent
+type EditorEvent = TextEntryEvent | VerticalNavigationEvent
 
 type AppEvent = GlobalAppEvent | FileEvent | ThemeEvent
 

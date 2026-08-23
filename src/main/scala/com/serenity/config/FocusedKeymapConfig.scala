@@ -24,7 +24,7 @@ private object KeymapBindings:
   ): Map[A, List[HotkeyTrigger]] =
     bindings.view.mapValues(_.filterNot(_ == trigger)).toMap + (action -> List(trigger))
 
-enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
+enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
   case MoveLeft
   case MoveRight
   case MoveUp
@@ -74,7 +74,7 @@ enum EditorKeyAction extends KeymapEventAction[TextEntryEvent]:
       case Tab                 => "tab"
       case ReverseTab          => "reverse_tab"
 
-  def event: TextEntryEvent =
+  def event: EditorEvent =
     this match
       case MoveLeft            => com.serenity.keystroke.events.MoveLeft
       case MoveRight           => com.serenity.keystroke.events.MoveRight
