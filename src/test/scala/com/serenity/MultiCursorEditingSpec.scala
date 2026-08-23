@@ -222,4 +222,21 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
     buffer.cursors shouldBe List(CursorPosition(0, 3), CursorPosition(0, 5))
     buffer.selections shouldBe Nil
   }
+
+  /** With word wrap on, vertical movement lands each cursor through the layout snapshot (`snap.moveVertical`) rather
+    * than the logical-line fallback the word-wrap-off cases above take. That snapshot is identical across cursors and
+    * is built once for the whole move; this pins that every cursor still advances and its vertical state is retained.
+    */
+  "Word-wrapped multi-cursor vertical movement" should "advance every cursor down one line" in {
+    val state = stateWithBuffer(
+      "abcdef\nghijkl\nmnopqr\nstuvwx",
+      List(CursorPosition(0, 2), CursorPosition(1, 4))
+    )
+    val wrapped = state.copy(config = state.config.withWordWrap(true))
+
+    val buffer = reduce(MoveDown, wrapped)
+
+    buffer.cursors.map(_.line) shouldBe List(1, 2)
+    buffer.multiCursorVerticalStates should have size 2
+  }
 end MultiCursorEditingSpec

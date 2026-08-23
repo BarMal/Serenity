@@ -1150,13 +1150,15 @@ object EditorEventReducer:
     currentState: AppState,
     direction: Int
   ): Buffer =
-    val cursorStates = multiCursorVerticalStates(buffer, currentState)
+    val (navSnap, navMetrics) = navigationSnapshot(buffer, currentState)
+    val cursorStates          = multiCursorVerticalStates(buffer, navSnap, navMetrics)
     val movedStates = cursorStates.map { cursorState =>
       cursorState.copy(
         cursor = moveMultiCursorVertical(
           cursorState.cursor,
           buffer,
           currentState,
+          navSnap,
           cursorState.preferredColumn,
           cursorState.preferredXPx,
           direction
@@ -1329,17 +1331,18 @@ object EditorEventReducer:
     cursor: CursorPosition,
     buffer: Buffer,
     currentState: AppState,
+    navSnap: TextLayoutSnapshot,
     preferredColumn: Int,
     preferredXPx: Float,
     direction: Int
   ): CursorPosition =
-    measuredVerticalMove(buffer, cursor, currentState, preferredXPx, direction).getOrElse {
-      fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction)
-    }
+    measuredVerticalMoveBySnapshot(currentState.config.wordWrapEnabled, cursor, navSnap, preferredXPx, direction)
+      .getOrElse(fallbackVerticalMove(cursor, buffer, currentState, preferredColumn, direction))
 
   private def multiCursorVerticalStates(
     buffer: Buffer,
-    currentState: AppState
+    navSnap: TextLayoutSnapshot,
+    navMetrics: CellMetrics
   ): List[MultiCursorVerticalState] =
     val visibleCursors = buffer.cursors.distinct
       .sortBy(cursor => (cursor.line, cursor.column))
@@ -1354,7 +1357,7 @@ object EditorEventReducer:
       )
     else
       visibleCursors.map(cursor =>
-        MultiCursorVerticalState(cursor, cursor.column, measuredCursorXPx(buffer, currentState, cursor))
+        MultiCursorVerticalState(cursor, cursor.column, measuredCursorXPxFrom(navSnap, navMetrics, cursor))
       )
 
   private def adjustViewportForCursor(
@@ -1626,50 +1629,6 @@ object EditorEventReducer:
     val viewportSize = currentState.viewportSize.getOrElse(com.serenity.ui.layout.ViewportSize(80, 24))
     val layout       = com.serenity.ui.layout.LayoutEngine.calculateLayout(currentState, viewportSize)
     layout.editorPanelRect.width
-
-  private def measuredCursorXPx(buffer: Buffer, currentState: AppState, cursor: CursorPosition): Float =
-    val font         = previewFontForBuffer(buffer, currentState.config.fontConfig)
-    val metrics      = CellMetrics.fromFont(font)
-    val panelWidthPx = effectivePanelWidth(currentState) * metrics.charWidth
-    val snapshot =
-      TextLayoutSnapshot.fromBuffer(
-        buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
-        panelWidthPx,
-        font,
-        wordWrapEnabled = currentState.config.wordWrapEnabled
-      )
-    snapshot.xPxForCursor(cursor).getOrElse(cursor.column.toFloat * metrics.charWidth.toFloat)
-
-  private def moveVerticalByLayout(
-    cursor: CursorPosition,
-    buffer: Buffer,
-    currentState: AppState,
-    preferredXPx: Float,
-    direction: Int
-  ): Option[CursorPosition] =
-    val font         = previewFontForBuffer(buffer, currentState.config.fontConfig)
-    val panelWidthPx = effectivePanelWidth(currentState) * CellMetrics.fromFont(font).charWidth
-    val snapshot =
-      TextLayoutSnapshot.fromBuffer(
-        buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
-        panelWidthPx,
-        font,
-        wordWrapEnabled = currentState.config.wordWrapEnabled
-      )
-    snapshot.moveVertical(cursor, direction, preferredXPx)
-
-  private def measuredVerticalMove(
-    buffer: Buffer,
-    cursor: CursorPosition,
-    currentState: AppState,
-    preferredXPx: Float,
-    direction: Int
-  ): Option[CursorPosition] =
-    Option
-      .when(currentState.config.wordWrapEnabled) {
-        moveVerticalByLayout(cursor, buffer, currentState, preferredXPx, direction)
-      }
-      .flatten
 
   /** Compute the single shared snapshot + metrics for single-cursor vertical navigation. Both preferredXPx measurement
     * and vertical movement use the same snapshot.
