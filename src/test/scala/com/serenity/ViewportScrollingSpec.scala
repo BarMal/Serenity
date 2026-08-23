@@ -8,8 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.{TextLayoutSnapshot, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -175,9 +174,9 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val buffer     = finalState.buffers(bufferId)
     val cursor     = buffer.cursors.head
-    val font       = FontLoader.previewTextFont(FontConfig(fontSize = 12.0f))
-    val metrics    = CellMetrics.fromFont(font)
-    val snapshot   = TextLayoutSnapshot.fromBuffer(buffer, buffer.viewport.visibleColumns * metrics.charWidth, font)
+    val font       = FontLoader.previewTextFont(finalState.config.fontConfig)
+    val wrapPx     = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, finalState.config.fontConfig)
+    val snapshot   = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
     val cursorShown = snapshot.visualLines.exists(line =>
       line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
     )
