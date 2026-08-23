@@ -12,6 +12,7 @@ import com.serenity.keystroke.events.{
   DeleteWordBackward,
   ExtendSelectionRight,
   InsertChar,
+  MoveDown,
   MoveRight,
   ScrollDown
 }
@@ -87,8 +88,10 @@ object PerformanceBenchmarks:
     val moveRightResult        = EditorEventReducer.reduce(MoveRight, PaneId(0), editingState)
     val extendRightResult      = EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
     val multiCursorState       = withCursorsOnConsecutiveLines(editingState, 50, fromLine = 5_000, column = 4)
+    val multiCursorWrapState   = multiCursorState.copy(config = multiCursorState.config.withWordWrap(true))
     val multiInsertResult      = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
     val multiMoveResult        = EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
+    val multiMoveDownResult    = EditorEventReducer.reduce(MoveDown, PaneId(0), multiCursorWrapState)
     val plainScrollResult      = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
     val richScrollResult       = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
     val originalLine           = editingState.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000))
@@ -165,6 +168,13 @@ object PerformanceBenchmarks:
         20,
         () => assert(reducedBuffer(multiMoveResult).exists(_.cursors.forall(_.column == 5))),
         () => EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
+      ),
+      BenchmarkRunner.Benchmark(
+        "reducer.multi_cursor_move_down",
+        3,
+        20,
+        () => assert(reducedBuffer(multiMoveDownResult).exists(_.cursors.sizeIs == 50)),
+        () => EditorEventReducer.reduce(MoveDown, PaneId(0), multiCursorWrapState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.deep_scroll.plain",
