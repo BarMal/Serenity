@@ -115,6 +115,20 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     cache.scene should be theSameInstanceAs MouseTargetCache.fromState(state, size).scene
   }
 
+  it should "wrap a prose pane at the pane's width on the render grid" in {
+    val state       = stateWith(Buffer.fromString(bufferId, "abcdefghij" * 12))
+    val size        = ViewportSize(80, 24)
+    val cache       = MouseTargetCache.fromState(state, size)
+    val codeFont    = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Code)
+    val textFont    = com.serenity.ui.fonts.FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
+    val snapshot    = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
+    val contentRect = cache.scene.paneLayouts(paneId).contentRect
+
+    CellMetrics.fromFont(textFont).charWidth should not be CellMetrics.fromFont(codeFont).charWidth
+    snapshot.panelWidthPx shouldBe contentRect.width * CellMetrics.fromFont(codeFont).charWidth
+    all(snapshot.visualLines.map(_.widthPx)) should be <= snapshot.panelWidthPx.toFloat
+  }
+
   it should "give rendering the scene prepared by mouse targeting first" in {
     val state    = stateWith(Buffer.fromString(bufferId, "alpha beta"))
     val size     = ViewportSize(80, 24)
