@@ -214,6 +214,10 @@ private[serenity] object AuthoritativeUiScene:
     Option(prepared.get(key)).getOrElse {
       val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val base   = UiSceneSnapshot.from(state, layout, viewportSize)
+      // Pane rects are measured in the screen grid's cells, and that grid is the code font's, whatever font a
+      // buffer draws with. Sizing a document-font pane from its own cells makes the snapshot wrap at a width the
+      // pane does not have, so its rows run off the right edge instead of wrapping.
+      val gridMetrics = CellMetrics.fromFont(codeFont)
       val snapshots = base.paneLayouts.flatMap {
         case (paneId, paneLayout) =>
           for
@@ -223,8 +227,8 @@ private[serenity] object AuthoritativeUiScene:
           yield
             val font        = if buffer.usesTextFont then textFont else codeFont
             val fontMetrics = CellMetrics.fromFont(font)
-            val width       = paneLayout.contentRect.width * fontMetrics.charWidth
-            val heightPx    = paneLayout.contentRect.height * fontMetrics.lineHeight
+            val width       = paneLayout.contentRect.width * gridMetrics.charWidth
+            val heightPx    = paneLayout.contentRect.height * gridMetrics.lineHeight
             val baseViewport = LayoutEngine
               .updateBufferViewportDimensions(buffer, paneLayout.contentRect, state.config.wordWrapEnabled)
             val visibleColumns =

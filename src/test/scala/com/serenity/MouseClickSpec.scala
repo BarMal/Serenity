@@ -9,7 +9,6 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -651,22 +650,23 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val state    = sm.getCurrentState.unsafeRunSync()
-    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
-    val font =
-      FontLoader.previewTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true))
-    val metrics      = CellMetrics.fromFont(font)
-    val panelWidthPx = paneRect.width * metrics.charWidth
+    val state       = sm.getCurrentState.unsafeRunSync()
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
+    val font        = FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
+    // Mouse pixels arrive in the screen grid's coordinates, and that grid is the code font's even for prose.
+    val gridMetrics  = CellMetrics.fromFont(FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Code))
+    val panelWidthPx = contentRect.width * gridMetrics.charWidth
     val snapshot     = TextLayoutSnapshot.fromBuffer(state.buffers(bufferId), panelWidthPx, font)
     val line         = snapshot.visualLines.head
-    val pixelX       = paneRect.x * metrics.charWidth + math.round(line.xForColumn(1).getOrElse(0.0f) + 1.0f)
-    val pixelY       = (paneRect.y + 1) * metrics.lineHeight
+    val pixelX       = contentRect.x * gridMetrics.charWidth + math.round(line.xForColumn(1).getOrElse(0.0f) + 1.0f)
+    val pixelY       = contentRect.y * gridMetrics.lineHeight
 
     sm.applyEvent(
       MouseClick(
-        col = paneRect.x,
-        row = paneRect.y + 1,
+        col = contentRect.x,
+        row = contentRect.y,
         pixelX = Some(pixelX),
         pixelY = Some(pixelY)
       )
