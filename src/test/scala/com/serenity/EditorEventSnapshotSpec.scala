@@ -4,7 +4,6 @@ import com.serenity.keystroke.events.{MoveDown, MoveUp}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -44,7 +43,7 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
 
   "EditorEventReducer (navigationSnapshot)" should "move cursor up from line 1 col 2 to line 0 col 2" in {
     val state     = stateWith("hello\nworld", CursorPosition(line = 1, column = 2))
-    val result    = EditorEventReducer.reduce(MoveUp, paneId, state).state
+    val result    = VerticalNavSupport.dispatch(MoveUp, paneId, state).state
     val newCursor = result.buffers(bufferId).cursors.head
     newCursor.line shouldBe 0
     newCursor.column shouldBe 2
@@ -52,7 +51,7 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "move cursor down from line 0 col 2 to line 1 col 2" in {
     val state     = stateWith("hello\nworld", CursorPosition(line = 0, column = 2))
-    val result    = EditorEventReducer.reduce(MoveDown, paneId, state).state
+    val result    = VerticalNavSupport.dispatch(MoveDown, paneId, state).state
     val newCursor = result.buffers(bufferId).cursors.head
     newCursor.line shouldBe 1
     newCursor.column shouldBe 2
@@ -60,7 +59,7 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "return to the original column after MoveDown then MoveUp" in {
     val state      = stateWith("hello\nworld", CursorPosition(line = 0, column = 2))
-    val afterDown  = EditorEventReducer.reduce(MoveDown, paneId, state).state
-    val afterRound = EditorEventReducer.reduce(MoveUp, paneId, afterDown).state
+    val afterDown  = VerticalNavSupport.dispatch(MoveDown, paneId, state).state
+    val afterRound = VerticalNavSupport.dispatch(MoveUp, paneId, afterDown).state
     afterRound.buffers(bufferId).cursors.head.column shouldBe 2
   }

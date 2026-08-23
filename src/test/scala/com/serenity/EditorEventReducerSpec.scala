@@ -1175,7 +1175,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(MoveDown, paneId, initialState).state
+    val updatedState = VerticalNavSupport.dispatch(MoveDown, paneId, initialState).state
     updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 1), CursorPosition(1, 3))
   }
 
@@ -1194,7 +1194,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(MoveUp, paneId, initialState).state
+    val updatedState = VerticalNavSupport.dispatch(MoveUp, paneId, initialState).state
     updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
   }
 
@@ -1347,7 +1347,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(ExtendSelectionUp, paneId, initialState).state
+    val updatedState = VerticalNavSupport.dispatch(ExtendSelectionUp, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
     buffer.cursors shouldBe List(CursorPosition(0, 1))
@@ -1587,7 +1587,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(MoveDown, paneId, initialState).state
+    val updatedState = VerticalNavSupport.dispatch(MoveDown, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
     buffer.cursors shouldBe List(CursorPosition(0, 6))
@@ -1655,8 +1655,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val afterFirstMove  = EditorEventReducer.reduce(MoveDown, paneId, initialState).state
-    val afterSecondMove = EditorEventReducer.reduce(MoveDown, paneId, afterFirstMove).state
+    val afterFirstMove  = VerticalNavSupport.dispatch(MoveDown, paneId, initialState).state
+    val afterSecondMove = VerticalNavSupport.dispatch(MoveDown, paneId, afterFirstMove).state
     val buffer          = afterSecondMove.buffers(bufferId)
 
     buffer.cursors shouldBe List(CursorPosition(2, 1), CursorPosition(2, 4))

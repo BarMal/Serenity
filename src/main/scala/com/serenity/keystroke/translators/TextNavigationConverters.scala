@@ -5,7 +5,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
 object TextNavigationConverters:
 
-  val navigationConverter: PartialFunction[KeyStrokeInfo, TextEntryEvent] = {
+  val navigationConverter: PartialFunction[KeyStrokeInfo, EditorEvent] = {
     case KeyStrokeInfo(InputKey.Home, _, modifiers) if modifiers.contains(Modifier.Ctrl) => MoveToStartOfFile
     case KeyStrokeInfo(InputKey.End, _, modifiers) if modifiers.contains(Modifier.Ctrl)  => MoveToEndOfFile
     case KeyStrokeInfo(InputKey.ArrowLeft, _, modifiers)

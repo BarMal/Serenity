@@ -1,9 +1,9 @@
 package com.serenity.keystroke.translators
 
 import com.serenity.config.AppConfig
-import com.serenity.keystroke.events.TextEntryEvent
+import com.serenity.keystroke.events.EditorEvent
 
-class EditorInputTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[TextEntryEvent]:
+class EditorInputTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[EditorEvent]:
 
   override def converters = List(
     LocalKeymapConverters.converter(appConfig.focusedKeymapConfig.editor.bindings),

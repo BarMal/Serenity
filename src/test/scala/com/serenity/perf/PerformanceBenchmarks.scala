@@ -91,7 +91,7 @@ object PerformanceBenchmarks:
     val multiCursorWrapState   = multiCursorState.copy(config = multiCursorState.config.withWordWrap(true))
     val multiInsertResult      = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
     val multiMoveResult        = EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
-    val multiMoveDownResult    = EditorEventReducer.reduce(MoveDown, PaneId(0), multiCursorWrapState)
+    val multiMoveDownResult    = com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
     val plainScrollResult      = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
     val richScrollResult       = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
     val originalLine           = editingState.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000))
@@ -174,7 +174,7 @@ object PerformanceBenchmarks:
         3,
         20,
         () => assert(reducedBuffer(multiMoveDownResult).exists(_.cursors.sizeIs == 50)),
-        () => EditorEventReducer.reduce(MoveDown, PaneId(0), multiCursorWrapState)
+        () => com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.deep_scroll.plain",
