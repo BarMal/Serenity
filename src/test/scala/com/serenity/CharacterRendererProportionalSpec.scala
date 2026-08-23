@@ -3,7 +3,8 @@ package com.serenity
 import java.awt.{Color, Font}
 
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
-import com.serenity.ui.layout.{TextCaretStop, TextLayoutSnapshot, TextVisualLine}
+import com.serenity.state.models.{TextCaretStop, TextVisualLine}
+import com.serenity.ui.layout.TextLayoutSnapshot
 import com.serenity.ui.renderer.CharacterRenderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec

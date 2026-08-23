@@ -4,6 +4,7 @@ import java.awt.Color
 
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
+import com.serenity.state.models.TextVisualLine
 import com.serenity.text.TextEditing
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
@@ -146,7 +147,7 @@ object CharacterRenderer:
     yPx: Int,
     lineHeightPx: Int,
     ascentPx: Int,
-    visualLine: com.serenity.ui.layout.TextVisualLine,
+    visualLine: TextVisualLine,
     theme: Theme,
     animations: AnimationState,
     syntaxHighlightingEnabled: Boolean = false,
