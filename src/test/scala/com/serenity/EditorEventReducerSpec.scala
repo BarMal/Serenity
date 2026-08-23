@@ -7,7 +7,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.{TextLayoutSnapshot, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -1552,9 +1552,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.buffers(bufferId)
     val cursor       = buffer.cursors.head
     val font         = FontLoader.previewTextFont(updatedState.config.fontConfig)
-    val metrics      = CellMetrics.fromFont(font)
-    val snapshot =
-      TextLayoutSnapshot.fromBuffer(buffer, buffer.viewport.visibleColumns * metrics.charWidth, font)
+    val wrapPx   = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, updatedState.config.fontConfig)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
 
     cursor shouldBe CursorPosition(0, needleColumn)
     buffer.viewport.topLine shouldBe 0

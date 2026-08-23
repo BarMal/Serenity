@@ -5,7 +5,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEventReducer, SystemEventReducer}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.{TextLayoutSnapshot, ViewportSize}
 
 final private[manager] class StateManagerViewportCapability(
     stateRef: cats.effect.Ref[IO, AppState],
@@ -25,7 +25,7 @@ final private[manager] class StateManagerViewportCapability(
               val cursor          = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
               val viewport        = buffer.viewport
               val font            = previewFontForBuffer(buffer, state.config.fontConfig)
-              val visibleWidthPx  = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
+              val visibleWidthPx  = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, state.config.fontConfig)
               val lineText        = buffer.content.getLine(cursor.line).getOrElse("")
               val wordWrapEnabled = state.config.wordWrapEnabled
               val measuredCursorVisualLine =

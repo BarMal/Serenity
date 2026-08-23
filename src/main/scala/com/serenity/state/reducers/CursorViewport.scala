@@ -2,7 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.TextLayoutSnapshot
 
 object CursorViewport:
 
@@ -15,7 +15,7 @@ object CursorViewport:
     val viewport         = buffer.viewport
     val halfVisibleLines = viewport.visibleLines / 2
     val font             = previewFontForBuffer(buffer, currentState.config.fontConfig)
-    val visibleWidthPx   = viewport.visibleColumns * CellMetrics.fromFont(font).charWidth
+    val visibleWidthPx   = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, currentState.config.fontConfig)
     val lineText         = buffer.content.getLine(cursor.line).getOrElse("")
     val measuredCursorVisualLine =
       if buffer.usesTextFont then

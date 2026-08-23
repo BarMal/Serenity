@@ -24,7 +24,7 @@ object EditorGeometryProducer:
     val snapshot =
       TextLayoutSnapshot.fromBuffer(
         buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
-        panelWidthColumns * metrics.charWidth,
+        TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.config.fontConfig),
         font,
         wordWrapEnabled = state.config.wordWrapEnabled
       )

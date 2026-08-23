@@ -6,7 +6,14 @@ import java.awt.{Font, RenderingHints}
 import java.text.AttributedString
 
 import com.serenity.richtext.{ParagraphAlignment, RichTextDocument}
-import com.serenity.state.models.{Buffer, CursorPosition, NavigationGeometry, TextCaretStop, TextVisualLine}
+import com.serenity.state.models.{
+  Buffer,
+  CursorPosition,
+  NavigationGeometry,
+  TextCaretStop,
+  TextVisualLine,
+  TypographyRole
+}
 import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
 
@@ -35,6 +42,13 @@ object TextLayoutSnapshot:
   private val UnwrappedOverscanColumns = 2
   final private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
   private val measuredLayoutCache = java.util.concurrent.ConcurrentHashMap[MeasuredLayoutKey, java.lang.Boolean]()
+
+  /** The pixel width text layout wraps at. The screen grid is the code font's cells whatever font a buffer draws with,
+    * so scroll and navigation math must wrap at the grid width the renderer uses -- not the buffer font's own
+    * `M`-width, which over-estimates the width for a proportional prose font and pushes wrapped rows off screen.
+    */
+  def gridWrapWidthPx(gridColumns: Int, fontConfig: FontLoader.FontConfig): Int =
+    gridColumns * CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).charWidth
 
   def caretXsForText(
     text: String,
