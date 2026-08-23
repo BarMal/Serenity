@@ -513,7 +513,7 @@ object PerformanceBenchmarks:
   private def renderedFrameHasPixels(image: BufferedImage): Boolean =
     image.getWidth > 0 && image.getHeight > 0 && ((image.getRGB(0, 0) >>> 24) & 0xff) > 0
 
-  private def renderedLongMeasuredLine(line: com.serenity.ui.layout.TextVisualLine): BufferedImage =
+  private def renderedLongMeasuredLine(line: com.serenity.state.models.TextVisualLine): BufferedImage =
     val image = new BufferedImage(frameWidthPx, frameHeightPx, BufferedImage.TYPE_INT_ARGB)
     val surface = new Java2DRenderSurface(
       image,

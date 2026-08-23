@@ -1,6 +1,7 @@
 package com.serenity
 
-import com.serenity.ui.layout.{DirtyLineDiff, TextCaretStop, TextLayoutSnapshot, TextVisualLine}
+import com.serenity.state.models.{TextCaretStop, TextVisualLine}
+import com.serenity.ui.layout.{DirtyLineDiff, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

@@ -334,12 +334,12 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "hit-test RTL caret stops without assuming x order" in {
     val caretStops = Vector(
-      com.serenity.ui.layout.TextCaretStop(0, 26.5f),
-      com.serenity.ui.layout.TextCaretStop(1, 15.8f),
-      com.serenity.ui.layout.TextCaretStop(2, 6.6f),
-      com.serenity.ui.layout.TextCaretStop(3, 26.5f)
+      TextCaretStop(0, 26.5f),
+      TextCaretStop(1, 15.8f),
+      TextCaretStop(2, 6.6f),
+      TextCaretStop(3, 26.5f)
     )
-    val line = com.serenity.ui.layout.TextVisualLine(
+    val line = TextVisualLine(
       bufferLine = 0,
       startColumn = 0,
       endColumn = 3,
@@ -354,8 +354,8 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "hit-test a long line through its x-sorted caret index" in {
-    val caretStops = Vector.tabulate(20_001)(column => com.serenity.ui.layout.TextCaretStop(column, column * 0.5f))
-    val line = com.serenity.ui.layout.TextVisualLine(
+    val caretStops = Vector.tabulate(20_001)(column => TextCaretStop(column, column * 0.5f))
+    val line = TextVisualLine(
       bufferLine = 0,
       startColumn = 0,
       endColumn = 20_000,
