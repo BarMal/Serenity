@@ -6,8 +6,8 @@ import cats.effect.IO
 import com.serenity.config.{AppConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
+import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
-import com.serenity.state.reducers.CursorViewport
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer

@@ -2,6 +2,7 @@ package com.serenity.state.components
 
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalEventReducer, Reducer}
 
@@ -16,7 +17,10 @@ class ModalComponent(
       case _                   => ModalInputEvent.fromEvent(event)
 
   protected def processTypedEvent(event: ModalInputEvent, currentState: AppState): ComponentResult =
-    ComponentResult.reducerResult(reducer.reduce(event, currentState))
+    val result = reducer.reduce(event, currentState)
+    ComponentResult.reducerResult(
+      result.copy(state = CursorViewport.ensureVisibleCursors(currentState, result.state))
+    )
 
   override protected def processFallbackEvent(event: Event, currentState: AppState): ComponentResult =
     modalType match

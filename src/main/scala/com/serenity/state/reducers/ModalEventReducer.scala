@@ -544,16 +544,13 @@ object ModalEventReducer:
           case Some(buffer) =>
             val selected = resultSet.results(resultSet.currentIndex)
             val target   = CursorPosition(selected.line, selected.column)
-            val baseBuffer = buffer.copy(
+            val updatedBuffer = buffer.copy(
               cursors = List(target),
               selection = None,
               selections = Nil,
               preferredColumn = Some(target.column),
               preferredXPx = None,
               findState = Some(FindState.fromResultSet(resultSet))
-            )
-            val updatedBuffer = baseBuffer.copy(
-              viewport = CursorViewport.adjustForCursor(baseBuffer, state, target)
             )
             state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
           case None =>
