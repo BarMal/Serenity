@@ -16,7 +16,7 @@ main/scala/com/serenity/config/ConfigManager.scala	method configToString	176
 main/scala/com/serenity/config/FocusedKeymapConfig.scala	file length	672
 main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	994
 main/scala/com/serenity/session/SessionState.scala	file length	1227
-main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	770
+main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	773
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2422
 main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala	file length	2161
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	807
@@ -26,9 +26,8 @@ main/scala/com/serenity/state/models/ContextualToolbar.scala	method proseItems	1
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	797
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceActive	419
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitSubmenu	134
-main/scala/com/serenity/state/reducers/CursorViewport.scala	forbidden import at line 4: reducers must stay pure: take measured geometry as a parameter instead of reaching for AWT or the layout engine	1
-main/scala/com/serenity/state/reducers/EditorEventReducer.scala	file length	1878
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	619
+main/scala/com/serenity/state/reducers/EditorEventReducer.scala	file length	1841
+main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	616
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	113
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
 main/scala/com/serenity/ui/layout/LayoutEngine.scala	file length	1547
@@ -46,11 +45,11 @@ test/scala/com/serenity/CommandRunnerReducerSpec.scala	file length	1226
 test/scala/com/serenity/CommandRunnerSpec.scala	file length	1053
 test/scala/com/serenity/ConfigManagerSpec.scala	file length	1283
 test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1729
-test/scala/com/serenity/EditorEventReducerSpec.scala	file length	1799
+test/scala/com/serenity/EditorEventReducerSpec.scala	file length	1801
 test/scala/com/serenity/FileHandlingSpec.scala	file length	623
 test/scala/com/serenity/LayoutContractSpec.scala	file length	925
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	757
-test/scala/com/serenity/ModalEventReducerSpec.scala	file length	898
+test/scala/com/serenity/ModalEventReducerSpec.scala	file length	899
 test/scala/com/serenity/MouseClickSpec.scala	file length	965
 test/scala/com/serenity/RendererMarkdownLensSpec.scala	file length	881
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	652

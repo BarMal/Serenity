@@ -4,6 +4,7 @@ import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
+import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader
@@ -1548,7 +1549,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
+    val reducedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
+    val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.buffers(bufferId)
     val cursor       = buffer.cursors.head
     val font         = FontLoader.previewTextFont(updatedState.config.fontConfig)
@@ -1721,7 +1723,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(MoveToStartOfFile, paneId, initialState).state
+    val reducedState = EditorEventReducer.reduce(MoveToStartOfFile, paneId, initialState).state
+    val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.buffers(bufferId)
 
     buffer.cursors shouldBe List(CursorPosition(0, 0))

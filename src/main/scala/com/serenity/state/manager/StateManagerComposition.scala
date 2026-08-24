@@ -159,7 +159,10 @@ final private[manager] class StateManagerOperationBoundary private (
     findSearchFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel)) >>
       (IO.sleep(FindSearchDebounce) >>
         IO.blocking(FindSearch.results(request.content, request.query)).flatMap { results =>
-          stateRef.update(ModalEventReducer.applyFindSearchResults(_, request, results))
+          stateRef.update { before =>
+            val after = ModalEventReducer.applyFindSearchResults(before, request, results)
+            CursorViewport.ensureVisibleCursors(before, after)
+          }
         }).start.flatMap(fiber => findSearchFiberRef.set(Some(fiber)))
 
   private def documentAnalysisJob: IO[Unit] =

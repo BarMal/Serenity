@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
+import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer, WorkflowEffect}
 import com.serenity.ui.fonts.FontLoader
@@ -102,11 +103,12 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       case Some(Modal.Find(query, _, _)) =>
         val bufferId = BufferId(0)
         val content  = state.buffers(bufferId).content
-        ModalEventReducer.applyFindSearchResults(
+        val reducedState = ModalEventReducer.applyFindSearchResults(
           state,
           FindSearchRequest(SurfaceId("find"), bufferId, query, content),
           FindSearch.results(content, query)
         )
+        CursorViewport.ensureVisibleCursors(state, reducedState)
       case _ =>
         state
 

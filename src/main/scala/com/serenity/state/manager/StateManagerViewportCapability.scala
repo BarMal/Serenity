@@ -3,9 +3,7 @@ package com.serenity.state.manager
 import cats.effect.IO
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEventReducer, SystemEventReducer}
-import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.ViewportSize
 
 final private[manager] class StateManagerViewportCapability(
     stateRef: cats.effect.Ref[IO, AppState],
@@ -22,48 +20,8 @@ final private[manager] class StateManagerViewportCapability(
         case Some(pane) =>
           pane.bufferId.flatMap(state.buffers.get) match
             case Some(buffer) =>
-              val cursor          = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
-              val viewport        = buffer.viewport
-              val font            = previewFontForBuffer(buffer, state.config.fontConfig)
-              val visibleWidthPx  = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, state.config.fontConfig)
-              val lineText        = buffer.content.getLine(cursor.line).getOrElse("")
-              val wordWrapEnabled = state.config.wordWrapEnabled
-              val measuredCursorVisualLine =
-                if buffer.usesTextFont then
-                  TextLayoutSnapshot.visualLineIndexForCursor(
-                    lineText,
-                    cursor.column,
-                    visibleWidthPx,
-                    font,
-                    wordWrapEnabled = wordWrapEnabled
-                  )
-                else cursor.column / math.max(1, viewport.visibleColumns)
-              val cursorVisualLine =
-                if wordWrapEnabled then measuredCursorVisualLine
-                else 0
-              val newLeftColumn =
-                if wordWrapEnabled then 0
-                else
-                  val measuredLeftColumn =
-                    TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
-                  val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
-                  math.max(minimumVisibleColumn, measuredLeftColumn)
-              val halfVisibleLines = viewport.visibleLines / 2
-              val newTopLine =
-                if cursorVisualLine > halfVisibleLines then cursor.line
-                else if cursor.line < viewport.topLine then cursor.line
-                else if cursor.line >= viewport.topLine + viewport.visibleLines then
-                  cursor.line - viewport.visibleLines + 1
-                else viewport.topLine
-              val newTopVisualLine =
-                if math.max(0, newTopLine) == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines)
-                else 0
-              val newViewport = viewport.copy(
-                topLine = math.max(0, newTopLine),
-                leftColumn = math.max(0, newLeftColumn),
-                topVisualLine = newTopVisualLine
-              )
-              val updatedBuffer = buffer.copy(viewport = newViewport)
+              val cursor        = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+              val updatedBuffer = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
               state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
             case None => state
         case None => state
@@ -150,9 +108,3 @@ final private[manager] class StateManagerViewportCapability(
         else updateFontConfig(identity)
       }
     }
-
-  private def previewFontForBuffer(
-    buffer: Buffer,
-    config: FontConfig
-  ): java.awt.Font =
-    FontLoader.previewFontForRole(config, buffer.typographyRole)

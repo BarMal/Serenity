@@ -1,6 +1,7 @@
 package com.serenity.state.components
 
 import com.serenity.keystroke.events.*
+import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, Reducer}
 
@@ -35,4 +36,7 @@ class EditorPaneComponent(
     _pane: EditorPane,
     currentState: AppState
   ): ComponentResult =
-    ComponentResult.updateState(_ => reducer.reduce(event, currentState).state)
+    ComponentResult.updateState { _ =>
+      val reducedState = reducer.reduce(event, currentState).state
+      CursorViewport.ensureVisibleCursors(currentState, reducedState)
+    }
