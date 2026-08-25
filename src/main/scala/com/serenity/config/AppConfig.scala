@@ -95,6 +95,22 @@ object RenderFpsTarget:
       case "uncapped" | "max" | "maximum" => Some(Uncapped)
       case _                              => None
 
+/** How much of the damage a reducer reports the renderer honours. `Rows` coarsens cell-level damage to whole rows,
+  * matching today's paint path. `Cells` honours column ranges where it is safe -- monospaced buffers only, see
+  * `Damage`'s doc comment -- and falls back to row granularity for proportional or ligature-shaped text.
+  */
+enum RenderDamageGranularity(val configKey: String):
+  case Rows  extends RenderDamageGranularity("rows")
+  case Cells extends RenderDamageGranularity("cells")
+
+object RenderDamageGranularity:
+
+  def fromConfigKey(value: String): Option[RenderDamageGranularity] =
+    value.trim.toLowerCase match
+      case "rows" | "row"   => Some(Rows)
+      case "cells" | "cell" => Some(Cells)
+      case _                => None
+
 enum CursorMode(val configKey: String):
   case Blink   extends CursorMode("blink")
   case Breathe extends CursorMode("breathe")
@@ -914,6 +930,7 @@ final case class SurfaceConfig(
     commandRunnerItemGapRows: Double = 0.0,
     commandRunnerCursorGapRows: Option[Double] = None,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
+    renderDamageGranularity: RenderDamageGranularity = RenderDamageGranularity.Rows,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     commandRunnerTransitionKind: Option[TransitionKind] = None,
     panelOpenTransitionKind: Option[TransitionKind] = None,
@@ -1091,6 +1108,8 @@ object SurfaceConfig:
       "command.runner.cursor.gap.rows",
       "render.fps",
       "ui.render.fps",
+      "render.damage_granularity",
+      "render.damage.granularity",
       "display.word_wrap",
       "display.word.wrap",
       "display.pane_headers",
@@ -1144,6 +1163,7 @@ object SurfaceConfig:
       "command_runner_cursor_gap_rows"       -> "command_runner.cursor_gap_rows",
       "render_fps"                           -> "render.fps",
       "ui_render_fps"                        -> "ui.render.fps",
+      "render_damage_granularity"            -> "render.damage_granularity",
       "display_word_wrap"                    -> "display.word_wrap",
       "display_pane_headers"                 -> "display.pane_headers",
       "display_focused_text_body"            -> "display.focused_text_body",
@@ -1169,6 +1189,9 @@ object SurfaceConfig:
       Set("command_runner.cursor_gap_rows", "command.runner.cursor.gap.rows", "command_runner_cursor_gap_rows")
 
     val renderFpsKeys: Set[String] = Set("render.fps", "render_fps", "ui.render.fps", "ui_render_fps")
+
+    val renderDamageGranularityKeys: Set[String] =
+      Set("render.damage_granularity", "render.damage.granularity", "render_damage_granularity")
 
     val materialPresetKeys: Set[String] = Set("ui.material", "ui_material", "material.preset", "material_preset")
 
@@ -1296,6 +1319,7 @@ object SurfaceConfig:
         commandRunnerItemGapRowsKeys ++
         commandRunnerCursorGapRowsKeys ++
         renderFpsKeys ++
+        renderDamageGranularityKeys ++
         wordWrapKeys ++
         paneHeaderKeys ++
         focusedTextBodyKeys ++
@@ -1353,6 +1377,8 @@ object SurfaceConfig:
       else if commandRunnerCursorGapRowsKeys.contains(key) then
         parseCommandRunnerCursorGapRows(trimmed).map(config.withCommandRunnerCursorGapRows)
       else if renderFpsKeys.contains(key) then RenderFpsTarget.fromConfigKey(trimmed).map(config.withRenderFpsTarget)
+      else if renderDamageGranularityKeys.contains(key) then
+        RenderDamageGranularity.fromConfigKey(trimmed).map(config.withRenderDamageGranularity)
       else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
       else if paneHeaderKeys.contains(key) then parseBoolean(trimmed).map(config.withPaneHeaders)
       else if focusedTextBodyKeys.contains(key) then parseBoolean(trimmed).map(config.withFocusedTextBody)
@@ -1554,6 +1580,7 @@ final case class AppConfig(
     commandRunnerItemGapRows: Double = 0.0,
     commandRunnerCursorGapRows: Option[Double] = None,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
+    renderDamageGranularity: RenderDamageGranularity = RenderDamageGranularity.Rows,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
     commandRunnerTransitionKind: Option[TransitionKind] = None,
     panelOpenTransitionKind: Option[TransitionKind] = None,
@@ -1638,6 +1665,7 @@ final case class AppConfig(
       commandRunnerItemGapRows = commandRunnerItemGapRows,
       commandRunnerCursorGapRows = commandRunnerCursorGapRows,
       renderFpsTarget = renderFpsTarget,
+      renderDamageGranularity = renderDamageGranularity,
       editorInsertionTransitionKind = editorInsertionTransitionKind,
       commandRunnerTransitionKind = commandRunnerTransitionKind,
       panelOpenTransitionKind = panelOpenTransitionKind,
@@ -1674,6 +1702,7 @@ final case class AppConfig(
       commandRunnerItemGapRows = normalized.commandRunnerItemGapRows,
       commandRunnerCursorGapRows = normalized.commandRunnerCursorGapRows,
       renderFpsTarget = normalized.renderFpsTarget,
+      renderDamageGranularity = normalized.renderDamageGranularity,
       editorInsertionTransitionKind = normalized.editorInsertionTransitionKind,
       commandRunnerTransitionKind = normalized.commandRunnerTransitionKind,
       panelOpenTransitionKind = normalized.panelOpenTransitionKind,
@@ -2002,6 +2031,9 @@ final case class AppConfig(
 
   def withRenderFpsTarget(target: RenderFpsTarget): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(renderFpsTarget = target))
+
+  def withRenderDamageGranularity(granularity: RenderDamageGranularity): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(renderDamageGranularity = granularity))
 
   def effectiveEditorTextTransitionSpeedScale: Double =
     surfaceConfig.effectiveEditorTextTransitionSpeedScale

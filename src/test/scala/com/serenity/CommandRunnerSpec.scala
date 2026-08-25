@@ -430,7 +430,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "command-runner-item-gap-rows",
       "command-runner-cursor-gap-rows"
     )
-    nestedGroup("settings-rendering").children.map(_.id) shouldBe List("render-fps")
+    nestedGroup("settings-rendering").children.map(_.id) shouldBe
+      List("render-fps", "render-damage-granularity")
     nestedGroup("settings-animation").children.map(_.id) should contain allOf (
       "motion-preset",
       "editor-text-transition",

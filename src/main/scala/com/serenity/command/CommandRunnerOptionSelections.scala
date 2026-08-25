@@ -23,9 +23,10 @@ object CommandRunnerOptionSelections:
       "motion-accessibility" -> motionAccessibilityIndex(
         surfaceConfig.motionConfiguration.fold(MotionAccessibility.Standard)(_.accessibility)
       ),
-      "command-runner-fade" -> commandRunnerFadeIndex(surfaceConfig.commandRunnerAnimation),
-      "ui-animation"        -> animationPresetIndex(surfaceConfig.uiAnimation),
-      "render-fps"          -> renderFpsTargetIndex(surfaceConfig.renderFpsTarget),
+      "command-runner-fade"       -> commandRunnerFadeIndex(surfaceConfig.commandRunnerAnimation),
+      "ui-animation"              -> animationPresetIndex(surfaceConfig.uiAnimation),
+      "render-fps"                -> renderFpsTargetIndex(surfaceConfig.renderFpsTarget),
+      "render-damage-granularity" -> renderDamageGranularityIndex(surfaceConfig.renderDamageGranularity),
       "editor-text-transition" -> editorTextTransitionIndex(
         configuredTransitionKind(surfaceConfig, MotionFamily.EditorText, TransitionScope.EditorInsertion)
       ),
@@ -177,6 +178,11 @@ object CommandRunnerOptionSelections:
       case RenderFpsTarget.Fps90    => 2
       case RenderFpsTarget.Fps120   => 3
       case RenderFpsTarget.Uncapped => 4
+
+  private def renderDamageGranularityIndex(granularity: RenderDamageGranularity): Int =
+    granularity match
+      case RenderDamageGranularity.Rows  => 0
+      case RenderDamageGranularity.Cells => 1
 
   private def editorTextTransitionIndex(kind: TransitionKind): Int =
     kind match

@@ -98,6 +98,7 @@ enum CommandIntent:
   case SetCommandRunnerItemGapRows(rows: Double)
   case SetCommandRunnerCursorGapRows(rows: Option[Double])
   case SetRenderFpsTarget(target: RenderFpsTarget)
+  case SetRenderDamageGranularity(granularity: RenderDamageGranularity)
   case SetEditorInsertionTransitionKind(kind: TransitionKind)
   case SetCommandRunnerTransitionKind(kind: TransitionKind)
   case SetPanelOpenTransitionKind(kind: TransitionKind)

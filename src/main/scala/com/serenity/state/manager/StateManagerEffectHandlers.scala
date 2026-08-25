@@ -661,6 +661,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
       case CommandIntent.SetRenderFpsTarget(target) =>
         updateAppearanceConfig(_.withRenderFpsTarget(target)).void
+      case CommandIntent.SetRenderDamageGranularity(granularity) =>
+        updateAppearanceConfig(_.withRenderDamageGranularity(granularity)).void
       case CommandIntent.SetEditorInsertionTransitionKind(kind) =>
         updateCustomMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
       case CommandIntent.SetCommandRunnerTransitionKind(kind) =>
