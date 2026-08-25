@@ -27,9 +27,8 @@ import com.serenity.state.models.*
   * state entirely outside `inputEventPhase`, so it needs its own before/after diff to report
   * `animationDamage`/`fullRenderDamage` at all.
   *
-  * Not yet covered, and out of scope for this pass: pane chrome (headers, gutter, line numbers -- keyed by `PaneId`,
-  * not `BufferId`, and largely derived inside `Renderer` rather than stored on `AppState`), focus-dimming's shifting
-  * active-body range, and overlay/surface damage (`#1000`).
+  * Not yet covered, and out of scope for this pass: focus-dimming's shifting active-body range, and overlay/surface
+  * damage (`#1000`) -- both left to the `overlaysMayCoverPanes` stand-down in `Renderer.planFrame` until then.
   */
 object DamageProducer:
 
@@ -42,7 +41,7 @@ object DamageProducer:
           case Some(beforeBuffer) =>
             acc |+| bufferDamageFor(bufferId, before, after, beforeBuffer, afterBuffer, granularity)
     }
-    bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after)
+    bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+| paneChromeDamage(before, after)
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
@@ -192,5 +191,52 @@ object DamageProducer:
     if before.themeTransition != after.themeTransition || before.surfaceAnimations != after.surfaceAnimations then
       Damage.Everything
     else Damage.Nothing
+
+  /** Pane headers, gutter text and line numbers -- `Renderer.ChromeKey`'s `layout`/`gutterText`/`lineNumberRows`/
+    * `headers` fields, keyed by `PaneId` rather than `BufferId`. `state.layout` keeps the same object reference across
+    * any transition that doesn't touch pane structure or the active pane (Scala's `.copy` only allocates a new object
+    * for the field actually changed), so a reference check here is both cheap and an exact match for what `ChromeKey`'s
+    * own `ReferenceIdentity(state.layout)` already invalidates on today -- reported as `Everything` since a changed
+    * active pane or pane structure affects the gutter, every pane's header, and line numbers all at once, and figuring
+    * out a narrower blast radius from `AppState` alone would just re-derive what `Renderer`'s layout engine computes.
+    */
+  private def paneChromeDamage(before: AppState, after: AppState): Damage =
+    if before.layout ne after.layout then Damage.Everything
+    else paneHeaderDamage(before, after) |+| gutterDamage(before, after)
+
+  /** A pane's header shows the active highlight, the buffer's filename and its dirty indicator -- exactly the four
+    * inputs `Renderer.chromeKeyFor`'s `headers` field reads. `activeEditorPaneId` can't differ here (the layout
+    * reference is unchanged, see [[paneChromeDamage]]), so only title/dirty/buffer-identity ever trip this.
+    */
+  private def paneHeaderDamage(before: AppState, after: AppState): Damage =
+    after.layout.orderedPaneIds.foldLeft(Damage.Nothing: Damage) { (acc, paneId) =>
+      if headerInputs(before, paneId) == headerInputs(after, paneId) then acc
+      else acc |+| Damage.PaneChrome(paneId)
+    }
+
+  private def headerInputs(state: AppState, paneId: PaneId) =
+    state.layout.editorPanes.get(paneId).map { pane =>
+      val buffer = pane.bufferId.flatMap(state.buffers.get)
+      (
+        buffer.flatMap(_.filePath).flatMap(path => Option(path.getFileName)).map(_.toString),
+        buffer.exists(_.isDirty),
+        buffer.map(_.id.value)
+      )
+    }
+
+  /** The legacy gutter (`Renderer.legacyGutterContent`) shows the active pane's cursor position, language and filename,
+    * and line numbers follow the active pane's own visible lines -- so any of those changing on the active buffer
+    * dirties the gutter/line-number chrome, on top of whatever row damage that buffer's own content reports.
+    */
+  private def gutterDamage(before: AppState, after: AppState): Damage =
+    if activeGutterInputs(before) == activeGutterInputs(after) then Damage.Nothing else Damage.Chrome
+
+  private def activeGutterInputs(state: AppState) =
+    for
+      paneId   <- state.layout.activeEditorPaneId
+      pane     <- state.layout.editorPanes.get(paneId)
+      bufferId <- pane.bufferId
+      buffer   <- state.buffers.get(bufferId)
+    yield (buffer.cursors, buffer.language, buffer.filePath, buffer.viewport)
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b
