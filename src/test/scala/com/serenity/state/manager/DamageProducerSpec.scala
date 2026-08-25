@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import com.serenity.config.RenderDamageGranularity
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.DirtyLineDiff
@@ -19,6 +21,16 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         bufferId,
         AppState.initial.buffers(bufferId).copy(content = Rope(text), cursors = cursors)
       )
+    )
+
+  /** A monospaced (`Code`) buffer under `Cells` granularity -- the one combination [[DamageProducer]] may report
+    * column-precise damage for.
+    */
+  private def cellsEligibleState(text: String): AppState =
+    val base = stateWithContent(text)
+    base.copy(
+      config = base.config.withRenderDamageGranularity(RenderDamageGranularity.Cells),
+      buffers = base.buffers.updated(bufferId, base.buffers(bufferId).copy(language = Some(LanguageId.Scala)))
     )
 
   "DamageProducer.forTransition" should "report no damage when nothing changed" in {
@@ -87,6 +99,46 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
 
     DamageProducer.forTransition(before, after) shouldBe
       Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0)), Damage.Chrome))
+  }
+
+  it should "report BufferCells for a single-line edit on a monospaced buffer when granularity is Cells" in {
+    val before       = cellsEligibleState("alpha\nbeta\ngamma")
+    val editedBuffer = before.buffers(bufferId).copy(content = before.buffers(bufferId).content.insert(1, "X"))
+    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+
+    DamageProducer
+      .forTransition(before, after) shouldBe Damage.BufferCells(bufferId, row = 0, fromColumn = 1, toColumn = Some(2))
+  }
+
+  it should "still report BufferRows under Cells granularity when the edit spans more than one row" in {
+    val before       = cellsEligibleState("alpha\nbeta\ngamma")
+    val editedBuffer = before.buffers(bufferId).copy(content = before.buffers(bufferId).content.insert(7, "X\nY"))
+    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(1, 2))
+  }
+
+  it should "still report BufferRows under Cells granularity for a prose buffer, since it may use measured layout" in {
+    val before = stateWithContent("alpha\nbeta\ngamma").copy(config =
+      AppState.initial.config.withRenderDamageGranularity(RenderDamageGranularity.Cells)
+    )
+    val editedBuffer = before.buffers(bufferId).copy(content = before.buffers(bufferId).content.insert(1, "X"))
+    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+
+    before.buffers(bufferId).language shouldBe None
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0))
+  }
+
+  it should "report BufferRows for a single-line monospaced edit when granularity is the Rows default" in {
+    val base = stateWithContent("alpha\nbeta\ngamma")
+    val before = base.copy(buffers =
+      base.buffers.updated(bufferId, base.buffers(bufferId).copy(language = Some(LanguageId.Scala)))
+    )
+    val editedBuffer = before.buffers(bufferId).copy(content = before.buffers(bufferId).content.insert(1, "X"))
+    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+
+    before.config.surfaceConfig.renderDamageGranularity shouldBe RenderDamageGranularity.Rows
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0))
   }
 
   "DamageProducer's reported rows" should "cover what DirtyLineDiff independently finds dirty for the same edit" in {

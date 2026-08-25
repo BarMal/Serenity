@@ -413,7 +413,8 @@ object PerformanceBenchmarks:
           ),
         () => renderedFrame(commentsState, deviceScale = 2.0)
       )
-    ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++ List(
+    ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++ DamageBenchmarks
+      .benchmarks() ++ List(
       BenchmarkRunner.Benchmark(
         "find_replace.large_result_set",
         3,
