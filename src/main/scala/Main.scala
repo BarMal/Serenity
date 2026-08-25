@@ -104,10 +104,13 @@ object Main extends IOApp:
                   () => displayState.uiMetrics
                 ),
               checkResize = IO(swingWin.doResizeIfNecessary()),
-              renderFull = (state, vis, cc) =>
+              // The trailing Damage parameter is landed plumbing for #999: AppRuntime now computes and threads real
+              // per-frame paint-scope damage, but Renderer's own paint-scope decision (Renderer.planFrame) doesn't
+              // consume it yet, so it isn't forwarded past this boundary until that follow-up lands.
+              renderFull = (state, vis, cc, _) =>
                 syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
                   IO(paintFullFrame(state, vis, cc, swingWin, displayState.snapshot)).evalOn(paintEc),
-              renderCursorOnly = (state, vis, cc) =>
+              renderCursorOnly = (state, vis, cc, _) =>
                 syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
                   IO(paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot)).evalOn(paintEc),
               appConfig = actualAppConfig,

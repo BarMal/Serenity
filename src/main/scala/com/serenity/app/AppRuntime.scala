@@ -83,8 +83,8 @@ object AppRuntime:
     initialViewportSize: ViewportSize,
     makeInputHandler: InputRouter[IO, Event] => InputHandler[IO],
     checkResize: IO[Option[ViewportSize]],
-    renderFull: (AppState, Boolean, Option[Color]) => IO[Unit],
-    renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
+    renderFull: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
+    renderCursorOnly: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
     appConfig: AppConfig,
     makeStateManager: Option[Logger[IO] => IO[StateManager]] = None,
     awaitExternalQuit: IO[Unit] = IO.never,
@@ -106,7 +106,14 @@ object AppRuntime:
         _              <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
         fastModeSignal <- SignallingRef.of[IO, Boolean](false)
         pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)
-        emitDamage = (damage: Damage) => pendingDamage.update(_ |+| damage) >> fastModeSignal.set(true)
+        // Separate from pendingDamage: that ref answers "should the fast loop keep running," reset once per phase and
+        // deliberately blind to the phase's own animation ticks (see shouldClearFastMode). This one answers "what has
+        // changed since the last frame was actually drawn," fed by both input events and animation ticks alike, and
+        // drained by every render call rather than once per phase -- the render-surface-side accumulator #999 is
+        // building keeps this from growing unbounded, since a real render drains it dozens of times a second.
+        pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
+        emitDamage = (damage: Damage) =>
+          pendingDamage.update(_ |+| damage) >> pendingPaintDamage.update(_ |+| damage) >> fastModeSignal.set(true)
         // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
@@ -130,12 +137,13 @@ object AppRuntime:
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
-            renderFull(initialState, true, None) >>
+            renderFull(initialState, true, None, Damage.Everything) >>
               logger.info("Initial render completed, starting main loop") >>
               {
                 val idlePhase = idleRenderPhase(
                   loadState = stateManager.getCurrentState,
                   fastModeSignal = fastModeSignal,
+                  pendingPaintDamage = pendingPaintDamage,
                   currentStateForDiagnostics = currentStateForDiagnostics,
                   checkResizeAndHandle = checkResizeAndHandle,
                   cursorVisible = cursorVisible,
@@ -148,6 +156,7 @@ object AppRuntime:
                   stateManager,
                   fastModeSignal,
                   pendingDamage,
+                  pendingPaintDamage,
                   animationTickCadence,
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
@@ -225,11 +234,12 @@ object AppRuntime:
   private[serenity] def idleRenderPhase(
     loadState: IO[AppState],
     fastModeSignal: SignallingRef[IO, Boolean],
+    pendingPaintDamage: Ref[IO, Damage],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
-    renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
+    renderCursorOnly: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
     requestFastRender: IO[Unit]
   )(using Logger[IO]): Stream[IO, Unit] =
     Stream
@@ -243,6 +253,7 @@ object AppRuntime:
         runIdleRenderStep(
           currentStateForDiagnostics,
           loadState,
+          pendingPaintDamage,
           checkResizeAndHandle,
           cursorVisible,
           breathIndex,
@@ -309,13 +320,14 @@ object AppRuntime:
     stateManager: StateReader & AnimationTicker,
     fastModeSignal: SignallingRef[IO, Boolean],
     pendingDamage: Ref[IO, Damage],
+    pendingPaintDamage: Ref[IO, Damage],
     animationTickCadence: Ref[IO, AnimationTickCadence],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
-    renderFull: (AppState, Boolean, Option[Color]) => IO[Unit],
-    renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
+    renderFull: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
+    renderCursorOnly: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
     sleep: FiniteDuration => IO[Unit] = IO.sleep
-  )(using logger: Logger[IO]): Stream[IO, Unit] =
+  )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
     Stream.eval(pendingDamage.getAndSet(Damage.Nothing)).flatMap { _ =>
       Stream
         .repeatEval(stateManager.getCurrentState)
@@ -334,20 +346,21 @@ object AppRuntime:
                 else
                   animationTickCadence.modify(_.advance(interval)).flatMap { animationTicks =>
                     withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
-                      advanceAnimationsForCadence(animationTicks, stateManager)
+                      advanceAnimationsForCadence(animationTicks, stateManager, pendingPaintDamage)
                     )
                   }
               state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
                 stateManager.getCurrentState
               )
+              paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
               _ <-
                 if state.windowSitter.isActive && !needsFullContentRender(state) then
                   withRuntimeDiagnostics("render loop", "fast.cursor-only-render", IO.pure(Some(state)))(
-                    renderCursorOnly(state, true, None)
+                    renderCursorOnly(state, true, None, paintDamage)
                   )
                 else
                   withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
-                    renderFull(state, true, None)
+                    renderFull(state, true, None, paintDamage)
                   )
             yield active
         }
@@ -430,10 +443,11 @@ object AppRuntime:
   private[serenity] def runIdleRenderStep(
     currentStateForDiagnostics: IO[Option[AppState]],
     loadState: IO[AppState],
+    pendingPaintDamage: Ref[IO, Damage],
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
-    renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
+    renderCursorOnly: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
     requestFastRender: IO[Unit]
   )(using logger: Logger[IO]): IO[Unit] =
     for
@@ -451,11 +465,12 @@ object AppRuntime:
               "idle.cursor",
               IO.pure(Some(state))
             )(computeIdleCursorFrame(state, cursorVisible, breathIndex))
+            paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
             _ <- withRuntimeDiagnostics(
               "render loop",
               "idle.cursor-render",
               IO.pure(Some(state))
-            )(renderCursorOnly(state, visible, cursor))
+            )(renderCursorOnly(state, visible, cursor, paintDamage))
               .handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender))
           yield ()
         case None =>
@@ -471,12 +486,21 @@ object AppRuntime:
         signalResize.handleErrorWith(error => logger.error(error)("[RUNTIME] resize callback failed"))
       )
 
-  private def advanceAnimationsForCadence(ticks: Int, stateManager: StateReader & AnimationTicker): IO[Boolean] =
+  private def advanceAnimationsForCadence(
+    ticks: Int,
+    stateManager: StateReader & AnimationTicker,
+    pendingPaintDamage: Ref[IO, Damage]
+  )(using balance: com.serenity.rope.Balance): IO[Boolean] =
     if ticks <= 0 then stateManager.getCurrentState.map(hasActiveAnimations)
     else
-      (0 until ticks).toList.foldLeft(IO.pure(false)) { (previous, _) =>
-        previous.flatMap(_ => stateManager.advanceAnimationsOnTick())
-      }
+      for
+        before <- stateManager.getCurrentState
+        stillActive <- (0 until ticks).toList.foldLeft(IO.pure(false)) { (previous, _) =>
+          previous.flatMap(_ => stateManager.advanceAnimationsOnTick())
+        }
+        after <- stateManager.getCurrentState
+        _     <- pendingPaintDamage.update(_ |+| DamageProducer.forTransition(before, after))
+      yield stillActive
 
   private[serenity] def hasActiveAnimations(state: AppState): Boolean =
     needsFullContentRender(state) || state.windowSitter.isActive

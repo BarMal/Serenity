@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import cats.syntax.all.*
+import com.serenity.animation.AnimationState
 import com.serenity.config.RenderDamageGranularity
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
@@ -21,10 +22,14 @@ import com.serenity.state.models.*
   * tree structure rather than comparing text, so its cost tracks how much of the document an edit actually touched
   * rather than the document's size.
   *
+  * Called from two funnel points: `AppRuntime.inputEventPhase` around each input event, and
+  * `AppRuntime.fastRenderPhase` (via `advanceAnimationsForCadence`) around each animation tick -- the latter mutates
+  * state entirely outside `inputEventPhase`, so it needs its own before/after diff to report
+  * `animationDamage`/`fullRenderDamage` at all.
+  *
   * Not yet covered, and out of scope for this pass: pane chrome (headers, gutter, line numbers -- keyed by `PaneId`,
   * not `BufferId`, and largely derived inside `Renderer` rather than stored on `AppState`), focus-dimming's shifting
-  * active-body range, the animation-tick loop (`StateManagerEditorCapability.advanceAnimationsOnTick`, which mutates
-  * state entirely outside the funnel point this producer is called from), and overlay/surface damage (`#1000`).
+  * active-body range, and overlay/surface damage (`#1000`).
   */
 object DamageProducer:
 
@@ -37,7 +42,7 @@ object DamageProducer:
           case Some(beforeBuffer) =>
             acc |+| bufferDamageFor(bufferId, before, after, beforeBuffer, afterBuffer, granularity)
     }
-    bufferDamage |+| chromeDamage(before, after)
+    bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after)
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
@@ -58,7 +63,8 @@ object DamageProducer:
       selectionDamage(bufferId, beforeBuffer, afterBuffer) |+|
       commentDamage(bufferId, beforeBuffer, afterBuffer) |+|
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
-      languageDamage(bufferId, beforeBuffer, afterBuffer)
+      languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      animationDamage(bufferId, beforeBuffer, afterBuffer)
 
   private def contentDamage(
     bufferId: BufferId,
@@ -154,12 +160,37 @@ object DamageProducer:
     if before.language == after.language then Damage.Nothing
     else Damage.BufferRows(bufferId, (0 until after.content.lineCount).toSet)
 
+  /** Character-reveal (and other per-cell) animation ticks report exactly the rows whose cells changed, read off
+    * `AnimationState.animations`'s `CharacterKey`s -- the same map `PaneRowKey.animations` (`Renderer.scala`) reads
+    * today to decide row reuse, so this is a direct structural read rather than a coarsening.
+    */
+  private def animationDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
+    if before.animations == after.animations then Damage.Nothing
+    else Damage.BufferRows(bufferId, changedAnimationLines(before.animations, after.animations))
+
+  private def changedAnimationLines(before: AnimationState, after: AnimationState): Set[Int] =
+    (before.animations.keySet ++ after.animations.keySet).iterator
+      .filter(key => before.animations.get(key) != after.animations.get(key))
+      .map(_.line)
+      .toSet
+
   /** Global (not per-buffer) chrome-level changes: the theme, or the syntax-highlighting toggle, which recolors every
     * visible buffer at once the same way a theme change does.
     */
   private def chromeDamage(before: AppState, after: AppState): Damage =
     if before.theme != after.theme || before.config.syntaxHighlightingEnabled != after.config.syntaxHighlightingEnabled
     then Damage.Chrome
+    else Damage.Nothing
+
+  /** Transitions that touch every visible glyph rather than any one buffer's rows, matching what
+    * `AppRuntime.needsFullContentRender` already treats as requiring a full canvas repaint: a theme transition
+    * cross-fades every glyph and background colour in flight, and a surface animation composites through the same
+    * full-render path as any other overlay (see that function's doc comment for why the window sitter alone is exempt
+    * -- it never touches the canvas at all, so it contributes no damage here).
+    */
+  private def fullRenderDamage(before: AppState, after: AppState): Damage =
+    if before.themeTransition != after.themeTransition || before.surfaceAnimations != after.surfaceAnimations then
+      Damage.Everything
     else Damage.Nothing
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b

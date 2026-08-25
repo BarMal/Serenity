@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
 import com.serenity.config.RenderDamageGranularity
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
@@ -134,6 +135,59 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after  = before.copy(config = before.config.withSyntaxHighlighting(!before.config.syntaxHighlightingEnabled))
 
     DamageProducer.forTransition(before, after) shouldBe Damage.Chrome
+  }
+
+  private val revealCell = AnimatedCell(Some('x'), List(java.awt.Color.WHITE), Nil)
+
+  it should "report the changed rows when a character-reveal animation tick advances" in {
+    val before = stateWithContent("first\nsecond\nthird")
+    val animated = before
+      .buffers(bufferId)
+      .copy(
+        animations = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
+      )
+    val after = before.copy(buffers = before.buffers.updated(bufferId, animated))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(1))
+  }
+
+  it should "report the union of changed rows when several cells across different rows tick at once" in {
+    val before = stateWithContent("first\nsecond\nthird")
+    val animated = before
+      .buffers(bufferId)
+      .copy(
+        animations = AnimationState(Map(CharacterKey(0, 0) -> revealCell, CharacterKey(2, 2) -> revealCell))
+      )
+    val after = before.copy(buffers = before.buffers.updated(bufferId, animated))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 2))
+  }
+
+  it should "report no damage when a transition changes nothing about the buffer's animations" in {
+    val before = stateWithContent("first\nsecond\nthird")
+    val animated = before
+      .buffers(bufferId)
+      .copy(
+        animations = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
+      )
+    val withAnimation = before.copy(buffers = before.buffers.updated(bufferId, animated))
+
+    DamageProducer.forTransition(withAnimation, withAnimation) shouldBe Damage.Nothing
+  }
+
+  it should "report Everything when a theme transition advances, since it cross-fades every visible glyph" in {
+    val before = stateWithContent("alpha")
+    val after  = before.copy(themeTransition = Some(ThemeTransition(before.theme, currentStep = 1, totalSteps = 10)))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+  }
+
+  it should "report Everything when a surface animation advances, since it composites through the full-render path" in {
+    val before = stateWithContent("alpha")
+    val after =
+      before.copy(surfaceAnimations = before.surfaceAnimations.updated(SurfaceId("palette"), SurfaceAnimationState()))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
   it should "report the damaged row for a single-character edit on one line" in {
