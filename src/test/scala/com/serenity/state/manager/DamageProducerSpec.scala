@@ -2,7 +2,9 @@ package com.serenity.state.manager
 
 import com.serenity.config.RenderDamageGranularity
 import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.{Balance, Rope}
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.layout.DirtyLineDiff
 import com.serenity.ui.theme.Theme
@@ -38,13 +40,100 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(state, state) shouldBe Damage.Nothing
   }
 
-  it should "report no damage for a cursor-only move, since content is unchanged" in {
+  it should "report the old and new cursor rows for a cursor move, even though content is unchanged" in {
     val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0)))
     val after = before.copy(buffers =
       before.buffers.updated(bufferId, before.buffers(bufferId).copy(cursors = List(CursorPosition(2, 3))))
     )
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.Nothing
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 2))
+  }
+
+  it should "report no damage when a transition changes nothing about the cursors at all" in {
+    val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0)))
+    DamageProducer.forTransition(before, before) shouldBe Damage.Nothing
+  }
+
+  it should "report every old and new row for a multi-cursor move" in {
+    val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0), CursorPosition(1, 0)))
+    val after = before.copy(buffers =
+      before.buffers.updated(
+        bufferId,
+        before.buffers(bufferId).copy(cursors = List(CursorPosition(1, 2), CursorPosition(2, 0)))
+      )
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2))
+  }
+
+  it should "report the spanned rows for a selection change" in {
+    val before = stateWithContent("first\nsecond\nthird\nfourth")
+    val after = before.copy(buffers =
+      before.buffers.updated(
+        bufferId,
+        before.buffers(bufferId).copy(selection = Some(Selection(CursorPosition(1, 0), CursorPosition(3, 2))))
+      )
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(1, 2, 3))
+  }
+
+  it should "report both the old and new selection rows when a selection moves" in {
+    val before = stateWithContent("first\nsecond\nthird\nfourth").copy()
+    val withSelection = before.copy(buffers =
+      before.buffers.updated(
+        bufferId,
+        before.buffers(bufferId).copy(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
+      )
+    )
+    val after = withSelection.copy(buffers =
+      withSelection.buffers.updated(
+        bufferId,
+        withSelection.buffers(bufferId).copy(selection = Some(Selection(CursorPosition(2, 0), CursorPosition(2, 5))))
+      )
+    )
+
+    DamageProducer.forTransition(withSelection, after) shouldBe Damage.BufferRows(bufferId, Set(0, 2))
+  }
+
+  it should "report the spanned rows when a document comment is added" in {
+    val before  = stateWithContent("first\nsecond\nthird\nfourth")
+    val comment = DocumentComment(CursorPosition(1, 0), CursorPosition(2, 3), "note")
+    val after = before.copy(buffers =
+      before.buffers.updated(bufferId, before.buffers(bufferId).copy(documentComments = List(comment)))
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(1, 2))
+  }
+
+  it should "report the spanned rows when an LSP diagnostic is added for the buffer's URI" in {
+    val before = stateWithContent("first\nsecond\nthird\nfourth")
+    val uri    = SpellChecker.diagnosticsUri(before.buffers(bufferId))
+    val diagnostic = Diagnostic(
+      LspRange(LspPosition(2, 0), LspPosition(2, 5)),
+      Some(DiagnosticSeverity.Warning),
+      "unused value",
+      Some("benchmark")
+    )
+    val after = before.copy(diagnostics = before.diagnostics.updated(uri, List(diagnostic)))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(2))
+  }
+
+  it should "report the full buffer extent when its language changes, since that changes syntax highlighting" in {
+    val before = stateWithContent("first\nsecond\nthird")
+    val after = before.copy(buffers =
+      before.buffers.updated(bufferId, before.buffers(bufferId).copy(language = Some(LanguageId.Scala)))
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2))
+  }
+
+  it should "report Chrome damage when the syntax-highlighting setting toggles, since it recolors every buffer" in {
+    val before = stateWithContent("alpha")
+    val after  = before.copy(config = before.config.withSyntaxHighlighting(!before.config.syntaxHighlightingEnabled))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Chrome
   }
 
   it should "report the damaged row for a single-character edit on one line" in {
