@@ -8,6 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.*
 import cats.effect.std.Dispatcher
 import cats.syntax.parallel.*
+import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, CursorMode, MotionFamily, RenderFpsTarget}
 import com.serenity.diagnostics.Trace
 import com.serenity.input.*
@@ -15,7 +16,7 @@ import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, Focus}
+import com.serenity.state.models.{AppState, Damage, Focus}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -49,12 +50,12 @@ object AppRuntime:
   private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean], breathIndex: Ref[IO, Int]): IO[Unit] =
     cursorVisible.set(true) >> breathIndex.set(0)
 
-  private[serenity] def shouldClearFastMode(
-    stillActive: Boolean,
-    phaseStartRenderRequest: Long,
-    currentRenderRequest: Long
-  ): Boolean =
-    !stillActive && currentRenderRequest == phaseStartRenderRequest
+  /** The fast phase may stand down once nothing is animating and no fresh damage arrived while it was running --
+    * `pendingDamage` is drained to `Damage.Nothing` when the phase starts, so any non-`Nothing` value here means
+    * `emitDamage` was called again since, and the phase should carry straight on rather than idle even one tick.
+    */
+  private[serenity] def shouldClearFastMode(stillActive: Boolean, pendingDamage: Damage): Boolean =
+    !stillActive && pendingDamage == Damage.Nothing
 
   final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
 
@@ -102,10 +103,13 @@ object AppRuntime:
         inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         systemClipboard = SystemClipboard.awt[IO]
         inputHandler    = makeInputHandler(inputRouter)
-        _                      <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
-        fastMode               <- SignallingRef.of[IO, Boolean](false)
-        fastRenderRequestEpoch <- Ref.of[IO, Long](0L)
-        requestFastRender = fastRenderRequestEpoch.update(_ + 1L) >> fastMode.set(true)
+        _              <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
+        fastModeSignal <- SignallingRef.of[IO, Boolean](false)
+        pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)
+        emitDamage = (damage: Damage) => pendingDamage.update(_ |+| damage) >> fastModeSignal.set(true)
+        // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
+        // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
+        requestFastRender = emitDamage(Damage.Everything)
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
         cursorVisible <- Ref.of[IO, Boolean](true)
         breathIndex   <- Ref.of[IO, Int](0)
@@ -121,7 +125,7 @@ object AppRuntime:
           checkResizeAndHandle,
           cursorVisible,
           breathIndex,
-          requestFastRender
+          emitDamage
         )
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
@@ -131,7 +135,7 @@ object AppRuntime:
               {
                 val idlePhase = idleRenderPhase(
                   loadState = stateManager.getCurrentState,
-                  fastMode = fastMode,
+                  fastModeSignal = fastModeSignal,
                   currentStateForDiagnostics = currentStateForDiagnostics,
                   checkResizeAndHandle = checkResizeAndHandle,
                   cursorVisible = cursorVisible,
@@ -142,8 +146,8 @@ object AppRuntime:
 
                 val fastPhase = fastRenderPhase(
                   stateManager,
-                  fastMode,
-                  fastRenderRequestEpoch,
+                  fastModeSignal,
+                  pendingDamage,
                   animationTickCadence,
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
@@ -220,7 +224,7 @@ object AppRuntime:
 
   private[serenity] def idleRenderPhase(
     loadState: IO[AppState],
-    fastMode: SignallingRef[IO, Boolean],
+    fastModeSignal: SignallingRef[IO, Boolean],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
@@ -234,7 +238,7 @@ object AppRuntime:
           .map(state => cursorIdleInterval(state.config).getOrElse(DefaultCursorIdleInterval))
           .flatMap(IO.sleep)
       )
-      .interruptWhen(fastMode.discrete)
+      .interruptWhen(fastModeSignal.discrete)
       .evalMap(_ =>
         runIdleRenderStep(
           currentStateForDiagnostics,
@@ -254,17 +258,22 @@ object AppRuntime:
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
-    requestFastRender: IO[Unit]
-  ): Stream[IO, Event] => Stream[IO, Unit] =
+    emitDamage: Damage => IO[Unit]
+  )(using balance: com.serenity.rope.Balance): Stream[IO, Event] => Stream[IO, Unit] =
     _.evalMap { event =>
-      checkResizeBeforeInput(event, checkResizeAndHandle) >>
-        ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
-        observeWindowSitterTyping(event, stateManager) >>
-        stateManager.applyEvent(event) >>
-        ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
-        refreshFocusedInputTranslator(stateManager, inputRouter) >>
-        resetCursorActivity(cursorVisible, breathIndex) >>
-        requestFastRender
+      for
+        before <- stateManager.getCurrentState
+        _ <-
+          checkResizeBeforeInput(event, checkResizeAndHandle) >>
+            ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
+            observeWindowSitterTyping(event, stateManager) >>
+            stateManager.applyEvent(event) >>
+            ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
+            refreshFocusedInputTranslator(stateManager, inputRouter) >>
+            resetCursorActivity(cursorVisible, breathIndex)
+        after <- stateManager.getCurrentState
+        _     <- emitDamage(DamageProducer.forTransition(before, after))
+      yield ()
     }.drain
 
   private[serenity] def observeWindowSitterTyping(
@@ -298,8 +307,8 @@ object AppRuntime:
 
   private[serenity] def fastRenderPhase(
     stateManager: StateReader & AnimationTicker,
-    fastMode: SignallingRef[IO, Boolean],
-    fastRenderRequestEpoch: Ref[IO, Long],
+    fastModeSignal: SignallingRef[IO, Boolean],
+    pendingDamage: Ref[IO, Damage],
     animationTickCadence: Ref[IO, AnimationTickCadence],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
@@ -307,7 +316,7 @@ object AppRuntime:
     renderCursorOnly: (AppState, Boolean, Option[Color]) => IO[Unit],
     sleep: FiniteDuration => IO[Unit] = IO.sleep
   )(using logger: Logger[IO]): Stream[IO, Unit] =
-    Stream.eval(fastRenderRequestEpoch.get).flatMap { phaseStartRenderRequest =>
+    Stream.eval(pendingDamage.getAndSet(Damage.Nothing)).flatMap { _ =>
       Stream
         .repeatEval(stateManager.getCurrentState)
         .zipWithIndex
@@ -346,9 +355,8 @@ object AppRuntime:
         .map(_ => ())
         .onFinalize {
           stateManager.getCurrentState.flatMap { state =>
-            fastRenderRequestEpoch.get.flatMap { currentRenderRequest =>
-              if shouldClearFastMode(hasActiveAnimations(state), phaseStartRenderRequest, currentRenderRequest) then
-                fastMode.set(false)
+            pendingDamage.get.flatMap { damage =>
+              if shouldClearFastMode(hasActiveAnimations(state), damage) then fastModeSignal.set(false)
               else IO.unit
             }
           }

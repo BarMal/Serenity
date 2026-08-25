@@ -436,7 +436,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val breathIndex   = Ref.of[IO, Int](0).unsafeRunSync()
 
     AppRuntime
-      .inputEventPhase(capabilities, router, clipboard, IO.unit, cursorVisible, breathIndex, IO.unit)(
+      .inputEventPhase(capabilities, router, clipboard, IO.unit, cursorVisible, breathIndex, (_: Damage) => IO.unit)(
         Stream.emit(Paste)
       )
       .compile
