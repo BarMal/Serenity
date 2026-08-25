@@ -38,7 +38,7 @@ main/scala/com/serenity/ui/renderer/Renderer.scala	file length	2785
 main/scala/com/serenity/ui/renderer/TextOverlayRenderer.scala	file length	1008
 main/scala/com/serenity/ui/terminal/SwingWindow.scala	file length	1143
 main/scala/com/serenity/ui/theme/ThemeManager.scala	method highlightMarkdownLine	89
-test/scala/com/serenity/AppRuntimeSpec.scala	file length	887
+test/scala/com/serenity/AppRuntimeSpec.scala	file length	888
 test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1624
 test/scala/com/serenity/CommandRunnerFloatingRenderingSpec.scala	file length	786
 test/scala/com/serenity/CommandRunnerReducerSpec.scala	file length	1226

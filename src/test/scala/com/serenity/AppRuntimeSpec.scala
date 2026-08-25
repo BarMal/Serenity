@@ -8,6 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import cats.syntax.semigroup.*
 import com.serenity.animation.{WindowSitter, WindowSitterConfig}
 import com.serenity.app.AppRuntime
 import com.serenity.config.*
@@ -19,7 +20,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, BufferId, CursorPosition}
+import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage}
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -152,14 +153,14 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     )
 
     val program = for
-      fastMode               <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
-      fastRenderRequestEpoch <- Ref.of[IO, Long](0L)
-      animationTickCadence   <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
-      animationTicks         <- Ref.of[IO, Int](0)
-      rendered               <- Ref.of[IO, Vector[Int]](Vector.empty)
-      requestedDelays        <- Ref.of[IO, Vector[FiniteDuration]](Vector.empty)
-      cursorVisible          <- Ref.of[IO, Boolean](true)
-      breathIndex            <- Ref.of[IO, Int](0)
+      fastModeSignal       <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      pendingDamage        <- Ref.of[IO, Damage](Damage.Nothing)
+      animationTickCadence <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
+      animationTicks       <- Ref.of[IO, Int](0)
+      rendered             <- Ref.of[IO, Vector[Int]](Vector.empty)
+      requestedDelays      <- Ref.of[IO, Vector[FiniteDuration]](Vector.empty)
+      cursorVisible        <- Ref.of[IO, Boolean](true)
+      breathIndex          <- Ref.of[IO, Int](0)
       stateManager = new com.serenity.state.manager.StateReader
         with com.serenity.state.manager.StateUpdater
         with com.serenity.state.manager.EventApplier
@@ -178,8 +179,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       clipboard = new SystemClipboard[IO]:
         def readText: IO[Option[String]]      = IO.pure(None)
         def writeText(text: String): IO[Unit] = IO.unit
-      requestFastRender = fastRenderRequestEpoch.update(_ + 1L) >> fastMode.set(true)
-      given Logger[IO]  = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      emitDamage: (Damage => IO[Unit]) = damage => pendingDamage.update(_ |+| damage) >> fastModeSignal.set(true)
+      given Logger[IO]                 = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntime
         .inputEventPhase(
           stateManager,
@@ -188,15 +189,15 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           IO.unit,
           cursorVisible,
           breathIndex,
-          requestFastRender
+          emitDamage
         )(Stream.emit(InsertChar('a')))
         .compile
         .drain
       _ <- AppRuntime
         .fastRenderPhase(
           stateManager,
-          fastMode,
-          fastRenderRequestEpoch,
+          fastModeSignal,
+          pendingDamage,
           animationTickCadence,
           IO.pure(Some(state)),
           IO.unit,
@@ -228,10 +229,10 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     AppRuntime.needsFullContentRender(state) shouldBe false
 
     val program = for
-      fastMode               <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
-      fastRenderRequestEpoch <- Ref.of[IO, Long](0L)
-      animationTickCadence   <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
-      cursorOnlyFrames       <- Ref.of[IO, Int](0)
+      fastModeSignal       <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      pendingDamage        <- Ref.of[IO, Damage](Damage.Nothing)
+      animationTickCadence <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
+      cursorOnlyFrames     <- Ref.of[IO, Int](0)
       stateManager = new com.serenity.state.manager.StateReader
         with com.serenity.state.manager.StateUpdater
         with com.serenity.state.manager.EventApplier
@@ -245,8 +246,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       _ <- AppRuntime
         .fastRenderPhase(
           stateManager,
-          fastMode,
-          fastRenderRequestEpoch,
+          fastModeSignal,
+          pendingDamage,
           animationTickCadence,
           IO.pure(Some(state)),
           IO.unit,
@@ -331,7 +332,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           resizeChecks.update(_ + 1),
           cursorVisible,
           breathIndex,
-          IO.unit
+          (_: Damage) => IO.unit
         )(
           Stream.emits(List(InsertChar('a'), DeleteBackward, MoveLeft, InsertChar('b')))
         )
@@ -372,7 +373,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           resizeChecks.update(_ + 1),
           cursorVisible,
           breathIndex,
-          IO.unit
+          (_: Damage) => IO.unit
         )(Stream.emit(MousePress(0, 0)))
         .compile
         .drain
@@ -480,7 +481,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         def readText: IO[Option[String]]      = IO.pure(None)
         def writeText(text: String): IO[Unit] = IO.unit
       _ <- AppRuntime
-        .inputEventPhase(stateManager, router, clipboard, IO.unit, cursorVisible, breathIndex, IO.unit)(
+        .inputEventPhase(stateManager, router, clipboard, IO.unit, cursorVisible, breathIndex, (_: Damage) => IO.unit)(
           Stream.emit(OpenFind)
         )
         .compile
@@ -491,15 +492,15 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 1
   }
 
-  it should "keep fast rendering active when a newer render request arrives during finalization" in {
+  it should "keep fast rendering active when fresh damage arrived during finalization" in {
     AppRuntime
-      .shouldClearFastMode(stillActive = false, phaseStartRenderRequest = 1L, currentRenderRequest = 1L)
+      .shouldClearFastMode(stillActive = false, pendingDamage = Damage.Nothing)
       .shouldBe(true)
     AppRuntime
-      .shouldClearFastMode(stillActive = true, phaseStartRenderRequest = 1L, currentRenderRequest = 1L)
+      .shouldClearFastMode(stillActive = true, pendingDamage = Damage.Nothing)
       .shouldBe(false)
     AppRuntime
-      .shouldClearFastMode(stillActive = false, phaseStartRenderRequest = 1L, currentRenderRequest = 2L)
+      .shouldClearFastMode(stillActive = false, pendingDamage = Damage.Everything)
       .shouldBe(false)
   }
 
