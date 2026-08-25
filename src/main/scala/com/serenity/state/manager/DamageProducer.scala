@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import cats.syntax.all.*
+import com.serenity.config.RenderDamageGranularity
 import com.serenity.rope.{Balance, RopeDiff}
 import com.serenity.state.models.*
 
@@ -18,20 +19,52 @@ import com.serenity.state.models.*
 object DamageProducer:
 
   def forTransition(before: AppState, after: AppState)(using Balance): Damage =
+    val granularity = after.config.surfaceConfig.renderDamageGranularity
     val bufferDamage = after.buffers.foldLeft(Damage.Nothing: Damage) {
       case (acc, (bufferId, afterBuffer)) =>
         before.buffers.get(bufferId) match
           case None               => acc
-          case Some(beforeBuffer) => acc |+| contentDamage(bufferId, beforeBuffer, afterBuffer)
+          case Some(beforeBuffer) => acc |+| contentDamage(bufferId, beforeBuffer, afterBuffer, granularity)
     }
     bufferDamage |+| chromeDamage(before, after)
 
-  private def contentDamage(bufferId: BufferId, before: Buffer, after: Buffer)(using Balance): Damage =
+  private def contentDamage(
+    bufferId: BufferId,
+    before: Buffer,
+    after: Buffer,
+    granularity: RenderDamageGranularity
+  )(using Balance): Damage =
     if isSameReference(before.content, after.content) then Damage.Nothing
     else
       RopeDiff.changedOffsetRange(before.content, after.content) match
-        case None               => Damage.Nothing
-        case Some((start, end)) => Damage.BufferRows(bufferId, rowsForOffsetRange(after, start, end))
+        case None => Damage.Nothing
+        case Some((start, end)) =>
+          cellDamage(bufferId, after, start, end, granularity)
+            .getOrElse(Damage.BufferRows(bufferId, rowsForOffsetRange(after, start, end)))
+
+  /** Column-precise damage for an edit confined to one row of a monospaced buffer under `Cells` granularity. `None`
+    * whenever that doesn't hold, so the caller falls back to row-level damage -- multi-row edits (including a merged
+    * offset range spanning several multi-cursor edits) lose per-row precision by construction, and a buffer using
+    * measured/proportional layout (`Buffer.typographyRole.usesTextFont`) can reshape glyphs across a clipped column
+    * boundary, which is the correctness constraint #997 documents for this setting.
+    */
+  private def cellDamage(
+    bufferId: BufferId,
+    after: Buffer,
+    start: Int,
+    end: Int,
+    granularity: RenderDamageGranularity
+  ): Option[Damage] =
+    Option
+      .when(granularity == RenderDamageGranularity.Cells && !after.typographyRole.usesTextFont) {
+        val weight                   = after.content.weight
+        val clampedStart             = math.max(0, math.min(start, weight))
+        val lastOffset               = math.max(clampedStart, math.min(end, weight) - 1)
+        val (startLine, startColumn) = after.content.offsetToLineColumn(clampedStart)
+        val (endLine, endColumn)     = after.content.offsetToLineColumn(lastOffset)
+        Option.when(startLine == endLine)(Damage.BufferCells(bufferId, startLine, startColumn, Some(endColumn + 1)))
+      }
+      .flatten
 
   /** The lines `[start, end)` (an exclusive offset range in `after`'s content) touches. A pure deletion reports
     * `end == start`, which still damages the one line the deletion landed on, so the last-affected offset is clamped to

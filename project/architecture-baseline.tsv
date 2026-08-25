@@ -60,6 +60,6 @@ test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	969
 test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1174
 test/scala/com/serenity/TextOverlayRendererSpec.scala	file length	673
 test/scala/com/serenity/UiPresetSpec.scala	file length	681
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	298
+test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	299
 test/scala/com/serenity/rope/RopeSpec.scala	file length	724
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	604

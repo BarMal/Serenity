@@ -20,7 +20,17 @@ object BenchmarkRunner:
       "reducer.multi_cursor_move_down",
       "reducer.deep_scroll.plain",
       "reducer.deep_scroll.rich_text",
-      "render.long_measured_line.java2d"
+      "render.long_measured_line.java2d",
+      "damage.single_char_long_line.rows",
+      "damage.single_char_long_line.cells",
+      "damage.single_char_short_line.rows",
+      "damage.single_char_short_line.cells",
+      "damage.multi_cursor.rows",
+      "damage.multi_cursor.cells",
+      "damage.markdown.rows",
+      "damage.markdown.cells",
+      "damage.scroll.rows",
+      "damage.scroll.cells"
     )
 
   final private[perf] case class Benchmark(
