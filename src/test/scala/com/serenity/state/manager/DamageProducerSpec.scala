@@ -41,13 +41,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(state, state) shouldBe Damage.Nothing
   }
 
-  it should "report the old and new cursor rows for a cursor move, even though content is unchanged" in {
+  it should "report the old and new cursor rows for a cursor move, plus Chrome since the active gutter shows it" in {
     val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0)))
     val after = before.copy(buffers =
       before.buffers.updated(bufferId, before.buffers(bufferId).copy(cursors = List(CursorPosition(2, 3))))
     )
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 2))
+    DamageProducer.forTransition(before, after) shouldBe
+      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 2)), Damage.Chrome))
   }
 
   it should "report no damage when a transition changes nothing about the cursors at all" in {
@@ -55,7 +56,7 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, before) shouldBe Damage.Nothing
   }
 
-  it should "report every old and new row for a multi-cursor move" in {
+  it should "report every old and new row for a multi-cursor move, plus Chrome since the active gutter shows it" in {
     val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0), CursorPosition(1, 0)))
     val after = before.copy(buffers =
       before.buffers.updated(
@@ -64,7 +65,8 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2))
+    DamageProducer.forTransition(before, after) shouldBe
+      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
   }
 
   it should "report the spanned rows for a selection change" in {
@@ -121,13 +123,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(2))
   }
 
-  it should "report the full buffer extent when its language changes, since that changes syntax highlighting" in {
+  it should "report the full buffer extent (plus Chrome, since the active gutter shows the language) on a language change" in {
     val before = stateWithContent("first\nsecond\nthird")
     val after = before.copy(buffers =
       before.buffers.updated(bufferId, before.buffers(bufferId).copy(language = Some(LanguageId.Scala)))
     )
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2))
+    DamageProducer.forTransition(before, after) shouldBe
+      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
   }
 
   it should "report Chrome damage when the syntax-highlighting setting toggles, since it recolors every buffer" in {
@@ -188,6 +191,72 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
       before.copy(surfaceAnimations = before.surfaceAnimations.updated(SurfaceId("palette"), SurfaceAnimationState()))
 
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+  }
+
+  private val activePaneId = PaneId(0)
+
+  it should "report PaneChrome damage when a buffer's dirty flag toggles" in {
+    val before = stateWithContent("alpha")
+    val after  = before.copy(buffers = before.buffers.updated(bufferId, before.buffers(bufferId).copy(isDirty = true)))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.PaneChrome(activePaneId)
+  }
+
+  it should "report PaneChrome and Chrome damage when a buffer's file path changes, since both header and gutter show it" in {
+    val before = stateWithContent("alpha")
+    val after = before.copy(buffers =
+      before.buffers.updated(bufferId, before.buffers(bufferId).copy(filePath = Some(java.nio.file.Path.of("a.txt"))))
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe
+      Damage.Combined(Set(Damage.PaneChrome(activePaneId), Damage.Chrome))
+  }
+
+  it should "report no PaneChrome damage when nothing header-relevant changed" in {
+    val before = stateWithContent("alpha")
+    val after =
+      before.copy(buffers = before.buffers.updated(bufferId, before.buffers(bufferId).copy(isNewEmpty = true)))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Nothing
+  }
+
+  it should "report Everything when the layout changes, e.g. a pane is added" in {
+    val before   = stateWithContent("alpha")
+    val secondId = PaneId(1)
+    val after = before.copy(layout =
+      before.layout.copy(
+        editorPanes = before.layout.editorPanes.updated(secondId, EditorPane.withBuffer(secondId, bufferId)),
+        paneOrder = before.layout.paneOrder :+ secondId
+      )
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+  }
+
+  it should "combine BufferRows and Chrome damage when the active buffer's cursor moves, since the gutter shows it" in {
+    val before = stateWithContent("first\nsecond\nthird", cursors = List(CursorPosition(0, 0)))
+    val after = before.copy(buffers =
+      before.buffers.updated(bufferId, before.buffers(bufferId).copy(cursors = List(CursorPosition(1, 2))))
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe
+      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1)), Damage.Chrome))
+  }
+
+  it should "report only BufferRows, no Chrome damage, when a non-active buffer's cursor moves" in {
+    val otherId = BufferId(99)
+    val before = stateWithContent("first\nsecond").copy(
+      buffers = AppState.initial.buffers
+        .updated(bufferId, AppState.initial.buffers(bufferId).copy(content = Rope("first\nsecond"))) +
+        (otherId -> AppState.initial
+          .buffers(bufferId)
+          .copy(id = otherId, content = Rope("x\ny"), cursors = List(CursorPosition(0, 0))))
+    )
+    val after = before.copy(buffers =
+      before.buffers.updated(otherId, before.buffers(otherId).copy(cursors = List(CursorPosition(1, 0))))
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(otherId, Set(0, 1))
   }
 
   it should "report the damaged row for a single-character edit on one line" in {
