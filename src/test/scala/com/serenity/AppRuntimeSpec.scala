@@ -155,6 +155,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     val program = for
       fastModeSignal       <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
       pendingDamage        <- Ref.of[IO, Damage](Damage.Nothing)
+      pendingPaintDamage   <- Ref.of[IO, Damage](Damage.Nothing)
       animationTickCadence <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
       animationTicks       <- Ref.of[IO, Int](0)
       rendered             <- Ref.of[IO, Vector[Int]](Vector.empty)
@@ -198,12 +199,13 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           stateManager,
           fastModeSignal,
           pendingDamage,
+          pendingPaintDamage,
           animationTickCadence,
           IO.pure(Some(state)),
           IO.unit,
-          (_: AppState, _: Boolean, _: Option[Color]) =>
+          (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
             animationTicks.get.flatMap(tickCount => rendered.update(_ :+ tickCount)),
-          (_: AppState, _: Boolean, _: Option[Color]) =>
+          (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
             IO.raiseError(new AssertionError("expected full render while a surface animation is active")),
           delay => requestedDelays.update(_ :+ delay)
         )
@@ -231,6 +233,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     val program = for
       fastModeSignal       <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
       pendingDamage        <- Ref.of[IO, Damage](Damage.Nothing)
+      pendingPaintDamage   <- Ref.of[IO, Damage](Damage.Nothing)
       animationTickCadence <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
       cursorOnlyFrames     <- Ref.of[IO, Int](0)
       stateManager = new com.serenity.state.manager.StateReader
@@ -248,12 +251,13 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           stateManager,
           fastModeSignal,
           pendingDamage,
+          pendingPaintDamage,
           animationTickCadence,
           IO.pure(Some(state)),
           IO.unit,
-          (_: AppState, _: Boolean, _: Option[Color]) =>
+          (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
             IO.raiseError(new AssertionError("expected cursor-only render while only the window sitter is active")),
-          (_: AppState, _: Boolean, _: Option[Color]) => cursorOnlyFrames.update(_ + 1),
+          (_: AppState, _: Boolean, _: Option[Color], _: Damage) => cursorOnlyFrames.update(_ + 1),
           _ => IO.unit
         )
         .take(2)
@@ -403,9 +407,9 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           initialViewportSize = ViewportSize(120, 40),
           makeInputHandler = _ => inputHandler,
           checkResize = IO.pure(None),
-          renderFull = (_: AppState, _: Boolean, _: Option[Color]) =>
+          renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
             initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
-          renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+          renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
           appConfig = AppConfig.default,
           makeStateManager = Some(_ => IO.pure(stateManager)),
           awaitExternalQuit = closeRequested.get,
@@ -444,9 +448,9 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           initialViewportSize = ViewportSize(120, 40),
           makeInputHandler = _ => inputHandler,
           checkResize = IO.pure(None),
-          renderFull = (_: AppState, _: Boolean, _: Option[Color]) =>
+          renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
             inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
-          renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+          renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
           appConfig = AppConfig.default,
           makeStateManager = Some(_ => IO.pure(stateManager)),
           registerResizeCallback = _ => ()
@@ -522,8 +526,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       initialViewportSize = ViewportSize(120, 40),
       makeInputHandler = _ => new SilentInputHandler,
       checkResize = IO.pure(None),
-      renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
-      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+      renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
       appConfig = AppConfig.default,
       awaitExternalQuit = IO.unit,
       registerResizeCallback = _ => ()
@@ -547,8 +551,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       initialViewportSize = ViewportSize(120, 40),
       makeInputHandler = _ => new TrackingInputHandler,
       checkResize = IO.pure(None),
-      renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
-      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+      renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
       appConfig = AppConfig.default,
       awaitExternalQuit = IO.unit,
       registerResizeCallback = _ => ()
@@ -566,8 +570,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       initialViewportSize = ViewportSize(120, 40),
       makeInputHandler = _ => new SilentInputHandler,
       checkResize = IO.pure(None),
-      renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
-      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+      renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
       appConfig = AppConfig.default,
       makeStateManager = Some(logger =>
         IO.blocking(java.nio.file.Files.createTempFile("serenity-session-root", ".tmp")).flatMap { fileRoot =>
@@ -595,8 +599,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       initialViewportSize = ViewportSize(120, 40),
       makeInputHandler = _ => new SilentInputHandler,
       checkResize = IO.raiseError(new RuntimeException("resize check failed")),
-      renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
-      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
+      renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
       appConfig = AppConfig.default,
       makeStateManager = Some(logger =>
         StateManager.apply(
@@ -780,17 +784,19 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     )
 
     val program = for
-      cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
-      renderCalls   <- Ref.of[IO, Int](0)
+      cursorVisible      <- Ref.of[IO, Boolean](true)
+      breathIndex        <- Ref.of[IO, Int](0)
+      pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
+      renderCalls        <- Ref.of[IO, Int](0)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntime.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
         loadState = IO.pure(state),
+        pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
         breathIndex = breathIndex,
-        renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color]) => renderCalls.update(_ + 1),
+        renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => renderCalls.update(_ + 1),
         requestFastRender = IO.unit
       )
       calls <- renderCalls.get
@@ -803,18 +809,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial
 
     val program = for
-      cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
-      rendered      <- Ref.of[IO, Vector[(Boolean, Option[Color])]](Vector.empty)
+      cursorVisible      <- Ref.of[IO, Boolean](true)
+      breathIndex        <- Ref.of[IO, Int](0)
+      pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
+      rendered           <- Ref.of[IO, Vector[(Boolean, Option[Color])]](Vector.empty)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntime.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
         loadState = IO.pure(state),
+        pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
         breathIndex = breathIndex,
-        renderCursorOnly =
-          (_: AppState, visible: Boolean, cursor: Option[Color]) => rendered.update(_ :+ (visible -> cursor)),
+        renderCursorOnly = (_: AppState, visible: Boolean, cursor: Option[Color], _: Damage) =>
+          rendered.update(_ :+ (visible -> cursor)),
         requestFastRender = IO.unit
       )
       frames <- rendered.get
@@ -833,9 +841,9 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
             initialViewportSize = ViewportSize(120, 40),
             makeInputHandler = _ => new SilentInputHandler,
             checkResize = IO.pure(None),
-            renderFull = (_: AppState, _: Boolean, _: Option[Color]) => IO.unit,
-            renderCursorOnly =
-              (_: AppState, _: Boolean, _: Option[Color]) => IO.raiseError(RuntimeException("idle render failed")),
+            renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+            renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
+              IO.raiseError(RuntimeException("idle render failed")),
             appConfig = AppConfig.default,
             makeStateManager = Some(logger =>
               StateManager.apply(
