@@ -136,6 +136,27 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 1
   }
 
+  it should "not recompute when only a buffer's markdown-preview commit generation caught up" in {
+    val bufferId = BufferId(1)
+    val stateA = AppState.initial.copy(buffers =
+      Map(bufferId -> Buffer.fromString(bufferId, "# hello").copy(markdownPreviewEditGeneration = 3L))
+    )
+    val stateB =
+      stateA.copy(buffers = Map(bufferId -> stateA.buffers(bufferId).copy(markdownPreviewCommittedGeneration = 3L)))
+    val program = for
+      sync      <- AccessibilitySync.empty
+      callCount <- IO.ref(0)
+      compute = (state: AppState) =>
+        (previous: Option[AccessibilitySnapshot]) =>
+          callCount.update(_ + 1).as(AccessibilitySnapshot.from(state, viewport, previous))
+      _     <- sync.sync(stateA)(compute(stateA))
+      _     <- sync.sync(stateB)(compute(stateB))
+      calls <- callCount.get
+    yield calls
+
+    program.unsafeRunSync() shouldBe 1
+  }
+
   it should "still recompute a real change even while the window sitter is also ticking" in {
     val stateA = AppState.initial
     val stateB = AppState.initial
