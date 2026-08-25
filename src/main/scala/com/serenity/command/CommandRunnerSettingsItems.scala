@@ -152,6 +152,21 @@ object CommandRunnerSettingsItems:
       hint = Some("Render loop cadence")
     )
 
+  private[command] def renderDamageGranularityOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "render-damage-granularity",
+      label = "Repaint Granularity",
+      options = List(
+        CommandOption("Rows", CommandIntent.SetRenderDamageGranularity(RenderDamageGranularity.Rows)),
+        CommandOption("Cells", CommandIntent.SetRenderDamageGranularity(RenderDamageGranularity.Cells))
+      ),
+      selectedIndex = optionSelections.getOrElse("render-damage-granularity", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Cells applies to monospaced code buffers only")
+    )
+
   private[command] def cursorInfoBarOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "cursor-info-bar",

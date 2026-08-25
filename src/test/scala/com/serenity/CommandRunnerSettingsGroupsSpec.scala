@@ -90,7 +90,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-shadows",
       "blur-radius"
     )
-    groupById(groups, "settings-rendering").children.map(_.id) shouldBe List("render-fps")
+    groupById(groups, "settings-rendering").children.map(_.id) shouldBe
+      List("render-fps", "render-damage-granularity")
     groupById(groups, "settings-animation").children.map(_.id) shouldBe List(
       "motion-accessibility",
       "motion-preset",

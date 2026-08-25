@@ -404,6 +404,9 @@ object ConfigManager:
        |command_runner.item_gap_rows = ${config.commandRunnerItemGapRows}
        |command_runner.cursor_gap_rows = ${config.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")}
        |render.fps = ${config.renderFpsTarget.configKey}
+       |# Damage granularity the renderer honours: rows redraws whole visible lines; cells honours column ranges on
+       |# monospaced buffers only, falling back to rows for proportional or ligature-shaped text
+       |render.damage_granularity = ${config.renderDamageGranularity.configKey}
        |display.word_wrap = ${config.wordWrapEnabled}
        |display.pane_headers = ${config.showPaneHeaders}
        |display.focused_text_body = ${config.focusedTextBodyEnabled}
@@ -854,6 +857,7 @@ object ConfigManager:
                           |# Interface density: compact, comfortable, spacious
                           |interface.density = comfortable
                           |render.fps = 60
+                          |render.damage_granularity = rows
                           |
                           |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
                           |ui.material = frosted

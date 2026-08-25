@@ -650,6 +650,13 @@ given Encoder[RenderFpsTarget] = Encoder.encodeString.contramap(_.configKey)
 given Decoder[RenderFpsTarget] =
   Decoder.decodeString.emap(value => RenderFpsTarget.fromConfigKey(value).toRight(s"Unknown RenderFpsTarget: $value"))
 
+given Encoder[RenderDamageGranularity] = Encoder.encodeString.contramap(_.configKey)
+
+given Decoder[RenderDamageGranularity] =
+  Decoder.decodeString.emap(value =>
+    RenderDamageGranularity.fromConfigKey(value).toRight(s"Unknown RenderDamageGranularity: $value")
+  )
+
 given Encoder[InterfaceDensity] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[InterfaceDensity] = Decoder.decodeString.emap {
@@ -977,6 +984,7 @@ given Encoder[AppConfig] = Encoder.instance { config =>
         "commandRunnerItemGapRows"          -> config.commandRunnerItemGapRows.asJson,
         "commandRunnerCursorGapRows"        -> config.commandRunnerCursorGapRows.asJson,
         "renderFpsTarget"                   -> config.renderFpsTarget.asJson,
+        "renderDamageGranularity"           -> config.renderDamageGranularity.asJson,
         "editorInsertionTransitionKind"     -> config.editorInsertionTransitionKind.asJson,
         "commandRunnerTransitionKind"       -> config.commandRunnerTransitionKind.asJson,
         "panelOpenTransitionKind"           -> config.panelOpenTransitionKind.asJson,
@@ -1046,6 +1054,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
       .getOrElse[Option[Double]]("commandRunnerCursorGapRows")(defaultConfig.commandRunnerCursorGapRows)
       .map(_.map(AppConfig.clampCommandRunnerCursorGapRows))
     renderFpsTarget <- cursor.getOrElse[RenderFpsTarget]("renderFpsTarget")(RenderFpsTarget.Fps60)
+    renderDamageGranularity <- cursor
+      .getOrElse[RenderDamageGranularity]("renderDamageGranularity")(RenderDamageGranularity.Rows)
     editorInsertionTransitionKind <- cursor.getOrElse[TransitionKind]("editorInsertionTransitionKind")(
       TransitionKind.Fade
     )
@@ -1085,6 +1095,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerItemGapRows = commandRunnerItemGapRows,
     commandRunnerCursorGapRows = commandRunnerCursorGapRows,
     renderFpsTarget = renderFpsTarget,
+    renderDamageGranularity = renderDamageGranularity,
     editorInsertionTransitionKind = editorInsertionTransitionKind,
     commandRunnerTransitionKind = commandRunnerTransitionKind,
     panelOpenTransitionKind = panelOpenTransitionKind,
