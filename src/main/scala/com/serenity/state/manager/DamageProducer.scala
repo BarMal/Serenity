@@ -2,19 +2,29 @@ package com.serenity.state.manager
 
 import cats.syntax.all.*
 import com.serenity.config.RenderDamageGranularity
+import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 
 /** Computes what a transition between two `AppState`s damaged, so the render loop doesn't have to rediscover it by
-  * diffing frames (`Renderer.planFrame`'s `ChromeKey`/`dirtyRowsAgainst` machinery, `#999`). Produced once, centrally,
-  * at the same effect-boundary funnel points as `CursorViewport.ensureVisibleCursors` -- see that object's doc comment
-  * for why per-reducer-branch emission was rejected in favour of a boundary pass.
+  * diffing frames -- the wake-up decision this drives is wired in by `#998` (`AppRuntime.inputEventPhase`). `#999` is
+  * migrating `Renderer.planFrame`'s own `ChromeKey`/`dirtyRowsAgainst` machinery onto this same signal for the
+  * paint-scope decision, which is why this producer also reports dimensions `#998`'s wake-up decision alone never
+  * needed -- cursor and selection movement, comment/diagnostic annotations, and language reclassification -- each of
+  * those already invalidates pixels today via `Renderer`'s own `PaneRowKey`/`PaneContentKey` structural comparison, so
+  * this producer has to cover them before `planFrame` can safely trust `Damage` instead of that comparison. See
+  * `CursorViewport.ensureVisibleCursors`'s doc comment for why per-reducer-branch emission was rejected in favour of
+  * this boundary-pass pattern.
   *
   * Buffer content damage goes through `RopeDiff`, which finds the changed offset range by walking the rope's persistent
   * tree structure rather than comparing text, so its cost tracks how much of the document an edit actually touched
   * rather than the document's size.
   *
-  * Landed unused: nothing calls this yet. `#998` wires it in alongside the damage queue that replaces `fastMode`.
+  * Not yet covered, and out of scope for this pass: pane chrome (headers, gutter, line numbers -- keyed by `PaneId`,
+  * not `BufferId`, and largely derived inside `Renderer` rather than stored on `AppState`), focus-dimming's shifting
+  * active-body range, the animation-tick loop (`StateManagerEditorCapability.advanceAnimationsOnTick`, which mutates
+  * state entirely outside the funnel point this producer is called from), and overlay/surface damage (`#1000`).
   */
 object DamageProducer:
 
@@ -23,10 +33,32 @@ object DamageProducer:
     val bufferDamage = after.buffers.foldLeft(Damage.Nothing: Damage) {
       case (acc, (bufferId, afterBuffer)) =>
         before.buffers.get(bufferId) match
-          case None               => acc
-          case Some(beforeBuffer) => acc |+| contentDamage(bufferId, beforeBuffer, afterBuffer, granularity)
+          case None => acc
+          case Some(beforeBuffer) =>
+            acc |+| bufferDamageFor(bufferId, before, after, beforeBuffer, afterBuffer, granularity)
     }
     bufferDamage |+| chromeDamage(before, after)
+
+  /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
+    * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
+    * (which recolors every row via syntax highlighting). Each check is independent and safe to over-report: reporting a
+    * row that turned out not to need repainting just costs a redundant draw, matching the bias documented on `RopeDiff`
+    * and `DirtyLineDiff`.
+    */
+  private def bufferDamageFor(
+    bufferId: BufferId,
+    before: AppState,
+    after: AppState,
+    beforeBuffer: Buffer,
+    afterBuffer: Buffer,
+    granularity: RenderDamageGranularity
+  )(using Balance): Damage =
+    contentDamage(bufferId, beforeBuffer, afterBuffer, granularity) |+|
+      cursorDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      selectionDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      commentDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
+      languageDamage(bufferId, beforeBuffer, afterBuffer)
 
   private def contentDamage(
     bufferId: BufferId,
@@ -78,7 +110,56 @@ object DamageProducer:
     val (endLine, _)   = after.content.offsetToLineColumn(lastOffset)
     (startLine to endLine).toSet
 
+  private def cursorDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
+    if before.cursors == after.cursors then Damage.Nothing
+    else Damage.BufferRows(bufferId, (before.cursors ++ after.cursors).map(_.line).toSet)
+
+  private def selectionDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
+    if before.allSelections == after.allSelections then Damage.Nothing
+    else Damage.BufferRows(bufferId, selectionLines(before.allSelections) ++ selectionLines(after.allSelections))
+
+  private def selectionLines(selections: List[Selection]): Set[Int] =
+    selections.iterator.flatMap(selection => selection.start.line to selection.end.line).toSet
+
+  private def commentDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
+    if before.documentComments == after.documentComments then Damage.Nothing
+    else Damage.BufferRows(bufferId, commentLines(before.documentComments) ++ commentLines(after.documentComments))
+
+  private def commentLines(comments: List[DocumentComment]): Set[Int] =
+    comments.iterator.flatMap(comment => comment.start.line to comment.end.line).toSet
+
+  /** Diagnostics live in `AppState.diagnostics`, keyed by URI rather than on the buffer itself, so this reads both
+    * sides' URIs rather than assuming they match -- a save-as between `before` and `after` changes a buffer's URI, and
+    * this must not silently compare the wrong two lists (or worse, the same list against itself) when that happens.
+    */
+  private def diagnosticDamage(
+    bufferId: BufferId,
+    before: AppState,
+    after: AppState,
+    beforeBuffer: Buffer,
+    afterBuffer: Buffer
+  ): Damage =
+    val beforeDiagnostics = before.diagnostics.getOrElse(SpellChecker.diagnosticsUri(beforeBuffer), Nil)
+    val afterDiagnostics  = after.diagnostics.getOrElse(SpellChecker.diagnosticsUri(afterBuffer), Nil)
+    if beforeDiagnostics == afterDiagnostics then Damage.Nothing
+    else Damage.BufferRows(bufferId, diagnosticLines(beforeDiagnostics) ++ diagnosticLines(afterDiagnostics))
+
+  private def diagnosticLines(diagnostics: List[Diagnostic]): Set[Int] =
+    diagnostics.iterator.flatMap(diagnostic => diagnostic.range.start.line to diagnostic.range.end.line).toSet
+
+  /** A language reclassification changes every row's syntax highlighting, not just the rows an edit touched, so this
+    * reports the buffer's full line extent rather than trying to reason about which rows actually recolor.
+    */
+  private def languageDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
+    if before.language == after.language then Damage.Nothing
+    else Damage.BufferRows(bufferId, (0 until after.content.lineCount).toSet)
+
+  /** Global (not per-buffer) chrome-level changes: the theme, or the syntax-highlighting toggle, which recolors every
+    * visible buffer at once the same way a theme change does.
+    */
   private def chromeDamage(before: AppState, after: AppState): Damage =
-    if before.theme != after.theme then Damage.Chrome else Damage.Nothing
+    if before.theme != after.theme || before.config.syntaxHighlightingEnabled != after.config.syntaxHighlightingEnabled
+    then Damage.Chrome
+    else Damage.Nothing
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b
