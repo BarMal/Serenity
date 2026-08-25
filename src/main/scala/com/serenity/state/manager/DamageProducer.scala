@@ -22,9 +22,10 @@ import com.serenity.state.models.*
   * tree structure rather than comparing text, so its cost tracks how much of the document an edit actually touched
   * rather than the document's size.
   *
-  * Called from two funnel points: `AppRuntime.inputEventPhase` around each input event, and `AppRuntime.fastRenderPhase`
-  * (via `advanceAnimationsForCadence`) around each animation tick -- the latter mutates state entirely outside
-  * `inputEventPhase`, so it needs its own before/after diff to report `animationDamage`/`fullRenderDamage` at all.
+  * Called from two funnel points: `AppRuntime.inputEventPhase` around each input event, and
+  * `AppRuntime.fastRenderPhase` (via `advanceAnimationsForCadence`) around each animation tick -- the latter mutates
+  * state entirely outside `inputEventPhase`, so it needs its own before/after diff to report
+  * `animationDamage`/`fullRenderDamage` at all.
   *
   * Not yet covered, and out of scope for this pass: pane chrome (headers, gutter, line numbers -- keyed by `PaneId`,
   * not `BufferId`, and largely derived inside `Renderer` rather than stored on `AppState`), focus-dimming's shifting
