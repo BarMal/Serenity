@@ -6,7 +6,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationState, CharacterKey, TransitionKind}
 import com.serenity.config.{AppConfig, MotionPreset}
-import com.serenity.keystroke.events.{InsertChar, Paste, ScrollDown}
+import com.serenity.keystroke.events.{DeleteBackward, InsertChar, NewLine, Paste, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -290,6 +290,55 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       buffer.content.collect() shouldBe largeText
       buffer.animations.animations.size should be <=
         com.serenity.state.manager.VisibleBufferAnimationCells.DefaultMaxAnimatedCells
+
+    program.unsafeRunSync()
+  }
+
+  it should "remap an animating character's key when an edit inserts a line above it" in {
+    val program = for
+      sm       <- IO.pure(makeStateManager())
+      _        <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
+      bufferId <- sm.createBuffer("line one\nline two")
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 1, 3)
+      _        <- sm.applyEvent(InsertChar('X'))
+      typed    <- sm.getCurrentState
+      _        <- sm.setCursorPosition(paneId, 0, 0)
+      _        <- sm.applyEvent(NewLine)
+      newState <- sm.getCurrentState
+    yield
+      typed.buffers(bufferId).animations.animations should contain key CharacterKey(3, 1)
+
+      val buffer = newState.buffers(bufferId)
+      buffer.content.collect() shouldBe "\nline one\nlinXe two"
+      buffer.animations.animations should contain key CharacterKey(3, 2)
+      buffer.animations.animations should not contain key(CharacterKey(3, 1))
+      buffer.animations.animations should have size 1
+
+    program.unsafeRunSync()
+  }
+
+  it should "drop an animation when a later edit deletes that exact character" in {
+    val program = for
+      sm       <- IO.pure(makeStateManager())
+      _        <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
+      bufferId <- sm.createBuffer("Hello")
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 0, 5)
+      _        <- sm.applyEvent(InsertChar('a'))
+      typed    <- sm.getCurrentState
+      _        <- sm.applyEvent(DeleteBackward)
+      newState <- sm.getCurrentState
+    yield
+      typed.buffers(bufferId).animations.animations should contain key CharacterKey(5, 0)
+
+      val buffer = newState.buffers(bufferId)
+      buffer.content.collect() shouldBe "Hello"
+      buffer.animations.animations shouldBe empty
 
     program.unsafeRunSync()
   }
