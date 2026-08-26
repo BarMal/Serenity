@@ -403,17 +403,17 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
       Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1)), Damage.Chrome))
   }
 
-  it should "report the whole buffer when the focused-text-body feature is toggled on" in {
+  it should "report Everything when the focused-text-body feature is toggled on, via chromeDamage's config check" in {
     val before = stateWithContent("first\nsecond\n\nfourth\nfifth", cursors = List(CursorPosition(0, 0)))
     val after  = before.copy(config = before.config.withFocusedTextBody(true))
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2, 3, 4))
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
-  it should "report the whole buffer when the focused-text-body feature is toggled off" in {
+  it should "report Everything when the focused-text-body feature is toggled off, via chromeDamage's config check" in {
     val base   = stateWithContent("first\nsecond\n\nfourth\nfifth", cursors = List(CursorPosition(0, 0)))
     val before = base.copy(config = base.config.withFocusedTextBody(true))
     val after  = before.copy(config = before.config.withFocusedTextBody(false))
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2, 3, 4))
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }

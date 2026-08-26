@@ -173,7 +173,8 @@ object DamageProducer:
     * covers, but crossing into a different block flips the dimmed state of every row in the old block that isn't also
     * in the new one (and vice versa) -- a much wider set than just the old and new cursor row, so this has to be
     * computed via [[FocusedTextBody]] (shared with `Renderer` so the two can never disagree) rather than derived from
-    * the cursor move alone. Toggling the feature itself redraws the whole buffer, since every row's dimmed state flips.
+    * the cursor move alone. Toggling the feature itself is a config change, already caught by [[chromeDamage]]'s
+    * blanket `Everything`, so this only has to reason about the range shifting while the feature stays enabled.
     */
   private def focusDimmingDamage(
     bufferId: BufferId,
@@ -182,10 +183,7 @@ object DamageProducer:
     beforeBuffer: Buffer,
     afterBuffer: Buffer
   ): Damage =
-    val wasEnabled = before.config.focusedTextBodyEnabled
-    val isEnabled  = after.config.focusedTextBodyEnabled
-    if !wasEnabled && !isEnabled then Damage.Nothing
-    else if wasEnabled != isEnabled then Damage.BufferRows(bufferId, (0 until afterBuffer.content.lineCount).toSet)
+    if !after.config.focusedTextBodyEnabled then Damage.Nothing
     else
       val beforeRange = FocusedTextBody.activeRange(beforeBuffer, beforeBuffer.cursors.headOption.map(_.line))
       val afterRange  = FocusedTextBody.activeRange(afterBuffer, afterBuffer.cursors.headOption.map(_.line))
@@ -201,13 +199,15 @@ object DamageProducer:
       .map(_.line)
       .toSet
 
-  /** The theme, or the syntax-highlighting toggle, recolor every glyph in every visible buffer's own content -- not
-    * just the gutter/header chrome `Damage.Chrome` denotes -- so this reports `Everything` rather than `Chrome`, the
-    * same as [[fullRenderDamage]] already does for a theme transition in flight.
+  /** The theme, or *any* config change, forces a full repaint. Config covers far more than the syntax-highlighting
+    * toggle this used to check individually -- word wrap, fonts, margins, blur radius, and dozens of other fields this
+    * producer has no per-field model for, each of which can reshape or recolor pane content in ways a narrower check
+    * would silently miss. `Renderer`'s retired `ChromeKey`/`PaneContentKey` machinery caught all of these the same
+    * blunt way, via `ReferenceIdentity(state.config)`; a structural comparison here gives the same safety without
+    * having to enumerate what every field does to a rendered frame.
     */
   private def chromeDamage(before: AppState, after: AppState): Damage =
-    if before.theme != after.theme || before.config.syntaxHighlightingEnabled != after.config.syntaxHighlightingEnabled
-    then Damage.Everything
+    if before.theme != after.theme || before.config != after.config then Damage.Everything
     else Damage.Nothing
 
   /** Transitions that touch every visible glyph rather than any one buffer's rows, matching what
