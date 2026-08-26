@@ -214,6 +214,12 @@ object EditorEventReducer:
             newContent,
             List(MultiCursorEdit(0, start, end, ""))
           ),
+          animations = remapAnimationsThroughEdits(
+            buffer.animations,
+            buffer.content,
+            newContent,
+            List(MultiCursorEdit(0, start, end, ""))
+          ),
           richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
         )
     }
@@ -234,6 +240,12 @@ object EditorEventReducer:
           preferredXPx = None,
           documentComments = adjustDocumentComments(
             buffer.documentComments,
+            buffer.content,
+            newContent,
+            List(MultiCursorEdit(0, start, end, ""))
+          ),
+          animations = remapAnimationsThroughEdits(
+            buffer.animations,
             buffer.content,
             newContent,
             List(MultiCursorEdit(0, start, end, ""))
@@ -655,7 +667,8 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
+        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
+        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, edits)
       )
       addInsertionAnimations(
         baseBuffer,
@@ -697,7 +710,8 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
+        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
+        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, edits)
       )
       baseBuffer
 
@@ -756,7 +770,8 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
+        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
+        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, edits)
       )
       baseBuffer
 
@@ -808,6 +823,7 @@ object EditorEventReducer:
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
         documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
+        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, edits),
         richTextDocument = updatedRichTextDocument
       )
       baseBuffer
@@ -844,7 +860,8 @@ object EditorEventReducer:
         selections = Nil,
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, mergedEdits)
+        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, mergedEdits),
+        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, mergedEdits)
       )
       baseBuffer
 
@@ -895,6 +912,31 @@ object EditorEventReducer:
           comment.text
         )
       }
+
+  /** `AnimationState.animations` is keyed by absolute `(line, column)`, so an edit anywhere before an animating
+    * character silently leaves its animation attached to whatever character now occupies that cell -- `#1001`'s
+    * correctness fix. Every edit-application site below remaps through this, the same offset-tracking
+    * `remapEditBoundary` already gives `documentComments`. A character an edit deletes has its animation dropped rather
+    * than remapped: keeping it would attach the animation to a different character at the same offset.
+    */
+  private def remapAnimationsThroughEdits(
+    animations: AnimationState,
+    initialContent: Rope,
+    updatedContent: Rope,
+    edits: List[MultiCursorEdit]
+  ): AnimationState =
+    if animations.animations.isEmpty || edits.isEmpty then animations
+    else
+      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
+      val remapped = animations.animations.flatMap { (key, cell) =>
+        val offset = initialContent.lineColumnToOffset(key.line, key.column)
+        if sortedEdits.exists(edit => offset >= edit.start && offset < edit.end) then None
+        else
+          val nextOffset     = remapEditBoundary(offset, sortedEdits, insertionAtBoundaryMoves = true)
+          val (line, column) = updatedContent.offsetToLineColumn(nextOffset)
+          Some(CharacterKey(column, line) -> cell)
+      }
+      AnimationState(remapped)
 
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
     remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
@@ -1073,6 +1115,12 @@ object EditorEventReducer:
       preferredXPx = None,
       documentComments = adjustDocumentComments(
         buffer.documentComments,
+        buffer.content,
+        newContent,
+        List(MultiCursorEdit(0, startOffset, endOffset, ""))
+      ),
+      animations = remapAnimationsThroughEdits(
+        buffer.animations,
         buffer.content,
         newContent,
         List(MultiCursorEdit(0, startOffset, endOffset, ""))
@@ -1503,6 +1551,7 @@ object EditorEventReducer:
           newContent,
           List(replacementEdit)
         ),
+        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, newContent, List(replacementEdit)),
         richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
       ),
       replacementEdit
@@ -1527,6 +1576,12 @@ object EditorEventReducer:
       preferredXPx = None,
       documentComments = adjustDocumentComments(
         buffer.documentComments,
+        buffer.content,
+        newContent,
+        List(MultiCursorEdit(0, startOffset, endOffset, ""))
+      ),
+      animations = remapAnimationsThroughEdits(
+        buffer.animations,
         buffer.content,
         newContent,
         List(MultiCursorEdit(0, startOffset, endOffset, ""))
