@@ -141,7 +141,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     yield
       val buffer     = newState.buffers(bufferId)
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
-      buffer.content.collect() shouldBe "Helloa"
+      buffer.document.content.collect() shouldBe "Helloa"
       animations.animations shouldBe empty
 
     program.unsafeRunSync()
@@ -171,7 +171,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
       val firstCell  = animations.getCell(5, 0).getOrElse(fail("Expected first pasted cell animation"))
       val secondCell = animations.getCell(6, 0).getOrElse(fail("Expected second pasted cell animation"))
-      buffer.content.collect() shouldBe "Helloab"
+      buffer.document.content.collect() shouldBe "Helloab"
       animations.animations.keySet should contain allOf (CharacterKey(5, 0), CharacterKey(6, 0))
       firstCell.foregroundAnimation.map(animation => animation.steps -> animation.delayFrames) shouldBe Some(10 -> 0)
       secondCell.foregroundAnimation.map(animation => animation.steps -> animation.delayFrames) shouldBe Some(10 -> 1)
@@ -299,7 +299,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     yield
       val buffer     = newState.buffers(bufferId)
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
-      buffer.content.collect() shouldBe largeText
+      buffer.document.content.collect() shouldBe largeText
       animations.animations.size should be <=
         com.serenity.state.manager.VisibleBufferAnimationCells.DefaultMaxAnimatedCells
 
@@ -326,7 +326,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
       val buffer     = newState.buffers(bufferId)
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
-      buffer.content.collect() shouldBe "\nline one\nlinXe two"
+      buffer.document.content.collect() shouldBe "\nline one\nlinXe two"
       animations.animations should contain key CharacterKey(3, 2)
       animations.animations should not contain key(CharacterKey(3, 1))
       animations.animations should have size 1
@@ -353,7 +353,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
       val buffer     = newState.buffers(bufferId)
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
-      buffer.content.collect() shouldBe "Hello"
+      buffer.document.content.collect() shouldBe "Hello"
       animations.animations shouldBe empty
 
     program.unsafeRunSync()

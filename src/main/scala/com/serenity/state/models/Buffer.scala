@@ -53,26 +53,50 @@ final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, 
 
 final case class VerticalCursorState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
 
-final case class Buffer(
-    id: BufferId,
+/** A buffer's on-disk identity and content -- what makes it "this file", independent of how it's being edited or
+  * displayed. Split out by #1002 so `Buffer` itself no longer spans unrelated subdomains.
+  */
+final case class Document(
     content: Rope,
     filePath: Option[Path] = None,
     isDirty: Boolean = false,
     language: Option[LanguageId] = None,
-    isNewEmpty: Boolean = false,
+    isNewEmpty: Boolean = false
+)
+
+/** A buffer's cursor/selection state. `Buffer.cursorList`/`withCursorList` convert this to and from the uniform
+  * per-cursor [[Cursor]] shape the reducer operates over.
+  */
+final case class EditingState(
     cursors: List[CursorPosition] = List(CursorPosition(0, 0)),
     selection: Option[Selection] = None,
+    selections: List[Selection] = Nil,
     preferredColumn: Option[Int] = None,
     preferredXPx: Option[Float] = None,
-    multiCursorVerticalStates: List[VerticalCursorState] = Nil,
-    viewport: Viewport = Viewport.default,
-    findState: Option[FindState] = None,
-    selections: List[Selection] = Nil,
+    multiCursorVerticalStates: List[VerticalCursorState] = Nil
+)
+
+/** User-authored markers anchored to buffer positions, independent of the document's own content. */
+final case class Annotations(
     bookmarks: List[CursorPosition] = Nil,
-    documentComments: List[DocumentComment] = Nil,
+    documentComments: List[DocumentComment] = Nil
+)
+
+/** Rich-text authoring state layered on top of the buffer's plain-text `Rope` content. */
+final case class RichTextState(
     richTextDocument: Option[RichTextDocument] = None,
     richTextFidelity: Option[RichTextFidelity] = None,
-    insertionRichTextStyle: Option[RichTextStyle] = None,
+    insertionRichTextStyle: Option[RichTextStyle] = None
+)
+
+final case class Buffer(
+    id: BufferId,
+    document: Document,
+    editing: EditingState = EditingState(),
+    viewport: Viewport = Viewport.default,
+    findState: Option[FindState] = None,
+    annotations: Annotations = Annotations(),
+    richText: RichTextState = RichTextState(),
     /** Bumped synchronously whenever an edit lands on this buffer while it has a live markdown preview. Compared
       * against `markdownPreviewCommittedGeneration` to tell the renderer whether an edit burst is still in flight.
       */
@@ -85,7 +109,7 @@ final case class Buffer(
 ):
 
   def typographyRole: TypographyRole =
-    language match
+    document.language match
       case None                      => TypographyRole.Prose
       case Some(LanguageId.Markdown) => TypographyRole.MarkdownSource
       case Some(_)                   => TypographyRole.Code
@@ -94,13 +118,13 @@ final case class Buffer(
     typographyRole.usesTextFont
 
   def allSelections: List[Selection] =
-    if selections.nonEmpty then selections else selection.toList
+    if editing.selections.nonEmpty then editing.selections else editing.selection.toList
 
   def primarySelection: Option[Selection] =
     allSelections.headOption
 
   def clearSelections: Buffer =
-    copy(selection = None, selections = Nil)
+    copy(editing = editing.copy(selection = None, selections = Nil))
 
   /** This buffer's cursors as one uniform list, converting `selections`/`selection`/`multiCursorVerticalStates` into
     * each cursor's own optional selection anchor and preferred vertical-navigation state -- see [[Cursor]]. Order and
@@ -108,14 +132,21 @@ final case class Buffer(
     */
   def cursorList: NonEmptyList[Cursor] =
     if allSelections.nonEmpty then NonEmptyList.fromListUnsafe(allSelections.map(Cursor(_)))
-    else if cursors.sizeIs > 1 then
-      NonEmptyList.fromListUnsafe(cursors.map { position =>
-        multiCursorVerticalStates.find(_.cursor == position) match
+    else if editing.cursors.sizeIs > 1 then
+      NonEmptyList.fromListUnsafe(editing.cursors.map { position =>
+        editing.multiCursorVerticalStates.find(_.cursor == position) match
           case Some(state) => Cursor(position, None, Some(state.preferredColumn), Some(state.preferredXPx))
           case None        => Cursor(position)
       })
     else
-      NonEmptyList.one(Cursor(cursors.headOption.getOrElse(CursorPosition(0, 0)), None, preferredColumn, preferredXPx))
+      NonEmptyList.one(
+        Cursor(
+          editing.cursors.headOption.getOrElse(CursorPosition(0, 0)),
+          None,
+          editing.preferredColumn,
+          editing.preferredXPx
+        )
+      )
 
   /** The inverse of [[cursorList]]: repackages a cursor list back into this buffer's five cursor-shaped fields, leaving
     * everything else untouched. Does not sort or deduplicate -- callers hand back the list in the order and membership
@@ -125,51 +156,59 @@ final case class Buffer(
     val list = updated.toList
     (list.exists(_.selectionAnchor.isDefined), list) match
       case (true, cursor :: Nil) =>
-        copy(
-          cursors = List(cursor.position),
-          selection = cursor.selection,
-          selections = Nil,
-          preferredColumn = None,
-          preferredXPx = None,
-          multiCursorVerticalStates = Nil
+        copy(editing =
+          EditingState(
+            cursors = List(cursor.position),
+            selection = cursor.selection,
+            selections = Nil,
+            preferredColumn = None,
+            preferredXPx = None,
+            multiCursorVerticalStates = Nil
+          )
         )
       case (true, many) =>
-        copy(
-          cursors = many.map(_.position),
-          selection = None,
-          selections = many.map(cursor => cursor.selection.getOrElse(Selection(cursor.position, cursor.position))),
-          preferredColumn = None,
-          preferredXPx = None,
-          multiCursorVerticalStates = Nil
+        copy(editing =
+          EditingState(
+            cursors = many.map(_.position),
+            selection = None,
+            selections = many.map(cursor => cursor.selection.getOrElse(Selection(cursor.position, cursor.position))),
+            preferredColumn = None,
+            preferredXPx = None,
+            multiCursorVerticalStates = Nil
+          )
         )
       case (false, cursor :: Nil) =>
-        copy(
-          cursors = List(cursor.position),
-          selection = None,
-          selections = Nil,
-          preferredColumn = cursor.preferredColumn,
-          preferredXPx = cursor.preferredXPx,
-          multiCursorVerticalStates = Nil
+        copy(editing =
+          EditingState(
+            cursors = List(cursor.position),
+            selection = None,
+            selections = Nil,
+            preferredColumn = cursor.preferredColumn,
+            preferredXPx = cursor.preferredXPx,
+            multiCursorVerticalStates = Nil
+          )
         )
       case (false, many) =>
-        copy(
-          cursors = many.map(_.position),
-          selection = None,
-          selections = Nil,
-          preferredColumn = None,
-          preferredXPx = None,
-          multiCursorVerticalStates = many.flatMap { cursor =>
-            cursor.preferredColumn.map(column =>
-              VerticalCursorState(cursor.position, column, cursor.preferredXPx.getOrElse(0f))
-            )
-          }
+        copy(editing =
+          EditingState(
+            cursors = many.map(_.position),
+            selection = None,
+            selections = Nil,
+            preferredColumn = None,
+            preferredXPx = None,
+            multiCursorVerticalStates = many.flatMap { cursor =>
+              cursor.preferredColumn.map(column =>
+                VerticalCursorState(cursor.position, column, cursor.preferredXPx.getOrElse(0f))
+              )
+            }
+          )
         )
 
   /** True when closing this buffer may lose user-authored content. */
   def hasUnsavedChanges: Boolean =
-    isDirty || (filePath.isEmpty && !isNewEmpty)
+    document.isDirty || (document.filePath.isEmpty && !document.isNewEmpty)
 
-  // The compiler-generated equals walks every one of this class's ~19 fields with no fast path -- paid once per
+  // The compiler-generated equals walks every one of this class's fields with no fast path -- paid once per
   // open buffer on every dispatched event via AppState's buffers map. Short-circuiting on reference identity
   // covers the common "this buffer wasn't touched by this event" case in O(1). Comparing via productIterator
   // rather than hand-listing fields avoids the risk of silently dropping a field from the comparison as the case
@@ -182,13 +221,13 @@ final case class Buffer(
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =
-    Buffer(id, Rope.empty)
+    Buffer(id, Document(Rope.empty))
 
   def newEmpty(id: BufferId)(using com.serenity.rope.Balance): Buffer =
-    Buffer(id, Rope.empty, isNewEmpty = true)
+    Buffer(id, Document(Rope.empty, isNewEmpty = true))
 
   def fromString(id: BufferId, content: String)(using com.serenity.rope.Balance): Buffer =
-    Buffer(id, Rope(content))
+    Buffer(id, Document(Rope(content)))
 
   def fromFile(id: BufferId, path: Path, content: String)(using com.serenity.rope.Balance): Buffer =
-    Buffer(id, Rope(content), Some(path))
+    Buffer(id, Document(Rope(content), filePath = Some(path)))

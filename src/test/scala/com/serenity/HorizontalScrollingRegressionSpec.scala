@@ -30,7 +30,9 @@ class HorizontalScrollingRegressionSpec extends AnyFlatSpec with Matchers:
           config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+            current
+              .buffers(bufferId)
+              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
           )
         )
       }
@@ -39,7 +41,7 @@ class HorizontalScrollingRegressionSpec extends AnyFlatSpec with Matchers:
     val initialState  = stateManager.getCurrentState.unsafeRunSync()
     val initialBuffer = initialState.buffers(bufferId)
     initialBuffer.viewport.leftColumn shouldBe 0
-    initialBuffer.cursors.head.column shouldBe 0
+    initialBuffer.editing.cursors.head.column shouldBe 0
 
     val alphabet = "abcdefghijklmnopqrstuvwxyz"
     val longText = alphabet * 5
@@ -50,6 +52,6 @@ class HorizontalScrollingRegressionSpec extends AnyFlatSpec with Matchers:
     val finalBuffer = finalState.buffers(bufferId)
 
     finalBuffer.viewport.leftColumn should be > 0
-    finalBuffer.cursors.head.column shouldBe longText.length
-    finalBuffer.cursors.head.column should be >= finalBuffer.viewport.leftColumn
+    finalBuffer.editing.cursors.head.column shouldBe longText.length
+    finalBuffer.editing.cursors.head.column should be >= finalBuffer.viewport.leftColumn
   }

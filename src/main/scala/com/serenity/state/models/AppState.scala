@@ -137,10 +137,10 @@ object SpellCheckFingerprint:
 
   def from(buffer: Buffer, config: SpellCheckConfig): SpellCheckFingerprint =
     SpellCheckFingerprint(
-      contentIdentity = System.identityHashCode(buffer.content),
-      contentWeight = buffer.content.weight,
-      contentNewlineCount = buffer.content.newlineCount,
-      contentLastLineLength = buffer.content.lastLineLength,
+      contentIdentity = System.identityHashCode(buffer.document.content),
+      contentWeight = buffer.document.content.weight,
+      contentNewlineCount = buffer.document.content.newlineCount,
+      contentLastLineLength = buffer.document.content.lastLineLength,
       usesTextFont = buffer.usesTextFont,
       dictionaryFingerprints = config.dictionaryFingerprints,
       config = config.normalized
@@ -232,14 +232,18 @@ final case class AppState(
       case (bufferId, buffer) =>
         lazy val index =
           val diagnostics = this.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
-          AnnotationLineIndex(buffer.documentComments.toVector, diagnostics.groupMap(_.range.start.line)(identity))
+          AnnotationLineIndex(
+            buffer.annotations.documentComments.toVector,
+            diagnostics.groupMap(_.range.start.line)(identity)
+          )
         bufferId -> (() => index)
     }.toMap
 
   lazy val markdownFenceIndexByBuffer: Map[BufferId, () => MarkdownBlockLens.FenceRangeIndex] =
     buffers.iterator.map {
       case (bufferId, buffer) =>
-        lazy val index = MarkdownBlockLens.fenceRangeIndex(buffer.content.lineCount, buffer.content.getLine)
+        lazy val index =
+          MarkdownBlockLens.fenceRangeIndex(buffer.document.content.lineCount, buffer.document.content.getLine)
         bufferId -> (() => index)
     }.toMap
 
@@ -253,7 +257,7 @@ final case class AppState(
       .flatMap(layout.editorPanes.get)
       .flatMap(_.bufferId)
       .flatMap(buffers.get)
-      .flatMap(_.cursors.headOption)
+      .flatMap(_.editing.cursors.headOption)
 
   def cursorInfoBarSurface: Option[UiSurface] =
     config.cursorInfoBarMode match
@@ -266,7 +270,7 @@ final case class AppState(
               pane     <- layout.editorPanes.get(paneId)
               bufferId <- pane.bufferId
               buffer   <- buffers.get(bufferId)
-              cursor   <- buffer.cursors.headOption
+              cursor   <- buffer.editing.cursors.headOption
             yield UiSurface(
               id = SurfaceId("cursor-info-bar"),
               content = SurfaceContent.CursorInfoBar(formatCursorInfoBarText(mode, cursor, buffer)),
@@ -284,7 +288,7 @@ final case class AppState(
           pane     <- layout.editorPanes.get(paneId)
           bufferId <- pane.bufferId
           buffer   <- buffers.get(bufferId)
-          cursor   <- buffer.cursors.headOption
+          cursor   <- buffer.editing.cursors.headOption
         yield formatCursorInfoBarText(mode, cursor, buffer)
 
   private def formatCursorInfoBarText(mode: CursorInfoBarMode, cursor: CursorPosition, buffer: Buffer): String =
@@ -295,8 +299,9 @@ final case class AppState(
       case CursorInfoBarMode.Position =>
         position
       case CursorInfoBarMode.Detailed =>
-        val language = buffer.language.fold("Plain Text")(_.displayName)
-        val fileName = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Unsaved")
+        val language = buffer.document.language.fold("Plain Text")(_.displayName)
+        val fileName =
+          buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Unsaved")
         s"$position | $language | $fileName"
 
   def floatingSurfaces: List[UiSurface] =

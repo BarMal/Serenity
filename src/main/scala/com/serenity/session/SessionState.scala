@@ -219,23 +219,23 @@ object SessionState:
 object SessionBuffer:
 
   def fromBuffer(buffer: Buffer, persistUnsaved: Boolean = true): SessionBuffer =
-    val text = buffer.content.toString
+    val text = buffer.document.content.toString
     SessionBuffer(
       id = buffer.id.value,
-      filePath = buffer.filePath.map(_.toString),
-      isDirty = buffer.isDirty,
-      language = buffer.language.map(_.id),
-      isNewEmpty = buffer.isNewEmpty,
-      cursors = buffer.cursors.map(SessionCursorPosition.fromCursorPosition),
+      filePath = buffer.document.filePath.map(_.toString),
+      isDirty = buffer.document.isDirty,
+      language = buffer.document.language.map(_.id),
+      isNewEmpty = buffer.document.isNewEmpty,
+      cursors = buffer.editing.cursors.map(SessionCursorPosition.fromCursorPosition),
       viewport = SessionViewport.fromViewport(buffer.viewport),
       unsavedContent =
-        if persistUnsaved || (!buffer.isDirty && !buffer.isNewEmpty) then Some(text)
+        if persistUnsaved || (!buffer.document.isDirty && !buffer.document.isNewEmpty) then Some(text)
         else None,
-      richTextDocument = buffer.richTextDocument.filter(_.matchesPlainText(text)),
-      richTextFidelity = buffer.richTextFidelity,
+      richTextDocument = buffer.richText.richTextDocument.filter(_.matchesPlainText(text)),
+      richTextFidelity = buffer.richText.richTextFidelity,
       findState = buffer.findState.map(SessionFindState.fromFindState),
-      bookmarks = buffer.bookmarks.map(SessionCursorPosition.fromCursorPosition),
-      documentComments = buffer.documentComments.map(SessionDocumentComment.fromDocumentComment)
+      bookmarks = buffer.annotations.bookmarks.map(SessionCursorPosition.fromCursorPosition),
+      documentComments = buffer.annotations.documentComments.map(SessionDocumentComment.fromDocumentComment)
     )
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
@@ -244,18 +244,24 @@ object SessionBuffer:
 
     Buffer(
       id = BufferId(sessionBuffer.id),
-      content = sessionBuffer.unsavedContent.map(Rope.apply).getOrElse(Rope.empty),
-      filePath = sessionBuffer.filePath.map(path => Paths.get(path)),
-      isDirty = sessionBuffer.isDirty,
-      language = sessionBuffer.language.flatMap(LanguageId.fromString),
-      isNewEmpty = sessionBuffer.isNewEmpty,
-      cursors = sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition),
+      document = Document(
+        content = sessionBuffer.unsavedContent.map(Rope.apply).getOrElse(Rope.empty),
+        filePath = sessionBuffer.filePath.map(path => Paths.get(path)),
+        isDirty = sessionBuffer.isDirty,
+        language = sessionBuffer.language.flatMap(LanguageId.fromString),
+        isNewEmpty = sessionBuffer.isNewEmpty
+      ),
+      editing = EditingState(cursors = sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
       findState = sessionBuffer.findState.map(SessionFindState.toFindState),
-      bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition),
-      documentComments = sessionBuffer.documentComments.map(SessionDocumentComment.toDocumentComment),
-      richTextDocument = sessionBuffer.richTextDocument,
-      richTextFidelity = sessionBuffer.richTextFidelity
+      annotations = Annotations(
+        bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition),
+        documentComments = sessionBuffer.documentComments.map(SessionDocumentComment.toDocumentComment)
+      ),
+      richText = RichTextState(
+        richTextDocument = sessionBuffer.richTextDocument,
+        richTextFidelity = sessionBuffer.richTextFidelity
+      )
     )
 
   def toBufferIO(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
@@ -268,13 +274,17 @@ object SessionBuffer:
       case None =>
         sessionBuffer.richTextDocument match
           case Some(document) =>
-            IO.pure(toBuffer(sessionBuffer).copy(content = Rope(document.plainText), isDirty = false))
+            val buffer = toBuffer(sessionBuffer)
+            IO.pure(buffer.copy(document = buffer.document.copy(content = Rope(document.plainText), isDirty = false)))
           case None =>
             sessionBuffer.filePath match
               case Some(pathText) =>
                 val path = Paths.get(pathText)
                 IO.blocking(Files.readString(path))
-                  .map(diskContent => toBuffer(sessionBuffer).copy(content = Rope(diskContent), isDirty = false))
+                  .map { diskContent =>
+                    val buffer = toBuffer(sessionBuffer)
+                    buffer.copy(document = buffer.document.copy(content = Rope(diskContent), isDirty = false))
+                  }
                   .handleError(_ => toBuffer(sessionBuffer))
               case None =>
                 IO.pure(toBuffer(sessionBuffer))

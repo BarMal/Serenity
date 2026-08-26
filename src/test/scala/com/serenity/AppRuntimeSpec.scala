@@ -749,8 +749,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     val buffer = state
       .buffers(bufferId)
       .copy(
-        language = Some(LanguageId.JsonLang),
-        cursors = List(CursorPosition(2, 4))
+        document = state.buffers(bufferId).document.copy(language = Some(LanguageId.JsonLang)),
+        editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4)))
       )
     val described = AppRuntime.describeStateForDiagnostics(
       state.copy(buffers = state.buffers.updated(bufferId, buffer))

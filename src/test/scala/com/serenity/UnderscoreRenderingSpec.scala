@@ -16,7 +16,7 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = BufferId(1)
     val cursor   = CursorPosition(0, 5)
-    val buffer   = Buffer.fromString(bufferId, "hello world").copy(cursors = List(cursor))
+    val buffer   = Buffer.fromString(bufferId, "hello world").copy(editing = EditingState(cursors = List(cursor)))
     val paneId   = PaneId(1)
     val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
@@ -34,8 +34,8 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
       case ComponentResult.ReducerUpdate(reducerResult) =>
         val newState      = reducerResult.state
         val updatedBuffer = newState.buffers(bufferId)
-        updatedBuffer.content.collect() shouldBe "hello_ world"
-        val newCursor = updatedBuffer.cursors.head
+        updatedBuffer.document.content.collect() shouldBe "hello_ world"
+        val newCursor = updatedBuffer.editing.cursors.head
         newCursor.column shouldBe 6
       case _ => fail("Expected ReducerUpdate result")
   }
@@ -46,9 +46,10 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = BufferId(1)
     val cursor   = CursorPosition(0, 0)
-    val buffer   = Buffer.fromString(bufferId, "test_with_underscores").copy(cursors = List(cursor))
-    val paneId   = PaneId(1)
-    val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
+    val buffer =
+      Buffer.fromString(bufferId, "test_with_underscores").copy(editing = EditingState(cursors = List(cursor)))
+    val paneId = PaneId(1)
+    val pane   = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))

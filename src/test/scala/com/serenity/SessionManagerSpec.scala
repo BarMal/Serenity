@@ -46,9 +46,10 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     else Nil
 
   private def dirtyStateWithText(text: String): AppState =
-    val initial  = AppState.initial
-    val bufferId = initial.bufferOrder.head
-    val buffer   = Buffer.fromString(bufferId, text).copy(isDirty = true)
+    val initial     = AppState.initial
+    val bufferId    = initial.bufferOrder.head
+    val plainBuffer = Buffer.fromString(bufferId, text)
+    val buffer      = plainBuffer.copy(document = plainBuffer.document.copy(isDirty = true))
     initial.copy(buffers = Map(bufferId -> buffer))
 
   private def stateWithText(text: String): AppState =
@@ -76,9 +77,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     IO.blocking {
       val tempFile = Files.createTempFile("session-manager-file-backed", ".txt")
       Files.writeString(tempFile, diskText)
-      val buffer = Buffer
-        .fromFile(BufferId(7), tempFile, unsavedText)
-        .copy(isDirty = true)
+      val plainBuffer = Buffer.fromFile(BufferId(7), tempFile, unsavedText)
+      val buffer      = plainBuffer.copy(document = plainBuffer.document.copy(isDirty = true))
       AppState.initial.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
@@ -103,8 +103,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       loadedSecond    <- sessionManager.loadSession(secondSessionId)
     yield
       sessions.map(_.displayName).shouldBe(List("Daily notes", "Refactor branch"))
-      loadedFirst.map(_.buffers.values.head.content.toString).shouldBe(Some("alpha"))
-      loadedSecond.map(_.buffers.values.head.content.toString).shouldBe(Some("beta"))
+      loadedFirst.map(_.buffers.values.head.document.content.toString).shouldBe(Some("alpha"))
+      loadedSecond.map(_.buffers.values.head.document.content.toString).shouldBe(Some("beta"))
 
     program.unsafeRunSync()
   }
@@ -148,7 +148,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val program = for
       sessionId <- sessionManager.saveSessionAs("Draft", dirtyStateWithText("unsaved work"))
       loaded    <- sessionManager.loadSession(sessionId)
-    yield loaded.map(_.buffers.values.head.content.toString).shouldBe(Some(""))
+    yield loaded.map(_.buffers.values.head.document.content.toString).shouldBe(Some(""))
 
     program.unsafeRunSync()
   }
@@ -161,8 +161,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       sessionId <- sessionManager.saveSessionAs("File draft", state)
       loaded    <- sessionManager.loadSession(sessionId)
     yield
-      loaded.map(_.buffers.values.head.content.toString) shouldBe Some("saved on disk")
-      loaded.map(_.buffers.values.head.isDirty) shouldBe Some(false)
+      loaded.map(_.buffers.values.head.document.content.toString) shouldBe Some("saved on disk")
+      loaded.map(_.buffers.values.head.document.isDirty) shouldBe Some(false)
 
     program.unsafeRunSync()
   }
@@ -186,7 +186,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val program = for
       _      <- sessionManager.saveSession(stateWithText("current session content"))
       loaded <- sessionManager.loadSession()
-    yield loaded.map(_.buffers.values.head.content.toString) shouldBe Some("current session content")
+    yield loaded.map(_.buffers.values.head.document.content.toString) shouldBe Some("current session content")
 
     program.unsafeRunSync()
   }
@@ -239,7 +239,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       _      <- IO.blocking(Files.writeString(sessionFile, migratedJson.spaces2))
       loaded <- sessionManager.loadSession()
     yield
-      loaded.map(_.buffers.values.head.content.toString) shouldBe Some("legacy config")
+      loaded.map(_.buffers.values.head.document.content.toString) shouldBe Some("legacy config")
       loaded.map(_.config.characterAnimation) shouldBe Some(AppConfig.default.characterAnimation)
       loaded.map(_.config.syntaxHighlightingEnabled) shouldBe Some(AppConfig.default.syntaxHighlightingEnabled)
       loaded.map(_.config.fontConfig) shouldBe Some(AppConfig.default.fontConfig)
@@ -400,7 +400,9 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
     Files.readString(outsideFile) shouldBe "untouched"
     Files.exists(currentSessionFile(sessionRoot)) shouldBe true
-    sessionManager.loadSession().unsafeRunSync().map(_.buffers.values.head.content.toString) shouldBe Some("safe")
+    sessionManager.loadSession().unsafeRunSync().map(_.buffers.values.head.document.content.toString) shouldBe Some(
+      "safe"
+    )
   }
 
   it should "reject a hostile session id before canonicalizing its filename" in {
@@ -425,7 +427,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
     sessionManager.saveSession(stateWithText("current after recovery")).unsafeRunSync()
 
-    sessionManager.loadSession(sessionId).unsafeRunSync().map(_.buffers.values.head.content.toString) shouldBe
+    sessionManager.loadSession(sessionId).unsafeRunSync().map(_.buffers.values.head.document.content.toString) shouldBe
       Some("preserve me")
     Files
       .list(sessionRoot)

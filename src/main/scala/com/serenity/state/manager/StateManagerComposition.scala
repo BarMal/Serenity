@@ -248,7 +248,7 @@ final private[manager] class StateManagerFilePersistence(
 
   def saveExistingBuffer(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
-      state.buffers.get(bufferId).flatMap(_.filePath) match
+      state.buffers.get(bufferId).flatMap(_.document.filePath) match
         case Some(_) =>
           state.buffers.get(bufferId).fold(IO.unit) { buffer =>
             fileManager
@@ -279,13 +279,13 @@ final private[manager] class StateManagerFilePersistence(
 
   private def refreshLspBindingAfterSaveAs(before: Buffer, saved: Buffer): IO[Unit] =
     val previous = for
-      path       <- before.filePath
-      languageId <- before.language
+      path       <- before.document.filePath
+      languageId <- before.document.language
     yield (path.toUri.toString, languageId)
     val next = for
-      path       <- saved.filePath
-      languageId <- saved.language
-    yield (path.toUri.toString, languageId, saved.content.collect())
+      path       <- saved.document.filePath
+      languageId <- saved.document.language
+    yield (path.toUri.toString, languageId, saved.document.content.collect())
     val nextIdentity = next.map { case (uri, languageId, _) => (uri, languageId) }
     if previous == nextIdentity then IO.unit
     else

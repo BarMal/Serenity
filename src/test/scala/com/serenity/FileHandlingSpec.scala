@@ -196,9 +196,9 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
     val newBuffer = fileManager.createNewBuffer(BufferId(42)).unsafeRunSync()
     newBuffer.id shouldBe BufferId(42)
-    newBuffer.content.collect() shouldBe ""
-    newBuffer.filePath shouldBe None
-    newBuffer.isDirty shouldBe false
+    newBuffer.document.content.collect() shouldBe ""
+    newBuffer.document.filePath shouldBe None
+    newBuffer.document.isDirty shouldBe false
   }
 
   it should "raise a clear error instead of opening rich documents as plain text" in {
@@ -240,13 +240,13 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
       val buffer = fileManager.loadFile(rtfFile, BufferId(99)).unsafeRunSync()
 
-      buffer.content.collect() shouldBe "plain bold"
-      buffer.richTextDocument.map(_.plainText) shouldBe Some("plain bold")
-      buffer.richTextDocument
+      buffer.document.content.collect() shouldBe "plain bold"
+      buffer.richText.richTextDocument.map(_.plainText) shouldBe Some("plain bold")
+      buffer.richText.richTextDocument
         .flatMap(_.paragraphs.headOption)
         .map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
-      buffer.filePath shouldBe Some(rtfFile)
-      buffer.isDirty shouldBe false
+      buffer.document.filePath shouldBe Some(rtfFile)
+      buffer.document.isDirty shouldBe false
     finally Files.deleteIfExists(rtfFile)
   }
 
@@ -278,16 +278,18 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     try
       Files.writeString(sourceFile, """{\rtf1\ansi plain \b bold\b0\par}""")
 
-      val buffer = fileManager
+      val loadedBuffer = fileManager
         .loadFile(sourceFile, BufferId(101))
         .unsafeRunSync()
-        .copy(content = com.serenity.rope.Rope("edited text"), isDirty = true)
+      val buffer = loadedBuffer.copy(document =
+        loadedBuffer.document.copy(content = com.serenity.rope.Rope("edited text"), isDirty = true)
+      )
       val savedBuffer = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
       val saved       = RtfDocumentCodec.read(savedFile).unsafeRunSync()
 
       saved.plainText shouldBe "edited text"
       saved.paragraphs.headOption.map(marksForText(_, "edited")) shouldBe Some(Set.empty)
-      savedBuffer.richTextDocument.map(_.plainText) shouldBe Some("edited text")
+      savedBuffer.richText.richTextDocument.map(_.plainText) shouldBe Some("edited text")
     finally
       Files.deleteIfExists(sourceFile)
       Files.deleteIfExists(savedFile)
@@ -302,7 +304,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       Files.writeString(sourceFile, """{\rtf1\ansi plain bold\par}""")
 
       val loadedBuffer = fileManager.loadFile(sourceFile, BufferId(102)).unsafeRunSync()
-      val formattedDocument = loadedBuffer.richTextDocument
+      val formattedDocument = loadedBuffer.richText.richTextDocument
         .getOrElse(fail("expected rich text metadata"))
         .applyMark(
           com.serenity.richtext.RichTextRange(
@@ -311,14 +313,17 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
           ),
           InlineMark.Bold
         )
-      val formattingDirtyBuffer = loadedBuffer.copy(isDirty = true, richTextDocument = Some(formattedDocument))
+      val formattingDirtyBuffer = loadedBuffer.copy(
+        document = loadedBuffer.document.copy(isDirty = true),
+        richText = loadedBuffer.richText.copy(richTextDocument = Some(formattedDocument))
+      )
 
       val savedBuffer = fileManager.saveBuffer(formattingDirtyBuffer, savedFile).unsafeRunSync()
       val saved       = RtfDocumentCodec.read(savedFile).unsafeRunSync()
 
       saved.plainText shouldBe "plain bold"
       saved.paragraphs.headOption.map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
-      savedBuffer.richTextDocument shouldBe Some(formattedDocument.normalized)
+      savedBuffer.richText.richTextDocument shouldBe Some(formattedDocument.normalized)
     finally
       Files.deleteIfExists(sourceFile)
       Files.deleteIfExists(savedFile)
@@ -346,13 +351,13 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
       val buffer = fileManager.loadFile(odtFile, BufferId(103)).unsafeRunSync()
 
-      buffer.content.collect() shouldBe "plain bold"
-      buffer.richTextDocument.map(_.plainText) shouldBe Some("plain bold")
-      buffer.richTextDocument
+      buffer.document.content.collect() shouldBe "plain bold"
+      buffer.richText.richTextDocument.map(_.plainText) shouldBe Some("plain bold")
+      buffer.richText.richTextDocument
         .flatMap(_.paragraphs.headOption)
         .map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
-      buffer.filePath shouldBe Some(odtFile)
-      buffer.isDirty shouldBe false
+      buffer.document.filePath shouldBe Some(odtFile)
+      buffer.document.isDirty shouldBe false
     finally Files.deleteIfExists(odtFile)
   }
 
@@ -373,9 +378,11 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val buffer = Buffer
-      .fromString(BufferId(104), "plain bold")
-      .copy(isDirty = true, richTextDocument = Some(document))
+    val plainBuffer = Buffer.fromString(BufferId(104), "plain bold")
+    val buffer = plainBuffer.copy(
+      document = plainBuffer.document.copy(isDirty = true),
+      richText = plainBuffer.richText.copy(richTextDocument = Some(document))
+    )
 
     try
       val savedBuffer = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
@@ -384,7 +391,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       saved.plainText shouldBe "plain bold"
       saved.paragraphs.headOption.map(_.alignment) shouldBe Some(com.serenity.richtext.ParagraphAlignment.Center)
       saved.paragraphs.headOption.map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
-      savedBuffer.richTextDocument shouldBe Some(document.normalized)
+      savedBuffer.richText.richTextDocument shouldBe Some(document.normalized)
     finally Files.deleteIfExists(savedFile)
   }
 
@@ -410,13 +417,13 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
       val buffer = fileManager.loadFile(docxFile, BufferId(105)).unsafeRunSync()
 
-      buffer.content.collect() shouldBe "plain bold"
-      buffer.richTextDocument.map(_.plainText) shouldBe Some("plain bold")
-      buffer.richTextDocument
+      buffer.document.content.collect() shouldBe "plain bold"
+      buffer.richText.richTextDocument.map(_.plainText) shouldBe Some("plain bold")
+      buffer.richText.richTextDocument
         .flatMap(_.paragraphs.headOption)
         .map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
-      buffer.filePath shouldBe Some(docxFile)
-      buffer.isDirty shouldBe false
+      buffer.document.filePath shouldBe Some(docxFile)
+      buffer.document.isDirty shouldBe false
     finally Files.deleteIfExists(docxFile)
   }
 
@@ -431,7 +438,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
       val buffer = fileManager.loadFile(sourceFile, BufferId(108)).unsafeRunSync()
 
-      buffer.richTextFidelity.exists(!_.isLossless) shouldBe true
+      buffer.richText.richTextFidelity.exists(!_.isLossless) shouldBe true
       fileManager.saveBuffer(buffer).attempt.unsafeRunSync().left.map(_.getMessage) shouldBe Left(
         s"Saving $sourceFile would discard unsupported rich document content. Use Save As to write a new file."
       )
@@ -440,8 +447,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       val saved = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
 
       Files.exists(savedFile) shouldBe true
-      saved.filePath shouldBe Some(savedFile)
-      saved.richTextFidelity shouldBe None
+      saved.document.filePath shouldBe Some(savedFile)
+      saved.richText.richTextFidelity shouldBe None
     finally
       Files.deleteIfExists(sourceFile)
       Files.deleteIfExists(savedFile)
@@ -464,9 +471,11 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val buffer = Buffer
-      .fromString(BufferId(106), "plain bold")
-      .copy(isDirty = true, richTextDocument = Some(document))
+    val plainBuffer = Buffer.fromString(BufferId(106), "plain bold")
+    val buffer = plainBuffer.copy(
+      document = plainBuffer.document.copy(isDirty = true),
+      richText = plainBuffer.richText.copy(richTextDocument = Some(document))
+    )
 
     try
       val savedBuffer = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
@@ -475,7 +484,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       saved.plainText shouldBe "plain bold"
       saved.paragraphs.headOption.map(_.alignment) shouldBe Some(com.serenity.richtext.ParagraphAlignment.Center)
       saved.paragraphs.headOption.map(marksForText(_, "bold")) shouldBe Some(Set(InlineMark.Bold))
-      savedBuffer.richTextDocument shouldBe Some(document.normalized)
+      savedBuffer.richText.richTextDocument shouldBe Some(document.normalized)
     finally Files.deleteIfExists(savedFile)
   }
 
@@ -496,14 +505,15 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val buffer = Buffer.fromString(BufferId(107), document.plainText).copy(richTextDocument = Some(document))
+    val plainBuffer = Buffer.fromString(BufferId(107), document.plainText)
+    val buffer      = plainBuffer.copy(richText = plainBuffer.richText.copy(richTextDocument = Some(document)))
 
     try
       val saved = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()
 
       Files.readString(savedFile) shouldBe "# Title\n**bold** *italic* <u>underlined</u>"
-      saved.language shouldBe Some(com.serenity.lsp.config.LanguageId.Markdown)
-      saved.richTextDocument shouldBe None
+      saved.document.language shouldBe Some(com.serenity.lsp.config.LanguageId.Markdown)
+      saved.richText.richTextDocument shouldBe None
     finally Files.deleteIfExists(savedFile)
   }
 
@@ -591,8 +601,10 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
       // Modify buffer content
       val modifiedBuffer = buffer.copy(
-        content = com.serenity.rope.Rope("val x = 43"),
-        isDirty = true
+        document = buffer.document.copy(
+          content = com.serenity.rope.Rope("val x = 43"),
+          isDirty = true
+        )
       )
 
       val stateManager = createStateManager()
@@ -617,7 +629,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       val savedContent = Files.readString(tempFile)
       savedContent shouldBe "val x = 43"
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.buffers(modifiedBuffer.id).isDirty shouldBe false
+      updatedState.buffers(modifiedBuffer.id).document.isDirty shouldBe false
 
     finally Files.deleteIfExists(tempFile)
   }

@@ -26,7 +26,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
   private val lines = Vector("alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta")
 
   private def stateWith(content: Vector[String], cursor: CursorPosition = CursorPosition(0, 0)): AppState =
-    val buffer = Buffer.fromString(bufferId, content.mkString("\n")).copy(cursors = List(cursor))
+    val buffer0 = Buffer.fromString(bufferId, content.mkString("\n"))
+    val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(cursor)))
     AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -82,9 +83,14 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     // changed range by walking shared tree structure between before/after, which two freshly-built ropes with no
     // shared lineage don't have -- matching how a real keystroke actually mutates the buffer in production.
     val zetaEndOffset = lines.take(6).map(_.length + 1).sum - 1
-    val editedContent = before.buffers(bufferId).content.insert(zetaEndOffset, "X")
+    val editedContent = before.buffers(bufferId).document.content.insert(zetaEndOffset, "X")
     val after =
-      before.copy(buffers = before.buffers.updated(bufferId, before.buffers(bufferId).copy(content = editedContent)))
+      before.copy(buffers =
+        before.buffers.updated(
+          bufferId,
+          before.buffers(bufferId).copy(document = before.buffers(bufferId).document.copy(content = editedContent))
+        )
+      )
 
     Renderer.render(before, cursorVisible = false, surface, viewport)
     surface.clear()
@@ -99,7 +105,12 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(lines, CursorPosition(0, 0))
     val after = before.copy(buffers =
-      before.buffers.updated(bufferId, before.buffers(bufferId).copy(cursors = List(CursorPosition(5, 0))))
+      before.buffers.updated(
+        bufferId,
+        before
+          .buffers(bufferId)
+          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(5, 0))))
+      )
     )
 
     Renderer.render(before, cursorVisible = true, surface, viewport)
@@ -116,7 +127,9 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val before  = stateWith(lines)
     val after = before.copy(
       buffers = before.buffers.view
-        .mapValues(_.copy(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4)))))
+        .mapValues(buf =>
+          buf.copy(editing = buf.editing.copy(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4)))))
+        )
         .toMap
     )
 
@@ -177,7 +190,14 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val edited = state.copy(buffers =
       state.buffers.updated(
         bufferId,
-        state.buffers(bufferId).copy(content = state.buffers(bufferId).content.insert(zetaEndOffset, "X"))
+        state
+          .buffers(bufferId)
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(content = state.buffers(bufferId).document.content.insert(zetaEndOffset, "X"))
+          )
       )
     )
 
@@ -192,7 +212,12 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(lines, CursorPosition(0, 0))
     val after = before.copy(buffers =
-      before.buffers.updated(bufferId, before.buffers(bufferId).copy(cursors = List(CursorPosition(3, 2))))
+      before.buffers.updated(
+        bufferId,
+        before
+          .buffers(bufferId)
+          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 2))))
+      )
     )
 
     val _ = repaintRegionFor(surface, before, Damage.Everything)

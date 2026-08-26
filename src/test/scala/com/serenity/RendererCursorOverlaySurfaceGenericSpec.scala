@@ -23,7 +23,8 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
   private val cellMetrics = com.serenity.ui.layout.CellMetrics.fromFont(codeFont)
 
   private def editorState: AppState =
-    val buffer = Buffer.fromString(bufferId, "hello world").copy(cursors = List(CursorPosition(0, 3)))
+    val buffer =
+      Buffer.fromString(bufferId, "hello world").copy(editing = EditingState(cursors = List(CursorPosition(0, 3))))
     AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),

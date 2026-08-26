@@ -13,6 +13,13 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
+extension (buffer: com.serenity.state.models.Buffer)
+
+  private def withEditing(
+    f: com.serenity.state.models.EditingState => com.serenity.state.models.EditingState
+  ): com.serenity.state.models.Buffer =
+    buffer.copy(editing = f(buffer.editing))
+
 class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
 
   given Balance           = Balance.default
@@ -31,7 +38,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         state.copy(
           buffers = state.buffers.updated(
             bufferId,
-            state.buffers(bufferId).copy(selection = Some(selection), cursors = List(selection.focus))
+            state.buffers(bufferId).withEditing(_.copy(selection = Some(selection), cursors = List(selection.focus)))
           )
         )
       }
@@ -70,8 +77,8 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     stateManager.executeCommand(command).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.isDirty shouldBe true
-    buffer.richTextDocument
+    buffer.document.isDirty shouldBe true
+    buffer.richText.richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .map(_.style.marks) shouldBe Some(Set(InlineMark.Bold))
@@ -89,8 +96,8 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.content.collect() shouldBe "alpha X"
-    buffer.richTextDocument.flatMap(_.paragraphs.headOption).map(_.runs) shouldBe Some(
+    buffer.document.content.collect() shouldBe "alpha X"
+    buffer.richText.richTextDocument.flatMap(_.paragraphs.headOption).map(_.runs) shouldBe Some(
       List(com.serenity.richtext.RichTextRun("alpha X"))
     )
   }
@@ -104,7 +111,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         state.copy(
           buffers = state.buffers.updated(
             bufferId,
-            state.buffers(bufferId).copy(cursors = List(CursorPosition(0, 5)))
+            state.buffers(bufferId).withEditing(_.copy(cursors = List(CursorPosition(0, 5))))
           )
         )
       }
@@ -115,8 +122,8 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.content.collect() shouldBe "alphaX"
-    buffer.richTextDocument
+    buffer.document.content.collect() shouldBe "alphaX"
+    buffer.richText.richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "X"))
       .map(_.style.marks) shouldBe Some(Set(InlineMark.Italic))
@@ -134,8 +141,8 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     stateManager.executeCommand(command).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.richTextDocument.map(_.plainText) shouldBe Some("alpha beta")
-    buffer.richTextDocument
+    buffer.richText.richTextDocument.map(_.plainText) shouldBe Some("alpha beta")
+    buffer.richText.richTextDocument
       .flatMap(_.paragraphs.headOption)
       .map(_.runs) shouldBe Some(List(com.serenity.richtext.RichTextRun("alpha beta")))
   }
@@ -149,7 +156,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         state.copy(
           buffers = state.buffers.updated(
             bufferId,
-            state.buffers(bufferId).copy(cursors = List(com.serenity.state.models.CursorPosition(0, 3)))
+            state.buffers(bufferId).withEditing(_.copy(cursors = List(com.serenity.state.models.CursorPosition(0, 3))))
           )
         )
       }
@@ -159,8 +166,8 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     stateManager.executeCommand(command).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.isDirty shouldBe true
-    buffer.richTextDocument.map(_.paragraphs.map(_.role)) shouldBe Some(
+    buffer.document.isDirty shouldBe true
+    buffer.richText.richTextDocument.map(_.paragraphs.map(_.role)) shouldBe Some(
       List(ParagraphRole.Heading(1), ParagraphRole.Body)
     )
   }
@@ -176,8 +183,8 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     stateManager.executeCommand(command).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.isDirty shouldBe true
-    buffer.richTextDocument.map(_.paragraphs.map(_.alignment)) shouldBe Some(
+    buffer.document.isDirty shouldBe true
+    buffer.richText.richTextDocument.map(_.paragraphs.map(_.alignment)) shouldBe Some(
       List(ParagraphAlignment.Left, ParagraphAlignment.Center, ParagraphAlignment.Center)
     )
   }
@@ -220,6 +227,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     val betaStyle = stateManager.getCurrentState
       .unsafeRunSync()
       .buffers(bufferId)
+      .richText
       .richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
@@ -244,7 +252,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         state.copy(
           buffers = state.buffers.updated(
             bufferId,
-            state.buffers(bufferId).copy(selection = None, cursors = List(CursorPosition(0, 8)))
+            state.buffers(bufferId).withEditing(_.copy(selection = None, cursors = List(CursorPosition(0, 8))))
           )
         )
       }
@@ -252,9 +260,9 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.content.collect() shouldBe "alpha beXta"
-    buffer.richTextDocument.map(_.plainText) shouldBe Some("alpha beXta")
-    buffer.richTextDocument.flatMap(_.paragraphs.headOption).map(_.runs) shouldBe Some(
+    buffer.document.content.collect() shouldBe "alpha beXta"
+    buffer.richText.richTextDocument.map(_.plainText) shouldBe Some("alpha beXta")
+    buffer.richText.richTextDocument.flatMap(_.paragraphs.headOption).map(_.runs) shouldBe Some(
       List(
         com.serenity.richtext.RichTextRun("alpha "),
         com.serenity.richtext.RichTextRun("be", com.serenity.richtext.RichTextStyle(Set(InlineMark.Italic))),
@@ -273,7 +281,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         state.copy(
           buffers = state.buffers.updated(
             bufferId,
-            state.buffers(bufferId).copy(cursors = List(com.serenity.state.models.CursorPosition(0, 0)))
+            state.buffers(bufferId).withEditing(_.copy(cursors = List(com.serenity.state.models.CursorPosition(0, 0))))
           )
         )
       }

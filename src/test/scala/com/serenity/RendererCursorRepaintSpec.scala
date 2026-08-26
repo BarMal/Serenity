@@ -24,12 +24,13 @@ class RendererCursorRepaintSpec extends AnyFlatSpec with Matchers:
   private val lines = Vector("alpha", "beta", "gamma", "delta", "epsilon")
 
   private def stateWith(cursors: List[CursorPosition]): AppState =
-    val buffer = Buffer.fromString(bufferId, lines.mkString("\n")).copy(cursors = cursors)
+    val buffer            = Buffer.fromString(bufferId, lines.mkString("\n"))
+    val bufferWithCursors = buffer.copy(editing = buffer.editing.copy(cursors = cursors))
     AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
+      buffers = Map(bufferWithCursors.id -> bufferWithCursors),
+      bufferOrder = List(bufferWithCursors.id),
       layout = AppState.initial.layout.copy(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferWithCursors.id)),
         activeEditorPaneId = Some(paneId),
         paneOrder = List(paneId)
       ),

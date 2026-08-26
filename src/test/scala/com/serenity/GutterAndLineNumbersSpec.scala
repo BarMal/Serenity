@@ -34,9 +34,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   behavior of "Gutter Display"
 
   it should "show the active buffer language in the rendered gutter" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "# Heading")
-      .copy(language = Some(LanguageId.Markdown))
+    val buffer0 = Buffer.fromString(BufferId(1), "# Heading")
+    val buffer  = buffer0.copy(document = buffer0.document.copy(language = Some(LanguageId.Markdown)))
     val state = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -57,14 +56,15 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve active document metadata while transient surfaces hold focus" in {
-    val paneId = PaneId(0)
-    val buffer = Buffer
-      .fromString(BufferId(6), "alpha\nbeta\ngamma")
-      .copy(
-        cursors = List(CursorPosition(2, 4)),
+    val paneId  = PaneId(0)
+    val buffer0 = Buffer.fromString(BufferId(6), "alpha\nbeta\ngamma")
+    val buffer = buffer0.copy(
+      document = buffer0.document.copy(
         language = Some(LanguageId.Markdown),
         filePath = Some(Paths.get("/workspace/active.md"))
-      )
+      ),
+      editing = buffer0.editing.copy(cursors = List(CursorPosition(2, 4)))
+    )
     val surfaces = List(
       "command-runner",
       "find-replace",
@@ -150,11 +150,9 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
       // Simulate setting file path (this would normally happen during file open/save)
       stateWithPath <- stateManager.getCurrentState
-      bufferWithPath = stateWithPath
-        .buffers(bufferId)
-        .copy(
-          filePath = Some(java.nio.file.Paths.get("/path/to/myfile.txt"))
-        )
+      bufferWithPath =
+        val current = stateWithPath.buffers(bufferId)
+        current.copy(document = current.document.copy(filePath = Some(java.nio.file.Paths.get("/path/to/myfile.txt"))))
       updatedState = stateWithPath.copy(
         buffers = stateWithPath.buffers + (bufferId -> bufferWithPath)
       )
@@ -162,7 +160,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       pane = updatedState.layout.editorPanes(paneId)
     yield
       // Then: Gutter should show file path
-      val gutterInfo = calculateGutterInfo(bufferWithPath, pane, bufferWithPath.filePath)
+      val gutterInfo = calculateGutterInfo(bufferWithPath, pane, bufferWithPath.document.filePath)
       gutterInfo.filePath shouldBe "myfile.txt"
 
     program.unsafeRunSync()
@@ -424,9 +422,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render pinned cursor info in the gutter without a pinned panel shell" in {
-    val buffer = Buffer
-      .fromString(BufferId(4), "alpha\nbeta")
-      .copy(cursors = List(CursorPosition(1, 2)))
+    val buffer0 = Buffer.fromString(BufferId(4), "alpha\nbeta")
+    val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -454,9 +451,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render pinned cursor info with UI font metrics inside the gutter row" in {
-    val buffer = Buffer
-      .fromString(BufferId(5), "alpha")
-      .copy(cursors = List(CursorPosition(0, 4)))
+    val buffer0 = Buffer.fromString(BufferId(5), "alpha")
+    val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(0, 4))))
     val state = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -530,7 +526,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   final case class GutterInfo(cursorPosition: String, filePath: String)
 
   private def calculateGutterInfo(buffer: Buffer, pane: EditorPane, filePath: Option[java.nio.file.Path]): GutterInfo =
-    val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+    val cursor   = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
     val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}" // 1-indexed for display
 
     val path = filePath match

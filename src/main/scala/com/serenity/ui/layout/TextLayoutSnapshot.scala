@@ -140,9 +140,9 @@ object TextLayoutSnapshot:
       math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble).toInt)
     val ascentPx =
       math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getAscent.toDouble).toInt)
-    val totalLines = buffer.content.lineCount
+    val totalLines = buffer.document.content.lineCount
     val richDocument =
-      buffer.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.content.weight))
+      buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
     val viewportTopVisualLine = if wordWrapEnabled then buffer.viewport.topVisualLine else 0
     val visualLineLimit       = viewportTopVisualLine + buffer.viewport.visibleLines
     val visualLines =
@@ -220,7 +220,10 @@ object TextLayoutSnapshot:
         loop(lines.tail, acc ++ aligned)
 
     val maxLogicalLines = math.min(math.max(0, totalLines - buffer.viewport.topLine), math.max(1, visualLineLimit))
-    loop(buffer.content.linesIteratorFrom(buffer.viewport.topLine).take(maxLogicalLines).toVector, Vector.empty)
+    loop(
+      buffer.document.content.linesIteratorFrom(buffer.viewport.topLine).take(maxLogicalLines).toVector,
+      Vector.empty
+    )
 
   private def unwrappedVisibleSlice(rawLine: String, startColumn: Int, visibleColumns: Int): String =
     val visibleEndColumn = startColumn + math.max(1, visibleColumns) + UnwrappedOverscanColumns

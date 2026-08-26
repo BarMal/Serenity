@@ -66,7 +66,10 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
       stateManager
         .updateState { state =>
           state.copy(
-            buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(filePath = Some(tempFile))),
+            buffers = state.buffers.updated(
+              bufferId,
+              state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(filePath = Some(tempFile)))
+            ),
             layout = state.layout.copy(
               editorPanes = state.layout.editorPanes.updated(
                 PaneId(0),
@@ -130,9 +133,8 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
       val stateManager = createStateManager()
       val bufferId     = com.serenity.state.models.BufferId(99)
       val paneId       = com.serenity.state.models.PaneId(0)
-      val buffer = com.serenity.state.models.Buffer
-        .fromString(bufferId, "val x = 100")
-        .copy(filePath = Some(tempFile), isDirty = true)
+      val baseBuffer   = com.serenity.state.models.Buffer.fromString(bufferId, "val x = 100")
+      val buffer       = baseBuffer.copy(document = baseBuffer.document.copy(filePath = Some(tempFile), isDirty = true))
 
       stateManager
         .updateState { state =>
@@ -153,7 +155,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
       Files.readString(tempFile) shouldBe "val x = 100"
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.buffers(bufferId).isDirty shouldBe false
+      updatedState.buffers(bufferId).document.isDirty shouldBe false
     finally Files.deleteIfExists(tempFile)
   }
 
@@ -191,7 +193,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.buffers(initialBufferId).content.collect() shouldBe "x"
+    updatedState.buffers(initialBufferId).document.content.collect() shouldBe "x"
     updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
   }
 
@@ -221,7 +223,14 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         state
-          .copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(content = Rope("needle need"))))
+          .copy(buffers =
+            state.buffers.updated(
+              bufferId,
+              state
+                .buffers(bufferId)
+                .copy(document = state.buffers(bufferId).document.copy(content = Rope("needle need")))
+            )
+          )
       }
       .unsafeRunSync()
     stateManager.showModal(Modal.Find("", Nil, 0)).unsafeRunSync()
@@ -229,7 +238,12 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     "need".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager
       .updateState { state =>
-        state.copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(content = Rope("other"))))
+        state.copy(buffers =
+          state.buffers.updated(
+            bufferId,
+            state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(content = Rope("other")))
+          )
+        )
       }
       .unsafeRunSync()
 

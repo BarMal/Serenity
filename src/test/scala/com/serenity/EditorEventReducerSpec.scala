@@ -29,9 +29,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope(text),
-            cursors = List(cursor),
-            documentComments = List(comment)
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(text)),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(cursor)),
+            annotations = AppState.initial.buffers(bufferId).annotations.copy(documentComments = List(comment))
           )
       )
     )
@@ -89,9 +89,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val bufferId     = updatedState.layout.editorPanes(paneId).bufferId.get
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "x"
-    buffer.cursors.head shouldBe com.serenity.state.models.CursorPosition(0, 1)
-    buffer.isDirty shouldBe true
+    buffer.document.content.collect() shouldBe "x"
+    buffer.editing.cursors.head shouldBe com.serenity.state.models.CursorPosition(0, 1)
+    buffer.document.isDirty shouldBe true
   }
 
   it should "insert characters at every cursor position when multiple cursors are active" in {
@@ -103,8 +103,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(0, 3))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
@@ -112,8 +115,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(InsertChar('X'), paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "aXbcXd"
-    buffer.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 5))
+    buffer.document.content.collect() shouldBe "aXbcXd"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 5))
   }
 
   it should "move document comments after inserted text before them" in {
@@ -124,8 +127,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(InsertChar('X'), paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "Xabc def"
-    buffer.documentComments shouldBe List(
+    buffer.document.content.collect() shouldBe "Xabc def"
+    buffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 5), CursorPosition(0, 8), "note")
     )
   }
@@ -140,9 +143,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = NonCollectingRope(Rope("abc def")),
-            cursors = List(CursorPosition(0, 0)),
-            documentComments = List(comment)
+            document = AppState.initial.buffers(bufferId).document.copy(content = NonCollectingRope(Rope("abc def"))),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+            annotations = AppState.initial.buffers(bufferId).annotations.copy(documentComments = List(comment))
           )
       )
     )
@@ -150,8 +153,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(InsertChar('X'), paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.getLine(0) shouldBe Some("Xabc def")
-    buffer.documentComments shouldBe List(
+    buffer.document.content.getLine(0) shouldBe Some("Xabc def")
+    buffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 5), CursorPosition(0, 8), "note")
     )
   }
@@ -164,8 +167,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(NewLine, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "\nabc def"
-    buffer.documentComments shouldBe List(
+    buffer.document.content.collect() shouldBe "\nabc def"
+    buffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(1, 4), CursorPosition(1, 7), "note")
     )
   }
@@ -178,8 +181,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteForward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "bc def"
-    buffer.documentComments shouldBe List(
+    buffer.document.content.collect() shouldBe "bc def"
+    buffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 3), CursorPosition(0, 6), "note")
     )
   }
@@ -194,9 +197,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = NonCollectingRope(Rope("abc def")),
-            cursors = List(CursorPosition(0, 0)),
-            documentComments = List(comment)
+            document = AppState.initial.buffers(bufferId).document.copy(content = NonCollectingRope(Rope("abc def"))),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+            annotations = AppState.initial.buffers(bufferId).annotations.copy(documentComments = List(comment))
           )
       )
     )
@@ -204,8 +207,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteForward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.getLine(0) shouldBe Some("bc def")
-    buffer.documentComments shouldBe List(
+    buffer.document.content.getLine(0) shouldBe Some("bc def")
+    buffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 3), CursorPosition(0, 6), "note")
     )
   }
@@ -218,8 +221,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(InsertChar('X'), paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "abc dXef"
-    buffer.documentComments shouldBe List(
+    buffer.document.content.collect() shouldBe "abc dXef"
+    buffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 4), CursorPosition(0, 8), "note")
     )
   }
@@ -234,10 +237,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abc def ghi"),
-            cursors = List(CursorPosition(0, 7)),
-            selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 7))),
-            documentComments = List(comment)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 7)),
+                selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 7)))
+              ),
+            annotations = AppState.initial.buffers(bufferId).annotations.copy(documentComments = List(comment))
           )
       )
     )
@@ -245,8 +254,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteBackward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "abc  ghi"
-    buffer.documentComments shouldBe List(
+    buffer.document.content.collect() shouldBe "abc  ghi"
+    buffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 4), CursorPosition(0, 4), "note")
     )
   }
@@ -261,10 +270,15 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("beta"),
-            cursors = List(CursorPosition(0, 4)),
-            selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 4))),
-            documentComments = List(comment)
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("beta")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 4)),
+                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 4)))
+              ),
+            annotations = AppState.initial.buffers(bufferId).annotations.copy(documentComments = List(comment))
           )
       )
     )
@@ -272,8 +286,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(TabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "    beta"
-    buffer.documentComments shouldBe List(
+    buffer.document.content.collect() shouldBe "    beta"
+    buffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 4), CursorPosition(0, 8), "note")
     )
   }
@@ -286,8 +300,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(Cut, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "beta"
-    buffer.documentComments shouldBe List(
+    buffer.document.content.collect() shouldBe "beta"
+    buffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 0), CursorPosition(0, 4), "note")
     )
   }
@@ -301,8 +315,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = NonCollectingRope(Rope("alpha\nbeta")),
-            cursors = List(CursorPosition(0, 0))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = NonCollectingRope(Rope("alpha\nbeta"))),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0)))
           )
       )
     )
@@ -310,8 +325,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(SelectAll, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
-    buffer.cursors shouldBe List(CursorPosition(1, 4))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 4))
   }
 
   it should "insert newlines at every cursor position when multiple cursors are active" in {
@@ -323,8 +338,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(0, 3))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
@@ -332,8 +350,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(NewLine, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "a\nbc\nd"
-    buffer.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(2, 0))
+    buffer.document.content.collect() shouldBe "a\nbc\nd"
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(2, 0))
   }
 
   it should "insert fixed spaces at every cursor position when tab is pressed with multiple cursors" in {
@@ -345,8 +363,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(0, 3))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
@@ -354,8 +375,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(TabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "a    bc    d"
-    buffer.cursors shouldBe List(CursorPosition(0, 5), CursorPosition(0, 11))
+    buffer.document.content.collect() shouldBe "a    bc    d"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 5), CursorPosition(0, 11))
   }
 
   it should "remove one indentation level when reverse-tab is pressed with a single cursor" in {
@@ -367,8 +388,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("    abc"),
-            cursors = List(CursorPosition(0, 6))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("    abc")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 6)))
           )
       )
     )
@@ -376,8 +397,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(ReverseTabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "abc"
-    buffer.cursors shouldBe List(CursorPosition(0, 2))
+    buffer.document.content.collect() shouldBe "abc"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 2))
   }
 
   it should "delete backward at every cursor position when multiple cursors are active" in {
@@ -389,8 +410,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("1a2b3"),
-            cursors = List(CursorPosition(0, 2), CursorPosition(0, 4))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("1a2b3")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
           )
       )
     )
@@ -398,8 +422,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteBackward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "123"
-    buffer.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 2))
+    buffer.document.content.collect() shouldBe "123"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 2))
   }
 
   it should "delete forward at every cursor position when multiple cursors are active" in {
@@ -411,8 +435,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("1a2b3"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(0, 3))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("1a2b3")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
@@ -420,8 +447,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteForward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "123"
-    buffer.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 2))
+    buffer.document.content.collect() shouldBe "123"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 2))
   }
 
   it should "delete the previous word for a single cursor" in {
@@ -433,8 +460,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha beta gamma"),
-            cursors = List(CursorPosition(0, 16))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 16)))
           )
       )
     )
@@ -442,8 +470,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteWordBackward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "alpha beta "
-    buffer.cursors shouldBe List(CursorPosition(0, 11))
+    buffer.document.content.collect() shouldBe "alpha beta "
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 11))
   }
 
   it should "delete the next word for a single cursor" in {
@@ -455,8 +483,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha beta gamma"),
-            cursors = List(CursorPosition(0, 6))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 6)))
           )
       )
     )
@@ -464,8 +493,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteWordForward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "alpha gamma"
-    buffer.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.document.content.collect() shouldBe "alpha gamma"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
   }
 
   it should "delete the previous word once when multiple cursors overlap the same word" in {
@@ -477,8 +506,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha beta gamma"),
-            cursors = List(CursorPosition(0, 8), CursorPosition(0, 10))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 8), CursorPosition(0, 10)))
           )
       )
     )
@@ -486,8 +519,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteWordBackward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "alpha  gamma"
-    buffer.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.document.content.collect() shouldBe "alpha  gamma"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
   }
 
   it should "delete words for multiple cursors without materialising the whole buffer" in {
@@ -500,8 +533,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = content,
-            cursors = List(CursorPosition(0, 8), CursorPosition(0, 10))
+            document = AppState.initial.buffers(bufferId).document.copy(content = content),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 8), CursorPosition(0, 10)))
           )
       )
     )
@@ -509,8 +545,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteWordBackward, paneId, initialState).state
 
     val buffer = updatedState.buffers(bufferId)
-    buffer.content.collect() shouldBe "alpha  gamma"
-    buffer.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.document.content.collect() shouldBe "alpha  gamma"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
   }
 
   it should "delete the previous word for a single cursor without materialising the whole buffer" in {
@@ -523,8 +559,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = content,
-            cursors = List(CursorPosition(0, 10))
+            document = AppState.initial.buffers(bufferId).document.copy(content = content),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 10)))
           )
       )
     )
@@ -532,8 +568,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteWordBackward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "alpha  gamma"
-    buffer.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.document.content.collect() shouldBe "alpha  gamma"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
   }
 
   it should "move horizontally without materialising a large single-line buffer" in {
@@ -543,8 +579,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val initialBuffer = AppState.initial
       .buffers(bufferId)
       .copy(
-        content = content,
-        cursors = List(CursorPosition(0, 0)),
+        document = AppState.initial.buffers(bufferId).document.copy(content = content),
+        editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -554,7 +590,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
 
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1))
   }
 
   it should "move across line boundaries without materialising the whole buffer" in {
@@ -564,8 +600,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val initialBuffer = AppState.initial
       .buffers(bufferId)
       .copy(
-        content = content,
-        cursors = List(CursorPosition(1, 0)),
+        document = AppState.initial.buffers(bufferId).document.copy(content = content),
+        editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -575,7 +611,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = EditorEventReducer.reduce(MoveLeft, paneId, initialState).state
 
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 5))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 5))
   }
 
   it should "move multiple cursors horizontally without materialising the whole buffer" in {
@@ -585,8 +621,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val initialBuffer = AppState.initial
       .buffers(bufferId)
       .copy(
-        content = content,
-        cursors = List(CursorPosition(0, 5), CursorPosition(1, 0)),
+        document = AppState.initial.buffers(bufferId).document.copy(content = content),
+        editing =
+          AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5), CursorPosition(1, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -596,7 +633,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
 
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 0), CursorPosition(1, 1))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(1, 1))
   }
 
   it should "copy the current line without materialising the whole buffer" in {
@@ -609,8 +646,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = content,
-            cursors = List(CursorPosition(0, 2))
+            document = AppState.initial.buffers(bufferId).document.copy(content = content),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
           )
       )
     )
@@ -630,8 +667,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = content,
-            cursors = List(CursorPosition(0, 2))
+            document = AppState.initial.buffers(bufferId).document.copy(content = content),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
           )
       )
     )
@@ -640,8 +677,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.buffers(bufferId)
 
     updatedState.clipboard shouldBe Some("alpha")
-    buffer.content.collect() shouldBe "x" * 5000
-    buffer.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.document.content.collect() shouldBe "x" * 5000
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
   }
 
   it should "replace a selection without materialising the whole buffer" in {
@@ -655,9 +692,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = content,
-            cursors = List(selection.focus),
-            selection = Some(selection)
+            document = AppState.initial.buffers(bufferId).document.copy(content = content),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(selection.focus), selection = Some(selection))
           )
       )
     )
@@ -665,8 +704,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(InsertChar('Z'), paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "Z\n" + ("x" * 5000)
-    buffer.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.document.content.collect() shouldBe "Z\n" + ("x" * 5000)
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 1))
     buffer.allSelections shouldBe Nil
   }
 
@@ -682,10 +721,15 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = content,
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document = AppState.initial.buffers(bufferId).document.copy(content = content),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -706,9 +750,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = content,
-            cursors = List(selection.focus),
-            selection = Some(selection)
+            document = AppState.initial.buffers(bufferId).document.copy(content = content),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(selection.focus), selection = Some(selection))
           )
       )
     )
@@ -716,10 +762,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(TabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.getLine(0) shouldBe Some("    alpha")
-    buffer.content.getLine(1) shouldBe Some("    beta")
-    buffer.content.getLine(2) shouldBe Some("x" * 5000)
-    buffer.cursors shouldBe List(CursorPosition(1, 6))
+    buffer.document.content.getLine(0) shouldBe Some("    alpha")
+    buffer.document.content.getLine(1) shouldBe Some("    beta")
+    buffer.document.content.getLine(2) shouldBe Some("x" * 5000)
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 6))
   }
 
   it should "unindent selected lines without materialising the whole buffer" in {
@@ -733,9 +779,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = content,
-            cursors = List(selection.focus),
-            selection = Some(selection)
+            document = AppState.initial.buffers(bufferId).document.copy(content = content),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(selection.focus), selection = Some(selection))
           )
       )
     )
@@ -743,10 +791,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(ReverseTabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.getLine(0) shouldBe Some("alpha")
-    buffer.content.getLine(1) shouldBe Some("beta")
-    buffer.content.getLine(2) shouldBe Some("x" * 5000)
-    buffer.cursors shouldBe List(CursorPosition(1, 0))
+    buffer.document.content.getLine(0) shouldBe Some("alpha")
+    buffer.document.content.getLine(1) shouldBe Some("beta")
+    buffer.document.content.getLine(2) shouldBe Some("x" * 5000)
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 0))
   }
 
   it should "delete the next word once when multiple cursors overlap the same word" in {
@@ -758,8 +806,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha beta gamma"),
-            cursors = List(CursorPosition(0, 6), CursorPosition(0, 8))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 6), CursorPosition(0, 8)))
           )
       )
     )
@@ -767,8 +819,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteWordForward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "alpha gamma"
-    buffer.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.document.content.collect() shouldBe "alpha gamma"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
   }
 
   it should "paste clipboard content at every cursor position when multiple cursors are active" in {
@@ -780,8 +832,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("ab"),
-            cursors = List(CursorPosition(0, 0), CursorPosition(0, 2))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("ab")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
           )
       ),
       clipboard = Some("Z")
@@ -790,8 +845,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(Paste, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "ZabZ"
-    buffer.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 4))
+    buffer.document.content.collect() shouldBe "ZabZ"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 4))
   }
 
   it should "replace every active selection when inserting with multiple selections" in {
@@ -805,10 +860,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abc def ghi"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -816,8 +877,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(InsertChar('X'), paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "X def X"
-    buffer.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 7))
+    buffer.document.content.collect() shouldBe "X def X"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 7))
     buffer.allSelections shouldBe Nil
   }
 
@@ -832,10 +893,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta\ngamma"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -843,8 +910,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(TabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "    alpha\n    beta\n    gamma"
-    buffer.cursors shouldBe List(CursorPosition(1, 6), CursorPosition(2, 9))
+    buffer.document.content.collect() shouldBe "    alpha\n    beta\n    gamma"
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 6), CursorPosition(2, 9))
     buffer.allSelections shouldBe Nil
   }
 
@@ -859,10 +926,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abc def ghi"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       ),
       clipboard = Some("ZZ")
@@ -871,8 +944,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(Paste, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "ZZ def ZZ"
-    buffer.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 9))
+    buffer.document.content.collect() shouldBe "ZZ def ZZ"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 9))
     buffer.allSelections shouldBe Nil
   }
 
@@ -887,10 +960,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abc def ghi"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -898,8 +977,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteBackward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe " def "
-    buffer.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
+    buffer.document.content.collect() shouldBe " def "
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
     buffer.allSelections shouldBe Nil
   }
 
@@ -914,10 +993,18 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("    alpha\n  beta\n\tgamma"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document = AppState.initial
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("    alpha\n  beta\n\tgamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -925,8 +1012,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(ReverseTabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "alpha\nbeta\ngamma"
-    buffer.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(2, 5))
+    buffer.document.content.collect() shouldBe "alpha\nbeta\ngamma"
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(2, 5))
     buffer.allSelections shouldBe Nil
   }
 
@@ -941,10 +1028,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abc def ghi"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -952,8 +1045,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteForward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe " def "
-    buffer.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
+    buffer.document.content.collect() shouldBe " def "
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
     buffer.allSelections shouldBe Nil
   }
 
@@ -968,10 +1061,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abc def ghi"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -979,8 +1078,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(DeleteWordForward, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe " def "
-    buffer.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
+    buffer.document.content.collect() shouldBe " def "
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
     buffer.allSelections shouldBe Nil
   }
 
@@ -995,10 +1094,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              ),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
       )
@@ -1007,7 +1112,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(PageDown, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(3, 0), CursorPosition(5, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(3, 0), CursorPosition(5, 0))
     buffer.allSelections shouldBe Nil
   }
 
@@ -1022,10 +1127,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -1033,7 +1144,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(MoveToStartOfFile, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
     buffer.allSelections shouldBe Nil
   }
 
@@ -1048,10 +1159,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("0\n1\n2\n3\n45"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n45")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -1059,7 +1176,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(MoveToEndOfFile, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(4, 2))
+    buffer.editing.cursors shouldBe List(CursorPosition(4, 2))
     buffer.allSelections shouldBe Nil
   }
 
@@ -1072,14 +1189,17 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd"),
-            cursors = List(CursorPosition(0, 2), CursorPosition(0, 4))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
           )
       )
     )
 
     val updatedState = EditorEventReducer.reduce(MoveLeft, paneId, initialState).state
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
   }
 
   it should "unindent every cursor line when reverse-tab is pressed with multiple cursors" in {
@@ -1091,8 +1211,14 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("    one\n  two\n\tthree"),
-            cursors = List(CursorPosition(0, 4), CursorPosition(1, 2), CursorPosition(2, 6))
+            document = AppState.initial
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("    one\n  two\n\tthree")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 4), CursorPosition(1, 2), CursorPosition(2, 6)))
           )
       )
     )
@@ -1100,8 +1226,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(ReverseTabKey, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "one\ntwo\nthree"
-    buffer.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0), CursorPosition(2, 5))
+    buffer.document.content.collect() shouldBe "one\ntwo\nthree"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0), CursorPosition(2, 5))
   }
 
   it should "move every cursor right when multiple cursors are active" in {
@@ -1113,14 +1239,17 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd"),
-            cursors = List(CursorPosition(0, 0), CursorPosition(0, 2))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
           )
       )
     )
 
     val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
   }
 
   it should "move every cursor to line start when multiple cursors are active" in {
@@ -1132,14 +1261,17 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd"),
-            cursors = List(CursorPosition(0, 2), CursorPosition(0, 4))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
           )
       )
     )
 
     val updatedState = EditorEventReducer.reduce(MoveToStart, paneId, initialState).state
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
   }
 
   it should "move every cursor to line end when multiple cursors are active" in {
@@ -1151,14 +1283,17 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd"),
-            cursors = List(CursorPosition(0, 0), CursorPosition(0, 2))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
           )
       )
     )
 
     val updatedState = EditorEventReducer.reduce(MoveToEnd, paneId, initialState).state
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 4))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 4))
   }
 
   it should "move every cursor down while preserving per-cursor columns when multiple cursors are active" in {
@@ -1170,14 +1305,17 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd\nwxyz"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(0, 3))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd\nwxyz")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
 
     val updatedState = VerticalNavSupport.dispatch(MoveDown, paneId, initialState).state
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 1), CursorPosition(1, 3))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 1), CursorPosition(1, 3))
   }
 
   it should "move every cursor up while preserving per-cursor columns when multiple cursors are active" in {
@@ -1189,14 +1327,17 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd\nwxyz"),
-            cursors = List(CursorPosition(1, 1), CursorPosition(1, 3))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd\nwxyz")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(1, 1), CursorPosition(1, 3)))
           )
       )
     )
 
     val updatedState = VerticalNavSupport.dispatch(MoveUp, paneId, initialState).state
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
   }
 
   it should "move every cursor to the start of the file when multiple cursors are active" in {
@@ -1208,14 +1349,18 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta\ngamma"),
-            cursors = List(CursorPosition(0, 3), CursorPosition(2, 4))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 3), CursorPosition(2, 4)))
           )
       )
     )
 
     val updatedState = EditorEventReducer.reduce(MoveToStartOfFile, paneId, initialState).state
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
   }
 
   it should "move every cursor to the end of the file when multiple cursors are active" in {
@@ -1227,14 +1372,18 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta\ngamma"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(1, 2))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
           )
       )
     )
 
     val updatedState = EditorEventReducer.reduce(MoveToEndOfFile, paneId, initialState).state
-    updatedState.buffers(bufferId).cursors shouldBe List(CursorPosition(2, 5))
+    updatedState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(2, 5))
   }
 
   it should "move every cursor up by a visible page when multiple cursors are active" in {
@@ -1246,8 +1395,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5"),
-            cursors = List(CursorPosition(3, 0), CursorPosition(5, 0)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(3, 0), CursorPosition(5, 0))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(topLine = 2, visibleLines = 2)
           )
       )
@@ -1256,7 +1409,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(PageUp, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(3, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(3, 0))
     buffer.viewport.topLine shouldBe 0
   }
 
@@ -1269,8 +1422,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(1, 2))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
           )
       )
     )
@@ -1278,8 +1435,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(SelectAll, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(1, 4))
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 4))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
   }
 
   it should "select the whole buffer when select-all is pressed with multiple selections" in {
@@ -1293,10 +1450,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta"),
-            cursors = List(first.focus, second.focus),
-            selection = Some(first),
-            selections = List(first, second)
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -1304,8 +1467,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(SelectAll, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(1, 4))
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 4))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
     buffer.allSelections shouldBe List(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
   }
 
@@ -1318,8 +1481,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcd"),
-            cursors = List(CursorPosition(0, 1))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1)))
           )
       )
     )
@@ -1328,8 +1491,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val secondState = EditorEventReducer.reduce(ExtendSelectionRight, paneId, firstState).state
     val buffer      = secondState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 3))
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(0, 3)))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 3))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(0, 3)))
     buffer.allSelections shouldBe List(Selection(CursorPosition(0, 1), CursorPosition(0, 3)))
   }
 
@@ -1342,8 +1505,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abc\ndef"),
-            cursors = List(CursorPosition(1, 1))
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc\ndef")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 1)))
           )
       )
     )
@@ -1351,10 +1514,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = VerticalNavSupport.dispatch(ExtendSelectionUp, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 1))
-    buffer.selection shouldBe Some(Selection(CursorPosition(1, 1), CursorPosition(0, 1)))
-    buffer.selection.map(_.start) shouldBe Some(CursorPosition(0, 1))
-    buffer.selection.map(_.end) shouldBe Some(CursorPosition(1, 1))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(1, 1), CursorPosition(0, 1)))
+    buffer.editing.selection.map(_.start) shouldBe Some(CursorPosition(0, 1))
+    buffer.editing.selection.map(_.end) shouldBe Some(CursorPosition(1, 1))
   }
 
   it should "open the goto-line modal from editor events even when multiple cursors are active" in {
@@ -1366,8 +1529,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(1, 2))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
           )
       )
     )
@@ -1388,8 +1555,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(1, 2))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
           )
       )
     )
@@ -1413,8 +1584,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta\nalpha"),
-            cursors = List(CursorPosition(2, 0)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\nalpha")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
             findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
           )
       )
@@ -1441,8 +1613,14 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("match alpha\nbeta\nmatch gamma"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(2, 2)),
+            document = AppState.initial
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("match alpha\nbeta\nmatch gamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(2, 2))),
             findState = Some(FindState("match", List(FindResult(0, 0), FindResult(2, 0)), 0)),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
@@ -1452,7 +1630,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(2, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(2, 0))
     buffer.findState shouldBe Some(FindState("match", List(FindResult(0, 0), FindResult(2, 0)), 1))
   }
 
@@ -1465,8 +1643,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("needle then needle"),
-            cursors = List(CursorPosition(0, 0)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle then needle")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 0))
           )
       )
@@ -1475,7 +1654,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(0, "needle then ".length))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, "needle then ".length))
     buffer.findState shouldBe Some(
       FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 1)
     )
@@ -1490,8 +1669,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("cafe\u0301!"),
-            cursors = List(CursorPosition(0, 0)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("cafe\u0301!")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             findState = Some(FindState("\u0301", List(FindResult(0, 4)), 0))
           )
       )
@@ -1501,7 +1681,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.buffers(bufferId)
 
     buffer.findState shouldBe None
-    buffer.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
   }
 
   it should "drop find-next matches that split a regional-indicator flag pair" in {
@@ -1515,8 +1695,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope(s"a$flag!"),
-            cursors = List(CursorPosition(0, 0)),
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(s"a$flag!")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             findState = Some(FindState(firstIndicator, List(FindResult(0, 1)), 0))
           )
       )
@@ -1526,7 +1706,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.buffers(bufferId)
 
     buffer.findState shouldBe None
-    buffer.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
   }
 
   it should "scroll wrapped text to the selected find-next visual row" in {
@@ -1541,8 +1721,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope(content),
-            cursors = List(CursorPosition(0, 0)),
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             findState = Some(FindState("needle", List(FindResult(0, needleColumn)), 0)),
             viewport = Viewport(0, 0, visibleLines = 3, visibleColumns = 12)
           )
@@ -1552,7 +1732,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val reducedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.buffers(bufferId)
-    val cursor       = buffer.cursors.head
+    val cursor       = buffer.editing.cursors.head
     val font         = FontLoader.previewTextFont(updatedState.config.fontConfig)
     val wrapPx   = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, updatedState.config.fontConfig)
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
@@ -1580,9 +1760,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = Rope("alpha beta gamma"),
-            language = Some(LanguageId.JsonLang),
-            cursors = List(CursorPosition(0, 0)),
+            document = AppState.initial
+              .buffers(bufferId)
+              .document
+              .copy(content = Rope("alpha beta gamma"), language = Some(LanguageId.JsonLang)),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             viewport = Viewport(0, 0, visibleLines = 5, visibleColumns = 8)
           )
       )
@@ -1591,7 +1773,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = VerticalNavSupport.dispatch(MoveDown, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
     buffer.viewport.leftColumn shouldBe 0
   }
 
@@ -1604,8 +1786,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("needle\nneedle"),
-            cursors = List(CursorPosition(0, 0)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle\nneedle")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
           )
       )
@@ -1614,7 +1797,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(InsertChar('x'), paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "xneedle\nneedle"
+    buffer.document.content.collect() shouldBe "xneedle\nneedle"
     buffer.findState shouldBe None
   }
 
@@ -1627,8 +1810,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("needle"),
-            cursors = List(CursorPosition(0, "needle".length)),
+            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle")),
+            editing =
+              AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, "needle".length))),
             findState = Some(FindState("needle", List(FindResult(0, 0)), 0))
           )
       )
@@ -1637,7 +1821,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val afterFirstDelete = EditorEventReducer.reduce(DeleteBackward, paneId, initialState).state
     val buffer           = afterFirstDelete.buffers(bufferId)
 
-    buffer.content.collect() shouldBe "needl"
+    buffer.document.content.collect() shouldBe "needl"
     buffer.findState shouldBe None
   }
 
@@ -1650,8 +1834,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("abcdef\nxy\nabcdef"),
-            cursors = List(CursorPosition(0, 1), CursorPosition(0, 4))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcdef\nxy\nabcdef")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 4)))
           )
       )
     )
@@ -1660,7 +1848,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val afterSecondMove = VerticalNavSupport.dispatch(MoveDown, paneId, afterFirstMove).state
     val buffer          = afterSecondMove.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(2, 1), CursorPosition(2, 4))
+    buffer.editing.cursors shouldBe List(CursorPosition(2, 1), CursorPosition(2, 4))
   }
 
   it should "update viewport position for scroll events" in {
@@ -1673,7 +1861,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         initialState
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("a\nb\nc\nd\ne\nf\ng"),
+            document =
+              initialState.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\nb\nc\nd\ne\nf\ng")),
             viewport = initialState.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
       )
@@ -1693,8 +1882,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5"),
-            cursors = List(CursorPosition(4, 1)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(4, 1))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(topLine = 3, visibleLines = 2)
           )
       )
@@ -1703,7 +1893,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(PageUp, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(2, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(2, 0))
     buffer.viewport.topLine shouldBe 1
   }
 
@@ -1716,8 +1906,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta\ngamma"),
-            cursors = List(CursorPosition(2, 3)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 3))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(topLine = 2)
           )
       )
@@ -1727,7 +1918,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
     buffer.viewport.topLine shouldBe 0
   }
 
@@ -1740,8 +1931,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta\ngamma"),
-            cursors = List(CursorPosition(0, 1)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
       )
@@ -1750,7 +1942,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(MoveToEndOfFile, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(2, 5))
+    buffer.editing.cursors shouldBe List(CursorPosition(2, 5))
     buffer.viewport.topLine shouldBe 1
   }
 
@@ -1763,8 +1955,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5"),
-            cursors = List(CursorPosition(1, 1)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 1))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
       )
@@ -1773,7 +1966,7 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(PageDown, paneId, initialState).state
     val buffer       = updatedState.buffers(bufferId)
 
-    buffer.cursors shouldBe List(CursorPosition(3, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(3, 0))
     buffer.viewport.topLine shouldBe 2
   }
 

@@ -89,7 +89,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val updatedBuffers = base.buffers.get(bufferId).fold(base.buffers) { buf =>
       import com.serenity.rope.Rope
-      base.buffers + (bufferId -> buf.copy(content = Rope(bufferContent)))
+      base.buffers + (bufferId -> buf.copy(document = buf.document.copy(content = Rope(bufferContent))))
     }
     val withContent     = base.copy(buffers = updatedBuffers)
     val (s1, surfaceId) = withContent.allocateSurfaceId
@@ -210,7 +210,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
         val newState = f(state)
         newState.fileSearchSurface shouldBe None
         newState.focus shouldBe a[Focus.EditorPane]
-        newState.buffers.get(bufferId).flatMap(_.cursors.headOption).map(_.line) shouldBe Some(5)
+        newState.buffers.get(bufferId).flatMap(_.editing.cursors.headOption).map(_.line) shouldBe Some(5)
       case other => fail(s"Expected StateChange, got $other")
   }
 
@@ -248,10 +248,11 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       delegate = Rope(content),
       allowedLines = (0 to 100).toSet
     )
-    val base = AppState.initial
-    val buffer = base
-      .buffers(bufferId)
-      .copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
+    val base       = AppState.initial
+    val baseBuffer = base.buffers(bufferId)
+    val buffer = baseBuffer.copy(document =
+      baseBuffer.document.copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
+    )
     val withBuffer       = base.copy(buffers = base.buffers.updated(bufferId, buffer))
     val (withId, search) = withBuffer.allocateSurfaceId
     val surface = UiSurface(
@@ -281,10 +282,11 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       delegate = Rope(content),
       allowedLines = (0 to 200).toSet
     )
-    val base = AppState.initial
-    val buffer = base
-      .buffers(bufferId)
-      .copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
+    val base       = AppState.initial
+    val baseBuffer = base.buffers(bufferId)
+    val buffer = baseBuffer.copy(document =
+      baseBuffer.document.copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
+    )
     val withBuffer       = base.copy(buffers = base.buffers.updated(bufferId, buffer))
     val (withId, search) = withBuffer.allocateSurfaceId
     val surface = UiSurface(

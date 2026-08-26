@@ -115,7 +115,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   it should "keep below-cursor overlays inside the active editor content rectangle" in {
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(CursorPosition(1, 2)))
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
@@ -145,7 +145,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   it should "keep above-cursor overlays inside the active editor content rectangle" in {
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(CursorPosition(1, 2)))
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -175,7 +175,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val cursor       = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(cursor))
+      .copy(editing = EditingState(cursors = List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
       config = AppConfig.default.copy(
@@ -320,7 +320,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(cursor))
+      .copy(editing = EditingState(cursors = List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
       config = AppConfig.default
@@ -366,7 +366,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(cursor))
+      .copy(editing = EditingState(cursors = List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val pinnedPanel = UiSurface(
       SurfaceId("left-panel"),
@@ -570,7 +570,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(cursor))
+      .copy(editing = EditingState(cursors = List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val quickInfo = UiSurface(
       SurfaceId("quick-info"),
@@ -724,7 +724,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(cursor))
+      .copy(editing = EditingState(cursors = List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val pinnedPanel = UiSurface(
       SurfaceId("find-panel"),
@@ -793,7 +793,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val cursor   = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(cursor))
+      .copy(editing = EditingState(cursors = List(cursor)))
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .updateSearchTerm("op")(using registry)
@@ -879,7 +879,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(cursor))
+      .copy(editing = EditingState(cursors = List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val toolbar = UiSurface(
       SurfaceId("contextual-toolbar"),

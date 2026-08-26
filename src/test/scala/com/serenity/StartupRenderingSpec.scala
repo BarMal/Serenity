@@ -228,11 +228,13 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "center blank buffer text by measured text font width" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
-    val buffer = Buffer
-      .fromString(bufferId, "")
-      .copy(isNewEmpty = false, viewport = Viewport.default.copy(visibleLines = 10))
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
+    val bufferBase = Buffer.fromString(bufferId, "")
+    val buffer = bufferBase.copy(
+      document = bufferBase.document.copy(isNewEmpty = false),
+      viewport = Viewport.default.copy(visibleLines = 10)
+    )
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
@@ -290,11 +292,13 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use the text font line height for blank buffer placeholder text" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
-    val buffer = Buffer
-      .fromString(bufferId, "")
-      .copy(isNewEmpty = false, viewport = Viewport.default.copy(visibleLines = 10))
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
+    val bufferBase = Buffer.fromString(bufferId, "")
+    val buffer = bufferBase.copy(
+      document = bufferBase.document.copy(isNewEmpty = false),
+      viewport = Viewport.default.copy(visibleLines = 10)
+    )
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
@@ -331,11 +335,13 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "center blank buffer placeholder text by measured line height" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
-    val buffer = Buffer
-      .fromString(bufferId, "")
-      .copy(isNewEmpty = false, viewport = Viewport.default.copy(visibleLines = 10))
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
+    val bufferBase = Buffer.fromString(bufferId, "")
+    val buffer = bufferBase.copy(
+      document = bufferBase.document.copy(isNewEmpty = false),
+      viewport = Viewport.default.copy(visibleLines = 10)
+    )
     val state = AppState.empty.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
@@ -434,7 +440,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       finalState <- stateManager.getCurrentState
     yield
       val buffer = finalState.buffers(bufferId)
-      buffer.content.collect() shouldBe "Welcome to Serenity!"
+      buffer.document.content.collect() shouldBe "Welcome to Serenity!"
       val pane = finalState.layout.editorPanes(paneId)
       pane.bufferId shouldBe Some(bufferId)
 
@@ -454,8 +460,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       finalState <- stateManager.getCurrentState
     yield
       val buffer = finalState.buffers(bufferId)
-      buffer.cursors.size shouldBe 1
-      val cursor = buffer.cursors.head
+      buffer.editing.cursors.size shouldBe 1
+      val cursor = buffer.editing.cursors.head
       cursor.line shouldBe 0
       cursor.column shouldBe 0
 
@@ -479,10 +485,10 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       finalState <- stateManager.getCurrentState
     yield
       val buffer = finalState.buffers(bufferId)
-      val cursor = buffer.cursors.head
+      val cursor = buffer.editing.cursors.head
       cursor.column shouldBe 100
       cursor.line shouldBe 0
-      buffer.content.collect() shouldBe longText
+      buffer.document.content.collect() shouldBe longText
 
     program.unsafeRunSync()
   }
@@ -503,7 +509,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       finalState <- stateManager.getCurrentState
     yield
       val buffer   = finalState.buffers(bufferId)
-      val cursor   = buffer.cursors.head
+      val cursor   = buffer.editing.cursors.head
       val viewport = buffer.viewport
       cursor.column shouldBe longText.length
       info(
@@ -529,7 +535,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       finalState <- stateManager.getCurrentState
     yield
       val buffer = finalState.buffers(bufferId)
-      buffer.content.collect() shouldBe testText
+      buffer.document.content.collect() shouldBe testText
 
     program.unsafeRunSync()
   }

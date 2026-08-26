@@ -108,14 +108,16 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       finalState.buffers.size shouldBe 1
       finalState.layout.editorPanes.size shouldBe 1
       finalState.bufferOrder.size shouldBe 1
-      finalState.buffers.values.find(_.filePath.contains(selectedFile)).map(_.content.collect()) shouldBe Some(
+      finalState.buffers.values
+        .find(_.document.filePath.contains(selectedFile))
+        .map(_.document.content.collect()) shouldBe Some(
         "opened from launch option"
       )
       val paneId = finalState.layout.activeEditorPaneId.getOrElse(fail("Expected an active editor pane"))
       finalState.focus shouldBe Focus.EditorPane(paneId)
       val activeBufferId =
         finalState.layout.editorPanes.get(paneId).flatMap(_.bufferId).getOrElse(fail("Expected active pane buffer"))
-      finalState.buffers(activeBufferId).filePath shouldBe Some(selectedFile)
+      finalState.buffers(activeBufferId).document.filePath shouldBe Some(selectedFile)
 
       val surface     = new MockRenderSurface(initialViewportSize.width, initialViewportSize.height)
       val font        = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))

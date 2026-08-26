@@ -231,14 +231,14 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
 
     // Initially should not be dirty
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    initialState.buffers.get(bufferId).map(_.isDirty) shouldBe Some(false)
+    initialState.buffers.get(bufferId).map(_.document.isDirty) shouldBe Some(false)
 
     // When: Make edit
     applyEvent(InsertChar('!'))
 
     // Then: Should be marked dirty
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.buffers.get(bufferId).map(_.isDirty) shouldBe Some(true)
+    finalState.buffers.get(bufferId).map(_.document.isDirty) shouldBe Some(true)
 
   it should "maintain state validity throughout complex operations" in new EditorTestFixture:
     // Given: Initial valid state
@@ -339,4 +339,4 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
 
     def getBufferContent(bufferId: BufferId): String =
       val state = stateManager.getCurrentState.unsafeRunSync()
-      state.buffers.get(bufferId).map(_.content.collect()).getOrElse("")
+      state.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")

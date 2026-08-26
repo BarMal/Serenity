@@ -100,15 +100,15 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
           .flatMap(_.bufferId)
           .flatMap(state.buffers.get)
           .fold(state) { buffer =>
-            val updatedComments = buffer.documentComments.map { comment =>
+            val updatedComments = buffer.annotations.documentComments.map { comment =>
               if comment == target then comment.copy(text = savedText) else comment
             }
-            if updatedComments == buffer.documentComments then state
+            if updatedComments == buffer.annotations.documentComments then state
             else
               state.copy(
                 buffers = state.buffers + (buffer.id -> buffer.copy(
-                  documentComments = updatedComments,
-                  isDirty = true
+                  annotations = buffer.annotations.copy(documentComments = updatedComments),
+                  document = buffer.document.copy(isDirty = true)
                 ))
               )
           }

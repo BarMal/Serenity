@@ -666,7 +666,7 @@ object LayoutEngine:
     // Find the maximum line count across all buffers to determine width needed
     val maxLines =
       if state.buffers.isEmpty then 10
-      else state.buffers.values.map(_.content.lineCount).max
+      else state.buffers.values.map(_.document.content.lineCount).max
 
     math.max(3, maxLines.toString.length + 1) // +1 for spacing, minimum 3 chars
 
@@ -714,7 +714,7 @@ object LayoutEngine:
       anchor <- floatingAnchor(surface, state, buffer)
       screenPosition <- CursorLayout.calculateScreenPositionInContent(
         anchor,
-        buffer.content,
+        buffer.document.content,
         contentRect,
         buffer.viewport,
         state.config.wordWrapEnabled
@@ -773,7 +773,7 @@ object LayoutEngine:
         buffer.primarySelection.flatMap(selection =>
           CursorLayout.calculateScreenPositionInContent(
             selection.end,
-            buffer.content,
+            buffer.document.content,
             contentRect,
             buffer.viewport,
             state.config.wordWrapEnabled
@@ -798,7 +798,7 @@ object LayoutEngine:
       anchor     <- floatingAnchor(surface, state, buffer)
       screenPosition <- CursorLayout.calculateScreenPositionInContent(
         anchor,
-        buffer.content,
+        buffer.document.content,
         paneLayout.contentRect,
         buffer.viewport,
         state.config.wordWrapEnabled
@@ -1167,9 +1167,9 @@ object LayoutEngine:
 
   private def clampLeftColumnForBuffer(buffer: Buffer, viewport: Viewport): Int =
     val visibleColumns = math.max(1, viewport.visibleColumns)
-    val cursor         = buffer.cursors.headOption.getOrElse(CursorPosition(viewport.topLine, 0))
+    val cursor         = buffer.editing.cursors.headOption.getOrElse(CursorPosition(viewport.topLine, 0))
     val cursorColumn   = cursor.column.max(0)
-    val lineLength     = buffer.content.getLine(cursor.line).map(_.length).getOrElse(cursorColumn)
+    val lineLength     = buffer.document.content.getLine(cursor.line).map(_.length).getOrElse(cursorColumn)
     val maxForCursor   = math.max(0, cursorColumn - visibleColumns + 1)
     val maxForLine     = math.max(0, lineLength - visibleColumns)
 

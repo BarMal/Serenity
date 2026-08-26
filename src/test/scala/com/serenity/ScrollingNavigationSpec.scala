@@ -57,7 +57,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       // Then: Should be at end of file after MoveToEndOfFile
       val pane2   = afterEndState.layout.editorPanes(paneId)
       val buffer2 = pane2.bufferId.flatMap(afterEndState.buffers.get).get
-      buffer2.cursors.head.line shouldBe 999            // Last line (0-indexed)
+      buffer2.editing.cursors.head.line shouldBe 999    // Last line (0-indexed)
       buffer2.viewport.topLine should be >= (1000 - 25) // Viewport shows last lines
 
     program.unsafeRunSync()
@@ -83,7 +83,11 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
           config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+            current
+              .buffers(bufferId)
+              .copy(
+                document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala))
+              )
           )
         )
       }
@@ -114,7 +118,11 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
         current.copy(
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(language = Some(LanguageId.Markdown))
+            current
+              .buffers(bufferId)
+              .copy(
+                document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown))
+              )
           )
         )
       }
@@ -142,15 +150,17 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       _ <- sm.updateState { current =>
         current.copy(
           buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(
-                language = Some(LanguageId.Markdown),
+            bufferId, {
+              val existing = current.buffers(bufferId)
+              existing.copy(
+                document = existing.document.copy(language = Some(LanguageId.Markdown)),
                 viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 4),
-                cursors = List(CursorPosition(0, 10)),
-                selection = Some(Selection(CursorPosition(0, 8), CursorPosition(0, 10)))
+                editing = existing.editing.copy(
+                  cursors = List(CursorPosition(0, 10)),
+                  selection = Some(Selection(CursorPosition(0, 8), CursorPosition(0, 10)))
+                )
               )
+            }
           )
         )
       }
@@ -162,14 +172,14 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
         FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
       )
       val expectedLeftColumn = TextLayoutSnapshot.leftColumnForCursorVisibility(
-        lineText = buffer.content.getLine(0).getOrElse(""),
+        lineText = buffer.document.content.getLine(0).getOrElse(""),
         cursorColumn = 8,
         visibleWidthPx = CellMetrics.fromFont(font).charWidth * 4,
         font = font
       )
 
-      buffer.content.collect() shouldBe "iiiiiiii"
-      buffer.cursors.head shouldBe CursorPosition(0, 8)
+      buffer.document.content.collect() shouldBe "iiiiiiii"
+      buffer.editing.cursors.head shouldBe CursorPosition(0, 8)
       buffer.viewport.leftColumn shouldBe expectedLeftColumn
 
     program.unsafeRunSync()
@@ -278,7 +288,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     afterGotoState.modalSurface shouldBe None
     val pane   = afterGotoState.layout.editorPanes(paneId)
     val buffer = pane.bufferId.flatMap(afterGotoState.buffers.get).get
-    buffer.cursors.head.line shouldBe 249           // 0-indexed, so line 250 = index 249
+    buffer.editing.cursors.head.line shouldBe 249   // 0-indexed, so line 250 = index 249
     buffer.viewport.topLine should be >= (249 - 12) // Center line in viewport
     buffer.viewport.topLine should be <= 249
 
@@ -311,7 +321,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val afterFindState = stateManager.getCurrentState.unsafeRunSync()
     val pane1          = afterFindState.layout.editorPanes(paneId)
     val buffer1        = pane1.bufferId.flatMap(afterFindState.buffers.get).get
-    buffer1.cursors.head.line shouldBe 49           // Line 50 (0-indexed)
+    buffer1.editing.cursors.head.line shouldBe 49   // Line 50 (0-indexed)
     buffer1.viewport.topLine should be >= (49 - 12) // Should be visible
     buffer1.viewport.topLine should be <= 49
 
@@ -322,7 +332,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val afterNextState = stateManager.getCurrentState.unsafeRunSync()
     val pane2          = afterNextState.layout.editorPanes(paneId)
     val buffer2        = pane2.bufferId.flatMap(afterNextState.buffers.get).get
-    buffer2.cursors.head.line shouldBe 99 // Line 100 (0-indexed)
+    buffer2.editing.cursors.head.line shouldBe 99 // Line 100 (0-indexed)
 
     // When: Find next again while the overlay remains open
     stateManager.applyEvent(FindNext).unsafeRunSync()
@@ -331,7 +341,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val afterNext2State = stateManager.getCurrentState.unsafeRunSync()
     val pane3           = afterNext2State.layout.editorPanes(paneId)
     val buffer3         = pane3.bufferId.flatMap(afterNext2State.buffers.get).get
-    buffer3.cursors.head.line shouldBe 149 // Line 150 (0-indexed)
+    buffer3.editing.cursors.head.line shouldBe 149 // Line 150 (0-indexed)
 
   it should "handle viewport synchronization across split panes" in new ScrollFixture:
     // Given: Same file in multiple panes

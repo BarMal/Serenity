@@ -76,7 +76,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
         .buffers
         .values
-        .find(_.filePath.contains(tempFile))
+        .find(_.document.filePath.contains(tempFile))
         .map(_.id)
 
       bufferId shouldBe defined
@@ -156,7 +156,12 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       val effects = sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
-        sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(tempFile)).map(_.content.collect())
+        sm.getCurrentState
+          .unsafeRunSync()
+          .buffers
+          .values
+          .find(_.document.filePath.contains(tempFile))
+          .map(_.document.content.collect())
 
       currentText shouldBe defined
       effects.head shouldBe LspEffect.FileOpened(tempFile.toUri.toString, LanguageId.Scala, "object Change")
@@ -193,7 +198,12 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       val effects = sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
-        sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(tempFile)).map(_.content.collect())
+        sm.getCurrentState
+          .unsafeRunSync()
+          .buffers
+          .values
+          .find(_.document.filePath.contains(tempFile))
+          .map(_.document.content.collect())
 
       effects should have size 2
       currentText shouldBe defined
@@ -211,7 +221,8 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     try
       sm.applyEvent(LoadFile(source)).unsafeRunSync()
       sm.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
-      val bufferId = sm.getCurrentState.unsafeRunSync().buffers.values.find(_.filePath.contains(source)).map(_.id)
+      val bufferId =
+        sm.getCurrentState.unsafeRunSync().buffers.values.find(_.document.filePath.contains(source)).map(_.id)
 
       bufferId shouldBe defined
       sm.saveBufferAs(bufferId.get, target.toString).unsafeRunSync()

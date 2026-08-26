@@ -97,7 +97,9 @@ final private[manager] class StateManagerEditorCapability(
       val bufferId = state.nextBufferId
       val buffer =
         if content.isEmpty && filePath.isEmpty then Buffer.newEmpty(bufferId)(using balance)
-        else Buffer.fromString(bufferId, content)(using balance).copy(filePath = filePath)
+        else
+          val fresh = Buffer.fromString(bufferId, content)(using balance)
+          fresh.copy(document = fresh.document.copy(filePath = filePath))
       val newState = state.copy(
         buffers = state.buffers + (bufferId -> buffer),
         bufferOrder = state.bufferOrder :+ bufferId,
@@ -115,16 +117,18 @@ final private[manager] class StateManagerEditorCapability(
         state.buffers.get(bufferId) match
           case Some(buffer) =>
             val updatedBuffer = buffer.copy(
-              content = Rope(content)(using balance),
-              isDirty = true,
-              isNewEmpty = false
+              document = buffer.document.copy(
+                content = Rope(content)(using balance),
+                isDirty = true,
+                isNewEmpty = false
+              )
             )
             val lspTarget =
-              if buffer.content.collect() == content then None
+              if buffer.document.content.collect() == content then None
               else
                 for
-                  path       <- updatedBuffer.filePath
-                  languageId <- updatedBuffer.language
+                  path       <- updatedBuffer.document.filePath
+                  languageId <- updatedBuffer.document.language
                 yield (path.toUri.toString, languageId, content)
             (state.copy(buffers = state.buffers + (bufferId -> updatedBuffer)), lspTarget)
           case None => (state, None)
@@ -143,7 +147,7 @@ final private[manager] class StateManagerEditorCapability(
       }
       .flatMap {
         case Some(buffer) =>
-          (buffer.filePath, buffer.language) match
+          (buffer.document.filePath, buffer.document.language) match
             case (Some(path), Some(languageId)) =>
               lspQueue.enqueue(LspEffect.FileClosed(path.toUri.toString, languageId))
             case _ =>
@@ -205,10 +209,12 @@ final private[manager] class StateManagerEditorCapability(
             case Some(buffer) =>
               val newCursor = CursorPosition(line, column)
               val updatedBuffer = buffer.copy(
-                cursors = List(newCursor),
-                preferredColumn = Some(column),
-                preferredXPx = None,
-                multiCursorVerticalStates = Nil
+                editing = buffer.editing.copy(
+                  cursors = List(newCursor),
+                  preferredColumn = Some(column),
+                  preferredXPx = None,
+                  multiCursorVerticalStates = Nil
+                )
               )
               state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
             case None => state

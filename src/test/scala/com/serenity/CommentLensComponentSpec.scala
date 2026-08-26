@@ -22,8 +22,8 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "Opening paragraph")
       .copy(
-        cursors = List(CursorPosition(0, 3)),
-        documentComments = List(comment)
+        editing = EditingState(cursors = List(CursorPosition(0, 3))),
+        annotations = Annotations(documentComments = List(comment))
       )
     AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -57,7 +57,7 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     result match
       case ComponentResult.StateChange(update) =>
         val updated = update(baseState)
-        updated.buffers(bufferId).documentComments shouldBe List(comment)
+        updated.buffers(bufferId).annotations.documentComments shouldBe List(comment)
         commentLens(updated).draft shouldBe "Initial!"
         commentLens(updated).cursor shouldBe "Initial!".length
       case other => fail(s"Expected StateChange, got $other")
@@ -69,7 +69,7 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
 
     commentLens(deleted).draft shouldBe "Initil"
     commentLens(deleted).cursor shouldBe 5
-    deleted.buffers(bufferId).documentComments shouldBe List(comment)
+    deleted.buffers(bufferId).annotations.documentComments shouldBe List(comment)
   }
 
   it should "dismiss without saving on Escape" in {
@@ -80,7 +80,7 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     dismissed.commentLensSurface shouldBe None
     dismissed.focus shouldBe Focus.EditorPane(paneId)
     dismissed.focusHistory shouldBe Nil
-    dismissed.buffers(bufferId).documentComments shouldBe List(comment)
+    dismissed.buffers(bufferId).annotations.documentComments shouldBe List(comment)
   }
 
   it should "save an authored comment and dismiss on Enter" in {
@@ -89,8 +89,8 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
 
     saved.commentLensSurface shouldBe None
     saved.focus shouldBe Focus.EditorPane(paneId)
-    saved.buffers(bufferId).documentComments shouldBe List(comment.copy(text = "Initial!"))
-    saved.buffers(bufferId).isDirty shouldBe true
+    saved.buffers(bufferId).annotations.documentComments shouldBe List(comment.copy(text = "Initial!"))
+    saved.buffers(bufferId).document.isDirty shouldBe true
   }
 
   private def stateAfter(result: ComponentResult, state: AppState): AppState =

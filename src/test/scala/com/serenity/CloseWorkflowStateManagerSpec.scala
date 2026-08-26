@@ -77,7 +77,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -110,11 +110,16 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(
-            content = com.serenity.rope.Rope("draft"),
-            filePath = None,
-            isDirty = false,
-            isNewEmpty = false
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("draft"),
+                filePath = None,
+                isDirty = false,
+                isNewEmpty = false
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -135,11 +140,16 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(
-            content = com.serenity.rope.Rope.empty,
-            filePath = None,
-            isDirty = false,
-            isNewEmpty = false
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope.empty,
+                filePath = None,
+                isDirty = false,
+                isNewEmpty = false
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -160,11 +170,16 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(
-            content = com.serenity.rope.Rope.empty,
-            filePath = None,
-            isDirty = false,
-            isNewEmpty = false
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope.empty,
+                filePath = None,
+                isDirty = false,
+                isNewEmpty = false
+              )
           )
         val (stateWithId, surfaceId) = state.copy(buffers = state.buffers + (bufferId -> buffer)).allocateSurfaceId
         val surface = UiSurface(
@@ -191,11 +206,16 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(
-            content = com.serenity.rope.Rope("draft"),
-            filePath = None,
-            isDirty = false,
-            isNewEmpty = false
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("draft"),
+                filePath = None,
+                isDirty = false,
+                isNewEmpty = false
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -218,11 +238,16 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(
-            content = com.serenity.rope.Rope("draft"),
-            filePath = None,
-            isDirty = false,
-            isNewEmpty = false
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("draft"),
+                filePath = None,
+                isDirty = false,
+                isNewEmpty = false
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -238,7 +263,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -251,7 +276,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
     updatedState.buffers should contain key bufferId
-    updatedState.buffers(bufferId).isDirty shouldBe true
+    updatedState.buffers(bufferId).document.isDirty shouldBe true
     updatedState.focus shouldBe Focus.EditorPane(updatedState.layout.activeEditorPaneId.get)
   }
 
@@ -266,10 +291,15 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         .updateState { state =>
           val buffer = state
             .buffers(bufferId)
-            .copy(
-              content = com.serenity.rope.Rope("object Notes"),
-              filePath = Some(targetFile),
-              isDirty = true
+            .copy(document =
+              state
+                .buffers(bufferId)
+                .document
+                .copy(
+                  content = com.serenity.rope.Rope("object Notes"),
+                  filePath = Some(targetFile),
+                  isDirty = true
+                )
             )
           state.copy(buffers = state.buffers + (bufferId -> buffer))
         }
@@ -299,9 +329,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         .updateState { state =>
           val buffer = state
             .buffers(bufferId)
-            .copy(
-              content = com.serenity.rope.Rope("object Notes"),
-              isDirty = true
+            .copy(document =
+              state
+                .buffers(bufferId)
+                .document
+                .copy(
+                  content = com.serenity.rope.Rope("object Notes"),
+                  isDirty = true
+                )
             )
           state.copy(buffers = state.buffers + (bufferId -> buffer))
         }
@@ -328,9 +363,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(
-            content = com.serenity.rope.Rope("object Notes"),
-            isDirty = true
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("object Notes"),
+                isDirty = true
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -342,7 +382,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
     updatedState.buffers should contain key bufferId
-    updatedState.buffers(bufferId).isDirty shouldBe true
+    updatedState.buffers(bufferId).document.isDirty shouldBe true
   }
 
   it should "open sequential unsaved-changes prompts for close-all" in {
@@ -351,8 +391,9 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val first  = state.buffers(BufferId(0)).copy(isDirty = true)
-        val second = state.buffers(secondBufferId).copy(isDirty = true)
+        val first = state.buffers(BufferId(0)).copy(document = state.buffers(BufferId(0)).document.copy(isDirty = true))
+        val second =
+          state.buffers(secondBufferId).copy(document = state.buffers(secondBufferId).document.copy(isDirty = true))
         state.copy(
           buffers = state.buffers + (BufferId(0) -> first) + (secondBufferId -> second),
           bufferOrder = state.bufferOrder :+ secondBufferId
@@ -377,7 +418,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -393,7 +434,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -409,7 +450,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()

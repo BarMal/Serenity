@@ -242,15 +242,14 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     getState.buffers(bufferId).allSelections shouldBe Nil
 
   it should "restore viewport, find state, and empty-buffer state from undo snapshots" in new UndoFixture:
-    val bufferId = setupBuffer("alpha\nbeta\nalpha")
-    val beforeBuffer = getState
-      .buffers(bufferId)
+    val bufferId      = setupBuffer("alpha\nbeta\nalpha")
+    val initialBuffer = getState.buffers(bufferId)
+    val beforeBuffer = initialBuffer
       .copy(
-        cursors = List(CursorPosition(2, 0)),
-        preferredColumn = Some(0),
+        document = initialBuffer.document.copy(isNewEmpty = true),
+        editing = initialBuffer.editing.copy(cursors = List(CursorPosition(2, 0)), preferredColumn = Some(0)),
         viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 8, visibleColumns = 40),
-        findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1)),
-        isNewEmpty = true
+        findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
       )
 
     updateBuffer(bufferId, beforeBuffer)
@@ -258,25 +257,25 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     applyEvent(InsertChar('!'))
 
     val edited = getState.buffers(bufferId)
-    edited.isNewEmpty shouldBe false
+    edited.document.isNewEmpty shouldBe false
     updateBuffer(
       bufferId,
       edited.copy(
+        document = edited.document.copy(isNewEmpty = false),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 24, visibleColumns = 80),
-        findState = None,
-        isNewEmpty = false
+        findState = None
       )
     )
 
     applyEvent(Undo)
 
     val undone = getState.buffers(bufferId)
-    undone.content.collect() shouldBe "alpha\nbeta\nalpha"
-    undone.cursors shouldBe List(CursorPosition(2, 0))
-    undone.preferredColumn shouldBe Some(0)
+    undone.document.content.collect() shouldBe "alpha\nbeta\nalpha"
+    undone.editing.cursors shouldBe List(CursorPosition(2, 0))
+    undone.editing.preferredColumn shouldBe Some(0)
     undone.viewport shouldBe beforeBuffer.viewport
     undone.findState shouldBe Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
-    undone.isNewEmpty shouldBe true
+    undone.document.isNewEmpty shouldBe true
 
   it should "undo and redo multi-cursor cut with the full cursor set" in new UndoFixture:
     val bufferId = setupBuffer("alpha\nbeta\ngamma\ndelta")
@@ -354,21 +353,22 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
       stateManager.getCurrentState.unsafeRunSync()
 
     def getContent(bufferId: BufferId): String =
-      getState.buffers.get(bufferId).map(_.content.collect()).getOrElse("")
+      getState.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
 
     def getCursor: CursorPosition =
       getState.activeCursorPosition.getOrElse(CursorPosition(0, 0))
 
     def getCursors(bufferId: BufferId): List[CursorPosition] =
-      getState.buffers(bufferId).cursors
+      getState.buffers(bufferId).editing.cursors
 
     def setCursors(bufferId: BufferId, cursors: List[CursorPosition]): Unit =
       stateManager
         .updateState { state =>
+          val buffer = state.buffers(bufferId)
           state.copy(
             buffers = state.buffers.updated(
               bufferId,
-              state.buffers(bufferId).copy(cursors = cursors, selection = None, selections = Nil)
+              buffer.copy(editing = buffer.editing.copy(cursors = cursors, selection = None, selections = Nil))
             )
           )
         }
@@ -377,16 +377,17 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     def setSelections(bufferId: BufferId, selections: List[Selection]): Unit =
       stateManager
         .updateState { state =>
+          val buffer = state.buffers(bufferId)
           state.copy(
             buffers = state.buffers.updated(
               bufferId,
-              state
-                .buffers(bufferId)
-                .copy(
+              buffer.copy(editing =
+                buffer.editing.copy(
                   cursors = selections.map(_.focus),
                   selection = selections.headOption,
                   selections = selections
                 )
+              )
             )
           )
         }

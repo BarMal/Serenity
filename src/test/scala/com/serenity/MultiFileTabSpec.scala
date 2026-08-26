@@ -35,14 +35,14 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     state.buffers.keys.should(contain).allOf(buffer1, buffer2, buffer3)
 
     // And their content should be accessible
-    state.buffers(buffer1).content.collect().shouldBe("Content of file 1")
-    state.buffers(buffer2).content.collect().shouldBe("Content of file 2")
-    state.buffers(buffer3).content.collect().shouldBe("Content of file 3")
+    state.buffers(buffer1).document.content.collect().shouldBe("Content of file 1")
+    state.buffers(buffer2).document.content.collect().shouldBe("Content of file 2")
+    state.buffers(buffer3).document.content.collect().shouldBe("Content of file 3")
 
     // And they should have the correct file paths
-    state.buffers(buffer1).filePath.shouldBe(Some(java.nio.file.Paths.get("file1.txt")))
-    state.buffers(buffer2).filePath.shouldBe(Some(java.nio.file.Paths.get("file2.txt")))
-    state.buffers(buffer3).filePath.shouldBe(Some(java.nio.file.Paths.get("file3.txt")))
+    state.buffers(buffer1).document.filePath.shouldBe(Some(java.nio.file.Paths.get("file1.txt")))
+    state.buffers(buffer2).document.filePath.shouldBe(Some(java.nio.file.Paths.get("file2.txt")))
+    state.buffers(buffer3).document.filePath.shouldBe(Some(java.nio.file.Paths.get("file3.txt")))
 
   it should "switch between tabs correctly" in new MultiFileFixture:
     // Given: Create multiple buffers and get the default pane
@@ -67,8 +67,8 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     backToBuffer1.layout.editorPanes(paneId).bufferId.shouldBe(Some(buffer1))
 
     // And the content should be accessible in each state
-    stateWithBuffer1.buffers(buffer1).content.collect().shouldBe("First buffer content")
-    stateWithBuffer2.buffers(buffer2).content.collect().shouldBe("Second buffer content")
+    stateWithBuffer1.buffers(buffer1).document.content.collect().shouldBe("First buffer content")
+    stateWithBuffer2.buffers(buffer2).document.content.collect().shouldBe("Second buffer content")
 
   it should "close tabs without affecting other tabs" in new MultiFileFixture:
     // Given: Create multiple buffers
@@ -90,8 +90,8 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     stateAfterClose.buffers.keys.should(not).contain(buffer2)
 
     // And the remaining buffers should be unaffected
-    stateAfterClose.buffers(buffer1).content.collect().shouldBe("First buffer")
-    stateAfterClose.buffers(buffer3).content.collect().shouldBe("Third buffer")
+    stateAfterClose.buffers(buffer1).document.content.collect().shouldBe("First buffer")
+    stateAfterClose.buffers(buffer3).document.content.collect().shouldBe("Third buffer")
 
   it should "handle closing tab with unsaved changes" in new MultiFileFixture:
     // Given: Create a tab with content and make changes
@@ -109,9 +109,9 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val buffer        = modifiedState.buffers(bufferId)
 
     // Then: Buffer should be dirty with unsaved changes
-    buffer.isDirty.shouldBe(true)
-    buffer.content.collect().shouldBe("Original content!")
-    buffer.filePath.shouldBe(Some(java.nio.file.Paths.get("/tmp/test.txt")))
+    buffer.document.isDirty.shouldBe(true)
+    buffer.document.content.collect().shouldBe("Original content!")
+    buffer.document.filePath.shouldBe(Some(java.nio.file.Paths.get("/tmp/test.txt")))
 
     // When: Ctrl+W attempts to close tab with unsaved changes
     stateManager.applyEvent(CloseTab).unsafeRunSync()
@@ -180,7 +180,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     stateAfterNewTab.focusedBufferId.get shouldBe newBufferId
 
     // The new buffer should be empty
-    stateAfterNewTab.buffers(newBufferId).content.collect() shouldBe ""
+    stateAfterNewTab.buffers(newBufferId).document.content.collect() shouldBe ""
 
     // When: Ctrl+Tab switches to next buffer (cycles through buffer order)
     stateManager.applyEvent(NextTab).unsafeRunSync()
@@ -223,7 +223,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     finalState.layout.editorPanes(newPaneId).bufferId shouldBe Some(bufferId)
 
     // And the buffer content should be accessible from both panes
-    finalState.buffers(bufferId).content.collect() shouldBe "Shared content between panes"
+    finalState.buffers(bufferId).document.content.collect() shouldBe "Shared content between panes"
 
   it should "handle pane resizing with minimum width constraints" in new MultiFileFixture:
     // Given: Limited terminal width where only 1-2 panes can fit
@@ -282,7 +282,9 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
     // When: Simulate session state capture
     val sessionData =
-      state.buffers.values.map(buffer => (buffer.filePath, buffer.content.collect(), buffer.isDirty)).toList
+      state.buffers.values
+        .map(buffer => (buffer.document.filePath, buffer.document.content.collect(), buffer.document.isDirty))
+        .toList
 
     // Then: Session data should contain all buffer information needed for restoration
     sessionData should have size 4 // Initial buffer + 2 file buffers + 1 untitled buffer

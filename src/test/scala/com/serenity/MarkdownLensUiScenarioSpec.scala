@@ -72,14 +72,17 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = markdownDriver("markdown-multi-pane")
     driver
       .updateState { state =>
-        val original    = state.focusedBufferId.flatMap(state.buffers.get).getOrElse(fail("Expected Markdown buffer"))
-        val firstId     = BufferId(50)
-        val firstBuffer = original.copy(id = firstId, cursors = List(CursorPosition(0, 0), CursorPosition(4, 0)))
-        val secondId    = BufferId(99)
+        val original = state.focusedBufferId.flatMap(state.buffers.get).getOrElse(fail("Expected Markdown buffer"))
+        val firstId  = BufferId(50)
+        val firstBuffer = original.copy(
+          id = firstId,
+          editing = original.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(4, 0)))
+        )
+        val secondId = BufferId(99)
         val secondBuffer = firstBuffer.copy(
           id = secondId,
-          content = com.serenity.rope.Rope("# Other\n\nSecond pane paragraph.\n"),
-          cursors = List(CursorPosition(2, 0))
+          document = firstBuffer.document.copy(content = com.serenity.rope.Rope("# Other\n\nSecond pane paragraph.\n")),
+          editing = firstBuffer.editing.copy(cursors = List(CursorPosition(2, 0)))
         )
         state.copy(
           buffers = Map(firstId -> firstBuffer, secondId -> secondBuffer),
@@ -104,7 +107,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
     evidence.previewPlacements.values.map(_.bounds).toSet should have size 2
     evidence.sourcePreviewMappings.values.exists(_.contains(0)) shouldBe true
     evidence.sourcePreviewMappings.values.exists(_.contains(2)) shouldBe true
-    driver.state.unsafeRunSync().buffers(BufferId(50)).cursors should have size 2
+    driver.state.unsafeRunSync().buffers(BufferId(50)).editing.cursors should have size 2
   }
 
   private def markdownDriver(name: String): UiScenarioDriver =

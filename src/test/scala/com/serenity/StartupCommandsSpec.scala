@@ -50,7 +50,9 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     yield
       finalState.startPageSurface shouldBe None
       finalState.modalSurface shouldBe None
-      finalState.buffers.values.find(_.filePath.contains(selectedFile)).map(_.content.collect()) shouldBe Some(
+      finalState.buffers.values
+        .find(_.document.filePath.contains(selectedFile))
+        .map(_.document.content.collect()) shouldBe Some(
         "opened from startup"
       )
       finalState.focus should matchPattern { case Focus.EditorPane(_) => }

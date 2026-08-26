@@ -215,7 +215,7 @@ object ContextualToolbar:
       .flatMap(_.bufferId)
       .flatMap(state.buffers.get)
       .map {
-        case buffer if buffer.language.contains(LanguageId.Markdown) =>
+        case buffer if buffer.document.language.contains(LanguageId.Markdown) =>
           applyMarkdownSelections(markdownItems, state.config.markdownViewMode)
         case buffer if buffer.typographyRole == TypographyRole.Code =>
           codeItems
@@ -812,8 +812,8 @@ object ContextualToolbar:
     if rounded == size then rounded.toInt.toString else f"$size%.1f"
 
   private def richTextDocumentFor(buffer: Buffer): RichTextDocument =
-    val text = buffer.content.collect()
-    buffer.richTextDocument
+    val text = buffer.document.content.collect()
+    buffer.richText.richTextDocument
       .filter(_.matchesPlainText(text))
       .getOrElse(RichTextDocument.fromPlainText(text))
 
@@ -832,7 +832,7 @@ object ContextualToolbar:
       case Some(selection) if selection.start != selection.end =>
         styleForSelection(selection, document)
       case _ =>
-        buffer.cursors.headOption
+        buffer.editing.cursors.headOption
           .flatMap(cursor => styleAtCursor(cursor, document))
           .getOrElse(RichTextStyle.empty)
 
@@ -879,7 +879,7 @@ object ContextualToolbar:
     buffer.primarySelection
       .map(richTextRange)
       .orElse(
-        buffer.cursors.headOption
+        buffer.editing.cursors.headOption
           .map(cursor => RichTextRange(richTextPosition(cursor, document), richTextPosition(cursor, document)))
       )
       .getOrElse(RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 0)))

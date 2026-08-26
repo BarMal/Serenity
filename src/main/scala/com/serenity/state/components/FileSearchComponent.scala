@@ -74,7 +74,8 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
 
   private def navigateToResult(state: AppState, surface: UiSurface, result: FileSearchResult): AppState =
     val updatedBuffers = state.buffers.get(result.bufferId).fold(state.buffers) { buffer =>
-      state.buffers + (result.bufferId -> buffer.copy(cursors = List(CursorPosition(result.line, 0))))
+      state.buffers + (result.bufferId -> buffer
+        .copy(editing = buffer.editing.copy(cursors = List(CursorPosition(result.line, 0)))))
     }
     val withoutSearch = state.copy(
       uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id),
@@ -135,8 +136,8 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
 
       val matches = for
         buffer <- matchedBuffers.iterator
-        name = buffer.filePath.map(_.getFileName.toString).getOrElse(s"buffer-${buffer.id.value}")
-        (lineIdx, line) <- buffer.content.linesIteratorFrom(startLine(buffer.id))
+        name = buffer.document.filePath.map(_.getFileName.toString).getOrElse(s"buffer-${buffer.id.value}")
+        (lineIdx, line) <- buffer.document.content.linesIteratorFrom(startLine(buffer.id))
         if line.toLowerCase.contains(lowerQuery)
       yield FileSearchResult(buffer.id, name, lineIdx, line.trim)
 

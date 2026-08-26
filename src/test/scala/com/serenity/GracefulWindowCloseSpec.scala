@@ -53,7 +53,7 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
     // Dirty buffer means close workflow is shown, app is NOT quit yet
     state.modalSurface shouldBe defined
-    state.buffers.get(bufferId).exists(_.isDirty) shouldBe true
+    state.buffers.get(bufferId).exists(_.document.isDirty) shouldBe true
   }
 
   it should "allow an external close to terminate immediately even with dirty buffers" in {
@@ -71,5 +71,5 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
     yield ()
 
     program.unsafeRunTimed(ciTimeout).shouldBe(defined)
-    sm.getCurrentState.unsafeRunSync().buffers.get(bufferId).exists(_.isDirty) shouldBe true
+    sm.getCurrentState.unsafeRunSync().buffers.get(bufferId).exists(_.document.isDirty) shouldBe true
   }

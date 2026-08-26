@@ -22,10 +22,15 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
     val buffer = AppState.initial
       .buffers(bufferId)
       .copy(
-        content = com.serenity.rope.Rope(content),
-        cursors = if selections.nonEmpty then selections.map(_.focus) else cursors,
-        selection = selections.headOption,
-        selections = selections,
+        document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
+        editing = AppState.initial
+          .buffers(bufferId)
+          .editing
+          .copy(
+            cursors = if selections.nonEmpty then selections.map(_.focus) else cursors,
+            selection = selections.headOption,
+            selections = selections
+          ),
         viewport = viewport
       )
     AppState.initial.copy(buffers = AppState.initial.buffers.updated(bufferId, buffer))
@@ -41,8 +46,8 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(InsertChar('X'), state)
 
-    buffer.content.collect() shouldBe "aXbcXd"
-    buffer.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 5))
+    buffer.document.content.collect() shouldBe "aXbcXd"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 5))
     buffer.allSelections shouldBe Nil
   }
 
@@ -54,8 +59,8 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(Paste, state)
 
-    buffer.content.collect() shouldBe "a\nXb\nc\nXd"
-    buffer.cursors shouldBe List(CursorPosition(1, 1), CursorPosition(3, 1))
+    buffer.document.content.collect() shouldBe "a\nXb\nc\nXd"
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 1), CursorPosition(3, 1))
   }
 
   it should "delete backward across line boundaries for every cursor" in {
@@ -66,8 +71,8 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(DeleteBackward, state)
 
-    buffer.content.collect() shouldBe "abcdef\ngh"
-    buffer.cursors shouldBe List(CursorPosition(0, 3), CursorPosition(1, 2))
+    buffer.document.content.collect() shouldBe "abcdef\ngh"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 3), CursorPosition(1, 2))
   }
 
   it should "delete forward across line boundaries and preserve cursors whose delete was a no-op" in {
@@ -78,8 +83,8 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(DeleteForward, state)
 
-    buffer.content.collect() shouldBe "abcd"
-    buffer.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 4))
+    buffer.document.content.collect() shouldBe "abcd"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 4))
   }
 
   it should "leave the buffer clean when every multi-cursor delete is a no-op" in {
@@ -90,9 +95,9 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(DeleteBackward, state)
 
-    buffer.content.collect() shouldBe "abc"
-    buffer.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 0))
-    buffer.isDirty shouldBe false
+    buffer.document.content.collect() shouldBe "abc"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 0))
+    buffer.document.isDirty shouldBe false
   }
 
   it should "collapse cursor collisions after horizontal movement" in {
@@ -103,7 +108,7 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(MoveLeft, state)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
     buffer.allSelections shouldBe Nil
   }
 
@@ -115,7 +120,7 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(MoveLeft, state)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 3), CursorPosition(1, 1))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 3), CursorPosition(1, 1))
   }
 
   it should "move every cursor right across line boundaries" in {
@@ -126,7 +131,7 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(MoveRight, state)
 
-    buffer.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(1, 3))
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(1, 3))
   }
 
   it should "move every cursor left by a word" in {
@@ -137,7 +142,7 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(MoveWordLeft, state)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(1, 4))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(1, 4))
   }
 
   it should "move every cursor right by a word" in {
@@ -148,7 +153,7 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(MoveWordRight, state)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(1, 4))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(1, 4))
   }
 
   it should "collapse a multi-selection to its focuses and move each one word left" in {
@@ -163,7 +168,7 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(MoveWordLeft, state)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(1, 4))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(1, 4))
     buffer.allSelections shouldBe Nil
   }
 
@@ -178,8 +183,8 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(InsertChar('X'), state)
 
-    buffer.content.collect() shouldBe "aXf"
-    buffer.cursors shouldBe List(CursorPosition(0, 2))
+    buffer.document.content.collect() shouldBe "aXf"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 2))
     buffer.allSelections shouldBe Nil
   }
 
@@ -194,8 +199,8 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(InsertChar('X'), state)
 
-    buffer.content.collect() shouldBe "aXavo\nXie"
-    buffer.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(1, 1))
+    buffer.document.content.collect() shouldBe "aXavo\nXie"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(1, 1))
     buffer.allSelections shouldBe Nil
   }
 
@@ -210,8 +215,8 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(DeleteForward, state)
 
-    buffer.content.collect() shouldBe "af"
-    buffer.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.document.content.collect() shouldBe "af"
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 1))
     buffer.allSelections shouldBe Nil
   }
 
@@ -222,11 +227,11 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
     )
 
     val afterDown = reduce(MoveDown, state)
-    afterDown.multiCursorVerticalStates should not be empty
+    afterDown.editing.multiCursorVerticalStates should not be empty
 
     val afterLeft = reduce(MoveLeft, state.copy(buffers = state.buffers.updated(bufferId, afterDown)))
 
-    afterLeft.multiCursorVerticalStates shouldBe Nil
+    afterLeft.editing.multiCursorVerticalStates shouldBe Nil
   }
 
   /** Multi-selection movement collapses the selections to their focuses and hands the collapsed buffer to the
@@ -242,9 +247,9 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(MoveLeft, state)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 4))
-    buffer.selection shouldBe None
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 4))
+    buffer.editing.selection shouldBe None
+    buffer.editing.selections shouldBe Nil
   }
 
   it should "survive it for vertical movement too" in {
@@ -256,8 +261,8 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(MoveUp, state)
 
-    buffer.cursors shouldBe List(CursorPosition(0, 3), CursorPosition(0, 5))
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 3), CursorPosition(0, 5))
+    buffer.editing.selections shouldBe Nil
   }
 
   /** With word wrap on, vertical movement lands each cursor through the layout snapshot (`snap.moveVertical`) rather
@@ -273,7 +278,7 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
 
     val buffer = reduce(MoveDown, wrapped)
 
-    buffer.cursors.map(_.line) shouldBe List(1, 2)
-    buffer.multiCursorVerticalStates should have size 2
+    buffer.editing.cursors.map(_.line) shouldBe List(1, 2)
+    buffer.editing.multiCursorVerticalStates should have size 2
   }
 end MultiCursorEditingSpec

@@ -149,7 +149,10 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     driver.stateManager.updateBuffer(bufferId, content).unsafeRunSync()
     driver
       .updateState { state =>
-        state.copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(language = Some(language))))
+        val buffer = state.buffers(bufferId)
+        state.copy(buffers =
+          state.buffers.updated(bufferId, buffer.copy(document = buffer.document.copy(language = Some(language))))
+        )
       }
       .unsafeRunSync()
 

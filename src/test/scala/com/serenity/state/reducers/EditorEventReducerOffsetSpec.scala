@@ -39,99 +39,109 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "move left and right across surrogate-pair emoji as one grapheme" in {
-    reduceTextEvent("a🙂b", CursorPosition(0, 3), MoveLeft).cursors shouldBe List(CursorPosition(0, 1))
-    reduceTextEvent("a🙂b", CursorPosition(0, 1), MoveRight).cursors shouldBe List(CursorPosition(0, 3))
+    reduceTextEvent("a🙂b", CursorPosition(0, 3), MoveLeft).editing.cursors shouldBe List(CursorPosition(0, 1))
+    reduceTextEvent("a🙂b", CursorPosition(0, 1), MoveRight).editing.cursors shouldBe List(CursorPosition(0, 3))
   }
 
   it should "move left and right across emoji skin-tone modifier sequences as one grapheme" in {
     val text = "a\uD83D\uDC4D\uD83C\uDFFDb"
 
-    reduceTextEvent(text, CursorPosition(0, 5), MoveLeft).cursors shouldBe List(CursorPosition(0, 1))
-    reduceTextEvent(text, CursorPosition(0, 1), MoveRight).cursors shouldBe List(CursorPosition(0, 5))
+    reduceTextEvent(text, CursorPosition(0, 5), MoveLeft).editing.cursors shouldBe List(CursorPosition(0, 1))
+    reduceTextEvent(text, CursorPosition(0, 1), MoveRight).editing.cursors shouldBe List(CursorPosition(0, 5))
   }
 
   it should "move left and right across combining-mark accents as one grapheme" in {
-    reduceTextEvent("cafe\u0301!", CursorPosition(0, 5), MoveLeft).cursors shouldBe List(CursorPosition(0, 3))
-    reduceTextEvent("cafe\u0301!", CursorPosition(0, 3), MoveRight).cursors shouldBe List(CursorPosition(0, 5))
+    reduceTextEvent("cafe\u0301!", CursorPosition(0, 5), MoveLeft).editing.cursors shouldBe List(CursorPosition(0, 3))
+    reduceTextEvent("cafe\u0301!", CursorPosition(0, 3), MoveRight).editing.cursors shouldBe List(CursorPosition(0, 5))
   }
 
   it should "move left and right by word boundaries" in {
-    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 17), MoveWordLeft).cursors shouldBe
+    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 17), MoveWordLeft).editing.cursors shouldBe
       List(CursorPosition(0, 12))
-    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 12), MoveWordLeft).cursors shouldBe
+    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 12), MoveWordLeft).editing.cursors shouldBe
       List(CursorPosition(0, 7))
-    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 0), MoveWordRight).cursors shouldBe
+    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 0), MoveWordRight).editing.cursors shouldBe
       List(CursorPosition(0, 5))
-    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 5), MoveWordRight).cursors shouldBe
+    reduceTextEvent("alpha, beta gamma", CursorPosition(0, 5), MoveWordRight).editing.cursors shouldBe
       List(CursorPosition(0, 7))
   }
 
   it should "delete complete graphemes for backward and forward deletes" in {
     val deleteEmojiBackward = reduceTextEvent("a🙂b", CursorPosition(0, 3), DeleteBackward)
-    deleteEmojiBackward.content.collect() shouldBe "ab"
-    deleteEmojiBackward.cursors shouldBe List(CursorPosition(0, 1))
+    deleteEmojiBackward.document.content.collect() shouldBe "ab"
+    deleteEmojiBackward.editing.cursors shouldBe List(CursorPosition(0, 1))
 
     val deleteAccentForward = reduceTextEvent("cafe\u0301!", CursorPosition(0, 3), DeleteForward)
-    deleteAccentForward.content.collect() shouldBe "caf!"
-    deleteAccentForward.cursors shouldBe List(CursorPosition(0, 3))
+    deleteAccentForward.document.content.collect() shouldBe "caf!"
+    deleteAccentForward.editing.cursors shouldBe List(CursorPosition(0, 3))
   }
 
   it should "delete complete graphemes when the cursor starts inside one" in {
     val emoji = "\uD83D\uDE42"
 
     val deleteEmojiForward = reduceTextEvent(s"a${emoji}b", CursorPosition(0, 2), DeleteForward)
-    deleteEmojiForward.content.collect() shouldBe "ab"
-    deleteEmojiForward.cursors shouldBe List(CursorPosition(0, 1))
+    deleteEmojiForward.document.content.collect() shouldBe "ab"
+    deleteEmojiForward.editing.cursors shouldBe List(CursorPosition(0, 1))
 
     val deleteAccentBackward = reduceTextEvent("cafe\u0301!", CursorPosition(0, 4), DeleteBackward)
-    deleteAccentBackward.content.collect() shouldBe "caf!"
-    deleteAccentBackward.cursors shouldBe List(CursorPosition(0, 3))
+    deleteAccentBackward.document.content.collect() shouldBe "caf!"
+    deleteAccentBackward.editing.cursors shouldBe List(CursorPosition(0, 3))
   }
 
   it should "replace whole graphemes when selection endpoints split them" in {
     val buffer = Buffer
       .fromString(bufferId, "cafe\u0301!")
-      .copy(
-        cursors = List(CursorPosition(0, 5)),
-        selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
+      .copy(editing =
+        EditingState(
+          cursors = List(CursorPosition(0, 5)),
+          selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
+        )
       )
     val state = AppState.initial.copy(buffers = Map(bufferId -> buffer))
 
     val updatedBuffer = EditorEventReducer.reduce(InsertChar('X'), paneId, state).state.buffers(bufferId)
 
-    updatedBuffer.content.collect() shouldBe "cafX!"
-    updatedBuffer.cursors shouldBe List(CursorPosition(0, 4))
+    updatedBuffer.document.content.collect() shouldBe "cafX!"
+    updatedBuffer.editing.cursors shouldBe List(CursorPosition(0, 4))
   }
 
   it should "insert beside a grapheme when the cursor starts inside one" in {
     val updatedBuffer = reduceTextEvent("cafe\u0301!", CursorPosition(0, 4), InsertChar('X'))
 
-    updatedBuffer.content.collect() shouldBe "cafe\u0301X!"
-    updatedBuffer.cursors shouldBe List(CursorPosition(0, 6))
+    updatedBuffer.document.content.collect() shouldBe "cafe\u0301X!"
+    updatedBuffer.editing.cursors shouldBe List(CursorPosition(0, 6))
   }
 
   it should "move, delete, and replace regional-indicator flag pairs as one grapheme" in {
     val flag = "\uD83C\uDDFA\uD83C\uDDF8"
     val text = s"a$flag!"
 
-    reduceTextEvent(text, CursorPosition(0, 5), MoveLeft).cursors shouldBe List(CursorPosition(0, 1))
-    reduceTextEvent(text, CursorPosition(0, 1), MoveRight).cursors shouldBe List(CursorPosition(0, 5))
-    reduceTextEvent(text, CursorPosition(0, 1), DeleteForward).content.collect() shouldBe "a!"
-    reduceTextEvent(text, CursorPosition(0, 5), DeleteBackward).content.collect() shouldBe "a!"
+    reduceTextEvent(text, CursorPosition(0, 5), MoveLeft).editing.cursors shouldBe List(CursorPosition(0, 1))
+    reduceTextEvent(text, CursorPosition(0, 1), MoveRight).editing.cursors shouldBe List(CursorPosition(0, 5))
+    reduceTextEvent(text, CursorPosition(0, 1), DeleteForward).document.content.collect() shouldBe "a!"
+    reduceTextEvent(text, CursorPosition(0, 5), DeleteBackward).document.content.collect() shouldBe "a!"
 
     val buffer = Buffer
       .fromString(bufferId, text)
-      .copy(
-        cursors = List(CursorPosition(0, 5)),
-        selection = Some(Selection(CursorPosition(0, 2), CursorPosition(0, 4)))
+      .copy(editing =
+        EditingState(
+          cursors = List(CursorPosition(0, 5)),
+          selection = Some(Selection(CursorPosition(0, 2), CursorPosition(0, 4)))
+        )
       )
     val state = AppState.initial.copy(buffers = Map(bufferId -> buffer))
 
-    EditorEventReducer.reduce(InsertChar('X'), paneId, state).state.buffers(bufferId).content.collect() shouldBe "aX!"
+    EditorEventReducer
+      .reduce(InsertChar('X'), paneId, state)
+      .state
+      .buffers(bufferId)
+      .document
+      .content
+      .collect() shouldBe "aX!"
   }
 
   private def reduceTextEvent(text: String, cursor: CursorPosition, event: TextEntryEvent): Buffer =
-    val buffer = Buffer.fromString(bufferId, text).copy(cursors = List(cursor))
+    val buffer = Buffer.fromString(bufferId, text).copy(editing = EditingState(cursors = List(cursor)))
     val state  = AppState.initial.copy(buffers = Map(bufferId -> buffer))
 
     EditorEventReducer.reduce(event, paneId, state).state.buffers(bufferId)

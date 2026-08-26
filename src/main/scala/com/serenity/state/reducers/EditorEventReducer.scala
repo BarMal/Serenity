@@ -53,7 +53,7 @@ object EditorEventReducer:
     direction: Int
   ): ReducerResult =
     val currentState = Focused.replaceBuffer(incomingState, buffer)
-    buffer.cursors.headOption match
+    buffer.editing.cursors.headOption match
       case Some(cursor) =>
         reduceSelectionExtension(buffer, cursor, currentState)(verticalTarget(currentState, geometry, direction))
       case None => ReducerResult.noEffects(currentState)
@@ -68,7 +68,7 @@ object EditorEventReducer:
       val seeded    = Focused.replaceBuffer(incomingState, buffer)
       val collapsed = collapseSelectionsToFocus(buffer)
       multiVertical(collapsed, seeded, geometry, direction)
-    else if buffer.multiCursorVerticalStates.size > 1 || buffer.cursors.size > 1 then
+    else if buffer.editing.multiCursorVerticalStates.size > 1 || buffer.editing.cursors.size > 1 then
       multiVertical(buffer, incomingState, geometry, direction)
     else singleVertical(clearInFlightMultiCursorVerticalState(buffer), incomingState, geometry, direction)
 
@@ -79,7 +79,7 @@ object EditorEventReducer:
     direction: Int
   ): ReducerResult =
     val currentState = Focused.replaceBuffer(incomingState, buffer)
-    buffer.cursors.headOption match
+    buffer.editing.cursors.headOption match
       case Some(cursor) =>
         reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(
           verticalTarget(currentState, geometry, direction)
@@ -107,7 +107,7 @@ object EditorEventReducer:
       case ScrollDown(lines) =>
         pane.bufferId.flatMap(currentState.buffers.get) match
           case Some(buffer) =>
-            val totalLines    = countLines(buffer.content)
+            val totalLines    = countLines(buffer.document.content)
             val maxTopLine    = math.max(0, totalLines - buffer.viewport.visibleLines)
             val newTopLine    = math.min(buffer.viewport.topLine + lines, maxTopLine)
             val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
@@ -173,8 +173,8 @@ object EditorEventReducer:
         state
 
   private def clearInFlightMultiCursorVerticalState(buffer: Buffer): Buffer =
-    if buffer.multiCursorVerticalStates.isEmpty then buffer
-    else buffer.copy(multiCursorVerticalStates = Nil)
+    if buffer.editing.multiCursorVerticalStates.isEmpty then buffer
+    else buffer.copy(editing = buffer.editing.copy(multiCursorVerticalStates = Nil))
 
   /** All four deletions share a selection arm and differ only in the range they delete when there is none. */
   private def reduceDeletion(
@@ -190,7 +190,7 @@ object EditorEventReducer:
           case None            => withoutSelection(current)
         result match
           case Some((updated, edit)) =>
-            (updated, animationRemapEffects(buffer.id, current.content, updated.content, List(edit)))
+            (updated, animationRemapEffects(buffer.id, current.document.content, updated.document.content, List(edit)))
           case None => (current, Nil)
       }
     )
@@ -199,63 +199,67 @@ object EditorEventReducer:
     buffer: Buffer,
     cursor: CursorPosition
   ): Option[(Buffer, MultiCursorEdit)] =
-    val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-    backwardGraphemeDeletionRange(buffer.content, offset).map {
+    val offset = lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
+    backwardGraphemeDeletionRange(buffer.document.content, offset).map {
       case (start, end) =>
-        val newContent = buffer.content.delete(start, end)
+        val newContent = buffer.document.content.delete(start, end)
         val newCursor  = offsetToCursorPosition(newContent, start)
         val updated = buffer.copy(
-          content = newContent,
-          isDirty = true,
-          isNewEmpty = false,
-          cursors = newCursor :: buffer.cursors.tail,
-          selection = None,
-          preferredColumn = Some(newCursor.column),
-          preferredXPx = None,
-          documentComments = adjustDocumentComments(
-            buffer.documentComments,
-            buffer.content,
-            newContent,
-            List(MultiCursorEdit(0, start, end, ""))
+          document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
+          editing = buffer.editing.copy(
+            cursors = newCursor :: buffer.editing.cursors.tail,
+            selection = None,
+            preferredColumn = Some(newCursor.column),
+            preferredXPx = None
           ),
-          richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
+          annotations = buffer.annotations.copy(
+            documentComments = adjustDocumentComments(
+              buffer.annotations.documentComments,
+              buffer.document.content,
+              newContent,
+              List(MultiCursorEdit(0, start, end, ""))
+            )
+          ),
+          richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, start, end, ""))
         )
         (updated, MultiCursorEdit(0, start, end, ""))
     }
 
   /** Forward deletion leaves the cursor where it is, so unlike the backward case it does not adjust the viewport. */
   private def graphemeForwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[(Buffer, MultiCursorEdit)] =
-    val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-    forwardGraphemeDeletionRange(buffer.content, offset).map {
+    val offset = lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
+    forwardGraphemeDeletionRange(buffer.document.content, offset).map {
       case (start, end) =>
-        val newContent = buffer.content.delete(start, end)
+        val newContent = buffer.document.content.delete(start, end)
         val newCursor  = offsetToCursorPosition(newContent, start)
         val updated = buffer.copy(
-          content = newContent,
-          isDirty = true,
-          isNewEmpty = false,
-          cursors = newCursor :: buffer.cursors.tail,
-          preferredColumn = Some(newCursor.column),
-          preferredXPx = None,
-          documentComments = adjustDocumentComments(
-            buffer.documentComments,
-            buffer.content,
-            newContent,
-            List(MultiCursorEdit(0, start, end, ""))
+          document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
+          editing = buffer.editing.copy(
+            cursors = newCursor :: buffer.editing.cursors.tail,
+            preferredColumn = Some(newCursor.column),
+            preferredXPx = None
           ),
-          richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
+          annotations = buffer.annotations.copy(
+            documentComments = adjustDocumentComments(
+              buffer.annotations.documentComments,
+              buffer.document.content,
+              newContent,
+              List(MultiCursorEdit(0, start, end, ""))
+            )
+          ),
+          richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, start, end, ""))
         )
         (updated, MultiCursorEdit(0, start, end, ""))
     }
 
   private def wordBackwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[(Buffer, MultiCursorEdit)] =
-    val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-    val start  = previousWordBoundary(buffer.content, offset)
+    val offset = lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
+    val start  = previousWordBoundary(buffer.document.content, offset)
     Option.when(start < offset)(deleteOffsetRange(buffer, start, offset, start))
 
   private def wordForwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[(Buffer, MultiCursorEdit)] =
-    val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
-    val end    = nextWordBoundary(buffer.content, offset)
+    val offset = lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
+    val end    = nextWordBoundary(buffer.document.content, offset)
     Option.when(offset < end)(deleteOffsetRange(buffer, offset, end, offset))
 
   private def insertAtCursor(
@@ -270,7 +274,7 @@ object EditorEventReducer:
         val (replaced, edit)  = replaceSelectionOrInsert(current, cursor, text)
         val (animated, delta) = addInsertionAnimations(replaced, currentState, List(edit))
         val effects =
-          animationRemapEffects(buffer.id, current.content, animated.content, List(edit)) ++
+          animationRemapEffects(buffer.id, current.document.content, animated.document.content, List(edit)) ++
             animationMergeEffects(buffer.id, delta)
         (animated, effects)
       }
@@ -325,7 +329,7 @@ object EditorEventReducer:
     paneId: PaneId,
     incomingState: AppState
   ): ReducerResult =
-    rawBuffer.cursors.headOption match
+    rawBuffer.editing.cursors.headOption match
       case None =>
         val currentState  = Focused.replaceBuffer(incomingState, rawBuffer)
         val defaultCursor = CursorPosition(0, 0)
@@ -366,7 +370,7 @@ object EditorEventReducer:
           val (updated, edits) = f(buffer)
           ReducerResult(
             Focused.replaceBuffer(currentState, updated),
-            animationRemapEffects(buffer.id, buffer.content, updated.content, edits)
+            animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
           )
 
         def navigate(moveFn: CursorPosition => CursorPosition): ReducerResult =
@@ -384,7 +388,7 @@ object EditorEventReducer:
             if hasSelection then
               val (updated, edits, delta) = applyLineIndent(buffer, currentState, selectionLines(buffer))
               val effects =
-                animationRemapEffects(buffer.id, buffer.content, updated.content, edits) ++
+                animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
                   animationMergeEffects(buffer.id, delta)
               ReducerResult(Focused.replaceBuffer(currentState, updated), effects)
             else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, TabInsertion))
@@ -422,12 +426,12 @@ object EditorEventReducer:
             else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = false))
             else reduceDeletion(buffer, currentState, wordForwardDeletion(_, head))
 
-          case MoveLeft          => navigate(cursor => moveCursorLeft(cursor, buffer.content))
-          case MoveRight         => navigate(cursor => moveCursorRight(cursor, buffer.content))
-          case MoveWordLeft      => navigate(cursor => wordBoundaryFrom(buffer, cursor, previousWordBoundary))
-          case MoveWordRight     => navigate(cursor => wordBoundaryFrom(buffer, cursor, nextWordBoundary))
-          case MoveToStart       => navigate(_.copy(column = 0))
-          case MoveToEnd         => navigate(cursor => cursor.copy(column = findLineEnd(buffer.content, cursor.line)))
+          case MoveLeft      => navigate(cursor => moveCursorLeft(cursor, buffer.document.content))
+          case MoveRight     => navigate(cursor => moveCursorRight(cursor, buffer.document.content))
+          case MoveWordLeft  => navigate(cursor => wordBoundaryFrom(buffer, cursor, previousWordBoundary))
+          case MoveWordRight => navigate(cursor => wordBoundaryFrom(buffer, cursor, nextWordBoundary))
+          case MoveToStart   => navigate(_.copy(column = 0))
+          case MoveToEnd => navigate(cursor => cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
           case MoveToStartOfFile => navigate(_ => OriginCursor)
 
           case PageUp =>
@@ -446,39 +450,43 @@ object EditorEventReducer:
             )
 
           case MoveToEndOfFile if !hasSelection && !isMulti =>
-            val totalLines  = countLines(buffer.content)
+            val totalLines  = countLines(buffer.document.content)
             val lastLine    = totalLines - 1
-            val lastLineEnd = findLineEnd(buffer.content, lastLine)
+            val lastLineEnd = findLineEnd(buffer.document.content, lastLine)
             val newCursor   = CursorPosition(lastLine, lastLineEnd)
             val newTopLine  = math.max(0, lastLine - buffer.viewport.visibleLines + 1)
             val newViewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
             applyBuffer(
               _.copy(
-                cursors = List(newCursor),
-                preferredColumn = Some(newCursor.column),
-                preferredXPx = None,
+                editing = buffer.editing.copy(
+                  cursors = List(newCursor),
+                  preferredColumn = Some(newCursor.column),
+                  preferredXPx = None
+                ),
                 viewport = newViewport
               )
             )
 
           case MoveToEndOfFile =>
-            val totalLines = countLines(buffer.content)
+            val totalLines = countLines(buffer.document.content)
             val lastLine   = totalLines - 1
-            val target     = CursorPosition(lastLine, findLineEnd(buffer.content, lastLine))
+            val target     = CursorPosition(lastLine, findLineEnd(buffer.document.content, lastLine))
             navigate(_ => target)
 
           case SelectAll =>
             ReducerResult.fromTransition(
               currentState,
               Focused.modifyBufferWithId(buffer.id) { current =>
-                val lastLine  = math.max(0, countLines(current.content) - 1)
-                val endCursor = CursorPosition(lastLine, findLineEnd(current.content, lastLine))
+                val lastLine  = math.max(0, countLines(current.document.content) - 1)
+                val endCursor = CursorPosition(lastLine, findLineEnd(current.document.content, lastLine))
                 current.copy(
-                  cursors = List(endCursor),
-                  selection = Some(Selection(CursorPosition(0, 0), endCursor)),
-                  selections = Nil,
-                  preferredColumn = Some(endCursor.column),
-                  preferredXPx = None
+                  editing = current.editing.copy(
+                    cursors = List(endCursor),
+                    selection = Some(Selection(CursorPosition(0, 0), endCursor)),
+                    selections = Nil,
+                    preferredColumn = Some(endCursor.column),
+                    preferredXPx = None
+                  )
                 )
               }
             )
@@ -497,8 +505,8 @@ object EditorEventReducer:
               case Some(FindState(query, storedResults, currentIndex)) if storedResults.nonEmpty =>
                 val validResults = storedResults.filter { result =>
                   isWholeGraphemeMatch(
-                    buffer.content,
-                    lineColumnToOffset(buffer.content, result.line, result.column),
+                    buffer.document.content,
+                    lineColumnToOffset(buffer.document.content, result.line, result.column),
                     query.length
                   )
                 }
@@ -509,11 +517,13 @@ object EditorEventReducer:
                   val target   = CursorPosition(selected.line, selected.column)
                   applyBuffer(
                     _.copy(
-                      cursors = List(target),
-                      selection = None,
-                      selections = Nil,
-                      preferredColumn = Some(target.column),
-                      preferredXPx = None,
+                      editing = buffer.editing.copy(
+                        cursors = List(target),
+                        selection = None,
+                        selections = Nil,
+                        preferredColumn = Some(target.column),
+                        preferredXPx = None
+                      ),
                       findState = Some(FindState.fromResultSet(resultSet))
                     )
                   )
@@ -525,7 +535,9 @@ object EditorEventReducer:
               ReducerResult.noEffects(currentState.copy(clipboard = Some(selectedTexts(buffer).mkString("\n"))))
             else
               val clipboardText =
-                distinctCursorLines(buffer).map(line => buffer.content.getLine(line).getOrElse("")).mkString("\n")
+                distinctCursorLines(buffer)
+                  .map(line => buffer.document.content.getLine(line).getOrElse(""))
+                  .mkString("\n")
               ReducerResult.noEffects(currentState.copy(clipboard = Some(clipboardText)))
 
           case Cut =>
@@ -536,18 +548,19 @@ object EditorEventReducer:
                   buffers = currentState.buffers + (buffer.id -> updated),
                   clipboard = Some(selectedTexts(buffer).mkString("\n"))
                 ),
-                animationRemapEffects(buffer.id, buffer.content, updated.content, edits)
+                animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
               )
             else
-              val targetLines      = distinctCursorLines(buffer)
-              val clipboardText    = targetLines.map(line => buffer.content.getLine(line).getOrElse("")).mkString("\n")
+              val targetLines = distinctCursorLines(buffer)
+              val clipboardText =
+                targetLines.map(line => buffer.document.content.getLine(line).getOrElse("")).mkString("\n")
               val (updated, edits) = applyMultiCursorLineCut(buffer, targetLines)
               ReducerResult(
                 currentState.copy(
                   buffers = currentState.buffers + (buffer.id -> updated),
                   clipboard = Some(clipboardText)
                 ),
-                animationRemapEffects(buffer.id, buffer.content, updated.content, edits)
+                animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
               )
 
           case Paste =>
@@ -559,20 +572,29 @@ object EditorEventReducer:
                 applyEditedBuffer(applyMultiCursorInsertion(_, text))
               case Some(text) =>
                 val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, head, text)
-                val newCursor                         = replacedBuffer.cursors.headOption.getOrElse(head)
+                val newCursor                         = replacedBuffer.editing.cursors.headOption.getOrElse(head)
                 val withoutAnimations = buffer.copy(
-                  content = replacedBuffer.content,
-                  isDirty = replacedBuffer.isDirty,
-                  isNewEmpty = replacedBuffer.isNewEmpty,
-                  cursors = replacedBuffer.cursors,
-                  selection = replacedBuffer.selection,
-                  preferredColumn = Some(newCursor.column),
-                  preferredXPx = None
+                  document = buffer.document.copy(
+                    content = replacedBuffer.document.content,
+                    isDirty = replacedBuffer.document.isDirty,
+                    isNewEmpty = replacedBuffer.document.isNewEmpty
+                  ),
+                  editing = buffer.editing.copy(
+                    cursors = replacedBuffer.editing.cursors,
+                    selection = replacedBuffer.editing.selection,
+                    preferredColumn = Some(newCursor.column),
+                    preferredXPx = None
+                  )
                 )
                 val (updatedBuffer, delta) =
                   addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
                 val effects =
-                  animationRemapEffects(buffer.id, buffer.content, updatedBuffer.content, List(replacementEdit)) ++
+                  animationRemapEffects(
+                    buffer.id,
+                    buffer.document.content,
+                    updatedBuffer.document.content,
+                    List(replacementEdit)
+                  ) ++
                     animationMergeEffects(buffer.id, delta)
                 ReducerResult(
                   currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)),
@@ -591,7 +613,8 @@ object EditorEventReducer:
     event match
       case InsertChar(char) =>
         val bufferId    = currentState.nextBufferId
-        val buffer      = Buffer.fromString(bufferId, char.toString).copy(isDirty = true, isNewEmpty = false)
+        val fresh       = Buffer.fromString(bufferId, char.toString)
+        val buffer      = fresh.copy(document = fresh.document.copy(isDirty = true, isNewEmpty = false))
         val newCursor   = CursorPosition(0, 1)
         val updatedPane = pane.copy(bufferId = Some(bufferId), cursors = List(newCursor))
         val (bufferWithAnimation, delta) = addInsertionAnimations(
@@ -638,7 +661,7 @@ object EditorEventReducer:
     insertedText: String
   ): (Buffer, List[MultiCursorEdit]) =
     val insertionOffsets =
-      multiCursorEntries(buffer).map(entry => graphemeBoundaryAfterOrAt(buffer.content, entry.offset))
+      multiCursorEntries(buffer).map(entry => graphemeBoundaryAfterOrAt(buffer.document.content, entry.offset))
     val edits = insertionOffsets.zipWithIndex.map {
       case (offset, index) =>
         MultiCursorEdit(index, offset, offset, insertedText)
@@ -653,8 +676,8 @@ object EditorEventReducer:
     val edits = entries.zipWithIndex.flatMap {
       case (entry, index) =>
         val range =
-          if backward then backwardGraphemeDeletionRange(buffer.content, entry.offset)
-          else forwardGraphemeDeletionRange(buffer.content, entry.offset)
+          if backward then backwardGraphemeDeletionRange(buffer.document.content, entry.offset)
+          else forwardGraphemeDeletionRange(buffer.document.content, entry.offset)
         range.map { case (start, end) => MultiCursorEdit(index, start, end, "") }
     }
     applyTrackedEdits(buffer, entries.map(_.offset), edits)
@@ -667,10 +690,10 @@ object EditorEventReducer:
     val edits = entries.zipWithIndex.flatMap {
       case (entry, index) =>
         if backward then
-          val start = previousWordBoundary(buffer.content, entry.offset)
+          val start = previousWordBoundary(buffer.document.content, entry.offset)
           Option.when(start < entry.offset)(MultiCursorEdit(index, start, entry.offset, ""))
         else
-          val end = nextWordBoundary(buffer.content, entry.offset)
+          val end = nextWordBoundary(buffer.document.content, entry.offset)
           Option.when(entry.offset < end)(MultiCursorEdit(index, entry.offset, end, ""))
     }
     applyMergedDeletionEdits(buffer, entries.map(_.offset), edits)
@@ -684,34 +707,37 @@ object EditorEventReducer:
     currentState: AppState,
     targetLines: List[Int]
   ): (Buffer, List[MultiCursorEdit], Map[CharacterKey, AnimatedCell]) =
-    val targetSet = targetLines.filter(line => line >= 0 && line < countLines(buffer.content)).toSet
+    val targetSet = targetLines.filter(line => line >= 0 && line < countLines(buffer.document.content)).toSet
 
     if targetSet.isEmpty then (buffer, Nil, Map.empty)
     else
       val edits = targetSet.toList.sorted.zipWithIndex.map {
         case (line, index) =>
-          val offset = lineColumnToOffset(buffer.content, line, 0)
+          val offset = lineColumnToOffset(buffer.document.content, line, 0)
           MultiCursorEdit(index, offset, offset, TabInsertion)
       }
       val updatedContent = edits
         .sortBy(edit => (-edit.start, -edit.end))
-        .foldLeft(buffer.content)((content, edit) => content.insert(edit.start, edit.insertedText))
-      val finalCursors = buffer.cursors.map { cursor =>
+        .foldLeft(buffer.document.content)((content, edit) => content.insert(edit.start, edit.insertedText))
+      val finalCursors = buffer.editing.cursors.map { cursor =>
         if targetSet.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
         else cursor
       }.distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
-        content = updatedContent,
-        isDirty = true,
-        isNewEmpty = false,
-        cursors = finalCursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(primaryCursor.column),
-        preferredXPx = None,
-        multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
+        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
+        editing = buffer.editing.copy(
+          cursors = finalCursors,
+          selection = None,
+          selections = Nil,
+          preferredColumn = Some(primaryCursor.column),
+          preferredXPx = None,
+          multiCursorVerticalStates = Nil
+        ),
+        annotations = buffer.annotations.copy(
+          documentComments =
+            adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
+        )
       )
       val (animatedBuffer, delta) = addInsertionAnimations(baseBuffer, currentState, edits)
       (animatedBuffer, edits, delta)
@@ -720,9 +746,9 @@ object EditorEventReducer:
     buffer: Buffer,
     targetLines: List[Int]
   ): (Buffer, List[MultiCursorEdit]) =
-    val targetSet = targetLines.filter(line => line >= 0 && line < countLines(buffer.content)).toSet
+    val targetSet = targetLines.filter(line => line >= 0 && line < countLines(buffer.document.content)).toSet
     val removals = targetSet.toList.sorted.map { line =>
-      val (_, removed) = unindentLine(buffer.content.getLine(line).getOrElse(""))
+      val (_, removed) = unindentLine(buffer.document.content.getLine(line).getOrElse(""))
       line -> removed
     }.toMap
 
@@ -730,27 +756,30 @@ object EditorEventReducer:
     else
       val edits = removals.toList.sortBy(_._1).zipWithIndex.collect {
         case ((line, removed), index) if removed > 0 =>
-          val start = lineColumnToOffset(buffer.content, line, 0)
+          val start = lineColumnToOffset(buffer.document.content, line, 0)
           MultiCursorEdit(index, start, start + removed, "")
       }
       val updatedContent = edits
         .sortBy(edit => (-edit.start, -edit.end))
-        .foldLeft(buffer.content)((content, edit) => content.delete(edit.start, edit.end))
-      val finalCursors = buffer.cursors
+        .foldLeft(buffer.document.content)((content, edit) => content.delete(edit.start, edit.end))
+      val finalCursors = buffer.editing.cursors
         .map(cursor => cursor.copy(column = math.max(0, cursor.column - removals.getOrElse(cursor.line, 0))))
         .distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
-        content = updatedContent,
-        isDirty = true,
-        isNewEmpty = false,
-        cursors = finalCursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(primaryCursor.column),
-        preferredXPx = None,
-        multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
+        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
+        editing = buffer.editing.copy(
+          cursors = finalCursors,
+          selection = None,
+          selections = Nil,
+          preferredColumn = Some(primaryCursor.column),
+          preferredXPx = None,
+          multiCursorVerticalStates = Nil
+        ),
+        annotations = buffer.annotations.copy(
+          documentComments =
+            adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
+        )
       )
       (baseBuffer, edits)
 
@@ -767,11 +796,11 @@ object EditorEventReducer:
   ): (Buffer, List[MultiCursorEdit]) =
     if targetLines.isEmpty then (buffer, Nil)
     else
-      val totalLines = countLines(buffer.content)
+      val totalLines = countLines(buffer.document.content)
       val lineEdits = targetLines.distinct.sorted.map { line =>
-        val lineText  = buffer.content.getLine(line).getOrElse("")
-        val lineStart = lineColumnToOffset(buffer.content, line, 0)
-        val lineEnd   = lineColumnToOffset(buffer.content, line, lineText.length)
+        val lineText  = buffer.document.content.getLine(line).getOrElse("")
+        val lineStart = lineColumnToOffset(buffer.document.content, line, 0)
+        val lineEnd   = lineColumnToOffset(buffer.document.content, line, lineText.length)
         val (deleteStart, deleteEnd) =
           if line == 0 && totalLines == 1 then (0, lineEnd)
           else if line < totalLines - 1 then (lineStart, lineEnd + 1)
@@ -780,7 +809,7 @@ object EditorEventReducer:
       }
       val updatedContent = lineEdits
         .sortBy { case (_, start, end) => (-start, -end) }
-        .foldLeft(buffer.content) {
+        .foldLeft(buffer.document.content) {
           case (content, (_, start, end)) =>
             content.delete(start, end)
         }
@@ -800,16 +829,19 @@ object EditorEventReducer:
       }.distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
-        content = updatedContent,
-        isDirty = true,
-        isNewEmpty = false,
-        cursors = finalCursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(primaryCursor.column),
-        preferredXPx = None,
-        multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
+        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
+        editing = buffer.editing.copy(
+          cursors = finalCursors,
+          selection = None,
+          selections = Nil,
+          preferredColumn = Some(primaryCursor.column),
+          preferredXPx = None,
+          multiCursorVerticalStates = Nil
+        ),
+        annotations = buffer.annotations.copy(
+          documentComments =
+            adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
+        )
       )
       (baseBuffer, edits)
 
@@ -822,18 +854,22 @@ object EditorEventReducer:
     else
       val trackedOffsets = initialOffsets.toArray
       val sortedEdits    = edits.sortBy(edit => (-edit.start, -edit.end))
-      val (updatedContent, updatedRichTextDocument) = sortedEdits.foldLeft((buffer.content, buffer.richTextDocument)) {
-        case ((content, document), edit) =>
-          val deleted     = content.delete(edit.start, edit.end)
-          val nextContent = deleted.insert(edit.start, edit.insertedText)
-          val nextDocument = richTextDocumentAfterEdit(
-            buffer.copy(content = content, richTextDocument = document),
-            edit.start,
-            edit.end,
-            edit.insertedText
-          )
-          (nextContent, nextDocument)
-      }
+      val (updatedContent, updatedRichTextDocument) =
+        sortedEdits.foldLeft((buffer.document.content, buffer.richText.richTextDocument)) {
+          case ((content, document), edit) =>
+            val deleted     = content.delete(edit.start, edit.end)
+            val nextContent = deleted.insert(edit.start, edit.insertedText)
+            val nextDocument = richTextDocumentAfterEdit(
+              buffer.copy(
+                document = buffer.document.copy(content = content),
+                richText = buffer.richText.copy(richTextDocument = document)
+              ),
+              edit.start,
+              edit.end,
+              edit.insertedText
+            )
+            (nextContent, nextDocument)
+        }
       val finalOffsets = sortedEdits.foldLeft(trackedOffsets) { (offsets, edit) =>
         val delta = edit.insertedText.length - (edit.end - edit.start)
         offsets.indices.foreach { i =>
@@ -851,17 +887,20 @@ object EditorEventReducer:
         .distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
-        content = updatedContent,
-        isDirty = true,
-        isNewEmpty = false,
-        cursors = finalCursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(primaryCursor.column),
-        preferredXPx = None,
-        multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
-        richTextDocument = updatedRichTextDocument
+        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
+        editing = buffer.editing.copy(
+          cursors = finalCursors,
+          selection = None,
+          selections = Nil,
+          preferredColumn = Some(primaryCursor.column),
+          preferredXPx = None,
+          multiCursorVerticalStates = Nil
+        ),
+        annotations = buffer.annotations.copy(
+          documentComments =
+            adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
+        ),
+        richText = buffer.richText.copy(richTextDocument = updatedRichTextDocument)
       )
       (baseBuffer, edits)
 
@@ -875,7 +914,7 @@ object EditorEventReducer:
       val mergedRanges = mergeOverlappingDeletionRanges(edits.map(edit => (edit.start, edit.end)))
       val updatedContent = mergedRanges
         .sortBy { case (start, end) => (-start, -end) }
-        .foldLeft(buffer.content) {
+        .foldLeft(buffer.document.content) {
           case (content, (start, end)) =>
             content.delete(start, end)
         }
@@ -889,15 +928,22 @@ object EditorEventReducer:
         .distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
-        content = updatedContent,
-        isDirty = true,
-        isNewEmpty = false,
-        cursors = finalCursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(primaryCursor.column),
-        preferredXPx = None,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, mergedEdits)
+        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
+        editing = buffer.editing.copy(
+          cursors = finalCursors,
+          selection = None,
+          selections = Nil,
+          preferredColumn = Some(primaryCursor.column),
+          preferredXPx = None
+        ),
+        annotations = buffer.annotations.copy(
+          documentComments = adjustDocumentComments(
+            buffer.annotations.documentComments,
+            buffer.document.content,
+            updatedContent,
+            mergedEdits
+          )
+        )
       )
       (baseBuffer, mergedEdits)
 
@@ -985,7 +1031,7 @@ object EditorEventReducer:
     buffer: Buffer,
     insertedText: String
   ): (Buffer, List[MultiCursorEdit]) =
-    val ranges  = mergedActiveSelectionRanges(buffer, buffer.content)
+    val ranges  = mergedActiveSelectionRanges(buffer, buffer.document.content)
     val offsets = ranges.map(_._1)
     val edits = ranges.zipWithIndex.map {
       case ((start, end), index) =>
@@ -996,7 +1042,7 @@ object EditorEventReducer:
   private def deleteSelectedRanges(
     buffer: Buffer
   ): (Buffer, List[MultiCursorEdit]) =
-    val ranges  = mergedActiveSelectionRanges(buffer, buffer.content)
+    val ranges  = mergedActiveSelectionRanges(buffer, buffer.document.content)
     val offsets = ranges.map(_._1)
     val edits = ranges.zipWithIndex.map {
       case ((start, end), index) =>
@@ -1007,18 +1053,20 @@ object EditorEventReducer:
   private def applyMultiCursorNavigation(
     buffer: Buffer
   )(move: CursorPosition => CursorPosition): Buffer =
-    val finalCursors = buffer.cursors
+    val finalCursors = buffer.editing.cursors
       .map(move)
       .distinct
       .sortBy(cursor => (cursor.line, cursor.column))
     val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
     val baseBuffer = buffer.copy(
-      cursors = finalCursors,
-      selection = None,
-      selections = Nil,
-      preferredColumn = Some(primaryCursor.column),
-      preferredXPx = None,
-      multiCursorVerticalStates = Nil
+      editing = buffer.editing.copy(
+        cursors = finalCursors,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(primaryCursor.column),
+        preferredXPx = None,
+        multiCursorVerticalStates = Nil
+      )
     )
     baseBuffer
 
@@ -1050,13 +1098,15 @@ object EditorEventReducer:
       .distinct
     val primaryCursor = visibleCursors.headOption.getOrElse(CursorPosition(0, 0))
     val baseBuffer = buffer.copy(
-      cursors = visibleCursors,
-      selection = None,
-      selections = Nil,
-      preferredColumn = Some(primaryCursor.column),
-      preferredXPx = None,
-      multiCursorVerticalStates = sortedStates.map(cursorState =>
-        VerticalCursorState(cursorState.cursor, cursorState.preferredColumn, cursorState.preferredXPx)
+      editing = buffer.editing.copy(
+        cursors = visibleCursors,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(primaryCursor.column),
+        preferredXPx = None,
+        multiCursorVerticalStates = sortedStates.map(cursorState =>
+          VerticalCursorState(cursorState.cursor, cursorState.preferredColumn, cursorState.preferredXPx)
+        )
       )
     )
     baseBuffer
@@ -1065,9 +1115,9 @@ object EditorEventReducer:
     buffer: Buffer,
     direction: Int
   ): Buffer =
-    val totalLines = countLines(buffer.content)
+    val totalLines = countLines(buffer.document.content)
     val visLines   = buffer.viewport.visibleLines
-    val finalCursors = buffer.cursors
+    val finalCursors = buffer.editing.cursors
       .map { cursor =>
         val targetLine =
           if direction < 0 then math.max(0, cursor.line - visLines)
@@ -1081,22 +1131,24 @@ object EditorEventReducer:
       if direction < 0 then math.max(0, buffer.viewport.topLine - visLines)
       else math.min(buffer.viewport.topLine + visLines, math.max(0, totalLines - visLines))
     buffer.copy(
-      cursors = finalCursors,
-      selection = None,
-      selections = Nil,
-      preferredColumn = Some(primaryCursor.column),
-      preferredXPx = None,
-      multiCursorVerticalStates = Nil,
+      editing = buffer.editing.copy(
+        cursors = finalCursors,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(primaryCursor.column),
+        preferredXPx = None,
+        multiCursorVerticalStates = Nil
+      ),
       viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
     )
 
   private def multiCursorEntries(buffer: Buffer): List[CursorEntry] =
-    buffer.cursors.distinct
-      .map(cursor => CursorEntry(cursor, lineColumnToOffset(buffer.content, cursor.line, cursor.column)))
+    buffer.editing.cursors.distinct
+      .map(cursor => CursorEntry(cursor, lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)))
       .sortBy(_.offset)
 
   private def distinctCursorLines(buffer: Buffer): List[Int] =
-    buffer.cursors.distinct
+    buffer.editing.cursors.distinct
       .sortBy(cursor => (cursor.line, cursor.column))
       .map(_.line)
       .distinct
@@ -1113,24 +1165,26 @@ object EditorEventReducer:
     endOffset: Int,
     cursorOffset: Int
   ): (Buffer, MultiCursorEdit) =
-    val newContent = buffer.content.delete(startOffset, endOffset)
+    val newContent = buffer.document.content.delete(startOffset, endOffset)
     val newCursor  = offsetToCursorPosition(newContent, cursorOffset)
     val baseBuffer = buffer.copy(
-      content = newContent,
-      isDirty = true,
-      isNewEmpty = false,
-      cursors = newCursor :: buffer.cursors.tail,
-      selection = None,
-      selections = Nil,
-      preferredColumn = Some(newCursor.column),
-      preferredXPx = None,
-      documentComments = adjustDocumentComments(
-        buffer.documentComments,
-        buffer.content,
-        newContent,
-        List(MultiCursorEdit(0, startOffset, endOffset, ""))
+      document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
+      editing = buffer.editing.copy(
+        cursors = newCursor :: buffer.editing.cursors.tail,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(newCursor.column),
+        preferredXPx = None
       ),
-      richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, "")
+      annotations = buffer.annotations.copy(
+        documentComments = adjustDocumentComments(
+          buffer.annotations.documentComments,
+          buffer.document.content,
+          newContent,
+          List(MultiCursorEdit(0, startOffset, endOffset, ""))
+        )
+      ),
+      richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
     )
     (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
@@ -1226,15 +1280,15 @@ object EditorEventReducer:
     buffer: Buffer,
     geometry: EditorGeometry
   ): List[MultiCursorVerticalState] =
-    val visibleCursors = buffer.cursors.distinct
+    val visibleCursors = buffer.editing.cursors.distinct
       .sortBy(cursor => (cursor.line, cursor.column))
-    val storedVisibleCursors = buffer.multiCursorVerticalStates
+    val storedVisibleCursors = buffer.editing.multiCursorVerticalStates
       .map(_.cursor)
       .distinct
       .sortBy(cursor => (cursor.line, cursor.column))
 
-    if buffer.multiCursorVerticalStates.nonEmpty && storedVisibleCursors == visibleCursors then
-      buffer.multiCursorVerticalStates.map(cursorState =>
+    if buffer.editing.multiCursorVerticalStates.nonEmpty && storedVisibleCursors == visibleCursors then
+      buffer.editing.multiCursorVerticalStates.map(cursorState =>
         MultiCursorVerticalState(cursorState.cursor, cursorState.preferredColumn, cursorState.preferredXPx)
       )
     else
@@ -1296,10 +1350,11 @@ object EditorEventReducer:
     direction: Int
   ): CursorPosition =
     if wordWrapEnabled then
-      if direction < 0 then moveUpVisualLine(cursor, buffer.content, geometry.panelWidthColumns, preferredColumn)
-      else moveDownVisualLine(cursor, buffer.content, geometry.panelWidthColumns, preferredColumn)
-    else if direction < 0 then moveUpLogicalLine(cursor, buffer.content, preferredColumn)
-    else moveDownLogicalLine(cursor, buffer.content, preferredColumn)
+      if direction < 0 then
+        moveUpVisualLine(cursor, buffer.document.content, geometry.panelWidthColumns, preferredColumn)
+      else moveDownVisualLine(cursor, buffer.document.content, geometry.panelWidthColumns, preferredColumn)
+    else if direction < 0 then moveUpLogicalLine(cursor, buffer.document.content, preferredColumn)
+    else moveDownLogicalLine(cursor, buffer.document.content, preferredColumn)
 
   private def moveUpLogicalLine(cursor: CursorPosition, rope: Rope, preferredColumn: Int): CursorPosition =
     if cursor.line <= 0 then cursor
@@ -1329,7 +1384,7 @@ object EditorEventReducer:
 
     if sortedEdits.isEmpty then (buffer, Map.empty)
     else
-      val insertedCells = insertedTransitionCells(buffer.content, sortedEdits, state)
+      val insertedCells = insertedTransitionCells(buffer.document.content, sortedEdits, state)
       if insertedCells.isEmpty then (buffer, Map.empty)
       else
         val plan = ElementTransitionPlanner.plan(
@@ -1420,21 +1475,21 @@ object EditorEventReducer:
     CursorTarget(landed, landed.column, preferredXPx = None)
 
   private def leftTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
-    horizontalTarget(moveCursorLeft(from, buffer.content))
+    horizontalTarget(moveCursorLeft(from, buffer.document.content))
 
   private def rightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
-    horizontalTarget(moveCursorRight(from, buffer.content))
+    horizontalTarget(moveCursorRight(from, buffer.document.content))
 
   private def wordBoundaryFrom(buffer: Buffer, from: CursorPosition, boundary: (Rope, Int) => Int): CursorPosition =
-    val offset = lineColumnToOffset(buffer.content, from.line, from.column)
-    offsetToCursorPosition(buffer.content, boundary(buffer.content, offset))
+    val offset = lineColumnToOffset(buffer.document.content, from.line, from.column)
+    offsetToCursorPosition(buffer.document.content, boundary(buffer.document.content, offset))
 
   private def verticalTarget(currentState: AppState, geometry: EditorGeometry, direction: Int)(
     buffer: Buffer,
     from: CursorPosition
   ): CursorTarget =
-    val preferredColumn = buffer.preferredColumn.getOrElse(from.column)
-    val preferredXPx    = buffer.preferredXPx.getOrElse(measuredCursorXPxFrom(geometry, from))
+    val preferredColumn = buffer.editing.preferredColumn.getOrElse(from.column)
+    val preferredXPx    = buffer.editing.preferredXPx.getOrElse(measuredCursorXPxFrom(geometry, from))
     val landed =
       measuredVerticalMoveBySnapshot(
         currentState.config.wordWrapEnabled,
@@ -1460,10 +1515,12 @@ object EditorEventReducer:
       Focused.modifyBufferWithId(buffer.id) { current =>
         val landed = target(current, from)
         current.copy(
-          cursors = landed.cursor :: current.cursors.tail,
-          selection = None,
-          preferredColumn = Some(landed.preferredColumn),
-          preferredXPx = landed.preferredXPx
+          editing = current.editing.copy(
+            cursors = landed.cursor :: current.editing.cursors.tail,
+            selection = None,
+            preferredColumn = Some(landed.preferredColumn),
+            preferredXPx = landed.preferredXPx
+          )
         )
       }
     )
@@ -1491,11 +1548,13 @@ object EditorEventReducer:
   ): Buffer =
     val selectionAnchor = buffer.primarySelection.map(_.anchor).getOrElse(anchor)
     buffer.copy(
-      cursors = focus :: buffer.cursors.tail,
-      selection = Some(Selection(selectionAnchor, focus)),
-      selections = Nil,
-      preferredColumn = preferredColumn,
-      preferredXPx = preferredXPx
+      editing = buffer.editing.copy(
+        cursors = focus :: buffer.editing.cursors.tail,
+        selection = Some(Selection(selectionAnchor, focus)),
+        selections = Nil,
+        preferredColumn = preferredColumn,
+        preferredXPx = preferredXPx
+      )
     )
 
   private def measuredCursorXPxFrom(geometry: EditorGeometry, cursor: CursorPosition): Float =
@@ -1517,20 +1576,23 @@ object EditorEventReducer:
   ): (Buffer, MultiCursorEdit) =
     val (baseContent, insertionStart, startOffset, endOffset) = buffer.primarySelection match
       case Some(selection) =>
-        val startOffset = selectionStartOffset(selection, buffer.content)
-        val endOffset   = selectionEndOffset(selection, buffer.content)
+        val startOffset = selectionStartOffset(selection, buffer.document.content)
+        val endOffset   = selectionEndOffset(selection, buffer.document.content)
         (
-          buffer.content.delete(startOffset, endOffset),
-          offsetToCursorPosition(buffer.content, startOffset),
+          buffer.document.content.delete(startOffset, endOffset),
+          offsetToCursorPosition(buffer.document.content, startOffset),
           startOffset,
           endOffset
         )
       case None =>
         val startOffset =
-          graphemeBoundaryAfterOrAt(buffer.content, lineColumnToOffset(buffer.content, cursor.line, cursor.column))
+          graphemeBoundaryAfterOrAt(
+            buffer.document.content,
+            lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
+          )
         (
-          buffer.content,
-          offsetToCursorPosition(buffer.content, startOffset),
+          buffer.document.content,
+          offsetToCursorPosition(buffer.document.content, startOffset),
           startOffset,
           startOffset
         )
@@ -1541,21 +1603,25 @@ object EditorEventReducer:
 
     (
       buffer.copy(
-        content = newContent,
-        isDirty = true,
-        isNewEmpty = false,
-        cursors = newCursor :: buffer.cursors.tail,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(newCursor.column),
-        preferredXPx = None,
-        documentComments = adjustDocumentComments(
-          buffer.documentComments,
-          buffer.content,
-          newContent,
-          List(replacementEdit)
+        document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
+        editing = buffer.editing.copy(
+          cursors = newCursor :: buffer.editing.cursors.tail,
+          selection = None,
+          selections = Nil,
+          preferredColumn = Some(newCursor.column),
+          preferredXPx = None
         ),
-        richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
+        annotations = buffer.annotations.copy(
+          documentComments = adjustDocumentComments(
+            buffer.annotations.documentComments,
+            buffer.document.content,
+            newContent,
+            List(replacementEdit)
+          )
+        ),
+        richText = buffer.richText.copy(
+          richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
+        )
       ),
       replacementEdit
     )
@@ -1564,26 +1630,28 @@ object EditorEventReducer:
     buffer: Buffer,
     selection: Selection
   ): (Buffer, MultiCursorEdit) =
-    val startOffset = selectionStartOffset(selection, buffer.content)
-    val endOffset   = selectionEndOffset(selection, buffer.content)
-    val newContent  = buffer.content.delete(startOffset, endOffset)
+    val startOffset = selectionStartOffset(selection, buffer.document.content)
+    val endOffset   = selectionEndOffset(selection, buffer.document.content)
+    val newContent  = buffer.document.content.delete(startOffset, endOffset)
     val newCursor   = offsetToCursorPosition(newContent, startOffset)
     val baseBuffer = buffer.copy(
-      content = newContent,
-      isDirty = true,
-      isNewEmpty = false,
-      cursors = newCursor :: buffer.cursors.tail,
-      selection = None,
-      selections = Nil,
-      preferredColumn = Some(newCursor.column),
-      preferredXPx = None,
-      documentComments = adjustDocumentComments(
-        buffer.documentComments,
-        buffer.content,
-        newContent,
-        List(MultiCursorEdit(0, startOffset, endOffset, ""))
+      document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
+      editing = buffer.editing.copy(
+        cursors = newCursor :: buffer.editing.cursors.tail,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(newCursor.column),
+        preferredXPx = None
       ),
-      richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, "")
+      annotations = buffer.annotations.copy(
+        documentComments = adjustDocumentComments(
+          buffer.annotations.documentComments,
+          buffer.document.content,
+          newContent,
+          List(MultiCursorEdit(0, startOffset, endOffset, ""))
+        )
+      ),
+      richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
     )
     (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
@@ -1599,9 +1667,9 @@ object EditorEventReducer:
       )
 
   private def selectedTexts(buffer: Buffer): List[String] =
-    mergedActiveSelectionRanges(buffer, buffer.content).map {
+    mergedActiveSelectionRanges(buffer, buffer.document.content).map {
       case (start, end) =>
-        buffer.content.sliceString(start, end)
+        buffer.document.content.sliceString(start, end)
     }
 
   private def mergedActiveSelectionRanges(buffer: Buffer, content: Rope): List[(Int, Int)] =
@@ -1633,21 +1701,22 @@ object EditorEventReducer:
     endOffset: Int,
     insertedText: String
   ): Option[RichTextDocument] =
-    buffer.richTextDocument.flatMap { document =>
-      Option.when(document.matchesPlainText(buffer.content.collect())) {
+    buffer.richText.richTextDocument.flatMap { document =>
+      Option.when(document.matchesPlainText(buffer.document.content.collect())) {
         val updatedDocument = document
           .replaceRange(
             RichTextRange(
-              richTextPositionForOffset(buffer.content, startOffset),
-              richTextPositionForOffset(buffer.content, endOffset)
+              richTextPositionForOffset(buffer.document.content, startOffset),
+              richTextPositionForOffset(buffer.document.content, endOffset)
             ),
             insertedText
           )
           .normalized
-        buffer.insertionRichTextStyle
+        buffer.richText.insertionRichTextStyle
           .filter(_ => insertedText.nonEmpty)
           .map { style =>
-            val updatedContent = buffer.content.delete(startOffset, endOffset).insert(startOffset, insertedText)
+            val updatedContent =
+              buffer.document.content.delete(startOffset, endOffset).insert(startOffset, insertedText)
             updatedDocument
               .updateInlineStyle(
                 RichTextRange(
@@ -1672,11 +1741,13 @@ object EditorEventReducer:
       .sortBy(cursor => (cursor.line, cursor.column))
     val primaryCursor = cursors.headOption.getOrElse(CursorPosition(0, 0))
     val baseBuffer = buffer.copy(
-      cursors = cursors,
-      selection = None,
-      selections = Nil,
-      preferredColumn = Some(primaryCursor.column),
-      preferredXPx = None
+      editing = buffer.editing.copy(
+        cursors = cursors,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(primaryCursor.column),
+        preferredXPx = None
+      )
     )
     baseBuffer
 

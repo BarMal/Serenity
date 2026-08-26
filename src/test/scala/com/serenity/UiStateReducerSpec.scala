@@ -48,7 +48,7 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     val state = baseState.copy(
       buffers = baseState.buffers.updated(
         bufferId,
-        baseState.buffers(bufferId).copy(cursors = List(cursor))
+        baseState.buffers(bufferId).copy(editing = baseState.buffers(bufferId).editing.copy(cursors = List(cursor)))
       )
     )
 

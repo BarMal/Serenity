@@ -147,7 +147,7 @@ object SpellChecker:
             .get(uri)
             .filter(_.fingerprint == fingerprint)
             .getOrElse {
-              val spellDiagnostics = check(buffer.content.collect(), state.config.spellCheck)
+              val spellDiagnostics = check(buffer.document.content.collect(), state.config.spellCheck)
               SpellCheckCacheEntry(fingerprint, spellDiagnostics)
             }
           val nextDiagnostics =
@@ -174,7 +174,7 @@ object SpellChecker:
     else current
 
   def diagnosticsUri(buffer: Buffer): String =
-    buffer.filePath.map(_.toUri.toString).getOrElse(bufferDiagnosticsUri(buffer.id))
+    buffer.document.filePath.map(_.toUri.toString).getOrElse(bufferDiagnosticsUri(buffer.id))
 
   def bufferDiagnosticsUri(bufferId: BufferId): String =
     s"buffer:${bufferId.value}"

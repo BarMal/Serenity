@@ -457,7 +457,7 @@ object EditorLayoutContract:
   private def pinnedGeometry(surface: UiSurface, frameRect: LayoutRect, state: AppState): SurfaceGeometry =
     val resolved = surface.content match
       case SurfaceContent.MarkdownPreview(bufferId, title) =>
-        val content = state.buffers.get(bufferId).map(_.content.collect()).getOrElse("")
+        val content = state.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
         SurfaceContentResolver.resolveMarkdownPreview(title, content, frameRect, SurfaceRenderMode.Pinned)
       case SurfaceContent.Outline(symbols, activeLocation) =>
         val resolvedOutline = SurfaceContent.Outline(

@@ -145,9 +145,10 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   "Renderer" should "apply rich text marks to editor text" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), richDocument.plainText)
-      .copy(richTextDocument = Some(richDocument))
+    val fromStringBuffer = Buffer.fromString(BufferId(1), richDocument.plainText)
+    val buffer = fromStringBuffer.copy(
+      richText = fromStringBuffer.richText.copy(richTextDocument = Some(richDocument))
+    )
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -160,9 +161,11 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render rich text marks when dirty buffer text still matches rich metadata" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), richDocument.plainText)
-      .copy(richTextDocument = Some(richDocument), isDirty = true)
+    val fromStringBuffer = Buffer.fromString(BufferId(1), richDocument.plainText)
+    val buffer = fromStringBuffer.copy(
+      document = fromStringBuffer.document.copy(isDirty = true),
+      richText = fromStringBuffer.richText.copy(richTextDocument = Some(richDocument))
+    )
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -179,9 +182,11 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
         RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 10)),
         InlineMark.Italic
       )
-    val buffer = Buffer
-      .fromString(BufferId(1), document.plainText)
-      .copy(richTextDocument = Some(document), cursors = List(CursorPosition(0, 0)), selection = None)
+    val fromStringBuffer = Buffer.fromString(BufferId(1), document.plainText)
+    val buffer = fromStringBuffer.copy(
+      editing = fromStringBuffer.editing.copy(cursors = List(CursorPosition(0, 0)), selection = None),
+      richText = fromStringBuffer.richText.copy(richTextDocument = Some(document))
+    )
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -191,9 +196,11 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "ignore rich text marks when dirty buffer text no longer matches rich metadata" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "edited text")
-      .copy(richTextDocument = Some(richDocument), isDirty = true)
+    val fromStringBuffer = Buffer.fromString(BufferId(1), "edited text")
+    val buffer = fromStringBuffer.copy(
+      document = fromStringBuffer.document.copy(isDirty = true),
+      richText = fromStringBuffer.richText.copy(richTextDocument = Some(richDocument))
+    )
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -217,9 +224,10 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val buffer = Buffer
-      .fromString(BufferId(1), document.plainText)
-      .copy(richTextDocument = Some(document))
+    val fromStringBuffer = Buffer.fromString(BufferId(1), document.plainText)
+    val buffer = fromStringBuffer.copy(
+      richText = fromStringBuffer.richText.copy(richTextDocument = Some(document))
+    )
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -239,9 +247,10 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val buffer = Buffer
-      .fromString(BufferId(1), document.plainText)
-      .copy(richTextDocument = Some(document))
+    val fromStringBuffer = Buffer.fromString(BufferId(1), document.plainText)
+    val buffer = fromStringBuffer.copy(
+      richText = fromStringBuffer.richText.copy(richTextDocument = Some(document))
+    )
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -261,9 +270,10 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val buffer = Buffer
-      .fromString(BufferId(1), document.plainText)
-      .copy(richTextDocument = Some(document))
+    val fromStringBuffer = Buffer.fromString(BufferId(1), document.plainText)
+    val buffer = fromStringBuffer.copy(
+      richText = fromStringBuffer.richText.copy(richTextDocument = Some(document))
+    )
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 

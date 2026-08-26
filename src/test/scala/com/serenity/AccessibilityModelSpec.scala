@@ -294,10 +294,11 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "align wrapped toolbar accessibility bounds with rendered row slots" in {
-    val surfaceId    = SurfaceId("toolbar")
-    val bufferId     = BufferId(42)
-    val paneId       = PaneId(0)
-    val buffer       = Buffer.fromString(bufferId, "toolbar").copy(cursors = List(CursorPosition(0, 0)))
+    val surfaceId = SurfaceId("toolbar")
+    val bufferId  = BufferId(42)
+    val paneId    = PaneId(0)
+    val buffer =
+      Buffer.fromString(bufferId, "toolbar").copy(editing = EditingState(cursors = List(CursorPosition(0, 0))))
     val toolbarState = ContextualToolbarState()
     val state = AppState.initial.copy(
       config = AppConfig.default.withUiElementGap(1),

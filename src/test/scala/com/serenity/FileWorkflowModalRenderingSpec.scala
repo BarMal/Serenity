@@ -32,7 +32,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        cursors = List(CursorPosition(1, 2))
+        editing = EditingState(cursors = List(CursorPosition(1, 2)))
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
@@ -98,7 +98,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        cursors = List(CursorPosition(1, 2))
+        editing = EditingState(cursors = List(CursorPosition(1, 2)))
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(

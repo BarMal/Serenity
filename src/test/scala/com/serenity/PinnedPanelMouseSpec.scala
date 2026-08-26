@@ -266,7 +266,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 2))
+    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 2))
   }
 
   it should "highlight an outline row on hover without stealing focus" in {
@@ -299,7 +299,14 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val comment  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
     sm.updateState(state =>
       state
-        .copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(documentComments = List(comment))))
+        .copy(buffers =
+          state.buffers.updated(
+            bufferId,
+            state
+              .buffers(bufferId)
+              .copy(annotations = state.buffers(bufferId).annotations.copy(documentComments = List(comment)))
+          )
+        )
     ).unsafeRunSync()
 
     val symbols = DocumentNavigation.commentSymbols(List(comment))
@@ -315,7 +322,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 0))
+    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 0))
 
     val lensSurface = updated.commentLensSurface.getOrElse(fail("Expected the comment lens to open"))
     val lensState = lensSurface.content match
@@ -332,7 +339,14 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val comment  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
     sm.updateState(state =>
       state
-        .copy(buffers = state.buffers.updated(bufferId, state.buffers(bufferId).copy(documentComments = List(comment))))
+        .copy(buffers =
+          state.buffers.updated(
+            bufferId,
+            state
+              .buffers(bufferId)
+              .copy(annotations = state.buffers(bufferId).annotations.copy(documentComments = List(comment)))
+          )
+        )
     ).unsafeRunSync()
 
     val symbols = DocumentNavigation.commentSymbols(List(comment))
@@ -373,7 +387,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(2, 3))
+    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(2, 3))
   }
 
   it should "highlight a diagnostics row on hover without stealing focus" in {
@@ -434,7 +448,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 1))
+    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1))
   }
 
   it should "not navigate from blank rows in a horizontal bottom diagnostics panel" in {
@@ -459,7 +473,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
   }
 
   it should "update a pinned panel size from mouse drag before release" in {

@@ -12,12 +12,14 @@ object DocumentOutline:
 
   def forBuffer(buffer: Buffer): List[Symbol] =
     richTextHeadings(
-      buffer.richTextDocument.filter(_.matchesPlainTextShape(buffer.content.lineCount, buffer.content.weight))
+      buffer.richText.richTextDocument.filter(
+        _.matchesPlainTextShape(buffer.document.content.lineCount, buffer.document.content.weight)
+      )
     )
       .filter(_.nonEmpty) match
       case Some(symbols) => symbols
       case None =>
-        buffer.language match
+        buffer.document.language match
           case Some(LanguageId.Markdown) =>
             markdownHeadings(buffer)
           case None =>
@@ -78,4 +80,4 @@ object DocumentOutline:
     else title.take(MaxPlainTextSectionNameLength - 3) + "..."
 
   private def bufferLines(buffer: Buffer): Iterator[(String, Int)] =
-    buffer.content.linesIteratorFrom(0).map { case (line, text) => text -> line }
+    buffer.document.content.linesIteratorFrom(0).map { case (line, text) => text -> line }

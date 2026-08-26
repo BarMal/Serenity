@@ -37,10 +37,11 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
 
     // A Prose-role buffer uses the text (wider) font; a Code-role buffer uses the code font.
     val baseBuffer = Buffer.fromString(bufferId, content)
+    val withLanguage =
+      if usesTextFont then baseBuffer
+      else baseBuffer.copy(document = baseBuffer.document.copy(language = Some(LanguageId.Scala)))
     val buffer =
-      (if usesTextFont then baseBuffer
-       else baseBuffer.copy(language = Some(LanguageId.Scala)))
-        .copy(cursors = List(CursorPosition(0, content.length)))
+      withLanguage.copy(editing = withLanguage.editing.copy(cursors = List(CursorPosition(0, content.length))))
 
     buffer.usesTextFont shouldBe usesTextFont
 
@@ -143,9 +144,9 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       val bufferId     = BufferId(1)
       val content      = "abcdefghij" * 60
 
-      val buffer = Buffer
-        .fromString(bufferId, content)
-        .copy(cursors = List(CursorPosition(0, content.length)))
+      val baseBuffer = Buffer.fromString(bufferId, content)
+      val buffer =
+        baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(0, content.length))))
       buffer.usesTextFont shouldBe true
 
       val baseState = AppState.initial.copy(
@@ -165,7 +166,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       // Give the buffer the viewport dimensions the layout engine derives (visibleColumns/visibleLines in cells).
       val state        = LayoutEngine.syncViewportDimensions(baseState, viewportSize)
       val syncedBuffer = state.buffers(bufferId)
-      val cursor       = syncedBuffer.cursors.head
+      val cursor       = syncedBuffer.editing.cursors.head
 
       // The caret's true wrapped row: measured at the width the renderer wraps at (the code-font grid width), with
       // the buffer's own prose font for glyph advances.

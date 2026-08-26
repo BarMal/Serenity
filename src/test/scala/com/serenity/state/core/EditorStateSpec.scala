@@ -19,7 +19,7 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     updatedState.buffers should have size 2
     updatedState.bufferOrder shouldBe List(BufferId(0), BufferId(1))
     updatedState.focusedBufferId shouldBe Some(BufferId(1))
-    updatedState.buffers(BufferId(1)).isNewEmpty shouldBe true
+    updatedState.buffers(BufferId(1)).document.isNewEmpty shouldBe true
   }
 
   it should "create new Markdown buffers when configured as the default document mode" in {
@@ -31,8 +31,8 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     )
 
     val buffer = updatedState.buffers(BufferId(1))
-    buffer.language shouldBe Some(LanguageId.Markdown)
-    buffer.richTextDocument shouldBe None
+    buffer.document.language shouldBe Some(LanguageId.Markdown)
+    buffer.richText.richTextDocument shouldBe None
   }
 
   it should "create new rich text buffers when configured as the default document mode" in {
@@ -44,8 +44,8 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     )
 
     val buffer = updatedState.buffers(BufferId(1))
-    buffer.language shouldBe None
-    buffer.richTextDocument.map(_.plainText) shouldBe Some("")
+    buffer.document.language shouldBe None
+    buffer.richText.richTextDocument.map(_.plainText) shouldBe Some("")
   }
 
   it should "insert a new buffer after the currently focused buffer" in {

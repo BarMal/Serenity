@@ -242,7 +242,9 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val state = initialState.copy(
       buffers = initialState.buffers.updated(
         BufferId(0),
-        initialState.buffers(BufferId(0)).copy(cursors = List(CursorPosition(12, 1)))
+        initialState
+          .buffers(BufferId(0))
+          .copy(editing = initialState.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(12, 1))))
       )
     )
 
@@ -261,7 +263,9 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val state = initialState.copy(
       buffers = initialState.buffers.updated(
         BufferId(0),
-        initialState.buffers(BufferId(0)).copy(cursors = List(CursorPosition(12, 1)))
+        initialState
+          .buffers(BufferId(0))
+          .copy(editing = initialState.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(12, 1))))
       )
     )
     val hoveredPanel = outlinePanel.copy(content = SurfaceContent.Outline(outlineSymbols, Some(Location(30, 0))))
@@ -309,7 +313,9 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     val state = initialState.copy(
       buffers = initialState.buffers.updated(
         BufferId(0),
-        initialState.buffers(BufferId(0)).copy(cursors = List(CursorPosition(15, 4)))
+        initialState
+          .buffers(BufferId(0))
+          .copy(editing = initialState.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(15, 4))))
       )
     )
 
