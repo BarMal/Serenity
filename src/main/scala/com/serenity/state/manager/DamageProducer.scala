@@ -27,8 +27,11 @@ import com.serenity.state.models.*
   * state entirely outside `inputEventPhase`, so it needs its own before/after diff to report
   * `animationDamage`/`fullRenderDamage` at all.
   *
-  * Not yet covered, and out of scope for this pass: overlay/surface damage (`#1000`) -- left to the
-  * `overlaysMayCoverPanes` stand-down in `Renderer.planFrame` until then.
+  * `#1000` retires `Renderer.planFrame`'s `overlaysMayCoverPanes` stand-down in favour of `fullRenderDamage`'s
+  * `uiSurfaces`/`focus` checks below, rather than reasoning about each overlay's precise pixel footprint (shadow/blur
+  * bleed included) -- see that function's doc comment for why a coarse "the whole frame redraws whenever an overlay
+  * changes" is both correct and enough to fix the actual reported problem (every frame redrawing while any overlay is
+  * merely visible, not just while one is changing).
   */
 object DamageProducer:
 
@@ -226,10 +229,24 @@ object DamageProducer:
     * cross-fades every glyph and background colour in flight, and a surface animation composites through the same
     * full-render path as any other overlay (see that function's doc comment for why the window sitter alone is exempt
     * -- it never touches the canvas at all, so it contributes no damage here).
+    *
+    * `uiSurfaces` changing covers a floating, pinned, modal or expanded surface appearing, moving, resizing or changing
+    * content -- `Renderer`'s retired `overlaysMayCoverPanes` stand-down disabled row reuse outright whenever any such
+    * surface was merely visible, because those layers draw shadows, blur and translucency that reach outside the
+    * rectangles the scene reports. Reporting `Everything` only when this actually changes keeps that same safety (a
+    * redraw whenever the overlay itself changes, wiping out any stale bleed) while letting ordinary content edits
+    * elsewhere -- typing with the command runner open -- report their own precise row damage instead, which is the
+    * whole point of `#1000`. `pinnedSurfaces` is a filtered/reordered projection of `uiSurfaces` (plus `layout`,
+    * already covered by `paneChromeDamage`), so it needs no separate check. `focus` changing can retarget which
+    * floating surface `OverlayViewModel.preferredFloatingSurface` selects, or its dim/active tint, without `uiSurfaces`
+    * itself changing (tabbing between two already-open floating panels).
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
-    if before.themeTransition != after.themeTransition || before.surfaceAnimations != after.surfaceAnimations then
-      Damage.Everything
+    if before.themeTransition != after.themeTransition ||
+        before.surfaceAnimations != after.surfaceAnimations ||
+        before.uiSurfaces != after.uiSurfaces ||
+        before.focus != after.focus
+    then Damage.Everything
     else Damage.Nothing
 
   /** Pane headers, gutter text and line numbers -- `Renderer.ChromeKey`'s `layout`/`gutterText`/`lineNumberRows`/
