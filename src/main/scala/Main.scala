@@ -104,15 +104,12 @@ object Main extends IOApp:
                   () => displayState.uiMetrics
                 ),
               checkResize = IO(swingWin.doResizeIfNecessary()),
-              // The trailing Damage parameter is landed plumbing for #999: AppRuntime now computes and threads real
-              // per-frame paint-scope damage, but Renderer's own paint-scope decision (Renderer.planFrame) doesn't
-              // consume it yet, so it isn't forwarded past this boundary until that follow-up lands.
-              renderFull = (state, vis, cc, _) =>
+              renderFull = (state, vis, cc, damage) =>
                 syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
-                  IO(paintFullFrame(state, vis, cc, swingWin, displayState.snapshot)).evalOn(paintEc),
-              renderCursorOnly = (state, vis, cc, _) =>
+                  IO(paintFullFrame(state, vis, cc, swingWin, displayState.snapshot, damage)).evalOn(paintEc),
+              renderCursorOnly = (state, vis, cc, damage) =>
                 syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
-                  IO(paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot)).evalOn(paintEc),
+                  IO(paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage)).evalOn(paintEc),
               appConfig = actualAppConfig,
               makeStateManager = Some(logger =>
                 com.serenity.state.manager.StateManager.apply(
@@ -152,7 +149,8 @@ object Main extends IOApp:
     cursorVisible: Boolean,
     cursorColor: Option[java.awt.Color],
     window: SwingWindow,
-    display: RuntimeDisplayState.Snapshot
+    display: RuntimeDisplayState.Snapshot,
+    damage: com.serenity.state.models.Damage
   ): Unit =
     if cursorVisible then
       val _ = Renderer.renderWithCursorOverlay(
@@ -162,7 +160,8 @@ object Main extends IOApp:
         display.textFont,
         display.uiFont,
         display.uiMetrics,
-        cursorColor
+        cursorColor,
+        damage
       )
       ()
     else
@@ -175,7 +174,8 @@ object Main extends IOApp:
         display.uiFont,
         display.uiMetrics,
         None,
-        repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible)
+        repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible),
+        damage = damage
       )
 
   /** Repaint only the cursor overlay, falling back to a full frame when the overlay path declines. */
@@ -184,7 +184,8 @@ object Main extends IOApp:
     cursorVisible: Boolean,
     cursorColor: Option[java.awt.Color],
     window: SwingWindow,
-    display: RuntimeDisplayState.Snapshot
+    display: RuntimeDisplayState.Snapshot,
+    damage: com.serenity.state.models.Damage
   ): Unit =
     val rendered = Renderer.renderCursorOnly(
       state,
@@ -206,5 +207,6 @@ object Main extends IOApp:
         display.uiFont,
         display.uiMetrics,
         cursorColor,
-        repaintOnFlush = true
+        repaintOnFlush = true,
+        damage = damage
       )
