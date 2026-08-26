@@ -54,6 +54,18 @@ object Damage:
   def isEverything(damage: Damage): Boolean =
     flatten(damage).contains(Everything)
 
+  /** Whether `damage` is expressed purely as per-buffer row/cell facts -- no `Chrome`, `PaneChrome`, `Surface` or
+    * `Everything`. `Nothing` trivially qualifies (there is nothing to bound a repaint around, but nothing excluded is
+    * present either). This is the shape a consumer must see before it can trust a screen repaint bounded to specific
+    * pixel rects rather than the whole canvas: any of the excluded cases can touch pixels outside what per-buffer row
+    * facts alone describe.
+    */
+  def isBufferRowsOnly(damage: Damage): Boolean =
+    flatten(damage).forall {
+      case BufferRows(_, _) | BufferCells(_, _, _, _) => true
+      case _                                          => false
+    }
+
   private def flatten(damage: Damage): Set[Damage] =
     damage match
       case Nothing         => Set.empty

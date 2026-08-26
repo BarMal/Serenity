@@ -3,6 +3,8 @@ package com.serenity.ui.renderer
 import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.jdk.CollectionConverters.*
+
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode, PostProcessingEffect}
 import com.serenity.lsp.config.LanguageId
@@ -100,133 +102,163 @@ object Renderer:
   private val MinMarkdownPreviewSourceLines = 32
   private val MarkdownPreviewOverscanFactor = 4
 
-  /** Reference identity for large state objects. Cheaper than structural equality and conservative in the safe
-    * direction: a rebuilt but equal object simply forces a redraw.
+  /** The render parameters that shape a frame but are not part of `AppState`, so `DamageProducer` -- which only diffs
+    * `AppState` -- has no way to see them change: the window's pixel size, the three fonts, and the metrics/overrides a
+    * caller derives from them. Tracked per persistence key so a mismatch against the last frame drawn with that key can
+    * force a full redraw the same blunt way `Renderer`'s retired `ChromeKey` did by including these fields directly in
+    * its own structural comparison.
     */
-  final private class ReferenceIdentity(private val value: AnyRef):
-
-    override def equals(other: Any): Boolean =
-      other match
-        case that: ReferenceIdentity => value eq that.value
-        case _                       => false
-
-    override def hashCode(): Int = System.identityHashCode(value)
-
-  /** Everything outside a pane's own visible rows that changes how those rows are drawn. Any difference retires the
-    * whole pane rather than being reasoned about per row.
-    */
-  final private case class PaneContentKey(
-      contentRect: LayoutRect,
-      theme: Theme,
-      config: ReferenceIdentity,
-      font: Font,
-      cellMetrics: CellMetrics,
-      syntaxHighlightingEnabled: Boolean,
-      language: Option[LanguageId],
-      selections: List[Selection]
-  )
-
-  /** Per-row inputs that are not part of the text layout: focused-body dimming, comment highlights, cell animations and
-    * any caret this surface draws itself. [[com.serenity.animation.AnimatedCell]] is pure frame-counter state, so value
-    * equality implies the same rendered colours.
-    */
-  final private case class PaneRowKey(
-      focusedBody: Boolean,
-      comments: List[DocumentComment],
-      animations: Map[Int, com.serenity.animation.AnimatedCell],
-      caretPixels: List[(Int, Int, Int)]
-  )
-
-  final private case class PaneFrameRecord(
-      key: PaneContentKey,
-      snapshot: TextLayoutSnapshot,
-      rowKeys: Vector[PaneRowKey],
-      rowRects: Vector[PixelRect],
-      overflowingRows: Set[Int]
-  )
-
-  /** Everything the frame draws outside editor pane text: spacers, line numbers, gutter, pane headers and the caret
-    * visibility that feeds them. Two frames sharing a chrome key paint identical pixels everywhere except pane rows,
-    * which is what makes a bounded repaint safe.
-    */
-  final private case class ChromeKey(
-      contract: EditorLayoutContract,
-      theme: Theme,
-      config: ReferenceIdentity,
-      layout: ReferenceIdentity,
-      uiSurfaces: ReferenceIdentity,
-      focus: Focus,
-      cursorVisible: Boolean,
-      cursorColor: Option[java.awt.Color],
+  final private case class RenderInputs(
       viewportSize: ViewportSize,
       codeFont: Font,
       textFont: Font,
       uiFont: Font,
       cellMetrics: CellMetrics,
       uiMetrics: CellMetrics,
-      gutterText: String,
-      lineNumberRows: Vector[(Int, Int)],
-      diagnostics: Map[BufferId, Map[Int, List[com.serenity.lsp.model.Diagnostic]]],
-      headers: List[(PaneId, Boolean, Option[String], Boolean, Option[Int])]
+      cursorVisible: Boolean,
+      cursorColor: Option[java.awt.Color]
   )
 
-  final private case class FrameRecord(panes: Map[PaneId, PaneFrameRecord], chrome: ChromeKey)
+  private def renderInputsFor(context: RenderContext, viewportSize: ViewportSize): RenderInputs =
+    RenderInputs(
+      viewportSize,
+      context.codeFont,
+      context.textFont,
+      context.uiFont,
+      context.cellMetrics,
+      context.uiMetrics,
+      context.cursorVisible,
+      context.cursorColorOverride
+    )
 
-  /** What a frame decided to reuse: the rows it still has to draw per pane, the pixel bands it kept, and the record to
-    * remember once the frame has been drawn.
+  /** Per-pane geometry for this frame: which buffer line each visual row shows, to translate `Damage`'s buffer-line
+    * facts into row indices, and the pixel band each row owns, to know what a preserved row's pixels actually cover.
     */
+  final private case class PaneFrameRecord(
+      bufferId: BufferId,
+      rowBufferLines: Vector[Int],
+      rowRects: Vector[PixelRect],
+      overflowingRows: Set[Int]
+  )
+
+  /** What a frame decided to reuse: the rows it still has to draw per pane and the pixel bands it kept. */
   final private case class FramePlan(
       dirtyRowsByPane: Map[PaneId, Set[Int]],
       preserved: List[PixelRect],
-      record: FrameRecord,
       repaintRegion: Option[PixelRect],
       boundedRepaint: Boolean
   )
 
-  /** Frame records for surfaces that keep their pixels, keyed by the surface's persistence key.
+  /** Where a frame goes: the screen it will be shown on, and the region sink that screen's repaint should honour. */
+  final private case class FrameOutput(screenToken: AnyRef, repaintRegion: AtomicReference[Option[PixelRect]])
+
+  /** Per-persistence-key bookkeeping this module remembers across frames, replacing the retired `ChromeKey`/
+    * `FrameRecord`/`PaneContentKey`/`PaneRowKey` reconstruct-and-diff machinery. Nothing here holds a structural
+    * snapshot of a frame to diff against -- staleness is `Damage`, reported by the code that made a change, accumulated
+    * across however many frames a pixel buffer or the screen sits unvisited via [[DamageAccumulator]]. What is kept is
+    * only enough to know when that accumulation cannot be trusted on its own: the set of panes actually drawn (a pane
+    * can appear or disappear -- e.g. an empty buffer gaining content -- without the layout reference changing, which is
+    * `paneChromeDamage`'s usual signal for that), and the non-`AppState` [[RenderInputs]] above.
     *
     * Weak keys: the base image pool recycles a small number of images, and an image the pool drops must not be held
     * alive by this cache. Access is synchronised because the render thread is not guaranteed to be a single thread
     * across the app's lifetime.
     */
-  private val frameRecords = new java.util.WeakHashMap[AnyRef, FrameRecord]()
+  final private case class DrawState(paneIds: Set[PaneId], inputs: RenderInputs)
 
-  /** Where a frame goes: the screen it will be shown on, and the region sink that screen's repaint should honour. */
-  final private case class FrameOutput(screenToken: AnyRef, repaintRegion: AtomicReference[Option[PixelRect]])
+  private val bufferDamage    = new java.util.WeakHashMap[AnyRef, Damage]()
+  private val bufferDrawState = new java.util.WeakHashMap[AnyRef, DrawState]()
 
-  /** The record of the frame currently on screen, per screen, used to bound repaints. Distinct from [[frameRecords]]
-    * because base images alternate: the pixels a surface preserves come from two frames ago, while the screen shows the
-    * last one.
+  /** Distinct from [[bufferDamage]] because base images alternate: the pixels a surface preserves come from two frames
+    * ago, while the screen shows the last one published.
     */
-  private val publishedRecords = new java.util.WeakHashMap[AnyRef, FrameRecord]()
+  private val screenDamage  = new java.util.WeakHashMap[AnyRef, Damage]()
+  private val screenPaneIds = new java.util.WeakHashMap[AnyRef, Set[PaneId]]()
 
-  private def publishedRecordFor(output: Option[FrameOutput]): Option[FrameRecord] =
-    output.flatMap(value => publishedRecords.synchronized(Option(publishedRecords.get(value.screenToken))))
+  /** Folds `damage` into every buffer identity already being tracked, via [[DamageAccumulator.accumulateBuffers]] --
+    * called unconditionally on every frame, regardless of which identity (if any) this specific frame draws into, so a
+    * pixel buffer sitting idle through several frames still accrues what each of them changed.
+    */
+  private def accumulateBufferDamage(damage: Damage): Unit =
+    bufferDamage.synchronized {
+      val updated = DamageAccumulator.accumulateBuffers(mapAsScala(bufferDamage), damage)
+      updated.foreach { case (key, value) => val _ = bufferDamage.put(key, value) }
+    }
 
-  private def storePublishedRecord(output: Option[FrameOutput], record: Option[FrameRecord]): Unit =
+  /** Reports and resets what has accumulated for `persistenceKey` since it was last drawn into, via
+    * [[DamageAccumulator.observeBufferDraw]] -- `Damage.Everything` if this is the first time this identity has been
+    * seen, since an untracked identity's pixels cannot be trusted at all, not merely assumed unchanged.
+    */
+  private def drainBufferDamage(persistenceKey: AnyRef): Damage =
+    bufferDamage.synchronized {
+      val wasTracked          = bufferDamage.containsKey(persistenceKey)
+      val (observed, updated) = DamageAccumulator.observeBufferDraw(mapAsScala(bufferDamage), persistenceKey)
+      updated.foreach { case (key, value) => val _ = bufferDamage.put(key, value) }
+      if wasTracked then observed else Damage.Everything
+    }
+
+  /** Records `paneIds`/`inputs` as this identity's current draw state and reports whether either differs from what was
+    * remembered -- a pane appearing or disappearing without a layout-reference change (an empty buffer gaining
+    * content), or a render parameter `DamageProducer` cannot see because it isn't part of `AppState` (a window resize,
+    * a font swap), both mean the accumulated buffer damage alone cannot be trusted for this frame.
+    */
+  private def drawStateChanged(persistenceKey: AnyRef, paneIds: Set[PaneId], inputs: RenderInputs): Boolean =
+    bufferDrawState.synchronized {
+      val next     = DrawState(paneIds, inputs)
+      val previous = Option(bufferDrawState.get(persistenceKey))
+      val _        = bufferDrawState.put(persistenceKey, next)
+      !previous.contains(next)
+    }
+
+  /** Folds `damage` into the screen's own accumulated total for `output`'s screen, via
+    * [[DamageAccumulator.accumulateScreen]]. Distinct from [[accumulateBufferDamage]] because exactly one buffer is
+    * ever on screen at a time, so there is only ever one running total to fold into, not one per tracked identity.
+    */
+  private def accumulateScreenDamage(output: Option[FrameOutput], damage: Damage): Unit =
     output.foreach { value =>
-      publishedRecords.synchronized {
-        record match
-          case Some(frame) => val _ = publishedRecords.put(value.screenToken, frame)
-          case None        => val _ = publishedRecords.remove(value.screenToken)
+      screenDamage.synchronized {
+        val current = Option(screenDamage.get(value.screenToken)).getOrElse(Damage.Nothing)
+        val _       = screenDamage.put(value.screenToken, DamageAccumulator.accumulateScreen(current, damage))
       }
     }
+
+  /** Reports and resets what has accumulated for the screen since it was last published to, via
+    * [[DamageAccumulator.observeScreenPublish]] -- `Damage.Everything` when there is no output to bound a repaint
+    * against, or this is the first publish this screen has ever been tracked for.
+    */
+  private def drainScreenDamage(output: Option[FrameOutput]): Damage =
+    output match
+      case None => Damage.Everything
+      case Some(value) =>
+        screenDamage.synchronized {
+          val wasTracked        = screenDamage.containsKey(value.screenToken)
+          val current           = Option(screenDamage.get(value.screenToken)).getOrElse(Damage.Nothing)
+          val (observed, reset) = DamageAccumulator.observeScreenPublish(current)
+          val _                 = screenDamage.put(value.screenToken, reset)
+          if wasTracked then observed else Damage.Everything
+        }
+
+  /** As [[drawStateChanged]], but for the screen's own published pane set -- distinct because the screen shows the
+    * previous frame while a surface's own preserved pixels come from the one before that (see [[screenDamage]]).
+    */
+  private def screenPaneIdsChanged(output: Option[FrameOutput], paneIds: Set[PaneId]): Boolean =
+    output match
+      case None => true
+      case Some(value) =>
+        screenPaneIds.synchronized {
+          val previous = Option(screenPaneIds.get(value.screenToken))
+          val _        = screenPaneIds.put(value.screenToken, paneIds)
+          !previous.contains(paneIds)
+        }
+
+  private def mapAsScala(map: java.util.Map[AnyRef, Damage]): Map[AnyRef, Damage] =
+    map.asScala.toMap
 
   /** Logical pixels map one-to-one onto canvas component pixels: the canvas scales the frame image back to its own
     * logical size when it paints, so a region measured against the frame is already in component coordinates.
     */
   private def toAwtRectangle(rect: PixelRect): java.awt.Rectangle =
     new java.awt.Rectangle(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)
-
-  private def recordFor(key: AnyRef): Option[FrameRecord] =
-    frameRecords.synchronized(Option(frameRecords.get(key)))
-
-  private def storeRecord(key: AnyRef, record: Option[FrameRecord]): Unit =
-    frameRecords.synchronized {
-      record match
-        case Some(value) => val _ = frameRecords.put(key, value)
-        case None        => val _ = frameRecords.remove(key)
-    }
 
   private def withEffectiveTheme(state: AppState): AppState =
     state.themeTransition match
@@ -271,7 +303,8 @@ object Renderer:
     uiFont: java.awt.Font,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
-    repaintOnFlush: Boolean
+    repaintOnFlush: Boolean,
+    damage: Damage = Damage.Everything
   ): Unit =
     val state0 = withEffectiveTheme(state)
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rect) for a
@@ -304,7 +337,8 @@ object Renderer:
         swingWin.metrics,
         uiMetrics,
         cursorColor,
-        output
+        output,
+        damage
       )
     }
 
@@ -376,7 +410,8 @@ object Renderer:
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[java.awt.Color],
+    damage: Damage = Damage.Everything
   ): Boolean =
     val state0       = withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
@@ -413,7 +448,8 @@ object Renderer:
         swingWin.metrics,
         uiMetrics,
         cursorColor = None,
-        output
+        output,
+        damage
       ).fold(false) { renderPlan =>
         val baseDirtyRegion = repaintRegion.get().map(toAwtRectangle)
         swingWin.onCursorOverlayReady(baseDirtyRegion) { image =>
@@ -447,6 +483,19 @@ object Renderer:
     cellMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
   ): Unit =
+    render(state, cursorVisible, surface, viewportSize, codeFont, textFont, cellMetrics, cursorColor, Damage.Everything)
+
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color],
+    damage: Damage
+  ): Unit =
     val defaultUiFont = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
     render(
       state,
@@ -458,7 +507,8 @@ object Renderer:
       defaultUiFont,
       cellMetrics,
       CellMetrics.fromFont(defaultUiFont),
-      cursorColor
+      cursorColor,
+      damage
     )
 
   def render(
@@ -473,6 +523,33 @@ object Renderer:
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color]
   ): Unit =
+    render(
+      state,
+      cursorVisible,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      cursorColor,
+      Damage.Everything
+    )
+
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color],
+    damage: Damage
+  ): Unit =
     val _ = renderWithRepaintRegion(
       state,
       cursorVisible,
@@ -483,7 +560,8 @@ object Renderer:
       uiFont,
       cellMetrics,
       uiMetrics,
-      cursorColor
+      cursorColor,
+      damage
     )
 
   /** Render one frame and report which part of the canvas it changed.
@@ -501,7 +579,8 @@ object Renderer:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[java.awt.Color],
+    damage: Damage = Damage.Everything
   ): Option[PixelRect] =
     val state0        = withEffectiveTheme(state)
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
@@ -521,7 +600,8 @@ object Renderer:
         cellMetrics,
         uiMetrics,
         cursorColor,
-        output
+        output,
+        damage
       )
     }
     repaintRegion.get()
@@ -575,8 +655,26 @@ object Renderer:
     state: AppState,
     cursorVisible: Boolean,
     surface: RenderSurface,
+    viewportSize: ViewportSize
+  ): Unit =
+    render(state, cursorVisible, surface, viewportSize, None, Damage.Everything)
+
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
     viewportSize: ViewportSize,
-    cursorColor: Option[java.awt.Color] = None
+    cursorColor: Option[java.awt.Color]
+  ): Unit =
+    render(state, cursorVisible, surface, viewportSize, cursorColor, Damage.Everything)
+
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    cursorColor: Option[java.awt.Color],
+    damage: Damage
   ): Unit =
     val defaultFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
     render(
@@ -587,7 +685,8 @@ object Renderer:
       defaultFont,
       defaultFont,
       CellMetrics.fromFont(defaultFont),
-      cursorColor
+      cursorColor,
+      damage
     )
 
   private def renderFrame(
@@ -602,7 +701,8 @@ object Renderer:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
-    output: Option[FrameOutput]
+    output: Option[FrameOutput],
+    damage: Damage
   ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
 
@@ -663,7 +763,7 @@ object Renderer:
           cellMetrics,
           uiMetrics
         )
-        val framePlan = planFrame(state, context, finalizedScene, editorRenderPlan, viewportSize, output)
+        val framePlan = planFrame(state, context, finalizedScene, editorRenderPlan, viewportSize, output, damage)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
             surface.clearViewportExcept(state.theme.background, plan.preserved)
@@ -681,7 +781,7 @@ object Renderer:
         renderPinnedPanels(state, context, finalizedScene)
         renderFloatingPanels(state, context, finalizedScene)
         renderModalLayer(state, context, finalizedScene)
-        commitFramePlan(surface, framePlan, output)
+        commitFramePlan(framePlan, output)
         Some(editorRenderPlan)
 
     surface.applyPostProcessing(state.config.postProcessingEffect)
@@ -690,31 +790,34 @@ object Renderer:
 
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *
-    * Used by frames that repaint the canvas from scratch (the start page), where no pane row survives.
+    * Used by frames that repaint the canvas from scratch (the start page) or that stand `planFrame`'s optimisation down
+    * entirely, where no pane row survives -- the accumulated damage this identity was tracking is now moot, since
+    * everything just got redrawn from nothing this surface's own bookkeeping remembers.
     */
   private def forgetPreservedContent(surface: RenderSurface, output: Option[FrameOutput]): Unit =
-    surface.persistentContentKey.foreach(key => storeRecord(key, None))
-    storePublishedRecord(output, None)
-    output.foreach(_.repaintRegion.set(None))
+    surface.persistentContentKey.foreach { key =>
+      bufferDamage.synchronized { val _ = bufferDamage.remove(key) }
+      bufferDrawState.synchronized { val _ = bufferDrawState.remove(key) }
+    }
+    output.foreach { value =>
+      screenDamage.synchronized { val _ = screenDamage.remove(value.screenToken) }
+      screenPaneIds.synchronized { val _ = screenPaneIds.remove(value.screenToken) }
+      value.repaintRegion.set(None)
+    }
 
-  private def commitFramePlan(surface: RenderSurface, framePlan: Option[FramePlan], output: Option[FrameOutput]): Unit =
-    framePlan match
-      case Some(plan) =>
-        surface.persistentContentKey.foreach(key => storeRecord(key, Some(plan.record)))
-        storePublishedRecord(output, Some(plan.record))
-        output.foreach(
-          _.repaintRegion.set(
-            if plan.boundedRepaint then Some(plan.repaintRegion.getOrElse(PixelRect(0, 0, 0, 0))) else None
-          )
-        )
-      case None =>
-        forgetPreservedContent(surface, output)
+  private def commitFramePlan(framePlan: Option[FramePlan], output: Option[FrameOutput]): Unit =
+    output.foreach { value =>
+      val bounded = framePlan.filter(_.boundedRepaint).map(_.repaintRegion.getOrElse(PixelRect(0, 0, 0, 0)))
+      value.repaintRegion.set(bounded)
+    }
 
   /** Decide which pane rows this frame still has to draw, and which pixel bands it may keep from an earlier frame.
     *
     * Returns `None` — meaning "draw everything, remember nothing" — whenever the frame cannot be reasoned about safely:
     * a surface that does not preserve pixels, a post-processing pass that would compound over kept pixels, or any
-    * floating/pinned/modal layer that may paint across pane content.
+    * floating/pinned/modal layer that may paint across pane content. `damage` is always folded into every tracked
+    * identity first, regardless of which branch this frame takes, so a pixel buffer that sits idle through a stood-down
+    * frame does not lose the damage that frame reported.
     */
   private def planFrame(
     state: AppState,
@@ -722,24 +825,27 @@ object Renderer:
     scene: UiSceneSnapshot,
     renderPlan: EditorPaneRenderPlan,
     viewportSize: ViewportSize,
-    output: Option[FrameOutput]
+    output: Option[FrameOutput],
+    damage: Damage
   ): Option[FramePlan] =
-    context.surface.persistentContentKey
+    accumulateBufferDamage(damage)
+    accumulateScreenDamage(output, damage)
+
+    val plan = context.surface.persistentContentKey
       .filter(_ => state.config.postProcessingEffect == PostProcessingEffect.Off)
       .filter(_ => !overlaysMayCoverPanes(state, scene))
       .map { persistenceKey =>
-        val previous  = recordFor(persistenceKey)
-        val published = publishedRecordFor(output)
-        val chrome    = chromeKeyFor(state, context, renderPlan, viewportSize)
-        val panes     = paneRecordsFor(state, context, renderPlan)
+        val panes   = paneRecordsFor(state, context, renderPlan)
+        val paneIds = panes.keySet
         val allPanesReusable =
           renderPlan.paneLayouts.keySet.forall(panes.contains) &&
             state.layout.orderedPaneIds.forall(panes.contains)
 
-        val dirtyRowsByPane = panes.map {
-          case (paneId, record) =>
-            paneId -> dirtyRowsAgainst(previous.flatMap(_.panes.get(paneId)), record)
-        }
+        val bufferDamageSinceLastDraw = drainBufferDamage(persistenceKey)
+        val inputsOrPanesChanged = drawStateChanged(persistenceKey, paneIds, renderInputsFor(context, viewportSize))
+        val effectiveDamage      = if inputsOrPanesChanged then Damage.Everything else bufferDamageSinceLastDraw
+
+        val dirtyRowsByPane = panes.map { case (paneId, record) => paneId -> dirtyRowsFor(effectiveDamage, record) }
 
         val preserved = panes.toList.flatMap {
           case (paneId, record) =>
@@ -748,41 +854,44 @@ object Renderer:
         }
 
         // The screen shows the previous frame, while the pixels this surface preserves come from the one before that,
-        // so the repaint region is measured against the published frame and only when every other layer matches it.
+        // so the repaint region is measured against damage accumulated since the screen was last published to, and
+        // only when every pane is reusable and the published pane set hasn't shifted underneath it.
+        val screenDamageSincePublish = drainScreenDamage(output)
+        val boundedRepaintEligible =
+          allPanesReusable &&
+            !screenPaneIdsChanged(output, paneIds) &&
+            Damage.isBufferRowsOnly(screenDamageSincePublish)
         val repaintRows =
-          published
-            .filter(_.chrome == chrome)
-            .filter(_ => allPanesReusable)
-            .filter(_.panes.keySet == panes.keySet)
-            .map { publishedRecord =>
-              panes.toList.flatMap {
-                case (paneId, record) =>
-                  dirtyRowsAgainst(publishedRecord.panes.get(paneId), record).toList
-                    .flatMap(record.rowRects.lift)
-              }
+          Option.when(boundedRepaintEligible) {
+            panes.toList.flatMap {
+              case (_, record) =>
+                dirtyRowsFor(screenDamageSincePublish, record).toList.flatMap(record.rowRects.lift)
             }
+          }
 
         FramePlan(
           dirtyRowsByPane = dirtyRowsByPane,
           preserved = preserved,
-          record = FrameRecord(panes, chrome),
           repaintRegion = repaintRows.flatMap(PixelRect.unionOf),
           boundedRepaint = repaintRows.isDefined
         )
       }
 
-  /** Rows of `current` that cannot reuse `previous`, widened by one row on each side and by the rows whose glyphs reach
-    * outside the band this pane can preserve.
+    if plan.isEmpty then forgetPreservedContent(context.surface, output)
+    plan
+
+  /** Rows of `record` that `damage` marks dirty, translated from buffer line numbers to this pane's current visual row
+    * indices, widened by one row on each side and by the rows whose glyphs reach outside the band this pane can
+    * preserve. `Damage.Everything` dirties every row, since it carries no per-buffer detail to translate.
     */
-  private def dirtyRowsAgainst(previous: Option[PaneFrameRecord], current: PaneFrameRecord): Set[Int] =
-    val comparable = previous.filter(_.key == current.key)
-    val dirty = DirtyLineDiff.dirtyRows(
-      comparable.map(_.snapshot),
-      current.snapshot,
-      comparable.map(_.rowKeys).getOrElse(Vector.empty),
-      current.rowKeys
-    )
-    DirtyLineDiff.dilate(dirty, current.snapshot.visualLines.length) ++ current.overflowingRows
+  private def dirtyRowsFor(damage: Damage, record: PaneFrameRecord): Set[Int] =
+    if Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
+    else
+      val bufferLines = Damage.coarsenToRows(record.bufferId, damage)
+      val dirty = record.rowBufferLines.zipWithIndex.collect {
+        case (bufferLine, row) if bufferLines.contains(bufferLine) => row
+      }.toSet
+      DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++ record.overflowingRows
 
   /** True when any floating, pinned or modal layer is on screen.
     *
@@ -803,7 +912,9 @@ object Renderer:
         case _                                  => false
     }
 
-  /** Frame records for the panes drawn by [[renderPlainBufferContent]].
+  /** Geometry for the panes drawn by [[renderPlainBufferContent]]: which buffer line each visual row shows (to
+    * translate `Damage`'s buffer-line facts into row indices) and the pixel band each row owns (to know what a
+    * preserved row's pixels actually cover).
     *
     * Panes on any other path — the welcome text, the empty-pane filler, the inline markdown lens, which paint over the
     * whole content rect from inputs this record does not track — are left out, so they always redraw in full.
@@ -821,48 +932,18 @@ object Renderer:
           buffer     <- state.buffers.get(bufferId)
           snapshot   <- renderPlan.snapshots.get(paneId)
           if buffer.content.weight > 0 && !isInlineMarkdownLens(buffer, state)
-        yield paneId -> paneFrameRecord(
-          buffer,
-          paneLayout.contentRect,
-          state,
-          context,
-          snapshot,
-          renderPlan.annotations.getOrElse(bufferId, BufferRenderAnnotations(Map.empty, Map.empty))
-        )
+        yield paneId -> paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot)
     }.toMap
 
   private def paneFrameRecord(
-    buffer: Buffer,
+    bufferId: BufferId,
     contentRect: LayoutRect,
-    state: AppState,
     context: RenderContext,
-    snapshot: TextLayoutSnapshot,
-    annotations: BufferRenderAnnotations
+    snapshot: TextLayoutSnapshot
   ): PaneFrameRecord =
-    val activeBodyLines = focusedTextBodyLines(buffer, state)
-    val carets          = caretPixelsByRow(buffer, contentRect, state, context, snapshot)
-    val rowKeys = snapshot.visualLines.zipWithIndex.map {
-      case (visualLine, row) =>
-        PaneRowKey(
-          focusedBody = activeBodyLines(visualLine.bufferLine),
-          comments = annotations.commentsByLine.getOrElse(visualLine.bufferLine, Nil),
-          animations = buffer.animations.getLineAnimations(visualLine.bufferLine),
-          caretPixels = carets.getOrElse(row, Nil)
-        )
-    }
     PaneFrameRecord(
-      key = PaneContentKey(
-        contentRect = contentRect,
-        theme = state.theme,
-        config = ReferenceIdentity(state.config),
-        font = context.fontForBuffer(buffer),
-        cellMetrics = context.cellMetrics,
-        syntaxHighlightingEnabled = state.syntaxHighlightingEnabled,
-        language = buffer.language,
-        selections = buffer.allSelections
-      ),
-      snapshot = snapshot,
-      rowKeys = rowKeys,
+      bufferId = bufferId,
+      rowBufferLines = snapshot.visualLines.map(_.bufferLine),
       rowRects = paneRowRects(contentRect, context, snapshot),
       overflowingRows = overflowingRows(contentRect, context, snapshot)
     )
@@ -901,81 +982,6 @@ object Renderer:
       val bottomPx = (rowMetrics.lineTopPx(row) + heightPx).min(bottomLimitPx)
       PixelRect(leftPx, topPx, widthPx.max(0), (bottomPx - topPx).max(0))
     }
-
-  /** The caret rectangles this surface paints itself, grouped by visual row.
-    *
-    * Mirrors [[renderCursors]] exactly, so a caret appearing, moving, blinking or changing colour retires the rows it
-    * touches. When the caret is drawn on a separate overlay image instead, no rectangle is produced here and the rows
-    * stay reusable.
-    */
-  private def caretPixelsByRow(
-    buffer: Buffer,
-    contentRect: LayoutRect,
-    state: AppState,
-    context: RenderContext,
-    snapshot: TextLayoutSnapshot
-  ): Map[Int, List[(Int, Int, Int)]] =
-    val cursorVisible = context.cursorVisible || state.hasCommandRunnerDomain
-    buffer.cursors.zipWithIndex
-      .flatMap {
-        case (cursor, cursorIndex) =>
-          val isPrimaryCursor = cursorIndex == 0
-          val shouldRender    = cursorVisible || (buffer.cursors.size > 1 && !isPrimaryCursor)
-          calculateCursorVisualPosition(cursor, snapshot)
-            .filter(_ => shouldRender)
-            .filter((visualLine, _) => visualLineVisible(contentRect, visualLine, context, snapshot))
-            .flatMap {
-              case (visualLine, xPx) =>
-                val color        = cursorColorFor(state.config, state.theme, context, isPrimaryCursor)
-                val caretWidthPx = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
-                val desiredXPx   = context.cellMetrics.toPixelX(contentRect.x) + math.round(xPx)
-                caretWithin(contentRect, context.cellMetrics, desiredXPx, caretWidthPx).map {
-                  case (caretXPx, widthPx) => visualLine -> (caretXPx, widthPx, color.getRGB)
-                }
-            }
-      }
-      .groupMap(_._1)(_._2)
-      .view
-      .mapValues(_.toList)
-      .toMap
-
-  private def chromeKeyFor(
-    state: AppState,
-    context: RenderContext,
-    renderPlan: EditorPaneRenderPlan,
-    viewportSize: ViewportSize
-  ): ChromeKey =
-    val activeSnapshot = state.layout.activeEditorPaneId.flatMap(renderPlan.snapshots.get)
-    ChromeKey(
-      contract = renderPlan.layoutContract,
-      theme = state.theme,
-      config = ReferenceIdentity(state.config),
-      layout = ReferenceIdentity(state.layout),
-      uiSurfaces = ReferenceIdentity(state.uiSurfaces),
-      focus = state.focus,
-      cursorVisible = context.cursorVisible,
-      cursorColor = context.cursorColorOverride,
-      viewportSize = viewportSize,
-      codeFont = context.codeFont,
-      textFont = context.textFont,
-      uiFont = context.uiFont,
-      cellMetrics = context.cellMetrics,
-      uiMetrics = context.uiMetrics,
-      gutterText = buildGutterContent(state),
-      lineNumberRows =
-        activeSnapshot.map(_.visualLines.map(line => line.bufferLine -> line.startColumn)).getOrElse(Vector.empty),
-      diagnostics = renderPlan.annotations.view.mapValues(_.diagnosticsByLine).toMap,
-      headers = state.layout.orderedPaneIds.map { paneId =>
-        val buffer = state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get)
-        (
-          paneId,
-          state.layout.activeEditorPaneId.contains(paneId),
-          buffer.flatMap(_.filePath).flatMap(path => Option(path.getFileName)).map(_.toString),
-          buffer.exists(_.isDirty),
-          buffer.map(_.id.value)
-        )
-      }
-    )
 
   private def prepareScene(
     state: AppState,
