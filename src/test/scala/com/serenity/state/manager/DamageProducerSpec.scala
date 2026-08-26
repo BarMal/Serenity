@@ -133,12 +133,29 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
       Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
   }
 
-  it should "report Chrome damage when the syntax-highlighting setting toggles, since it recolors every buffer" in {
-    val before = stateWithContent("alpha")
-    val after  = before.copy(config = before.config.withSyntaxHighlighting(!before.config.syntaxHighlightingEnabled))
+  it should
+    "report the full buffer extent (plus Chrome, since the active gutter's line numbers follow it) on a scroll" in {
+      val before = stateWithContent("first\nsecond\nthird")
+      val after = before.copy(buffers =
+        before.buffers.updated(bufferId, before.buffers(bufferId).copy(viewport = Viewport.default.copy(topLine = 1)))
+      )
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.Chrome
+      DamageProducer.forTransition(before, after) shouldBe
+        Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
+    }
+
+  it should "report no damage from scrolling when the viewport does not actually change" in {
+    val before = stateWithContent("first\nsecond\nthird")
+    DamageProducer.forTransition(before, before) shouldBe Damage.Nothing
   }
+
+  it should
+    "report Everything when the syntax-highlighting setting toggles, since it recolors every buffer's own content" in {
+      val before = stateWithContent("alpha")
+      val after  = before.copy(config = before.config.withSyntaxHighlighting(!before.config.syntaxHighlightingEnabled))
+
+      DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+    }
 
   private val revealCell = AnimatedCell(Some('x'), List(java.awt.Color.WHITE), Nil)
 
@@ -295,22 +312,21 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.Nothing
   }
 
-  it should "report Chrome damage when the theme changes" in {
+  it should "report Everything when the theme changes, since it recolors every visible buffer's own content" in {
     val before = stateWithContent("alpha")
     val after  = before.copy(theme = if before.theme == Theme.dark then Theme.light else Theme.dark)
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.Chrome
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
-  it should "combine content and chrome damage when both change together" in {
+  it should "report Everything when a theme change accompanies a content edit, since Everything subsumes it" in {
     val before       = stateWithContent("alpha\nbeta")
     val editedBuffer = before.buffers(bufferId).copy(content = before.buffers(bufferId).content.insert(0, "X"))
     val after = before
       .copy(buffers = before.buffers.updated(bufferId, editedBuffer))
       .copy(theme = if before.theme == Theme.dark then Theme.light else Theme.dark)
 
-    DamageProducer.forTransition(before, after) shouldBe
-      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0)), Damage.Chrome))
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
   it should "report BufferCells for a single-line edit on a monospaced buffer when granularity is Cells" in {
@@ -403,17 +419,17 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
       Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1)), Damage.Chrome))
   }
 
-  it should "report the whole buffer when the focused-text-body feature is toggled on" in {
+  it should "report Everything when the focused-text-body feature is toggled on, via chromeDamage's config check" in {
     val before = stateWithContent("first\nsecond\n\nfourth\nfifth", cursors = List(CursorPosition(0, 0)))
     val after  = before.copy(config = before.config.withFocusedTextBody(true))
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2, 3, 4))
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
-  it should "report the whole buffer when the focused-text-body feature is toggled off" in {
+  it should "report Everything when the focused-text-body feature is toggled off, via chromeDamage's config check" in {
     val base   = stateWithContent("first\nsecond\n\nfourth\nfifth", cursors = List(CursorPosition(0, 0)))
     val before = base.copy(config = base.config.withFocusedTextBody(true))
     val after  = before.copy(config = before.config.withFocusedTextBody(false))
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2, 3, 4))
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }

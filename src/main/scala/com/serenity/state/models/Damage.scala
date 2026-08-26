@@ -17,6 +17,11 @@ enum Damage:
   case BufferRows(bufferId: BufferId, rows: Set[Int])
   case PaneChrome(paneId: PaneId)
   case Surface(surfaceId: SurfaceId)
+
+  /** Pixels outside every pane's own content -- the gutter and line numbers -- and nothing else. A change that also
+    * recolors or reshapes pane content itself (a theme, a font, syntax highlighting) is `Everything`, not `Chrome`: a
+    * consumer that reuses pane content pixels on `Chrome` alone would leave them stale for anything broader.
+    */
   case Chrome
   case Everything
   case Combined(items: Set[Damage])
