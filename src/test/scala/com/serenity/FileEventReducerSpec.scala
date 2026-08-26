@@ -32,9 +32,9 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
   "FileEventReducer" should "emit a save-buffer effect for the focused file-backed buffer" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "val x = 42")
-      .copy(filePath = Some(Paths.get("example.scala")), isDirty = true)
+    val buffer0 = Buffer.fromString(BufferId(1), "val x = 42")
+    val buffer = buffer0
+      .copy(document = buffer0.document.copy(filePath = Some(Paths.get("example.scala")), isDirty = true))
     val state = stateWithPaneBuffer(buffer)
 
     val result = FileEventReducer.reduce(SaveFile, state)
@@ -45,9 +45,9 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "emit a save-buffer effect for an explicitly targeted pane" in {
     val paneId = PaneId(4)
-    val buffer = Buffer
-      .fromString(BufferId(2), "val y = 99")
-      .copy(filePath = Some(Paths.get("target.scala")), isDirty = true)
+    val buffer0 = Buffer.fromString(BufferId(2), "val y = 99")
+    val buffer = buffer0
+      .copy(document = buffer0.document.copy(filePath = Some(Paths.get("target.scala")), isDirty = true))
     val state = stateWithPaneBuffer(buffer, paneId = paneId, focus = Focus.Surface(SurfaceId("command-runner"))).copy(
       uiSurfaces = List(
         UiSurface(
@@ -67,7 +67,8 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "emit no save effect when the buffer has no file path" in {
-    val buffer = Buffer.fromString(BufferId(3), "scratch").copy(isDirty = true)
+    val buffer0 = Buffer.fromString(BufferId(3), "scratch")
+    val buffer  = buffer0.copy(document = buffer0.document.copy(isDirty = true))
     val state  = stateWithPaneBuffer(buffer)
 
     val result = FileEventReducer.reduce(SaveFile, state)

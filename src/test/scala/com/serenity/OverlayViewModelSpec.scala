@@ -19,9 +19,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   private def stateWithQuickInfo(text: String): AppState =
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
@@ -62,9 +60,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   it should "derive a below-cursor modal overlay view from unified floating surfaces" in {
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -94,7 +90,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "space command palette item slots without spacing other overlay content" in {
-    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(cursors = List(CursorPosition(1, 2)))
+    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane   = EditorPane.withBuffer(paneId, bufferId)
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
@@ -127,9 +123,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   it should "derive a focused find overlay view beneath the active cursor" in {
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -176,9 +170,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     )
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       config = AppConfig.default
@@ -229,9 +221,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -264,9 +254,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   it should "skip inactive command palettes so closed overlays do not linger" in {
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -301,9 +289,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -377,9 +363,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -420,9 +404,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(2, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(2, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -463,9 +445,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .updateSearchTerm("op")(using registry)
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),

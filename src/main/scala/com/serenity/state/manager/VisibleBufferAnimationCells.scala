@@ -23,7 +23,7 @@ private[serenity] object VisibleBufferAnimationCells:
 
     (viewport.topLine until (viewport.topLine + viewport.visibleLines))
       .flatMap { lineIndex =>
-        buffer.content.getLine(lineIndex).toList.flatMap { line =>
+        buffer.document.content.getLine(lineIndex).toList.flatMap { line =>
           val visibleText = line.slice(startColumn, startColumn + visibleColumns)
           visibleText.zipWithIndex.map { (char, offset) =>
             CharacterKey(startColumn + offset, lineIndex) -> CellAnimation(char, startColor, endColor)

@@ -287,20 +287,22 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
       config = AppConfig.default.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true)),
-      buffers =
-        AppState.initial.buffers.updated(bufferId, AppState.initial.buffers(bufferId).copy(content = Rope("hello")))
+      buffers = {
+        val buffer = AppState.initial.buffers(bufferId)
+        AppState.initial.buffers.updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("hello"))))
+      }
     )
     val movedCursorState = initialState.copy(
-      buffers = initialState.buffers.updated(
-        bufferId,
-        initialState.buffers(bufferId).copy(cursors = List(CursorPosition(0, 1)))
-      )
+      buffers = {
+        val buffer = initialState.buffers(bufferId)
+        initialState.buffers.updated(bufferId, buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 1)))))
+      }
     )
     val editedState = movedCursorState.copy(
-      buffers = movedCursorState.buffers.updated(
-        bufferId,
-        movedCursorState.buffers(bufferId).copy(content = Rope("wurld"))
-      )
+      buffers = {
+        val buffer = movedCursorState.buffers(bufferId)
+        movedCursorState.buffers.updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("wurld"))))
+      }
     )
     val configuredState = editedState.copy(
       config = editedState.config.withSpellCheck(editedState.config.spellCheck.copy(additionalWords = List("wurld")))
@@ -534,9 +536,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   it should "bump markdownPreviewEditGeneration when an edit changes a buffer with a live inline markdown preview" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
+    val beforeUnstyled = Buffer.fromString(bufferId, "# Before")
     val before =
-      Buffer.fromString(bufferId, "# Before").copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
-    val after = before.copy(content = Rope("# After"))
+      beforeUnstyled.copy(document =
+        beforeUnstyled.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
+      )
+    val after = before.copy(document = before.document.copy(content = Rope("# After")))
     val prevState = focusedOnBuffer(
       AppState.initial.copy(
         buffers = Map(bufferId -> before),
@@ -565,9 +570,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   it should "leave markdownPreviewEditGeneration untouched when the buffer has no live markdown preview" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
+    val beforeUnstyled = Buffer.fromString(bufferId, "# Before")
     val before =
-      Buffer.fromString(bufferId, "# Before").copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
-    val after = before.copy(content = Rope("# After"))
+      beforeUnstyled.copy(document =
+        beforeUnstyled.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
+      )
+    val after = before.copy(document = before.document.copy(content = Rope("# After")))
     // No withMarkdownViewMode(InlineLens) and no MarkdownPreview surface -- markdownViewMode defaults to Source.
     val prevState    = focusedOnBuffer(AppState.initial.copy(buffers = Map(bufferId -> before)), paneId, bufferId)
     val currentState = prevState.copy(buffers = Map(bufferId -> after))
@@ -590,8 +598,11 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   it should "leave markdownPreviewEditGeneration untouched when the buffer's content did not change" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
+    val bufferUnstyled = Buffer.fromString(bufferId, "# Same")
     val buffer =
-      Buffer.fromString(bufferId, "# Same").copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
+      bufferUnstyled.copy(document =
+        bufferUnstyled.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown))
+      )
     val prevState = focusedOnBuffer(
       AppState.initial.copy(
         buffers = Map(bufferId -> buffer),

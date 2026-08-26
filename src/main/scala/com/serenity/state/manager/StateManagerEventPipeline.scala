@@ -214,13 +214,14 @@ final private[manager] class StateManagerEventPipeline(
         currentState.buffers.get(bufferId) match
           case None => cats.effect.IO.unit
           case Some(buffer) =>
-            val changedContent = previousState.buffers.get(bufferId).exists(_.content != buffer.content)
+            val changedContent =
+              previousState.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
             (for
-              path       <- buffer.filePath
-              languageId <- buffer.language
+              path       <- buffer.document.filePath
+              languageId <- buffer.document.language
               if changedContent
             yield AppEffect.LspQueue(
-              LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.content.collect())
+              LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.document.content.collect())
             ))
               .fold(cats.effect.IO.unit)(effects.interpretEffect)
       }
@@ -238,7 +239,7 @@ final private[manager] class StateManagerEventPipeline(
         currentState.buffers.get(bufferId) match
           case Some(buffer)
               if hasLiveMarkdownPreview(currentState, bufferId) &&
-                previousState.buffers.get(bufferId).exists(_.content != buffer.content) =>
+                previousState.buffers.get(bufferId).exists(_.document.content != buffer.document.content) =>
             val nextGeneration = buffer.markdownPreviewEditGeneration + 1
             stateRef.update { s =>
               s.buffers.get(bufferId).fold(s) { b =>
@@ -255,7 +256,7 @@ final private[manager] class StateManagerEventPipeline(
       case _                                                         => false
     } || (
       state.config.markdownViewMode == com.serenity.config.MarkdownViewMode.InlineLens &&
-        state.buffers.get(bufferId).exists(_.language.contains(com.serenity.lsp.config.LanguageId.Markdown))
+        state.buffers.get(bufferId).exists(_.document.language.contains(com.serenity.lsp.config.LanguageId.Markdown))
     )
 
   private def recordUndoableEdit(event: Event, prevState: AppState): cats.effect.IO[Unit] =
@@ -342,10 +343,10 @@ final private[manager] class StateManagerEventPipeline(
       case _ => false
 
   private def bufferChanged(before: Buffer, after: Buffer): Boolean =
-    before.content != after.content ||
-      before.cursors != after.cursors ||
-      before.selection != after.selection ||
-      before.selections != after.selections
+    before.document.content != after.document.content ||
+      before.editing.cursors != after.editing.cursors ||
+      before.editing.selection != after.editing.selection ||
+      before.editing.selections != after.editing.selections
 
   private def snapFocusToPane(state: AppState, paneId: PaneId): AppState =
     if state.focus == Focus.EditorPane(paneId) then state
@@ -985,13 +986,15 @@ final private[manager] class StateManagerEventPipeline(
                                               s.copy(
                                                 buffers = s.buffers.updated(
                                                   buffer.id,
-                                                  current.copy(
-                                                    cursors = List(focusCursor),
-                                                    selection = selection,
-                                                    selections = Nil,
-                                                    preferredColumn = Some(focusCursor.column),
-                                                    preferredXPx = None,
-                                                    multiCursorVerticalStates = Nil
+                                                  current.copy(editing =
+                                                    current.editing.copy(
+                                                      cursors = List(focusCursor),
+                                                      selection = selection,
+                                                      selections = Nil,
+                                                      preferredColumn = Some(focusCursor.column),
+                                                      preferredXPx = None,
+                                                      multiCursorVerticalStates = Nil
+                                                    )
                                                   )
                                                 ),
                                                 focus = Focus.EditorPane(paneId),
@@ -1113,13 +1116,15 @@ final private[manager] class StateManagerEventPipeline(
                               s.copy(
                                 buffers = s.buffers.updated(
                                   buffer.id,
-                                  current.copy(
-                                    cursors = List(focusCursor),
-                                    selection = selection,
-                                    selections = Nil,
-                                    preferredColumn = Some(focusCursor.column),
-                                    preferredXPx = None,
-                                    multiCursorVerticalStates = Nil
+                                  current.copy(editing =
+                                    current.editing.copy(
+                                      cursors = List(focusCursor),
+                                      selection = selection,
+                                      selections = Nil,
+                                      preferredColumn = Some(focusCursor.column),
+                                      preferredXPx = None,
+                                      multiCursorVerticalStates = Nil
+                                    )
                                   )
                                 ),
                                 focus = Focus.EditorPane(paneId),
@@ -1152,20 +1157,22 @@ final private[manager] class StateManagerEventPipeline(
                           val anchor =
                             current.primarySelection
                               .map(_.anchor)
-                              .orElse(current.cursors.headOption)
+                              .orElse(current.editing.cursors.headOption)
                               .getOrElse(draggedCursor)
                           val selection =
                             Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
                           s.copy(
                             buffers = s.buffers.updated(
                               buffer.id,
-                              current.copy(
-                                cursors = List(draggedCursor),
-                                selection = selection,
-                                selections = Nil,
-                                preferredColumn = Some(draggedCursor.column),
-                                preferredXPx = None,
-                                multiCursorVerticalStates = Nil
+                              current.copy(editing =
+                                current.editing.copy(
+                                  cursors = List(draggedCursor),
+                                  selection = selection,
+                                  selections = Nil,
+                                  preferredColumn = Some(draggedCursor.column),
+                                  preferredXPx = None,
+                                  multiCursorVerticalStates = Nil
+                                )
                               )
                             ),
                             focus = Focus.EditorPane(paneId),
@@ -1427,17 +1434,21 @@ final private[manager] class StateManagerEventPipeline(
       case Some(paneId) =>
         state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get) match
           case Some(buffer) =>
-            val line     = math.max(0, math.min(location.line, math.max(0, buffer.content.lineCount - 1)))
-            val column   = math.max(0, math.min(location.column, buffer.content.getLine(line).getOrElse("").length))
+            val line =
+              math.max(0, math.min(location.line, math.max(0, buffer.document.content.lineCount - 1)))
+            val column =
+              math.max(0, math.min(location.column, buffer.document.content.getLine(line).getOrElse("").length))
             val cursor   = CursorPosition(line, column)
             val viewport = CursorViewport.adjustForCursor(buffer, state, cursor)
             val updatedBuffer = buffer.copy(
-              cursors = List(cursor),
-              selection = None,
-              selections = Nil,
-              preferredColumn = Some(cursor.column),
-              preferredXPx = None,
-              multiCursorVerticalStates = Nil,
+              editing = buffer.editing.copy(
+                cursors = List(cursor),
+                selection = None,
+                selections = Nil,
+                preferredColumn = Some(cursor.column),
+                preferredXPx = None,
+                multiCursorVerticalStates = Nil
+              ),
               viewport = viewport
             )
             state.copy(
@@ -2103,8 +2114,8 @@ final private[manager] class StateManagerEventPipeline(
                       .orElse {
                         val bufferLine  = (vp.topLine + visualRow).max(0)
                         val bufferCol   = (vp.leftColumn + (click.col - contentRect.x)).max(0)
-                        val clampedLine = bufferLine.min(math.max(0, buffer.content.lineCount - 1))
-                        val lineLen     = buffer.content.getLine(clampedLine).getOrElse("").length
+                        val clampedLine = bufferLine.min(math.max(0, buffer.document.content.lineCount - 1))
+                        val lineLen     = buffer.document.content.getLine(clampedLine).getOrElse("").length
                         Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
                       }
                     clickedCursor.map(cursor => (paneId, buffer, cursor))
@@ -2135,8 +2146,8 @@ final private[manager] class StateManagerEventPipeline(
       case None => cats.effect.IO.raiseError(new IllegalStateException(s"missing text snapshot for pane $paneId"))
 
   private def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
-    val source        = RopeCharacterSource(buffer.content)
-    val clickedOffset = buffer.content.lineColumnToOffset(cursor.line, cursor.column)
+    val source        = RopeCharacterSource(buffer.document.content)
+    val clickedOffset = buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
     if source.length == 0 then None
     else
       val probeOffset =
@@ -2156,13 +2167,13 @@ final private[manager] class StateManagerEventPipeline(
         val end = wordEndFrom(probeOffset)
         Some(
           Selection(
-            offsetToCursorPosition(buffer.content, start),
-            offsetToCursorPosition(buffer.content, end)
+            offsetToCursorPosition(buffer.document.content, start),
+            offsetToCursorPosition(buffer.document.content, end)
           )
         )
 
   private def lineSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
-    val lineText = buffer.content.getLine(cursor.line).getOrElse("")
+    val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
     Some(
       Selection(
         CursorPosition(cursor.line, 0),
@@ -2171,7 +2182,7 @@ final private[manager] class StateManagerEventPipeline(
     )
 
   private def rangeSelectionFromAnchor(buffer: Buffer, focus: CursorPosition): Option[Selection] =
-    val anchor = buffer.primarySelection.map(_.anchor).orElse(buffer.cursors.headOption).getOrElse(focus)
+    val anchor = buffer.primarySelection.map(_.anchor).orElse(buffer.editing.cursors.headOption).getOrElse(focus)
     Option.when(anchor != focus)(Selection(anchor, focus))
 
   private def offsetToCursorPosition(content: com.serenity.rope.Rope, offset: Int): CursorPosition =

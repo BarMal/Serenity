@@ -94,18 +94,18 @@ object PerformanceBenchmarks:
     val multiMoveDownResult    = com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
     val plainScrollResult      = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
     val richScrollResult       = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
-    val originalLine           = editingState.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000))
+    val originalLine           = editingState.buffers.get(BufferId(1)).flatMap(_.document.content.getLine(6_000))
     val expectedEditedLine     = originalLine.map(_.patch(12, "x", 0))
     val expectedBackspacedLine = originalLine.map(_.patch(11, "", 1))
 
     def editedLine(result: com.serenity.state.reducers.ReducerResult): Option[String] =
-      result.state.buffers.get(BufferId(1)).flatMap(_.content.getLine(6_000))
+      result.state.buffers.get(BufferId(1)).flatMap(_.document.content.getLine(6_000))
 
     def reducedBuffer(result: com.serenity.state.reducers.ReducerResult): Option[Buffer] =
       result.state.buffers.get(BufferId(1))
 
     def reducedCursor(result: com.serenity.state.reducers.ReducerResult): Option[CursorPosition] =
-      reducedBuffer(result).flatMap(_.cursors.headOption)
+      reducedBuffer(result).flatMap(_.editing.cursors.headOption)
 
     def reducedSelection(result: com.serenity.state.reducers.ReducerResult): Option[Selection] =
       reducedBuffer(result).flatMap(_.primarySelection)
@@ -159,21 +159,21 @@ object PerformanceBenchmarks:
         "reducer.multi_cursor_insert",
         3,
         20,
-        () => assert(reducedBuffer(multiInsertResult).exists(_.cursors.sizeIs == 50)),
+        () => assert(reducedBuffer(multiInsertResult).exists(_.editing.cursors.sizeIs == 50)),
         () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.multi_cursor_move",
         3,
         20,
-        () => assert(reducedBuffer(multiMoveResult).exists(_.cursors.forall(_.column == 5))),
+        () => assert(reducedBuffer(multiMoveResult).exists(_.editing.cursors.forall(_.column == 5))),
         () => EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.multi_cursor_move_down",
         3,
         20,
-        () => assert(reducedBuffer(multiMoveDownResult).exists(_.cursors.sizeIs == 50)),
+        () => assert(reducedBuffer(multiMoveDownResult).exists(_.editing.cursors.sizeIs == 50)),
         () => com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
       ),
       BenchmarkRunner.Benchmark(
@@ -215,10 +215,12 @@ object PerformanceBenchmarks:
     )
     val commentsState = multilineState.copy(
       buffers = multilineState.buffers.view.mapValues { buffer =>
-        buffer.copy(documentComments =
-          (10 until 3_000 by 3)
-            .map(line => DocumentComment(CursorPosition(line, 0), CursorPosition(line, 20), "note"))
-            .toList
+        buffer.copy(annotations =
+          buffer.annotations.copy(documentComments =
+            (10 until 3_000 by 3)
+              .map(line => DocumentComment(CursorPosition(line, 0), CursorPosition(line, 20), "note"))
+              .toList
+          )
         )
       }.toMap
     )
@@ -250,7 +252,9 @@ object PerformanceBenchmarks:
     )
     val findState = editorState(findText, None)
     val editingState = findState.copy(
-      buffers = findState.buffers.view.mapValues(buffer => buffer.copy(cursors = List(CursorPosition(6_000, 12)))).toMap
+      buffers = findState.buffers.view
+        .mapValues(buffer => buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(6_000, 12)))))
+        .toMap
     )
     val jsonSearchResults = Rope(jsonText).searchAll("\"k19999\"")
     val jsonCursorOffset  = Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
@@ -284,7 +288,7 @@ object PerformanceBenchmarks:
       findQuerySurfaceId,
       BufferId(1),
       "needle",
-      findQueryState.buffers(BufferId(1)).content
+      findQueryState.buffers(BufferId(1)).document.content
     )
     val completeFindQuery = ModalEventReducer.applyFindSearchResults(
       findQueryState,

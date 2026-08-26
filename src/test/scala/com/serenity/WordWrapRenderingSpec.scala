@@ -29,7 +29,7 @@ class WordWrapRenderingSpec extends AnyFlatSpec with Matchers:
     val content      = "abcdefghij" * 9
     val buffer = Buffer
       .fromString(bufferId, content)
-      .copy(cursors = List(CursorPosition(0, content.length)))
+      .copy(editing = EditingState(cursors = List(CursorPosition(0, content.length))))
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),

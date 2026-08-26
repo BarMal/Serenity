@@ -54,18 +54,18 @@ class FileManager(using balance: Balance):
       case _ =>
         for
           _ <- ensureSupported(path, _.canSave, "save")
-          _ <- FileUtils.writeFileContent(path, buffer.content.collect())
+          _ <- FileUtils.writeFileContent(path, buffer.document.content.collect())
         yield savedBuffer(buffer, path, None))
 
   /** Save buffer to its existing file path */
   def saveBuffer(buffer: Buffer): IO[Buffer] =
-    buffer.filePath match
+    buffer.document.filePath match
       case Some(path) => saveBuffer(buffer, path)
       case None       => IO.raiseError(new RuntimeException("Buffer has no file path - use Save As"))
 
   /** Check if buffer has unsaved changes */
   def hasUnsavedChanges(buffer: Buffer): Boolean =
-    buffer.isDirty
+    buffer.document.isDirty
 
   /** Get file browser */
   def getFileBrowser: FileBrowser = fileBrowser
@@ -75,10 +75,7 @@ class FileManager(using balance: Balance):
     IO.pure(
       Buffer(
         id = bufferId,
-        content = com.serenity.rope.Rope.empty,
-        filePath = None,
-        isDirty = false,
-        language = None
+        document = com.serenity.state.models.Document(content = com.serenity.rope.Rope.empty)
       )
     )
 
@@ -99,10 +96,11 @@ class FileManager(using balance: Balance):
   private def bufferFromContent(bufferId: BufferId, path: Path, content: String): Buffer =
     Buffer(
       id = bufferId,
-      content = com.serenity.rope.Rope(content),
-      filePath = Some(path),
-      isDirty = false,
-      language = languageFromPath(path)
+      document = com.serenity.state.models.Document(
+        content = com.serenity.rope.Rope(content),
+        filePath = Some(path),
+        language = languageFromPath(path)
+      )
     )
 
   private def bufferFromRichText(
@@ -114,26 +112,32 @@ class FileManager(using balance: Balance):
     val normalized = document.normalized
     Buffer(
       id = bufferId,
-      content = com.serenity.rope.Rope(normalized.plainText),
-      filePath = Some(path),
-      isDirty = false,
-      language = None,
-      richTextDocument = Some(normalized),
-      richTextFidelity = fidelity
+      document = com.serenity.state.models.Document(
+        content = com.serenity.rope.Rope(normalized.plainText),
+        filePath = Some(path)
+      ),
+      richText = com.serenity.state.models.RichTextState(
+        richTextDocument = Some(normalized),
+        richTextFidelity = fidelity
+      )
     )
 
   private def savedBuffer(buffer: Buffer, path: Path, richTextDocument: Option[RichTextDocument]): Buffer =
     buffer.copy(
-      filePath = Some(path),
-      isDirty = false,
-      language = languageFromPath(path),
-      richTextDocument = richTextDocument.map(_.normalized),
-      richTextFidelity = None
+      document = buffer.document.copy(
+        filePath = Some(path),
+        isDirty = false,
+        language = languageFromPath(path)
+      ),
+      richText = buffer.richText.copy(
+        richTextDocument = richTextDocument.map(_.normalized),
+        richTextFidelity = None
+      )
     )
 
   private def preventLossyOverwrite(buffer: Buffer, path: Path): IO[Unit] =
-    val replacesImportedFile = buffer.filePath.contains(path)
-    val isLossyImport        = buffer.richTextFidelity.exists(!_.isLossless)
+    val replacesImportedFile = buffer.document.filePath.contains(path)
+    val isLossyImport        = buffer.richText.richTextFidelity.exists(!_.isLossless)
     IO.raiseWhen(replacesImportedFile && isLossyImport)(
       LossyRichTextOverwriteException(
         s"Saving $path would discard unsupported rich document content. Use Save As to write a new file."
@@ -141,8 +145,8 @@ class FileManager(using balance: Balance):
     )
 
   private def richTextDocumentForSave(buffer: Buffer): RichTextDocument =
-    val text = buffer.content.collect()
-    buffer.richTextDocument
+    val text = buffer.document.content.collect()
+    buffer.richText.richTextDocument
       .filter(_.matchesPlainText(text))
       .getOrElse(RichTextDocument.fromPlainText(text))
 

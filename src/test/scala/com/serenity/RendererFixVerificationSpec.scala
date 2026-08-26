@@ -38,7 +38,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
           config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+            current.buffers(bufferId).copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
           )
         )
       }
@@ -85,7 +85,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
           config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+            current.buffers(bufferId).copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
           )
         )
       }
@@ -103,11 +103,11 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val buffer     = finalState.buffers(bufferId)
 
     // Buffer should contain all text
-    buffer.content.collect() shouldBe longText
+    buffer.document.content.collect() shouldBe longText
 
     // Viewport should scroll to keep cursor visible
     finalState.layout.editorPanes(paneId)
-    val cursor = buffer.cursors.head
+    val cursor = buffer.editing.cursors.head
     cursor.column shouldBe longText.length
 
     // With the fix, the Renderer will clip content to panelRect.width
@@ -138,7 +138,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
           config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+            current.buffers(bufferId).copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
           )
         )
       }
@@ -155,7 +155,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.layout.editorPanes(paneId)
     val buffer   = finalState.buffers(bufferId)
-    val cursor   = buffer.cursors.head
+    val cursor   = buffer.editing.cursors.head
     val viewport = buffer.viewport
 
     // Cursor should be at end
@@ -166,7 +166,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     cursor.column should be < (viewport.leftColumn + viewport.visibleColumns)
 
     // Buffer content should be intact
-    buffer.content.collect() shouldBe veryLongText
+    buffer.document.content.collect() shouldBe veryLongText
 
     info(s"Very long text length: ${veryLongText.length}")
     info(s"Cursor position: ${cursor.column}")
@@ -192,7 +192,7 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
         current.copy(
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+            current.buffers(bufferId).copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
           )
         )
       }
@@ -211,13 +211,13 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.layout.editorPanes(paneId)
     val buffer = finalState.buffers(bufferId)
-    val cursor = buffer.cursors.head
+    val cursor = buffer.editing.cursors.head
 
     // Should be on last line
     cursor.line shouldBe 4
 
     // Content should be preserved
-    val content = buffer.content.collect()
+    val content = buffer.document.content.collect()
     content should include("Line 1:")
     content should include("Line 5:")
     content.count(_ == '\n') shouldBe 4

@@ -39,13 +39,11 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
     try
       stateManager
         .updateState { state =>
-          val buffer = state
-            .buffers(BufferId(0))
-            .copy(
-              filePath = Some(file),
-              language = Some(LanguageId.Scala),
-              cursors = List(CursorPosition(3, 7))
-            )
+          val original = state.buffers(BufferId(0))
+          val buffer = original.copy(
+            document = original.document.copy(filePath = Some(file), language = Some(LanguageId.Scala)),
+            editing = original.editing.copy(cursors = List(CursorPosition(3, 7)))
+          )
           state.copy(buffers = state.buffers + (BufferId(0) -> buffer))
         }
         .unsafeRunSync()
@@ -78,14 +76,15 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
     try
       stateManager
         .updateState { state =>
-          val buffer = state
-            .buffers(BufferId(0))
-            .copy(
+          val original = state.buffers(BufferId(0))
+          val buffer = original.copy(
+            document = original.document.copy(
               content = com.serenity.rope.Rope("val total = subtotal + 1"),
               filePath = Some(file),
-              language = Some(LanguageId.Scala),
-              cursors = List(CursorPosition(0, 14))
-            )
+              language = Some(LanguageId.Scala)
+            ),
+            editing = original.editing.copy(cursors = List(CursorPosition(0, 14)))
+          )
           state.copy(buffers = state.buffers + (BufferId(0) -> buffer))
         }
         .unsafeRunSync()
@@ -119,13 +118,11 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
     try
       stateManager
         .updateState { state =>
-          val buffer = state
-            .buffers(BufferId(0))
-            .copy(
-              filePath = Some(file),
-              language = Some(LanguageId.Scala),
-              cursors = List(CursorPosition(2, 5))
-            )
+          val original = state.buffers(BufferId(0))
+          val buffer = original.copy(
+            document = original.document.copy(filePath = Some(file), language = Some(LanguageId.Scala)),
+            editing = original.editing.copy(cursors = List(CursorPosition(2, 5)))
+          )
           state.copy(buffers = state.buffers + (BufferId(0) -> buffer))
         }
         .unsafeRunSync()

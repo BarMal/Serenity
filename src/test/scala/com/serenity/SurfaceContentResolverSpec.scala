@@ -892,9 +892,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
         bufferId -> Buffer
           .fromString(bufferId, "alpha beta")
           .copy(
-            selection = Some(selection),
-            cursors = List(selection.focus),
-            richTextDocument = Some(richDocument)
+            editing = EditingState(selection = Some(selection), cursors = List(selection.focus)),
+            richText = RichTextState(richTextDocument = Some(richDocument))
           )
       ),
       bufferOrder = List(bufferId),
@@ -975,9 +974,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
         bufferId -> Buffer
           .fromString(bufferId, "alpha beta")
           .copy(
-            selection = Some(selection),
-            cursors = List(selection.focus),
-            richTextDocument = Some(richDocument)
+            editing = EditingState(selection = Some(selection), cursors = List(selection.focus)),
+            richText = RichTextState(richTextDocument = Some(richDocument))
           )
       ),
       bufferOrder = List(bufferId),

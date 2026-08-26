@@ -78,7 +78,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val stateManager = createStateManager()
       stateManager
         .updateState { state =>
-          val buffer = state.buffers(bufferId).copy(content = com.serenity.rope.Rope(bufferText), isDirty = true)
+          val existing = state.buffers(bufferId)
+          val buffer   = existing.copy(document = existing.document.copy(content = com.serenity.rope.Rope(bufferText), isDirty = true))
           state.copy(buffers = state.buffers + (bufferId -> buffer))
         }
         .unsafeRunSync()
@@ -113,8 +114,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
       updatedState.modalSurface shouldBe None
       Files.readString(targetFile) shouldBe bufferText
-      updatedState.buffers(bufferId).filePath shouldBe Some(targetFile)
-      updatedState.buffers(bufferId).isDirty shouldBe false
+      updatedState.buffers(bufferId).document.filePath shouldBe Some(targetFile)
+      updatedState.buffers(bufferId).document.isDirty shouldBe false
     finally
       Files.deleteIfExists(targetFile)
       Files.deleteIfExists(targetDir)
@@ -150,8 +151,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       updatedState.bufferOrder should have size (initialState.bufferOrder.size + 1)
       val openedBufferId = updatedState.bufferOrder.last
       updatedState.focusedBufferId shouldBe Some(openedBufferId)
-      updatedState.buffers(openedBufferId).filePath shouldBe Some(targetFile)
-      updatedState.buffers(openedBufferId).content.collect() shouldBe "val answer = 42"
+      updatedState.buffers(openedBufferId).document.filePath shouldBe Some(targetFile)
+      updatedState.buffers(openedBufferId).document.content.collect() shouldBe "val answer = 42"
       updatedState.recentFiles shouldBe List(targetFile)
     finally
       Files.deleteIfExists(targetFile)
@@ -320,7 +321,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(content = com.serenity.rope.Rope("remote draft"), isDirty = true)
+        val existing = state.buffers(bufferId)
+        val buffer   = existing.copy(document = existing.document.copy(content = com.serenity.rope.Rope("remote draft"), isDirty = true))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -341,8 +343,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val workflow = currentWorkflow(stateManager)
     workflow.statusMessage shouldBe Some("Remote storage is not supported yet: s3://serenity-docs/drafts/notes.md")
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.buffers(bufferId).filePath shouldBe None
-    state.buffers(bufferId).isDirty shouldBe true
+    state.buffers(bufferId).document.filePath shouldBe None
+    state.buffers(bufferId).document.isDirty shouldBe true
   }
 
   it should "keep the modal open and surface a visible status when save-as targets an unwritable path" in {
@@ -355,7 +357,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val stateManager = createStateManager()
       stateManager
         .updateState { state =>
-          val buffer = state.buffers(bufferId).copy(content = com.serenity.rope.Rope("undeliverable"), isDirty = true)
+          val existing = state.buffers(bufferId)
+          val buffer   = existing.copy(document = existing.document.copy(content = com.serenity.rope.Rope("undeliverable"), isDirty = true))
           state.copy(buffers = state.buffers + (bufferId -> buffer))
         }
         .unsafeRunSync()
@@ -377,8 +380,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       workflow.statusMessage shouldBe defined
       workflow.statusMessage.get should startWith("Could not save:")
       val state = stateManager.getCurrentState.unsafeRunSync()
-      state.buffers(bufferId).filePath shouldBe None
-      state.buffers(bufferId).isDirty shouldBe true
+      state.buffers(bufferId).document.filePath shouldBe None
+      state.buffers(bufferId).document.isDirty shouldBe true
     finally Files.deleteIfExists(blockingFile)
   }
 
@@ -390,14 +393,17 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val stateManager = createStateManager()
       stateManager
         .updateState { state =>
-          val buffer = state
-            .buffers(BufferId(0))
-            .copy(
+          val existing = state.buffers(BufferId(0))
+          val buffer = existing.copy(
+            document = existing.document.copy(
               content = Rope("edited text"),
               filePath = Some(sourceFile),
-              isDirty = true,
+              isDirty = true
+            ),
+            richText = existing.richText.copy(
               richTextFidelity = Some(RichTextFidelity(unsupportedElements = Set("tbl")))
             )
+          )
           state.copy(buffers = state.buffers.updated(BufferId(0), buffer))
         }
         .unsafeRunSync()
@@ -407,7 +413,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val workflow = currentWorkflow(stateManager)
       workflow shouldBe a[SaveAsFileWorkflowState]
       workflow.statusMessage shouldBe Some(reason)
-      stateManager.getCurrentState.unsafeRunSync().buffers(BufferId(0)).filePath shouldBe Some(sourceFile)
-      stateManager.getCurrentState.unsafeRunSync().buffers(BufferId(0)).isDirty shouldBe true
+      stateManager.getCurrentState.unsafeRunSync().buffers(BufferId(0)).document.filePath shouldBe Some(sourceFile)
+      stateManager.getCurrentState.unsafeRunSync().buffers(BufferId(0)).document.isDirty shouldBe true
     finally Files.deleteIfExists(sourceFile)
   }

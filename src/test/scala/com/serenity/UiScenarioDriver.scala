@@ -182,8 +182,8 @@ final class UiScenarioDriver private (
     val mappings = state.buffers.map {
       case (bufferId, buffer) =>
         bufferId -> MarkdownBlockLens.activeBlockLineSet(
-          buffer.content.toString.linesIterator.toVector,
-          buffer.cursors.headOption.map(_.line)
+          buffer.document.content.toString.linesIterator.toVector,
+          buffer.editing.cursors.headOption.map(_.line)
         )
     }
     val previewPlacements = contract.workspace.paneLayouts.toList.flatMap {
@@ -203,7 +203,7 @@ final class UiScenarioDriver private (
     }
     val visibleText = state.focusedBufferId.toList.flatMap { bufferId =>
       state.buffers.get(bufferId).toList.flatMap { buffer =>
-        buffer.content.toString.linesIterator.drop(buffer.viewport.topLine).take(buffer.viewport.visibleLines).toList
+        buffer.document.content.toString.linesIterator.drop(buffer.viewport.topLine).take(buffer.viewport.visibleLines).toList
       }
     }
     val renderedContentRows =
@@ -244,10 +244,10 @@ final class UiScenarioDriver private (
   private def previewPlacementFor(buffer: Buffer, image: Option[ScenarioDrawnImage]): Option[ScenarioPreviewPlacement] =
     for
       drawnImage <- image
-      if buffer.language.contains(com.serenity.lsp.config.LanguageId.Markdown)
+      if buffer.document.language.contains(com.serenity.lsp.config.LanguageId.Markdown)
     yield
-      val lines       = buffer.content.linesFrom(0, buffer.content.lineCount)
-      val activeLine  = buffer.cursors.headOption.map(_.line).filter(line => line >= 0 && line < lines.length)
+      val lines       = buffer.document.content.linesFrom(0, buffer.document.content.lineCount)
+      val activeLine  = buffer.editing.cursors.headOption.map(_.line).filter(line => line >= 0 && line < lines.length)
       val activeBlock = activeLine.map(line => MarkdownBlockLens.currentBlock(lines, line))
       val sourceLimit = math.max(32, buffer.viewport.visibleLines.max(1) * 4)
       val viewportTop = buffer.viewport.topLine.max(0).min(math.max(0, lines.length - 1))
@@ -275,7 +275,7 @@ final class UiScenarioDriver private (
     activeSourceLines: Set[Int]
   ): Set[Int] =
     MarkdownDocumentPreview
-      .renderInlineDocument(buffer.content.linesFrom(0, buffer.content.lineCount))
+      .renderInlineDocument(buffer.document.content.linesFrom(0, buffer.document.content.lineCount))
       .zipWithIndex
       .collect {
         case (previewLine, previewRow)

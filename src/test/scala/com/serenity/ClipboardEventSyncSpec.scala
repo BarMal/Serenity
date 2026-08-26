@@ -64,7 +64,7 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
       stateManager.setCursorPosition(paneId, line, column).unsafeRunSync()
 
     def getContent(bufferId: BufferId): String =
-      stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect()
+      stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).document.content.collect()
 
   final class TestClipboard extends SystemClipboard[IO]:
     private val current = AtomicReference[Option[String]](None)

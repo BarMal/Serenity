@@ -27,8 +27,8 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
     state.buffers should have size 3
     state.buffers should contain key buffer1
     state.buffers should contain key buffer2
-    state.buffers(buffer1).content.collect() shouldBe "First buffer"
-    state.buffers(buffer2).content.collect() shouldBe "Second buffer"
+    state.buffers(buffer1).document.content.collect() shouldBe "First buffer"
+    state.buffers(buffer2).document.content.collect() shouldBe "Second buffer"
 
   it should "manage panes correctly" in new EditorFixture:
     // Given: Initial state has one pane
@@ -60,7 +60,7 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.isValid shouldBe true
     finalState.validationErrors shouldBe empty
-    finalState.buffers(buffer1).content.collect() shouldBe "Updated content"
+    finalState.buffers(buffer1).document.content.collect() shouldBe "Updated content"
 
   it should "handle buffer cleanup correctly" in new EditorFixture:
     // Given: Buffer associated with pane

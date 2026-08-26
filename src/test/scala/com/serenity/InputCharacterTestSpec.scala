@@ -191,7 +191,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
         val state  = stateManager.getCurrentState.unsafeRunSync()
         val pane   = getCurrentPane(state)
         val buffer = pane.bufferId.flatMap(state.buffers.get).get
-        buffer.cursors.head.column.shouldBe(index + 1)
+        buffer.editing.cursors.head.column.shouldBe(index + 1)
     }
 
   trait InputFixture:
@@ -213,7 +213,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
 
     def getBufferContent(bufferId: BufferId): String =
       val state = stateManager.getCurrentState.unsafeRunSync()
-      state.buffers.get(bufferId).map(_.content.collect()).getOrElse("")
+      state.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
 
     def getCurrentPane(state: AppState): EditorPane =
       val paneId = state.layout.editorPanes.keys.head

@@ -12,9 +12,9 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "CommentRendering" should "extract raw and inline markdown views from line comments" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "val x = 1\n// **Important** note")
-      .copy(language = Some(LanguageId.Scala), cursors = List(CursorPosition(1, 4)))
+    val base = Buffer.fromString(BufferId(1), "val x = 1\n// **Important** note")
+    val buffer = base
+      .copy(document = base.document.copy(language = Some(LanguageId.Scala)), editing = base.editing.copy(cursors = List(CursorPosition(1, 4))))
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -24,9 +24,9 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "extract block comments from code buffers" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "/* _Draft_ note */")
-      .copy(language = Some(LanguageId.JavaScript), cursors = List(CursorPosition(0, 3)))
+    val base = Buffer.fromString(BufferId(1), "/* _Draft_ note */")
+    val buffer = base
+      .copy(document = base.document.copy(language = Some(LanguageId.JavaScript)), editing = base.editing.copy(cursors = List(CursorPosition(0, 3))))
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -35,17 +35,17 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "extract multiline block comments from code buffers" in {
-    val buffer = Buffer
-      .fromString(
-        BufferId(1),
-        """val x = 1
-          |/*
-          | * **Review** this value
-          | * before release
-          | */
-          |val y = 2""".stripMargin
-      )
-      .copy(language = Some(LanguageId.Scala), cursors = List(CursorPosition(2, 6)))
+    val base = Buffer.fromString(
+      BufferId(1),
+      """val x = 1
+        |/*
+        | * **Review** this value
+        | * before release
+        | */
+        |val y = 2""".stripMargin
+    )
+    val buffer = base
+      .copy(document = base.document.copy(language = Some(LanguageId.Scala)), editing = base.editing.copy(cursors = List(CursorPosition(2, 6))))
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -55,9 +55,9 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "extract prose comments from markdown buffers" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "<!-- **Review** this paragraph -->")
-      .copy(language = Some(LanguageId.Markdown), cursors = List(CursorPosition(0, 8)))
+    val base = Buffer.fromString(BufferId(1), "<!-- **Review** this paragraph -->")
+    val buffer = base
+      .copy(document = base.document.copy(language = Some(LanguageId.Markdown)), editing = base.editing.copy(cursors = List(CursorPosition(0, 8))))
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -66,17 +66,17 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render authored document comments at the cursor" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "Chapter text")
+    val base = Buffer.fromString(BufferId(1), "Chapter text")
+    val buffer = base
       .copy(
-        cursors = List(CursorPosition(0, 4)),
-        documentComments = List(
+        editing = base.editing.copy(cursors = List(CursorPosition(0, 4))),
+        annotations = base.annotations.copy(documentComments = List(
           DocumentComment(
             anchor = CursorPosition(0, 0),
             focus = CursorPosition(0, 7),
             text = "**Tighten** this opening."
           )
-        )
+        ))
       )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
@@ -87,16 +87,16 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "extract multiline prose comments from markdown buffers" in {
-    val buffer = Buffer
-      .fromString(
-        BufferId(1),
-        """# Notes
-          |<!--
-          |**Review** this paragraph
-          |before publishing
-          |-->""".stripMargin
-      )
-      .copy(language = Some(LanguageId.Markdown), cursors = List(CursorPosition(2, 4)))
+    val base = Buffer.fromString(
+      BufferId(1),
+      """# Notes
+        |<!--
+        |**Review** this paragraph
+        |before publishing
+        |-->""".stripMargin
+    )
+    val buffer = base
+      .copy(document = base.document.copy(language = Some(LanguageId.Markdown)), editing = base.editing.copy(cursors = List(CursorPosition(2, 4))))
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -106,9 +106,9 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "return no comment for ordinary source lines" in {
-    val buffer = Buffer
-      .fromString(BufferId(1), "val x = 1")
-      .copy(language = Some(LanguageId.Scala), cursors = List(CursorPosition(0, 0)))
+    val base = Buffer.fromString(BufferId(1), "val x = 1")
+    val buffer = base
+      .copy(document = base.document.copy(language = Some(LanguageId.Scala)), editing = base.editing.copy(cursors = List(CursorPosition(0, 0))))
 
     CommentRendering.atCursor(buffer) shouldBe None
   }
@@ -122,12 +122,11 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
       }
       .mkString("\n")
     val guardedContent = GuardedGetLineRope(Rope(source), allowedLines = Set(targetLine))
-    val buffer = Buffer
-      .fromString(BufferId(1), "")
+    val base = Buffer.fromString(BufferId(1), "")
+    val buffer = base
       .copy(
-        content = guardedContent,
-        language = Some(LanguageId.Scala),
-        cursors = List(CursorPosition(targetLine, 4))
+        document = base.document.copy(content = guardedContent, language = Some(LanguageId.Scala)),
+        editing = base.editing.copy(cursors = List(CursorPosition(targetLine, 4)))
       )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))

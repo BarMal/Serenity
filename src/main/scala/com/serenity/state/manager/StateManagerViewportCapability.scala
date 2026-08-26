@@ -20,7 +20,7 @@ final private[manager] class StateManagerViewportCapability(
         case Some(pane) =>
           pane.bufferId.flatMap(state.buffers.get) match
             case Some(buffer) =>
-              val cursor        = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+              val cursor        = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
               val updatedBuffer = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
               state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
             case None => state
@@ -82,7 +82,7 @@ final private[manager] class StateManagerViewportCapability(
               val halfVisible = buffer.viewport.visibleLines / 2
               val newTopLine  = math.max(0, targetLine - halfVisible)
               val updatedBuffer = buffer.copy(
-                cursors = List(CursorPosition(targetLine, 0)),
+                editing = buffer.editing.copy(cursors = List(CursorPosition(targetLine, 0))),
                 viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
               )
               state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))

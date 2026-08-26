@@ -125,7 +125,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.models.BufferId(1)
     )
     updatedState.focusedBufferId shouldBe Some(com.serenity.state.models.BufferId(1))
-    updatedState.buffers(com.serenity.state.models.BufferId(1)).isNewEmpty shouldBe true
+    updatedState.buffers(com.serenity.state.models.BufferId(1)).document.isNewEmpty shouldBe true
   }
 
   it should "open file search through the typed file-search command" in {
@@ -162,7 +162,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val selected = state
           .buffers(bufferId)
           .copy(
-            selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
+            editing = state.buffers(bufferId).editing.copy(
+              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> selected))
       }
@@ -174,21 +176,21 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "select-all", "select-all")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).selection shouldBe Some(
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.selection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "Hello World".length))
     )
 
     stateManager.updateState(_.copy(clipboard = Some("Draft"))).unsafeRunSync()
     executeCommandThroughRunner(stateManager, "paste", "paste")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect() shouldBe "Draft"
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).document.content.collect() shouldBe "Draft"
 
     executeCommandThroughRunner(stateManager, "select-all", "select-all")
     executeCommandThroughRunner(stateManager, "cut", "cut")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.clipboard shouldBe Some("Draft")
-    finalState.buffers(bufferId).content.collect() shouldBe ""
+    finalState.buffers(bufferId).document.content.collect() shouldBe ""
   }
 
   it should "execute undo and redo editor commands" in {
@@ -202,12 +204,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val undone = stateManager.getCurrentState.unsafeRunSync()
     undone.commandRunnerSurface shouldBe None
-    undone.buffers(bufferId).content.collect() shouldBe ""
+    undone.buffers(bufferId).document.content.collect() shouldBe ""
     undone.focus shouldBe Focus.EditorPane(PaneId(0))
 
     executeCommandThroughRunner(stateManager, "redo", "redo")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).content.collect() shouldBe "!!"
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).document.content.collect() shouldBe "!!"
   }
 
   it should "open the goto-line modal for the goto-line command" in {
@@ -249,8 +251,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbeta\nalpha"),
-            cursors = List(CursorPosition(2, 0)),
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\nalpha")),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
             findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -384,7 +386,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(content = com.serenity.rope.Rope("wurld"))
+        val buffer =
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("wurld")))
         state.copy(
           buffers = state.buffers + (bufferId -> buffer),
           config = state.config.withSpellCheck(SpellCheckConfig(enabled = false))
@@ -418,9 +421,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("saved through dialog"),
-            filePath = Some(filePath),
-            isDirty = true
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope("saved through dialog"),
+              filePath = Some(filePath),
+              isDirty = true
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -431,8 +436,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
     updatedState.modalSurface shouldBe None
-    updatedState.buffers(bufferId).filePath shouldBe Some(targetPath)
-    updatedState.buffers(bufferId).isDirty shouldBe false
+    updatedState.buffers(bufferId).document.filePath shouldBe Some(targetPath)
+    updatedState.buffers(bufferId).document.isDirty shouldBe false
     Files.readString(targetPath) shouldBe "saved through dialog"
   }
 
@@ -448,9 +453,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
     updatedState.modalSurface shouldBe None
-    val openedBuffer = updatedState.buffers.values.find(_.filePath.contains(sourcePath))
-    openedBuffer.map(_.content.collect()) shouldBe Some("# Notes")
-    openedBuffer.flatMap(_.language) shouldBe Some(LanguageId.Markdown)
+    val openedBuffer = updatedState.buffers.values.find(_.document.filePath.contains(sourcePath))
+    openedBuffer.map(_.document.content.collect()) shouldBe Some("# Notes")
+    openedBuffer.flatMap(_.document.language) shouldBe Some(LanguageId.Markdown)
     val paneId = updatedState.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
     val layout = LayoutEngine.calculateLayout(updatedState, viewportSize)
     val contentRect = LayoutEngine
@@ -468,7 +473,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(content = com.serenity.rope.Rope("no dialog here"), filePath = Some(Path.of("temp", "notes.scala")))
+          .copy(document = state.buffers(bufferId).document.copy(
+            content = com.serenity.rope.Rope("no dialog here"),
+            filePath = Some(Path.of("temp", "notes.scala"))
+          ))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -483,7 +491,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected active file workflow modal"))
     workflow.mode shouldBe FileWorkflowMode.SaveAs
     workflow.filename shouldBe "notes.scala"
-    updatedState.buffers(bufferId).filePath shouldBe Some(Path.of("temp", "notes.scala"))
+    updatedState.buffers(bufferId).document.filePath shouldBe Some(Path.of("temp", "notes.scala"))
   }
 
   it should "open the in-app open-file form when no native dialog is available" in {
@@ -511,8 +519,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
     updatedState.modalSurface shouldBe None
-    updatedState.buffers(BufferId(0)).filePath shouldBe Some(targetPath)
-    updatedState.buffers(BufferId(0)).isDirty shouldBe false
+    updatedState.buffers(BufferId(0)).document.filePath shouldBe Some(targetPath)
+    updatedState.buffers(BufferId(0)).document.isDirty shouldBe false
     Files.readString(targetPath) shouldBe "draft body"
   }
 
@@ -522,7 +530,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -547,7 +555,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(content = com.serenity.rope.Rope.empty, filePath = None, isDirty = false, isNewEmpty = false)
+          .copy(document = state.buffers(bufferId).document.copy(
+            content = com.serenity.rope.Rope.empty,
+            filePath = None,
+            isDirty = false,
+            isNewEmpty = false
+          ))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -570,7 +583,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(dirtyBufferId).copy(isDirty = true)
+        val buffer =
+          state.buffers(dirtyBufferId).copy(document = state.buffers(dirtyBufferId).document.copy(isDirty = true))
         state.copy(
           buffers = state.buffers + (dirtyBufferId -> buffer),
           bufferOrder = state.bufferOrder :+ dirtyBufferId
@@ -594,7 +608,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(dirtyBufferId).copy(isDirty = true)
+        val buffer =
+          state.buffers(dirtyBufferId).copy(document = state.buffers(dirtyBufferId).document.copy(isDirty = true))
         state.copy(
           buffers = state.buffers + (dirtyBufferId -> buffer),
           bufferOrder = state.bufferOrder :+ dirtyBufferId
@@ -618,7 +633,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(isDirty = true)
+        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -690,8 +705,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph"),
-            documentComments = List(DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this"))
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
+            annotations = state.buffers(bufferId).annotations.copy(
+              documentComments = List(DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this"))
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -721,8 +738,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-            language = Some(LanguageId.Markdown)
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+              language = Some(LanguageId.Markdown)
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -758,9 +777,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two\n\nText\n\n### Beat Three"),
-            language = Some(LanguageId.Markdown),
-            cursors = List(CursorPosition(1, 2))
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two\n\nText\n\n### Beat Three"),
+              language = Some(LanguageId.Markdown)
+            ),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -769,9 +790,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    updatedBuffer.cursors shouldBe List(CursorPosition(4, 0))
-    updatedBuffer.selection shouldBe None
-    updatedBuffer.selections shouldBe Nil
+    updatedBuffer.editing.cursors shouldBe List(CursorPosition(4, 0))
+    updatedBuffer.editing.selection shouldBe None
+    updatedBuffer.editing.selections shouldBe Nil
   }
 
   it should "animate the target buffer after document symbol navigation" in {
@@ -783,11 +804,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope(
-              "# Chapter One\n\nBody\n\nMore\n\nStill more\n\nEven more\n\n## Scene Two\n\nText"
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope(
+                "# Chapter One\n\nBody\n\nMore\n\nStill more\n\nEven more\n\n## Scene Two\n\nText"
+              ),
+              language = Some(LanguageId.Markdown)
             ),
-            language = Some(LanguageId.Markdown),
-            cursors = List(CursorPosition(1, 2)),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2))),
             viewport = Viewport.default.copy(visibleLines = 4, visibleColumns = 40)
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -797,7 +820,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    updatedBuffer.cursors shouldBe List(CursorPosition(10, 0))
+    updatedBuffer.editing.cursors shouldBe List(CursorPosition(10, 0))
     updatedBuffer.viewport.topLine should be > 0
     val animations = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
     animations.activeAnimationCount should be > 0
@@ -812,9 +835,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-            language = Some(LanguageId.Markdown),
-            cursors = List(CursorPosition(0, 0))
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+              language = Some(LanguageId.Markdown)
+            ),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -831,7 +856,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(4, 0))
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors shouldBe List(CursorPosition(4, 0))
   }
 
   it should "navigate between plaintext sections from the command runner" in {
@@ -843,9 +868,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("Opening\nbody\n\nSecond\nbody\n\nThird"),
-            language = None,
-            cursors = List(CursorPosition(1, 0))
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope("Opening\nbody\n\nSecond\nbody\n\nThird"),
+              language = None
+            ),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -853,7 +880,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(3, 0))
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors shouldBe List(CursorPosition(3, 0))
   }
 
   it should "toggle a bookmark at the active cursor from the command runner" in {
@@ -862,18 +889,19 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(cursors = List(CursorPosition(2, 4)))
+        val buffer =
+          state.buffers(bufferId).copy(editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4))))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "toggle-bookmark", "toggle-bookmark")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).bookmarks shouldBe List(CursorPosition(2, 4))
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.bookmarks shouldBe List(CursorPosition(2, 4))
 
     executeCommandThroughRunner(stateManager, "toggle-bookmark", "toggle-bookmark")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).bookmarks shouldBe Nil
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.bookmarks shouldBe Nil
   }
 
   it should "navigate between explicit bookmarks from command runner commands" in {
@@ -885,8 +913,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            cursors = List(CursorPosition(2, 0)),
-            bookmarks = List(CursorPosition(0, 3), CursorPosition(4, 1))
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
+            annotations = state.buffers(bufferId).annotations.copy(
+              bookmarks = List(CursorPosition(0, 3), CursorPosition(4, 1))
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -894,11 +924,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "next-bookmark", "next-bookmark")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(4, 1))
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors shouldBe List(CursorPosition(4, 1))
 
     executeCommandThroughRunner(stateManager, "previous-bookmark", "previous-bookmark")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(0, 3))
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 3))
   }
 
   it should "animate the target buffer after bookmark navigation" in {
@@ -910,9 +940,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho"),
-            cursors = List(CursorPosition(1, 0)),
-            bookmarks = List(CursorPosition(4, 1)),
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho")),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))),
+            annotations = state.buffers(bufferId).annotations.copy(bookmarks = List(CursorPosition(4, 1))),
             viewport = Viewport.default.copy(visibleLines = 8, visibleColumns = 40)
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -922,7 +952,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-bookmark", "next-bookmark")
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    updatedBuffer.cursors shouldBe List(CursorPosition(4, 1))
+    updatedBuffer.editing.cursors shouldBe List(CursorPosition(4, 1))
     val animations = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
     animations.activeAnimationCount should be > 0
   }
@@ -936,9 +966,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("0123456789abcdefghijklmnopqrstuvwxyz"),
-            cursors = List(CursorPosition(0, 0)),
-            bookmarks = List(CursorPosition(0, 12)),
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0123456789abcdefghijklmnopqrstuvwxyz")),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+            annotations = state.buffers(bufferId).annotations.copy(bookmarks = List(CursorPosition(0, 12))),
             viewport = Viewport.default.copy(visibleLines = 1, visibleColumns = 5)
           )
         state.copy(
@@ -952,7 +982,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
     val animations    = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
-    updatedBuffer.cursors.shouldBe(List(CursorPosition(0, 12)))
+    updatedBuffer.editing.cursors.shouldBe(List(CursorPosition(0, 12)))
     updatedBuffer.viewport.leftColumn.should(be > 0)
     animations.animations.should(contain.key(CharacterKey(updatedBuffer.viewport.leftColumn, 0)))
     animations.animations.shouldNot(contain.key(CharacterKey(0, 0)))
@@ -967,9 +997,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-            language = Some(LanguageId.Markdown),
-            cursors = List(CursorPosition(1, 2))
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+              language = Some(LanguageId.Markdown)
+            ),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -978,21 +1010,21 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
     val afterJump = stateManager.getCurrentState.unsafeRunSync()
-    afterJump.buffers(bufferId).cursors shouldBe List(CursorPosition(4, 0))
+    afterJump.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(4, 0))
     afterJump.navigationBackStack shouldBe List(NavigationPoint(PaneId(0), bufferId, CursorPosition(1, 2)))
     afterJump.navigationForwardStack shouldBe Nil
 
     executeCommandThroughRunner(stateManager, "navigate-back", "navigate-back")
 
     val afterBack = stateManager.getCurrentState.unsafeRunSync()
-    afterBack.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 2))
+    afterBack.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 2))
     afterBack.navigationBackStack shouldBe Nil
     afterBack.navigationForwardStack shouldBe List(NavigationPoint(PaneId(0), bufferId, CursorPosition(4, 0)))
 
     executeCommandThroughRunner(stateManager, "navigate-forward", "navigate-forward")
 
     val afterForward = stateManager.getCurrentState.unsafeRunSync()
-    afterForward.buffers(bufferId).cursors shouldBe List(CursorPosition(4, 0))
+    afterForward.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(4, 0))
     afterForward.navigationBackStack shouldBe List(NavigationPoint(PaneId(0), bufferId, CursorPosition(1, 2)))
     afterForward.navigationForwardStack shouldBe Nil
   }
@@ -1006,11 +1038,15 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-            language = Some(LanguageId.Markdown),
-            cursors = List(CursorPosition(2, 4)),
-            bookmarks = List(CursorPosition(2, 4)),
-            documentComments = List(DocumentComment(CursorPosition(3, 0), CursorPosition(3, 3), "Revise bridge"))
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+              language = Some(LanguageId.Markdown)
+            ),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4))),
+            annotations = state.buffers(bufferId).annotations.copy(
+              bookmarks = List(CursorPosition(2, 4)),
+              documentComments = List(DocumentComment(CursorPosition(3, 0), CursorPosition(3, 3), "Revise bridge"))
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1041,8 +1077,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("# Plain text only"),
-            cursors = List(CursorPosition(0, 7))
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("# Plain text only")),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 7)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1050,7 +1086,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(0, 7))
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 7))
   }
 
   it should "pin the diagnostics panel from the command runner" in {
@@ -1074,8 +1110,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("# Notes\n\n![Diagram](diagram.png)"),
-            language = Some(LanguageId.Markdown)
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope("# Notes\n\n![Diagram](diagram.png)"),
+              language = Some(LanguageId.Markdown)
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1096,7 +1134,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     }
 
     preview should not be empty
-    updatedState.buffers(BufferId(0)).content.collect() shouldBe "# Notes\n\n![Diagram](diagram.png)"
+    updatedState.buffers(BufferId(0)).document.content.collect() shouldBe "# Notes\n\n![Diagram](diagram.png)"
   }
 
   it should "leave the workspace unchanged when Markdown preview is requested for a non-Markdown buffer" in {
@@ -1200,9 +1238,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("val x = 1\n// **Review** this value"),
-            language = Some(LanguageId.Scala),
-            cursors = List(CursorPosition(1, 3))
+            document = state.buffers(bufferId).document.copy(
+              content = com.serenity.rope.Rope("val x = 1\n// **Review** this value"),
+              language = Some(LanguageId.Scala)
+            ),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 3)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1252,9 +1292,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph"),
-            cursors = List(CursorPosition(0, 2)),
-            selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
+            editing = state.buffers(bufferId).editing.copy(
+              cursors = List(CursorPosition(0, 2)),
+              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1263,10 +1305,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "add-document-comment", "add-document-comment")
 
     val commentedBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
-    commentedBuffer.documentComments shouldBe List(
+    commentedBuffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Comment")
     )
-    commentedBuffer.isDirty shouldBe true
+    commentedBuffer.document.isDirty shouldBe true
 
     executeCommandThroughRunner(stateManager, "comment-lens", "comment-lens")
 
@@ -1284,18 +1326,20 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(cursors = List(CursorPosition(1, 0)), selection = None)
+        val buffer = state.buffers(bufferId).copy(
+          editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0)), selection = None)
+        )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "next-document-comment", "next-document-comment")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
 
     executeCommandThroughRunner(stateManager, "delete-document-comment", "delete-document-comment")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments shouldBe Nil
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.documentComments shouldBe Nil
   }
 
   it should "open the comment lens when navigating between document comments with the keyboard" in {
@@ -1307,11 +1351,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph"),
-            cursors = List(CursorPosition(1, 0)),
-            documentComments = List(
-              DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"),
-              DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))),
+            annotations = state.buffers(bufferId).annotations.copy(
+              documentComments = List(
+                DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"),
+                DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
+              )
             )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -1321,7 +1367,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "previous-document-comment", "previous-document-comment")
 
     val afterPrevious = stateManager.getCurrentState.unsafeRunSync()
-    afterPrevious.buffers(bufferId).cursors shouldBe List(CursorPosition(0, 0))
+    afterPrevious.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
     val previousLens = afterPrevious.commentLensSurface
       .collect { case UiSurface(_, SurfaceContent.CommentLens(lens), _, _) => lens }
       .getOrElse(fail("Expected the comment lens to open after previous-document-comment"))
@@ -1331,7 +1377,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-document-comment", "next-document-comment")
 
     val afterNext = stateManager.getCurrentState.unsafeRunSync()
-    afterNext.buffers(bufferId).cursors shouldBe List(CursorPosition(1, 0))
+    afterNext.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 0))
     val nextLens = afterNext.commentLensSurface
       .collect { case UiSurface(_, SurfaceContent.CommentLens(lens), _, _) => lens }
       .getOrElse(fail("Expected the comment lens to open after next-document-comment"))
@@ -1348,9 +1394,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("Opening paragraph"),
-            cursors = List(CursorPosition(0, 3)),
-            selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("Opening paragraph")),
+            editing = state.buffers(bufferId).editing.copy(
+              cursors = List(CursorPosition(0, 3)),
+              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1367,13 +1415,15 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments shouldBe List(
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Tighten this opening")
     )
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(cursors = List(CursorPosition(0, 3)), selection = None)
+        val buffer = state.buffers(bufferId).copy(
+          editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 3)), selection = None)
+        )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -1389,7 +1439,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments shouldBe List(
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Make this quieter")
     )
   }
@@ -1403,9 +1453,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("cafe\u0301!"),
-            cursors = List(CursorPosition(0, 5)),
-            selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("cafe\u0301!")),
+            editing = state.buffers(bufferId).editing.copy(
+              cursors = List(CursorPosition(0, 5)),
+              selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1422,7 +1474,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments shouldBe List(
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(0, 3), CursorPosition(0, 5), "Accent")
     )
 
@@ -1431,10 +1483,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("a\uD83D\uDE42b"),
-            cursors = List(CursorPosition(0, 2)),
-            selection = None,
-            documentComments = Nil
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\uD83D\uDE42b")),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)), selection = None),
+            annotations = state.buffers(bufferId).annotations.copy(documentComments = Nil)
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1451,7 +1502,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments should contain(
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.documentComments should contain(
       DocumentComment(CursorPosition(0, 3), CursorPosition(0, 3), "Point")
     )
 
@@ -1460,10 +1511,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("a\uD83C\uDDFA\uD83C\uDDF8b"),
-            cursors = List(CursorPosition(0, 3)),
-            selection = None,
-            documentComments = Nil
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\uD83C\uDDFA\uD83C\uDDF8b")),
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 3)), selection = None),
+            annotations = state.buffers(bufferId).annotations.copy(documentComments = Nil)
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1480,7 +1530,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).documentComments should contain(
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.documentComments should contain(
       DocumentComment(CursorPosition(0, 5), CursorPosition(0, 5), "Flag point")
     )
   }
@@ -1492,7 +1542,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val viewportSize = ViewportSize(120, 40)
 
     stateManager.updateBuffer(bufferId, "saved session").unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).isNewEmpty shouldBe false
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).document.isNewEmpty shouldBe false
 
     executeCommandThroughRunner(stateManager, "save-session", "save-session")
     stateManager.sessionExists.unsafeRunSync() shouldBe true
@@ -1502,7 +1552,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "restore-session", "restore-session")
     val restoredState = stateManager.getCurrentState.unsafeRunSync()
-    restoredState.buffers(bufferId).content.collect() shouldBe "saved session"
+    restoredState.buffers(bufferId).document.content.collect() shouldBe "saved session"
     assertActiveBufferFitsViewport(restoredState, viewportSize)
 
     executeCommandThroughRunner(stateManager, "clear-session", "clear-session")
@@ -1526,7 +1576,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     restoredManager.applyEvent(Enter).unsafeRunSync()
 
     val restoredState = restoredManager.getCurrentState.unsafeRunSync()
-    restoredState.buffers(bufferId).content.collect() shouldBe "startup session"
+    restoredState.buffers(bufferId).document.content.collect() shouldBe "startup session"
     restoredState.buffers(bufferId).viewport.visibleColumns should not be savedViewport.width
     restoredState.buffers(bufferId).viewport.visibleLines should not be savedViewport.height
     assertActiveBufferFitsViewport(restoredState, startupViewport)

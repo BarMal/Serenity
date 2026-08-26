@@ -24,7 +24,7 @@ final private[manager] class StateManagerWorkflowCapability(
     statusMessage: Option[String] = None
   ): IO[Unit] =
     val targetBufferId = bufferIdOverride.orElse(state.focusedBufferId)
-    val focusedPath    = targetBufferId.flatMap(id => state.buffers.get(id)).flatMap(_.filePath)
+    val focusedPath    = targetBufferId.flatMap(id => state.buffers.get(id)).flatMap(_.document.filePath)
     val filename = mode match
       case FileWorkflowMode.SaveAs =>
         focusedPath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("")
@@ -115,7 +115,7 @@ final private[manager] class StateManagerWorkflowCapability(
               stateRef.set(nextState) >> continueCloseWorkflow(workflow, nextState)
             case CloseWorkflowChoice.Save =>
               state.buffers.get(workflow.currentBufferId) match
-                case Some(buffer) if buffer.filePath.isDefined =>
+                case Some(buffer) if buffer.document.filePath.isDefined =>
                   saveBufferEffect(workflow.currentBufferId) >>
                     stateRef.get.flatMap { savedState =>
                       val dismissedState = clearCloseActions(dismissModalSurface(savedState))
@@ -162,7 +162,7 @@ final private[manager] class StateManagerWorkflowCapability(
   protected def closeBufferLabel(state: AppState, bufferId: BufferId): String =
     state.buffers
       .get(bufferId)
-      .flatMap(_.filePath.flatMap(path => Option(path.getFileName).map(_.toString)))
+      .flatMap(_.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)))
       .getOrElse(s"Buffer ${bufferId.value} - unsaved")
 
   protected def withCloseAction(state: AppState, workflow: CloseWorkflowState): AppState =
@@ -228,7 +228,7 @@ final private[manager] class StateManagerWorkflowCapability(
       case Some(bufferId) =>
         state.buffers.get(bufferId) match
           case Some(buffer) =>
-            workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.content, _)) match
+            workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.document.content, _)) match
               case Left(error) =>
                 updateReplaceWorkflowSurface(
                   surfaceId,
@@ -244,7 +244,7 @@ final private[manager] class StateManagerWorkflowCapability(
                 else
                   val updatedContent =
                     replaceMatchesInRanges(
-                      rope = buffer.content,
+                      rope = buffer.document.content,
                       matchOffsets = matches,
                       findText = workflow.findText,
                       replacementText = workflow.replacementText
@@ -259,14 +259,18 @@ final private[manager] class StateManagerWorkflowCapability(
                   val updatedFindState =
                     refreshedFindState(updatedContent, workflow.findText, requestedIndex = 0)
                   val updatedBuffer = buffer.copy(
-                    content = updatedContent,
-                    isDirty = true,
-                    isNewEmpty = false,
-                    cursors = List(newCursor),
-                    selection = None,
-                    selections = Nil,
-                    preferredColumn = Some(newCursor.column),
-                    preferredXPx = None,
+                    document = buffer.document.copy(
+                      content = updatedContent,
+                      isDirty = true,
+                      isNewEmpty = false
+                    ),
+                    editing = buffer.editing.copy(
+                      cursors = List(newCursor),
+                      selection = None,
+                      selections = Nil,
+                      preferredColumn = Some(newCursor.column),
+                      preferredXPx = None
+                    ),
                     findState = updatedFindState
                   )
                   recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
@@ -299,7 +303,7 @@ final private[manager] class StateManagerWorkflowCapability(
       case Some(bufferId) =>
         state.buffers.get(bufferId) match
           case Some(buffer) =>
-            workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.content, _)) match
+            workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.document.content, _)) match
               case Left(error) =>
                 updateReplaceWorkflowSurface(
                   surfaceId,
@@ -315,7 +319,7 @@ final private[manager] class StateManagerWorkflowCapability(
                 else
                   val startOffset = nextReplaceMatchOffset(buffer, matches)
                   val endOffset   = startOffset + workflow.findText.length
-                  val updatedContent = buffer.content
+                  val updatedContent = buffer.document.content
                     .delete(startOffset, endOffset)
                     .insert(startOffset, workflow.replacementText)
                   val cursorOffset = startOffset + workflow.replacementText.length
@@ -338,14 +342,18 @@ final private[manager] class StateManagerWorkflowCapability(
                       case ReplaceWorkflowScope.CurrentBuffer =>
                         None
                   val updatedBuffer = buffer.copy(
-                    content = updatedContent,
-                    isDirty = true,
-                    isNewEmpty = false,
-                    cursors = List(newCursor),
-                    selection = replacementSelection,
-                    selections = Nil,
-                    preferredColumn = Some(newCursor.column),
-                    preferredXPx = None,
+                    document = buffer.document.copy(
+                      content = updatedContent,
+                      isDirty = true,
+                      isNewEmpty = false
+                    ),
+                    editing = buffer.editing.copy(
+                      cursors = List(newCursor),
+                      selection = replacementSelection,
+                      selections = Nil,
+                      preferredColumn = Some(newCursor.column),
+                      preferredXPx = None
+                    ),
                     findState = updatedFindState
                   )
                   recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
@@ -569,7 +577,7 @@ final private[manager] class StateManagerWorkflowCapability(
       case Some(bufferId) =>
         fileDialog match
           case Some(dialog) =>
-            val focusedPath = state.buffers.get(bufferId).flatMap(_.filePath)
+            val focusedPath = state.buffers.get(bufferId).flatMap(_.document.filePath)
             val initialDirectory =
               focusedPath
                 .flatMap(path => Option(path.getParent).map(IO.pure))
@@ -648,8 +656,8 @@ final private[manager] class StateManagerWorkflowCapability(
     }
 
   private def nextReplaceMatchOffset(buffer: Buffer, matches: List[Int]): Int =
-    val cursorOffset = buffer.cursors.headOption
-      .map(cursor => offsetForCursor(buffer.content, cursor))
+    val cursorOffset = buffer.editing.cursors.headOption
+      .map(cursor => offsetForCursor(buffer.document.content, cursor))
       .getOrElse(0)
     matches.find(_ >= cursorOffset).getOrElse(matches.head)
 
@@ -658,13 +666,13 @@ final private[manager] class StateManagerWorkflowCapability(
     findText: String,
     range: ReplaceScopeRange
   ): List[Int] =
-    buffer.content.searchAll(findText).filter { offset =>
+    buffer.document.content.searchAll(findText).filter { offset =>
       val insideScope = range match
         case ReplaceScopeRange.Selection(startOffset, endOffset) =>
           offset >= startOffset && (offset + findText.length) <= endOffset
         case ReplaceScopeRange.WholeBuffer =>
           true
-      insideScope && isWholeGraphemeMatch(buffer.content, offset, findText.length)
+      insideScope && isWholeGraphemeMatch(buffer.document.content, offset, findText.length)
     }
 
   private def refreshedFindState(
@@ -724,7 +732,7 @@ final private[manager] class StateManagerWorkflowCapability(
     endOffset: Int,
     replacementLength: Int
   ): Selection =
-    val oldText = buffer.content.collect()
+    val oldText = buffer.document.content.collect()
     val delta   = replacementLength - (endOffset - startOffset)
 
     def adjust(cursor: CursorPosition): CursorPosition =

@@ -105,9 +105,9 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "characterize stacked floating surfaces in scene paint order" in {
     val cursor = CursorPosition(1, 2)
-    val buffer = Buffer
+    val bufferBase = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(cursors = List(cursor))
+    val buffer = bufferBase.copy(editing = bufferBase.editing.copy(cursors = List(cursor)))
     val first = UiSurface(
       SurfaceId("contextual-toolbar"),
       SurfaceContent.ContextualToolbar(ContextualToolbarState()),

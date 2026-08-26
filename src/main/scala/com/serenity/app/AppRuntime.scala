@@ -596,13 +596,13 @@ object AppRuntime:
       activePane.flatMap(paneId => state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get))
     val activeBufferSummary = activeBuffer match
       case Some(buffer) =>
-        val language = buffer.language.map(_.id).getOrElse("plaintext")
-        val cursor   = buffer.cursors.headOption.map(c => s"${c.line}:${c.column}").getOrElse("none")
+        val language = buffer.document.language.map(_.id).getOrElse("plaintext")
+        val cursor   = buffer.editing.cursors.headOption.map(c => s"${c.line}:${c.column}").getOrElse("none")
         List(
           s"activeBuffer=${buffer.id}",
-          s"chars=${buffer.content.weight}",
-          s"lines=${buffer.content.lineCount}",
-          s"dirty=${buffer.isDirty}",
+          s"chars=${buffer.document.content.weight}",
+          s"lines=${buffer.document.content.lineCount}",
+          s"dirty=${buffer.document.isDirty}",
           s"language=$language",
           s"cursor=$cursor"
         ).mkString(" ")

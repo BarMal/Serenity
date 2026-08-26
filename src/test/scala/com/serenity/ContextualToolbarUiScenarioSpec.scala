@@ -45,9 +45,11 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha beta"),
-            selection = Some(selection),
-            cursors = List(selection.focus)
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.buffers(bufferId).editing.copy(
+              selection = Some(selection),
+              cursors = List(selection.focus)
+            )
           )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
       }
@@ -79,9 +81,11 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            content = com.serenity.rope.Rope("alpha beta"),
-            selection = Some(selection),
-            cursors = List(selection.focus)
+            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.buffers(bufferId).editing.copy(
+              selection = Some(selection),
+              cursors = List(selection.focus)
+            )
           )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
       }
@@ -108,7 +112,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     moveToToolbarItem(driver, "bold")
     driver.dispatch(Enter).unsafeRunSync()
-    driver.state.unsafeRunSync().buffers.values.flatMap(_.richTextDocument).toList should not be empty
+    driver.state.unsafeRunSync().buffers.values.flatMap(_.richText.richTextDocument).toList should not be empty
 
     val dropdownAfterButton = toolbarItemPoint(driver, "paragraph-role")
     driver.dispatch(MouseClick(dropdownAfterButton._1, dropdownAfterButton._2)).unsafeRunSync()

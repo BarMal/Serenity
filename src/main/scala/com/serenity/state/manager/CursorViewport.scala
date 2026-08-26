@@ -14,10 +14,11 @@ object CursorViewport:
   def ensureVisibleCursors(before: AppState, after: AppState): AppState =
     after.buffers.foldLeft(after) {
       case (state, (bufferId, buffer)) =>
-        val cursorMoved = before.buffers.get(bufferId).exists(_.cursors.headOption != buffer.cursors.headOption)
+        val cursorMoved =
+          before.buffers.get(bufferId).exists(_.editing.cursors.headOption != buffer.editing.cursors.headOption)
         if !cursorMoved then state
         else
-          buffer.cursors.headOption match
+          buffer.editing.cursors.headOption match
             case Some(cursor) =>
               val updatedBuffer = buffer.copy(viewport = adjustForCursor(buffer, state, cursor))
               state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
@@ -34,7 +35,7 @@ object CursorViewport:
     val halfVisibleLines = viewport.visibleLines / 2
     val font             = previewFontForBuffer(buffer, currentState.config.fontConfig)
     val visibleWidthPx   = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, currentState.config.fontConfig)
-    val lineText         = buffer.content.getLine(cursor.line).getOrElse("")
+    val lineText         = buffer.document.content.getLine(cursor.line).getOrElse("")
     val measuredCursorVisualLine =
       if buffer.usesTextFont then
         TextLayoutSnapshot.visualLineIndexForCursor(

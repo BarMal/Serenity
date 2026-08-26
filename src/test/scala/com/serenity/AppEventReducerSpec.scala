@@ -147,7 +147,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     state.buffers should have size 2
     state.bufferOrder shouldBe List(BufferId(0), BufferId(1))
     state.focusedBufferId shouldBe Some(BufferId(1))
-    state.buffers(BufferId(1)).isNewEmpty shouldBe true
+    state.buffers(BufferId(1)).document.isNewEmpty shouldBe true
     result.effects shouldBe Nil
   }
 

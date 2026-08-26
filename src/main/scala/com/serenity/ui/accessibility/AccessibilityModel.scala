@@ -59,7 +59,7 @@ object AccessibilitySnapshot:
       case SceneNodeId.EditorPane(paneId) =>
         val buffer = state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get)
         val name = buffer
-          .flatMap(_.filePath)
+          .flatMap(_.document.filePath)
           .flatMap(path => Option(path.getFileName).map(_.toString))
           .getOrElse("Untitled document")
         Some(
@@ -67,7 +67,7 @@ object AccessibilitySnapshot:
             s"pane:${paneId.value}",
             AccessibilityRole.Document,
             name,
-            buffer.map(_.content.toString),
+            buffer.map(_.document.content.toString),
             false,
             state.focus == Focus.EditorPane(paneId),
             node.contentRect

@@ -17,7 +17,9 @@ final private[manager] class StateManagerFileFacade(
     stateRef.update { state =>
       state.buffers.get(bufferId) match
         case Some(buffer) =>
-          state.copy(buffers = state.buffers + (bufferId -> buffer.copy(filePath = Some(Path.of(filePath)))))
+          state.copy(buffers =
+            state.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(filePath = Some(Path.of(filePath)))))
+          )
         case None =>
           state
     }
@@ -35,7 +37,9 @@ final private[manager] class StateManagerFileFacade(
     stateRef.update { state =>
       state.buffers.get(bufferId) match
         case Some(buffer) =>
-          state.copy(buffers = state.buffers + (bufferId -> buffer.copy(isDirty = false)))
+          state.copy(buffers =
+            state.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(isDirty = false)))
+          )
         case None =>
           state
     }

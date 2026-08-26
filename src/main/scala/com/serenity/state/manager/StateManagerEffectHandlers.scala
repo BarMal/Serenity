@@ -812,15 +812,21 @@ final private[manager] class StateManagerEffectHandlers(
             state.buffers.get(bufferId) match
               case Some(buffer) =>
                 val updateLanguage =
-                  updateState(s => s.copy(buffers = s.buffers + (bufferId -> buffer.copy(language = language))))
+                  updateState(s =>
+                    s.copy(buffers =
+                      s.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(language = language)))
+                    )
+                  )
 
                 val refreshLspBinding =
-                  buffer.filePath match
-                    case Some(path) if buffer.language != language =>
+                  buffer.document.filePath match
+                    case Some(path) if buffer.document.language != language =>
                       val uri  = path.toUri.toString
-                      val text = buffer.content.collect()
+                      val text = buffer.document.content.collect()
                       val closeOld =
-                        buffer.language.fold(IO.unit)(previous => lspQueue.enqueue(LspEffect.FileClosed(uri, previous)))
+                        buffer.document.language.fold(IO.unit)(previous =>
+                          lspQueue.enqueue(LspEffect.FileClosed(uri, previous))
+                        )
                       val openNew =
                         language.fold(IO.unit)(next => lspQueue.enqueue(LspEffect.FileOpened(uri, next, text)))
                       closeOld >> openNew
@@ -1016,13 +1022,13 @@ final private[manager] class StateManagerEffectHandlers(
     activeEditorContentBuffer(state) match
       case Some(buffer) =>
         val selections = buffer.allSelections.filter(selection => selection.start != selection.end)
-        val text       = buffer.content.collect()
-        val baseDocument = buffer.richTextDocument
+        val text       = buffer.document.content.collect()
+        val baseDocument = buffer.richText.richTextDocument
           .filter(_.matchesPlainText(text))
           .getOrElse(com.serenity.richtext.RichTextDocument.fromPlainText(text))
         val insertionStyle =
           if selections.isEmpty then
-            buffer.insertionRichTextStyle.getOrElse(RichTextStyle.empty) match
+            buffer.richText.insertionRichTextStyle.getOrElse(RichTextStyle.empty) match
               case style if style.marks.contains(mark) => style.withoutMark(mark)
               case style                               => style.withMark(mark)
           else RichTextStyle.empty
@@ -1036,10 +1042,11 @@ final private[manager] class StateManagerEffectHandlers(
           buffers = state.buffers.updated(
             buffer.id,
             buffer.copy(
-              isDirty = true,
-              isNewEmpty = false,
-              richTextDocument = Some(updatedDocument),
-              insertionRichTextStyle = Some(insertionStyle)
+              document = buffer.document.copy(isDirty = true, isNewEmpty = false),
+              richText = buffer.richText.copy(
+                richTextDocument = Some(updatedDocument),
+                insertionRichTextStyle = Some(insertionStyle)
+              )
             )
           )
         )
@@ -1069,8 +1076,8 @@ final private[manager] class StateManagerEffectHandlers(
         val ranges = buffer.allSelections.filter(selection => selection.start != selection.end).map(richTextRange)
         if ranges.isEmpty then state
         else
-          val text = buffer.content.collect()
-          val baseDocument = buffer.richTextDocument
+          val text = buffer.document.content.collect()
+          val baseDocument = buffer.richText.richTextDocument
             .filter(_.matchesPlainText(text))
             .getOrElse(RichTextDocument.fromPlainText(text))
           val updatedDocument = ranges.foldLeft(baseDocument)(update).normalized
@@ -1080,9 +1087,8 @@ final private[manager] class StateManagerEffectHandlers(
               buffers = state.buffers.updated(
                 buffer.id,
                 buffer.copy(
-                  isDirty = true,
-                  isNewEmpty = false,
-                  richTextDocument = Some(updatedDocument)
+                  document = buffer.document.copy(isDirty = true, isNewEmpty = false),
+                  richText = buffer.richText.copy(richTextDocument = Some(updatedDocument))
                 )
               )
             )
@@ -1097,8 +1103,8 @@ final private[manager] class StateManagerEffectHandlers(
         val ranges = richTextParagraphRanges(buffer)
         if ranges.isEmpty then state
         else
-          val text = buffer.content.collect()
-          val baseDocument = buffer.richTextDocument
+          val text = buffer.document.content.collect()
+          val baseDocument = buffer.richText.richTextDocument
             .filter(_.matchesPlainText(text))
             .getOrElse(RichTextDocument.fromPlainText(text))
           val updatedDocument = ranges.foldLeft(baseDocument)(update).normalized
@@ -1108,9 +1114,8 @@ final private[manager] class StateManagerEffectHandlers(
               buffers = state.buffers.updated(
                 buffer.id,
                 buffer.copy(
-                  isDirty = true,
-                  isNewEmpty = false,
-                  richTextDocument = Some(updatedDocument)
+                  document = buffer.document.copy(isDirty = true, isNewEmpty = false),
+                  richText = buffer.richText.copy(richTextDocument = Some(updatedDocument))
                 )
               )
             )
@@ -1121,7 +1126,7 @@ final private[manager] class StateManagerEffectHandlers(
     val selections = buffer.allSelections.filter(selection => selection.start != selection.end).map(richTextRange)
     if selections.nonEmpty then selections
     else
-      buffer.cursors.distinct.map { cursor =>
+      buffer.editing.cursors.distinct.map { cursor =>
         RichTextRange(
           start = com.serenity.richtext.RichTextPosition(cursor.line, cursor.column),
           end = com.serenity.richtext.RichTextPosition(cursor.line, cursor.column)
@@ -1255,15 +1260,25 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def applyPresetDocumentModeToActiveEmptyBuffer(state: AppState, mode: DefaultDocumentMode): AppState =
     state.focusedBufferId.flatMap(state.buffers.get) match
-      case Some(buffer) if buffer.isNewEmpty && buffer.content.weight == 0 && buffer.filePath.isEmpty =>
+      case Some(buffer)
+          if buffer.document.isNewEmpty && buffer.document.content.weight == 0 && buffer.document.filePath.isEmpty =>
         val updatedBuffer =
           mode match
             case DefaultDocumentMode.PlainText =>
-              buffer.copy(language = None, richTextDocument = None)
+              buffer.copy(
+                document = buffer.document.copy(language = None),
+                richText = buffer.richText.copy(richTextDocument = None)
+              )
             case DefaultDocumentMode.Markdown =>
-              buffer.copy(language = Some(LanguageId.Markdown), richTextDocument = None)
+              buffer.copy(
+                document = buffer.document.copy(language = Some(LanguageId.Markdown)),
+                richText = buffer.richText.copy(richTextDocument = None)
+              )
             case DefaultDocumentMode.RichText =>
-              buffer.copy(language = None, richTextDocument = Some(RichTextDocument.fromPlainText("")))
+              buffer.copy(
+                document = buffer.document.copy(language = None),
+                richText = buffer.richText.copy(richTextDocument = Some(RichTextDocument.fromPlainText("")))
+              )
         state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
       case _ =>
         state
@@ -1529,7 +1544,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def projectTaskStartPath(state: AppState): IO[Path] =
     state.focusedBufferId
       .flatMap(state.buffers.get)
-      .flatMap(_.filePath)
+      .flatMap(_.document.filePath)
       .fold(FileUtils.getCurrentDirectory)(path => IO.pure(path))
 
   private def pinProjectTerminal(text: String): IO[Unit] =
@@ -1575,9 +1590,9 @@ final private[manager] class StateManagerEffectHandlers(
     for
       bufferId   <- activeEditorBufferId(state)
       buffer     <- state.buffers.get(bufferId)
-      path       <- buffer.filePath
-      languageId <- buffer.language
-      cursor     <- buffer.cursors.headOption
+      path       <- buffer.document.filePath
+      languageId <- buffer.document.language
+      cursor     <- buffer.editing.cursors.headOption
     yield (path.toUri.toString, languageId, cursor, buffer)
 
   private def showLspUnavailablePeek(state: AppState): IO[Unit] =
@@ -1587,7 +1602,7 @@ final private[manager] class StateManagerEffectHandlers(
     )
 
   private def wordAtCursor(buffer: Buffer, cursor: CursorPosition): String =
-    val line = buffer.content.getLine(cursor.line).getOrElse("")
+    val line = buffer.document.content.getLine(cursor.line).getOrElse("")
     if line.isEmpty then ""
     else
       val clamped = cursor.column.max(0).min(line.length)
@@ -1709,9 +1724,9 @@ final private[manager] class StateManagerEffectHandlers(
   private def markdownPreviewContent(state: AppState): Option[SurfaceContent] =
     state.focusedBufferId
       .flatMap(state.buffers.get)
-      .filter(_.language.contains(LanguageId.Markdown))
+      .filter(_.document.language.contains(LanguageId.Markdown))
       .map { buffer =>
-        val title = buffer.filePath
+        val title = buffer.document.filePath
           .flatMap(path => Option(path.getFileName).map(_.toString))
           .getOrElse("Untitled")
         SurfaceContent.MarkdownPreview(buffer.id, title)
@@ -1857,7 +1872,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def outlineSymbolsForBuffer(buffer: Buffer): List[Symbol] =
     (
       DocumentOutline.forBuffer(buffer) ++
-        DocumentNavigation.bookmarkSymbols(buffer.bookmarks)
+        DocumentNavigation.bookmarkSymbols(buffer.annotations.bookmarks)
     )
       .sortBy(symbol => (symbol.location.line, symbol.location.column, symbol.name))
 
@@ -1869,7 +1884,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def commentPanelSymbols(state: AppState): List[Symbol] =
     state.focusedBufferId
       .flatMap(state.buffers.get)
-      .map(buffer => DocumentNavigation.commentSymbols(buffer.documentComments))
+      .map(buffer => DocumentNavigation.commentSymbols(buffer.annotations.documentComments))
       .getOrElse(Nil)
 
   private def navigateDocumentSymbol(
@@ -1882,7 +1897,12 @@ final private[manager] class StateManagerEffectHandlers(
     state: AppState,
     chooseSymbol: (List[Symbol], CursorPosition) => Option[Symbol]
   ): IO[Unit] =
-    navigateSymbols(state, buffer => DocumentNavigation.bookmarkSymbols(buffer.bookmarks), chooseSymbol, "Bookmark")
+    navigateSymbols(
+      state,
+      buffer => DocumentNavigation.bookmarkSymbols(buffer.annotations.bookmarks),
+      chooseSymbol,
+      "Bookmark"
+    )
 
   private def navigateDocumentComment(
     state: AppState,
@@ -1890,7 +1910,7 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[Unit] =
     navigateSymbols(
       state,
-      buffer => DocumentNavigation.commentSymbols(buffer.documentComments),
+      buffer => DocumentNavigation.commentSymbols(buffer.annotations.documentComments),
       chooseSymbol,
       "Document comment",
       onTargetResolved = Some(CommentRendering.openLensAtCursor)
@@ -1906,7 +1926,7 @@ final private[manager] class StateManagerEffectHandlers(
     activeEditorBuffer(state)
       .flatMap {
         case (paneId, buffer) =>
-          val cursor  = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+          val cursor  = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
           val symbols = symbolsForBuffer(buffer)
           chooseSymbol(symbols, cursor).map { symbol =>
             val before = NavigationPoint(paneId, buffer.id, cursor)
@@ -2029,7 +2049,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def currentNavigationPoint(state: AppState): Option[NavigationPoint] =
     activeEditorBuffer(state).flatMap {
       case (paneId, buffer) =>
-        buffer.cursors.headOption.map(cursor => NavigationPoint(paneId, buffer.id, cursor))
+        buffer.editing.cursors.headOption.map(cursor => NavigationPoint(paneId, buffer.id, cursor))
     }
 
   private def pushNavigationPoint(point: NavigationPoint, stack: List[NavigationPoint]): List[NavigationPoint] =
@@ -2042,12 +2062,14 @@ final private[manager] class StateManagerEffectHandlers(
       case (Some(pane), Some(buffer)) =>
         val viewport = CursorViewport.adjustForCursor(buffer, state, point.cursor)
         val updatedBuffer = buffer.copy(
-          cursors = List(point.cursor),
-          selection = None,
-          selections = Nil,
-          preferredColumn = Some(point.cursor.column),
-          preferredXPx = None,
-          multiCursorVerticalStates = Nil,
+          editing = buffer.editing.copy(
+            cursors = List(point.cursor),
+            selection = None,
+            selections = Nil,
+            preferredColumn = Some(point.cursor.column),
+            preferredXPx = None,
+            multiCursorVerticalStates = Nil
+          ),
           viewport = viewport
         )
         state.copy(
@@ -2063,15 +2085,21 @@ final private[manager] class StateManagerEffectHandlers(
   private def toggleBookmark(state: AppState): IO[Unit] =
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
-        val cursor = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val cursor = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
         updateState { current =>
           current.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
               val bookmarks =
-                if currentBuffer.bookmarks.contains(cursor) then currentBuffer.bookmarks.filterNot(_ == cursor)
-                else (cursor :: currentBuffer.bookmarks).distinct.sortBy(position => (position.line, position.column))
+                if currentBuffer.annotations.bookmarks.contains(cursor) then
+                  currentBuffer.annotations.bookmarks.filterNot(_ == cursor)
+                else
+                  (cursor :: currentBuffer.annotations.bookmarks).distinct
+                    .sortBy(position => (position.line, position.column))
 
-              current.copy(buffers = current.buffers + (buffer.id -> currentBuffer.copy(bookmarks = bookmarks)))
+              current.copy(buffers =
+                current.buffers + (buffer.id ->
+                  currentBuffer.copy(annotations = currentBuffer.annotations.copy(bookmarks = bookmarks)))
+              )
             case None => current
         }
       case None =>
@@ -2080,7 +2108,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def addDocumentComment(state: AppState, text: String): IO[Unit] =
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
-        val cursor           = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val cursor           = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
         val normalizedCursor = snapCursorAfterGrapheme(buffer, cursor)
         val range = buffer.primarySelection
           .map(selection => normalizedCommentSelectionRange(buffer, selection))
@@ -2090,17 +2118,20 @@ final private[manager] class StateManagerEffectHandlers(
         updateState: current =>
           current.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
-              val existingCommentAtCursor = currentBuffer.documentComments.find(_.contains(normalizedCursor))
+              val existingCommentAtCursor = currentBuffer.annotations.documentComments.find(_.contains(normalizedCursor))
               val updatedComment = existingCommentAtCursor
                 .map(existing => existing.copy(text = commentText))
                 .getOrElse(comment)
-              val comments = (updatedComment :: currentBuffer.documentComments.filterNot(existing =>
+              val comments = (updatedComment :: currentBuffer.annotations.documentComments.filterNot(existing =>
                 existingCommentAtCursor.contains(existing) ||
                   (existing.start == comment.start && existing.end == comment.end)
               )).sortBy(existing => (existing.start.line, existing.start.column, existing.text))
               current.copy(
-                buffers =
-                  current.buffers + (buffer.id -> currentBuffer.copy(documentComments = comments, isDirty = true))
+                buffers = current.buffers + (buffer.id ->
+                  currentBuffer.copy(
+                    annotations = currentBuffer.annotations.copy(documentComments = comments),
+                    document = currentBuffer.document.copy(isDirty = true)
+                  ))
               )
             case None => current
       case None =>
@@ -2110,8 +2141,8 @@ final private[manager] class StateManagerEffectHandlers(
     buffer: Buffer,
     selection: Selection
   ): (CursorPosition, CursorPosition) =
-    val startOffset = buffer.content.lineColumnToOffset(selection.start.line, selection.start.column)
-    val endOffset   = buffer.content.lineColumnToOffset(selection.end.line, selection.end.column)
+    val startOffset = buffer.document.content.lineColumnToOffset(selection.start.line, selection.start.column)
+    val endOffset   = buffer.document.content.lineColumnToOffset(selection.end.line, selection.end.column)
     if startOffset >= endOffset then
       val cursor = offsetToCursorPosition(buffer, graphemeBoundaryAfterOrAt(buffer, startOffset))
       cursor -> cursor
@@ -2120,18 +2151,18 @@ final private[manager] class StateManagerEffectHandlers(
         offsetToCursorPosition(buffer, graphemeBoundaryAfterOrAt(buffer, endOffset))
 
   private def snapCursorAfterGrapheme(buffer: Buffer, cursor: CursorPosition): CursorPosition =
-    val offset = buffer.content.lineColumnToOffset(cursor.line, cursor.column)
+    val offset = buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
     offsetToCursorPosition(buffer, graphemeBoundaryAfterOrAt(buffer, offset))
 
   private def offsetToCursorPosition(buffer: Buffer, offset: Int): CursorPosition =
-    val (line, column) = buffer.content.offsetToLineColumn(offset)
+    val (line, column) = buffer.document.content.offsetToLineColumn(offset)
     CursorPosition(line, column)
 
   private def graphemeBoundaryBeforeOrAt(buffer: Buffer, offset: Int): Int =
-    TextEditing.graphemeBoundaryBeforeOrAt(RopeCharacterSource(buffer.content), offset)
+    TextEditing.graphemeBoundaryBeforeOrAt(RopeCharacterSource(buffer.document.content), offset)
 
   private def graphemeBoundaryAfterOrAt(buffer: Buffer, offset: Int): Int =
-    TextEditing.graphemeBoundaryAfterOrAt(RopeCharacterSource(buffer.content), offset)
+    TextEditing.graphemeBoundaryAfterOrAt(RopeCharacterSource(buffer.document.content), offset)
 
   final private case class RopeCharacterSource(content: com.serenity.rope.Rope) extends TextEditing.CharacterSource:
     override def length: Int =
@@ -2143,16 +2174,18 @@ final private[manager] class StateManagerEffectHandlers(
   private def deleteDocumentComment(state: AppState): IO[Unit] =
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
-        val cursor = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val cursor = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
         updateState: current =>
           current.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
-              val comments = currentBuffer.documentComments.filterNot(_.contains(cursor))
+              val comments = currentBuffer.annotations.documentComments.filterNot(_.contains(cursor))
               current.copy(
                 buffers = current.buffers + (buffer.id ->
                   currentBuffer.copy(
-                    documentComments = comments,
-                    isDirty = currentBuffer.isDirty || comments != currentBuffer.documentComments
+                    annotations = currentBuffer.annotations.copy(documentComments = comments),
+                    document = currentBuffer.document.copy(
+                      isDirty = currentBuffer.document.isDirty || comments != currentBuffer.annotations.documentComments
+                    )
                   ))
               )
             case None => current
@@ -2244,10 +2277,10 @@ final private[manager] class StateManagerEffectHandlers(
             }
           }
           .flatTap { loadedBuffer =>
-            loadedBuffer.language match
+            loadedBuffer.document.language match
               case Some(languageId) =>
                 val uri  = path.toUri.toString
-                val text = loadedBuffer.content.collect()
+                val text = loadedBuffer.document.content.collect()
                 lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
               case None => IO.unit
           }
@@ -2259,7 +2292,7 @@ final private[manager] class StateManagerEffectHandlers(
   private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.buffers.get(bufferId) match
-        case Some(buffer) if buffer.filePath.isDefined =>
+        case Some(buffer) if buffer.document.filePath.isDefined =>
           saveExistingBuffer(bufferId).handleErrorWith {
             case error: com.serenity.richtext.LossyRichTextOverwriteException =>
               stateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, error.getMessage))
@@ -2333,12 +2366,12 @@ final private[manager] class StateManagerEffectHandlers(
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil
     else
-      buffer.content
+      buffer.document.content
         .searchAll(query)
         .filter(offset =>
-          TextEditing.isWholeGraphemeRange(RopeCharacterSource(buffer.content), offset, offset + query.length)
+          TextEditing.isWholeGraphemeRange(RopeCharacterSource(buffer.document.content), offset, offset + query.length)
         )
-        .map(offset => cursorPositionForOffset(buffer.content, offset))
+        .map(offset => cursorPositionForOffset(buffer.document.content, offset))
 
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)

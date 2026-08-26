@@ -52,7 +52,7 @@ class AppStateEqualitySpec extends AnyFlatSpec with Matchers:
 
   it should "detect a difference confined to its last declared field (insertionRichTextStyle)" in {
     val base    = Buffer.fromString(BufferId(1), "hello")
-    val changed = base.copy(insertionRichTextStyle = Some(RichTextStyle()))
+    val changed = base.copy(richText = base.richText.copy(insertionRichTextStyle = Some(RichTextStyle())))
 
     (base == changed) shouldBe false
   }

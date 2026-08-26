@@ -21,7 +21,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         bufferId,
         List.fill(20)("abcdefghijklmnopqrstuvwxyz").mkString("\n")
       )
-      .copy(cursors = List(cursor))
+      .copy(editing = EditingState(cursors = List(cursor)))
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
@@ -239,7 +239,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, longLine)
       .copy(
-        cursors = List(cursor),
+        editing = EditingState(cursors = List(cursor)),
         viewport = Viewport(topLine = 0, topVisualLine = 2, leftColumn = 0, visibleColumns = 80, visibleLines = 20)
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
@@ -287,7 +287,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, lines.mkString("\n"))
       .copy(
-        cursors = List(cursor),
+        editing = EditingState(cursors = List(cursor)),
         viewport = Viewport(topLine = 8, leftColumn = 0, visibleLines = 30, visibleColumns = 80)
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)

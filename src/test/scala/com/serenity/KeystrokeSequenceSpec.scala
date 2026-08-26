@@ -83,9 +83,9 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
         .get(bufferId)
         .fold(IO.raiseError[Buffer](new RuntimeException("Buffer not found")))(IO.pure)
     yield
-      buffer.content.collect() shouldBe expected
-      paneBuffer.cursors.head.line shouldBe 1
-      paneBuffer.cursors.head.column shouldBe 9 // After 2 spaces + "Hello"
+      buffer.document.content.collect() shouldBe expected
+      paneBuffer.editing.cursors.head.line shouldBe 1
+      paneBuffer.editing.cursors.head.column shouldBe 9 // After 2 spaces + "Hello"
 
     program.unsafeRunSync()
   }
@@ -125,7 +125,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
       // Then: Text should be corrected
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-    yield buffer.content.collect() shouldBe "The quick brown fox"
+    yield buffer.document.content.collect() shouldBe "The quick brown fox"
 
     program.unsafeRunSync()
   }
@@ -196,7 +196,7 @@ Line 4"""
 Line 2!
 * Line 3
 Final line""".replace("\r\n", "\n")
-    yield buffer.content.collect() shouldBe expected
+    yield buffer.document.content.collect() shouldBe expected
 
     program.unsafeRunSync()
   }
@@ -247,7 +247,7 @@ Final line""".replace("\r\n", "\n")
       // Then: Should have modified text
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-    yield buffer.content.collect() shouldBe "Hello beautiful this is a test!"
+    yield buffer.document.content.collect() shouldBe "Hello beautiful this is a test!"
 
     program.unsafeRunSync()
   }
@@ -302,7 +302,7 @@ Final line""".replace("\r\n", "\n")
       // Then: Should have final corrected text
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-    yield buffer.content.collect() shouldBe "Typing quickly now"
+    yield buffer.document.content.collect() shouldBe "Typing quickly now"
 
     program.unsafeRunSync()
   }
@@ -364,7 +364,7 @@ Final line""".replace("\r\n", "\n")
       expected = """The Single line
 Second line
 Third""".replace("\r\n", "\n")
-    yield buffer.content.collect() shouldBe expected
+    yield buffer.document.content.collect() shouldBe expected
 
     program.unsafeRunSync()
   }
@@ -414,10 +414,10 @@ Third""".replace("\r\n", "\n")
         .get(bufferId)
         .fold(IO.raiseError[Buffer](new RuntimeException("Buffer not found")))(IO.pure)
     yield
-      buffer.content.collect() shouldBe "AB\nCDE"
+      buffer.document.content.collect() shouldBe "AB\nCDE"
       // Cursor should be at end
-      paneBuffer.cursors.head.line shouldBe 1
-      paneBuffer.cursors.head.column shouldBe 3
+      paneBuffer.editing.cursors.head.line shouldBe 1
+      paneBuffer.editing.cursors.head.column shouldBe 3
 
     program.unsafeRunSync()
   }
@@ -450,7 +450,7 @@ Third""".replace("\r\n", "\n")
       // Then: Lines should be joined
       finalState <- stateManager.getCurrentState
       buffer = finalState.buffers(bufferId)
-    yield buffer.content.collect() shouldBe "First & Second\nThird"
+    yield buffer.document.content.collect() shouldBe "First & Second\nThird"
 
     program.unsafeRunSync()
   }
@@ -514,7 +514,7 @@ Third""".replace("\r\n", "\n")
       expected = """* Initial state
 Line 2 (middle)
 Line 3""".replace("\r\n", "\n")
-    yield buffer.content.collect() shouldBe expected
+    yield buffer.document.content.collect() shouldBe expected
 
     program.unsafeRunSync()
   }

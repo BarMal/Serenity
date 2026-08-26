@@ -27,12 +27,11 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
   private val cursorCol = 3
 
   private def stateWithRunnerAndBuffer(language: Option[LanguageId]): AppState =
-    val buffer = Buffer
-      .fromString(bufferId, text)
-      .copy(
-        cursors = List(CursorPosition(0, cursorCol)),
-        language = language
-      )
+    val baseBuffer = Buffer.fromString(bufferId, text)
+    val buffer = baseBuffer.copy(
+      document = baseBuffer.document.copy(language = language),
+      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(0, cursorCol)))
+    )
     val pane   = EditorPane.withBuffer(paneId, bufferId)
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val base = AppState.initial.copy(

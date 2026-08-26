@@ -22,10 +22,16 @@ class TypographyRoleSpec extends AnyFlatSpec with Matchers:
 
   "TypographyRole" should "classify buffers by content semantics" in {
     Buffer.fromString(BufferId(1), "plain").typographyRole shouldBe TypographyRole.Prose
-    Buffer.fromString(BufferId(2), "# title").copy(language = Some(LanguageId.Markdown)).typographyRole shouldBe
-      TypographyRole.MarkdownSource
-    Buffer.fromString(BufferId(3), "object Main").copy(language = Some(LanguageId.Scala)).typographyRole shouldBe
-      TypographyRole.Code
+
+    val markdownBuffer = Buffer.fromString(BufferId(2), "# title")
+    markdownBuffer
+      .copy(document = markdownBuffer.document.copy(language = Some(LanguageId.Markdown)))
+      .typographyRole shouldBe TypographyRole.MarkdownSource
+
+    val scalaBuffer = Buffer.fromString(BufferId(3), "object Main")
+    scalaBuffer
+      .copy(document = scalaBuffer.document.copy(language = Some(LanguageId.Scala)))
+      .typographyRole shouldBe TypographyRole.Code
   }
 
   it should "choose runtime fonts by semantic role" in {

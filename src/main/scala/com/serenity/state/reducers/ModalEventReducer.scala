@@ -451,8 +451,8 @@ object ModalEventReducer:
       case ReplaceWorkflowScope.Selection =>
         buffer.primarySelection match
           case Some(selection) =>
-            val startOffset = offsetForCursor(buffer.content, selection.start)
-            val endOffset   = offsetForCursor(buffer.content, selection.end)
+            val startOffset = offsetForCursor(buffer.document.content, selection.start)
+            val endOffset   = offsetForCursor(buffer.document.content, selection.end)
             Right(Some((math.min(startOffset, endOffset), math.max(startOffset, endOffset))))
           case None =>
             Left("Select text to preview selection matches")
@@ -462,13 +462,13 @@ object ModalEventReducer:
     findText: String,
     range: Option[(Int, Int)]
   ): List[Int] =
-    buffer.content.searchAll(findText).filter { offset =>
+    buffer.document.content.searchAll(findText).filter { offset =>
       val insideScope = range match
         case Some((startOffset, endOffset)) =>
           offset >= startOffset && (offset + findText.length) <= endOffset
         case None =>
           true
-      insideScope && isWholeGraphemeMatch(buffer.content, offset, findText.length)
+      insideScope && isWholeGraphemeMatch(buffer.document.content, offset, findText.length)
     }
 
   private def updateFindQuery(state: AppState, surface: UiSurface, query: String): ReducerResult =
@@ -487,7 +487,7 @@ object ModalEventReducer:
             buffer   <- clearedState.buffers.get(bufferId)
           yield ReducerResult.withEffect(
             clearedState,
-            AppEffect.RefreshFind(FindSearchRequest(surface.id, bufferId, query, buffer.content))
+            AppEffect.RefreshFind(FindSearchRequest(surface.id, bufferId, query, buffer.document.content))
           )).getOrElse(ReducerResult.noEffects(clearedState))
 
   private def updateFindSelection(
@@ -518,7 +518,7 @@ object ModalEventReducer:
       case _ =>
         false
     }
-    val contentIsCurrent = state.buffers.get(request.bufferId).exists(_.content.eq(request.content))
+    val contentIsCurrent = state.buffers.get(request.bufferId).exists(_.document.content.eq(request.content))
 
     if !modalIsCurrent || !contentIsCurrent || !activeBufferId(state).contains(request.bufferId) then state
     else
@@ -545,11 +545,13 @@ object ModalEventReducer:
             val selected = resultSet.results(resultSet.currentIndex)
             val target   = CursorPosition(selected.line, selected.column)
             val updatedBuffer = buffer.copy(
-              cursors = List(target),
-              selection = None,
-              selections = Nil,
-              preferredColumn = Some(target.column),
-              preferredXPx = None,
+              editing = buffer.editing.copy(
+                cursors = List(target),
+                selection = None,
+                selections = Nil,
+                preferredColumn = Some(target.column),
+                preferredXPx = None
+              ),
               findState = Some(FindState.fromResultSet(resultSet))
             )
             state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
@@ -593,7 +595,7 @@ object ModalEventReducer:
                 val halfVisible = buffer.viewport.visibleLines / 2
                 val newTopLine  = math.max(0, targetLine - halfVisible)
                 val updatedBuffer = buffer.copy(
-                  cursors = List(CursorPosition(targetLine, 0)),
+                  editing = buffer.editing.copy(cursors = List(CursorPosition(targetLine, 0))),
                   viewport = buffer.viewport.copy(topLine = newTopLine)
                 )
                 state.dismissTopModal.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))

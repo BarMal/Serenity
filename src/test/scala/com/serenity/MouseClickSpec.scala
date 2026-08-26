@@ -88,7 +88,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -98,8 +98,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(6, 3)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption.map(_.line) shouldBe Some(2)
-    buffer.cursors.headOption.map(_.column) shouldBe Some(3)
+    buffer.editing.cursors.headOption.map(_.line) shouldBe Some(2)
+    buffer.editing.cursors.headOption.map(_.column) shouldBe Some(3)
   }
 
   it should "move cursor to the first row of the content area" in {
@@ -110,7 +110,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -120,8 +120,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(3, 1)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption.map(_.line) shouldBe Some(0)
-    buffer.cursors.headOption.map(_.column) shouldBe Some(0)
+    buffer.editing.cursors.headOption.map(_.line) shouldBe Some(0)
+    buffer.editing.cursors.headOption.map(_.column) shouldBe Some(0)
   }
 
   it should "not move the cursor for non-primary clicks" in {
@@ -135,8 +135,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
           state
             .buffers(bufferId)
             .copy(
-              language = Some(LanguageId.Scala),
-              cursors = List(CursorPosition(0, 1))
+              document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
+              editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1)))
             )
         )
       )
@@ -146,7 +146,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 1))
   }
 
   it should "consume workspace clicks, presses, and drags while a close confirmation is active" in {
@@ -174,7 +174,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(paneRect.x + 8, paneRect.y + 3)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
-    after.buffers(bufferId).cursors shouldBe before.buffers(bufferId).cursors
+    after.buffers(bufferId).editing.cursors shouldBe before.buffers(bufferId).editing.cursors
     after.buffers(bufferId).primarySelection shouldBe before.buffers(bufferId).primarySelection
     after.focus shouldBe Focus.Surface(close.id)
     after.topBlockingModalSurface.map(_.id) shouldBe Some(close.id)
@@ -409,8 +409,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
           state
             .buffers(bufferId)
             .copy(
-              language = Some(LanguageId.Scala),
-              cursors = List(CursorPosition(0, 1))
+              document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
+              editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1)))
             )
         )
       )
@@ -421,7 +421,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
     val state  = sm.getCurrentState.unsafeRunSync()
     val buffer = state.buffers(bufferId)
-    buffer.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.editing.cursors shouldBe List(CursorPosition(0, 1))
     val menu = state.contextMenuSurface
       .flatMap {
         _.content match
@@ -540,7 +540,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -550,8 +550,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(35, 1)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption.map(_.line) shouldBe Some(0)
-    buffer.cursors.headOption.map(_.column) shouldBe Some(2)
+    buffer.editing.cursors.headOption.map(_.line) shouldBe Some(0)
+    buffer.editing.cursors.headOption.map(_.column) shouldBe Some(2)
   }
 
   it should "track the editor position under the pointer on mouse move" in {
@@ -562,7 +562,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -593,12 +593,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
+    val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.headOption
 
     // Click at row=0 (header row of pane at y=0) — should be ignored
     sm.applyEvent(MouseClick(20, 0)).unsafeRunSync()
 
-    val afterCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
+    val afterCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.headOption
     afterCursor shouldBe initialCursor
   }
 
@@ -610,12 +610,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
+    val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.headOption
 
     // Click at col=5 (left spacer, pane starts at col=15) — should be ignored
     sm.applyEvent(MouseClick(5, 5)).unsafeRunSync()
 
-    val afterCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
+    val afterCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.headOption
     afterCursor shouldBe initialCursor
   }
 
@@ -625,11 +625,11 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     // No ResizeEvent applied — ViewportSize is None
 
-    val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
+    val initialCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.headOption
 
     sm.applyEvent(MouseClick(20, 5)).unsafeRunSync()
 
-    val afterCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).cursors.headOption
+    val afterCursor = sm.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.headOption
     afterCursor shouldBe initialCursor
   }
 
@@ -644,7 +644,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(language = Some(LanguageId.Markdown))
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown)))
         )
       )
     }.unsafeRunSync()
@@ -673,7 +673,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     ).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption shouldBe Some(com.serenity.state.models.CursorPosition(0, 1))
+    buffer.editing.cursors.headOption shouldBe Some(com.serenity.state.models.CursorPosition(0, 1))
   }
 
   it should "create a selection while dragging inside an editor pane" in {
@@ -684,7 +684,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -698,9 +698,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption shouldBe Some(CursorPosition(1, 3))
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(1, 3))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
+    buffer.editing.selections shouldBe Nil
   }
 
   it should "start a new drag selection from the latest press instead of reusing an old anchor" in {
@@ -711,7 +711,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -727,9 +727,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(paneRect.x + 5, paneRect.y + 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption shouldBe Some(CursorPosition(1, 5))
-    buffer.selection shouldBe Some(Selection(CursorPosition(1, 2), CursorPosition(1, 5)))
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(1, 5))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(1, 2), CursorPosition(1, 5)))
+    buffer.editing.selections shouldBe Nil
   }
 
   it should "select the clicked word on double click" in {
@@ -740,7 +740,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -753,9 +753,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 7, paneRect.y + 1, clickCount = 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption shouldBe Some(CursorPosition(0, 10))
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(0, 10))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
+    buffer.editing.selections shouldBe Nil
   }
 
   it should "select the clicked word on double click without materialising the whole buffer" in {
@@ -769,8 +769,10 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
           state
             .buffers(bufferId)
             .copy(
-              content = NonCollectingRope(Rope("alpha beta gamma")),
-              language = Some(LanguageId.Scala)
+              document = state
+                .buffers(bufferId)
+                .document
+                .copy(content = NonCollectingRope(Rope("alpha beta gamma")), language = Some(LanguageId.Scala))
             )
         )
       )
@@ -784,9 +786,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 7, paneRect.y + 1, clickCount = 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption shouldBe Some(CursorPosition(0, 10))
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(0, 10))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
+    buffer.editing.selections shouldBe Nil
   }
 
   it should "select the clicked line on triple click" in {
@@ -797,7 +799,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -810,9 +812,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 2, paneRect.y + 2, clickCount = 3)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption shouldBe Some(CursorPosition(1, 10))
-    buffer.selection shouldBe Some(Selection(CursorPosition(1, 0), CursorPosition(1, 10)))
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(1, 10))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(1, 0), CursorPosition(1, 10)))
+    buffer.editing.selections shouldBe Nil
   }
 
   it should "extend the current selection from the existing anchor on shift-click" in {
@@ -826,8 +828,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
           state
             .buffers(bufferId)
             .copy(
-              language = Some(LanguageId.Scala),
-              cursors = List(CursorPosition(0, 2))
+              document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
+              editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
             )
         )
       )
@@ -841,9 +843,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 4, paneRect.y + 2, shiftDown = true)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption shouldBe Some(CursorPosition(1, 4))
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(1, 4)))
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(1, 4))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(1, 4)))
+    buffer.editing.selections shouldBe Nil
   }
 
   it should "preserve the original anchor while extending with shift-drag" in {
@@ -857,8 +859,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
           state
             .buffers(bufferId)
             .copy(
-              language = Some(LanguageId.Scala),
-              cursors = List(CursorPosition(0, 2))
+              document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
+              editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
             )
         )
       )
@@ -873,9 +875,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(paneRect.x + 5, paneRect.y + 3, shiftDown = true)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors.headOption shouldBe Some(CursorPosition(2, 5))
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(2, 5)))
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(2, 5))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(2, 5)))
+    buffer.editing.selections shouldBe Nil
   }
 
   it should "collapse multi-cursor state to the clicked cursor" in {
@@ -889,11 +891,13 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
           state
             .buffers(bufferId)
             .copy(
-              language = Some(LanguageId.Scala),
-              cursors = List(CursorPosition(0, 1), CursorPosition(2, 3)),
-              multiCursorVerticalStates = List(
-                VerticalCursorState(CursorPosition(0, 1), 1, 1.0f),
-                VerticalCursorState(CursorPosition(2, 3), 3, 3.0f)
+              document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
+              editing = state.buffers(bufferId).editing.copy(
+                cursors = List(CursorPosition(0, 1), CursorPosition(2, 3)),
+                multiCursorVerticalStates = List(
+                  VerticalCursorState(CursorPosition(0, 1), 1, 1.0f),
+                  VerticalCursorState(CursorPosition(2, 3), 3, 3.0f)
+                )
               )
             )
         )
@@ -908,10 +912,10 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 2, paneRect.y + 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors shouldBe List(CursorPosition(1, 2))
-    buffer.selection shouldBe None
-    buffer.selections shouldBe Nil
-    buffer.multiCursorVerticalStates shouldBe Nil
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 2))
+    buffer.editing.selection shouldBe None
+    buffer.editing.selections shouldBe Nil
+    buffer.editing.multiCursorVerticalStates shouldBe Nil
   }
 
   it should "collapse multi-selection state to a single drag selection" in {
@@ -927,10 +931,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
           state
             .buffers(bufferId)
             .copy(
-              language = Some(LanguageId.Scala),
-              cursors = List(first.focus, second.focus),
-              selection = Some(first),
-              selections = List(first, second)
+              document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
+              editing = state.buffers(bufferId).editing.copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )
@@ -945,9 +951,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().buffers(bufferId)
-    buffer.cursors shouldBe List(CursorPosition(1, 3))
-    buffer.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
-    buffer.selections shouldBe Nil
+    buffer.editing.cursors shouldBe List(CursorPosition(1, 3))
+    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
+    buffer.editing.selections shouldBe Nil
   }
 
   private def contextMenuItemPoint(state: AppState, itemIndex: Int): (Int, Int) =

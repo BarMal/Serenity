@@ -21,11 +21,13 @@ class CursorListSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matc
       selection       <- Gen.option(Generators.genCursorPosition)
       preferredColumn <- Gen.option(Gen.chooseNum(0, 500))
       preferredXPx    <- Gen.option(Gen.chooseNum(0f, 2000f))
-    yield emptyBuffer.copy(
-      cursors = List(cursor),
-      selection = selection.map(anchor => Selection(anchor, cursor)),
-      preferredColumn = if selection.isDefined then None else preferredColumn,
-      preferredXPx = if selection.isDefined then None else preferredXPx
+    yield emptyBuffer.copy(editing =
+      emptyBuffer.editing.copy(
+        cursors = List(cursor),
+        selection = selection.map(anchor => Selection(anchor, cursor)),
+        preferredColumn = if selection.isDefined then None else preferredColumn,
+        preferredXPx = if selection.isDefined then None else preferredXPx
+      )
     )
 
   private val genMultiCursorBuffer: Gen[Buffer] =
@@ -36,12 +38,12 @@ class CursorListSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matc
     yield
       val states =
         if withVerticalState then cursors.map(c => VerticalCursorState(c, c.column, xPx)) else Nil
-      emptyBuffer.copy(cursors = cursors, multiCursorVerticalStates = states)
+      emptyBuffer.copy(editing = emptyBuffer.editing.copy(cursors = cursors, multiCursorVerticalStates = states))
 
   private val genMultiSelectionBuffer: Gen[Buffer] =
     Gen.listOfN(3, Generators.genCursorPosition).map { cursors =>
       val selections = cursors.map(c => Selection(c, c))
-      emptyBuffer.copy(cursors = cursors, selections = selections)
+      emptyBuffer.copy(editing = emptyBuffer.editing.copy(cursors = cursors, selections = selections))
     }
 
   private val genCanonicalBuffer: Gen[Buffer] =
@@ -50,12 +52,12 @@ class CursorListSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matc
   property("withCursorList(cursorList(buffer)) reproduces the buffer's cursor-shaped fields") {
     forAll(genCanonicalBuffer) { buffer =>
       val roundTripped = buffer.withCursorList(buffer.cursorList)
-      roundTripped.cursors shouldBe buffer.cursors
-      roundTripped.selection shouldBe buffer.selection
-      roundTripped.selections shouldBe buffer.selections
-      roundTripped.preferredColumn shouldBe buffer.preferredColumn
-      roundTripped.preferredXPx shouldBe buffer.preferredXPx
-      roundTripped.multiCursorVerticalStates shouldBe buffer.multiCursorVerticalStates
+      roundTripped.editing.cursors shouldBe buffer.editing.cursors
+      roundTripped.editing.selection shouldBe buffer.editing.selection
+      roundTripped.editing.selections shouldBe buffer.editing.selections
+      roundTripped.editing.preferredColumn shouldBe buffer.editing.preferredColumn
+      roundTripped.editing.preferredXPx shouldBe buffer.editing.preferredXPx
+      roundTripped.editing.multiCursorVerticalStates shouldBe buffer.editing.multiCursorVerticalStates
     }
   }
 

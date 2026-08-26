@@ -56,7 +56,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
       layout       = LayoutEngine.calculateLayout(finalState, viewportSize)
       panelRect    = layout.editorPanelRect
       buffer       = finalState.buffers(bufferId)
-      content      = buffer.content.collect()
+      content      = buffer.document.content.collect()
 
       // Simulate placing characters on screen (basic version of what Renderer does)
       _ = content.zipWithIndex.foreach {
@@ -126,7 +126,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
           config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(language = Some(LanguageId.Scala))
+            current.buffers(bufferId).copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
           )
         )
       }
@@ -286,7 +286,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
 
     private def renderBufferToMock(pane: EditorPane, buffer: Buffer, rect: com.serenity.ui.layout.LayoutRect): Unit =
       val viewport = pane.viewport
-      val rope     = buffer.content
+      val rope     = buffer.document.content
 
       // Render visible lines - this simulates Renderer.renderBufferContent
       for screenLine <- 0 until math.min(viewport.visibleLines, rect.height) do

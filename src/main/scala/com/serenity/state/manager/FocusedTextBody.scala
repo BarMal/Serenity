@@ -18,12 +18,12 @@ object FocusedTextBody:
     * the active line falls outside the buffer's current extent.
     */
   def activeRange(buffer: Buffer, activeLine: Option[Int]): Option[Range.Inclusive] =
-    if buffer.language.contains(LanguageId.Markdown) then markdownRange(buffer, activeLine)
+    if buffer.document.language.contains(LanguageId.Markdown) then markdownRange(buffer, activeLine)
     else plainTextRange(buffer, activeLine)
 
   private def markdownRange(buffer: Buffer, activeLine: Option[Int]): Option[Range.Inclusive] =
     activeLine
-      .filter(line => line >= 0 && line < buffer.content.lineCount)
+      .filter(line => line >= 0 && line < buffer.document.content.lineCount)
       .map(line => markdownBlock(buffer, line))
 
   /** The markdown block surrounding `line`, exposed separately since callers with a definite line in hand (rather than
@@ -32,23 +32,23 @@ object FocusedTextBody:
     */
   def markdownBlock(buffer: Buffer, line: Int): Range.Inclusive =
     val bounded = MarkdownBlockLens.currentBlock(
-      buffer.content.lineCount,
-      buffer.content.getLine,
+      buffer.document.content.lineCount,
+      buffer.document.content.getLine,
       line,
       fenceProbeWindow = MarkdownFenceProbeWindow
     )
     def resolve(window: Int, range: Range.Inclusive): Range.Inclusive =
       val firstProbeLine = (line - window).max(0)
-      val lastProbeLine  = (line + window).min(buffer.content.lineCount - 1)
+      val lastProbeLine  = (line + window).min(buffer.document.content.lineCount - 1)
       val probeBounded =
         (firstProbeLine > 0 && range.start == firstProbeLine) ||
-          (lastProbeLine < buffer.content.lineCount - 1 && range.end == lastProbeLine)
-      if !probeBounded || window >= buffer.content.lineCount || window >= MarkdownFenceProbeMaximum then range
+          (lastProbeLine < buffer.document.content.lineCount - 1 && range.end == lastProbeLine)
+      if !probeBounded || window >= buffer.document.content.lineCount || window >= MarkdownFenceProbeMaximum then range
       else
-        val nextWindow = (window * 2).min(buffer.content.lineCount).min(MarkdownFenceProbeMaximum)
+        val nextWindow = (window * 2).min(buffer.document.content.lineCount).min(MarkdownFenceProbeMaximum)
         val expanded = MarkdownBlockLens.currentBlock(
-          buffer.content.lineCount,
-          buffer.content.getLine,
+          buffer.document.content.lineCount,
+          buffer.document.content.getLine,
           line,
           fenceProbeWindow = nextWindow
         )
@@ -58,15 +58,17 @@ object FocusedTextBody:
 
   private def plainTextRange(buffer: Buffer, activeLine: Option[Int]): Option[Range.Inclusive] =
     activeLine
-      .filter(line => line >= 0 && line < buffer.content.lineCount)
+      .filter(line => line >= 0 && line < buffer.document.content.lineCount)
       .map { line =>
         val start = Iterator
           .iterate(line)(_ - 1)
-          .takeWhile(index => index >= 0 && buffer.content.getLine(index).exists(_.trim.nonEmpty))
+          .takeWhile(index => index >= 0 && buffer.document.content.getLine(index).exists(_.trim.nonEmpty))
           .foldLeft(line)((_, index) => index)
         val end = Iterator
           .iterate(line + 1)(_ + 1)
-          .takeWhile(index => index < buffer.content.lineCount && buffer.content.getLine(index).exists(_.trim.nonEmpty))
+          .takeWhile(index =>
+            index < buffer.document.content.lineCount && buffer.document.content.getLine(index).exists(_.trim.nonEmpty)
+          )
           .foldLeft(line)((_, index) => index)
         start to end
       }

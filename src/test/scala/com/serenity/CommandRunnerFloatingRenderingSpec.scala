@@ -47,7 +47,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        cursors = cursors
+        editing = EditingState(cursors = cursors)
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
@@ -158,7 +158,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     def overlayFor(cursor: CursorPosition): (LayoutRect, LayoutRect) =
       val buffer = Buffer
         .fromString(bufferId, content)
-        .copy(cursors = List(cursor))
+        .copy(editing = EditingState(cursors = List(cursor)))
       val pane = EditorPane.withBuffer(paneId, bufferId)
       val state = AppState.initial.copy(
         buffers = Map(bufferId -> buffer),
@@ -211,7 +211,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        cursors = List(CursorPosition(1, 2))
+        editing = EditingState(cursors = List(CursorPosition(1, 2)))
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
@@ -299,7 +299,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3))
+        editing = EditingState(cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
@@ -345,7 +345,9 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
       .enterSelectedGroup
-    val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(cursors = List(CursorPosition(1, 2)))
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane   = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -388,7 +390,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3))
+        editing = EditingState(cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
@@ -751,7 +753,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        cursors = List(CursorPosition(1, 2))
+        editing = EditingState(cursors = List(CursorPosition(1, 2)))
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(

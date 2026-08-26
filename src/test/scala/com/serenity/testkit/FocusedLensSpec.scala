@@ -42,40 +42,44 @@ class FocusedLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "satisfy put-get: what was written is what is read back" in {
-    val marked = run(focusedState)(Focused.modifyBuffer(_.copy(isDirty = true)))
+    val marked = run(focusedState)(Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = true))))
 
-    Focused.bufferOf(marked).map(_.isDirty) shouldBe Some(true)
+    Focused.bufferOf(marked).map(_.document.isDirty) shouldBe Some(true)
   }
 
   it should "satisfy put-put: the last write wins" in {
     val twice =
-      run(focusedState)(Focused.modifyBuffer(_.copy(isDirty = true)) *> Focused.modifyBuffer(_.copy(isDirty = false)))
-    val once = run(focusedState)(Focused.modifyBuffer(_.copy(isDirty = false)))
+      run(focusedState)(
+        Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = true))) *> Focused.modifyBuffer(b =>
+          b.copy(document = b.document.copy(isDirty = false))
+        )
+      )
+    val once = run(focusedState)(Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = false))))
 
     twice shouldBe once
   }
 
   it should "absorb a missing focus rather than making the caller match" in {
     Focused.bufferOf(unfocusedState) shouldBe None
-    run(unfocusedState)(Focused.modifyBuffer(_.copy(isDirty = true))) shouldBe unfocusedState
+    run(unfocusedState)(Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = true)))) shouldBe unfocusedState
   }
 
   it should "leave other buffers untouched" in {
     val otherId    = BufferId(2)
     val withSecond = focusedState.copy(buffers = focusedState.buffers + (otherId -> Buffer.empty(otherId)))
 
-    val updated = run(withSecond)(Focused.modifyBuffer(_.copy(isDirty = true)))
+    val updated = run(withSecond)(Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = true))))
 
-    updated.buffers(otherId).isDirty shouldBe false
+    updated.buffers(otherId).document.isDirty shouldBe false
   }
 
   "Focused.bufferWithId" should "satisfy the same laws for an addressed buffer" in {
     run(focusedState)(Focused.modifyBufferWithId(bufferId)(identity)) shouldBe focusedState
 
-    val marked = run(focusedState)(Focused.modifyBufferWithId(bufferId)(_.copy(isDirty = true)))
-    marked.buffers(bufferId).isDirty shouldBe true
+    val marked = run(focusedState)(Focused.modifyBufferWithId(bufferId)(b => b.copy(document = b.document.copy(isDirty = true))))
+    marked.buffers(bufferId).document.isDirty shouldBe true
 
-    run(focusedState)(Focused.modifyBufferWithId(BufferId(99))(_.copy(isDirty = true))) shouldBe focusedState
+    run(focusedState)(Focused.modifyBufferWithId(BufferId(99))(b => b.copy(document = b.document.copy(isDirty = true)))) shouldBe focusedState
   }
 
   "Focused.pane" should "satisfy get-put, put-get and put-put" in {
@@ -104,9 +108,9 @@ class FocusedLensSpec extends AnyFlatSpec with Matchers:
     val transition =
       for
         maybeBuffer <- Focused.buffer
-        _           <- Focused.modifyBuffer(_.copy(isDirty = maybeBuffer.isDefined))
+        _ <- Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = maybeBuffer.isDefined)))
       yield ()
 
-    run(focusedState)(transition).buffers(bufferId).isDirty shouldBe true
+    run(focusedState)(transition).buffers(bufferId).document.isDirty shouldBe true
     run(unfocusedState)(transition) shouldBe unfocusedState
   }

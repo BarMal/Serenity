@@ -181,7 +181,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.layout.editorPanes should have size 1
     state.layout.activeEditorPaneId shouldBe Some(PaneId(1))
     state.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(1))
-    state.buffers(BufferId(1)).richTextDocument should not be empty
+    state.buffers(BufferId(1)).richText.richTextDocument should not be empty
     state.config.showPaneHeaders shouldBe false
     state.pinnedSurfaces shouldBe Nil
   }
@@ -212,7 +212,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.layout.editorPanes should have size 1
     state.layout.activeEditorPaneId.flatMap(state.layout.editorPanes.get).flatMap(_.bufferId) shouldBe
       state.bufferOrder.lastOption
-    state.focusedBufferId.flatMap(state.buffers.get).flatMap(_.richTextDocument) should not be empty
+    state.focusedBufferId.flatMap(state.buffers.get).flatMap(_.richText.richTextDocument) should not be empty
   }
 
   it should "preserve unrelated persisted configuration when applying a built-in workflow" in {
@@ -276,7 +276,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.buffers(BufferId(0)).language shouldBe Some(LanguageId.Markdown)
+    state.buffers(BufferId(0)).document.language shouldBe Some(LanguageId.Markdown)
     state.pinnedSurfaces.collectFirst {
       case UiSurface(
             _,
@@ -298,8 +298,10 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       val buffer = state
         .buffers(bufferId)
         .copy(
-          content = Rope("# Notes\n\nDraft"),
-          language = Some(LanguageId.Markdown)
+          document = state.buffers(bufferId).document.copy(
+            content = Rope("# Notes\n\nDraft"),
+            language = Some(LanguageId.Markdown)
+          )
         )
       state.copy(buffers = state.buffers + (bufferId -> buffer))
     }.unsafeRunSync()
@@ -338,9 +340,13 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       val buffer = state
         .buffers(bufferId)
         .copy(
-          content = Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-          language = Some(LanguageId.Markdown),
-          bookmarks = List(CursorPosition(2, 4))
+          document = state.buffers(bufferId).document.copy(
+            content = Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+            language = Some(LanguageId.Markdown)
+          ),
+          annotations = state.buffers(bufferId).annotations.copy(
+            bookmarks = List(CursorPosition(2, 4))
+          )
         )
       state.copy(buffers = state.buffers + (bufferId -> buffer))
     }.unsafeRunSync()
@@ -369,9 +375,13 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       val buffer = state
         .buffers(bufferId)
         .copy(
-          content = Rope("# Finding\n\nNeeds review"),
-          language = Some(LanguageId.Markdown),
-          bookmarks = List(CursorPosition(2, 0))
+          document = state.buffers(bufferId).document.copy(
+            content = Rope("# Finding\n\nNeeds review"),
+            language = Some(LanguageId.Markdown)
+          ),
+          annotations = state.buffers(bufferId).annotations.copy(
+            bookmarks = List(CursorPosition(2, 0))
+          )
         )
       state.copy(buffers = state.buffers + (bufferId -> buffer))
     }.unsafeRunSync()

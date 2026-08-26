@@ -14,7 +14,7 @@ class FocusedTextBodySpec extends AnyFlatSpec with Matchers:
 
   private def bufferWithContent(text: String, language: Option[LanguageId] = None) =
     val base = AppState.initial.buffers(bufferId)
-    base.copy(content = Rope(text), language = language)
+    base.copy(document = base.document.copy(content = Rope(text), language = language))
 
   "FocusedTextBody.activeRange" should "report None when there is no active line" in {
     val buffer = bufferWithContent("alpha\nbeta\ngamma")

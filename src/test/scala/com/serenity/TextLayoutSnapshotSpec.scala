@@ -117,7 +117,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(13), "")
       .copy(
-        content = content,
+        document = Document(content = content),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 8)
       )
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
@@ -241,7 +241,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(10), document.plainText)
       .copy(
-        richTextDocument = Some(document),
+        richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2)
       )
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
@@ -264,7 +264,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(16), "abcd\nefgh")
       .copy(
-        richTextDocument = Some(document),
+        richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2)
       )
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
@@ -283,7 +283,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(11), document.plainText)
       .copy(
-        richTextDocument = Some(document),
+        richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2)
       )
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()

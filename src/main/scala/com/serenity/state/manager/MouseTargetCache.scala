@@ -163,11 +163,11 @@ private[manager] object MouseTargetLayoutKey:
           .flatMap(state.buffers.get)
           .map(buffer =>
             (
-              RopeIdentity(buffer.content),
+              RopeIdentity(buffer.document.content),
               buffer.viewport,
               buffer.typographyRole,
-              buffer.language,
-              buffer.richTextDocument
+              buffer.document.language,
+              buffer.richText.richTextDocument
             )
           )
       },
@@ -178,7 +178,7 @@ private[manager] object MouseTargetLayoutKey:
       },
       lineNumberContent =
         if state.config.showLineNumbers then
-          state.buffers.toList.sortBy(_._1.value).map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.content))
+          state.buffers.toList.sortBy(_._1.value).map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
         else Nil
     )
 
@@ -250,7 +250,7 @@ private[serenity] object AuthoritativeUiScene:
                   .toInt
                   .max(baseViewport.visibleColumns)
                   .max(paneLayout.contentRect.width + 64)
-            val cursorColumn = buffer.cursors.headOption.map(_.column).getOrElse(baseViewport.leftColumn)
+            val cursorColumn = buffer.editing.cursors.headOption.map(_.column).getOrElse(baseViewport.leftColumn)
             val leftColumn =
               if state.config.wordWrapEnabled then 0
               else baseViewport.leftColumn.max(0).max(cursorColumn - visibleColumns + 1)

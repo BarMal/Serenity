@@ -36,9 +36,9 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     val firstBuffer           = stateAfterFirstBuffer.buffers(firstBufferId)
 
     // Should have "ABC" and cursor at position 3
-    firstBuffer.content.collect() shouldBe "ABC"
-    firstBuffer.cursors.head.column shouldBe 3
-    firstBuffer.cursors.head.line shouldBe 0
+    firstBuffer.document.content.collect() shouldBe "ABC"
+    firstBuffer.editing.cursors.head.column shouldBe 3
+    firstBuffer.editing.cursors.head.line shouldBe 0
 
     // Create second buffer and type different content
     stateManager.applyEvent(NewTab).unsafeRunSync()
@@ -50,9 +50,9 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     val secondBuffer           = stateAfterSecondBuffer.buffers(secondBufferId)
 
     // Should have "XY" and cursor at position 2
-    secondBuffer.content.collect() shouldBe "XY"
-    secondBuffer.cursors.head.column shouldBe 2
-    secondBuffer.cursors.head.line shouldBe 0
+    secondBuffer.document.content.collect() shouldBe "XY"
+    secondBuffer.editing.cursors.head.column shouldBe 2
+    secondBuffer.editing.cursors.head.line shouldBe 0
 
     // When: Switch back to first buffer
     stateManager.applyEvent(PreviousTab).unsafeRunSync()
@@ -62,14 +62,14 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     val secondBufferAfterSwitch = stateAfterSwitch.buffers(secondBufferId)
 
     // Then: Both buffers should maintain their cursor positions
-    firstBufferAfterSwitch.cursors.head.column shouldBe 3 // Still at end of "ABC"
-    firstBufferAfterSwitch.cursors.head.line shouldBe 0
-    secondBufferAfterSwitch.cursors.head.column shouldBe 2 // Still at end of "XY"
-    secondBufferAfterSwitch.cursors.head.line shouldBe 0
+    firstBufferAfterSwitch.editing.cursors.head.column shouldBe 3 // Still at end of "ABC"
+    firstBufferAfterSwitch.editing.cursors.head.line shouldBe 0
+    secondBufferAfterSwitch.editing.cursors.head.column shouldBe 2 // Still at end of "XY"
+    secondBufferAfterSwitch.editing.cursors.head.line shouldBe 0
 
     // And: Content should be preserved
-    firstBufferAfterSwitch.content.collect() shouldBe "ABC"
-    secondBufferAfterSwitch.content.collect() shouldBe "XY"
+    firstBufferAfterSwitch.document.content.collect() shouldBe "ABC"
+    secondBufferAfterSwitch.document.content.collect() shouldBe "XY"
 
   it should "track viewport position per buffer" in new CursorTrackingFixture:
     // Given: Wide terminal and two buffers
@@ -129,14 +129,14 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     val buffer1 = finalState.buffers(buffer1Id)
     val buffer2 = finalState.buffers(buffer2Id)
 
-    buffer0.content.collect() shouldBe "1"
-    buffer0.cursors.head.column shouldBe 1
+    buffer0.document.content.collect() shouldBe "1"
+    buffer0.editing.cursors.head.column shouldBe 1
 
-    buffer1.content.collect() shouldBe "23"
-    buffer1.cursors.head.column shouldBe 2
+    buffer1.document.content.collect() shouldBe "23"
+    buffer1.editing.cursors.head.column shouldBe 2
 
-    buffer2.content.collect() shouldBe "456"
-    buffer2.cursors.head.column shouldBe 3
+    buffer2.document.content.collect() shouldBe "456"
+    buffer2.editing.cursors.head.column shouldBe 3
 
     // When: Navigate back through buffers and verify cursor positions remain
     stateManager.applyEvent(PreviousTab).unsafeRunSync() // Go to buffer 1
@@ -148,6 +148,6 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     stateOnBuffer0.focusedBufferId.get shouldBe buffer0Id
 
     // Cursor positions should still be preserved
-    stateOnBuffer0.buffers(buffer0Id).cursors.head.column shouldBe 1
-    stateOnBuffer1.buffers(buffer1Id).cursors.head.column shouldBe 2
-    stateOnBuffer0.buffers(buffer2Id).cursors.head.column shouldBe 3
+    stateOnBuffer0.buffers(buffer0Id).editing.cursors.head.column shouldBe 1
+    stateOnBuffer1.buffers(buffer1Id).editing.cursors.head.column shouldBe 2
+    stateOnBuffer0.buffers(buffer2Id).editing.cursors.head.column shouldBe 3

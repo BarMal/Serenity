@@ -27,7 +27,9 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val cursor   = CursorPosition(0, 0)
     val buffer =
-      Buffer.fromString(bufferId, "function test_func() {\n\treturn 'hello_world';\n}").copy(cursors = List(cursor))
+      Buffer
+        .fromString(bufferId, "function test_func() {\n\treturn 'hello_world';\n}")
+        .copy(editing = EditingState(cursors = List(cursor)))
     val paneId = PaneId(1)
     val pane   = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
@@ -44,9 +46,9 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     noException should be thrownBy
       Renderer.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
 
-    buffer.content.collect() should include("test_func")
-    buffer.content.collect() should include("\t")
-    buffer.content.collect() should include("hello_world")
+    buffer.document.content.collect() should include("test_func")
+    buffer.document.content.collect() should include("\t")
+    buffer.document.content.collect() should include("hello_world")
   }
 
   it should "allow switching between light and dark themes" in {
@@ -65,7 +67,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = BufferId(1)
     val cursor   = CursorPosition(0, 5)
-    val buffer   = Buffer.fromString(bufferId, "hello").copy(cursors = List(cursor))
+    val buffer   = Buffer.fromString(bufferId, "hello").copy(editing = EditingState(cursors = List(cursor)))
     val paneId   = PaneId(1)
     val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
@@ -89,5 +91,5 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
       case _                                            => fail("Expected state change")
 
     val finalBuffer = finalState.buffers(bufferId)
-    finalBuffer.content.collect() shouldBe "hello\t_"
+    finalBuffer.document.content.collect() shouldBe "hello\t_"
   }

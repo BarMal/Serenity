@@ -23,13 +23,12 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
     cursor: CursorPosition,
     language: Option[LanguageId] = Some(LanguageId.Scala)
   ): AppState =
-    val buffer = Buffer
-      .fromString(bufferId, content)
-      .copy(
-        cursors = List(cursor),
-        language = language,
-        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 10)
-      )
+    val buffer0 = Buffer.fromString(bufferId, content)
+    val buffer = buffer0.copy(
+      editing = buffer0.editing.copy(cursors = List(cursor)),
+      document = buffer0.document.copy(language = language),
+      viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 10)
+    )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -44,7 +43,7 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
   "EditorEventReducer (navigationSnapshot)" should "move cursor up from line 1 col 2 to line 0 col 2" in {
     val state     = stateWith("hello\nworld", CursorPosition(line = 1, column = 2))
     val result    = VerticalNavSupport.dispatch(MoveUp, paneId, state).state
-    val newCursor = result.buffers(bufferId).cursors.head
+    val newCursor = result.buffers(bufferId).editing.cursors.head
     newCursor.line shouldBe 0
     newCursor.column shouldBe 2
   }
@@ -52,7 +51,7 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
   it should "move cursor down from line 0 col 2 to line 1 col 2" in {
     val state     = stateWith("hello\nworld", CursorPosition(line = 0, column = 2))
     val result    = VerticalNavSupport.dispatch(MoveDown, paneId, state).state
-    val newCursor = result.buffers(bufferId).cursors.head
+    val newCursor = result.buffers(bufferId).editing.cursors.head
     newCursor.line shouldBe 1
     newCursor.column shouldBe 2
   }
@@ -61,5 +60,5 @@ class EditorEventSnapshotSpec extends AnyFlatSpec with Matchers:
     val state      = stateWith("hello\nworld", CursorPosition(line = 0, column = 2))
     val afterDown  = VerticalNavSupport.dispatch(MoveDown, paneId, state).state
     val afterRound = VerticalNavSupport.dispatch(MoveUp, paneId, afterDown).state
-    afterRound.buffers(bufferId).cursors.head.column shouldBe 2
+    afterRound.buffers(bufferId).editing.cursors.head.column shouldBe 2
   }

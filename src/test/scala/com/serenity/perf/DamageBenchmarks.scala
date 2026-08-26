@@ -40,7 +40,10 @@ private[perf] object DamageBenchmarks:
       val buffer = before.buffers(BufferId(1))
       val after =
         before.copy(buffers =
-          before.buffers.updated(BufferId(1), buffer.copy(content = buffer.content.insert(insertAt, insertion)))
+          before.buffers.updated(
+            BufferId(1),
+            buffer.copy(document = buffer.document.copy(content = buffer.document.content.insert(insertAt, insertion)))
+          )
         )
       (before, after)
 
@@ -56,7 +59,11 @@ private[perf] object DamageBenchmarks:
     val (markdownBefore, markdownAfter) =
       editedContentPair(markdownDoc, insertAt = markdownDoc.length / 2, insertion = "y")
     def asMarkdown(state: AppState): AppState =
-      state.copy(buffers = state.buffers.view.mapValues(_.copy(language = Some(LanguageId.Markdown))).toMap)
+      state.copy(buffers =
+        state.buffers.view
+          .mapValues(buffer => buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown))))
+          .toMap
+      )
 
     val scrollBase = editorState(largeMultilineDocument(lines = 20_000), Some(LanguageId.Scala))
     val scrollDeep = scrollBase.copy(buffers = scrollBase.buffers.view.mapValues(_.copy(viewport = deepViewport)).toMap)

@@ -4,7 +4,7 @@ import com.serenity.document.DocumentOutline
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.{Balance, Rope}
-import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.state.models.{Buffer, BufferId, Document}
 import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -57,7 +57,7 @@ class DocumentOutlineSpec extends AnyFlatSpec with Matchers:
       throw AssertionError("outline generation should not materialise the whole buffer")
 
   "DocumentOutline" should "extract Markdown headings as document navigation symbols" in {
-    val buffer = Buffer
+    val baseBuffer = Buffer
       .fromString(
         BufferId(1),
         """# Chapter One
@@ -68,7 +68,7 @@ class DocumentOutlineSpec extends AnyFlatSpec with Matchers:
           |not a heading
           |### Beat Three""".stripMargin
       )
-      .copy(language = Some(LanguageId.Markdown))
+    val buffer = baseBuffer.copy(document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)))
 
     DocumentOutline.forBuffer(buffer) shouldBe List(
       Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
@@ -78,7 +78,8 @@ class DocumentOutlineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave non-Markdown buffers without document navigation symbols" in {
-    val buffer = Buffer.fromString(BufferId(1), "# Not Markdown").copy(language = Some(LanguageId.Scala))
+    val baseBuffer = Buffer.fromString(BufferId(1), "# Not Markdown")
+    val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(language = Some(LanguageId.Scala)))
 
     DocumentOutline.forBuffer(buffer) shouldBe Nil
   }
@@ -110,9 +111,9 @@ class DocumentOutlineSpec extends AnyFlatSpec with Matchers:
         RichTextParagraph.plain("Scene Two", role = ParagraphRole.Heading(2))
       )
     )
-    val buffer = Buffer
+    val baseBuffer = Buffer
       .fromString(BufferId(1), "Chapter One\nBody\nScene Two")
-      .copy(richTextDocument = Some(richDocument))
+    val buffer = baseBuffer.copy(richText = baseBuffer.richText.copy(richTextDocument = Some(richDocument)))
 
     DocumentOutline.forBuffer(buffer) shouldBe List(
       Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
@@ -127,8 +128,9 @@ class DocumentOutlineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "extract Markdown headings without materialising the whole rope" in {
-    val content = NonCollectingRope(Rope("# One\nbody\n## Two"))
-    val buffer  = Buffer(BufferId(2), content).copy(language = Some(LanguageId.Markdown))
+    val content    = NonCollectingRope(Rope("# One\nbody\n## Two"))
+    val baseBuffer = Buffer(BufferId(2), Document(content))
+    val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)))
 
     DocumentOutline.forBuffer(buffer) shouldBe List(
       Symbol("One", SymbolKind.Heading, Location(0, 0)),
@@ -138,7 +140,7 @@ class DocumentOutlineSpec extends AnyFlatSpec with Matchers:
 
   it should "extract plaintext sections without materialising the whole rope" in {
     val content = NonCollectingRope(Rope("Opening\nbody\n\nSecond\nbody"))
-    val buffer  = Buffer(BufferId(3), content)
+    val buffer  = Buffer(BufferId(3), Document(content))
 
     DocumentOutline.forBuffer(buffer) shouldBe List(
       Symbol("Opening", SymbolKind.Section, Location(0, 0)),
@@ -153,8 +155,9 @@ class DocumentOutlineSpec extends AnyFlatSpec with Matchers:
         RichTextParagraph.plain("Body")
       )
     )
-    val content = NonCollectingRope(Rope("Chapter One\nBody"))
-    val buffer  = Buffer(BufferId(4), content).copy(richTextDocument = Some(richDocument))
+    val content    = NonCollectingRope(Rope("Chapter One\nBody"))
+    val baseBuffer = Buffer(BufferId(4), Document(content))
+    val buffer     = baseBuffer.copy(richText = baseBuffer.richText.copy(richTextDocument = Some(richDocument)))
 
     DocumentOutline.forBuffer(buffer) shouldBe List(
       Symbol("Chapter One", SymbolKind.Heading, Location(0, 0))

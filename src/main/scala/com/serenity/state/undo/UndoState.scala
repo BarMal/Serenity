@@ -17,32 +17,36 @@ final case class BufferSnapshot(
 
   def restoreInto(buffer: Buffer): Buffer =
     buffer.copy(
-      content = content,
-      cursors = cursors,
-      selection = selection,
-      selections = selections,
-      preferredColumn = preferredColumn,
-      preferredXPx = preferredXPx,
+      document = buffer.document.copy(
+        content = content,
+        isDirty = true,
+        isNewEmpty = isNewEmpty
+      ),
+      editing = buffer.editing.copy(
+        cursors = cursors,
+        selection = selection,
+        selections = selections,
+        preferredColumn = preferredColumn,
+        preferredXPx = preferredXPx,
+        multiCursorVerticalStates = Nil
+      ),
       viewport = viewport,
-      findState = findState,
-      isDirty = true,
-      isNewEmpty = isNewEmpty,
-      multiCursorVerticalStates = Nil
+      findState = findState
     )
 
 object BufferSnapshot:
 
   def fromBuffer(buffer: Buffer): BufferSnapshot =
     BufferSnapshot(
-      content = buffer.content,
-      cursors = buffer.cursors,
-      selection = buffer.selection,
-      selections = buffer.selections,
-      preferredColumn = buffer.preferredColumn,
-      preferredXPx = buffer.preferredXPx,
+      content = buffer.document.content,
+      cursors = buffer.editing.cursors,
+      selection = buffer.editing.selection,
+      selections = buffer.editing.selections,
+      preferredColumn = buffer.editing.preferredColumn,
+      preferredXPx = buffer.editing.preferredXPx,
       viewport = buffer.viewport,
       findState = buffer.findState,
-      isNewEmpty = buffer.isNewEmpty
+      isNewEmpty = buffer.document.isNewEmpty
     )
 
 /** A snapshot of a buffer at a point in time, sufficient to restore that state. Used for both undo and redo stacks.

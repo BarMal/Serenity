@@ -50,11 +50,11 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
   private def markdownEditorState(mode: MarkdownViewMode): AppState =
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
-    val buffer = Buffer
-      .fromString(bufferId, "# Rendered\n\n# Raw\ncontinued")
+    val baseBuffer = Buffer.fromString(bufferId, "# Rendered\n\n# Raw\ncontinued")
+    val buffer = baseBuffer
       .copy(
-        language = Some(LanguageId.Markdown),
-        cursors = List(CursorPosition(2, 0)),
+        document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
+        editing = baseBuffer.editing.copy(cursors = List(CursorPosition(2, 0))),
         viewport = Viewport.default.copy(visibleLines = 10)
       )
     AppState.empty.copy(
@@ -114,11 +114,13 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         val bufferId = BufferId(0)
-        val buffer = state
-          .buffers(bufferId)
+        val existing = state.buffers(bufferId)
+        val buffer = existing
           .copy(
-            content = Rope("# Notes\n\nInitial text"),
-            language = Some(LanguageId.Markdown)
+            document = existing.document.copy(
+              content = Rope("# Notes\n\nInitial text"),
+              language = Some(LanguageId.Markdown)
+            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -141,7 +143,9 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         val bufferId = BufferId(0)
-        val updated  = state.buffers(bufferId).copy(content = Rope("# Notes\n\nUpdated live text"))
+        val existing = state.buffers(bufferId)
+        val updated =
+          existing.copy(document = existing.document.copy(content = Rope("# Notes\n\nUpdated live text")))
         state.copy(buffers = state.buffers + (bufferId -> updated))
       }
       .unsafeRunSync()
@@ -202,9 +206,10 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(1)
     val state = AppState.empty.copy(
       buffers = Map(
-        bufferId -> Buffer
-          .fromString(bufferId, "# Notes\n\n| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |")
-          .copy(language = Some(LanguageId.Markdown))
+        bufferId -> {
+          val base = Buffer.fromString(bufferId, "# Notes\n\n| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |")
+          base.copy(document = base.document.copy(language = Some(LanguageId.Markdown)))
+        }
       ),
       bufferOrder = List(bufferId),
       layout = Layout(
@@ -412,8 +417,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(1)
     val state = AppState.empty.copy(
       buffers = Map(
-        bufferId -> Buffer
-          .fromString(
+        bufferId -> {
+          val base = Buffer.fromString(
             bufferId,
             """|| Task | Owner |
               || ---- | ----- |
@@ -421,11 +426,12 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
               |
               |Editing here""".stripMargin
           )
-          .copy(
-            language = Some(LanguageId.Markdown),
-            cursors = List(CursorPosition(4, 0)),
+          base.copy(
+            document = base.document.copy(language = Some(LanguageId.Markdown)),
+            editing = base.editing.copy(cursors = List(CursorPosition(4, 0))),
             viewport = Viewport.default.copy(visibleLines = 10)
           )
+        }
       ),
       bufferOrder = List(bufferId),
       layout = Layout(
@@ -471,13 +477,14 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(1)
     AppState.empty.copy(
       buffers = Map(
-        bufferId -> Buffer
-          .fromString(bufferId, source)
-          .copy(
-            language = Some(LanguageId.Markdown),
-            cursors = List(cursor),
+        bufferId -> {
+          val base = Buffer.fromString(bufferId, source)
+          base.copy(
+            document = base.document.copy(language = Some(LanguageId.Markdown)),
+            editing = base.editing.copy(cursors = List(cursor)),
             viewport = Viewport.default.copy(visibleLines = 10)
           )
+        }
       ),
       bufferOrder = List(bufferId),
       layout = Layout(

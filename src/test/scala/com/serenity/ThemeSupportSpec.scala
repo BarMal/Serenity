@@ -44,7 +44,7 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     val buffer   = Buffer.fromString(bufferId, "function hello() { return 'world'; }")
     val theme    = Theme.dark
 
-    val styledContent = ThemeManager.applyTheme(buffer.content, theme)
+    val styledContent = ThemeManager.applyTheme(buffer.document.content, theme)
 
     styledContent should not be empty
     styledContent.exists(_.element == SyntaxElement.Keyword) shouldBe true

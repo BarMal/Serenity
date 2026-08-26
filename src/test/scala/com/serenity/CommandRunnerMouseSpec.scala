@@ -222,7 +222,10 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
           .flatMap(_.bufferId)
           .getOrElse(fail("Expected focused buffer"))
         state.copy(buffers =
-          state.buffers.updated(bufferId, state.buffers(bufferId).copy(language = Some(LanguageId.Scala)))
+          state.buffers.updated(
+            bufferId,
+            state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+          )
         )
       }
       .unsafeRunSync()
@@ -238,7 +241,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       .flatMap(after.layout.editorPanes.get)
       .flatMap(_.bufferId)
       .getOrElse(fail("Expected focused buffer"))
-    after.buffers(bufferId).language shouldBe None
+    after.buffers(bufferId).document.language shouldBe None
     after.commandRunnerSurface shouldBe None
   }
 

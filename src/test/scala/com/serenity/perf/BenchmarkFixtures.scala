@@ -20,10 +20,10 @@ private[perf] object BenchmarkFixtures:
   def editorState(content: String, language: Option[LanguageId]): AppState =
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
-    val buffer = Buffer
-      .fromString(bufferId, content)
+    val baseBuffer = Buffer.fromString(bufferId, content)
+    val buffer = baseBuffer
       .copy(
-        language = language,
+        document = baseBuffer.document.copy(language = language),
         viewport =
           Viewport(topLine = 0, leftColumn = 0, visibleColumns = viewportSize.width, visibleLines = viewportSize.height)
       )
@@ -38,7 +38,9 @@ private[perf] object BenchmarkFixtures:
 
   def editorStateForRichDocument(document: RichTextDocument): AppState =
     val base = editorState(document.plainText, None)
-    base.copy(buffers = base.buffers.view.mapValues(_.copy(richTextDocument = Some(document))).toMap)
+    base.copy(buffers =
+      base.buffers.view.mapValues(buffer => buffer.copy(richText = buffer.richText.copy(richTextDocument = Some(document)))).toMap
+    )
 
   def deepViewport: Viewport =
     Viewport(topLine = 10_000, leftColumn = 0, visibleColumns = viewportSize.width, visibleLines = viewportSize.height)
@@ -82,6 +84,8 @@ private[perf] object BenchmarkFixtures:
 
   def withCursorsOnConsecutiveLines(state: AppState, count: Int, fromLine: Int, column: Int): AppState =
     val cursors = (0 until count).toList.map(row => CursorPosition(fromLine + row, column))
-    state.copy(buffers = state.buffers.view.mapValues(_.copy(cursors = cursors)).toMap)
+    state.copy(buffers =
+      state.buffers.view.mapValues(buffer => buffer.copy(editing = buffer.editing.copy(cursors = cursors))).toMap
+    )
 
 end BenchmarkFixtures

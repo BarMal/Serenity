@@ -22,7 +22,7 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
-      .copy(cursors = List(cursor))
+      .copy(editing = EditingState(cursors = List(cursor)))
     AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),

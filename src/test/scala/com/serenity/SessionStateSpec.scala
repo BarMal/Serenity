@@ -51,18 +51,17 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val restoredState =
       SessionState.toAppState(SessionState.fromAppState(appState), Theme.default)
 
-    restoredState.buffers(buffer.id).content.toString.shouldBe("content from disk")
-    restoredState.buffers(buffer.id).filePath.shouldBe(Some(tempFile))
-    restoredState.buffers(buffer.id).isDirty.shouldBe(false)
+    restoredState.buffers(buffer.id).document.content.toString.shouldBe("content from disk")
+    restoredState.buffers(buffer.id).document.filePath.shouldBe(Some(tempFile))
+    restoredState.buffers(buffer.id).document.isDirty.shouldBe(false)
   }
 
   it should "restore dirty file-backed buffers from unsaved in-memory content" in {
     val tempFile = Files.createTempFile("session-state-dirty", ".txt")
     Files.writeString(tempFile, "saved on disk")
 
-    val buffer = Buffer
-      .fromFile(BufferId(9), tempFile, "unsaved in memory")
-      .copy(isDirty = true)
+    val baseBuffer = Buffer.fromFile(BufferId(9), tempFile, "unsaved in memory")
+    val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(isDirty = true))
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -78,18 +77,17 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val restoredState =
       SessionState.toAppState(SessionState.fromAppState(appState), Theme.default)
 
-    restoredState.buffers(buffer.id).content.toString.shouldBe("unsaved in memory")
-    restoredState.buffers(buffer.id).filePath.shouldBe(Some(tempFile))
-    restoredState.buffers(buffer.id).isDirty.shouldBe(true)
+    restoredState.buffers(buffer.id).document.content.toString.shouldBe("unsaved in memory")
+    restoredState.buffers(buffer.id).document.filePath.shouldBe(Some(tempFile))
+    restoredState.buffers(buffer.id).document.isDirty.shouldBe(true)
   }
 
   it should "discard dirty buffer content when persistUnsavedBuffers is false" in {
     val tempFile = Files.createTempFile("session-state-no-persist", ".txt")
     Files.writeString(tempFile, "saved on disk")
 
-    val buffer = Buffer
-      .fromFile(BufferId(11), tempFile, "unsaved in memory")
-      .copy(isDirty = true)
+    val baseBuffer = Buffer.fromFile(BufferId(11), tempFile, "unsaved in memory")
+    val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(isDirty = true))
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -137,17 +135,18 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val tempFile = Files.createTempFile("session-json-roundtrip", ".txt")
     Files.writeString(tempFile, "json round trip content")
 
-    val buffer = Buffer
-      .fromFile(BufferId(20), tempFile, "json round trip content")
-      .copy(
-        cursors = List(CursorPosition(3, 7)),
-        viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80),
-        findState = Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1)),
+    val baseBuffer = Buffer.fromFile(BufferId(20), tempFile, "json round trip content")
+    val buffer = baseBuffer.copy(
+      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(3, 7))),
+      viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80),
+      findState = Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1)),
+      annotations = baseBuffer.annotations.copy(
         bookmarks = List(CursorPosition(1, 2), CursorPosition(8, 0)),
         documentComments = List(
           DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.")
         )
       )
+    )
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -168,13 +167,13 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val restored       = SessionState.toAppState(decoded.toOption.get, Theme.default)
     val restoredBuffer = restored.buffers(buffer.id)
 
-    restoredBuffer.content.toString shouldBe "json round trip content"
-    restoredBuffer.cursors.head shouldBe CursorPosition(3, 7)
+    restoredBuffer.document.content.toString shouldBe "json round trip content"
+    restoredBuffer.editing.cursors.head shouldBe CursorPosition(3, 7)
     restoredBuffer.viewport.topLine shouldBe 2
     restoredBuffer.viewport.leftColumn shouldBe 1
     restoredBuffer.findState shouldBe Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1))
-    restoredBuffer.bookmarks shouldBe List(CursorPosition(1, 2), CursorPosition(8, 0))
-    restoredBuffer.documentComments shouldBe List(
+    restoredBuffer.annotations.bookmarks shouldBe List(CursorPosition(1, 2), CursorPosition(8, 0))
+    restoredBuffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.")
     )
   }
@@ -191,9 +190,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val buffer = Buffer
-      .fromString(BufferId(22), richDocument.plainText)
-      .copy(richTextDocument = Some(richDocument))
+    val baseBuffer = Buffer.fromString(BufferId(22), richDocument.plainText)
+    val buffer     = baseBuffer.copy(richText = baseBuffer.richText.copy(richTextDocument = Some(richDocument)))
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -214,8 +212,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .toAppState(decoded.toOption.get, Theme.default)
       .buffers(buffer.id)
 
-    restoredBuffer.content.toString shouldBe "plain bold"
-    restoredBuffer.richTextDocument shouldBe Some(richDocument)
+    restoredBuffer.document.content.toString shouldBe "plain bold"
+    restoredBuffer.richText.richTextDocument shouldBe Some(richDocument)
   }
 
   it should "preserve rich document fidelity through JSON round trip" in {
@@ -223,9 +221,13 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       unsupportedElements = Set("tbl"),
       unsupportedArchiveEntries = Set("word/media/image1.png")
     )
-    val buffer = Buffer
-      .fromString(BufferId(23), "kept text")
-      .copy(richTextDocument = Some(RichTextDocument.oneParagraph("kept text")), richTextFidelity = Some(fidelity))
+    val baseBuffer = Buffer.fromString(BufferId(23), "kept text")
+    val buffer = baseBuffer.copy(richText =
+      baseBuffer.richText.copy(
+        richTextDocument = Some(RichTextDocument.oneParagraph("kept text")),
+        richTextFidelity = Some(fidelity)
+      )
+    )
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -241,16 +243,22 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
 
     decoded.isRight shouldBe true
-    SessionState.toAppState(decoded.toOption.get, Theme.default).buffers(buffer.id).richTextFidelity shouldBe Some(
+    SessionState
+      .toAppState(decoded.toOption.get, Theme.default)
+      .buffers(buffer.id)
+      .richText
+      .richTextFidelity shouldBe Some(
       fidelity
     )
   }
 
   it should "drop stale rich text metadata for dirty buffers" in {
     val richDocument = RichTextDocument.oneParagraph("old text")
-    val buffer = Buffer
-      .fromString(BufferId(24), "edited text")
-      .copy(isDirty = true, richTextDocument = Some(richDocument))
+    val baseBuffer = Buffer.fromString(BufferId(24), "edited text")
+    val buffer = baseBuffer.copy(
+      document = baseBuffer.document.copy(isDirty = true),
+      richText = baseBuffer.richText.copy(richTextDocument = Some(richDocument))
+    )
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -267,8 +275,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .toAppState(SessionState.fromAppState(appState), Theme.default)
       .buffers(buffer.id)
 
-    restoredBuffer.content.toString shouldBe "edited text"
-    restoredBuffer.richTextDocument shouldBe None
+    restoredBuffer.document.content.toString shouldBe "edited text"
+    restoredBuffer.richText.richTextDocument shouldBe None
   }
 
   it should "preserve aligned rich text metadata for dirty formatting-only buffers" in {
@@ -282,9 +290,11 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val buffer = Buffer
-      .fromString(BufferId(26), richDocument.plainText)
-      .copy(isDirty = true, richTextDocument = Some(richDocument))
+    val baseBuffer = Buffer.fromString(BufferId(26), richDocument.plainText)
+    val buffer = baseBuffer.copy(
+      document = baseBuffer.document.copy(isDirty = true),
+      richText = baseBuffer.richText.copy(richTextDocument = Some(richDocument))
+    )
     val appState = AppState.initial.copy(
       buffers = Map(buffer.id -> buffer),
       bufferOrder = List(buffer.id),
@@ -301,8 +311,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .toAppState(SessionState.fromAppState(appState), Theme.default)
       .buffers(buffer.id)
 
-    restoredBuffer.content.toString shouldBe "plain bold"
-    restoredBuffer.richTextDocument shouldBe Some(richDocument)
+    restoredBuffer.document.content.toString shouldBe "plain bold"
+    restoredBuffer.richText.richTextDocument shouldBe Some(richDocument)
   }
 
   it should "restore legacy session find state that only stored result lines" in {
@@ -870,8 +880,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val restored = SessionState.toAppState(SessionState.fromAppState(appState), Theme.default)
 
     restored.buffers should have size 2
-    restored.buffers(buffer1.id).content.toString shouldBe "pane one content"
-    restored.buffers(buffer2.id).content.toString shouldBe "pane two content"
+    restored.buffers(buffer1.id).document.content.toString shouldBe "pane one content"
+    restored.buffers(buffer2.id).document.content.toString shouldBe "pane two content"
     restored.layout.editorPanes should have size 2
     restored.layout.activeEditorPaneId shouldBe Some(PaneId(1))
     restored.focus shouldBe Focus.EditorPane(PaneId(1))

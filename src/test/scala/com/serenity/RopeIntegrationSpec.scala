@@ -17,19 +17,19 @@ class RopeIntegrationSpec extends AnyFlatSpec with Matchers:
     // Given: Large text content that will create an unbalanced rope
     val largeText = (1 to 100).map(i => s"Line $i with some content").mkString("\n")
     val rope      = Rope(largeText)
-    val buffer    = Buffer(BufferId(1), rope, isDirty = false, filePath = None)
+    val buffer    = Buffer(BufferId(1), Document(rope, isDirty = false, filePath = None))
 
     // When: Perform many insertions that could unbalance the rope
     val insertions = (1 to 50).map(i => (i * 10, s" [Insert $i]"))
 
     val currentBuffer = insertions.foldLeft(buffer) {
       case (buf, (position, text)) =>
-        val newContent = buf.content.insert(position, text)
-        buf.copy(content = newContent)
+        val newContent = buf.document.content.insert(position, text)
+        buf.copy(document = buf.document.copy(content = newContent))
     }
 
     // Then: Rope should remain balanced or be rebalanceable
-    val finalRope = currentBuffer.content
+    val finalRope = currentBuffer.document.content
     finalRope.isHeightBalanced shouldBe true
     finalRope.isDepthBalanced shouldBe true
 
@@ -192,8 +192,8 @@ let anotherOldName = oldName * 2;"""
   it should "integrate rope operations with editor component processing" in new RopeIntegrationFixture:
     // Given: Editor state with buffer
     val initialText = "Hello world"
-    val buffer = Buffer(BufferId(1), Rope(initialText), isDirty = false, filePath = None).copy(
-      cursors = List(CursorPosition(0, 6)), // Position at "world"
+    val buffer = Buffer(BufferId(1), Document(Rope(initialText), isDirty = false, filePath = None)).copy(
+      editing = EditingState(cursors = List(CursorPosition(0, 6))), // Position at "world"
       viewport = Viewport(0, 0, 80, 24)
     )
     val pane = EditorPane(
@@ -236,11 +236,11 @@ let anotherOldName = oldName * 2;"""
 
     // Then: Final state should reflect all rope operations
     val finalBuffer = currentState.buffers(BufferId(1))
-    finalBuffer.content.collect() shouldBe "Hello, beautiful world!"
-    finalBuffer.isDirty shouldBe true
+    finalBuffer.document.content.collect() shouldBe "Hello, beautiful world!"
+    finalBuffer.document.isDirty shouldBe true
 
     // Cursor should be at end
-    finalBuffer.cursors.head.column shouldBe 23
+    finalBuffer.editing.cursors.head.column shouldBe 23
 
   it should "handle rope operations at chunk boundaries" in new RopeIntegrationFixture:
     // Given: Text that will span multiple rope chunks (leafChunkSize = 30)

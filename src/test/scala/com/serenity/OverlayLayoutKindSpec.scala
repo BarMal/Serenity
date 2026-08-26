@@ -17,11 +17,12 @@ class OverlayLayoutKindSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(1)
 
   private def listingState: AppState =
-    val buffer = Buffer
-      .fromString(bufferId, "one\ntwo\nthree")
-      .copy(
+    val baseBuffer = Buffer.fromString(bufferId, "one\ntwo\nthree")
+    val buffer = baseBuffer.copy(
+      editing = baseBuffer.editing.copy(
         cursors = List(CursorPosition(1, 2))
       )
+    )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val entries = List(
       DirEntry(Paths.get("/repo/src"), "src", true),

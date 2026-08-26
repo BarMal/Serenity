@@ -33,16 +33,17 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     )
 
   "MouseTargetLayoutKey" should "ignore cursor and selection changes during mouse drags" in {
-    val buffer = Buffer
-      .fromString(bufferId, "alpha\nbeta\ngamma")
-      .copy(cursors = List(CursorPosition(0, 1)))
+    val plainBuffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma")
+    val buffer      = plainBuffer.copy(editing = plainBuffer.editing.copy(cursors = List(CursorPosition(0, 1))))
     val state = stateWith(buffer)
     val draggedState = state.copy(
       buffers = state.buffers.updated(
         bufferId,
         buffer.copy(
-          cursors = List(CursorPosition(1, 3)),
-          selection = Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
+          editing = buffer.editing.copy(
+            cursors = List(CursorPosition(1, 3)),
+            selection = Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
+          )
         )
       )
     )
@@ -89,8 +90,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
 
   it should "reuse the prepared scene for cursor-only state changes" in {
     val buffer = Buffer.fromString(bufferId, "alpha beta")
-    val state  = stateWith(buffer.copy(cursors = List(CursorPosition(0, 1))))
-    val moved  = stateWith(buffer.copy(cursors = List(CursorPosition(0, 5))))
+    val state  = stateWith(buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 1)))))
+    val moved  = stateWith(buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 5)))))
     val size   = ViewportSize(80, 24)
     val scene  = MouseTargetCache.fromState(state, size).scene
 
@@ -185,19 +186,20 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "invalidate prepared snapshots when font, typography, language, viewport, or rich text changes" in {
-    val buffer = Buffer
-      .fromString(bufferId, "alpha beta")
-      .copy(language = Some(LanguageId.Scala))
+    val plainBuffer = Buffer.fromString(bufferId, "alpha beta")
+    val buffer      = plainBuffer.copy(document = plainBuffer.document.copy(language = Some(LanguageId.Scala)))
     val state = stateWith(buffer)
     val size  = ViewportSize(80, 24)
     val key   = MouseTargetLayoutKey.from(state, size)
 
     val fontChanged     = stateWith(buffer, state.config.withFontConfig(state.config.fontConfig.copy(fontSize = 14.0f)))
-    val languageChanged = stateWith(buffer.copy(language = Some(LanguageId.Markdown)))
-    val languageRemoved = stateWith(buffer.copy(language = None))
+    val languageChanged = stateWith(buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown))))
+    val languageRemoved = stateWith(buffer.copy(document = buffer.document.copy(language = None)))
     val viewportChanged = stateWith(buffer.copy(viewport = buffer.viewport.copy(topVisualLine = 1)))
     val richTextChanged = stateWith(
-      buffer.copy(richTextDocument = Some(com.serenity.richtext.RichTextDocument.fromPlainText("alpha beta")))
+      buffer.copy(richText =
+        buffer.richText.copy(richTextDocument = Some(com.serenity.richtext.RichTextDocument.fromPlainText("alpha beta")))
+      )
     )
 
     List(fontChanged, languageChanged, languageRemoved, viewportChanged, richTextChanged).foreach { changed =>

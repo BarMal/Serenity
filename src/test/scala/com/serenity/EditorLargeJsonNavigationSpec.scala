@@ -67,8 +67,7 @@ class EditorLargeJsonNavigationSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, largeJsonLine)
       .copy(
-        content = NonCollectingRope(Rope(largeJsonLine)),
-        language = Some(LanguageId.JsonLang),
+        document = Document(content = NonCollectingRope(Rope(largeJsonLine)), language = Some(LanguageId.JsonLang)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 24)
       )
     val state = AppState.initial.copy(
@@ -84,5 +83,5 @@ class EditorLargeJsonNavigationSpec extends AnyFlatSpec with Matchers:
 
     val moved = (1 to 100).foldLeft(state)((current, _) => EditorEventReducer.reduce(MoveRight, paneId, current).state)
 
-    moved.buffers(bufferId).cursors.head shouldBe CursorPosition(0, 100)
+    moved.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 100)
   }

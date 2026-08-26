@@ -96,7 +96,7 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     // Then: Each buffer should have independent animation state
     val bufferContents = bufferIds.map { bufferId =>
       val buffer = finalState.buffers(bufferId)
-      buffer.content.collect()
+      buffer.document.content.collect()
     }
 
     // Each buffer should have different content
@@ -134,8 +134,8 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
 
     // Debug: Check what's actually in each buffer
-    val buffer1Content = finalState.buffers(buffer1Id).content.collect()
-    val buffer2Content = finalState.buffers(buffer2Id).content.collect()
+    val buffer1Content = finalState.buffers(buffer1Id).document.content.collect()
+    val buffer2Content = finalState.buffers(buffer2Id).document.content.collect()
 
     // Then: Buffers should have correct independent content
     // Note: the order depends on which buffer was focused when, adjust expectation
@@ -147,16 +147,16 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
       // Original expectation
       buffer1Content shouldBe "13"
       buffer2Content shouldBe "2"
-    finalState.buffers(buffer2Id).content.collect() shouldBe "2"
+    finalState.buffers(buffer2Id).document.content.collect() shouldBe "2"
 
     // And animation states should be independent
     val buffer1 = finalState.buffers(buffer1Id)
     val buffer2 = finalState.buffers(buffer2Id)
 
     // At least they should not interfere with each other's content
-    buffer1.content.collect().should(not).contain('2')
-    buffer2.content.collect().should(not).contain('1')
-    buffer2.content.collect().should(not).contain('3')
+    buffer1.document.content.collect().should(not).contain('2')
+    buffer2.document.content.collect().should(not).contain('1')
+    buffer2.document.content.collect().should(not).contain('3')
 
   // Helper method to determine if a buffer has active animations
   private def hasActiveAnimations(bufferId: BufferId, stateManager: StateManager): Boolean =

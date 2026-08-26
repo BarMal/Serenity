@@ -92,9 +92,9 @@ object DamageProducer:
     after: Buffer,
     granularity: RenderDamageGranularity
   )(using Balance): Damage =
-    if isSameReference(before.content, after.content) then Damage.Nothing
+    if isSameReference(before.document.content, after.document.content) then Damage.Nothing
     else
-      RopeDiff.changedOffsetRange(before.content, after.content) match
+      RopeDiff.changedOffsetRange(before.document.content, after.document.content) match
         case None => Damage.Nothing
         case Some((start, end)) =>
           cellDamage(bufferId, after, start, end, granularity)
@@ -115,11 +115,11 @@ object DamageProducer:
   ): Option[Damage] =
     Option
       .when(granularity == RenderDamageGranularity.Cells && !after.typographyRole.usesTextFont) {
-        val weight                   = after.content.weight
+        val weight                   = after.document.content.weight
         val clampedStart             = math.max(0, math.min(start, weight))
         val lastOffset               = math.max(clampedStart, math.min(end, weight) - 1)
-        val (startLine, startColumn) = after.content.offsetToLineColumn(clampedStart)
-        val (endLine, endColumn)     = after.content.offsetToLineColumn(lastOffset)
+        val (startLine, startColumn) = after.document.content.offsetToLineColumn(clampedStart)
+        val (endLine, endColumn)     = after.document.content.offsetToLineColumn(lastOffset)
         Option.when(startLine == endLine)(Damage.BufferCells(bufferId, startLine, startColumn, Some(endColumn + 1)))
       }
       .flatten
@@ -129,16 +129,16 @@ object DamageProducer:
     * be at least `start` rather than `end - 1` going negative relative to it.
     */
   private def rowsForOffsetRange(after: Buffer, start: Int, end: Int): Set[Int] =
-    val weight         = after.content.weight
+    val weight         = after.document.content.weight
     val clampedStart   = math.max(0, math.min(start, weight))
     val lastOffset     = math.max(clampedStart, math.min(end, weight) - 1)
-    val (startLine, _) = after.content.offsetToLineColumn(clampedStart)
-    val (endLine, _)   = after.content.offsetToLineColumn(lastOffset)
+    val (startLine, _) = after.document.content.offsetToLineColumn(clampedStart)
+    val (endLine, _)   = after.document.content.offsetToLineColumn(lastOffset)
     (startLine to endLine).toSet
 
   private def cursorDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
-    if before.cursors == after.cursors then Damage.Nothing
-    else Damage.BufferRows(bufferId, (before.cursors ++ after.cursors).map(_.line).toSet)
+    if before.editing.cursors == after.editing.cursors then Damage.Nothing
+    else Damage.BufferRows(bufferId, (before.editing.cursors ++ after.editing.cursors).map(_.line).toSet)
 
   private def selectionDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.allSelections == after.allSelections then Damage.Nothing
@@ -148,8 +148,12 @@ object DamageProducer:
     selections.iterator.flatMap(selection => selection.start.line to selection.end.line).toSet
 
   private def commentDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
-    if before.documentComments == after.documentComments then Damage.Nothing
-    else Damage.BufferRows(bufferId, commentLines(before.documentComments) ++ commentLines(after.documentComments))
+    if before.annotations.documentComments == after.annotations.documentComments then Damage.Nothing
+    else
+      Damage.BufferRows(
+        bufferId,
+        commentLines(before.annotations.documentComments) ++ commentLines(after.annotations.documentComments)
+      )
 
   private def commentLines(comments: List[DocumentComment]): Set[Int] =
     comments.iterator.flatMap(comment => comment.start.line to comment.end.line).toSet
@@ -177,8 +181,8 @@ object DamageProducer:
     * reports the buffer's full line extent rather than trying to reason about which rows actually recolor.
     */
   private def languageDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
-    if before.language == after.language then Damage.Nothing
-    else Damage.BufferRows(bufferId, (0 until after.content.lineCount).toSet)
+    if before.document.language == after.document.language then Damage.Nothing
+    else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
 
   /** Scrolling shifts which buffer line each visual row shows, so every visible row's content changes even though
     * nothing about the buffer's own data did -- this producer has no layout knowledge of which rows are actually on
@@ -189,7 +193,7 @@ object DamageProducer:
     */
   private def viewportDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.viewport == after.viewport then Damage.Nothing
-    else Damage.BufferRows(bufferId, (0 until after.content.lineCount).toSet)
+    else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
 
   /** Character-reveal (and other per-cell) animation ticks report exactly the rows whose cells changed, read off
     * `AnimationState.animations`'s `CharacterKey`s -- the same map `PaneRowKey.animations` (`Renderer.scala`) reads
@@ -215,12 +219,12 @@ object DamageProducer:
   ): Damage =
     if !after.config.focusedTextBodyEnabled then Damage.Nothing
     else
-      val beforeRange = FocusedTextBody.activeRange(beforeBuffer, beforeBuffer.cursors.headOption.map(_.line))
-      val afterRange  = FocusedTextBody.activeRange(afterBuffer, afterBuffer.cursors.headOption.map(_.line))
+      val beforeRange = FocusedTextBody.activeRange(beforeBuffer, beforeBuffer.editing.cursors.headOption.map(_.line))
+      val afterRange  = FocusedTextBody.activeRange(afterBuffer, afterBuffer.editing.cursors.headOption.map(_.line))
       if beforeRange == afterRange then Damage.Nothing
       else
-        val beforeLines = beforeRange.map(_.toSet).getOrElse((0 until beforeBuffer.content.lineCount).toSet)
-        val afterLines  = afterRange.map(_.toSet).getOrElse((0 until afterBuffer.content.lineCount).toSet)
+        val beforeLines = beforeRange.map(_.toSet).getOrElse((0 until beforeBuffer.document.content.lineCount).toSet)
+        val afterLines  = afterRange.map(_.toSet).getOrElse((0 until afterBuffer.document.content.lineCount).toSet)
         Damage.BufferRows(bufferId, beforeLines.diff(afterLines) ++ afterLines.diff(beforeLines))
 
   private def changedAnimationLines(before: AnimationState, after: AnimationState): Set[Int] =
@@ -291,8 +295,8 @@ object DamageProducer:
     state.layout.editorPanes.get(paneId).map { pane =>
       val buffer = pane.bufferId.flatMap(state.buffers.get)
       (
-        buffer.flatMap(_.filePath).flatMap(path => Option(path.getFileName)).map(_.toString),
-        buffer.exists(_.isDirty),
+        buffer.flatMap(_.document.filePath).flatMap(path => Option(path.getFileName)).map(_.toString),
+        buffer.exists(_.document.isDirty),
         buffer.map(_.id.value)
       )
     }
@@ -310,6 +314,6 @@ object DamageProducer:
       pane     <- state.layout.editorPanes.get(paneId)
       bufferId <- pane.bufferId
       buffer   <- state.buffers.get(bufferId)
-    yield (buffer.cursors, buffer.language, buffer.filePath, buffer.viewport)
+    yield (buffer.editing.cursors, buffer.document.language, buffer.document.filePath, buffer.viewport)
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b

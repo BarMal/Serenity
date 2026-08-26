@@ -957,7 +957,7 @@ object Renderer:
           bufferId   <- pane.bufferId
           buffer     <- state.buffers.get(bufferId)
           snapshot   <- renderPlan.snapshots.get(paneId)
-          if buffer.content.weight > 0 && !isInlineMarkdownLens(buffer, state)
+          if buffer.document.content.weight > 0 && !isInlineMarkdownLens(buffer, state)
         yield paneId -> paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot)
     }.toMap
 
@@ -1172,9 +1172,9 @@ object Renderer:
     if wordWrapEnabled then 0
     else
       val visibleColumns = math.max(1, viewport.visibleColumns)
-      val cursor         = buffer.cursors.headOption.getOrElse(CursorPosition(viewport.topLine, 0))
+      val cursor         = buffer.editing.cursors.headOption.getOrElse(CursorPosition(viewport.topLine, 0))
       val cursorColumn   = cursor.column.max(0)
-      val lineLength     = buffer.content.getLine(cursor.line).map(_.length).getOrElse(cursorColumn)
+      val lineLength     = buffer.document.content.getLine(cursor.line).map(_.length).getOrElse(cursorColumn)
       val maxForCursor   = math.max(0, cursorColumn - visibleColumns + 1)
       val maxForLine     = math.max(0, lineLength - visibleColumns)
 
@@ -1254,9 +1254,9 @@ object Renderer:
       }
 
     buffer match
-      case Some(buf) if buf.content.weight == 0 && buf.isNewEmpty =>
+      case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
         renderWelcomeText(contentRect, state.theme, context)
-      case Some(buf) if buf.content.weight == 0 =>
+      case Some(buf) if buf.document.content.weight == 0 =>
         renderEmptyPane(contentRect, state.theme, context)
       case Some(buf) =>
         renderBufferContent(
@@ -1314,12 +1314,12 @@ object Renderer:
 
       val bufferTitle = buffer match
         case Some(buf) =>
-          buf.filePath match
+          buf.document.filePath match
             case Some(path) =>
               val filename = path.getFileName.toString
-              if buf.isDirty then s"$filename - unsaved" else filename
+              if buf.document.isDirty then s"$filename - unsaved" else filename
             case None =>
-              if buf.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
+              if buf.document.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
         case None =>
           "No Buffer"
 
@@ -1435,7 +1435,7 @@ object Renderer:
                 lineTheme,
                 context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                 state.syntaxHighlightingEnabled,
-                buffer.language,
+                buffer.document.language,
                 styledSegments,
                 clipRightXPx = Some(contentRightXPx)
               )
@@ -1448,7 +1448,7 @@ object Renderer:
                 lineTheme,
                 context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                 state.syntaxHighlightingEnabled,
-                buffer.language,
+                buffer.document.language,
                 bufferLine = visualLine.bufferLine,
                 bufferStartColumn = visualLine.startColumn,
                 styledSegments = styledSegments
@@ -1566,7 +1566,7 @@ object Renderer:
   private def focusedTextBodyLines(buffer: Buffer, state: AppState): Int => Boolean =
     if !state.config.focusedTextBodyEnabled then _ => true
     else
-      val activeLine = buffer.cursors.headOption.map(_.line)
+      val activeLine = buffer.editing.cursors.headOption.map(_.line)
       FocusedTextBody
         .activeRange(buffer, activeLine)
         .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
@@ -1588,7 +1588,7 @@ object Renderer:
       context.cellMetrics.lineHeight,
       context.surface.devicePixelScaleY
     )
-    val title = buffer.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
+    val title = buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Untitled")
     val image = MarkdownDocumentPreview.renderInlineRowsImage(
       rows = frame.previewRows,
       sourceLines = frame.lines,
@@ -1777,11 +1777,11 @@ object Renderer:
       Option.when(clippedStart < clippedEnd)(clippedStart -> clippedEnd)
 
   private def isInlineMarkdownLens(buffer: Buffer, state: AppState): Boolean =
-    buffer.language.contains(LanguageId.Markdown) && state.config.markdownViewMode == MarkdownViewMode.InlineLens
+    buffer.document.language.contains(LanguageId.Markdown) && state.config.markdownViewMode == MarkdownViewMode.InlineLens
 
   private def markdownLensFrameFor(buffer: Buffer, snapshot: TextLayoutSnapshot): MarkdownLensFrame =
     val previewWindow = markdownPreviewWindow(buffer, buffer.viewport.visibleLines)
-    val lines = buffer.content.linesFrom(
+    val lines = buffer.document.content.linesFrom(
       previewWindow.window.firstSourceLine,
       previewWindow.sourceLineCount
     )
@@ -1802,7 +1802,7 @@ object Renderer:
       baseRows,
       lines,
       activeRanges,
-      buffer.cursors.map(_.line - previewWindow.window.firstSourceLine).toSet,
+      buffer.editing.cursors.map(_.line - previewWindow.window.firstSourceLine).toSet,
       snapshot,
       previewWindow.window,
       previewWindow.window.firstSourceLine
@@ -1856,17 +1856,17 @@ object Renderer:
     rows -> placements
 
   private def markdownPreviewWindow(buffer: Buffer, visibleRows: Int): MarkdownLensPreviewWindow =
-    val lineCount = buffer.content.lineCount
+    val lineCount = buffer.document.content.lineCount
     if lineCount == 0 then MarkdownLensPreviewWindow(MarkdownDocumentPreview.PreviewWindow(0, 0, ""), 0)
     else
-      val activeLine = buffer.cursors.headOption
+      val activeLine = buffer.editing.cursors.headOption
         .map(_.line)
         .filter(line => line >= 0 && line < lineCount)
       val activeBlock     = activeLine.map(line => FocusedTextBody.markdownBlock(buffer, line))
       val viewportTopLine = buffer.viewport.topLine.max(0).min(lineCount - 1)
       val windowTopLine = activeLine
-        .filter(line => line == viewportTopLine && line > 0 && buffer.content.getLine(line).exists(_.trim.isEmpty))
-        .filter(line => buffer.content.getLine(line - 1).exists(_.trim.matches("^#{1,6}\\s+.*")))
+        .filter(line => line == viewportTopLine && line > 0 && buffer.document.content.getLine(line).exists(_.trim.isEmpty))
+        .filter(line => buffer.document.content.getLine(line - 1).exists(_.trim.matches("^#{1,6}\\s+.*")))
         .map(_ - 1)
         .getOrElse(viewportTopLine)
       val baseSourceLineLimit = markdownPreviewSourceLineLimit(visibleRows)
@@ -1886,7 +1886,7 @@ object Renderer:
           firstSourceLine = firstSourceLine,
           firstPreviewRow = MarkdownDocumentPreview
             .previewRowForSourceLine(
-              buffer.content.linesFrom(firstSourceLine, math.min(maxSourceLines, lineCount - firstSourceLine)),
+              buffer.document.content.linesFrom(firstSourceLine, math.min(maxSourceLines, lineCount - firstSourceLine)),
               0
             )
             .getOrElse(0),
@@ -1899,8 +1899,8 @@ object Renderer:
     math.max(MinMarkdownPreviewSourceLines, visibleRows.max(1) * MarkdownPreviewOverscanFactor)
 
   private def activeMarkdownBlockRanges(buffer: Buffer): List[Range.Inclusive] =
-    val lineCount = buffer.content.lineCount
-    val cursorRanges = buffer.cursors
+    val lineCount = buffer.document.content.lineCount
+    val cursorRanges = buffer.editing.cursors
       .map(_.line)
       .filter(line => line >= 0 && line < lineCount)
       .map(line => FocusedTextBody.markdownBlock(buffer, line))
@@ -2017,10 +2017,10 @@ object Renderer:
           blockRange,
           markdownLensPlacement(blockRange, blockVisualLines, rect.height, lines, previewWindow)
         )
-        buffer.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
+        buffer.editing.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
           val isPrimaryCursor = cursorIndex == 0
           val shouldRenderCursor =
-            context.cursorVisible || (buffer.cursors.size > 1 && !isPrimaryCursor)
+            context.cursorVisible || (buffer.editing.cursors.size > 1 && !isPrimaryCursor)
           blockVisualLines.zipWithIndex.collectFirst {
             case (line, visualIndex)
                 if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
@@ -2278,10 +2278,10 @@ object Renderer:
     snapshot: TextLayoutSnapshot
   ): List[PixelRect] =
 
-    buffer.cursors.zipWithIndex.flatMap { (cursor, cursorIndex) =>
+    buffer.editing.cursors.zipWithIndex.flatMap { (cursor, cursorIndex) =>
       val isPrimaryCursor = cursorIndex == 0
       val shouldRenderCursor =
-        context.cursorVisible || (buffer.cursors.size > 1 && !isPrimaryCursor)
+        context.cursorVisible || (buffer.editing.cursors.size > 1 && !isPrimaryCursor)
       calculateCursorVisualPosition(cursor, snapshot) match
         case Some((visualLine, xPx)) if shouldRenderCursor =>
           if visualLineVisible(rect, visualLine, context, snapshot)
@@ -2545,7 +2545,7 @@ object Renderer:
       .map(buffer => markdownSplitPreviewWindow(buffer, contentHeightCells).source)
       .getOrElse("")
     val baseUri =
-      buffer.flatMap(_.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
+      buffer.flatMap(_.document.filePath).flatMap(path => Option(path.toAbsolutePath.getParent).map(_.toUri))
     val image = MarkdownDocumentPreview.renderImage(
       source = content,
       title = title,
@@ -2579,13 +2579,13 @@ object Renderer:
     )
 
   private def markdownSplitPreviewWindow(buffer: Buffer, visibleRows: Int): MarkdownDocumentPreview.PreviewWindow =
-    val lineCount = buffer.content.lineCount
+    val lineCount = buffer.document.content.lineCount
     if lineCount == 0 then MarkdownDocumentPreview.PreviewWindow(0, 0, "")
     else
       val maxSourceLines = markdownPreviewSourceLineLimit(visibleRows).max(1)
       val maxStart       = (lineCount - maxSourceLines).max(0)
       val fallbackStart  = buffer.viewport.topLine.max(0).min(maxStart)
-      val anchorLine = buffer.cursors.headOption
+      val anchorLine = buffer.editing.cursors.headOption
         .map(_.line)
         .filter(line => line >= 0 && line < lineCount)
         .getOrElse(buffer.viewport.topLine.max(0).min(lineCount - 1))
@@ -2596,7 +2596,7 @@ object Renderer:
       MarkdownDocumentPreview.PreviewWindow(
         firstSourceLine,
         firstPreviewRow = 0,
-        buffer.content.linesFrom(firstSourceLine, maxSourceLines).mkString("\n")
+        buffer.document.content.linesFrom(firstSourceLine, maxSourceLines).mkString("\n")
       )
 
   private def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
@@ -2757,11 +2757,11 @@ object Renderer:
       case Some(pane) =>
         pane.bufferId.flatMap(state.buffers.get) match
           case Some(buffer) =>
-            val cursor   = buffer.cursors.headOption.getOrElse(CursorPosition(0, 0))
+            val cursor   = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
             val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
-            val language = buffer.language.fold("Plain Text")(_.displayName)
+            val language = buffer.document.language.fold("Plain Text")(_.displayName)
 
-            val filePath = buffer.filePath match
+            val filePath = buffer.document.filePath match
               case Some(path) => s" | ${path.getFileName}"
               case None       => " | Not saved to file yet"
 

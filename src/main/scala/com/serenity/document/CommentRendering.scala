@@ -14,7 +14,7 @@ object CommentRendering:
 
   def atCursor(buffer: Buffer): Option[RenderedComment] =
     for
-      cursor  <- buffer.cursors.headOption
+      cursor  <- buffer.editing.cursors.headOption
       comment <- authoredCommentAt(buffer, cursor).orElse(commentAtLine(buffer, cursor.line))
     yield comment
 
@@ -39,10 +39,10 @@ object CommentRendering:
       pane     <- state.layout.editorPanes.get(paneId)
       bufferId <- pane.bufferId
       buffer   <- state.buffers.get(bufferId)
-      cursor   <- buffer.cursors.headOption
+      cursor   <- buffer.editing.cursors.headOption
       comment  <- atCursor(buffer)
     yield
-      val target = buffer.documentComments.find(_.contains(cursor))
+      val target = buffer.annotations.documentComments.find(_.contains(cursor))
       val draft  = target.map(_.text).getOrElse(comment.raw)
       (cursor, CommentLensState(comment = comment, draft = draft, cursor = draft.length, target = target))
 
@@ -55,7 +55,7 @@ object CommentRendering:
     buffer: Buffer,
     cursor: com.serenity.state.models.CursorPosition
   ): Option[RenderedComment] =
-    buffer.documentComments
+    buffer.annotations.documentComments
       .find(_.contains(cursor))
       .map { comment =>
         val lines = comment.text.linesIterator.toVector
@@ -67,14 +67,14 @@ object CommentRendering:
       }
 
   private def commentAtLine(buffer: Buffer, lineIndex: Int): Option[RenderedComment] =
-    buffer.content.getLine(lineIndex).flatMap { line =>
-      if startsBlockComment(line, buffer.language) then
-        blockCommentAt(buffer, lineIndex, buffer.language)
-          .orElse(lineCommentAt(line, lineIndex, buffer.language, includeStarFallback = true))
+    buffer.document.content.getLine(lineIndex).flatMap { line =>
+      if startsBlockComment(line, buffer.document.language) then
+        blockCommentAt(buffer, lineIndex, buffer.document.language)
+          .orElse(lineCommentAt(line, lineIndex, buffer.document.language, includeStarFallback = true))
       else
-        lineCommentAt(line, lineIndex, buffer.language, includeStarFallback = false)
-          .orElse(blockCommentAt(buffer, lineIndex, buffer.language))
-          .orElse(lineCommentAt(line, lineIndex, buffer.language, includeStarFallback = true))
+        lineCommentAt(line, lineIndex, buffer.document.language, includeStarFallback = false)
+          .orElse(blockCommentAt(buffer, lineIndex, buffer.document.language))
+          .orElse(lineCommentAt(line, lineIndex, buffer.document.language, includeStarFallback = true))
     }
 
   private def lineCommentAt(
@@ -126,7 +126,7 @@ object CommentRendering:
       .headOption
       .map {
         case (syntax, range) =>
-          val rawLines = buffer.content.linesFrom(range.start, range.size).map(_.trim)
+          val rawLines = buffer.document.content.linesFrom(range.start, range.size).map(_.trim)
           RenderedComment(
             sourceLine = range.start,
             raw = rawLines.mkString("\n"),
@@ -157,14 +157,16 @@ object CommentRendering:
     lineIndex: Int,
     syntax: BlockCommentSyntax
   ): Option[Range.Inclusive] =
-    val lineCount = buffer.content.lineCount
+    val lineCount = buffer.document.content.lineCount
     if lineIndex < 0 || lineIndex >= lineCount then None
     else
       for
         start <- (lineIndex to 0 by -1).find(index =>
-          buffer.content.getLine(index).exists(_.trim.startsWith(syntax.start))
+          buffer.document.content.getLine(index).exists(_.trim.startsWith(syntax.start))
         )
-        end <- (start until lineCount).find(index => buffer.content.getLine(index).exists(_.trim.endsWith(syntax.end)))
+        end <- (start until lineCount).find(index =>
+          buffer.document.content.getLine(index).exists(_.trim.endsWith(syntax.end))
+        )
         if lineIndex <= end
       yield start to end
 
