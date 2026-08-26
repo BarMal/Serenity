@@ -17,7 +17,7 @@ final private[manager] class StateManagerWorkflowCapability(
 
   import dependencies.*
 
-  protected def openFileWorkflowModal(
+  private[manager] def openFileWorkflowModal(
     mode: FileWorkflowMode,
     state: AppState,
     bufferIdOverride: Option[BufferId] = None,
@@ -514,23 +514,34 @@ final private[manager] class StateManagerWorkflowCapability(
             updateFileWorkflowSurface(surfaceId, workflow.updated(confirmCreateDirectories = true))
           case None =>
             workflowTargetPath(workflow).flatMap { targetPath =>
-              saveBufferAsEffect(bufferId, targetPath) >>
-                stateRef.get.flatMap { savedState =>
-                  savedState.actionStack.collectFirst {
-                    case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow
-                  } match
-                    case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
-                      val dismissedState = dismissModalSurface(savedState)
-                      val nextState =
-                        if closeWorkflow.scope == CloseScope.Quit then dismissedState
-                        else closeBufferUsingExistingFlow(dismissedState, bufferId)
-                      stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
-                    case _ =>
-                      dismissSurfaceAndFocusEditor(surfaceId)
+              saveBufferAsEffect(bufferId, targetPath)
+                .flatMap { _ =>
+                  stateRef.get.flatMap { savedState =>
+                    savedState.actionStack.collectFirst {
+                      case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow
+                    } match
+                      case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
+                        val dismissedState = dismissModalSurface(savedState)
+                        val nextState =
+                          if closeWorkflow.scope == CloseScope.Quit then dismissedState
+                          else closeBufferUsingExistingFlow(dismissedState, bufferId)
+                        stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
+                      case _ =>
+                        dismissSurfaceAndFocusEditor(surfaceId)
+                  }
+                }
+                .handleErrorWith { error =>
+                  updateFileWorkflowSurface(
+                    surfaceId,
+                    workflow.updated(statusMessage = Some(saveFailureMessage(error)))
+                  )
                 }
             }
       case None =>
         logger.debug("[FILE-WORKFLOW] No focused buffer available for save-as")
+
+  private def saveFailureMessage(error: Throwable): String =
+    s"Could not save: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}"
 
   private def remoteWorkflowTarget(workflow: FileWorkflowState): Option[String] =
     val filenameInput = workflow.filename.trim
@@ -556,22 +567,28 @@ final private[manager] class StateManagerWorkflowCapability(
   private[manager] def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
     bufferIdOverride.orElse(state.focusedBufferId) match
       case Some(bufferId) =>
-        val focusedPath = state.buffers.get(bufferId).flatMap(_.filePath)
-        val initialDirectory =
-          focusedPath
-            .flatMap(path => Option(path.getParent).map(IO.pure))
-            .getOrElse(FileUtils.getCurrentDirectory)
-        val suggestedFileName = focusedPath.flatMap(path => Option(path.getFileName).map(_.toString))
+        fileDialog match
+          case Some(dialog) =>
+            val focusedPath = state.buffers.get(bufferId).flatMap(_.filePath)
+            val initialDirectory =
+              focusedPath
+                .flatMap(path => Option(path.getParent).map(IO.pure))
+                .getOrElse(FileUtils.getCurrentDirectory)
+            val suggestedFileName = focusedPath.flatMap(path => Option(path.getFileName).map(_.toString))
 
-        initialDirectory
-          .flatMap(directory => fileDialog.chooseSaveFile(Some(directory), suggestedFileName))
-          .flatMap {
-            case Some(path) =>
-              saveBufferAsEffect(bufferId, path) >> continueCloseAfterNativeSaveAs(bufferId)
-            case None =>
-              IO.unit
-          }
-          .handleErrorWith(ex => logger.error(ex)(s"[FILE] Native save-as dialog failed for buffer $bufferId"))
+            initialDirectory
+              .flatMap(directory => dialog.chooseSaveFile(Some(directory), suggestedFileName))
+              .flatMap {
+                case Some(path) =>
+                  saveBufferAsEffect(bufferId, path) >> continueCloseAfterNativeSaveAs(bufferId)
+                case None =>
+                  IO.unit
+              }
+              .handleErrorWith(ex => logger.error(ex)(s"[FILE] Native save-as dialog failed for buffer $bufferId"))
+          case None =>
+            // No native dialog to show at all -- the in-app form is the only way to collect a path, not a fallback
+            // for a dialog the user might have cancelled (that case stays a no-op above, via chooseSaveFile's None).
+            openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId))
       case None =>
         logger.debug("[FILE] Save As requested without a focused buffer")
 

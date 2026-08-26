@@ -31,7 +31,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     ): IO[Option[java.nio.file.Path]] =
       IO.pure(saveSelection)
 
-  private def createStateManager(fileDialog: FileDialog = FileDialog.unavailable): StateManager =
+  private def createStateManager(fileDialog: Option[FileDialog] = None): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CloseWorkflowStateManagerSpec"))
     StateManager.apply(logger, fileDialog = fileDialog).unsafeRunSync()
 
@@ -294,7 +294,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val bufferId   = BufferId(0)
 
     try
-      val stateManager = createStateManager(TestFileDialog(Some(targetFile)))
+      val stateManager = createStateManager(Some(TestFileDialog(Some(targetFile))))
       stateManager
         .updateState { state =>
           val buffer = state
@@ -321,7 +321,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep the close workflow open when native save-as is cancelled" in {
-    val stateManager = createStateManager(TestFileDialog(None))
+    val stateManager = createStateManager(Some(TestFileDialog(None)))
     val bufferId     = BufferId(0)
 
     stateManager

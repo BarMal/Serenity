@@ -52,7 +52,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       // Test Option 2: Open File
       stateManager3 <- createStateManagerIO(
         "StartupOptionsEndToEndSpec",
-        fileDialog = TestFileDialog(Some(selectedFile))
+        fileDialog = Some(TestFileDialog(Some(selectedFile)))
       )
       _             <- AppStartup.initializeState(stateManager3, theme, viewportSize)
       _             <- stateManager3.applyEvent(MoveDown) // Move to option 2

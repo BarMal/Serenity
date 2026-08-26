@@ -126,7 +126,7 @@ final private[manager] case class StateManagerRuntime(
     uiPresetStore: UiPresetStore,
     windowSizeProvider: IO[Option[PreferredWindowSize]],
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
-    fileDialog: FileDialog,
+    fileDialog: Option[FileDialog],
     fileManager: FileManager,
     sessionManager: SessionManager,
     sessionPersistence: SessionPersistence
@@ -155,7 +155,7 @@ private[manager] object StateManagerRuntime:
     uiPresetStore: UiPresetStore,
     windowSizeProvider: IO[Option[PreferredWindowSize]],
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
-    fileDialog: FileDialog
+    fileDialog: Option[FileDialog]
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride
       .map(root => SessionManager.create(root, themeManager, logger, policy))

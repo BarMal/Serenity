@@ -23,7 +23,7 @@ trait StateManagerTestSupport:
     loggerName: String,
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
     deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
-    fileDialog: FileDialog = FileDialog.unavailable
+    fileDialog: Option[FileDialog] = None
   ): IO[StateManager] =
     IO.blocking(Files.createTempDirectory(s"${loggerName.toLowerCase}-state-manager"))
       .flatMap(root =>
@@ -40,6 +40,6 @@ trait StateManagerTestSupport:
     loggerName: String,
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
     deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
-    fileDialog: FileDialog = FileDialog.unavailable
+    fileDialog: Option[FileDialog] = None
   ): StateManager =
     createStateManagerIO(loggerName, onFontConfigChanged, deviceTextScaleProvider, fileDialog).unsafeRunSync()

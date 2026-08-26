@@ -124,7 +124,7 @@ object Main extends IOApp:
                   configPersistencePath = Some(ConfigManager.defaultConfigPath),
                   windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
                   onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
-                  fileDialog = SwingFileDialog(swingWin.canvas)
+                  fileDialog = Some(SwingFileDialog(swingWin.canvas))
                 )
               ),
               awaitExternalQuit = swingWin.awaitClose,
