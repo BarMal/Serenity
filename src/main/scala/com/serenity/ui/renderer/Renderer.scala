@@ -375,6 +375,155 @@ object Renderer:
       )
     }
 
+  /** The render plan a cursor-only redraw needs: the cached one from the last full layout, if it is still valid for
+    * these fonts/metrics/viewport, or a freshly prepared one otherwise. Shared by every cursor-only entry point (Swing
+    * and surface-generic alike) so the cache is consulted exactly the same way regardless of shell.
+    */
+  private def resolveCursorRenderPlan(
+    state0: AppState,
+    authoritativeScene: UiSceneSnapshot,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    cursorVisible: Boolean,
+    cursorColor: Option[java.awt.Color],
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics
+  ): (CalculatedLayout, EditorPaneRenderPlan) =
+    preparedSceneRef
+      .get()
+      .filter(_.matches(authoritativeScene, codeFont, textFont, uiFont, cellMetrics, uiMetrics, viewportSize))
+      .map(value => value.scene.calculatedLayout -> value.renderPlan)
+      .getOrElse {
+        val next = prepareScene(
+          state0,
+          surface,
+          viewportSize,
+          authoritativeScene,
+          cursorVisible,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics
+        )
+        preparedSceneRef.set(Some(next))
+        next.scene.calculatedLayout -> next.renderPlan
+      }
+
+  /** Draw just the cursor glyphs for `renderPlan` into `surface` and flush. Shared tail of every cursor-only /
+    * cursor-overlay entry point: the only thing that differs between them is which surface the cursor lands on and how
+    * that surface's owning shell was told a fresh layout was needed.
+    */
+  private def paintCursorsOnly(
+    state0: AppState,
+    surface: RenderSurface,
+    layout: CalculatedLayout,
+    renderPlan: EditorPaneRenderPlan,
+    cursorVisible: Boolean,
+    cursorColor: Option[java.awt.Color],
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
+  ): List[PixelRect] =
+    val context = RenderContext(
+      surface,
+      layout,
+      cursorVisible,
+      cursorColor,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      bufferAnimations
+    )
+    val cursorRects = renderEditorCursors(state0, context, renderPlan)
+    surface.flush()
+    cursorRects
+
+  /** Surface-generic form of [[renderCursorOnly]]: redraws just the cursor glyphs into `surface`, reusing the cached
+    * render plan from the last full layout when it is still valid. `false` only for a start-page-only state, which has
+    * no cursor to draw.
+    */
+  def renderCursorOnly(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color]
+  ): Boolean =
+    renderCursorOnly(
+      state,
+      cursorVisible,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      cursorColor,
+      Map.empty
+    )
+
+  def renderCursorOnly(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color],
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
+  ): Boolean =
+    val state0 = withEffectiveTheme(state)
+    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(_ => false) {
+      authoritativeScene =>
+        val (layout, renderPlan) = resolveCursorRenderPlan(
+          state0,
+          authoritativeScene,
+          surface,
+          viewportSize,
+          cursorVisible,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics
+        )
+        val _ = paintCursorsOnly(
+          state0,
+          surface,
+          layout,
+          renderPlan,
+          cursorVisible,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics,
+          bufferAnimations
+        )
+        true
+    }
+
   def renderCursorOnly(
     state: AppState,
     cursorVisible: Boolean,
@@ -395,46 +544,115 @@ object Renderer:
         swingWin.onCursorOverlayReady(Some(new java.awt.Rectangle(0, 0, 0, 0))) { image =>
           val surface =
             Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
-          val prepared = preparedSceneRef
-            .get()
-            .filter(
-              _.matches(authoritativeScene, codeFont, textFont, uiFont, swingWin.metrics, uiMetrics, viewportSize)
-            )
-          val (layout, renderPlan) = prepared match
-            case Some(value) => value.scene.calculatedLayout -> value.renderPlan
-            case None =>
-              val next = prepareScene(
-                state0,
-                surface,
-                viewportSize,
-                authoritativeScene,
-                cursorVisible,
-                cursorColor,
-                codeFont,
-                textFont,
-                uiFont,
-                swingWin.metrics,
-                uiMetrics
-              )
-              preparedSceneRef.set(Some(next))
-              next.scene.calculatedLayout -> next.renderPlan
-          val context =
-            RenderContext(
-              surface,
-              layout,
-              cursorVisible,
-              cursorColor,
-              codeFont,
-              textFont,
-              uiFont,
-              swingWin.metrics,
-              uiMetrics,
-              bufferAnimations
-            )
-          val cursorRects = renderEditorCursors(state0, context, renderPlan)
-          surface.flush()
-          cursorRects.map(toAwtRectangle)
+          val (layout, renderPlan) = resolveCursorRenderPlan(
+            state0,
+            authoritativeScene,
+            surface,
+            viewportSize,
+            cursorVisible,
+            cursorColor,
+            codeFont,
+            textFont,
+            uiFont,
+            swingWin.metrics,
+            uiMetrics
+          )
+          paintCursorsOnly(
+            state0,
+            surface,
+            layout,
+            renderPlan,
+            cursorVisible,
+            cursorColor,
+            codeFont,
+            textFont,
+            uiFont,
+            swingWin.metrics,
+            uiMetrics,
+            bufferAnimations
+          ).map(toAwtRectangle)
         }
+    }
+
+  /** Surface-generic form of [[renderWithCursorOverlay]]: renders a base frame with the cursor left out, then draws the
+    * cursor directly on top of the same surface and flushes again. Unlike the Swing form, which composites the cursor
+    * into a separate overlay image so blinking never has to redraw the base, this issues two flushes -- fine for any
+    * `RenderSurface`, and inexpensive on a damage-diffed one, where the second flush only ever touches the handful of
+    * cells the cursor occupies.
+    */
+  def renderWithCursorOverlay(
+    state: AppState,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color]
+  ): Boolean =
+    renderWithCursorOverlay(
+      state,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      cursorColor,
+      Damage.Everything
+    )
+
+  def renderWithCursorOverlay(
+    state: AppState,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color],
+    damage: Damage
+  ): Boolean =
+    val state0        = withEffectiveTheme(state)
+    val repaintRegion = new AtomicReference[Option[PixelRect]](None)
+    val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
+    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
+      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics, output)
+      true
+    ) { scene =>
+      renderFrame(
+        state0,
+        cursorVisible = false,
+        surface,
+        viewportSize,
+        scene,
+        codeFont,
+        textFont,
+        uiFont,
+        cellMetrics,
+        uiMetrics,
+        cursorColor = None,
+        output,
+        damage
+      ).fold(false) { renderPlan =>
+        val _ = paintCursorsOnly(
+          state0,
+          surface,
+          scene.calculatedLayout,
+          renderPlan,
+          true,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics
+        )
+        true
+      }
     }
 
   /** Render a base frame and its cursor overlay without recalculating the editor layout. */
@@ -492,9 +710,11 @@ object Renderer:
         swingWin.onCursorOverlayReady(baseDirtyRegion) { image =>
           val cursorSurface =
             Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
-          val cursorContext = RenderContext(
+          paintCursorsOnly(
+            state0,
             cursorSurface,
             scene.calculatedLayout,
+            renderPlan,
             true,
             cursorColor,
             codeFont,
@@ -503,10 +723,7 @@ object Renderer:
             swingWin.metrics,
             uiMetrics,
             bufferAnimations
-          )
-          val cursorRects = renderEditorCursors(state0, cursorContext, renderPlan)
-          cursorSurface.flush()
-          cursorRects.map(toAwtRectangle)
+          ).map(toAwtRectangle)
         }
       }
     }
