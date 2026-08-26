@@ -35,12 +35,15 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val currentUndoRef  = Ref.of[IO, UndoState](UndoState()).unsafeRunSync()
     val currentFiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
     val currentCacheRef = Ref.of[IO, Option[MouseTargetCache]](None).unsafeRunSync()
+    val currentBufferAnimationsRef =
+      Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
     val statePort = new EventStatePort:
       val stateRef                 = currentStateRef
       val undoRef                  = currentUndoRef
       val logger                   = currentLogger
       val documentAnalysisFiberRef = currentFiberRef
       val mouseTargetCacheRef      = currentCacheRef
+      val bufferAnimationsRef      = currentBufferAnimationsRef
     val effectPort = new EventEffectPort:
       def interpretEffect(effect: AppEffect): IO[Unit]                                       = runEffect(effect)
       def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] = IO.unit
@@ -425,10 +428,19 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   "AppRuntime input phase" should "depend only on state read, update, and event application capabilities" in {
     val stateRef = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
     val applied  = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
+    val bufferAnimationsRef =
+      Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
     val capabilities = new StateReader with StateUpdater with EventApplier:
-      def getCurrentState: IO[AppState]                       = stateRef.get
-      def updateState(update: AppState => AppState): IO[Unit] = stateRef.update(update)
-      def applyEvent(event: Event): IO[Unit]                  = applied.update(_ :+ event)
+      def getCurrentState: IO[AppState]                                                 = stateRef.get
+      def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
+      def updateState(update: AppState => AppState): IO[Unit]                           = stateRef.update(update)
+      def updateBufferAnimations(
+        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+          BufferId,
+          com.serenity.animation.AnimationState
+        ]
+      ): IO[Unit] = bufferAnimationsRef.update(update)
+      def applyEvent(event: Event): IO[Unit] = applied.update(_ :+ event)
     val router = InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default)).unsafeRunSync()
     val clipboard = new SystemClipboard[IO]:
       def readText: IO[Option[String]]      = IO.pure(Some("pasted"))

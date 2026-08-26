@@ -382,24 +382,20 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
     val secondBufferId = stateManager.createBuffer("Second").unsafeRunSync()
     stateManager
-      .updateState { state =>
-        val buffer = state.buffers(secondBufferId)
-        state.copy(buffers =
-          state.buffers.updated(
-            secondBufferId,
-            buffer
-              .copy(animations = buffer.animations.addCharacterAnimation('z', 0, 0, Color.BLACK, Color.WHITE, 5))
-          )
+      .updateBufferAnimations { animations =>
+        val current = animations.getOrElse(secondBufferId, com.serenity.animation.AnimationState.empty)
+        animations.updated(
+          secondBufferId,
+          current.addCharacterAnimation('z', 0, 0, Color.BLACK, Color.WHITE, 5)
         )
       }
       .unsafeRunSync()
 
     stateManager.applyEvent(NextTab).unsafeRunSync()
 
-    val animations = stateManager.getCurrentState
+    val animations = stateManager.getBufferAnimations
       .unsafeRunSync()
-      .buffers(secondBufferId)
-      .animations
+      .getOrElse(secondBufferId, com.serenity.animation.AnimationState.empty)
     val owners = animations.animations.values.map(_.owner).toSet
     owners should contain allOf (AnimationOwner.EditorText, AnimationOwner.UiTransitions)
     animations.getCell(0, 0).map(_.owner) shouldBe Some(AnimationOwner.EditorText)

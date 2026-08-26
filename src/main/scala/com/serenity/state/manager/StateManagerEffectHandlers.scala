@@ -253,15 +253,15 @@ final private[manager] class StateManagerEffectHandlers(
     }.void
 
   private def cancelActiveMotion(): IO[Unit] =
-    stateRef.update(state =>
-      state.copy(
-        buffers = clearBufferAnimations(state),
-        themeTransition = None,
-        uiSurfaces = state.uiSurfaces.filterNot(isGhostOverlay),
-        surfaceAnimations = Map.empty,
-        windowSitter = com.serenity.animation.WindowSitter.default
+    clearBufferAnimations() >>
+      stateRef.update(state =>
+        state.copy(
+          themeTransition = None,
+          uiSurfaces = state.uiSurfaces.filterNot(isGhostOverlay),
+          surfaceAnimations = Map.empty,
+          windowSitter = com.serenity.animation.WindowSitter.default
+        )
       )
-    )
 
   private def cancelDisabledMotion(
     previous: com.serenity.config.AppConfig,
@@ -288,38 +288,41 @@ final private[manager] class StateManagerEffectHandlers(
   private def cancelMotionFamily(family: com.serenity.config.MotionFamily): IO[Unit] =
     family match
       case com.serenity.config.MotionFamily.EditorText =>
-        stateRef.update(state =>
-          state.copy(buffers = clearBufferAnimations(state, com.serenity.animation.AnimationOwner.EditorText))
-        )
+        clearBufferAnimations(com.serenity.animation.AnimationOwner.EditorText)
       case com.serenity.config.MotionFamily.CommandSurfaces =>
         cancelSurfaceMotion(isCommandSurface)
       case com.serenity.config.MotionFamily.PinnedPanels =>
         cancelSurfaceMotion(isDockedSurface)
       case com.serenity.config.MotionFamily.UiTransitions =>
-        stateRef.update(state =>
-          state.copy(
-            buffers = clearBufferAnimations(state, com.serenity.animation.AnimationOwner.UiTransitions),
-            themeTransition = None,
-            windowSitter = com.serenity.animation.WindowSitter.default
+        clearBufferAnimations(com.serenity.animation.AnimationOwner.UiTransitions) >>
+          stateRef.update(state =>
+            state.copy(
+              themeTransition = None,
+              windowSitter = com.serenity.animation.WindowSitter.default
+            )
           )
-        )
       case com.serenity.config.MotionFamily.Cursor =>
         IO.unit
 
-  private def clearBufferAnimations(state: AppState): Map[BufferId, Buffer] =
-    state.buffers.view.mapValues { buffer =>
-      val animations = buffer.animations.clearAll()
-      if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
-    }.toMap
+  private def clearBufferAnimations(): IO[Unit] =
+    bufferAnimationsRef.update(
+      _.view
+        .mapValues { animations =>
+          val cleared = animations.clearAll()
+          if cleared eq animations then animations else cleared
+        }
+        .toMap
+    )
 
-  private def clearBufferAnimations(
-    state: AppState,
-    owner: com.serenity.animation.AnimationOwner
-  ): Map[BufferId, Buffer] =
-    state.buffers.view.mapValues { buffer =>
-      val animations = buffer.animations.clear(owner)
-      if animations eq buffer.animations then buffer else buffer.copy(animations = animations)
-    }.toMap
+  private def clearBufferAnimations(owner: com.serenity.animation.AnimationOwner): IO[Unit] =
+    bufferAnimationsRef.update(
+      _.view
+        .mapValues { animations =>
+          val cleared = animations.clear(owner)
+          if cleared eq animations then animations else cleared
+        }
+        .toMap
+    )
 
   private def cancelSurfaceMotion(matches: UiSurface => Boolean): IO[Unit] =
     stateRef.update { state =>
@@ -1913,17 +1916,14 @@ final private[manager] class StateManagerEffectHandlers(
       } match
       case Some((before, after)) if before != after =>
         val sweep = navigationSweep(before, after)
-        updateState { current =>
-          val navigated = animateNavigationTarget(
-            moveToNavigationPoint(current, after).copy(
-              navigationBackStack = pushNavigationPoint(before, current.navigationBackStack),
-              navigationForwardStack = Nil
-            ),
-            after,
-            sweep
+        stateRef.modify { current =>
+          val moved = moveToNavigationPoint(current, after).copy(
+            navigationBackStack = pushNavigationPoint(before, current.navigationBackStack),
+            navigationForwardStack = Nil
           )
-          onTargetResolved.fold(navigated)(_(navigated))
-        }
+          val animationUpdate = applyNavigationAnimationUpdate(animationUpdateForNavigationTarget(moved, after, sweep))
+          (onTargetResolved.fold(moved)(_(moved)), animationUpdate)
+        }.flatten
       case Some(_) =>
         onTargetResolved match
           case Some(transform) => updateState(transform)
@@ -1937,40 +1937,47 @@ final private[manager] class StateManagerEffectHandlers(
     then com.serenity.animation.SweepDirection.Backward
     else com.serenity.animation.SweepDirection.Forward
 
-  private def animateNavigationTarget(
+  private def animationUpdateForNavigationTarget(
     state: AppState,
     point: NavigationPoint,
     sweep: com.serenity.animation.SweepDirection
-  ): AppState =
-    state.buffers.get(point.bufferId) match
-      case Some(buffer) =>
-        val cells = VisibleBufferAnimationCells.fromBuffer(
-          buffer,
-          state.config.wordWrapEnabled,
-          state.theme.background,
-          state.theme.foreground
-        )
+  ): Option[(BufferId, com.serenity.animation.AnimationState => com.serenity.animation.AnimationState)] =
+    state.buffers.get(point.bufferId).flatMap { buffer =>
+      val cells = VisibleBufferAnimationCells.fromBuffer(
+        buffer,
+        state.config.wordWrapEnabled,
+        state.theme.background,
+        state.theme.foreground
+      )
 
-        if cells.isEmpty then state
-        else
-          state.config.scaledUiAnimation.fold(state) { config =>
-            val animated = com.serenity.animation.FlowAnimationBuilder.build(
-              cells,
-              com.serenity.animation.FlowDirection.ByRow,
-              sweep,
-              config.steps
-            )
-            val uiAnimations =
-              animated.view.mapValues(_.copy(owner = com.serenity.animation.AnimationOwner.UiTransitions)).toMap
-            val updatedBuffer = buffer.copy(
-              animations = buffer.animations
-                .clear(com.serenity.animation.AnimationOwner.UiTransitions)
-                .mergeUiTransitionAnimations(uiAnimations)
-            )
-            state.copy(buffers = state.buffers + (point.bufferId -> updatedBuffer))
-          }
-      case None =>
-        state
+      if cells.isEmpty then None
+      else
+        state.config.scaledUiAnimation.map { config =>
+          val animated = com.serenity.animation.FlowAnimationBuilder.build(
+            cells,
+            com.serenity.animation.FlowDirection.ByRow,
+            sweep,
+            config.steps
+          )
+          val uiAnimations =
+            animated.view.mapValues(_.copy(owner = com.serenity.animation.AnimationOwner.UiTransitions)).toMap
+          point.bufferId -> ((animations: com.serenity.animation.AnimationState) =>
+            animations
+              .clear(com.serenity.animation.AnimationOwner.UiTransitions)
+              .mergeUiTransitionAnimations(uiAnimations)
+          )
+        }
+    }
+
+  private def applyNavigationAnimationUpdate(
+    update: Option[(BufferId, com.serenity.animation.AnimationState => com.serenity.animation.AnimationState)]
+  ): IO[Unit] =
+    update.fold(IO.unit) {
+      case (bufferId, f) =>
+        bufferAnimationsRef.update(map =>
+          map.updated(bufferId, f(map.getOrElse(bufferId, com.serenity.animation.AnimationState.empty)))
+        )
+    }
 
   private def updateNavigationHistory(
     state: AppState,
@@ -1978,18 +1985,15 @@ final private[manager] class StateManagerEffectHandlers(
     backStack: List[NavigationPoint],
     forwardStack: List[NavigationPoint],
     sweep: com.serenity.animation.SweepDirection
-  ): AppState =
-    animateNavigationTarget(
-      moveToNavigationPoint(state, target).copy(
-        navigationBackStack = backStack,
-        navigationForwardStack = forwardStack
-      ),
-      target,
-      sweep
+  ): (AppState, IO[Unit]) =
+    val moved = moveToNavigationPoint(state, target).copy(
+      navigationBackStack = backStack,
+      navigationForwardStack = forwardStack
     )
+    (moved, applyNavigationAnimationUpdate(animationUpdateForNavigationTarget(moved, target, sweep)))
 
   private def navigateHistoryBack(): IO[Unit] =
-    updateState { current =>
+    stateRef.modify { current =>
       current.navigationBackStack match
         case target :: remaining =>
           currentNavigationPoint(current) match
@@ -2001,12 +2005,12 @@ final private[manager] class StateManagerEffectHandlers(
                 pushNavigationPoint(point, current.navigationForwardStack),
                 navigationSweep(point, target)
               )
-            case None => current
-        case Nil => current
-    }
+            case None => (current, IO.unit)
+        case Nil => (current, IO.unit)
+    }.flatten
 
   private def navigateHistoryForward(): IO[Unit] =
-    updateState { current =>
+    stateRef.modify { current =>
       current.navigationForwardStack match
         case target :: remaining =>
           currentNavigationPoint(current) match
@@ -2018,9 +2022,9 @@ final private[manager] class StateManagerEffectHandlers(
                 remaining,
                 navigationSweep(point, target)
               )
-            case None => current
-        case Nil => current
-    }
+            case None => (current, IO.unit)
+        case Nil => (current, IO.unit)
+    }.flatten
 
   private def currentNavigationPoint(state: AppState): Option[NavigationPoint] =
     activeEditorBuffer(state).flatMap {

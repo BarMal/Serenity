@@ -62,8 +62,8 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
       // Type a character
       val result = component.processEvent(InsertChar('h'), initialState)
       result match
-        case ComponentResult.StateChange(update) =>
-          val newState      = update(initialState)
+        case ComponentResult.ReducerUpdate(reducerResult) =>
+          val newState      = reducerResult.state
           val updatedBuffer = newState.buffers(bufferId)
 
           // After typing, should no longer be new empty
@@ -90,8 +90,8 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
       // Delete the character
       val result = component.processEvent(DeleteBackward, initialState)
       result match
-        case ComponentResult.StateChange(update) =>
-          val newState      = update(initialState)
+        case ComponentResult.ReducerUpdate(reducerResult) =>
+          val newState      = reducerResult.state
           val updatedBuffer = newState.buffers(bufferId)
 
           // Should be empty but not new empty (shows ~Empty~)

@@ -462,14 +462,15 @@ final private[manager] class StateManagerEventPipeline(
         val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, config.steps)
         val uiAnimations =
           animated.view.mapValues(_.copy(owner = com.serenity.animation.AnimationOwner.UiTransitions)).toMap
-        val newAnims =
-          buffer.animations
+        buffId -> ((animations: AnimationState) =>
+          animations
             .clear(com.serenity.animation.AnimationOwner.UiTransitions)
             .mergeUiTransitionAnimations(uiAnimations)
-        state.copy(buffers = state.buffers.updated(buffId, buffer.copy(animations = newAnims)))
+        )
       animOpt match
-        case Some(newState) => stateRef.set(newState)
-        case None           => cats.effect.IO.unit
+        case Some((buffId, f)) =>
+          bufferAnimationsRef.update(map => map.updated(buffId, f(map.getOrElse(buffId, AnimationState.empty))))
+        case None => cats.effect.IO.unit
     }
 
   private[manager] def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =

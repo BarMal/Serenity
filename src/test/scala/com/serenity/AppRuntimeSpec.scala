@@ -36,7 +36,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
   "AppRuntime" should "keep fast rendering active while the window sitter is ticking" in {
     val state = AppState.initial.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L))
 
-    AppRuntime.hasActiveAnimations(state) shouldBe true
+    AppRuntime.hasActiveAnimations(state, Map.empty) shouldBe true
   }
 
   it should "initialize the window sitter from the configured startup frames" in {
@@ -166,11 +166,18 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         with com.serenity.state.manager.StateUpdater
         with com.serenity.state.manager.EventApplier
         with com.serenity.state.manager.AnimationTicker:
-        def getCurrentState: IO[AppState]                       = IO.pure(state)
-        def updateState(update: AppState => AppState): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit]                  = IO.unit
-        def advanceAnimationFrames(): IO[Unit]                  = IO.unit
-        def advanceAnimationsOnTick(): IO[Boolean]              = animationTicks.updateAndGet(_ + 1).as(true)
+        def getCurrentState: IO[AppState]                                                 = IO.pure(state)
+        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
+        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
+        def updateBufferAnimations(
+          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+            BufferId,
+            com.serenity.animation.AnimationState
+          ]
+        ): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]     = IO.unit
+        def advanceAnimationFrames(): IO[Unit]     = IO.unit
+        def advanceAnimationsOnTick(): IO[Boolean] = animationTicks.updateAndGet(_ + 1).as(true)
       inputRouter = new InputRouter[IO, Event]:
         private val translator = new TextEntryTranslator(AppConfig.default)
 
@@ -203,10 +210,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           animationTickCadence,
           IO.pure(Some(state)),
           IO.unit,
-          (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
-            animationTicks.get.flatMap(tickCount => rendered.update(_ :+ tickCount)),
-          (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
-            IO.raiseError(new AssertionError("expected full render while a surface animation is active")),
+          (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => animationTicks.get.flatMap(tickCount => rendered.update(_ :+ tickCount)),
+          (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => IO.raiseError(new AssertionError("expected full render while a surface animation is active")),
           delay => requestedDelays.update(_ :+ delay)
         )
         .take(2)
@@ -228,7 +245,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       windowSitter = WindowSitter.default.observeTyping(1_000_000_000L)
     )
     state.windowSitter.isActive shouldBe true
-    AppRuntime.needsFullContentRender(state) shouldBe false
+    AppRuntime.needsFullContentRender(state, Map.empty) shouldBe false
 
     val program = for
       fastModeSignal       <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
@@ -240,11 +257,18 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         with com.serenity.state.manager.StateUpdater
         with com.serenity.state.manager.EventApplier
         with com.serenity.state.manager.AnimationTicker:
-        def getCurrentState: IO[AppState]                       = IO.pure(state)
-        def updateState(update: AppState => AppState): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit]                  = IO.unit
-        def advanceAnimationFrames(): IO[Unit]                  = IO.unit
-        def advanceAnimationsOnTick(): IO[Boolean]              = IO.pure(true)
+        def getCurrentState: IO[AppState]                                                 = IO.pure(state)
+        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
+        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
+        def updateBufferAnimations(
+          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+            BufferId,
+            com.serenity.animation.AnimationState
+          ]
+        ): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]     = IO.unit
+        def advanceAnimationFrames(): IO[Unit]     = IO.unit
+        def advanceAnimationsOnTick(): IO[Boolean] = IO.pure(true)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntime
         .fastRenderPhase(
@@ -255,9 +279,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           animationTickCadence,
           IO.pure(Some(state)),
           IO.unit,
-          (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
-            IO.raiseError(new AssertionError("expected cursor-only render while only the window sitter is active")),
-          (_: AppState, _: Boolean, _: Option[Color], _: Damage) => cursorOnlyFrames.update(_ + 1),
+          (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => IO.raiseError(new AssertionError("expected cursor-only render while only the window sitter is active")),
+          (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => cursorOnlyFrames.update(_ + 1),
           _ => IO.unit
         )
         .take(2)
@@ -322,9 +357,16 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateReader
         with com.serenity.state.manager.StateUpdater
         with com.serenity.state.manager.EventApplier:
-        def getCurrentState: IO[AppState]                       = IO.pure(AppState.initial)
-        def updateState(update: AppState => AppState): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit]                  = IO.unit
+        def getCurrentState: IO[AppState]                                                 = IO.pure(AppState.initial)
+        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
+        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
+        def updateBufferAnimations(
+          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+            BufferId,
+            com.serenity.animation.AnimationState
+          ]
+        ): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit] = IO.unit
       clipboard = new SystemClipboard[IO]:
         def readText: IO[Option[String]]      = IO.pure(None)
         def writeText(text: String): IO[Unit] = IO.unit
@@ -363,9 +405,16 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateReader
         with com.serenity.state.manager.StateUpdater
         with com.serenity.state.manager.EventApplier:
-        def getCurrentState: IO[AppState]                       = IO.pure(AppState.initial)
-        def updateState(update: AppState => AppState): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit]                  = IO.unit
+        def getCurrentState: IO[AppState]                                                 = IO.pure(AppState.initial)
+        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
+        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
+        def updateBufferAnimations(
+          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+            BufferId,
+            com.serenity.animation.AnimationState
+          ]
+        ): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit] = IO.unit
       clipboard = new SystemClipboard[IO]:
         def readText: IO[Option[String]]      = IO.pure(None)
         def writeText(text: String): IO[Unit] = IO.unit
@@ -407,9 +456,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           initialViewportSize = ViewportSize(120, 40),
           makeInputHandler = _ => inputHandler,
           checkResize = IO.pure(None),
-          renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
-            initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
-          renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+          renderFull = (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
+          renderCursorOnly = (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => IO.unit,
           appConfig = AppConfig.default,
           makeStateManager = Some(_ => IO.pure(stateManager)),
           awaitExternalQuit = closeRequested.get,
@@ -448,9 +508,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           initialViewportSize = ViewportSize(120, 40),
           makeInputHandler = _ => inputHandler,
           checkResize = IO.pure(None),
-          renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
-            inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
-          renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+          renderFull = (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
+          renderCursorOnly = (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => IO.unit,
           appConfig = AppConfig.default,
           makeStateManager = Some(_ => IO.pure(stateManager)),
           registerResizeCallback = _ => ()
@@ -478,9 +549,16 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateReader
         with com.serenity.state.manager.StateUpdater
         with com.serenity.state.manager.EventApplier:
-        def getCurrentState: IO[AppState]                       = IO.pure(AppState.initial)
-        def updateState(update: AppState => AppState): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit]                  = IO.unit
+        def getCurrentState: IO[AppState]                                                 = IO.pure(AppState.initial)
+        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
+        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
+        def updateBufferAnimations(
+          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+            BufferId,
+            com.serenity.animation.AnimationState
+          ]
+        ): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit] = IO.unit
       clipboard = new SystemClipboard[IO]:
         def readText: IO[Option[String]]      = IO.pure(None)
         def writeText(text: String): IO[Unit] = IO.unit
@@ -526,8 +604,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       initialViewportSize = ViewportSize(120, 40),
       makeInputHandler = _ => new SilentInputHandler,
       checkResize = IO.pure(None),
-      renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
-      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+      renderFull = (
+        _: AppState,
+        _: Boolean,
+        _: Option[Color],
+        _: Damage,
+        _: Map[BufferId, com.serenity.animation.AnimationState]
+      ) => IO.unit,
+      renderCursorOnly = (
+        _: AppState,
+        _: Boolean,
+        _: Option[Color],
+        _: Damage,
+        _: Map[BufferId, com.serenity.animation.AnimationState]
+      ) => IO.unit,
       appConfig = AppConfig.default,
       awaitExternalQuit = IO.unit,
       registerResizeCallback = _ => ()
@@ -551,8 +641,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       initialViewportSize = ViewportSize(120, 40),
       makeInputHandler = _ => new TrackingInputHandler,
       checkResize = IO.pure(None),
-      renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
-      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+      renderFull = (
+        _: AppState,
+        _: Boolean,
+        _: Option[Color],
+        _: Damage,
+        _: Map[BufferId, com.serenity.animation.AnimationState]
+      ) => IO.unit,
+      renderCursorOnly = (
+        _: AppState,
+        _: Boolean,
+        _: Option[Color],
+        _: Damage,
+        _: Map[BufferId, com.serenity.animation.AnimationState]
+      ) => IO.unit,
       appConfig = AppConfig.default,
       awaitExternalQuit = IO.unit,
       registerResizeCallback = _ => ()
@@ -570,8 +672,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       initialViewportSize = ViewportSize(120, 40),
       makeInputHandler = _ => new SilentInputHandler,
       checkResize = IO.pure(None),
-      renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
-      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+      renderFull = (
+        _: AppState,
+        _: Boolean,
+        _: Option[Color],
+        _: Damage,
+        _: Map[BufferId, com.serenity.animation.AnimationState]
+      ) => IO.unit,
+      renderCursorOnly = (
+        _: AppState,
+        _: Boolean,
+        _: Option[Color],
+        _: Damage,
+        _: Map[BufferId, com.serenity.animation.AnimationState]
+      ) => IO.unit,
       appConfig = AppConfig.default,
       makeStateManager = Some(logger =>
         IO.blocking(java.nio.file.Files.createTempFile("serenity-session-root", ".tmp")).flatMap { fileRoot =>
@@ -599,8 +713,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       initialViewportSize = ViewportSize(120, 40),
       makeInputHandler = _ => new SilentInputHandler,
       checkResize = IO.raiseError(new RuntimeException("resize check failed")),
-      renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
-      renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
+      renderFull = (
+        _: AppState,
+        _: Boolean,
+        _: Option[Color],
+        _: Damage,
+        _: Map[BufferId, com.serenity.animation.AnimationState]
+      ) => IO.unit,
+      renderCursorOnly = (
+        _: AppState,
+        _: Boolean,
+        _: Option[Color],
+        _: Damage,
+        _: Map[BufferId, com.serenity.animation.AnimationState]
+      ) => IO.unit,
       appConfig = AppConfig.default,
       makeStateManager = Some(logger =>
         StateManager.apply(
@@ -792,11 +918,18 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       _ <- AppRuntime.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
         loadState = IO.pure(state),
+        loadBufferAnimations = IO.pure(Map.empty),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
         breathIndex = breathIndex,
-        renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => renderCalls.update(_ + 1),
+        renderCursorOnly = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => renderCalls.update(_ + 1),
         requestFastRender = IO.unit
       )
       calls <- renderCalls.get
@@ -817,12 +950,18 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       _ <- AppRuntime.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
         loadState = IO.pure(state),
+        loadBufferAnimations = IO.pure(Map.empty),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
         breathIndex = breathIndex,
-        renderCursorOnly = (_: AppState, visible: Boolean, cursor: Option[Color], _: Damage) =>
-          rendered.update(_ :+ (visible -> cursor)),
+        renderCursorOnly = (
+          _: AppState,
+          visible: Boolean,
+          cursor: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => rendered.update(_ :+ (visible -> cursor)),
         requestFastRender = IO.unit
       )
       frames <- rendered.get
@@ -841,9 +980,20 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
             initialViewportSize = ViewportSize(120, 40),
             makeInputHandler = _ => new SilentInputHandler,
             checkResize = IO.pure(None),
-            renderFull = (_: AppState, _: Boolean, _: Option[Color], _: Damage) => IO.unit,
-            renderCursorOnly = (_: AppState, _: Boolean, _: Option[Color], _: Damage) =>
-              IO.raiseError(RuntimeException("idle render failed")),
+            renderFull = (
+              _: AppState,
+              _: Boolean,
+              _: Option[Color],
+              _: Damage,
+              _: Map[BufferId, com.serenity.animation.AnimationState]
+            ) => IO.unit,
+            renderCursorOnly = (
+              _: AppState,
+              _: Boolean,
+              _: Option[Color],
+              _: Damage,
+              _: Map[BufferId, com.serenity.animation.AnimationState]
+            ) => IO.raiseError(RuntimeException("idle render failed")),
             appConfig = AppConfig.default,
             makeStateManager = Some(logger =>
               StateManager.apply(

@@ -28,10 +28,12 @@ trait EventApplier:
 /** Reads the current immutable application state. */
 trait StateReader:
   def getCurrentState: IO[AppState]
+  def getBufferAnimations: IO[Map[BufferId, AnimationState]]
 
 /** Applies an atomic transformation to application state. */
 trait StateUpdater:
   def updateState(update: AppState => AppState): IO[Unit]
+  def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]
 
 /** Advances renderer-visible animation state. */
 trait AnimationTicker:

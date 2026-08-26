@@ -57,27 +57,20 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     val stateAfterType1 = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Only buffer1 should have animation state, buffer2 should not
-    val buffer1AfterType = stateAfterType1.buffers(buffer1Id)
-    val buffer2AfterType = stateAfterType1.buffers(buffer2Id)
-
     // Buffer1 should have some animation activity (newly typed character)
-    val buffer1HasAnimations = hasActiveAnimations(buffer1AfterType, stateAfterType1)
+    val buffer1HasAnimations = hasActiveAnimations(buffer1Id, stateManager)
     buffer1HasAnimations shouldBe true
 
     // Buffer2 should have no animation activity
-    val buffer2HasAnimations = hasActiveAnimations(buffer2AfterType, stateAfterType1)
+    val buffer2HasAnimations = hasActiveAnimations(buffer2Id, stateManager)
     buffer2HasAnimations shouldBe false
 
     // When: Switch focus to buffer2 and type there
     stateManager.applyEvent(com.serenity.keystroke.events.NextTab).unsafeRunSync() // Go to second buffer
     stateManager.applyEvent(InsertChar('B')).unsafeRunSync()
-    val stateAfterType2 = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Now buffer2 should have new animations, buffer1's should be separate
-    stateAfterType2.buffers(buffer1Id)
-    val buffer2Final = stateAfterType2.buffers(buffer2Id)
-
-    val buffer2HasNewAnimations = hasActiveAnimations(buffer2Final, stateAfterType2)
+    val buffer2HasNewAnimations = hasActiveAnimations(buffer2Id, stateManager)
     buffer2HasNewAnimations shouldBe true
 
   it should "maintain separate character animation states per buffer" in new AnimationFixture:
@@ -111,10 +104,7 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     bufferContents should contain allOf ("X", "Y", "Z")
 
     // Animation state should be tracked separately per buffer
-    val animationStates = bufferIds.map { bufferId =>
-      val buffer = finalState.buffers(bufferId)
-      hasActiveAnimations(buffer, finalState)
-    }
+    val animationStates = bufferIds.map(bufferId => hasActiveAnimations(bufferId, stateManager))
 
     // At least one should have animations (the last one typed)
     animationStates should contain(true)
@@ -169,6 +159,6 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     buffer2.content.collect().should(not).contain('3')
 
   // Helper method to determine if a buffer has active animations
-  private def hasActiveAnimations(buffer: Buffer, state: AppState): Boolean =
+  private def hasActiveAnimations(bufferId: BufferId, stateManager: StateManager): Boolean =
     // Check if this specific buffer has any active animations
-    buffer.animations.hasActiveAnimations
+    stateManager.getBufferAnimations.unsafeRunSync().get(bufferId).exists(_.hasActiveAnimations)

@@ -80,13 +80,13 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     tabResult should not be ComponentResult.noChange
 
     val stateAfterTab = tabResult match
-      case ComponentResult.StateChange(update) => update(state)
-      case _                                   => fail("Expected state change")
+      case ComponentResult.ReducerUpdate(reducerResult) => reducerResult.state
+      case _                                            => fail("Expected state change")
 
     val underscoreResult = component.processEvent(InsertChar('_'), stateAfterTab)
     val finalState = underscoreResult match
-      case ComponentResult.StateChange(update) => update(stateAfterTab)
-      case _                                   => fail("Expected state change")
+      case ComponentResult.ReducerUpdate(reducerResult) => reducerResult.state
+      case _                                            => fail("Expected state change")
 
     val finalBuffer = finalState.buffers(bufferId)
     finalBuffer.content.collect() shouldBe "hello\t_"

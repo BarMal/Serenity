@@ -16,7 +16,7 @@ import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, Damage, Focus}
+import com.serenity.state.models.{AppState, BufferId, Damage, Focus}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -24,6 +24,9 @@ import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 object AppRuntime:
+
+  private[serenity] type RenderFn =
+    (AppState, Boolean, Option[Color], Damage, Map[BufferId, com.serenity.animation.AnimationState]) => IO[Unit]
 
   private val NanosPerSecond: Long                      = 1_000_000_000L
   private val DefaultCursorIdleInterval: FiniteDuration = 500.millis
@@ -83,8 +86,8 @@ object AppRuntime:
     initialViewportSize: ViewportSize,
     makeInputHandler: InputRouter[IO, Event] => InputHandler[IO],
     checkResize: IO[Option[ViewportSize]],
-    renderFull: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
-    renderCursorOnly: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
+    renderFull: RenderFn,
+    renderCursorOnly: RenderFn,
     appConfig: AppConfig,
     makeStateManager: Option[Logger[IO] => IO[StateManager]] = None,
     awaitExternalQuit: IO[Unit] = IO.never,
@@ -137,11 +140,12 @@ object AppRuntime:
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
-            renderFull(initialState, true, None, Damage.Everything) >>
+            renderFull(initialState, true, None, Damage.Everything, Map.empty) >>
               logger.info("Initial render completed, starting main loop") >>
               {
                 val idlePhase = idleRenderPhase(
                   loadState = stateManager.getCurrentState,
+                  loadBufferAnimations = stateManager.getBufferAnimations,
                   fastModeSignal = fastModeSignal,
                   pendingPaintDamage = pendingPaintDamage,
                   currentStateForDiagnostics = currentStateForDiagnostics,
@@ -233,13 +237,14 @@ object AppRuntime:
 
   private[serenity] def idleRenderPhase(
     loadState: IO[AppState],
+    loadBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]],
     fastModeSignal: SignallingRef[IO, Boolean],
     pendingPaintDamage: Ref[IO, Damage],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
-    renderCursorOnly: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
+    renderCursorOnly: RenderFn,
     requestFastRender: IO[Unit]
   )(using Logger[IO]): Stream[IO, Unit] =
     Stream
@@ -253,6 +258,7 @@ object AppRuntime:
         runIdleRenderStep(
           currentStateForDiagnostics,
           loadState,
+          loadBufferAnimations,
           pendingPaintDamage,
           checkResizeAndHandle,
           cursorVisible,
@@ -273,7 +279,8 @@ object AppRuntime:
   )(using balance: com.serenity.rope.Balance): Stream[IO, Event] => Stream[IO, Unit] =
     _.evalMap { event =>
       for
-        before <- stateManager.getCurrentState
+        before           <- stateManager.getCurrentState
+        beforeAnimations <- stateManager.getBufferAnimations
         _ <-
           checkResizeBeforeInput(event, checkResizeAndHandle) >>
             ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
@@ -282,8 +289,9 @@ object AppRuntime:
             ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
             refreshFocusedInputTranslator(stateManager, inputRouter) >>
             resetCursorActivity(cursorVisible, breathIndex)
-        after <- stateManager.getCurrentState
-        _     <- emitDamage(DamageProducer.forTransition(before, after))
+        after           <- stateManager.getCurrentState
+        afterAnimations <- stateManager.getBufferAnimations
+        _               <- emitDamage(DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations))
       yield ()
     }.drain
 
@@ -324,8 +332,8 @@ object AppRuntime:
     animationTickCadence: Ref[IO, AnimationTickCadence],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
-    renderFull: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
-    renderCursorOnly: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
+    renderFull: RenderFn,
+    renderCursorOnly: RenderFn,
     sleep: FiniteDuration => IO[Unit] = IO.sleep
   )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
     Stream.eval(pendingDamage.getAndSet(Damage.Nothing)).flatMap { _ =>
@@ -342,7 +350,11 @@ object AppRuntime:
                 checkResizeAndHandle
               )
               active <-
-                if isInitialFrame then stateManager.getCurrentState.map(hasActiveAnimations)
+                if isInitialFrame then
+                  for
+                    initialState     <- stateManager.getCurrentState
+                    bufferAnimations <- stateManager.getBufferAnimations
+                  yield hasActiveAnimations(initialState, bufferAnimations)
                 else
                   animationTickCadence.modify(_.advance(interval)).flatMap { animationTicks =>
                     withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
@@ -352,15 +364,16 @@ object AppRuntime:
               state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
                 stateManager.getCurrentState
               )
-              paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
+              bufferAnimations <- stateManager.getBufferAnimations
+              paintDamage      <- pendingPaintDamage.getAndSet(Damage.Nothing)
               _ <-
-                if state.windowSitter.isActive && !needsFullContentRender(state) then
+                if state.windowSitter.isActive && !needsFullContentRender(state, bufferAnimations) then
                   withRuntimeDiagnostics("render loop", "fast.cursor-only-render", IO.pure(Some(state)))(
-                    renderCursorOnly(state, true, None, paintDamage)
+                    renderCursorOnly(state, true, None, paintDamage, bufferAnimations)
                   )
                 else
                   withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
-                    renderFull(state, true, None, paintDamage)
+                    renderFull(state, true, None, paintDamage, bufferAnimations)
                   )
             yield active
         }
@@ -368,9 +381,12 @@ object AppRuntime:
         .map(_ => ())
         .onFinalize {
           stateManager.getCurrentState.flatMap { state =>
-            pendingDamage.get.flatMap { damage =>
-              if shouldClearFastMode(hasActiveAnimations(state), damage) then fastModeSignal.set(false)
-              else IO.unit
+            stateManager.getBufferAnimations.flatMap { bufferAnimations =>
+              pendingDamage.get.flatMap { damage =>
+                if shouldClearFastMode(hasActiveAnimations(state, bufferAnimations), damage) then
+                  fastModeSignal.set(false)
+                else IO.unit
+              }
             }
           }
         }
@@ -443,11 +459,12 @@ object AppRuntime:
   private[serenity] def runIdleRenderStep(
     currentStateForDiagnostics: IO[Option[AppState]],
     loadState: IO[AppState],
+    loadBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]],
     pendingPaintDamage: Ref[IO, Damage],
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
-    renderCursorOnly: (AppState, Boolean, Option[Color], Damage) => IO[Unit],
+    renderCursorOnly: RenderFn,
     requestFastRender: IO[Unit]
   )(using logger: Logger[IO]): IO[Unit] =
     for
@@ -465,12 +482,13 @@ object AppRuntime:
               "idle.cursor",
               IO.pure(Some(state))
             )(computeIdleCursorFrame(state, cursorVisible, breathIndex))
-            paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
+            paintDamage      <- pendingPaintDamage.getAndSet(Damage.Nothing)
+            bufferAnimations <- loadBufferAnimations
             _ <- withRuntimeDiagnostics(
               "render loop",
               "idle.cursor-render",
               IO.pure(Some(state))
-            )(renderCursorOnly(state, visible, cursor, paintDamage))
+            )(renderCursorOnly(state, visible, cursor, paintDamage, bufferAnimations))
               .handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender))
           yield ()
         case None =>
@@ -491,19 +509,30 @@ object AppRuntime:
     stateManager: StateReader & AnimationTicker,
     pendingPaintDamage: Ref[IO, Damage]
   )(using balance: com.serenity.rope.Balance): IO[Boolean] =
-    if ticks <= 0 then stateManager.getCurrentState.map(hasActiveAnimations)
+    if ticks <= 0 then
+      for
+        state            <- stateManager.getCurrentState
+        bufferAnimations <- stateManager.getBufferAnimations
+      yield hasActiveAnimations(state, bufferAnimations)
     else
       for
-        before <- stateManager.getCurrentState
+        before           <- stateManager.getCurrentState
+        beforeAnimations <- stateManager.getBufferAnimations
         stillActive <- (0 until ticks).toList.foldLeft(IO.pure(false)) { (previous, _) =>
           previous.flatMap(_ => stateManager.advanceAnimationsOnTick())
         }
-        after <- stateManager.getCurrentState
-        _     <- pendingPaintDamage.update(_ |+| DamageProducer.forTransition(before, after))
+        after           <- stateManager.getCurrentState
+        afterAnimations <- stateManager.getBufferAnimations
+        _ <- pendingPaintDamage.update(
+          _ |+| DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations)
+        )
       yield stillActive
 
-  private[serenity] def hasActiveAnimations(state: AppState): Boolean =
-    needsFullContentRender(state) || state.windowSitter.isActive
+  private[serenity] def hasActiveAnimations(
+    state: AppState,
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
+  ): Boolean =
+    needsFullContentRender(state, bufferAnimations) || state.windowSitter.isActive
 
   /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
     * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every
@@ -514,8 +543,11 @@ object AppRuntime:
     * every frame regardless) and never touches the canvas -- so it alone keeps the fast loop running (see
     * hasActiveAnimations) without forcing a full repaint each frame.
     */
-  private[serenity] def needsFullContentRender(state: AppState): Boolean =
-    state.buffers.values.exists(_.animations.hasActiveAnimations) ||
+  private[serenity] def needsFullContentRender(
+    state: AppState,
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
+  ): Boolean =
+    state.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
       state.themeTransition.isDefined ||
       state.surfaceAnimations.nonEmpty
 
@@ -572,8 +604,7 @@ object AppRuntime:
           s"lines=${buffer.content.lineCount}",
           s"dirty=${buffer.isDirty}",
           s"language=$language",
-          s"cursor=$cursor",
-          s"bufferAnimations=${buffer.animations.hasActiveAnimations}"
+          s"cursor=$cursor"
         ).mkString(" ")
       case None =>
         "activeBuffer=none"

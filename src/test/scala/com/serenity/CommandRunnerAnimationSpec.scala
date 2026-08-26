@@ -46,9 +46,10 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
   it should "have active overlay animations but no buffer animations after open" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    val state     = sm.getCurrentState.unsafeRunSync()
-    val surfaceId = state.commandRunnerSurface.get.id
-    state.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe false
+    val state            = sm.getCurrentState.unsafeRunSync()
+    val surfaceId        = state.commandRunnerSurface.get.id
+    val bufferAnimations = sm.getBufferAnimations.unsafeRunSync()
+    bufferAnimations.values.exists(_.hasActiveAnimations) shouldBe false
     state.surfaceAnimations(surfaceId).animationState.hasActiveAnimations shouldBe true
   }
 
@@ -96,8 +97,9 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       advanceToVisible(sm)
       sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
-      val activeState = sm.getCurrentState.unsafeRunSync()
-      activeState.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe true
+      val activeState            = sm.getCurrentState.unsafeRunSync()
+      val activeBufferAnimations = sm.getBufferAnimations.unsafeRunSync()
+      activeBufferAnimations.values.exists(_.hasActiveAnimations) shouldBe true
       activeState.themeTransition shouldBe defined
       activeState.surfaceAnimations should not be empty
       activeState.uiSurfaces
@@ -113,7 +115,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       ).unsafeRunSync()
 
       val state = sm.getCurrentState.unsafeRunSync()
-      state.buffers.values.foreach(_.animations.animations shouldBe Map.empty)
+      sm.getBufferAnimations.unsafeRunSync().values.foreach(_.animations shouldBe Map.empty)
       state.themeTransition shouldBe None
       state.surfaceAnimations shouldBe Map.empty
       state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
@@ -139,7 +141,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     ).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
-    state.buffers.values.foreach(_.animations.animations shouldBe Map.empty)
+    sm.getBufferAnimations.unsafeRunSync().values.foreach(_.animations shouldBe Map.empty)
     state.themeTransition shouldBe defined
     state.surfaceAnimations should not be empty
     state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
@@ -244,7 +246,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
-    state.buffers.values.exists(_.animations.hasActiveAnimations) shouldBe false
+    sm.getBufferAnimations.unsafeRunSync().values.exists(_.hasActiveAnimations) shouldBe false
   }
 
   it should "fade the ghost overlay out without row-staggered collapse" in {

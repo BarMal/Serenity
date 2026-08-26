@@ -1,5 +1,6 @@
 package com.serenity.state.reducers
 
+import cats.syntax.all.*
 import com.serenity.state.models.{AppState, Buffer, BufferId, EditorPane, PaneId}
 
 /** Reaching the buffer under the cursor forks: the `BufferId` is read out of `layout` and used to index `buffers`, a
@@ -41,6 +42,19 @@ object Focused:
 
   def modifyBufferWithId(id: BufferId)(f: Buffer => Buffer): Transition[Unit] =
     Transition.modify(state => state.buffers.get(id).fold(state)(buffer => replaceBuffer(state, f(buffer))))
+
+  /** Like [[modifyBufferWithId]], but `f` also reports effects to emit alongside the state change -- for a modification
+    * that needs to hand something to the presentation layer (an animation change, `#1001`) computed from the buffer it
+    * read, not derivable from the state change alone.
+    */
+  def modifyBufferWithIdAndEmit(id: BufferId)(f: Buffer => (Buffer, List[AppEffect])): Transition[Unit] =
+    Transition.get.flatMap { state =>
+      state.buffers.get(id) match
+        case Some(buffer) =>
+          val (updated, effects) = f(buffer)
+          Transition.set(replaceBuffer(state, updated)) *> Transition.emitAll(effects)
+        case None => Transition.unit
+    }
 
   def modifyPane(f: EditorPane => EditorPane): Transition[Unit] =
     Transition.modify { state =>

@@ -18,6 +18,8 @@ final private[manager] class StateManagerEditorCapability(
   import dependencies.*
   def getCurrentState: IO[AppState] = stateRef.get
 
+  def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
+
   def getCurrentFocus: IO[Focus] = stateRef.get.map(_.focus)
 
   def switchFocus(newFocus: Focus): IO[Unit] =
@@ -26,44 +28,52 @@ final private[manager] class StateManagerEditorCapability(
   def updateState(update: AppState => AppState): IO[Unit] =
     stateRef.update(update)
 
+  def updateBufferAnimations(
+    update: Map[BufferId, com.serenity.animation.AnimationState] => Map[BufferId, com.serenity.animation.AnimationState]
+  ): IO[Unit] =
+    bufferAnimationsRef.update(update)
+
   def advanceAnimationFrames(): IO[Unit] =
-    for
-      state <- stateRef.get
-      updatedBuffers = state.buffers.view.mapValues { buffer =>
-        val updatedAnimations = buffer.animations.advanceAnimations()
-        if updatedAnimations eq buffer.animations then buffer
-        else buffer.copy(animations = updatedAnimations)
-      }.toMap
-      _ <- stateRef.set(state.copy(buffers = updatedBuffers))
-    yield ()
+    bufferAnimationsRef.update(
+      _.view
+        .mapValues { animations =>
+          val advanced = animations.advanceAnimations()
+          if advanced eq animations then animations else advanced
+        }
+        .toMap
+    )
 
   def advanceAnimationsOnTick(): IO[Boolean] =
-    stateRef.get.flatMap { state =>
-      val hasBufferAnimations  = state.buffers.values.exists(_.animations.hasActiveAnimations)
-      val hasThemeTransition   = state.themeTransition.isDefined
-      val hasSurfaceAnimations = state.surfaceAnimations.nonEmpty
-      val hasWindowSitter      = state.windowSitter.isActive
-      if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasWindowSitter then IO.pure(false)
-      else
-        val updatedBuffers = state.buffers.view.mapValues { buffer =>
-          val updatedAnimations = buffer.animations.advanceAllAnimations(isWithinViewport(buffer.viewport))
-          if updatedAnimations eq buffer.animations then buffer
-          else buffer.copy(animations = updatedAnimations)
-        }.toMap
-        val updatedTransition = state.themeTransition.map(_.advance).filterNot(_.isComplete)
-        val stateWithAdvancedBuffers = state.copy(
-          buffers = updatedBuffers,
-          themeTransition = updatedTransition,
-          windowSitter = state.windowSitter.advance
-        )
-        val newState = advanceSurfaceAnimations(stateWithAdvancedBuffers)
-        val stillActive =
-          newState.buffers.values.exists(_.animations.hasActiveAnimations) ||
+    for
+      state            <- stateRef.get
+      bufferAnimations <- bufferAnimationsRef.get
+      hasBufferAnimations  = state.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations))
+      hasThemeTransition   = state.themeTransition.isDefined
+      hasSurfaceAnimations = state.surfaceAnimations.nonEmpty
+      hasWindowSitter      = state.windowSitter.isActive
+      stillActive <-
+        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasWindowSitter then IO.pure(false)
+        else
+          val updatedTransition = state.themeTransition.map(_.advance).filterNot(_.isComplete)
+          val stateWithAdvancedBuffers = state.copy(
+            themeTransition = updatedTransition,
+            windowSitter = state.windowSitter.advance
+          )
+          val newState = advanceSurfaceAnimations(stateWithAdvancedBuffers)
+          for
+            updatedBufferAnimations <- bufferAnimationsRef.updateAndGet(_.map {
+              case (id, animations) =>
+                val advanced = newState.buffers.get(id) match
+                  case Some(buffer) => animations.advanceAllAnimations(isWithinViewport(buffer.viewport))
+                  case None         => animations
+                id -> advanced
+            })
+            _ <- stateRef.set(newState)
+          yield newState.buffers.keys.exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
             newState.themeTransition.isDefined ||
             newState.surfaceAnimations.nonEmpty ||
             newState.windowSitter.isActive
-        stateRef.set(newState).as(stillActive)
-    }
+    yield stillActive
 
   /** A cell outside the buffer's currently visible viewport isn't rendered, so there's no need to pay its
     * interpolation/allocation cost on every tick -- it simply resumes advancing once scrolled back into view.
