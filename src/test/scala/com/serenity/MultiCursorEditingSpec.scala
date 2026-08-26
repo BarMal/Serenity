@@ -129,6 +129,44 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
     buffer.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(1, 3))
   }
 
+  it should "move every cursor left by a word" in {
+    val state = stateWithBuffer(
+      "foo bar\nbaz qux",
+      List(CursorPosition(0, 7), CursorPosition(1, 7))
+    )
+
+    val buffer = reduce(MoveWordLeft, state)
+
+    buffer.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(1, 4))
+  }
+
+  it should "move every cursor right by a word" in {
+    val state = stateWithBuffer(
+      "foo bar\nbaz qux",
+      List(CursorPosition(0, 0), CursorPosition(1, 0))
+    )
+
+    val buffer = reduce(MoveWordRight, state)
+
+    buffer.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(1, 4))
+  }
+
+  it should "collapse a multi-selection to its focuses and move each one word left" in {
+    val state = stateWithBuffer(
+      "foo bar\nbaz qux",
+      cursors = Nil,
+      selections = List(
+        Selection(CursorPosition(0, 5), CursorPosition(0, 7)),
+        Selection(CursorPosition(1, 5), CursorPosition(1, 7))
+      )
+    )
+
+    val buffer = reduce(MoveWordLeft, state)
+
+    buffer.cursors shouldBe List(CursorPosition(0, 4), CursorPosition(1, 4))
+    buffer.allSelections shouldBe Nil
+  }
+
   it should "replace overlapping selections once as a merged editing range" in {
     val first  = Selection(CursorPosition(0, 1), CursorPosition(0, 4))
     val second = Selection(CursorPosition(0, 3), CursorPosition(0, 5))
