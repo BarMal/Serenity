@@ -3,6 +3,7 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import cats.Order
+import cats.data.NonEmptyList
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
@@ -102,6 +103,69 @@ final case class Buffer(
 
   def clearSelections: Buffer =
     copy(selection = None, selections = Nil)
+
+  /** This buffer's cursors as one uniform list, converting `selections`/`selection`/`multiCursorVerticalStates` into
+    * each cursor's own optional selection anchor and preferred vertical-navigation state -- see [[Cursor]]. Order and
+    * membership exactly mirror `cursors`/`allSelections`; nothing is sorted or deduplicated here.
+    */
+  def cursorList: NonEmptyList[Cursor] =
+    if allSelections.nonEmpty then NonEmptyList.fromListUnsafe(allSelections.map(Cursor(_)))
+    else if cursors.sizeIs > 1 then
+      NonEmptyList.fromListUnsafe(cursors.map { position =>
+        multiCursorVerticalStates.find(_.cursor == position) match
+          case Some(state) => Cursor(position, None, Some(state.preferredColumn), Some(state.preferredXPx))
+          case None        => Cursor(position)
+      })
+    else
+      NonEmptyList.one(Cursor(cursors.headOption.getOrElse(CursorPosition(0, 0)), None, preferredColumn, preferredXPx))
+
+  /** The inverse of [[cursorList]]: repackages a cursor list back into this buffer's five cursor-shaped fields, leaving
+    * everything else untouched. Does not sort or deduplicate -- callers hand back the list in the order and membership
+    * they want stored, exactly as `cursorList` handed it to them.
+    */
+  def withCursorList(updated: NonEmptyList[Cursor]): Buffer =
+    val list = updated.toList
+    (list.exists(_.selectionAnchor.isDefined), list) match
+      case (true, cursor :: Nil) =>
+        copy(
+          cursors = List(cursor.position),
+          selection = cursor.selection,
+          selections = Nil,
+          preferredColumn = None,
+          preferredXPx = None,
+          multiCursorVerticalStates = Nil
+        )
+      case (true, many) =>
+        copy(
+          cursors = many.map(_.position),
+          selection = None,
+          selections = many.map(cursor => cursor.selection.getOrElse(Selection(cursor.position, cursor.position))),
+          preferredColumn = None,
+          preferredXPx = None,
+          multiCursorVerticalStates = Nil
+        )
+      case (false, cursor :: Nil) =>
+        copy(
+          cursors = List(cursor.position),
+          selection = None,
+          selections = Nil,
+          preferredColumn = cursor.preferredColumn,
+          preferredXPx = cursor.preferredXPx,
+          multiCursorVerticalStates = Nil
+        )
+      case (false, many) =>
+        copy(
+          cursors = many.map(_.position),
+          selection = None,
+          selections = Nil,
+          preferredColumn = None,
+          preferredXPx = None,
+          multiCursorVerticalStates = many.flatMap { cursor =>
+            cursor.preferredColumn.map(column =>
+              VerticalCursorState(cursor.position, column, cursor.preferredXPx.getOrElse(0f))
+            )
+          }
+        )
 
   /** True when closing this buffer may lose user-authored content. */
   def hasUnsavedChanges: Boolean =
