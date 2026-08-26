@@ -14,7 +14,7 @@ import com.serenity.state.models.Damage
   *     last drawn into." Necessary because `SwingWindow.ReusableImagePool` (`SwingWindow.scala:650-665`) alternates
   *     between two images, so a buffer's own damage history spans however many frames it has been sitting unused, not
   *     just the one frame immediately prior -- accumulating via `Damage`'s `Monoid` across that whole span is exactly
-  *     what a `Map[AnyRef, Damage]` keyed by buffer identity gives for free.
+  *     what a `Map[K, Damage]` keyed by buffer identity gives for free.
   *   - '''Screen''' (`accumulateScreen`/`observeScreenPublish`): "what changed since the currently-displayed image was
   *     published." Exactly one buffer is ever on screen at a time, so this needs only one `Damage` value, reset each
   *     time a frame is actually published rather than per buffer identity.
@@ -29,7 +29,7 @@ object DamageAccumulator:
     * tracked is left absent -- only [[observeBufferDraw]] starts tracking one, at the point it is first drawn into, so
     * accumulation before that point has nothing to attach to.
     */
-  def accumulateBuffers(tracked: Map[AnyRef, Damage], damage: Damage): Map[AnyRef, Damage] =
+  def accumulateBuffers[K](tracked: Map[K, Damage], damage: Damage): Map[K, Damage] =
     if damage == Damage.Nothing then tracked
     else tracked.view.mapValues(_ |+| damage).toMap
 
@@ -37,7 +37,7 @@ object DamageAccumulator:
     * the updated tracking map with `identity` reset to `Damage.Nothing` -- and, if this is the first time `identity`
     * appears, now present so future [[accumulateBuffers]] calls reach it.
     */
-  def observeBufferDraw(tracked: Map[AnyRef, Damage], identity: AnyRef): (Damage, Map[AnyRef, Damage]) =
+  def observeBufferDraw[K](tracked: Map[K, Damage], identity: K): (Damage, Map[K, Damage]) =
     val damage = tracked.getOrElse(identity, Damage.Nothing)
     (damage, tracked.updated(identity, Damage.Nothing))
 

@@ -99,8 +99,8 @@ class Java2DRenderSurface(
     * this frame leaves behind. Only surfaces built with `contentPersists` advertise it, because an image the caller
     * intends to hand out once carries no promise about what it will contain next time.
     */
-  override def persistentContentKey: Option[AnyRef] =
-    Option.when(contentPersists)(image)
+  override def persistentContentKey: Option[SurfaceContentIdentity] =
+    Option.when(contentPersists)(SurfaceContentIdentity(image))
 
   override def clearViewport(color: Color): Unit =
     bgRef.set(color)
