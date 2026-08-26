@@ -229,8 +229,8 @@ let anotherOldName = oldName * 2;"""
     val currentState = events.foldLeft(appState) { (state, event) =>
       val result = component.processEvent(event, state)
       result match
-        case com.serenity.state.components.ComponentResult.StateChange(updateFn) =>
-          updateFn(state)
+        case com.serenity.state.components.ComponentResult.ReducerUpdate(reducerResult) =>
+          reducerResult.state
         case _ => state // No change
     }
 

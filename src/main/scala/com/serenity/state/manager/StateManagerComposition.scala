@@ -350,6 +350,7 @@ private[manager] trait EffectModalWorkflowPort:
 private[manager] trait EditorCapabilityPort:
   def stateRef: Ref[IO, AppState]
   def lspQueue: LspEffectQueue
+  def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]]
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
   def createNewEmptyBuffer(): IO[BufferId]
   def closeBuffer(bufferId: BufferId): IO[Unit]
@@ -390,6 +391,7 @@ private[manager] trait EventStatePort:
   def logger: Logger[IO]
   def documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]]
   def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
+  def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]]
 
 /** Effects and commands triggered by event routing. */
 private[manager] trait EventEffectPort:
@@ -553,8 +555,9 @@ private[manager] class StateManagerComposition(
       effects.saveBufferAsEffect(bufferId, path)
 
   private val editorPort: EditorCapabilityPort = new EditorCapabilityPort:
-    val stateRef = runtimeStateRef
-    val lspQueue = runtimeLspQueue
+    val stateRef            = runtimeStateRef
+    val lspQueue            = runtimeLspQueue
+    val bufferAnimationsRef = runtimeBufferAnimationsRef
     def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
       editor.createBuffer(content, filePath)
     def createNewEmptyBuffer(): IO[BufferId]               = editor.createNewEmptyBuffer()
@@ -608,6 +611,7 @@ private[manager] class StateManagerComposition(
       val logger                   = runtimeLogger
       val documentAnalysisFiberRef = runtimeDocumentAnalysisFiberRef
       val mouseTargetCacheRef      = runtimeMouseTargetCacheRef
+      val bufferAnimationsRef      = runtimeBufferAnimationsRef
 
   private val eventEffectPort: EventEffectPort =
     new EventEffectPort:

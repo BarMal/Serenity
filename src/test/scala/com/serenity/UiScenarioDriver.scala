@@ -7,6 +7,8 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
+import cats.syntax.apply.*
+import com.serenity.animation.AnimationState
 import com.serenity.config.ConfigManager
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.rope.Balance
@@ -99,7 +101,7 @@ final class UiScenarioDriver private (
 
   /** Render one frame and return state/layout evidence without consulting private renderer state. */
   def renderFrame(name: String): IO[ScenarioFrame] =
-    state.map { current =>
+    (state, stateManager.getBufferAnimations).mapN { (current, bufferAnimations) =>
       val logicalWidth  = environment.viewport.width * environment.cellMetrics.charWidth
       val logicalHeight = environment.viewport.height * environment.cellMetrics.lineHeight
       val image = new BufferedImage(
@@ -132,7 +134,7 @@ final class UiScenarioDriver private (
       )
       val layout   = LayoutEngine.calculateLayoutWithUI(current, environment.viewport)
       val contract = EditorLayoutContract.from(current, environment.viewport, layout)
-      val frame    = ScenarioFrame(image, evidenceFor(current, contract, image, recordingSurface))
+      val frame    = ScenarioFrame(image, evidenceFor(current, bufferAnimations, contract, image, recordingSurface))
       artifactDirectory.foreach { directory =>
         Files.createDirectories(directory)
         javax.imageio.ImageIO.write(image, "png", directory.resolve(s"$name.png").toFile)
@@ -155,6 +157,7 @@ final class UiScenarioDriver private (
 
   private def evidenceFor(
     state: AppState,
+    bufferAnimations: Map[BufferId, AnimationState],
     contract: EditorLayoutContract,
     image: BufferedImage,
     recordingSurface: ScenarioRecordingSurface
@@ -234,7 +237,7 @@ final class UiScenarioDriver private (
       recordingSurface.drawnImages.map(_.bounds),
       renderedContentRows,
       animationComplete = state.surfaceAnimations.values.forall(_.animationState.animations.isEmpty) &&
-        state.buffers.values.forall(_.animations.animations.isEmpty),
+        bufferAnimations.values.forall(_.animations.isEmpty),
       contract.violations
     )
 

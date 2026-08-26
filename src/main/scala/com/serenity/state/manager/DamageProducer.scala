@@ -35,14 +35,28 @@ import com.serenity.state.models.*
   */
 object DamageProducer:
 
-  def forTransition(before: AppState, after: AppState)(using Balance): Damage =
+  def forTransition(
+    before: AppState,
+    after: AppState,
+    beforeAnimations: Map[BufferId, AnimationState] = Map.empty,
+    afterAnimations: Map[BufferId, AnimationState] = Map.empty
+  )(using Balance): Damage =
     val granularity = after.config.surfaceConfig.renderDamageGranularity
     val bufferDamage = after.buffers.foldLeft(Damage.Nothing: Damage) {
       case (acc, (bufferId, afterBuffer)) =>
         before.buffers.get(bufferId) match
           case None => acc
           case Some(beforeBuffer) =>
-            acc |+| bufferDamageFor(bufferId, before, after, beforeBuffer, afterBuffer, granularity)
+            acc |+| bufferDamageFor(
+              bufferId,
+              before,
+              after,
+              beforeBuffer,
+              afterBuffer,
+              granularity,
+              beforeAnimations.getOrElse(bufferId, AnimationState.empty),
+              afterAnimations.getOrElse(bufferId, AnimationState.empty)
+            )
     }
     bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+| paneChromeDamage(before, after)
 
@@ -58,7 +72,9 @@ object DamageProducer:
     after: AppState,
     beforeBuffer: Buffer,
     afterBuffer: Buffer,
-    granularity: RenderDamageGranularity
+    granularity: RenderDamageGranularity,
+    beforeAnimations: AnimationState,
+    afterAnimations: AnimationState
   )(using Balance): Damage =
     contentDamage(bufferId, beforeBuffer, afterBuffer, granularity) |+|
       cursorDamage(bufferId, beforeBuffer, afterBuffer) |+|
@@ -67,7 +83,7 @@ object DamageProducer:
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
       languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
       viewportDamage(bufferId, beforeBuffer, afterBuffer) |+|
-      animationDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      animationDamage(bufferId, beforeAnimations, afterAnimations) |+|
       focusDimmingDamage(bufferId, after, beforeBuffer, afterBuffer)
 
   private def contentDamage(
@@ -179,9 +195,9 @@ object DamageProducer:
     * `AnimationState.animations`'s `CharacterKey`s -- the same map `PaneRowKey.animations` (`Renderer.scala`) reads
     * today to decide row reuse, so this is a direct structural read rather than a coarsening.
     */
-  private def animationDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
-    if before.animations == after.animations then Damage.Nothing
-    else Damage.BufferRows(bufferId, changedAnimationLines(before.animations, after.animations))
+  private def animationDamage(bufferId: BufferId, before: AnimationState, after: AnimationState): Damage =
+    if before == after then Damage.Nothing
+    else Damage.BufferRows(bufferId, changedAnimationLines(before, after))
 
   /** `Renderer.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the cursor.
     * Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]] already

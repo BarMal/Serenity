@@ -23,7 +23,8 @@ final case class RenderContext(
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    uiMetrics: CellMetrics
+    uiMetrics: CellMetrics,
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
 ):
 
   def fontForRole(role: TypographyRole): java.awt.Font =
@@ -334,7 +335,8 @@ object Renderer:
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
     repaintOnFlush: Boolean,
-    damage: Damage = Damage.Everything
+    damage: Damage = Damage.Everything,
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
   ): Unit =
     val state0 = withEffectiveTheme(state)
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rect) for a
@@ -368,7 +370,8 @@ object Renderer:
         uiMetrics,
         cursorColor,
         output,
-        damage
+        damage,
+        bufferAnimations
       )
     }
 
@@ -380,7 +383,8 @@ object Renderer:
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[java.awt.Color],
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
   ): Boolean =
     val state0       = withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
@@ -424,7 +428,8 @@ object Renderer:
               textFont,
               uiFont,
               swingWin.metrics,
-              uiMetrics
+              uiMetrics,
+              bufferAnimations
             )
           val cursorRects = renderEditorCursors(state0, context, renderPlan)
           surface.flush()
@@ -441,7 +446,8 @@ object Renderer:
     uiFont: java.awt.Font,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
-    damage: Damage = Damage.Everything
+    damage: Damage = Damage.Everything,
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
   ): Boolean =
     val state0       = withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
@@ -479,7 +485,8 @@ object Renderer:
         uiMetrics,
         cursorColor = None,
         output,
-        damage
+        damage,
+        bufferAnimations
       ).fold(false) { renderPlan =>
         val baseDirtyRegion = repaintRegion.get().map(toAwtRectangle)
         swingWin.onCursorOverlayReady(baseDirtyRegion) { image =>
@@ -494,7 +501,8 @@ object Renderer:
             textFont,
             uiFont,
             swingWin.metrics,
-            uiMetrics
+            uiMetrics,
+            bufferAnimations
           )
           val cursorRects = renderEditorCursors(state0, cursorContext, renderPlan)
           cursorSurface.flush()
@@ -732,7 +740,8 @@ object Renderer:
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
     output: Option[FrameOutput],
-    damage: Damage
+    damage: Damage,
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
   ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
 
@@ -791,7 +800,8 @@ object Renderer:
           textFont,
           uiFont,
           cellMetrics,
-          uiMetrics
+          uiMetrics,
+          bufferAnimations
         )
         val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage)
         framePlan match
@@ -1423,7 +1433,7 @@ object Renderer:
                 snapshot.ascentPx,
                 visualLine,
                 lineTheme,
-                buffer.animations,
+                context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                 state.syntaxHighlightingEnabled,
                 buffer.language,
                 styledSegments,
@@ -1436,7 +1446,7 @@ object Renderer:
                 screenY,
                 visualLine.text,
                 lineTheme,
-                buffer.animations,
+                context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                 state.syntaxHighlightingEnabled,
                 buffer.language,
                 bufferLine = visualLine.bufferLine,
@@ -1469,7 +1479,9 @@ object Renderer:
             )
 
             val stringEnd = visualLine.startColumn + visualLine.text.length
-            val lineAnims = buffer.animations.getLineAnimations(visualLine.bufferLine)
+            val lineAnims = context.bufferAnimations
+              .getOrElse(buffer.id, com.serenity.animation.AnimationState.empty)
+              .getLineAnimations(visualLine.bufferLine)
             lineAnims
               .filter((col, cell) => col >= stringEnd && cell.currentBackground.isDefined)
               .foreach { (col, cell) =>
@@ -1954,7 +1966,7 @@ object Renderer:
                   snapshot.ascentPx,
                   visualLine,
                   state.theme.copy(background = state.theme.panel.background),
-                  buffer.animations,
+                  context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
                   clipRightXPx = Some(context.cellMetrics.toPixelX(rect.right).toFloat)
@@ -1966,7 +1978,7 @@ object Renderer:
                   screenY,
                   visualLine.text,
                   state.theme.copy(background = state.theme.panel.background),
-                  buffer.animations,
+                  context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
                   bufferLine = visualLine.bufferLine,

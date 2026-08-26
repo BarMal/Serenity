@@ -160,39 +160,39 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
   private val revealCell = AnimatedCell(Some('x'), List(java.awt.Color.WHITE), Nil)
 
   it should "report the changed rows when a character-reveal animation tick advances" in {
-    val before = stateWithContent("first\nsecond\nthird")
-    val animated = before
-      .buffers(bufferId)
-      .copy(
-        animations = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
-      )
-    val after = before.copy(buffers = before.buffers.updated(bufferId, animated))
+    val before   = stateWithContent("first\nsecond\nthird")
+    val animated = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(1))
+    DamageProducer.forTransition(
+      before,
+      before,
+      beforeAnimations = Map.empty,
+      afterAnimations = Map(bufferId -> animated)
+    ) shouldBe Damage.BufferRows(bufferId, Set(1))
   }
 
   it should "report the union of changed rows when several cells across different rows tick at once" in {
-    val before = stateWithContent("first\nsecond\nthird")
-    val animated = before
-      .buffers(bufferId)
-      .copy(
-        animations = AnimationState(Map(CharacterKey(0, 0) -> revealCell, CharacterKey(2, 2) -> revealCell))
-      )
-    val after = before.copy(buffers = before.buffers.updated(bufferId, animated))
+    val before   = stateWithContent("first\nsecond\nthird")
+    val animated = AnimationState(Map(CharacterKey(0, 0) -> revealCell, CharacterKey(2, 2) -> revealCell))
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 2))
+    DamageProducer.forTransition(
+      before,
+      before,
+      beforeAnimations = Map.empty,
+      afterAnimations = Map(bufferId -> animated)
+    ) shouldBe Damage.BufferRows(bufferId, Set(0, 2))
   }
 
   it should "report no damage when a transition changes nothing about the buffer's animations" in {
-    val before = stateWithContent("first\nsecond\nthird")
-    val animated = before
-      .buffers(bufferId)
-      .copy(
-        animations = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
-      )
-    val withAnimation = before.copy(buffers = before.buffers.updated(bufferId, animated))
+    val before   = stateWithContent("first\nsecond\nthird")
+    val animated = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
 
-    DamageProducer.forTransition(withAnimation, withAnimation) shouldBe Damage.Nothing
+    DamageProducer.forTransition(
+      before,
+      before,
+      beforeAnimations = Map(bufferId -> animated),
+      afterAnimations = Map(bufferId -> animated)
+    ) shouldBe Damage.Nothing
   }
 
   it should "report Everything when a theme transition advances, since it cross-fades every visible glyph" in {

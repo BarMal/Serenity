@@ -4,7 +4,6 @@ import java.nio.file.Path
 
 import cats.Order
 import cats.data.NonEmptyList
-import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
@@ -61,7 +60,6 @@ final case class Buffer(
     isDirty: Boolean = false,
     language: Option[LanguageId] = None,
     isNewEmpty: Boolean = false,
-    animations: AnimationState = AnimationState.empty,
     cursors: List[CursorPosition] = List(CursorPosition(0, 0)),
     selection: Option[Selection] = None,
     preferredColumn: Option[Int] = None,

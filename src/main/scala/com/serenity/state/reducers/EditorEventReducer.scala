@@ -180,27 +180,31 @@ object EditorEventReducer:
   private def reduceDeletion(
     buffer: Buffer,
     currentState: AppState,
-    withoutSelection: Buffer => Option[Buffer]
+    withoutSelection: Buffer => Option[(Buffer, MultiCursorEdit)]
   ): ReducerResult =
     ReducerResult.fromTransition(
       currentState,
-      Focused.modifyBufferWithId(buffer.id) { current =>
-        current.primarySelection match
-          case Some(selection) => deleteSelectedRange(current, selection)
-          case None            => withoutSelection(current).getOrElse(current)
+      Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
+        val result = current.primarySelection match
+          case Some(selection) => Some(deleteSelectedRange(current, selection))
+          case None            => withoutSelection(current)
+        result match
+          case Some((updated, edit)) =>
+            (updated, animationRemapEffects(buffer.id, current.content, updated.content, List(edit)))
+          case None => (current, Nil)
       }
     )
 
   private def graphemeBackwardDeletion(
     buffer: Buffer,
     cursor: CursorPosition
-  ): Option[Buffer] =
+  ): Option[(Buffer, MultiCursorEdit)] =
     val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
     backwardGraphemeDeletionRange(buffer.content, offset).map {
       case (start, end) =>
         val newContent = buffer.content.delete(start, end)
         val newCursor  = offsetToCursorPosition(newContent, start)
-        buffer.copy(
+        val updated = buffer.copy(
           content = newContent,
           isDirty = true,
           isNewEmpty = false,
@@ -214,24 +218,19 @@ object EditorEventReducer:
             newContent,
             List(MultiCursorEdit(0, start, end, ""))
           ),
-          animations = remapAnimationsThroughEdits(
-            buffer.animations,
-            buffer.content,
-            newContent,
-            List(MultiCursorEdit(0, start, end, ""))
-          ),
           richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
         )
+        (updated, MultiCursorEdit(0, start, end, ""))
     }
 
   /** Forward deletion leaves the cursor where it is, so unlike the backward case it does not adjust the viewport. */
-  private def graphemeForwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[Buffer] =
+  private def graphemeForwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[(Buffer, MultiCursorEdit)] =
     val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
     forwardGraphemeDeletionRange(buffer.content, offset).map {
       case (start, end) =>
         val newContent = buffer.content.delete(start, end)
         val newCursor  = offsetToCursorPosition(newContent, start)
-        buffer.copy(
+        val updated = buffer.copy(
           content = newContent,
           isDirty = true,
           isNewEmpty = false,
@@ -244,22 +243,17 @@ object EditorEventReducer:
             newContent,
             List(MultiCursorEdit(0, start, end, ""))
           ),
-          animations = remapAnimationsThroughEdits(
-            buffer.animations,
-            buffer.content,
-            newContent,
-            List(MultiCursorEdit(0, start, end, ""))
-          ),
           richTextDocument = richTextDocumentAfterEdit(buffer, start, end, "")
         )
+        (updated, MultiCursorEdit(0, start, end, ""))
     }
 
-  private def wordBackwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[Buffer] =
+  private def wordBackwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[(Buffer, MultiCursorEdit)] =
     val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
     val start  = previousWordBoundary(buffer.content, offset)
     Option.when(start < offset)(deleteOffsetRange(buffer, start, offset, start))
 
-  private def wordForwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[Buffer] =
+  private def wordForwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[(Buffer, MultiCursorEdit)] =
     val offset = lineColumnToOffset(buffer.content, cursor.line, cursor.column)
     val end    = nextWordBoundary(buffer.content, offset)
     Option.when(offset < end)(deleteOffsetRange(buffer, offset, end, offset))
@@ -272,11 +266,35 @@ object EditorEventReducer:
   ): ReducerResult =
     ReducerResult.fromTransition(
       currentState,
-      Focused.modifyBufferWithId(buffer.id) { current =>
-        val (replaced, edit) = replaceSelectionOrInsert(current, cursor, text)
-        addInsertionAnimations(replaced, currentState, List(edit))
+      Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
+        val (replaced, edit)  = replaceSelectionOrInsert(current, cursor, text)
+        val (animated, delta) = addInsertionAnimations(replaced, currentState, List(edit))
+        val effects =
+          animationRemapEffects(buffer.id, current.content, animated.content, List(edit)) ++
+            animationMergeEffects(buffer.id, delta)
+        (animated, effects)
       }
     )
+
+  private def animationRemapEffects(
+    bufferId: BufferId,
+    before: Rope,
+    after: Rope,
+    edits: List[MultiCursorEdit]
+  ): List[AppEffect] =
+    if edits.isEmpty then Nil
+    else
+      List(
+        AppEffect.Animation(
+          AnimationEffect.RemapThroughEdits(bufferId, before, after, edits.map(toTextEdit))
+        )
+      )
+
+  private def animationMergeEffects(bufferId: BufferId, delta: Map[CharacterKey, AnimatedCell]): List[AppEffect] =
+    if delta.isEmpty then Nil else List(AppEffect.Animation(AnimationEffect.Merge(bufferId, delta)))
+
+  private def toTextEdit(edit: MultiCursorEdit): TextEdit =
+    TextEdit(edit.start, edit.end, edit.insertedText)
 
   /** One path over `buffer.cursorList` (see its doc comment) handles single cursor, multi-cursor and multi-selection
     * alike. `hasSelection`/`isMulti` name which of the three shapes this buffer is in; most event bodies below still
@@ -341,6 +359,16 @@ object EditorEventReducer:
         def applyBuffer(f: Buffer => Buffer): ReducerResult =
           ReducerResult.noEffects(Focused.replaceBuffer(currentState, f(buffer)))
 
+        /** Like `applyBuffer`, but `f` also reports the edits it made, so their animations can be remapped in the
+          * presentation layer (`#1001`) instead of inside `Buffer` itself.
+          */
+        def applyEditedBuffer(f: Buffer => (Buffer, List[MultiCursorEdit])): ReducerResult =
+          val (updated, edits) = f(buffer)
+          ReducerResult(
+            Focused.replaceBuffer(currentState, updated),
+            animationRemapEffects(buffer.id, buffer.content, updated.content, edits)
+          )
+
         def navigate(moveFn: CursorPosition => CursorPosition): ReducerResult =
           applyBuffer(target =>
             applyMultiCursorNavigation(if hasSelection then collapseSelectionsToFocus(target) else target)(moveFn)
@@ -348,18 +376,23 @@ object EditorEventReducer:
 
         event match
           case InsertChar(char) =>
-            if hasSelection then applyBuffer(applyMultiSelectionReplacement(_, char.toString))
-            else if isMulti then applyBuffer(applyMultiCursorInsertion(_, char.toString))
+            if hasSelection then applyEditedBuffer(applyMultiSelectionReplacement(_, char.toString))
+            else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, char.toString))
             else insertAtCursor(buffer, head, char.toString, currentState)
 
           case TabKey =>
-            if hasSelection then applyBuffer(b => applyLineIndent(b, currentState, selectionLines(b)))
-            else if isMulti then applyBuffer(applyMultiCursorInsertion(_, TabInsertion))
+            if hasSelection then
+              val (updated, edits, delta) = applyLineIndent(buffer, currentState, selectionLines(buffer))
+              val effects =
+                animationRemapEffects(buffer.id, buffer.content, updated.content, edits) ++
+                  animationMergeEffects(buffer.id, delta)
+              ReducerResult(Focused.replaceBuffer(currentState, updated), effects)
+            else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, TabInsertion))
             else insertAtCursor(buffer, head, TabInsertion, currentState)
 
           case NewLine | Enter =>
-            if hasSelection then applyBuffer(applyMultiSelectionReplacement(_, "\n"))
-            else if isMulti then applyBuffer(applyMultiCursorInsertion(_, "\n"))
+            if hasSelection then applyEditedBuffer(applyMultiSelectionReplacement(_, "\n"))
+            else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, "\n"))
             else insertAtCursor(buffer, head, "\n", currentState)
 
           case ReverseTabKey =>
@@ -367,26 +400,26 @@ object EditorEventReducer:
               if hasSelection then selectionLines(buffer)
               else if isMulti then distinctCursorLines(buffer)
               else List(head.line)
-            applyBuffer(applyLineUnindent(_, targetLines))
+            applyEditedBuffer(applyLineUnindent(_, targetLines))
 
           case DeleteBackward =>
-            if hasSelection then applyBuffer(deleteSelectedRanges)
-            else if isMulti then applyBuffer(applyMultiCursorDeletion(_, backward = true))
+            if hasSelection then applyEditedBuffer(deleteSelectedRanges)
+            else if isMulti then applyEditedBuffer(applyMultiCursorDeletion(_, backward = true))
             else reduceDeletion(buffer, currentState, graphemeBackwardDeletion(_, head))
 
           case DeleteForward =>
-            if hasSelection then applyBuffer(deleteSelectedRanges)
-            else if isMulti then applyBuffer(applyMultiCursorDeletion(_, backward = false))
+            if hasSelection then applyEditedBuffer(deleteSelectedRanges)
+            else if isMulti then applyEditedBuffer(applyMultiCursorDeletion(_, backward = false))
             else reduceDeletion(buffer, currentState, graphemeForwardDeletion(_, head))
 
           case DeleteWordBackward =>
-            if hasSelection then applyBuffer(deleteSelectedRanges)
-            else if isMulti then applyBuffer(applyMultiCursorWordDeletion(_, backward = true))
+            if hasSelection then applyEditedBuffer(deleteSelectedRanges)
+            else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = true))
             else reduceDeletion(buffer, currentState, wordBackwardDeletion(_, head))
 
           case DeleteWordForward =>
-            if hasSelection then applyBuffer(deleteSelectedRanges)
-            else if isMulti then applyBuffer(applyMultiCursorWordDeletion(_, backward = false))
+            if hasSelection then applyEditedBuffer(deleteSelectedRanges)
+            else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = false))
             else reduceDeletion(buffer, currentState, wordForwardDeletion(_, head))
 
           case MoveLeft          => navigate(cursor => moveCursorLeft(cursor, buffer.content))
@@ -497,47 +530,53 @@ object EditorEventReducer:
 
           case Cut =>
             if hasSelection then
-              ReducerResult.noEffects(
+              val (updated, edits) = deleteSelectedRanges(buffer)
+              ReducerResult(
                 currentState.copy(
-                  buffers = currentState.buffers + (buffer.id -> deleteSelectedRanges(buffer)),
+                  buffers = currentState.buffers + (buffer.id -> updated),
                   clipboard = Some(selectedTexts(buffer).mkString("\n"))
-                )
+                ),
+                animationRemapEffects(buffer.id, buffer.content, updated.content, edits)
               )
             else
-              val targetLines   = distinctCursorLines(buffer)
-              val clipboardText = targetLines.map(line => buffer.content.getLine(line).getOrElse("")).mkString("\n")
-              ReducerResult.noEffects(
+              val targetLines      = distinctCursorLines(buffer)
+              val clipboardText    = targetLines.map(line => buffer.content.getLine(line).getOrElse("")).mkString("\n")
+              val (updated, edits) = applyMultiCursorLineCut(buffer, targetLines)
+              ReducerResult(
                 currentState.copy(
-                  buffers = currentState.buffers + (buffer.id -> applyMultiCursorLineCut(buffer, targetLines)),
+                  buffers = currentState.buffers + (buffer.id -> updated),
                   clipboard = Some(clipboardText)
-                )
+                ),
+                animationRemapEffects(buffer.id, buffer.content, updated.content, edits)
               )
 
           case Paste =>
             currentState.clipboard.filter(_.nonEmpty) match
               case None => ReducerResult.noEffects(currentState)
               case Some(text) if hasSelection =>
-                applyBuffer(applyMultiSelectionReplacement(_, text))
+                applyEditedBuffer(applyMultiSelectionReplacement(_, text))
               case Some(text) if isMulti =>
-                applyBuffer(applyMultiCursorInsertion(_, text))
+                applyEditedBuffer(applyMultiCursorInsertion(_, text))
               case Some(text) =>
                 val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, head, text)
                 val newCursor                         = replacedBuffer.cursors.headOption.getOrElse(head)
-                val updatedBuffer = addInsertionAnimations(
-                  buffer.copy(
-                    content = replacedBuffer.content,
-                    isDirty = replacedBuffer.isDirty,
-                    isNewEmpty = replacedBuffer.isNewEmpty,
-                    cursors = replacedBuffer.cursors,
-                    selection = replacedBuffer.selection,
-                    preferredColumn = Some(newCursor.column),
-                    preferredXPx = None
-                  ),
-                  currentState,
-                  List(replacementEdit)
+                val withoutAnimations = buffer.copy(
+                  content = replacedBuffer.content,
+                  isDirty = replacedBuffer.isDirty,
+                  isNewEmpty = replacedBuffer.isNewEmpty,
+                  cursors = replacedBuffer.cursors,
+                  selection = replacedBuffer.selection,
+                  preferredColumn = Some(newCursor.column),
+                  preferredXPx = None
                 )
-                ReducerResult.noEffects(
-                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer))
+                val (updatedBuffer, delta) =
+                  addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
+                val effects =
+                  animationRemapEffects(buffer.id, buffer.content, updatedBuffer.content, List(replacementEdit)) ++
+                    animationMergeEffects(buffer.id, delta)
+                ReducerResult(
+                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)),
+                  effects
                 )
 
           case _ =>
@@ -555,19 +594,20 @@ object EditorEventReducer:
         val buffer      = Buffer.fromString(bufferId, char.toString).copy(isDirty = true, isNewEmpty = false)
         val newCursor   = CursorPosition(0, 1)
         val updatedPane = pane.copy(bufferId = Some(bufferId), cursors = List(newCursor))
-        val bufferWithAnimation = addInsertionAnimations(
+        val (bufferWithAnimation, delta) = addInsertionAnimations(
           buffer,
           currentState,
           List(MultiCursorEdit(0, 0, 0, char.toString))
         )
-        ReducerResult.noEffects(
+        ReducerResult(
           currentState.copy(
             buffers = currentState.buffers + (bufferId -> bufferWithAnimation),
             layout = currentState.layout.copy(
               editorPanes = currentState.layout.editorPanes + (paneId -> updatedPane)
             ),
             nextBufferId = BufferId(bufferId.value + 1)
-          )
+          ),
+          animationMergeEffects(bufferId, delta)
         )
 
       case TabKey =>
@@ -596,7 +636,7 @@ object EditorEventReducer:
   private def applyMultiCursorInsertion(
     buffer: Buffer,
     insertedText: String
-  ): Buffer =
+  ): (Buffer, List[MultiCursorEdit]) =
     val insertionOffsets =
       multiCursorEntries(buffer).map(entry => graphemeBoundaryAfterOrAt(buffer.content, entry.offset))
     val edits = insertionOffsets.zipWithIndex.map {
@@ -608,7 +648,7 @@ object EditorEventReducer:
   private def applyMultiCursorDeletion(
     buffer: Buffer,
     backward: Boolean
-  ): Buffer =
+  ): (Buffer, List[MultiCursorEdit]) =
     val entries = multiCursorEntries(buffer)
     val edits = entries.zipWithIndex.flatMap {
       case (entry, index) =>
@@ -622,7 +662,7 @@ object EditorEventReducer:
   private def applyMultiCursorWordDeletion(
     buffer: Buffer,
     backward: Boolean
-  ): Buffer =
+  ): (Buffer, List[MultiCursorEdit]) =
     val entries = multiCursorEntries(buffer)
     val edits = entries.zipWithIndex.flatMap {
       case (entry, index) =>
@@ -635,14 +675,18 @@ object EditorEventReducer:
     }
     applyMergedDeletionEdits(buffer, entries.map(_.offset), edits)
 
+  /** Returns the buffer with the indent applied and its own edits (for the caller's animation remap), plus the
+    * insertion-animation delta from `addInsertionAnimations` (for the caller's animation merge) -- two independent
+    * animation effects, since one shifts existing animations and the other adds new ones.
+    */
   private def applyLineIndent(
     buffer: Buffer,
     currentState: AppState,
     targetLines: List[Int]
-  ): Buffer =
+  ): (Buffer, List[MultiCursorEdit], Map[CharacterKey, AnimatedCell]) =
     val targetSet = targetLines.filter(line => line >= 0 && line < countLines(buffer.content)).toSet
 
-    if targetSet.isEmpty then buffer
+    if targetSet.isEmpty then (buffer, Nil, Map.empty)
     else
       val edits = targetSet.toList.sorted.zipWithIndex.map {
         case (line, index) =>
@@ -667,26 +711,22 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
-        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, edits)
+        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
       )
-      addInsertionAnimations(
-        baseBuffer,
-        currentState,
-        edits
-      )
+      val (animatedBuffer, delta) = addInsertionAnimations(baseBuffer, currentState, edits)
+      (animatedBuffer, edits, delta)
 
   private def applyLineUnindent(
     buffer: Buffer,
     targetLines: List[Int]
-  ): Buffer =
+  ): (Buffer, List[MultiCursorEdit]) =
     val targetSet = targetLines.filter(line => line >= 0 && line < countLines(buffer.content)).toSet
     val removals = targetSet.toList.sorted.map { line =>
       val (_, removed) = unindentLine(buffer.content.getLine(line).getOrElse(""))
       line -> removed
     }.toMap
 
-    if removals.values.forall(_ == 0) then buffer
+    if removals.values.forall(_ == 0) then (buffer, Nil)
     else
       val edits = removals.toList.sortBy(_._1).zipWithIndex.collect {
         case ((line, removed), index) if removed > 0 =>
@@ -710,10 +750,9 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
-        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, edits)
+        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
       )
-      baseBuffer
+      (baseBuffer, edits)
 
   private def unindentLine(lineText: String): (String, Int) =
     if lineText.startsWith("\t") then (lineText.drop(1), 1)
@@ -725,8 +764,8 @@ object EditorEventReducer:
   private def applyMultiCursorLineCut(
     buffer: Buffer,
     targetLines: List[Int]
-  ): Buffer =
-    if targetLines.isEmpty then buffer
+  ): (Buffer, List[MultiCursorEdit]) =
+    if targetLines.isEmpty then (buffer, Nil)
     else
       val totalLines = countLines(buffer.content)
       val lineEdits = targetLines.distinct.sorted.map { line =>
@@ -770,17 +809,16 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
-        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, edits)
+        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits)
       )
-      baseBuffer
+      (baseBuffer, edits)
 
   private def applyTrackedEdits(
     buffer: Buffer,
     initialOffsets: List[Int],
     edits: List[MultiCursorEdit]
-  ): Buffer =
-    if edits.isEmpty then buffer
+  ): (Buffer, List[MultiCursorEdit]) =
+    if edits.isEmpty then (buffer, Nil)
     else
       val trackedOffsets = initialOffsets.toArray
       val sortedEdits    = edits.sortBy(edit => (-edit.start, -edit.end))
@@ -823,17 +861,16 @@ object EditorEventReducer:
         preferredXPx = None,
         multiCursorVerticalStates = Nil,
         documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, edits),
-        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, edits),
         richTextDocument = updatedRichTextDocument
       )
-      baseBuffer
+      (baseBuffer, edits)
 
   private def applyMergedDeletionEdits(
     buffer: Buffer,
     initialOffsets: List[Int],
     edits: List[MultiCursorEdit]
-  ): Buffer =
-    if edits.isEmpty then buffer
+  ): (Buffer, List[MultiCursorEdit]) =
+    if edits.isEmpty then (buffer, Nil)
     else
       val mergedRanges = mergeOverlappingDeletionRanges(edits.map(edit => (edit.start, edit.end)))
       val updatedContent = mergedRanges
@@ -860,10 +897,9 @@ object EditorEventReducer:
         selections = Nil,
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
-        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, mergedEdits),
-        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, updatedContent, mergedEdits)
+        documentComments = adjustDocumentComments(buffer.documentComments, buffer.content, updatedContent, mergedEdits)
       )
-      baseBuffer
+      (baseBuffer, mergedEdits)
 
   private def mergeOverlappingDeletionRanges(
     ranges: List[(Int, Int)]
@@ -913,31 +949,6 @@ object EditorEventReducer:
         )
       }
 
-  /** `AnimationState.animations` is keyed by absolute `(line, column)`, so an edit anywhere before an animating
-    * character silently leaves its animation attached to whatever character now occupies that cell -- `#1001`'s
-    * correctness fix. Every edit-application site below remaps through this, the same offset-tracking
-    * `remapEditBoundary` already gives `documentComments`. A character an edit deletes has its animation dropped rather
-    * than remapped: keeping it would attach the animation to a different character at the same offset.
-    */
-  private def remapAnimationsThroughEdits(
-    animations: AnimationState,
-    initialContent: Rope,
-    updatedContent: Rope,
-    edits: List[MultiCursorEdit]
-  ): AnimationState =
-    if animations.animations.isEmpty || edits.isEmpty then animations
-    else
-      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
-      val remapped = animations.animations.flatMap { (key, cell) =>
-        val offset = initialContent.lineColumnToOffset(key.line, key.column)
-        if sortedEdits.exists(edit => offset >= edit.start && offset < edit.end) then None
-        else
-          val nextOffset     = remapEditBoundary(offset, sortedEdits, insertionAtBoundaryMoves = true)
-          val (line, column) = updatedContent.offsetToLineColumn(nextOffset)
-          Some(CharacterKey(column, line) -> cell)
-      }
-      AnimationState(remapped)
-
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
     remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
 
@@ -973,7 +984,7 @@ object EditorEventReducer:
   private def applyMultiSelectionReplacement(
     buffer: Buffer,
     insertedText: String
-  ): Buffer =
+  ): (Buffer, List[MultiCursorEdit]) =
     val ranges  = mergedActiveSelectionRanges(buffer, buffer.content)
     val offsets = ranges.map(_._1)
     val edits = ranges.zipWithIndex.map {
@@ -984,7 +995,7 @@ object EditorEventReducer:
 
   private def deleteSelectedRanges(
     buffer: Buffer
-  ): Buffer =
+  ): (Buffer, List[MultiCursorEdit]) =
     val ranges  = mergedActiveSelectionRanges(buffer, buffer.content)
     val offsets = ranges.map(_._1)
     val edits = ranges.zipWithIndex.map {
@@ -1101,7 +1112,7 @@ object EditorEventReducer:
     startOffset: Int,
     endOffset: Int,
     cursorOffset: Int
-  ): Buffer =
+  ): (Buffer, MultiCursorEdit) =
     val newContent = buffer.content.delete(startOffset, endOffset)
     val newCursor  = offsetToCursorPosition(newContent, cursorOffset)
     val baseBuffer = buffer.copy(
@@ -1119,15 +1130,9 @@ object EditorEventReducer:
         newContent,
         List(MultiCursorEdit(0, startOffset, endOffset, ""))
       ),
-      animations = remapAnimationsThroughEdits(
-        buffer.animations,
-        buffer.content,
-        newContent,
-        List(MultiCursorEdit(0, startOffset, endOffset, ""))
-      ),
       richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, "")
     )
-    baseBuffer
+    (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
   private def offsetToCursorPosition(content: Rope, offset: Int): CursorPosition =
     val (line, column) = content.offsetToLineColumn(offset)
@@ -1308,40 +1313,39 @@ object EditorEventReducer:
       val nextLineLength = rope.getLine(cursor.line + 1).map(_.length).getOrElse(0)
       cursor.copy(line = cursor.line + 1, column = math.min(preferredColumn, nextLineLength))
 
+  /** Returns the buffer with content/comments/etc. applied but animations untouched, plus the delta of newly animated
+    * cells for the caller to hand to the presentation layer (`#1001`) -- this function never had access to the buffer's
+    * *current* animations beyond merging into them, so it never needed to read them; only the merge itself moves to the
+    * caller.
+    */
   private def addInsertionAnimations(
     buffer: Buffer,
     state: AppState,
     edits: List[MultiCursorEdit]
-  ): Buffer =
+  ): (Buffer, Map[CharacterKey, AnimatedCell]) =
     val sortedEdits = edits
       .filter(_.insertedText.nonEmpty)
       .sortBy(edit => (edit.start, edit.end))
 
-    if sortedEdits.isEmpty then buffer
+    if sortedEdits.isEmpty then (buffer, Map.empty)
     else
       val insertedCells = insertedTransitionCells(buffer.content, sortedEdits, state)
-      if insertedCells.isEmpty then buffer
+      if insertedCells.isEmpty then (buffer, Map.empty)
       else
         val plan = ElementTransitionPlanner.plan(
           ElementTransitionRequest(TransitionScope.EditorInsertion),
           state.config.editorInsertionTransitionSettings
         )
-        if plan.kind == TransitionKind.Disabled then buffer
+        if plan.kind == TransitionKind.Disabled then (buffer, Map.empty)
         else if plan.kind == TransitionKind.Fade then
           state.config.scaledCharacterAnimation match
             case Some(animConfig) =>
               if insertedCells.size == 1 then
                 val (key, cell) = insertedCells.head
-                buffer.copy(
-                  animations = buffer.animations.addCharacterAnimation(
-                    cell.char,
-                    key.column,
-                    key.line,
-                    cell.startColor,
-                    cell.endColor,
-                    animConfig.steps
-                  )
+                val delta = Map(
+                  key -> AnimatedCell.parametricForeground(cell.char, cell.startColor, cell.endColor, animConfig.steps)
                 )
+                (buffer, delta)
               else
                 val staggeredCells = insertedCells
                   .groupBy { case (key, _) => key.line }
@@ -1356,16 +1360,16 @@ object EditorEventReducer:
                     )
                   )
                   .toMap
-                buffer.copy(animations = buffer.animations.mergeAnimations(staggeredCells))
+                (buffer, staggeredCells)
             case None =>
-              buffer
+              (buffer, Map.empty)
         else
           val animationState = ElementTransitionLowerer.lower(
             plan,
             ElementTransitionCells(content = insertedCells),
             tickRateMs = 16
           )
-          buffer.copy(animations = buffer.animations.mergeAnimations(animationState.animations))
+          (buffer, animationState.animations)
 
   private def insertedTransitionCells(
     content: Rope,
@@ -1551,7 +1555,6 @@ object EditorEventReducer:
           newContent,
           List(replacementEdit)
         ),
-        animations = remapAnimationsThroughEdits(buffer.animations, buffer.content, newContent, List(replacementEdit)),
         richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
       ),
       replacementEdit
@@ -1560,7 +1563,7 @@ object EditorEventReducer:
   private def deleteSelectedRange(
     buffer: Buffer,
     selection: Selection
-  ): Buffer =
+  ): (Buffer, MultiCursorEdit) =
     val startOffset = selectionStartOffset(selection, buffer.content)
     val endOffset   = selectionEndOffset(selection, buffer.content)
     val newContent  = buffer.content.delete(startOffset, endOffset)
@@ -1580,15 +1583,9 @@ object EditorEventReducer:
         newContent,
         List(MultiCursorEdit(0, startOffset, endOffset, ""))
       ),
-      animations = remapAnimationsThroughEdits(
-        buffer.animations,
-        buffer.content,
-        newContent,
-        List(MultiCursorEdit(0, startOffset, endOffset, ""))
-      ),
       richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, "")
     )
-    baseBuffer
+    (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
   private def activeSelections(buffer: Buffer): List[Selection] =
     buffer.allSelections.distinct

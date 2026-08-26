@@ -52,12 +52,12 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
 
     result should not be ComponentResult.noChange
     result match
-      case ComponentResult.StateChange(stateUpdate) =>
-        val newState      = stateUpdate(state)
+      case ComponentResult.ReducerUpdate(reducerResult) =>
+        val newState      = reducerResult.state
         val updatedBuffer = newState.buffers(bufferId)
         updatedBuffer.content.collect() shouldBe "hello     world"
 
         val newCursor = updatedBuffer.cursors.head
         newCursor.column shouldBe 9
-      case _ => fail("Expected StateChange result")
+      case _ => fail("Expected ReducerUpdate result")
   }
