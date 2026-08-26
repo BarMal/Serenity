@@ -6,7 +6,7 @@ import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.layout.{CellMetrics, PixelRect, TextLayoutSnapshot}
-import com.serenity.ui.renderer.RenderSurface
+import com.serenity.ui.renderer.{RenderSurface, SurfaceContentIdentity}
 import com.serenity.ui.theme.TextStyle
 
 /** In-memory RenderSurface for renderer tests. Records putString calls so assertions can inspect what was drawn at each
@@ -45,8 +45,8 @@ class MockRenderSurface(val width: Int, val height: Int, persistentContent: Bool
 
   def setFontCalls: List[Font] = setFontCallsBuffer.toList
 
-  override def persistentContentKey: Option[AnyRef] =
-    Option.when(persistentContent)(this)
+  override def persistentContentKey: Option[SurfaceContentIdentity] =
+    Option.when(persistentContent)(SurfaceContentIdentity(this))
 
   override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)

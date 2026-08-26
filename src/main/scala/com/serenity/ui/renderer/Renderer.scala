@@ -149,8 +149,16 @@ object Renderer:
       boundedRepaint: Boolean
   )
 
+  /** Identity of the screen a frame publishes to -- a newtype over the backing canvas/surface's own reference identity,
+    * for the same reason [[SurfaceContentIdentity]] wraps a pixel buffer's.
+    */
+  opaque type ScreenIdentity = AnyRef
+
+  private object ScreenIdentity:
+    def apply(value: AnyRef): ScreenIdentity = value
+
   /** Where a frame goes: the screen it will be shown on, and the region sink that screen's repaint should honour. */
-  final private case class FrameOutput(screenToken: AnyRef, repaintRegion: AtomicReference[Option[PixelRect]])
+  final private case class FrameOutput(screenToken: ScreenIdentity, repaintRegion: AtomicReference[Option[PixelRect]])
 
   /** Per-persistence-key bookkeeping this module remembers across frames, replacing the retired `ChromeKey`/
     * `FrameRecord`/`PaneContentKey`/`PaneRowKey` reconstruct-and-diff machinery. Nothing here holds a structural
@@ -166,14 +174,14 @@ object Renderer:
     */
   final private case class DrawState(paneIds: Set[PaneId], inputs: RenderInputs)
 
-  private val bufferDamage    = new java.util.WeakHashMap[AnyRef, Damage]()
-  private val bufferDrawState = new java.util.WeakHashMap[AnyRef, DrawState]()
+  private val bufferDamage    = new java.util.WeakHashMap[SurfaceContentIdentity, Damage]()
+  private val bufferDrawState = new java.util.WeakHashMap[SurfaceContentIdentity, DrawState]()
 
   /** Distinct from [[bufferDamage]] because base images alternate: the pixels a surface preserves come from two frames
     * ago, while the screen shows the last one published.
     */
-  private val screenDamage  = new java.util.WeakHashMap[AnyRef, Damage]()
-  private val screenPaneIds = new java.util.WeakHashMap[AnyRef, Set[PaneId]]()
+  private val screenDamage  = new java.util.WeakHashMap[ScreenIdentity, Damage]()
+  private val screenPaneIds = new java.util.WeakHashMap[ScreenIdentity, Set[PaneId]]()
 
   /** Folds `damage` into every buffer identity already being tracked, via [[DamageAccumulator.accumulateBuffers]] --
     * called unconditionally on every frame, regardless of which identity (if any) this specific frame draws into, so a
@@ -189,7 +197,7 @@ object Renderer:
     * [[DamageAccumulator.observeBufferDraw]] -- `Damage.Everything` if this is the first time this identity has been
     * seen, since an untracked identity's pixels cannot be trusted at all, not merely assumed unchanged.
     */
-  private def drainBufferDamage(persistenceKey: AnyRef): Damage =
+  private def drainBufferDamage(persistenceKey: SurfaceContentIdentity): Damage =
     bufferDamage.synchronized {
       val wasTracked          = bufferDamage.containsKey(persistenceKey)
       val (observed, updated) = DamageAccumulator.observeBufferDraw(mapAsScala(bufferDamage), persistenceKey)
@@ -202,7 +210,11 @@ object Renderer:
     * content), or a render parameter `DamageProducer` cannot see because it isn't part of `AppState` (a window resize,
     * a font swap), both mean the accumulated buffer damage alone cannot be trusted for this frame.
     */
-  private def drawStateChanged(persistenceKey: AnyRef, paneIds: Set[PaneId], inputs: RenderInputs): Boolean =
+  private def drawStateChanged(
+    persistenceKey: SurfaceContentIdentity,
+    paneIds: Set[PaneId],
+    inputs: RenderInputs
+  ): Boolean =
     bufferDrawState.synchronized {
       val next     = DrawState(paneIds, inputs)
       val previous = Option(bufferDrawState.get(persistenceKey))
@@ -251,7 +263,7 @@ object Renderer:
           !previous.contains(paneIds)
         }
 
-  private def mapAsScala(map: java.util.Map[AnyRef, Damage]): Map[AnyRef, Damage] =
+  private def mapAsScala(map: java.util.Map[SurfaceContentIdentity, Damage]): Map[SurfaceContentIdentity, Damage] =
     map.asScala.toMap
 
   /** Logical pixels map one-to-one onto canvas component pixels: the canvas scales the frame image back to its own
@@ -310,7 +322,7 @@ object Renderer:
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rect) for a
     // repaint bounded to the pane rows this frame actually changed.
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
-    val output        = Some(FrameOutput(swingWin.canvas, repaintRegion))
+    val output        = Some(FrameOutput(ScreenIdentity(swingWin.canvas), repaintRegion))
     val publishFrame: java.awt.image.BufferedImage => Unit =
       if repaintOnFlush then image => swingWin.onImageReady(image, repaintRegion.get().map(toAwtRectangle))
       else swingWin.onBaseImageReady
@@ -418,7 +430,7 @@ object Renderer:
     // The caret is composited from a separate overlay image, so this base frame is repainted whole every time; the
     // record is still kept up to date so the next frame knows what the screen is showing.
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
-    val output        = Some(FrameOutput(swingWin.canvas, repaintRegion))
+    val output        = Some(FrameOutput(ScreenIdentity(swingWin.canvas), repaintRegion))
     // The pooled acquirer is what lets this frame reuse the pixels of the last frame drawn into the same image; the
     // cursor rides on a separate overlay image, so the base frame here is pure pane content and chrome.
     val surface = Java2DRenderSurface.forFrame(
@@ -584,7 +596,7 @@ object Renderer:
   ): Option[PixelRect] =
     val state0        = withEffectiveTheme(state)
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
-    val output        = Some(FrameOutput(surface, repaintRegion))
+    val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
     val _ = withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
       renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics, output)
     ) { scene =>

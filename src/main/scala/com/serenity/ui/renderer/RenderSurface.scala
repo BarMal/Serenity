@@ -8,6 +8,17 @@ import com.serenity.config.PostProcessingEffect
 import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.theme.TextStyle
 
+/** Identity of the pixels a [[RenderSurface]] accumulates into. A newtype over the backing object's own reference
+  * identity (typically the image it draws into) rather than a bare `AnyRef`, so the render path's cache keys carry an
+  * asserted domain meaning instead of an untyped object reference. Erases to the wrapped value at runtime, so equality,
+  * hashing and weak-reference behaviour are exactly the backing object's own -- what a `WeakHashMap[AnyRef, _]` needs
+  * to track it correctly.
+  */
+opaque type SurfaceContentIdentity = AnyRef
+
+object SurfaceContentIdentity:
+  def apply(value: AnyRef): SurfaceContentIdentity = value
+
 trait RenderSurface:
 
   /** Identity of the pixels this surface accumulates into, when it preserves what earlier frames drew.
@@ -17,9 +28,9 @@ trait RenderSurface:
     * only skip redrawing unchanged content when a key is present. `None` — the default — means every frame starts from
     * unknown pixels and everything must be drawn.
     */
-  def persistentContentKey: Option[AnyRef]         = None
-  def setFont(font: Font): Unit                    = ()
-  def fontRenderContext: Option[FontRenderContext] = None
+  def persistentContentKey: Option[SurfaceContentIdentity] = None
+  def setFont(font: Font): Unit                            = ()
+  def fontRenderContext: Option[FontRenderContext]         = None
   def setForegroundColor(color: Color): Unit
   def setBackgroundColor(color: Color): Unit
   def getBackgroundColor: Color
