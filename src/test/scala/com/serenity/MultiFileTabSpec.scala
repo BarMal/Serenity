@@ -282,7 +282,9 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
     // When: Simulate session state capture
     val sessionData =
-      state.buffers.values.map(buffer => (buffer.document.filePath, buffer.document.content.collect(), buffer.document.isDirty)).toList
+      state.buffers.values
+        .map(buffer => (buffer.document.filePath, buffer.document.content.collect(), buffer.document.isDirty))
+        .toList
 
     // Then: Session data should contain all buffer information needed for restoration
     sessionData should have size 4 // Initial buffer + 2 file buffers + 1 untitled buffer

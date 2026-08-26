@@ -48,8 +48,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   private def markdownEditorState(mode: MarkdownViewMode): AppState =
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
     val baseBuffer = Buffer.fromString(bufferId, "# Rendered\n\n# Raw\ncontinued")
     val buffer = baseBuffer
       .copy(

@@ -14,6 +14,7 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 extension (buffer: com.serenity.state.models.Buffer)
+
   private def withEditing(
     f: com.serenity.state.models.EditingState => com.serenity.state.models.EditingState
   ): com.serenity.state.models.Buffer =
@@ -226,7 +227,8 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     val betaStyle = stateManager.getCurrentState
       .unsafeRunSync()
       .buffers(bufferId)
-      .richText.richTextDocument
+      .richText
+      .richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .map(_.style)

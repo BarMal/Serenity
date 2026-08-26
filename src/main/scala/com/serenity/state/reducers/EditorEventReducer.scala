@@ -426,12 +426,12 @@ object EditorEventReducer:
             else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = false))
             else reduceDeletion(buffer, currentState, wordForwardDeletion(_, head))
 
-          case MoveLeft          => navigate(cursor => moveCursorLeft(cursor, buffer.document.content))
-          case MoveRight         => navigate(cursor => moveCursorRight(cursor, buffer.document.content))
-          case MoveWordLeft      => navigate(cursor => wordBoundaryFrom(buffer, cursor, previousWordBoundary))
-          case MoveWordRight     => navigate(cursor => wordBoundaryFrom(buffer, cursor, nextWordBoundary))
-          case MoveToStart       => navigate(_.copy(column = 0))
-          case MoveToEnd         => navigate(cursor => cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
+          case MoveLeft      => navigate(cursor => moveCursorLeft(cursor, buffer.document.content))
+          case MoveRight     => navigate(cursor => moveCursorRight(cursor, buffer.document.content))
+          case MoveWordLeft  => navigate(cursor => wordBoundaryFrom(buffer, cursor, previousWordBoundary))
+          case MoveWordRight => navigate(cursor => wordBoundaryFrom(buffer, cursor, nextWordBoundary))
+          case MoveToStart   => navigate(_.copy(column = 0))
+          case MoveToEnd => navigate(cursor => cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
           case MoveToStartOfFile => navigate(_ => OriginCursor)
 
           case PageUp =>
@@ -535,7 +535,9 @@ object EditorEventReducer:
               ReducerResult.noEffects(currentState.copy(clipboard = Some(selectedTexts(buffer).mkString("\n"))))
             else
               val clipboardText =
-                distinctCursorLines(buffer).map(line => buffer.document.content.getLine(line).getOrElse("")).mkString("\n")
+                distinctCursorLines(buffer)
+                  .map(line => buffer.document.content.getLine(line).getOrElse(""))
+                  .mkString("\n")
               ReducerResult.noEffects(currentState.copy(clipboard = Some(clipboardText)))
 
           case Cut =>
@@ -549,7 +551,7 @@ object EditorEventReducer:
                 animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
               )
             else
-              val targetLines   = distinctCursorLines(buffer)
+              val targetLines = distinctCursorLines(buffer)
               val clipboardText =
                 targetLines.map(line => buffer.document.content.getLine(line).getOrElse("")).mkString("\n")
               val (updated, edits) = applyMultiCursorLineCut(buffer, targetLines)
@@ -587,7 +589,12 @@ object EditorEventReducer:
                 val (updatedBuffer, delta) =
                   addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
                 val effects =
-                  animationRemapEffects(buffer.id, buffer.document.content, updatedBuffer.document.content, List(replacementEdit)) ++
+                  animationRemapEffects(
+                    buffer.id,
+                    buffer.document.content,
+                    updatedBuffer.document.content,
+                    List(replacementEdit)
+                  ) ++
                     animationMergeEffects(buffer.id, delta)
                 ReducerResult(
                   currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)),
@@ -1343,7 +1350,8 @@ object EditorEventReducer:
     direction: Int
   ): CursorPosition =
     if wordWrapEnabled then
-      if direction < 0 then moveUpVisualLine(cursor, buffer.document.content, geometry.panelWidthColumns, preferredColumn)
+      if direction < 0 then
+        moveUpVisualLine(cursor, buffer.document.content, geometry.panelWidthColumns, preferredColumn)
       else moveDownVisualLine(cursor, buffer.document.content, geometry.panelWidthColumns, preferredColumn)
     else if direction < 0 then moveUpLogicalLine(cursor, buffer.document.content, preferredColumn)
     else moveDownLogicalLine(cursor, buffer.document.content, preferredColumn)
@@ -1707,7 +1715,8 @@ object EditorEventReducer:
         buffer.richText.insertionRichTextStyle
           .filter(_ => insertedText.nonEmpty)
           .map { style =>
-            val updatedContent = buffer.document.content.delete(startOffset, endOffset).insert(startOffset, insertedText)
+            val updatedContent =
+              buffer.document.content.delete(startOffset, endOffset).insert(startOffset, insertedText)
             updatedDocument
               .updateInlineStyle(
                 RichTextRange(

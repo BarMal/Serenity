@@ -12,7 +12,9 @@ object DocumentOutline:
 
   def forBuffer(buffer: Buffer): List[Symbol] =
     richTextHeadings(
-      buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(buffer.document.content.lineCount, buffer.document.content.weight))
+      buffer.richText.richTextDocument.filter(
+        _.matchesPlainTextShape(buffer.document.content.lineCount, buffer.document.content.weight)
+      )
     )
       .filter(_.nonEmpty) match
       case Some(symbols) => symbols

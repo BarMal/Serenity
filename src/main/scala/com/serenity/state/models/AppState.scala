@@ -232,14 +232,18 @@ final case class AppState(
       case (bufferId, buffer) =>
         lazy val index =
           val diagnostics = this.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
-          AnnotationLineIndex(buffer.annotations.documentComments.toVector, diagnostics.groupMap(_.range.start.line)(identity))
+          AnnotationLineIndex(
+            buffer.annotations.documentComments.toVector,
+            diagnostics.groupMap(_.range.start.line)(identity)
+          )
         bufferId -> (() => index)
     }.toMap
 
   lazy val markdownFenceIndexByBuffer: Map[BufferId, () => MarkdownBlockLens.FenceRangeIndex] =
     buffers.iterator.map {
       case (bufferId, buffer) =>
-        lazy val index = MarkdownBlockLens.fenceRangeIndex(buffer.document.content.lineCount, buffer.document.content.getLine)
+        lazy val index =
+          MarkdownBlockLens.fenceRangeIndex(buffer.document.content.lineCount, buffer.document.content.getLine)
         bufferId -> (() => index)
     }.toMap
 
@@ -296,7 +300,8 @@ final case class AppState(
         position
       case CursorInfoBarMode.Detailed =>
         val language = buffer.document.language.fold("Plain Text")(_.displayName)
-        val fileName = buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Unsaved")
+        val fileName =
+          buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Unsaved")
         s"$position | $language | $fileName"
 
   def floatingSurfaces: List[UiSurface] =

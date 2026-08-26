@@ -85,10 +85,12 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val zetaEndOffset = lines.take(6).map(_.length + 1).sum - 1
     val editedContent = before.buffers(bufferId).document.content.insert(zetaEndOffset, "X")
     val after =
-      before.copy(buffers = before.buffers.updated(
-        bufferId,
-        before.buffers(bufferId).copy(document = before.buffers(bufferId).document.copy(content = editedContent))
-      ))
+      before.copy(buffers =
+        before.buffers.updated(
+          bufferId,
+          before.buffers(bufferId).copy(document = before.buffers(bufferId).document.copy(content = editedContent))
+        )
+      )
 
     Renderer.render(before, cursorVisible = false, surface, viewport)
     surface.clear()
@@ -105,7 +107,9 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(buffers =
       before.buffers.updated(
         bufferId,
-        before.buffers(bufferId).copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(5, 0))))
+        before
+          .buffers(bufferId)
+          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(5, 0))))
       )
     )
 
@@ -123,7 +127,9 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val before  = stateWith(lines)
     val after = before.copy(
       buffers = before.buffers.view
-        .mapValues(buf => buf.copy(editing = buf.editing.copy(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4))))))
+        .mapValues(buf =>
+          buf.copy(editing = buf.editing.copy(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4)))))
+        )
         .toMap
     )
 
@@ -184,9 +190,14 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val edited = state.copy(buffers =
       state.buffers.updated(
         bufferId,
-        state.buffers(bufferId).copy(document =
-          state.buffers(bufferId).document.copy(content = state.buffers(bufferId).document.content.insert(zetaEndOffset, "X"))
-        )
+        state
+          .buffers(bufferId)
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(content = state.buffers(bufferId).document.content.insert(zetaEndOffset, "X"))
+          )
       )
     )
 
@@ -203,7 +214,9 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(buffers =
       before.buffers.updated(
         bufferId,
-        before.buffers(bufferId).copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 2))))
+        before
+          .buffers(bufferId)
+          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 2))))
       )
     )
 

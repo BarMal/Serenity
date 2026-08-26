@@ -197,7 +197,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
         bufferId,
         AppState.initial
           .buffers(bufferId)
-          .copy(document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\nb\nc\nd")))
+          .copy(document =
+            AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\nb\nc\nd"))
+          )
       )
     )
 
@@ -309,7 +311,10 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(document =
-            AppState.initial.buffers(bufferId).document.copy(content = NonCollectingRope(Rope("alpha needle beta\nneedle again")))
+            AppState.initial
+              .buffers(bufferId)
+              .document
+              .copy(content = NonCollectingRope(Rope("alpha needle beta\nneedle again")))
           )
       )
     )
@@ -431,7 +436,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
           AppState.initial
             .buffers(bufferId)
             .copy(
-              document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+              document =
+                AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
               editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5))),
               findState = Some(FindState("alpha", List(matchAt(0, 0)), 0))
             )
@@ -804,7 +810,10 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer = AppState.initial
       .buffers(BufferId(0))
       .copy(
-        document = AppState.initial.buffers(BufferId(0)).document.copy(content = com.serenity.rope.Rope("needle one\nneedle two\nplain"))
+        document = AppState.initial
+          .buffers(BufferId(0))
+          .document
+          .copy(content = com.serenity.rope.Rope("needle one\nneedle two\nplain"))
       )
     val initialState = AppState.initial.copy(
       buffers = AppState.initial.buffers + (BufferId(0) -> buffer),
@@ -842,7 +851,10 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer = AppState.initial
       .buffers(BufferId(0))
       .copy(
-        document = AppState.initial.buffers(BufferId(0)).document.copy(content = com.serenity.rope.Rope("needle one\nneedle two\nplain")),
+        document = AppState.initial
+          .buffers(BufferId(0))
+          .document
+          .copy(content = com.serenity.rope.Rope("needle one\nneedle two\nplain")),
         editing = AppState.initial
           .buffers(BufferId(0))
           .editing

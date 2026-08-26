@@ -72,13 +72,13 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = markdownDriver("markdown-multi-pane")
     driver
       .updateState { state =>
-        val original    = state.focusedBufferId.flatMap(state.buffers.get).getOrElse(fail("Expected Markdown buffer"))
-        val firstId     = BufferId(50)
+        val original = state.focusedBufferId.flatMap(state.buffers.get).getOrElse(fail("Expected Markdown buffer"))
+        val firstId  = BufferId(50)
         val firstBuffer = original.copy(
           id = firstId,
           editing = original.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(4, 0)))
         )
-        val secondId    = BufferId(99)
+        val secondId = BufferId(99)
         val secondBuffer = firstBuffer.copy(
           id = secondId,
           document = firstBuffer.document.copy(content = com.serenity.rope.Rope("# Other\n\nSecond pane paragraph.\n")),

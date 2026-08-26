@@ -18,8 +18,8 @@ private[perf] object BenchmarkFixtures:
   val viewportSize: ViewportSize = ViewportSize(120, 40)
 
   def editorState(content: String, language: Option[LanguageId]): AppState =
-    val paneId   = PaneId(0)
-    val bufferId = BufferId(1)
+    val paneId     = PaneId(0)
+    val bufferId   = BufferId(1)
     val baseBuffer = Buffer.fromString(bufferId, content)
     val buffer = baseBuffer
       .copy(
@@ -39,7 +39,9 @@ private[perf] object BenchmarkFixtures:
   def editorStateForRichDocument(document: RichTextDocument): AppState =
     val base = editorState(document.plainText, None)
     base.copy(buffers =
-      base.buffers.view.mapValues(buffer => buffer.copy(richText = buffer.richText.copy(richTextDocument = Some(document)))).toMap
+      base.buffers.view
+        .mapValues(buffer => buffer.copy(richText = buffer.richText.copy(richTextDocument = Some(document))))
+        .toMap
     )
 
   def deepViewport: Viewport =

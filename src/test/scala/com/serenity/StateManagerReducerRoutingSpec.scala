@@ -133,8 +133,8 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
       val stateManager = createStateManager()
       val bufferId     = com.serenity.state.models.BufferId(99)
       val paneId       = com.serenity.state.models.PaneId(0)
-      val baseBuffer = com.serenity.state.models.Buffer.fromString(bufferId, "val x = 100")
-      val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(filePath = Some(tempFile), isDirty = true))
+      val baseBuffer   = com.serenity.state.models.Buffer.fromString(bufferId, "val x = 100")
+      val buffer       = baseBuffer.copy(document = baseBuffer.document.copy(filePath = Some(tempFile), isDirty = true))
 
       stateManager
         .updateState { state =>
@@ -223,10 +223,14 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         state
-          .copy(buffers = state.buffers.updated(
-            bufferId,
-            state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(content = Rope("needle need")))
-          ))
+          .copy(buffers =
+            state.buffers.updated(
+              bufferId,
+              state
+                .buffers(bufferId)
+                .copy(document = state.buffers(bufferId).document.copy(content = Rope("needle need")))
+            )
+          )
       }
       .unsafeRunSync()
     stateManager.showModal(Modal.Find("", Nil, 0)).unsafeRunSync()
@@ -234,10 +238,12 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     "need".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager
       .updateState { state =>
-        state.copy(buffers = state.buffers.updated(
-          bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(content = Rope("other")))
-        ))
+        state.copy(buffers =
+          state.buffers.updated(
+            bufferId,
+            state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(content = Rope("other")))
+          )
+        )
       }
       .unsafeRunSync()
 

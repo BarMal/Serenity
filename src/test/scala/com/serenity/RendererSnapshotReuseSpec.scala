@@ -128,7 +128,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer =
       Buffer.fromString(bufferId, content).copy(editing = EditingState(cursors = List(CursorPosition(0, cursorCol))))
-    val pane     = EditorPane.withBuffer(paneId, bufferId)
+    val pane = EditorPane.withBuffer(paneId, bufferId)
     AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
@@ -185,8 +185,10 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val comment  = DocumentComment(CursorPosition(0, 0), CursorPosition(100000, 0), "wide")
     val buffer =
-      Buffer.fromString(bufferId, "content").copy(annotations = Annotations(documentComments = List.fill(10000)(comment)))
-    val state    = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
+      Buffer
+        .fromString(bufferId, "content")
+        .copy(annotations = Annotations(documentComments = List.fill(10000)(comment)))
+    val state = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
 
     val index = state.annotationIndexByBuffer(bufferId)()
 
@@ -203,7 +205,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       Buffer
         .fromString(bufferId, "content")
         .copy(annotations = Annotations(documentComments = (unrelated :+ visible).toList))
-    val state   = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
+    val state = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
 
     val result = state.annotationIndexByBuffer(bufferId)().commentsByLine(Set(100000))
 

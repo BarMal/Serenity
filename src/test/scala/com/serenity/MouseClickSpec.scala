@@ -88,7 +88,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -110,7 +112,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -540,7 +544,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -562,7 +568,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -644,7 +652,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown)))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown)))
         )
       )
     }.unsafeRunSync()
@@ -684,7 +694,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -711,7 +723,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -740,7 +754,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -799,7 +815,9 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
       state.copy(
         buffers = state.buffers.updated(
           bufferId,
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
         )
       )
     }.unsafeRunSync()
@@ -892,13 +910,16 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
-              editing = state.buffers(bufferId).editing.copy(
-                cursors = List(CursorPosition(0, 1), CursorPosition(2, 3)),
-                multiCursorVerticalStates = List(
-                  VerticalCursorState(CursorPosition(0, 1), 1, 1.0f),
-                  VerticalCursorState(CursorPosition(2, 3), 3, 3.0f)
+              editing = state
+                .buffers(bufferId)
+                .editing
+                .copy(
+                  cursors = List(CursorPosition(0, 1), CursorPosition(2, 3)),
+                  multiCursorVerticalStates = List(
+                    VerticalCursorState(CursorPosition(0, 1), 1, 1.0f),
+                    VerticalCursorState(CursorPosition(2, 3), 3, 3.0f)
+                  )
                 )
-              )
             )
         )
       )
@@ -932,11 +953,14 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
-              editing = state.buffers(bufferId).editing.copy(
-                cursors = List(first.focus, second.focus),
-                selection = Some(first),
-                selections = List(first, second)
-              )
+              editing = state
+                .buffers(bufferId)
+                .editing
+                .copy(
+                  cursors = List(first.focus, second.focus),
+                  selection = Some(first),
+                  selections = List(first, second)
+                )
             )
         )
       )

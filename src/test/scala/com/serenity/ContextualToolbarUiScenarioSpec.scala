@@ -46,10 +46,13 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.buffers(bufferId).editing.copy(
-              selection = Some(selection),
-              cursors = List(selection.focus)
-            )
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                selection = Some(selection),
+                cursors = List(selection.focus)
+              )
           )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
       }
@@ -82,10 +85,13 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.buffers(bufferId).editing.copy(
-              selection = Some(selection),
-              cursors = List(selection.focus)
-            )
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                selection = Some(selection),
+                cursors = List(selection.focus)
+              )
           )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
       }

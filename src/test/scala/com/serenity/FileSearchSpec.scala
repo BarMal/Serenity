@@ -248,7 +248,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       delegate = Rope(content),
       allowedLines = (0 to 100).toSet
     )
-    val base = AppState.initial
+    val base       = AppState.initial
     val baseBuffer = base.buffers(bufferId)
     val buffer = baseBuffer.copy(document =
       baseBuffer.document.copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
@@ -282,7 +282,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       delegate = Rope(content),
       allowedLines = (0 to 200).toSet
     )
-    val base = AppState.initial
+    val base       = AppState.initial
     val baseBuffer = base.buffers(bufferId)
     val buffer = baseBuffer.copy(document =
       baseBuffer.document.copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))

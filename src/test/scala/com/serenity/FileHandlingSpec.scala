@@ -506,7 +506,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       )
     )
     val plainBuffer = Buffer.fromString(BufferId(107), document.plainText)
-    val buffer = plainBuffer.copy(richText = plainBuffer.richText.copy(richTextDocument = Some(document)))
+    val buffer      = plainBuffer.copy(richText = plainBuffer.richText.copy(richTextDocument = Some(document)))
 
     try
       val saved = fileManager.saveBuffer(buffer, savedFile).unsafeRunSync()

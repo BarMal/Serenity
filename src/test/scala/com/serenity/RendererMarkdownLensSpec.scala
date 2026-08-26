@@ -17,8 +17,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "Renderer markdown lens" should "render the active markdown block as raw source" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
     val baseBuffer = Buffer.fromString(bufferId, "# Lens\n\n# Raw\ncontinued")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
@@ -77,8 +77,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render markdown preview as the inline lens base when the cursor is outside the viewport" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
     val baseBuffer = Buffer.fromString(bufferId, "# One\n# Two")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
@@ -157,8 +157,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render every active cursor markdown block as raw source" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
     val baseBuffer = Buffer.fromString(bufferId, "# First\nfirst body\n\n# Second\nsecond body\n\n# Third")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
@@ -204,8 +204,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not pull an adjacent heading into a raw paragraph lens when there is no blank line" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
     val baseBuffer = Buffer.fromString(bufferId, "# Title\nParagraph immediately after the heading")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
@@ -247,8 +247,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not draw a border around the raw source lens" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
     val baseBuffer = Buffer.fromString(bufferId, "# Preview\n\nRaw paragraph\ncontinued")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
@@ -805,8 +805,8 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     selection: Option[Selection] = None,
     viewportHeight: Int = 24
   ): (AppState, MockRenderSurface, CellMetrics) =
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
     val baseBuffer = Buffer.fromString(bufferId, source)
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),

@@ -44,7 +44,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "emit a save-buffer effect for an explicitly targeted pane" in {
-    val paneId = PaneId(4)
+    val paneId  = PaneId(4)
     val buffer0 = Buffer.fromString(BufferId(2), "val y = 99")
     val buffer = buffer0
       .copy(document = buffer0.document.copy(filePath = Some(Paths.get("target.scala")), isDirty = true))
@@ -69,7 +69,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
   it should "emit no save effect when the buffer has no file path" in {
     val buffer0 = Buffer.fromString(BufferId(3), "scratch")
     val buffer  = buffer0.copy(document = buffer0.document.copy(isDirty = true))
-    val state  = stateWithPaneBuffer(buffer)
+    val state   = stateWithPaneBuffer(buffer)
 
     val result = FileEventReducer.reduce(SaveFile, state)
 

@@ -79,7 +79,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       stateManager
         .updateState { state =>
           val existing = state.buffers(bufferId)
-          val buffer   = existing.copy(document = existing.document.copy(content = com.serenity.rope.Rope(bufferText), isDirty = true))
+          val buffer = existing
+            .copy(document = existing.document.copy(content = com.serenity.rope.Rope(bufferText), isDirty = true))
           state.copy(buffers = state.buffers + (bufferId -> buffer))
         }
         .unsafeRunSync()
@@ -322,7 +323,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         val existing = state.buffers(bufferId)
-        val buffer   = existing.copy(document = existing.document.copy(content = com.serenity.rope.Rope("remote draft"), isDirty = true))
+        val buffer = existing
+          .copy(document = existing.document.copy(content = com.serenity.rope.Rope("remote draft"), isDirty = true))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -358,7 +360,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       stateManager
         .updateState { state =>
           val existing = state.buffers(bufferId)
-          val buffer   = existing.copy(document = existing.document.copy(content = com.serenity.rope.Rope("undeliverable"), isDirty = true))
+          val buffer = existing
+            .copy(document = existing.document.copy(content = com.serenity.rope.Rope("undeliverable"), isDirty = true))
           state.copy(buffers = state.buffers + (bufferId -> buffer))
         }
         .unsafeRunSync()

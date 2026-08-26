@@ -254,7 +254,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   it should "drop stale rich text metadata for dirty buffers" in {
     val richDocument = RichTextDocument.oneParagraph("old text")
-    val baseBuffer = Buffer.fromString(BufferId(24), "edited text")
+    val baseBuffer   = Buffer.fromString(BufferId(24), "edited text")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(isDirty = true),
       richText = baseBuffer.richText.copy(richTextDocument = Some(richDocument))

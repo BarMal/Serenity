@@ -108,7 +108,9 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       finalState.buffers.size shouldBe 1
       finalState.layout.editorPanes.size shouldBe 1
       finalState.bufferOrder.size shouldBe 1
-      finalState.buffers.values.find(_.document.filePath.contains(selectedFile)).map(_.document.content.collect()) shouldBe Some(
+      finalState.buffers.values
+        .find(_.document.filePath.contains(selectedFile))
+        .map(_.document.content.collect()) shouldBe Some(
         "opened from launch option"
       )
       val paneId = finalState.layout.activeEditorPaneId.getOrElse(fail("Expected an active editor pane"))

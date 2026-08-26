@@ -242,7 +242,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     getState.buffers(bufferId).allSelections shouldBe Nil
 
   it should "restore viewport, find state, and empty-buffer state from undo snapshots" in new UndoFixture:
-    val bufferId = setupBuffer("alpha\nbeta\nalpha")
+    val bufferId      = setupBuffer("alpha\nbeta\nalpha")
     val initialBuffer = getState.buffers(bufferId)
     val beforeBuffer = initialBuffer
       .copy(

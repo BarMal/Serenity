@@ -134,7 +134,8 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     val transformations = List(
       // Transform 1: Update buffer content
       (state: AppState) =>
-        val updatedBuffer1 = state.buffers(buffer1).copy(document = state.buffers(buffer1).document.copy(isDirty = true))
+        val updatedBuffer1 =
+          state.buffers(buffer1).copy(document = state.buffers(buffer1).document.copy(isDirty = true))
         state.copy(buffers = state.buffers + (buffer1 -> updatedBuffer1))
       ,
       // Transform 2: Switch focus

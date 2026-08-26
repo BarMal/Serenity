@@ -228,9 +228,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "center blank buffer text by measured text font width" in {
-    val bufferId    = BufferId(1)
-    val paneId      = PaneId(1)
-    val bufferBase  = Buffer.fromString(bufferId, "")
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
+    val bufferBase = Buffer.fromString(bufferId, "")
     val buffer = bufferBase.copy(
       document = bufferBase.document.copy(isNewEmpty = false),
       viewport = Viewport.default.copy(visibleLines = 10)
@@ -292,9 +292,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use the text font line height for blank buffer placeholder text" in {
-    val bufferId    = BufferId(1)
-    val paneId      = PaneId(1)
-    val bufferBase  = Buffer.fromString(bufferId, "")
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
+    val bufferBase = Buffer.fromString(bufferId, "")
     val buffer = bufferBase.copy(
       document = bufferBase.document.copy(isNewEmpty = false),
       viewport = Viewport.default.copy(visibleLines = 10)
@@ -335,9 +335,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "center blank buffer placeholder text by measured line height" in {
-    val bufferId    = BufferId(1)
-    val paneId      = PaneId(1)
-    val bufferBase  = Buffer.fromString(bufferId, "")
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(1)
+    val bufferBase = Buffer.fromString(bufferId, "")
     val buffer = bufferBase.copy(
       document = bufferBase.document.copy(isNewEmpty = false),
       viewport = Viewport.default.copy(visibleLines = 10)

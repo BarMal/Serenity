@@ -23,11 +23,14 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
       .buffers(bufferId)
       .copy(
         document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
-        editing = AppState.initial.buffers(bufferId).editing.copy(
-          cursors = if selections.nonEmpty then selections.map(_.focus) else cursors,
-          selection = selections.headOption,
-          selections = selections
-        ),
+        editing = AppState.initial
+          .buffers(bufferId)
+          .editing
+          .copy(
+            cursors = if selections.nonEmpty then selections.map(_.focus) else cursors,
+            selection = selections.headOption,
+            selections = selections
+          ),
         viewport = viewport
       )
     AppState.initial.copy(buffers = AppState.initial.buffers.updated(bufferId, buffer))

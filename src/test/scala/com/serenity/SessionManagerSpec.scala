@@ -46,10 +46,10 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     else Nil
 
   private def dirtyStateWithText(text: String): AppState =
-    val initial  = AppState.initial
-    val bufferId = initial.bufferOrder.head
+    val initial     = AppState.initial
+    val bufferId    = initial.bufferOrder.head
     val plainBuffer = Buffer.fromString(bufferId, text)
-    val buffer   = plainBuffer.copy(document = plainBuffer.document.copy(isDirty = true))
+    val buffer      = plainBuffer.copy(document = plainBuffer.document.copy(isDirty = true))
     initial.copy(buffers = Map(bufferId -> buffer))
 
   private def stateWithText(text: String): AppState =
@@ -400,7 +400,9 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
     Files.readString(outsideFile) shouldBe "untouched"
     Files.exists(currentSessionFile(sessionRoot)) shouldBe true
-    sessionManager.loadSession().unsafeRunSync().map(_.buffers.values.head.document.content.toString) shouldBe Some("safe")
+    sessionManager.loadSession().unsafeRunSync().map(_.buffers.values.head.document.content.toString) shouldBe Some(
+      "safe"
+    )
   }
 
   it should "reject a hostile session id before canonicalizing its filename" in {

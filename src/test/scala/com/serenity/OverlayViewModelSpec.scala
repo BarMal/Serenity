@@ -90,7 +90,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "space command palette item slots without spacing other overlay content" in {
-    val buffer = Buffer.fromString(bufferId, "one\ntwo\nthree").copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
+    val buffer =
+      Buffer.fromString(bufferId, "one\ntwo\nthree").copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane   = EditorPane.withBuffer(paneId, bufferId)
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(

@@ -302,7 +302,9 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
         .copy(buffers =
           state.buffers.updated(
             bufferId,
-            state.buffers(bufferId).copy(annotations = state.buffers(bufferId).annotations.copy(documentComments = List(comment)))
+            state
+              .buffers(bufferId)
+              .copy(annotations = state.buffers(bufferId).annotations.copy(documentComments = List(comment)))
           )
         )
     ).unsafeRunSync()
@@ -340,7 +342,9 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
         .copy(buffers =
           state.buffers.updated(
             bufferId,
-            state.buffers(bufferId).copy(annotations = state.buffers(bufferId).annotations.copy(documentComments = List(comment)))
+            state
+              .buffers(bufferId)
+              .copy(annotations = state.buffers(bufferId).annotations.copy(documentComments = List(comment)))
           )
         )
     ).unsafeRunSync()

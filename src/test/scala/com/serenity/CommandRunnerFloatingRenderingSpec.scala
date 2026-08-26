@@ -348,7 +348,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
-    val pane   = EditorPane.withBuffer(paneId, bufferId)
+    val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),

@@ -224,8 +224,9 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, "alpha beta gamma")
       .copy(
         editing = EditingState(cursors = List(CursorPosition(0, 0))),
-        annotations =
-          Annotations(documentComments = List(DocumentComment(CursorPosition(0, 6), CursorPosition(0, 10), "Review this")))
+        annotations = Annotations(documentComments =
+          List(DocumentComment(CursorPosition(0, 6), CursorPosition(0, 10), "Review this"))
+        )
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
@@ -262,8 +263,9 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, "alpha beta gamma")
       .copy(
         editing = EditingState(cursors = List(CursorPosition(0, 7))),
-        annotations =
-          Annotations(documentComments = List(DocumentComment(CursorPosition(0, 6), CursorPosition(0, 10), "Review this")))
+        annotations = Annotations(documentComments =
+          List(DocumentComment(CursorPosition(0, 6), CursorPosition(0, 10), "Review this"))
+        )
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
@@ -335,8 +337,9 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, "alpha")
       .copy(
         editing = EditingState(cursors = List(CursorPosition(0, 0))),
-        annotations =
-          Annotations(documentComments = List(DocumentComment(CursorPosition(0, 5), CursorPosition(0, 5), "Point note")))
+        annotations = Annotations(documentComments =
+          List(DocumentComment(CursorPosition(0, 5), CursorPosition(0, 5), "Point note"))
+        )
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(

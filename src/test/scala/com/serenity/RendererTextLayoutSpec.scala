@@ -33,8 +33,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     textFontOverride: Option[Font] = None,
     config: AppConfig = AppConfig.default.withLineNumbers(false).withGutter(false)
   ): MockRenderSurface =
-    val paneId   = PaneId(0)
-    val bufferId = BufferId(1)
+    val paneId     = PaneId(0)
+    val bufferId   = BufferId(1)
     val bufferBase = Buffer.fromString(bufferId, content)
     val buffer = bufferBase.copy(
       document = bufferBase.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
@@ -90,13 +90,12 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
   it should "render wrapped continuation indicators after vertical visual scrolling" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
-    val buffer = {
+    val buffer =
       val base = Buffer.fromString(bufferId, "alpha beta gamma delta epsilon\nnext")
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.JsonLang)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4, topVisualLine = 1)
       )
-    }
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -124,10 +123,9 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val title    = "api-spec.json"
-    val buffer = {
+    val buffer =
       val base = Buffer.fromString(bufferId, "content")
       base.copy(document = base.document.copy(filePath = Some(Path.of(title))))
-    }
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
@@ -294,7 +292,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val textFont   = Font(Font.SANS_SERIF, Font.PLAIN, 18)
     val cellMetric = CellMetrics.fromFont(codeFont)
     val text       = "W" * 32
-    val buffer = {
+    val buffer =
       val base = Buffer.fromString(bufferId, text)
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
@@ -303,7 +301,6 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
           selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, text.length)))
         )
       )
-    }
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
@@ -335,13 +332,12 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val font     = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
-    val buffer = {
+    val buffer =
       val base = Buffer.fromString(bufferId, "iW")
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
         editing = base.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
-    }
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
@@ -366,13 +362,12 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val font     = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
-    val buffer = {
+    val buffer =
       val base = Buffer.fromString(bufferId, "iW")
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
         editing = base.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
-    }
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
@@ -404,13 +399,12 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val font     = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
     val activeColor   = new Color(0x33, 0x66, 0xcc)
     val inactiveColor = new Color(0xcc, 0x66, 0x33)
-    val buffer = {
+    val buffer =
       val base = Buffer.fromString(bufferId, "iW")
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
         editing = base.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
-    }
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
@@ -442,13 +436,12 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     blinkOff.clear()
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
-    val buffer = {
+    val buffer =
       val base = Buffer.fromString(bufferId, "iW")
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
         editing = base.editing.copy(cursors = List(CursorPosition(0, 1)))
       )
-    }
     val state = AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),

@@ -89,11 +89,14 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content =
-              com.serenity.rope.Rope(
-                "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu\nnu xi omicron pi rho sigma tau"
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content =
+                com.serenity.rope.Rope(
+                  "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu\nnu xi omicron pi rho sigma tau"
+                )
               )
-            )
           )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
       }
@@ -413,7 +416,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(List.fill(12)("toolbar target").mkString("\n"))),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope(List.fill(12)("toolbar target").mkString("\n"))),
             editing = state.buffers(bufferId).editing.copy(selection = None, cursors = List(CursorPosition(8, 4)))
           )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
@@ -446,7 +452,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(List.fill(20)("toolbar selection target").mkString("\n"))),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope(List.fill(20)("toolbar selection target").mkString("\n"))),
             editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
@@ -476,7 +485,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(List.fill(20)("x" * 140).mkString("\n"))),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope(List.fill(20)("x" * 140).mkString("\n"))),
             editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
@@ -506,7 +518,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(List.fill(12)("toolbar selection target").mkString("\n"))),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope(List.fill(12)("toolbar selection target").mkString("\n"))),
             editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(buffers = state.buffers.updated(bufferId, buffer))
@@ -535,7 +550,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(List.fill(40)("toolbar target").mkString("\n"))),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope(List.fill(40)("toolbar target").mkString("\n"))),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(30, 4))),
             viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 120)
           )
@@ -720,7 +738,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val bufferId = activeBufferId(after)
     after
       .buffers(bufferId)
-      .richText.richTextDocument
+      .richText
+      .richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .map(_.style.marks)
@@ -762,7 +781,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val bufferId = activeBufferId(after)
     after
       .buffers(bufferId)
-      .richText.richTextDocument
+      .richText
+      .richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .map(_.style.marks)
@@ -863,7 +883,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val bufferId = activeBufferId(state)
     state
       .buffers(bufferId)
-      .richText.richTextDocument
+      .richText
+      .richTextDocument
       .flatMap(_.paragraphs.headOption)
       .map(_.role)
       .shouldBe(Some(ParagraphRole.Heading(1)))
@@ -904,7 +925,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val bufferId = activeBufferId(state)
     state
       .buffers(bufferId)
-      .richText.richTextDocument
+      .richText
+      .richTextDocument
       .flatMap(_.paragraphs.headOption)
       .map(_.role)
       .shouldBe(Some(ParagraphRole.Heading(4)))
@@ -944,7 +966,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val bufferId = activeBufferId(state)
     state
       .buffers(bufferId)
-      .richText.richTextDocument
+      .richText
+      .richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .flatMap(_.style.color)
@@ -1478,7 +1501,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
           .buffers(bufferId)
           .copy(
             document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus)),
+            editing =
+              state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus)),
             richText = state.buffers(bufferId).richText.copy(richTextDocument = Some(document))
           )
         state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))

@@ -14,7 +14,10 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   "CommentRendering" should "extract raw and inline markdown views from line comments" in {
     val base = Buffer.fromString(BufferId(1), "val x = 1\n// **Important** note")
     val buffer = base
-      .copy(document = base.document.copy(language = Some(LanguageId.Scala)), editing = base.editing.copy(cursors = List(CursorPosition(1, 4))))
+      .copy(
+        document = base.document.copy(language = Some(LanguageId.Scala)),
+        editing = base.editing.copy(cursors = List(CursorPosition(1, 4)))
+      )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -26,7 +29,10 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   it should "extract block comments from code buffers" in {
     val base = Buffer.fromString(BufferId(1), "/* _Draft_ note */")
     val buffer = base
-      .copy(document = base.document.copy(language = Some(LanguageId.JavaScript)), editing = base.editing.copy(cursors = List(CursorPosition(0, 3))))
+      .copy(
+        document = base.document.copy(language = Some(LanguageId.JavaScript)),
+        editing = base.editing.copy(cursors = List(CursorPosition(0, 3)))
+      )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -45,7 +51,10 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
         |val y = 2""".stripMargin
     )
     val buffer = base
-      .copy(document = base.document.copy(language = Some(LanguageId.Scala)), editing = base.editing.copy(cursors = List(CursorPosition(2, 6))))
+      .copy(
+        document = base.document.copy(language = Some(LanguageId.Scala)),
+        editing = base.editing.copy(cursors = List(CursorPosition(2, 6)))
+      )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -57,7 +66,10 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   it should "extract prose comments from markdown buffers" in {
     val base = Buffer.fromString(BufferId(1), "<!-- **Review** this paragraph -->")
     val buffer = base
-      .copy(document = base.document.copy(language = Some(LanguageId.Markdown)), editing = base.editing.copy(cursors = List(CursorPosition(0, 8))))
+      .copy(
+        document = base.document.copy(language = Some(LanguageId.Markdown)),
+        editing = base.editing.copy(cursors = List(CursorPosition(0, 8)))
+      )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -70,13 +82,15 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = base
       .copy(
         editing = base.editing.copy(cursors = List(CursorPosition(0, 4))),
-        annotations = base.annotations.copy(documentComments = List(
-          DocumentComment(
-            anchor = CursorPosition(0, 0),
-            focus = CursorPosition(0, 7),
-            text = "**Tighten** this opening."
+        annotations = base.annotations.copy(documentComments =
+          List(
+            DocumentComment(
+              anchor = CursorPosition(0, 0),
+              focus = CursorPosition(0, 7),
+              text = "**Tighten** this opening."
+            )
           )
-        ))
+        )
       )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
@@ -96,7 +110,10 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
         |-->""".stripMargin
     )
     val buffer = base
-      .copy(document = base.document.copy(language = Some(LanguageId.Markdown)), editing = base.editing.copy(cursors = List(CursorPosition(2, 4))))
+      .copy(
+        document = base.document.copy(language = Some(LanguageId.Markdown)),
+        editing = base.editing.copy(cursors = List(CursorPosition(2, 4)))
+      )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
 
@@ -108,7 +125,10 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   it should "return no comment for ordinary source lines" in {
     val base = Buffer.fromString(BufferId(1), "val x = 1")
     val buffer = base
-      .copy(document = base.document.copy(language = Some(LanguageId.Scala)), editing = base.editing.copy(cursors = List(CursorPosition(0, 0))))
+      .copy(
+        document = base.document.copy(language = Some(LanguageId.Scala)),
+        editing = base.editing.copy(cursors = List(CursorPosition(0, 0)))
+      )
 
     CommentRendering.atCursor(buffer) shouldBe None
   }
@@ -122,7 +142,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
       }
       .mkString("\n")
     val guardedContent = GuardedGetLineRope(Rope(source), allowedLines = Set(targetLine))
-    val base = Buffer.fromString(BufferId(1), "")
+    val base           = Buffer.fromString(BufferId(1), "")
     val buffer = base
       .copy(
         document = base.document.copy(content = guardedContent, language = Some(LanguageId.Scala)),

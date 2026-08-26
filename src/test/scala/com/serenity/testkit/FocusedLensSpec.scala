@@ -61,7 +61,9 @@ class FocusedLensSpec extends AnyFlatSpec with Matchers:
 
   it should "absorb a missing focus rather than making the caller match" in {
     Focused.bufferOf(unfocusedState) shouldBe None
-    run(unfocusedState)(Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = true)))) shouldBe unfocusedState
+    run(unfocusedState)(
+      Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = true)))
+    ) shouldBe unfocusedState
   }
 
   it should "leave other buffers untouched" in {
@@ -76,10 +78,13 @@ class FocusedLensSpec extends AnyFlatSpec with Matchers:
   "Focused.bufferWithId" should "satisfy the same laws for an addressed buffer" in {
     run(focusedState)(Focused.modifyBufferWithId(bufferId)(identity)) shouldBe focusedState
 
-    val marked = run(focusedState)(Focused.modifyBufferWithId(bufferId)(b => b.copy(document = b.document.copy(isDirty = true))))
+    val marked =
+      run(focusedState)(Focused.modifyBufferWithId(bufferId)(b => b.copy(document = b.document.copy(isDirty = true))))
     marked.buffers(bufferId).document.isDirty shouldBe true
 
-    run(focusedState)(Focused.modifyBufferWithId(BufferId(99))(b => b.copy(document = b.document.copy(isDirty = true)))) shouldBe focusedState
+    run(focusedState)(
+      Focused.modifyBufferWithId(BufferId(99))(b => b.copy(document = b.document.copy(isDirty = true)))
+    ) shouldBe focusedState
   }
 
   "Focused.pane" should "satisfy get-put, put-get and put-put" in {
@@ -108,7 +113,7 @@ class FocusedLensSpec extends AnyFlatSpec with Matchers:
     val transition =
       for
         maybeBuffer <- Focused.buffer
-        _ <- Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = maybeBuffer.isDefined)))
+        _           <- Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = maybeBuffer.isDefined)))
       yield ()
 
     run(focusedState)(transition).buffers(bufferId).document.isDirty shouldBe true

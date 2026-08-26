@@ -35,7 +35,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   "MouseTargetLayoutKey" should "ignore cursor and selection changes during mouse drags" in {
     val plainBuffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma")
     val buffer      = plainBuffer.copy(editing = plainBuffer.editing.copy(cursors = List(CursorPosition(0, 1))))
-    val state = stateWith(buffer)
+    val state       = stateWith(buffer)
     val draggedState = state.copy(
       buffers = state.buffers.updated(
         bufferId,
@@ -188,9 +188,9 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   it should "invalidate prepared snapshots when font, typography, language, viewport, or rich text changes" in {
     val plainBuffer = Buffer.fromString(bufferId, "alpha beta")
     val buffer      = plainBuffer.copy(document = plainBuffer.document.copy(language = Some(LanguageId.Scala)))
-    val state = stateWith(buffer)
-    val size  = ViewportSize(80, 24)
-    val key   = MouseTargetLayoutKey.from(state, size)
+    val state       = stateWith(buffer)
+    val size        = ViewportSize(80, 24)
+    val key         = MouseTargetLayoutKey.from(state, size)
 
     val fontChanged     = stateWith(buffer, state.config.withFontConfig(state.config.fontConfig.copy(fontSize = 14.0f)))
     val languageChanged = stateWith(buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown))))
@@ -198,7 +198,9 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val viewportChanged = stateWith(buffer.copy(viewport = buffer.viewport.copy(topVisualLine = 1)))
     val richTextChanged = stateWith(
       buffer.copy(richText =
-        buffer.richText.copy(richTextDocument = Some(com.serenity.richtext.RichTextDocument.fromPlainText("alpha beta")))
+        buffer.richText.copy(richTextDocument =
+          Some(com.serenity.richtext.RichTextDocument.fromPlainText("alpha beta"))
+        )
       )
     )
 

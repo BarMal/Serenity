@@ -428,11 +428,11 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       List("draft/G"),
       List("SET UTF-8")
     )
-    val config   = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
-    val bufferId = BufferId(0)
+    val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val bufferId   = BufferId(0)
     val baseBuffer = AppState.initial.buffers(bufferId)
-    val buffer   = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("drafting")))
-    val uri      = SpellChecker.diagnosticsUri(buffer)
+    val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("drafting")))
+    val uri        = SpellChecker.diagnosticsUri(buffer)
     val staleState = AppState.initial.copy(
       config = AppConfig.default.withSpellCheck(config),
       buffers = Map(bufferId -> buffer)

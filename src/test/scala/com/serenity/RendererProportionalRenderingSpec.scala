@@ -26,11 +26,11 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
   private val viewportSize = ViewportSize(80, 24)
 
   private def buildState(content: String, language: Option[LanguageId] = None): AppState =
-    val paneId   = PaneId(0)
-    val bufferId = BufferId(1)
+    val paneId     = PaneId(0)
+    val bufferId   = BufferId(1)
     val baseBuffer = Buffer.fromString(bufferId, content)
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(language = language))
-    val pane     = EditorPane.withBuffer(paneId, bufferId)
+    val pane       = EditorPane.withBuffer(paneId, bufferId)
     AppState.initial.copy(
       buffers = Map(bufferId -> buffer),
       bufferOrder = List(bufferId),
@@ -94,8 +94,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render proportional selections with highlight colors via drawRunPx" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(0)
+    val bufferId   = BufferId(1)
+    val paneId     = PaneId(0)
     val baseBuffer = Buffer.fromString(bufferId, "hello markdown")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),

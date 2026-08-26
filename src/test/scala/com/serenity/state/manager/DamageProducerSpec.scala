@@ -54,7 +54,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(buffers =
       before.buffers.updated(
         bufferId,
-        before.buffers(bufferId).copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 3))))
+        before
+          .buffers(bufferId)
+          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 3))))
       )
     )
 
@@ -74,7 +76,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         bufferId,
         before
           .buffers(bufferId)
-          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2), CursorPosition(2, 0))))
+          .copy(editing =
+            before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2), CursorPosition(2, 0)))
+          )
       )
     )
 
@@ -90,7 +94,10 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before
           .buffers(bufferId)
           .copy(editing =
-            before.buffers(bufferId).editing.copy(selection = Some(Selection(CursorPosition(1, 0), CursorPosition(3, 2))))
+            before
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(Selection(CursorPosition(1, 0), CursorPosition(3, 2))))
           )
       )
     )
@@ -106,7 +113,10 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before
           .buffers(bufferId)
           .copy(editing =
-            before.buffers(bufferId).editing.copy(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
+            before
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
           )
       )
     )
@@ -116,7 +126,10 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         withSelection
           .buffers(bufferId)
           .copy(editing =
-            withSelection.buffers(bufferId).editing.copy(selection = Some(Selection(CursorPosition(2, 0), CursorPosition(2, 5))))
+            withSelection
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(Selection(CursorPosition(2, 0), CursorPosition(2, 5))))
           )
       )
     )
@@ -130,7 +143,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(buffers =
       before.buffers.updated(
         bufferId,
-        before.buffers(bufferId).copy(annotations = before.buffers(bufferId).annotations.copy(documentComments = List(comment)))
+        before
+          .buffers(bufferId)
+          .copy(annotations = before.buffers(bufferId).annotations.copy(documentComments = List(comment)))
       )
     )
 
@@ -156,7 +171,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(buffers =
       before.buffers.updated(
         bufferId,
-        before.buffers(bufferId).copy(document = before.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        before
+          .buffers(bufferId)
+          .copy(document = before.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
       )
     )
 
@@ -276,7 +293,10 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
   it should "report PaneChrome damage when a buffer's dirty flag toggles" in {
     val before = stateWithContent("alpha")
     val after = before.copy(buffers =
-      before.buffers.updated(bufferId, before.buffers(bufferId).copy(document = before.buffers(bufferId).document.copy(isDirty = true)))
+      before.buffers.updated(
+        bufferId,
+        before.buffers(bufferId).copy(document = before.buffers(bufferId).document.copy(isDirty = true))
+      )
     )
 
     DamageProducer.forTransition(before, after) shouldBe Damage.PaneChrome(activePaneId)
@@ -328,7 +348,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(buffers =
       before.buffers.updated(
         bufferId,
-        before.buffers(bufferId).copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2))))
+        before
+          .buffers(bufferId)
+          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2))))
       )
     )
 
@@ -357,7 +379,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(buffers =
       before.buffers.updated(
         otherId,
-        before.buffers(otherId).copy(editing = before.buffers(otherId).editing.copy(cursors = List(CursorPosition(1, 0))))
+        before
+          .buffers(otherId)
+          .copy(editing = before.buffers(otherId).editing.copy(cursors = List(CursorPosition(1, 0))))
       )
     )
 
@@ -365,34 +389,38 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report the damaged row for a single-character edit on one line" in {
-    val before       = stateWithContent("alpha\nbeta\ngamma")
+    val before = stateWithContent("alpha\nbeta\ngamma")
     val editedBuffer = before
       .buffers(bufferId)
-      .copy(document = before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(1, "X")))
-    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+      .copy(document =
+        before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(1, "X"))
+      )
+    val after = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
 
     DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0))
   }
 
   it should "report every damaged row for an edit spanning a newline" in {
-    val before       = stateWithContent("alpha\nbeta\ngamma")
+    val before = stateWithContent("alpha\nbeta\ngamma")
     val editedBuffer = before
       .buffers(bufferId)
       .copy(document =
         before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(7, "X\nY"))
       )
-    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+    val after = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
 
     // "alpha\nbeX\nYta\ngamma" -- the insertion at offset 7 (into "beta", the second line) spans into a new line.
     DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(1, 2))
   }
 
   it should "report the deletion's line even though the deleted range is empty in the result" in {
-    val before       = stateWithContent("helloXworld")
+    val before = stateWithContent("helloXworld")
     val editedBuffer = before
       .buffers(bufferId)
-      .copy(document = before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.delete(5, 6)))
-    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+      .copy(document =
+        before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.delete(5, 6))
+      )
+    val after = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
 
     DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0))
   }
@@ -421,10 +449,12 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report Everything when a theme change accompanies a content edit, since Everything subsumes it" in {
-    val before       = stateWithContent("alpha\nbeta")
+    val before = stateWithContent("alpha\nbeta")
     val editedBuffer = before
       .buffers(bufferId)
-      .copy(document = before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(0, "X")))
+      .copy(document =
+        before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(0, "X"))
+      )
     val after = before
       .copy(buffers = before.buffers.updated(bufferId, editedBuffer))
       .copy(theme = if before.theme == Theme.dark then Theme.light else Theme.dark)
@@ -433,24 +463,26 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report BufferCells for a single-line edit on a monospaced buffer when granularity is Cells" in {
-    val before       = cellsEligibleState("alpha\nbeta\ngamma")
+    val before = cellsEligibleState("alpha\nbeta\ngamma")
     val editedBuffer = before
       .buffers(bufferId)
-      .copy(document = before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(1, "X")))
-    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+      .copy(document =
+        before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(1, "X"))
+      )
+    val after = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
 
     DamageProducer
       .forTransition(before, after) shouldBe Damage.BufferCells(bufferId, row = 0, fromColumn = 1, toColumn = Some(2))
   }
 
   it should "still report BufferRows under Cells granularity when the edit spans more than one row" in {
-    val before       = cellsEligibleState("alpha\nbeta\ngamma")
+    val before = cellsEligibleState("alpha\nbeta\ngamma")
     val editedBuffer = before
       .buffers(bufferId)
       .copy(document =
         before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(7, "X\nY"))
       )
-    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+    val after = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
 
     DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(1, 2))
   }
@@ -461,8 +493,10 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     )
     val editedBuffer = before
       .buffers(bufferId)
-      .copy(document = before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(1, "X")))
-    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+      .copy(document =
+        before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(1, "X"))
+      )
+    val after = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
 
     before.buffers(bufferId).document.language shouldBe None
     DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0))
@@ -478,8 +512,10 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     )
     val editedBuffer = before
       .buffers(bufferId)
-      .copy(document = before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(1, "X")))
-    val after        = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
+      .copy(document =
+        before.buffers(bufferId).document.copy(content = before.buffers(bufferId).document.content.insert(1, "X"))
+      )
+    val after = before.copy(buffers = before.buffers.updated(bufferId, editedBuffer))
 
     before.config.surfaceConfig.renderDamageGranularity shouldBe RenderDamageGranularity.Rows
     DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0))
@@ -507,7 +543,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
       val after = before.copy(buffers =
         before.buffers.updated(
           bufferId,
-          before.buffers(bufferId).copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 0))))
+          before
+            .buffers(bufferId)
+            .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 0))))
         )
       )
 
@@ -522,7 +560,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(buffers =
       before.buffers.updated(
         bufferId,
-        before.buffers(bufferId).copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 0))))
+        before
+          .buffers(bufferId)
+          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 0))))
       )
     )
 
@@ -536,7 +576,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(buffers =
       before.buffers.updated(
         bufferId,
-        before.buffers(bufferId).copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))))
+        before
+          .buffers(bufferId)
+          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))))
       )
     )
 

@@ -220,7 +220,10 @@ object TextLayoutSnapshot:
         loop(lines.tail, acc ++ aligned)
 
     val maxLogicalLines = math.min(math.max(0, totalLines - buffer.viewport.topLine), math.max(1, visualLineLimit))
-    loop(buffer.document.content.linesIteratorFrom(buffer.viewport.topLine).take(maxLogicalLines).toVector, Vector.empty)
+    loop(
+      buffer.document.content.linesIteratorFrom(buffer.viewport.topLine).take(maxLogicalLines).toVector,
+      Vector.empty
+    )
 
   private def unwrappedVisibleSlice(rawLine: String, startColumn: Int, visibleColumns: Int): String =
     val visibleEndColumn = startColumn + math.max(1, visibleColumns) + UnwrappedOverscanColumns

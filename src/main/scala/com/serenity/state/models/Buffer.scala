@@ -140,7 +140,12 @@ final case class Buffer(
       })
     else
       NonEmptyList.one(
-        Cursor(editing.cursors.headOption.getOrElse(CursorPosition(0, 0)), None, editing.preferredColumn, editing.preferredXPx)
+        Cursor(
+          editing.cursors.headOption.getOrElse(CursorPosition(0, 0)),
+          None,
+          editing.preferredColumn,
+          editing.preferredXPx
+        )
       )
 
   /** The inverse of [[cursorList]]: repackages a cursor list back into this buffer's five cursor-shaped fields, leaving

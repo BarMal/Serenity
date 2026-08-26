@@ -62,7 +62,9 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       _ =
         openFileState.startPageSurface shouldBe None
         openFileState.modalSurface shouldBe None
-        openFileState.buffers.values.find(_.document.filePath.contains(selectedFile)).map(_.document.content.collect()) shouldBe Some(
+        openFileState.buffers.values
+          .find(_.document.filePath.contains(selectedFile))
+          .map(_.document.content.collect()) shouldBe Some(
           "opened from startup options"
         )
         openFileState.focus should matchPattern { case Focus.EditorPane(_) => }

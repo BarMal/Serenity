@@ -30,9 +30,9 @@ class HorizontalScrollingRegressionSpec extends AnyFlatSpec with Matchers:
           config = current.config.withWordWrap(false),
           buffers = current.buffers.updated(
             bufferId,
-            current.buffers(bufferId).copy(document =
-              current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala))
-            )
+            current
+              .buffers(bufferId)
+              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
           )
         )
       }

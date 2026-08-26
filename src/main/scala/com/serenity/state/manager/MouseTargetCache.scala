@@ -178,7 +178,9 @@ private[manager] object MouseTargetLayoutKey:
       },
       lineNumberContent =
         if state.config.showLineNumbers then
-          state.buffers.toList.sortBy(_._1.value).map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
+          state.buffers.toList
+            .sortBy(_._1.value)
+            .map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
         else Nil
     )
 

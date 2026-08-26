@@ -1994,7 +1994,9 @@ object Renderer:
       Option.when(clippedStart < clippedEnd)(clippedStart -> clippedEnd)
 
   private def isInlineMarkdownLens(buffer: Buffer, state: AppState): Boolean =
-    buffer.document.language.contains(LanguageId.Markdown) && state.config.markdownViewMode == MarkdownViewMode.InlineLens
+    buffer.document.language.contains(
+      LanguageId.Markdown
+    ) && state.config.markdownViewMode == MarkdownViewMode.InlineLens
 
   private def markdownLensFrameFor(buffer: Buffer, snapshot: TextLayoutSnapshot): MarkdownLensFrame =
     val previewWindow = markdownPreviewWindow(buffer, buffer.viewport.visibleLines)
@@ -2082,7 +2084,9 @@ object Renderer:
       val activeBlock     = activeLine.map(line => FocusedTextBody.markdownBlock(buffer, line))
       val viewportTopLine = buffer.viewport.topLine.max(0).min(lineCount - 1)
       val windowTopLine = activeLine
-        .filter(line => line == viewportTopLine && line > 0 && buffer.document.content.getLine(line).exists(_.trim.isEmpty))
+        .filter(line =>
+          line == viewportTopLine && line > 0 && buffer.document.content.getLine(line).exists(_.trim.isEmpty)
+        )
         .filter(line => buffer.document.content.getLine(line - 1).exists(_.trim.matches("^#{1,6}\\s+.*")))
         .map(_ - 1)
         .getOrElse(viewportTopLine)

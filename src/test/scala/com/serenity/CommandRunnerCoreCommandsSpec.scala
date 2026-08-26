@@ -162,9 +162,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val selected = state
           .buffers(bufferId)
           .copy(
-            editing = state.buffers(bufferId).editing.copy(
-              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
-            )
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> selected))
       }
@@ -387,7 +390,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         val buffer =
-          state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("wurld")))
+          state
+            .buffers(bufferId)
+            .copy(document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("wurld")))
         state.copy(
           buffers = state.buffers + (bufferId -> buffer),
           config = state.config.withSpellCheck(SpellCheckConfig(enabled = false))
@@ -421,11 +426,14 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("saved through dialog"),
-              filePath = Some(filePath),
-              isDirty = true
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("saved through dialog"),
+                filePath = Some(filePath),
+                isDirty = true
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -473,10 +481,15 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(document = state.buffers(bufferId).document.copy(
-            content = com.serenity.rope.Rope("no dialog here"),
-            filePath = Some(Path.of("temp", "notes.scala"))
-          ))
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("no dialog here"),
+                filePath = Some(Path.of("temp", "notes.scala"))
+              )
+          )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -555,12 +568,17 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val buffer = state
           .buffers(bufferId)
-          .copy(document = state.buffers(bufferId).document.copy(
-            content = com.serenity.rope.Rope.empty,
-            filePath = None,
-            isDirty = false,
-            isNewEmpty = false
-          ))
+          .copy(document =
+            state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope.empty,
+                filePath = None,
+                isDirty = false,
+                isNewEmpty = false
+              )
+          )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -705,10 +723,16 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
-            annotations = state.buffers(bufferId).annotations.copy(
-              documentComments = List(DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this"))
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
+            annotations = state
+              .buffers(bufferId)
+              .annotations
+              .copy(
+                documentComments = List(DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this"))
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -738,10 +762,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-              language = Some(LanguageId.Markdown)
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+                language = Some(LanguageId.Markdown)
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -777,10 +804,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two\n\nText\n\n### Beat Three"),
-              language = Some(LanguageId.Markdown)
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two\n\nText\n\n### Beat Three"),
+                language = Some(LanguageId.Markdown)
+              ),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -804,12 +834,15 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope(
-                "# Chapter One\n\nBody\n\nMore\n\nStill more\n\nEven more\n\n## Scene Two\n\nText"
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope(
+                  "# Chapter One\n\nBody\n\nMore\n\nStill more\n\nEven more\n\n## Scene Two\n\nText"
+                ),
+                language = Some(LanguageId.Markdown)
               ),
-              language = Some(LanguageId.Markdown)
-            ),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2))),
             viewport = Viewport.default.copy(visibleLines = 4, visibleColumns = 40)
           )
@@ -835,10 +868,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-              language = Some(LanguageId.Markdown)
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+                language = Some(LanguageId.Markdown)
+              ),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -868,10 +904,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("Opening\nbody\n\nSecond\nbody\n\nThird"),
-              language = None
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("Opening\nbody\n\nSecond\nbody\n\nThird"),
+                language = None
+              ),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -890,14 +929,18 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         val buffer =
-          state.buffers(bufferId).copy(editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4))))
+          state
+            .buffers(bufferId)
+            .copy(editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4))))
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "toggle-bookmark", "toggle-bookmark")
 
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.bookmarks shouldBe List(CursorPosition(2, 4))
+    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).annotations.bookmarks shouldBe List(
+      CursorPosition(2, 4)
+    )
 
     executeCommandThroughRunner(stateManager, "toggle-bookmark", "toggle-bookmark")
 
@@ -914,9 +957,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
-            annotations = state.buffers(bufferId).annotations.copy(
-              bookmarks = List(CursorPosition(0, 3), CursorPosition(4, 1))
-            )
+            annotations = state
+              .buffers(bufferId)
+              .annotations
+              .copy(
+                bookmarks = List(CursorPosition(0, 3), CursorPosition(4, 1))
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -940,7 +986,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho")),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho")),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))),
             annotations = state.buffers(bufferId).annotations.copy(bookmarks = List(CursorPosition(4, 1))),
             viewport = Viewport.default.copy(visibleLines = 8, visibleColumns = 40)
@@ -966,7 +1015,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0123456789abcdefghijklmnopqrstuvwxyz")),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("0123456789abcdefghijklmnopqrstuvwxyz")),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             annotations = state.buffers(bufferId).annotations.copy(bookmarks = List(CursorPosition(0, 12))),
             viewport = Viewport.default.copy(visibleLines = 1, visibleColumns = 5)
@@ -997,10 +1049,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-              language = Some(LanguageId.Markdown)
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+                language = Some(LanguageId.Markdown)
+              ),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -1038,15 +1093,21 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-              language = Some(LanguageId.Markdown)
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+                language = Some(LanguageId.Markdown)
+              ),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4))),
-            annotations = state.buffers(bufferId).annotations.copy(
-              bookmarks = List(CursorPosition(2, 4)),
-              documentComments = List(DocumentComment(CursorPosition(3, 0), CursorPosition(3, 3), "Revise bridge"))
-            )
+            annotations = state
+              .buffers(bufferId)
+              .annotations
+              .copy(
+                bookmarks = List(CursorPosition(2, 4)),
+                documentComments = List(DocumentComment(CursorPosition(3, 0), CursorPosition(3, 3), "Revise bridge"))
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1110,10 +1171,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("# Notes\n\n![Diagram](diagram.png)"),
-              language = Some(LanguageId.Markdown)
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("# Notes\n\n![Diagram](diagram.png)"),
+                language = Some(LanguageId.Markdown)
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1238,10 +1302,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("val x = 1\n// **Review** this value"),
-              language = Some(LanguageId.Scala)
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("val x = 1\n// **Review** this value"),
+                language = Some(LanguageId.Scala)
+              ),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 3)))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -1292,11 +1359,17 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
-            editing = state.buffers(bufferId).editing.copy(
-              cursors = List(CursorPosition(0, 2)),
-              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 2)),
+                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1326,9 +1399,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(
-          editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0)), selection = None)
-        )
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0)), selection = None)
+          )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -1351,14 +1426,20 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))),
-            annotations = state.buffers(bufferId).annotations.copy(
-              documentComments = List(
-                DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"),
-                DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
+            annotations = state
+              .buffers(bufferId)
+              .annotations
+              .copy(
+                documentComments = List(
+                  DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"),
+                  DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
+                )
               )
-            )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1395,10 +1476,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("Opening paragraph")),
-            editing = state.buffers(bufferId).editing.copy(
-              cursors = List(CursorPosition(0, 3)),
-              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
-            )
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 3)),
+                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1421,9 +1505,11 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(
-          editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 3)), selection = None)
-        )
+        val buffer = state
+          .buffers(bufferId)
+          .copy(
+            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 3)), selection = None)
+          )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
       .unsafeRunSync()
@@ -1454,10 +1540,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("cafe\u0301!")),
-            editing = state.buffers(bufferId).editing.copy(
-              cursors = List(CursorPosition(0, 5)),
-              selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
-            )
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 5)),
+                selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -1511,7 +1600,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\uD83C\uDDFA\uD83C\uDDF8b")),
+            document =
+              state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\uD83C\uDDFA\uD83C\uDDF8b")),
             editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 3)), selection = None),
             annotations = state.buffers(bufferId).annotations.copy(documentComments = Nil)
           )

@@ -2118,7 +2118,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateState: current =>
           current.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
-              val existingCommentAtCursor = currentBuffer.annotations.documentComments.find(_.contains(normalizedCursor))
+              val existingCommentAtCursor =
+                currentBuffer.annotations.documentComments.find(_.contains(normalizedCursor))
               val updatedComment = existingCommentAtCursor
                 .map(existing => existing.copy(text = commentText))
                 .getOrElse(comment)

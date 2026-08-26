@@ -54,10 +54,9 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "drop secondary selections rather than extending each of them" in {
-    val base          = bufferOf("abcdef", CursorPosition(0, 1))
-    val multiSelected = base.copy(editing =
-      base.editing.copy(selections = List(Selection(CursorPosition(0, 3), CursorPosition(0, 5))))
-    )
+    val base = bufferOf("abcdef", CursorPosition(0, 1))
+    val multiSelected =
+      base.copy(editing = base.editing.copy(selections = List(Selection(CursorPosition(0, 3), CursorPosition(0, 5)))))
 
     reduce(multiSelected, ExtendSelectionRight).editing.selections shouldBe Nil
   }

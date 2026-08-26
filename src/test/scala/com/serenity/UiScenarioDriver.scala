@@ -203,7 +203,10 @@ final class UiScenarioDriver private (
     }
     val visibleText = state.focusedBufferId.toList.flatMap { bufferId =>
       state.buffers.get(bufferId).toList.flatMap { buffer =>
-        buffer.document.content.toString.linesIterator.drop(buffer.viewport.topLine).take(buffer.viewport.visibleLines).toList
+        buffer.document.content.toString.linesIterator
+          .drop(buffer.viewport.topLine)
+          .take(buffer.viewport.visibleLines)
+          .toList
       }
     }
     val renderedContentRows =

@@ -54,9 +54,12 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -95,9 +98,12 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -144,13 +150,19 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope(original)
-            ),
-            editing = state.buffers(bufferId).editing.copy(
-              cursors = List(CursorPosition(0, 0)),
-              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope(original)
+              ),
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 0)),
+                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
+              ),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -196,12 +208,18 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("e cafe\u0301")
-            ),
-            editing = state.buffers(bufferId).editing.copy(
-              cursors = List(CursorPosition(0, 0))
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("e cafe\u0301")
+              ),
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 0))
+              ),
             findState = Some(FindState("e", List(FindResult(0, 0)), 0))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -248,17 +266,23 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three")
-            ),
-            editing = state.buffers(bufferId).editing.copy(
-              selection = Some(
-                Selection(
-                  CursorPosition(1, 0),
-                  CursorPosition(1, "needle two".length)
-            )
-          )
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three")
+              ),
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                selection = Some(
+                  Selection(
+                    CursorPosition(1, 0),
+                    CursorPosition(1, "needle two".length)
+                  )
+                )
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -302,17 +326,23 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three")
-            ),
-            editing = state.buffers(bufferId).editing.copy(
-              selection = Some(
-                Selection(
-                  CursorPosition(1, 0),
-                  CursorPosition(2, "needle three".length)
-            )
-          )
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three")
+              ),
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                selection = Some(
+                  Selection(
+                    CursorPosition(1, 0),
+                    CursorPosition(2, "needle three".length)
+                  )
+                )
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -341,17 +371,23 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three\noutside needle")
-            ),
-            editing = state.buffers(bufferId).editing.copy(
-              selection = Some(
-                Selection(
-                  CursorPosition(0, 0),
-                  CursorPosition(2, "needle three".length)
-            )
-          )
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three\noutside needle")
+              ),
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                selection = Some(
+                  Selection(
+                    CursorPosition(0, 0),
+                    CursorPosition(2, "needle three".length)
+                  )
+                )
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -408,17 +444,23 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("needle one\nneedle two\noutside needle")
-            ),
-            editing = state.buffers(bufferId).editing.copy(
-              selection = Some(
-                Selection(
-                  CursorPosition(0, 0),
-                  CursorPosition(1, "needle two".length)
-            )
-          )
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("needle one\nneedle two\noutside needle")
+              ),
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                selection = Some(
+                  Selection(
+                    CursorPosition(0, 0),
+                    CursorPosition(1, "needle two".length)
+                  )
+                )
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -478,13 +520,19 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope(original)
-            ),
-            editing = state.buffers(bufferId).editing.copy(
-              cursors = List(CursorPosition(0, 0)),
-              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope(original)
+              ),
+            editing = state
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 0)),
+                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
+              ),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(2, 0)), 0))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -528,9 +576,12 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("needle one\nneedle two")
-            ),
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("needle one\nneedle two")
+              ),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
@@ -561,10 +612,13 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope("plain text"),
-              isDirty = false
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope("plain text"),
+                isDirty = false
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }
@@ -606,10 +660,13 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         val buffer = state
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(
-              content = com.serenity.rope.Rope(original),
-              isDirty = false
-            )
+            document = state
+              .buffers(bufferId)
+              .document
+              .copy(
+                content = com.serenity.rope.Rope(original),
+                isDirty = false
+              )
           )
         state.copy(buffers = state.buffers + (bufferId -> buffer))
       }

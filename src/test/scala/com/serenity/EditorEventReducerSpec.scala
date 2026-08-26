@@ -104,7 +104,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
@@ -234,8 +237,15 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 7)), selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 7)))),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 7)),
+                selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 7)))
+              ),
             annotations = AppState.initial.buffers(bufferId).annotations.copy(documentComments = List(comment))
           )
       )
@@ -261,7 +271,13 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("beta")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 4)), selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 4)))),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(CursorPosition(0, 4)),
+                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 4)))
+              ),
             annotations = AppState.initial.buffers(bufferId).annotations.copy(documentComments = List(comment))
           )
       )
@@ -299,7 +315,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = NonCollectingRope(Rope("alpha\nbeta"))),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = NonCollectingRope(Rope("alpha\nbeta"))),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0)))
           )
       )
@@ -322,7 +339,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
@@ -344,7 +364,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
@@ -388,7 +411,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("1a2b3")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
           )
       )
     )
@@ -410,7 +436,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("1a2b3")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
@@ -431,7 +460,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 16)))
           )
       )
@@ -453,7 +483,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 6)))
           )
       )
@@ -475,8 +506,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 8), CursorPosition(0, 10)))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 8), CursorPosition(0, 10)))
           )
       )
     )
@@ -499,7 +534,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = content),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 8), CursorPosition(0, 10)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 8), CursorPosition(0, 10)))
           )
       )
     )
@@ -584,7 +622,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       .buffers(bufferId)
       .copy(
         document = AppState.initial.buffers(bufferId).document.copy(content = content),
-        editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5), CursorPosition(1, 0))),
+        editing =
+          AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5), CursorPosition(1, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -654,7 +693,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = content),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(selection.focus), selection = Some(selection))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(selection.focus), selection = Some(selection))
           )
       )
     )
@@ -680,7 +722,14 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = content),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -702,7 +751,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = content),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(selection.focus), selection = Some(selection))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(selection.focus), selection = Some(selection))
           )
       )
     )
@@ -728,7 +780,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = content),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(selection.focus), selection = Some(selection))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(selection.focus), selection = Some(selection))
           )
       )
     )
@@ -751,8 +806,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 6), CursorPosition(0, 8)))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 6), CursorPosition(0, 8)))
           )
       )
     )
@@ -774,7 +833,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("ab")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
           )
       ),
       clipboard = Some("Z")
@@ -798,8 +860,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -823,8 +893,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -848,8 +926,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       ),
       clipboard = Some("ZZ")
@@ -874,8 +960,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -899,8 +993,18 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("    alpha\n  beta\n\tgamma")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document = AppState.initial
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("    alpha\n  beta\n\tgamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -924,8 +1028,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -949,8 +1061,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abc def ghi")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -974,8 +1094,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second)),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              ),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
       )
@@ -999,8 +1127,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -1023,8 +1159,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n45")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n45")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -1046,7 +1190,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
           )
       )
     )
@@ -1064,8 +1211,14 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("    one\n  two\n\tthree")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 4), CursorPosition(1, 2), CursorPosition(2, 6)))
+            document = AppState.initial
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("    one\n  two\n\tthree")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 4), CursorPosition(1, 2), CursorPosition(2, 6)))
           )
       )
     )
@@ -1087,7 +1240,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
           )
       )
     )
@@ -1106,7 +1262,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
           )
       )
     )
@@ -1125,7 +1284,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
           )
       )
     )
@@ -1144,7 +1306,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd\nwxyz")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
           )
       )
     )
@@ -1163,7 +1328,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd\nwxyz")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 1), CursorPosition(1, 3)))
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(1, 1), CursorPosition(1, 3)))
           )
       )
     )
@@ -1181,8 +1349,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 3), CursorPosition(2, 4)))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 3), CursorPosition(2, 4)))
           )
       )
     )
@@ -1200,8 +1372,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
           )
       )
     )
@@ -1219,8 +1395,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 0), CursorPosition(5, 0))),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(3, 0), CursorPosition(5, 0))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(topLine = 2, visibleLines = 2)
           )
       )
@@ -1242,8 +1422,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
           )
       )
     )
@@ -1266,8 +1450,16 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(first.focus, second.focus), selection = Some(first), selections = List(first, second))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
           )
       )
     )
@@ -1337,8 +1529,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
           )
       )
     )
@@ -1359,8 +1555,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
           )
       )
     )
@@ -1384,7 +1584,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\nalpha")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\nalpha")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
             findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
           )
@@ -1412,8 +1613,14 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("match alpha\nbeta\nmatch gamma")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(2, 2))),
+            document = AppState.initial
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("match alpha\nbeta\nmatch gamma")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(2, 2))),
             findState = Some(FindState("match", List(FindResult(0, 0), FindResult(2, 0)), 0)),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
@@ -1436,7 +1643,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle then needle")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle then needle")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 0))
           )
@@ -1461,7 +1669,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("cafe\u0301!")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("cafe\u0301!")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             findState = Some(FindState("\u0301", List(FindResult(0, 4)), 0))
           )
@@ -1551,7 +1760,10 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = Rope("alpha beta gamma"), language = Some(LanguageId.JsonLang)),
+            document = AppState.initial
+              .buffers(bufferId)
+              .document
+              .copy(content = Rope("alpha beta gamma"), language = Some(LanguageId.JsonLang)),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             viewport = Viewport(0, 0, visibleLines = 5, visibleColumns = 8)
           )
@@ -1574,7 +1786,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle\nneedle")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle\nneedle")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
           )
@@ -1598,7 +1811,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, "needle".length))),
+            editing =
+              AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, "needle".length))),
             findState = Some(FindState("needle", List(FindResult(0, 0)), 0))
           )
       )
@@ -1620,8 +1834,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcdef\nxy\nabcdef")),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 4)))
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcdef\nxy\nabcdef")),
+            editing = AppState.initial
+              .buffers(bufferId)
+              .editing
+              .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 4)))
           )
       )
     )
@@ -1643,7 +1861,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         initialState
           .buffers(bufferId)
           .copy(
-            document = initialState.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\nb\nc\nd\ne\nf\ng")),
+            document =
+              initialState.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\nb\nc\nd\ne\nf\ng")),
             viewport = initialState.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
       )
@@ -1663,7 +1882,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(4, 1))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(topLine = 3, visibleLines = 2)
           )
@@ -1686,7 +1906,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 3))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(topLine = 2)
           )
@@ -1710,7 +1931,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(visibleLines = 2)
           )
@@ -1733,7 +1955,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
         AppState.initial
           .buffers(bufferId)
           .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+            document =
+              AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
             editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 1))),
             viewport = AppState.initial.buffers(bufferId).viewport.copy(visibleLines = 2)
           )

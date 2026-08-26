@@ -287,22 +287,22 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
       config = AppConfig.default.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true)),
-      buffers = {
+      buffers =
         val buffer = AppState.initial.buffers(bufferId)
-        AppState.initial.buffers.updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("hello"))))
-      }
+        AppState.initial.buffers
+          .updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("hello"))))
     )
     val movedCursorState = initialState.copy(
-      buffers = {
+      buffers =
         val buffer = initialState.buffers(bufferId)
-        initialState.buffers.updated(bufferId, buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 1)))))
-      }
+        initialState.buffers
+          .updated(bufferId, buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 1)))))
     )
     val editedState = movedCursorState.copy(
-      buffers = {
+      buffers =
         val buffer = movedCursorState.buffers(bufferId)
-        movedCursorState.buffers.updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("wurld"))))
-      }
+        movedCursorState.buffers
+          .updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("wurld"))))
     )
     val configuredState = editedState.copy(
       config = editedState.config.withSpellCheck(editedState.config.spellCheck.copy(additionalWords = List("wurld")))
@@ -534,8 +534,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     )
 
   it should "bump markdownPreviewEditGeneration when an edit changes a buffer with a live inline markdown preview" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId       = BufferId(1)
+    val paneId         = PaneId(1)
     val beforeUnstyled = Buffer.fromString(bufferId, "# Before")
     val before =
       beforeUnstyled.copy(document =
@@ -568,8 +568,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave markdownPreviewEditGeneration untouched when the buffer has no live markdown preview" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId       = BufferId(1)
+    val paneId         = PaneId(1)
     val beforeUnstyled = Buffer.fromString(bufferId, "# Before")
     val before =
       beforeUnstyled.copy(document =
@@ -596,8 +596,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave markdownPreviewEditGeneration untouched when the buffer's content did not change" in {
-    val bufferId = BufferId(1)
-    val paneId   = PaneId(1)
+    val bufferId       = BufferId(1)
+    val paneId         = PaneId(1)
     val bufferUnstyled = Buffer.fromString(bufferId, "# Same")
     val buffer =
       bufferUnstyled.copy(document =

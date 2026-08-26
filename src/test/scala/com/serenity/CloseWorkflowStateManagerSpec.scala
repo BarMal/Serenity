@@ -391,8 +391,9 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val first  = state.buffers(BufferId(0)).copy(document = state.buffers(BufferId(0)).document.copy(isDirty = true))
-        val second = state.buffers(secondBufferId).copy(document = state.buffers(secondBufferId).document.copy(isDirty = true))
+        val first = state.buffers(BufferId(0)).copy(document = state.buffers(BufferId(0)).document.copy(isDirty = true))
+        val second =
+          state.buffers(secondBufferId).copy(document = state.buffers(secondBufferId).document.copy(isDirty = true))
         state.copy(
           buffers = state.buffers + (BufferId(0) -> first) + (secondBufferId -> second),
           bufferOrder = state.bufferOrder :+ secondBufferId

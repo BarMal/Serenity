@@ -254,10 +254,13 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
               state
                 .buffers(activeBufferId.get())
                 .copy(editing =
-                  state.buffers(activeBufferId.get()).editing.copy(
-                    cursors = List(selection.start),
-                    selection = Some(selection)
-                  )
+                  state
+                    .buffers(activeBufferId.get())
+                    .editing
+                    .copy(
+                      cursors = List(selection.start),
+                      selection = Some(selection)
+                    )
                 )
             )
           )
@@ -274,11 +277,14 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
               state
                 .buffers(activeBufferId.get())
                 .copy(editing =
-                  state.buffers(activeBufferId.get()).editing.copy(
-                    cursors = selections.map(_.focus),
-                    selection = Some(primary),
-                    selections = selections
-                  )
+                  state
+                    .buffers(activeBufferId.get())
+                    .editing
+                    .copy(
+                      cursors = selections.map(_.focus),
+                      selection = Some(primary),
+                      selections = selections
+                    )
                 )
             )
           )
@@ -294,11 +300,14 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
               state
                 .buffers(activeBufferId.get())
                 .copy(editing =
-                  state.buffers(activeBufferId.get()).editing.copy(
-                    cursors = cursors,
-                    selection = None,
-                    selections = Nil
-                  )
+                  state
+                    .buffers(activeBufferId.get())
+                    .editing
+                    .copy(
+                      cursors = cursors,
+                      selection = None,
+                      selections = Nil
+                    )
                 )
             )
           )

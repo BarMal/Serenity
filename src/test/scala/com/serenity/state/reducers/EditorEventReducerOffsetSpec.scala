@@ -131,7 +131,13 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
       )
     val state = AppState.initial.copy(buffers = Map(bufferId -> buffer))
 
-    EditorEventReducer.reduce(InsertChar('X'), paneId, state).state.buffers(bufferId).document.content.collect() shouldBe "aX!"
+    EditorEventReducer
+      .reduce(InsertChar('X'), paneId, state)
+      .state
+      .buffers(bufferId)
+      .document
+      .content
+      .collect() shouldBe "aX!"
   }
 
   private def reduceTextEvent(text: String, cursor: CursorPosition, event: TextEntryEvent): Buffer =

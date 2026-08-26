@@ -224,7 +224,9 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
         state.copy(buffers =
           state.buffers.updated(
             bufferId,
-            state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            state
+              .buffers(bufferId)
+              .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
           )
         )
       }

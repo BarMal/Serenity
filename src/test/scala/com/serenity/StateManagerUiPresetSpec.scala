@@ -298,10 +298,13 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       val buffer = state
         .buffers(bufferId)
         .copy(
-          document = state.buffers(bufferId).document.copy(
-            content = Rope("# Notes\n\nDraft"),
-            language = Some(LanguageId.Markdown)
-          )
+          document = state
+            .buffers(bufferId)
+            .document
+            .copy(
+              content = Rope("# Notes\n\nDraft"),
+              language = Some(LanguageId.Markdown)
+            )
         )
       state.copy(buffers = state.buffers + (bufferId -> buffer))
     }.unsafeRunSync()
@@ -340,13 +343,19 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       val buffer = state
         .buffers(bufferId)
         .copy(
-          document = state.buffers(bufferId).document.copy(
-            content = Rope("# Chapter One\n\nBody\n\n## Scene Two"),
-            language = Some(LanguageId.Markdown)
-          ),
-          annotations = state.buffers(bufferId).annotations.copy(
-            bookmarks = List(CursorPosition(2, 4))
-          )
+          document = state
+            .buffers(bufferId)
+            .document
+            .copy(
+              content = Rope("# Chapter One\n\nBody\n\n## Scene Two"),
+              language = Some(LanguageId.Markdown)
+            ),
+          annotations = state
+            .buffers(bufferId)
+            .annotations
+            .copy(
+              bookmarks = List(CursorPosition(2, 4))
+            )
         )
       state.copy(buffers = state.buffers + (bufferId -> buffer))
     }.unsafeRunSync()
@@ -375,13 +384,19 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       val buffer = state
         .buffers(bufferId)
         .copy(
-          document = state.buffers(bufferId).document.copy(
-            content = Rope("# Finding\n\nNeeds review"),
-            language = Some(LanguageId.Markdown)
-          ),
-          annotations = state.buffers(bufferId).annotations.copy(
-            bookmarks = List(CursorPosition(2, 0))
-          )
+          document = state
+            .buffers(bufferId)
+            .document
+            .copy(
+              content = Rope("# Finding\n\nNeeds review"),
+              language = Some(LanguageId.Markdown)
+            ),
+          annotations = state
+            .buffers(bufferId)
+            .annotations
+            .copy(
+              bookmarks = List(CursorPosition(2, 0))
+            )
         )
       state.copy(buffers = state.buffers + (bufferId -> buffer))
     }.unsafeRunSync()

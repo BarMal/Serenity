@@ -56,7 +56,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve active document metadata while transient surfaces hold focus" in {
-    val paneId = PaneId(0)
+    val paneId  = PaneId(0)
     val buffer0 = Buffer.fromString(BufferId(6), "alpha\nbeta\ngamma")
     val buffer = buffer0.copy(
       document = buffer0.document.copy(
@@ -150,12 +150,9 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
       // Simulate setting file path (this would normally happen during file open/save)
       stateWithPath <- stateManager.getCurrentState
-      bufferWithPath = {
+      bufferWithPath =
         val current = stateWithPath.buffers(bufferId)
-        current.copy(document =
-          current.document.copy(filePath = Some(java.nio.file.Paths.get("/path/to/myfile.txt")))
-        )
-      }
+        current.copy(document = current.document.copy(filePath = Some(java.nio.file.Paths.get("/path/to/myfile.txt"))))
       updatedState = stateWithPath.copy(
         buffers = stateWithPath.buffers + (bufferId -> bufferWithPath)
       )
