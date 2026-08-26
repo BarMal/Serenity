@@ -177,28 +177,46 @@ object Renderer:
   private val bufferDamage    = new java.util.WeakHashMap[SurfaceContentIdentity, Damage]()
   private val bufferDrawState = new java.util.WeakHashMap[SurfaceContentIdentity, DrawState]()
 
+  /** Which screen each tracked buffer identity was last drawn for, so [[accumulateBufferDamage]] only folds a frame's
+    * damage into buffers that actually belong to the same screen -- e.g. the same `SwingWindow`'s own two pooled
+    * images. Without this, every buffer identity ever tracked shares one process-wide map with no notion of which ones
+    * are actually part of the same image pool: harmless in production (there is only ever one real window, so "every
+    * tracked identity" and "every identity in this window's pool" are the same set), but any other concurrently running
+    * render session -- another window, or another independent `render` call in the same process -- would otherwise have
+    * its damage silently mixed into this one's, and vice versa.
+    */
+  private val bufferScreen = new java.util.WeakHashMap[SurfaceContentIdentity, ScreenIdentity]()
+
   /** Distinct from [[bufferDamage]] because base images alternate: the pixels a surface preserves come from two frames
     * ago, while the screen shows the last one published.
     */
   private val screenDamage  = new java.util.WeakHashMap[ScreenIdentity, Damage]()
   private val screenPaneIds = new java.util.WeakHashMap[ScreenIdentity, Set[PaneId]]()
 
-  /** Folds `damage` into every buffer identity already being tracked, via [[DamageAccumulator.accumulateBuffers]] --
-    * called unconditionally on every frame, regardless of which identity (if any) this specific frame draws into, so a
-    * pixel buffer sitting idle through several frames still accrues what each of them changed.
+  /** Folds `damage` into every buffer identity already being tracked for `output`'s screen (every identity, if there is
+    * no output to scope by), via [[DamageAccumulator.accumulateBuffers]] -- called unconditionally on every frame,
+    * regardless of which identity (if any) this specific frame draws into, so a pixel buffer sitting idle through
+    * several frames still accrues what each of them changed.
     */
-  private def accumulateBufferDamage(damage: Damage): Unit =
+  private def accumulateBufferDamage(output: Option[FrameOutput], damage: Damage): Unit =
     bufferDamage.synchronized {
-      val updated = DamageAccumulator.accumulateBuffers(mapAsScala(bufferDamage), damage)
+      val tracked = mapAsScala(bufferDamage)
+      val scoped = output match
+        case None => tracked
+        case Some(value) =>
+          tracked.filter { case (key, _) => Option(bufferScreen.get(key)).forall(_ == value.screenToken) }
+      val updated = DamageAccumulator.accumulateBuffers(scoped, damage)
       updated.foreach { case (key, value) => val _ = bufferDamage.put(key, value) }
     }
 
   /** Reports and resets what has accumulated for `persistenceKey` since it was last drawn into, via
     * [[DamageAccumulator.observeBufferDraw]] -- `Damage.Everything` if this is the first time this identity has been
-    * seen, since an untracked identity's pixels cannot be trusted at all, not merely assumed unchanged.
+    * seen, since an untracked identity's pixels cannot be trusted at all, not merely assumed unchanged. Also records
+    * `output`'s screen as this identity's owner, so future [[accumulateBufferDamage]] calls scope correctly.
     */
-  private def drainBufferDamage(persistenceKey: SurfaceContentIdentity): Damage =
+  private def drainBufferDamage(output: Option[FrameOutput], persistenceKey: SurfaceContentIdentity): Damage =
     bufferDamage.synchronized {
+      output.foreach(value => bufferScreen.put(persistenceKey, value.screenToken))
       val wasTracked          = bufferDamage.containsKey(persistenceKey)
       val (observed, updated) = DamageAccumulator.observeBufferDraw(mapAsScala(bufferDamage), persistenceKey)
       updated.foreach { case (key, value) => val _ = bufferDamage.put(key, value) }
@@ -775,7 +793,7 @@ object Renderer:
           cellMetrics,
           uiMetrics
         )
-        val framePlan = planFrame(state, context, finalizedScene, editorRenderPlan, viewportSize, output, damage)
+        val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
             surface.clearViewportExcept(state.theme.background, plan.preserved)
@@ -808,7 +826,10 @@ object Renderer:
     */
   private def forgetPreservedContent(surface: RenderSurface, output: Option[FrameOutput]): Unit =
     surface.persistentContentKey.foreach { key =>
-      bufferDamage.synchronized { val _ = bufferDamage.remove(key) }
+      bufferDamage.synchronized {
+        val _ = bufferDamage.remove(key)
+        val _ = bufferScreen.remove(key)
+      }
       bufferDrawState.synchronized { val _ = bufferDrawState.remove(key) }
     }
     output.foreach { value =>
@@ -826,26 +847,28 @@ object Renderer:
   /** Decide which pane rows this frame still has to draw, and which pixel bands it may keep from an earlier frame.
     *
     * Returns `None` — meaning "draw everything, remember nothing" — whenever the frame cannot be reasoned about safely:
-    * a surface that does not preserve pixels, a post-processing pass that would compound over kept pixels, or any
-    * floating/pinned/modal layer that may paint across pane content. `damage` is always folded into every tracked
-    * identity first, regardless of which branch this frame takes, so a pixel buffer that sits idle through a stood-down
-    * frame does not lose the damage that frame reported.
+    * a surface that does not preserve pixels, or a post-processing pass that would compound over kept pixels. A
+    * floating/pinned/modal/expanded layer being visible no longer stands the whole optimisation down by itself
+    * (`#1000`, retiring the old `overlaysMayCoverPanes` check) -- `DamageProducer.fullRenderDamage` reports
+    * `Everything` whenever `uiSurfaces`/`focus` actually change, which still wipes out any stale
+    * shadow/blur/translucency bleed the instant an overlay appears, moves, resizes or changes content, while leaving
+    * row reuse active on every other frame an overlay merely sits on screen. `damage` is always folded into every
+    * tracked identity first, regardless of which branch this frame takes, so a pixel buffer that sits idle through a
+    * stood-down frame does not lose the damage that frame reported.
     */
   private def planFrame(
     state: AppState,
     context: RenderContext,
-    scene: UiSceneSnapshot,
     renderPlan: EditorPaneRenderPlan,
     viewportSize: ViewportSize,
     output: Option[FrameOutput],
     damage: Damage
   ): Option[FramePlan] =
-    accumulateBufferDamage(damage)
+    accumulateBufferDamage(output, damage)
     accumulateScreenDamage(output, damage)
 
     val plan = context.surface.persistentContentKey
       .filter(_ => state.config.postProcessingEffect == PostProcessingEffect.Off)
-      .filter(_ => !overlaysMayCoverPanes(state, scene))
       .map { persistenceKey =>
         val panes   = paneRecordsFor(state, context, renderPlan)
         val paneIds = panes.keySet
@@ -853,7 +876,7 @@ object Renderer:
           renderPlan.paneLayouts.keySet.forall(panes.contains) &&
             state.layout.orderedPaneIds.forall(panes.contains)
 
-        val bufferDamageSinceLastDraw = drainBufferDamage(persistenceKey)
+        val bufferDamageSinceLastDraw = drainBufferDamage(output, persistenceKey)
         val inputsOrPanesChanged = drawStateChanged(persistenceKey, paneIds, renderInputsFor(context, viewportSize))
         val effectiveDamage      = if inputsOrPanesChanged then Damage.Everything else bufferDamageSinceLastDraw
 
@@ -904,25 +927,6 @@ object Renderer:
         case (bufferLine, row) if bufferLines.contains(bufferLine) => row
       }.toSet
       DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++ record.overflowingRows
-
-  /** True when any floating, pinned or modal layer is on screen.
-    *
-    * Those layers draw shadows, blur and translucency that reach outside the rectangles the scene reports, so rather
-    * than testing for overlap with each pane the whole optimisation stands down while any of them is visible.
-    */
-  private def overlaysMayCoverPanes(state: AppState, scene: UiSceneSnapshot): Boolean =
-    val overlays = OverlayViewModel.fromState(state, scene)
-    overlays.aboveCursor.nonEmpty ||
-    overlays.belowCursor.nonEmpty ||
-    overlays.belowCursorStack.nonEmpty ||
-    overlays.modal.nonEmpty ||
-    scene.modalBackdrop.nonEmpty ||
-    state.pinnedSurfaces.nonEmpty ||
-    state.uiSurfaces.exists {
-      _.presentation match
-        case SurfacePresentation.Expanded(_, _) => true
-        case _                                  => false
-    }
 
   /** Geometry for the panes drawn by [[renderPlainBufferContent]]: which buffer line each visual row shows (to
     * translate `Damage`'s buffer-line facts into row indices) and the pixel band each row owns (to know what a

@@ -210,6 +210,36 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
+  it should "report Everything when a floating/pinned/modal surface appears" in {
+    val before  = stateWithContent("alpha")
+    val surface = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
+    val after   = before.copy(uiSurfaces = surface :: before.uiSurfaces)
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+  }
+
+  it should "report Everything when an existing surface's content or position changes" in {
+    val surface = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
+    val before  = stateWithContent("alpha").copy(uiSurfaces = List(surface))
+    val after   = before.copy(uiSurfaces = List(surface.copy(content = SurfaceContent.Diagnostics(Nil))))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+  }
+
+  it should "report Everything when focus moves between two already-open floating surfaces" in {
+    val before = stateWithContent("alpha").copy(focus = Focus.Surface(SurfaceId("a")))
+    val after  = before.copy(focus = Focus.Surface(SurfaceId("b")))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+  }
+
+  it should "report no damage from uiSurfaces or focus when neither changes" in {
+    val surface = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
+    val state = stateWithContent("alpha").copy(uiSurfaces = List(surface), focus = Focus.Surface(SurfaceId("palette")))
+
+    DamageProducer.forTransition(state, state) shouldBe Damage.Nothing
+  }
+
   private val activePaneId = PaneId(0)
 
   it should "report PaneChrome damage when a buffer's dirty flag toggles" in {
