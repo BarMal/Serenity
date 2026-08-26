@@ -27,8 +27,8 @@ import com.serenity.state.models.*
   * state entirely outside `inputEventPhase`, so it needs its own before/after diff to report
   * `animationDamage`/`fullRenderDamage` at all.
   *
-  * Not yet covered, and out of scope for this pass: focus-dimming's shifting active-body range, and overlay/surface
-  * damage (`#1000`) -- both left to the `overlaysMayCoverPanes` stand-down in `Renderer.planFrame` until then.
+  * Not yet covered, and out of scope for this pass: overlay/surface damage (`#1000`) -- left to the
+  * `overlaysMayCoverPanes` stand-down in `Renderer.planFrame` until then.
   */
 object DamageProducer:
 
@@ -63,7 +63,8 @@ object DamageProducer:
       commentDamage(bufferId, beforeBuffer, afterBuffer) |+|
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
       languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
-      animationDamage(bufferId, beforeBuffer, afterBuffer)
+      animationDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      focusDimmingDamage(bufferId, before, after, beforeBuffer, afterBuffer)
 
   private def contentDamage(
     bufferId: BufferId,
@@ -166,6 +167,33 @@ object DamageProducer:
   private def animationDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.animations == after.animations then Damage.Nothing
     else Damage.BufferRows(bufferId, changedAnimationLines(before.animations, after.animations))
+
+  /** `Renderer.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the cursor.
+    * Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]] already
+    * covers, but crossing into a different block flips the dimmed state of every row in the old block that isn't also
+    * in the new one (and vice versa) -- a much wider set than just the old and new cursor row, so this has to be
+    * computed via [[FocusedTextBody]] (shared with `Renderer` so the two can never disagree) rather than derived from
+    * the cursor move alone. Toggling the feature itself redraws the whole buffer, since every row's dimmed state flips.
+    */
+  private def focusDimmingDamage(
+    bufferId: BufferId,
+    before: AppState,
+    after: AppState,
+    beforeBuffer: Buffer,
+    afterBuffer: Buffer
+  ): Damage =
+    val wasEnabled = before.config.focusedTextBodyEnabled
+    val isEnabled  = after.config.focusedTextBodyEnabled
+    if !wasEnabled && !isEnabled then Damage.Nothing
+    else if wasEnabled != isEnabled then Damage.BufferRows(bufferId, (0 until afterBuffer.content.lineCount).toSet)
+    else
+      val beforeRange = FocusedTextBody.activeRange(beforeBuffer, beforeBuffer.cursors.headOption.map(_.line))
+      val afterRange  = FocusedTextBody.activeRange(afterBuffer, afterBuffer.cursors.headOption.map(_.line))
+      if beforeRange == afterRange then Damage.Nothing
+      else
+        val beforeLines = beforeRange.map(_.toSet).getOrElse((0 until beforeBuffer.content.lineCount).toSet)
+        val afterLines  = afterRange.map(_.toSet).getOrElse((0 until afterBuffer.content.lineCount).toSet)
+        Damage.BufferRows(bufferId, beforeLines.diff(afterLines) ++ afterLines.diff(beforeLines))
 
   private def changedAnimationLines(before: AnimationState, after: AnimationState): Set[Int] =
     (before.animations.keySet ++ after.animations.keySet).iterator

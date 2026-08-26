@@ -368,3 +368,52 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val damage = DamageProducer.forTransition(before, after)
     dirty.subsetOf(Damage.coarsenToRows(bufferId, damage)) shouldBe true
   }
+
+  "DamageProducer's focus-dimming coverage" should
+    "report no damage from focus dimming when the feature is disabled, even across a paragraph boundary" in {
+      val before = stateWithContent("first\nsecond\n\nfourth\nfifth", cursors = List(CursorPosition(0, 0)))
+      val after = before.copy(buffers =
+        before.buffers.updated(bufferId, before.buffers(bufferId).copy(cursors = List(CursorPosition(3, 0))))
+      )
+
+      before.config.focusedTextBodyEnabled shouldBe false
+      DamageProducer.forTransition(before, after) shouldBe
+        Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 3)), Damage.Chrome))
+    }
+
+  it should "widen damage to every row whose dimmed state flips when the cursor crosses a paragraph boundary" in {
+    val base   = stateWithContent("first\nsecond\n\nfourth\nfifth", cursors = List(CursorPosition(0, 0)))
+    val before = base.copy(config = base.config.withFocusedTextBody(true))
+    val after = before.copy(buffers =
+      before.buffers.updated(bufferId, before.buffers(bufferId).copy(cursors = List(CursorPosition(3, 0))))
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe
+      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 3, 4)), Damage.Chrome))
+  }
+
+  it should "report no extra damage from focus dimming when the cursor stays within the same paragraph" in {
+    val base   = stateWithContent("first\nsecond\n\nfourth\nfifth", cursors = List(CursorPosition(0, 0)))
+    val before = base.copy(config = base.config.withFocusedTextBody(true))
+    val after = before.copy(buffers =
+      before.buffers.updated(bufferId, before.buffers(bufferId).copy(cursors = List(CursorPosition(1, 0))))
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe
+      Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1)), Damage.Chrome))
+  }
+
+  it should "report the whole buffer when the focused-text-body feature is toggled on" in {
+    val before = stateWithContent("first\nsecond\n\nfourth\nfifth", cursors = List(CursorPosition(0, 0)))
+    val after  = before.copy(config = before.config.withFocusedTextBody(true))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2, 3, 4))
+  }
+
+  it should "report the whole buffer when the focused-text-body feature is toggled off" in {
+    val base   = stateWithContent("first\nsecond\n\nfourth\nfifth", cursors = List(CursorPosition(0, 0)))
+    val before = base.copy(config = base.config.withFocusedTextBody(true))
+    val after  = before.copy(config = before.config.withFocusedTextBody(false))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.BufferRows(bufferId, Set(0, 1, 2, 3, 4))
+  }
