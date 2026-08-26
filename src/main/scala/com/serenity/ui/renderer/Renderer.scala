@@ -6,8 +6,8 @@ import java.util.concurrent.atomic.AtomicReference
 import com.serenity.animation.ThemeInterpolator
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode, PostProcessingEffect}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
-import com.serenity.state.manager.AuthoritativeUiScene
+import com.serenity.markdown.MarkdownDocumentPreview
+import com.serenity.state.manager.{AuthoritativeUiScene, FocusedTextBody}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.*
@@ -68,35 +68,7 @@ object Renderer:
 
   private val preparedSceneRef = new AtomicReference[Option[PreparedScene]](None)
 
-  private val MarkdownFenceProbeWindow    = 512
-  private val MarkdownFenceProbeMaximum   = 8_192
   private val MarkdownSelectionProbeLimit = 512
-
-  private def markdownBlockForRenderer(buffer: Buffer, line: Int): Range.Inclusive =
-    val bounded = MarkdownBlockLens.currentBlock(
-      buffer.content.lineCount,
-      buffer.content.getLine,
-      line,
-      fenceProbeWindow = MarkdownFenceProbeWindow
-    )
-    def resolve(window: Int, range: Range.Inclusive): Range.Inclusive =
-      val firstProbeLine = (line - window).max(0)
-      val lastProbeLine  = (line + window).min(buffer.content.lineCount - 1)
-      val probeBounded =
-        (firstProbeLine > 0 && range.start == firstProbeLine) ||
-          (lastProbeLine < buffer.content.lineCount - 1 && range.end == lastProbeLine)
-      if !probeBounded || window >= buffer.content.lineCount || window >= MarkdownFenceProbeMaximum then range
-      else
-        val nextWindow = (window * 2).min(buffer.content.lineCount).min(MarkdownFenceProbeMaximum)
-        val expanded = MarkdownBlockLens.currentBlock(
-          buffer.content.lineCount,
-          buffer.content.getLine,
-          line,
-          fenceProbeWindow = nextWindow
-        )
-        resolve(nextWindow, expanded)
-
-    resolve(MarkdownFenceProbeWindow, bounded)
 
   final private case class EditorPaneRenderPlan(
       workspaceLayout: EditorWorkspaceLayout,
@@ -1561,31 +1533,10 @@ object Renderer:
     if !state.config.focusedTextBodyEnabled then _ => true
     else
       val activeLine = buffer.cursors.headOption.map(_.line)
-      if buffer.language.contains(LanguageId.Markdown) then
-        activeLine
-          .filter(line => line >= 0 && line < buffer.content.lineCount)
-          .map(line => markdownBlockForRenderer(buffer, line))
-          .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
-          .getOrElse((_: Int) => true)
-      else
-        plainTextBodyRange(buffer, activeLine)
-          .map(range => (line: Int) => range.contains(line))
-          .getOrElse((_: Int) => true)
-
-  private def plainTextBodyRange(buffer: Buffer, activeLine: Option[Int]): Option[Range.Inclusive] =
-    activeLine
-      .filter(line => line >= 0 && line < buffer.content.lineCount)
-      .map { line =>
-        val start = Iterator
-          .iterate(line)(_ - 1)
-          .takeWhile(index => index >= 0 && buffer.content.getLine(index).exists(_.trim.nonEmpty))
-          .foldLeft(line)((_, index) => index)
-        val end = Iterator
-          .iterate(line + 1)(_ + 1)
-          .takeWhile(index => index < buffer.content.lineCount && buffer.content.getLine(index).exists(_.trim.nonEmpty))
-          .foldLeft(line)((_, index) => index)
-        start to end
-      }
+      FocusedTextBody
+        .activeRange(buffer, activeLine)
+        .map((range: Range.Inclusive) => (line: Int) => range.contains(line))
+        .getOrElse((_: Int) => true)
 
   private def renderInlineMarkdownPreview(
     buffer: Buffer,
@@ -1877,7 +1828,7 @@ object Renderer:
       val activeLine = buffer.cursors.headOption
         .map(_.line)
         .filter(line => line >= 0 && line < lineCount)
-      val activeBlock     = activeLine.map(line => markdownBlockForRenderer(buffer, line))
+      val activeBlock     = activeLine.map(line => FocusedTextBody.markdownBlock(buffer, line))
       val viewportTopLine = buffer.viewport.topLine.max(0).min(lineCount - 1)
       val windowTopLine = activeLine
         .filter(line => line == viewportTopLine && line > 0 && buffer.content.getLine(line).exists(_.trim.isEmpty))
@@ -1918,7 +1869,7 @@ object Renderer:
     val cursorRanges = buffer.cursors
       .map(_.line)
       .filter(line => line >= 0 && line < lineCount)
-      .map(line => markdownBlockForRenderer(buffer, line))
+      .map(line => FocusedTextBody.markdownBlock(buffer, line))
     val selectionRanges = buffer.allSelections.flatMap { selection =>
       if lineCount == 0 then Nil
       else
@@ -1927,7 +1878,7 @@ object Renderer:
         val selectedLines =
           if endLine - startLine <= MarkdownSelectionProbeLimit then startLine to endLine
           else List(startLine, endLine)
-        selectedLines.map(line => markdownBlockForRenderer(buffer, line)).distinct
+        selectedLines.map(line => FocusedTextBody.markdownBlock(buffer, line)).distinct
     }
     mergeOverlappingMarkdownRanges(cursorRanges ++ selectionRanges)
 
