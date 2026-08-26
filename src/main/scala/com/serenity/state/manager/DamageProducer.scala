@@ -201,12 +201,13 @@ object DamageProducer:
       .map(_.line)
       .toSet
 
-  /** Global (not per-buffer) chrome-level changes: the theme, or the syntax-highlighting toggle, which recolors every
-    * visible buffer at once the same way a theme change does.
+  /** The theme, or the syntax-highlighting toggle, recolor every glyph in every visible buffer's own content -- not
+    * just the gutter/header chrome `Damage.Chrome` denotes -- so this reports `Everything` rather than `Chrome`, the
+    * same as [[fullRenderDamage]] already does for a theme transition in flight.
     */
   private def chromeDamage(before: AppState, after: AppState): Damage =
     if before.theme != after.theme || before.config.syntaxHighlightingEnabled != after.config.syntaxHighlightingEnabled
-    then Damage.Chrome
+    then Damage.Everything
     else Damage.Nothing
 
   /** Transitions that touch every visible glyph rather than any one buffer's rows, matching what
