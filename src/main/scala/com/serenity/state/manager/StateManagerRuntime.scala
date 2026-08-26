@@ -4,12 +4,13 @@ import java.nio.file.Path
 
 import cats.effect.*
 import cats.effect.std.{Queue, Semaphore}
+import com.serenity.animation.AnimationState
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
-import com.serenity.state.models.AppState
+import com.serenity.state.models.{AppState, BufferId}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -118,6 +119,7 @@ final private[manager] case class StateManagerRuntime(
     projectTaskSemaphore: Semaphore[IO],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]],
     onFontConfigChanged: FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
     configPersistencePath: Option[Path],
@@ -146,6 +148,7 @@ private[manager] object StateManagerRuntime:
     projectTaskSemaphore: Semaphore[IO],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]],
     onFontConfigChanged: FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
     configPersistencePath: Option[Path],
@@ -170,6 +173,7 @@ private[manager] object StateManagerRuntime:
       projectTaskSemaphore = projectTaskSemaphore,
       mouseTargetCacheRef = mouseTargetCacheRef,
       documentAnalysisFiberRef = documentAnalysisFiberRef,
+      bufferAnimationsRef = bufferAnimationsRef,
       onFontConfigChanged = onFontConfigChanged,
       deviceTextScaleProvider = deviceTextScaleProvider,
       configPersistencePath = configPersistencePath,

@@ -3,9 +3,11 @@ package com.serenity.state.reducers
 import java.nio.file.Path
 
 import cats.syntax.all.*
+import com.serenity.animation.{AnimatedCell, AnimationOwner, CharacterKey, TextEdit}
 import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
+import com.serenity.rope.Rope
 import com.serenity.state.models.{AppState, BufferId, SurfaceId}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfig
@@ -48,6 +50,18 @@ enum LspQueueEffect:
   case Enqueue(effect: LspEffect)
   case DocumentChanged(uri: String, languageId: LanguageId, text: String)
 
+/** `Buffer` carries no animation state (`#1001`) -- these are how a reducer that computed an animation change hands it
+  * to the presentation layer that actually owns `AnimationState`, instead of writing it into the `AppState` it returns.
+  * `RemapThroughEdits` carries the edits themselves, not a precomputed `AnimationState`, because the remap
+  * (`AnimationState.remapThroughEdits`) needs the presentation layer's own current animations as input -- state the
+  * pure reducer has no access to.
+  */
+enum AnimationEffect:
+  case RemapThroughEdits(bufferId: BufferId, contentBefore: Rope, contentAfter: Rope, edits: List[TextEdit])
+  case Merge(bufferId: BufferId, delta: Map[CharacterKey, AnimatedCell])
+  case ClearAll(bufferId: BufferId)
+  case ClearOwner(bufferId: BufferId, owner: AnimationOwner)
+
 enum AppEffect:
   case Lifecycle(effect: LifecycleEffect)
   case CommandRequest(effect: CommandEffect)
@@ -58,6 +72,7 @@ enum AppEffect:
   case Explorer(effect: ExplorerEffect)
   case Workflow(effect: WorkflowEffect)
   case LspQueue(effect: LspQueueEffect)
+  case Animation(effect: AnimationEffect)
 
 object AppEffect:
 

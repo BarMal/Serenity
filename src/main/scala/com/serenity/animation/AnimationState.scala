@@ -2,8 +2,17 @@ package com.serenity.animation
 
 import java.awt.Color
 
+import com.serenity.rope.Rope
+
 /** Buffer coordinate key for character animations (column, line) */
 final case class CharacterKey(column: Int, line: Int)
+
+/** One text edit's effect on buffer offsets: `[start, end)` replaced by `insertedText`. `start == end` is a pure
+  * insertion. Deliberately narrower than the reducer's own edit-tracking type (no cursor-ownership index) -- this is
+  * the shape [[AnimationState.remapThroughEdits]] needs to cross the reducer/presentation-layer boundary as an
+  * `AppEffect` payload, not a reducer-internal detail.
+  */
+final case class TextEdit(start: Int, end: Int, insertedText: String)
 
 /** Manages animations for all characters using buffer coordinates as keys */
 final case class AnimationState(
@@ -111,5 +120,47 @@ final case class AnimationState(
   def allPositions: Set[CharacterKey] =
     animations.keySet
 
+  /** Remap every animation's key through a set of text edits, so an edit before an animating character moves its key
+    * rather than silently leaving the animation attached to whatever character now occupies that `(line, column)` cell.
+    * A character an edit deletes has its animation dropped rather than remapped: keeping it would attach the animation
+    * to a different character at the same offset. `initialContent`/`updatedContent` are the buffer's rope before and
+    * after the edits, used only to convert keys to and from offsets.
+    */
+  def remapThroughEdits(initialContent: Rope, updatedContent: Rope, edits: List[TextEdit]): AnimationState =
+    if animations.isEmpty || edits.isEmpty then this
+    else
+      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
+      val remapped = animations.flatMap { (key, cell) =>
+        val offset = initialContent.lineColumnToOffset(key.line, key.column)
+        if sortedEdits.exists(edit => offset >= edit.start && offset < edit.end) then None
+        else
+          val nextOffset     = AnimationState.remapOffset(offset, sortedEdits)
+          val (line, column) = updatedContent.offsetToLineColumn(nextOffset)
+          Some(CharacterKey(column, line) -> cell)
+      }
+      AnimationState(remapped)
+
 object AnimationState:
   val empty: AnimationState = AnimationState()
+
+  /** A single character position's offset, tracked through a sequence of edits the same way a zero-width boundary that
+    * always moves with an insertion at its own position would be.
+    */
+  private def remapOffset(offset: Int, edits: List[TextEdit]): Int =
+    val (_, remapped) = edits.foldLeft((0, offset)) {
+      case ((deltaSoFar, currentOffset), edit) =>
+        val removedLength     = edit.end - edit.start
+        val insertedLength    = edit.insertedText.length
+        val editDelta         = insertedLength - removedLength
+        val remappedEditStart = edit.start + deltaSoFar
+        val isInsertion       = edit.start == edit.end
+        val nextOffset =
+          if isInsertion then if offset >= edit.start then currentOffset + insertedLength else currentOffset
+          else if offset < edit.start then currentOffset
+          else if offset > edit.end then currentOffset + editDelta
+          else remappedEditStart
+
+        (deltaSoFar + editDelta, nextOffset)
+    }
+
+    remapped.max(0)

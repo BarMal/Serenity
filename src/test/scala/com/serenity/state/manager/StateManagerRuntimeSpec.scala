@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
+import com.serenity.animation.AnimationState
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileDialog
@@ -39,6 +40,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       projectTaskSemaphore     <- Semaphore[IO](1)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      bufferAnimationsRef      <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
       sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
@@ -55,6 +57,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
+        bufferAnimationsRef = bufferAnimationsRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
@@ -73,6 +76,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.projectTaskSemaphore shouldBe projectTaskSemaphore
       runtime.mouseTargetCacheRef shouldBe mouseTargetCacheRef
       runtime.documentAnalysisFiberRef shouldBe documentAnalysisFiberRef
+      runtime.bufferAnimationsRef shouldBe bufferAnimationsRef
       runtime.sessionManager.sessionExists.unsafeRunSync() shouldBe false
       runtime.fileManager should not be null
       runtime.fileDialog shouldBe FileDialog.unavailable
@@ -92,6 +96,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       projectTaskSemaphore     <- Semaphore[IO](1)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      bufferAnimationsRef      <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
       analysisCancelled        <- Deferred[IO, Unit]
       analysisStarted          <- Deferred[IO, Unit]
       pendingAnalysis <- IO
@@ -114,6 +119,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
+        bufferAnimationsRef = bufferAnimationsRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
@@ -140,6 +146,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.projectTaskSemaphore,
         runtime.mouseTargetCacheRef,
         runtime.documentAnalysisFiberRef,
+        runtime.bufferAnimationsRef,
         runtime.onFontConfigChanged,
         runtime.deviceTextScaleProvider,
         runtime.configPersistencePath,
@@ -268,7 +275,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
           lspQueue =
             case LspQueueEffect.Enqueue(value) => observed.update(_ :+ value)
             case LspQueueEffect.DocumentChanged(uri, languageId, text) =>
-              observed.update(_ :+ LspEffect.FileChanged(uri, languageId, text, version = 0))
+              observed.update(_ :+ LspEffect.FileChanged(uri, languageId, text, version = 0)),
+          animation = _ => IO.unit
         )
       )
       _       <- behavior.interpret(AppEffect.LspQueue(LspQueueEffect.Enqueue(effect)))

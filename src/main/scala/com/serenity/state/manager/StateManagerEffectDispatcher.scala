@@ -18,6 +18,7 @@ final private[manager] class CommandEffectInterpreter(
       case AppEffect.Explorer(value)       => dependencies.explorer(value)
       case AppEffect.Workflow(value)       => dependencies.workflow(value)
       case AppEffect.LspQueue(value)       => dependencies.lspQueue(value)
+      case AppEffect.Animation(value)      => dependencies.animation(value)
 
 private[manager] object CommandEffectInterpreter:
 
@@ -29,5 +30,6 @@ private[manager] object CommandEffectInterpreter:
       file: FileEffect => IO[Unit],
       explorer: ExplorerEffect => IO[Unit],
       workflow: WorkflowEffect => IO[Unit],
-      lspQueue: LspQueueEffect => IO[Unit]
+      lspQueue: LspQueueEffect => IO[Unit],
+      animation: AnimationEffect => IO[Unit]
   )

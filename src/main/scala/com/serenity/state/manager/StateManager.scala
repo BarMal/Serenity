@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.*
 import cats.effect.std.Semaphore
+import com.serenity.animation.AnimationState
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
@@ -195,6 +196,7 @@ object StateManager:
       undoRef                     <- Ref.of[IO, UndoState](UndoState(maxUndoDepth = policy.maxUndoDepth))
       mouseTargetCacheRef         <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef    <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      bufferAnimationsRef         <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
       themeNamesRef <- themeManager.listAvailableThemes
         .handleErrorWith(_ => IO.pure(Nil))
         .flatMap(Ref.of[IO, List[String]])
@@ -216,6 +218,7 @@ object StateManager:
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
+        bufferAnimationsRef = bufferAnimationsRef,
         onFontConfigChanged = onFontConfigChanged,
         deviceTextScaleProvider = deviceTextScaleProvider,
         configPersistencePath = configPersistencePath,
@@ -265,6 +268,7 @@ object StateManager:
       runtime.projectTaskSemaphore,
       runtime.mouseTargetCacheRef,
       runtime.documentAnalysisFiberRef,
+      runtime.bufferAnimationsRef,
       runtime.onFontConfigChanged,
       runtime.deviceTextScaleProvider,
       runtime.configPersistencePath,

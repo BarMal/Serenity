@@ -53,6 +53,7 @@ private[manager] trait EffectRuntimePort:
   def configPersistencePath: Option[Path]
   def uiPresetStore: UiPresetStore
   def windowSizeProvider: IO[Option[PreferredWindowSize]]
+  def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]]
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
@@ -425,6 +426,7 @@ private[manager] class StateManagerComposition(
     val projectTaskSemaphore: Semaphore[IO],
     val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     val documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
+    val bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
     val onFontConfigChanged: FontConfig => IO[Unit],
     val deviceTextScaleProvider: IO[Double],
     val configPersistencePath: Option[Path],
@@ -448,6 +450,7 @@ private[manager] class StateManagerComposition(
   private val runtimeProjectTaskSemaphore     = projectTaskSemaphore
   private val runtimeMouseTargetCacheRef      = mouseTargetCacheRef
   private val runtimeDocumentAnalysisFiberRef = documentAnalysisFiberRef
+  private val runtimeBufferAnimationsRef      = bufferAnimationsRef
   private val runtimeOnFontConfigChanged      = onFontConfigChanged
   private val runtimeDeviceTextScaleProvider  = deviceTextScaleProvider
   private val runtimeConfigPersistencePath    = configPersistencePath
@@ -480,6 +483,7 @@ private[manager] class StateManagerComposition(
     val configPersistencePath   = runtimeConfigPersistencePath
     val uiPresetStore           = runtimeUiPresetStore
     val windowSizeProvider      = runtimeWindowSizeProvider
+    val bufferAnimationsRef     = runtimeBufferAnimationsRef
 
   private val effectEditorPort: EffectEditorPort = new EffectEditorPort:
     def updateState(update: AppState => AppState): IO[Unit] = runtimeStateRef.update(update)
