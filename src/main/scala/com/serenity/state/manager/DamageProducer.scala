@@ -63,8 +63,9 @@ object DamageProducer:
       commentDamage(bufferId, beforeBuffer, afterBuffer) |+|
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
       languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      viewportDamage(bufferId, beforeBuffer, afterBuffer) |+|
       animationDamage(bufferId, beforeBuffer, afterBuffer) |+|
-      focusDimmingDamage(bufferId, before, after, beforeBuffer, afterBuffer)
+      focusDimmingDamage(bufferId, after, beforeBuffer, afterBuffer)
 
   private def contentDamage(
     bufferId: BufferId,
@@ -160,6 +161,17 @@ object DamageProducer:
     if before.language == after.language then Damage.Nothing
     else Damage.BufferRows(bufferId, (0 until after.content.lineCount).toSet)
 
+  /** Scrolling shifts which buffer line each visual row shows, so every visible row's content changes even though
+    * nothing about the buffer's own data did -- this producer has no layout knowledge of which rows are actually on
+    * screen, so it reports the buffer's full line extent, the same coarse-but-safe bias [[languageDamage]] uses.
+    * `Renderer`'s retired row-by-row structural diff already redrew close to every visible row on a scroll in practice
+    * (a shifted row rarely matches what the previous frame had at the same row index), so this is not a regression from
+    * the pixels it replaces.
+    */
+  private def viewportDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
+    if before.viewport == after.viewport then Damage.Nothing
+    else Damage.BufferRows(bufferId, (0 until after.content.lineCount).toSet)
+
   /** Character-reveal (and other per-cell) animation ticks report exactly the rows whose cells changed, read off
     * `AnimationState.animations`'s `CharacterKey`s -- the same map `PaneRowKey.animations` (`Renderer.scala`) reads
     * today to decide row reuse, so this is a direct structural read rather than a coarsening.
@@ -178,7 +190,6 @@ object DamageProducer:
     */
   private def focusDimmingDamage(
     bufferId: BufferId,
-    before: AppState,
     after: AppState,
     beforeBuffer: Buffer,
     afterBuffer: Buffer

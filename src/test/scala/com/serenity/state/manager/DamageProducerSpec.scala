@@ -134,6 +134,22 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should
+    "report the full buffer extent (plus Chrome, since the active gutter's line numbers follow it) on a scroll" in {
+      val before = stateWithContent("first\nsecond\nthird")
+      val after = before.copy(buffers =
+        before.buffers.updated(bufferId, before.buffers(bufferId).copy(viewport = Viewport.default.copy(topLine = 1)))
+      )
+
+      DamageProducer.forTransition(before, after) shouldBe
+        Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 1, 2)), Damage.Chrome))
+    }
+
+  it should "report no damage from scrolling when the viewport does not actually change" in {
+    val before = stateWithContent("first\nsecond\nthird")
+    DamageProducer.forTransition(before, before) shouldBe Damage.Nothing
+  }
+
+  it should
     "report Everything when the syntax-highlighting setting toggles, since it recolors every buffer's own content" in {
       val before = stateWithContent("alpha")
       val after  = before.copy(config = before.config.withSyntaxHighlighting(!before.config.syntaxHighlightingEnabled))
