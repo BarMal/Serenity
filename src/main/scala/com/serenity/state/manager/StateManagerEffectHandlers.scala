@@ -2274,30 +2274,39 @@ final private[manager] class StateManagerEffectHandlers(
     }
 
   protected def requestOpenFileDialog: IO[Unit] =
-    FileUtils.getCurrentDirectory
-      .flatMap(currentDirectory => fileDialog.chooseOpenFile(Some(currentDirectory)))
-      .flatMap {
-        case Some(path) =>
-          updateState(_.copy(uiSurfaces = List.empty)) >> directLoadFileEffect(path)
-        case None =>
-          IO.unit
-      }
-      .handleErrorWith(ex => logger.error(ex)("[FILE] Native open-file dialog failed"))
+    fileDialog match
+      case Some(dialog) =>
+        FileUtils.getCurrentDirectory
+          .flatMap(currentDirectory => dialog.chooseOpenFile(Some(currentDirectory)))
+          .flatMap {
+            case Some(path) =>
+              updateState(_.copy(uiSurfaces = List.empty)) >> directLoadFileEffect(path)
+            case None =>
+              IO.unit
+          }
+          .handleErrorWith(ex => logger.error(ex)("[FILE] Native open-file dialog failed"))
+      case None =>
+        // No native dialog to show at all -- fall back to the in-app form, same as the save-as path.
+        stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
 
   protected def exportCurrentThemeEffect(state: AppState): IO[Unit] =
     val config            = ThemeConfigWriter.themeToConfig(state.theme)
     val suggestedFileName = s"${ThemeConfigWriter.fileNameFor(config.name)}.conf"
-    FileUtils.getCurrentDirectory
-      .flatMap(currentDirectory => fileDialog.chooseSaveFile(Some(currentDirectory), Some(suggestedFileName)))
-      .flatMap {
-        case Some(path) =>
-          ThemeConfigWriter
-            .write(config, path)
-            .flatTap(_ => logger.info(s"[THEMES] Exported current theme '${config.name}' to $path"))
-        case None =>
-          IO.unit
-      }
-      .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to export current theme '${config.name}'"))
+    fileDialog match
+      case Some(dialog) =>
+        FileUtils.getCurrentDirectory
+          .flatMap(currentDirectory => dialog.chooseSaveFile(Some(currentDirectory), Some(suggestedFileName)))
+          .flatMap {
+            case Some(path) =>
+              ThemeConfigWriter
+                .write(config, path)
+                .flatTap(_ => logger.info(s"[THEMES] Exported current theme '${config.name}' to $path"))
+            case None =>
+              IO.unit
+          }
+          .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to export current theme '${config.name}'"))
+      case None =>
+        IO.unit
 
   private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>

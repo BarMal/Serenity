@@ -318,7 +318,7 @@ private[manager] trait EffectSurfacePort:
 
 /** File infrastructure used by command effects. */
 private[manager] trait EffectFilePort:
-  def fileDialog: com.serenity.io.FileDialog
+  def fileDialog: Option[com.serenity.io.FileDialog]
   def fileManager: FileManager
   def saveExistingBuffer(bufferId: BufferId): IO[Unit]
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]
@@ -335,6 +335,7 @@ private[manager] trait EffectModalWorkflowPort:
   def clearCloseActions(state: AppState): AppState
   def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
   def showSaveAsWorkflow(state: AppState, bufferId: BufferId, statusMessage: String): IO[Unit]
+  def openFileWorkflowModal(mode: FileWorkflowMode, state: AppState): IO[Unit]
   def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit]
   def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
@@ -369,7 +370,7 @@ private[manager] trait WorkflowCapabilityPort:
   def undoRef: Ref[IO, UndoState]
   def quitSignal: Deferred[IO, Unit]
   def logger: Logger[IO]
-  def fileDialog: com.serenity.io.FileDialog
+  def fileDialog: Option[com.serenity.io.FileDialog]
   def fileManager: FileManager
   def sessionPersistence: SessionPersistence
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
@@ -434,7 +435,7 @@ private[manager] class StateManagerComposition(
     val configPersistencePath: Option[Path],
     val uiPresetStore: UiPresetStore,
     val windowSizeProvider: IO[Option[PreferredWindowSize]],
-    val fileDialog: com.serenity.io.FileDialog,
+    val fileDialog: Option[com.serenity.io.FileDialog],
     val fileManager: FileManager,
     val sessionManager: SessionManager,
     val sessionPersistence: SessionPersistence,
@@ -528,6 +529,8 @@ private[manager] class StateManagerComposition(
       workflow.beginCloseAction(scope, state)
     def showSaveAsWorkflow(state: AppState, bufferId: BufferId, statusMessage: String): IO[Unit] =
       workflow.showSaveAsWorkflow(state, bufferId, statusMessage)
+    def openFileWorkflowModal(mode: FileWorkflowMode, state: AppState): IO[Unit] =
+      workflow.openFileWorkflowModal(mode, state)
     def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
       workflow.requestSaveAsFileDialog(state, bufferIdOverride)
     def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =

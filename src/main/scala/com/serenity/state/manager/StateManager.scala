@@ -189,7 +189,7 @@ object StateManager:
     uiPresetStore: UiPresetStore = UiPresetStore.default,
     windowSizeProvider: IO[Option[PreferredWindowSize]] = IO.pure(None),
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit,
-    fileDialog: FileDialog = FileDialog.unavailable
+    fileDialog: Option[FileDialog] = None
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     for

@@ -42,7 +42,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   private def createStateManager(
     sessionRootOverride: Option[Path] = None,
     configPersistencePath: Option[Path] = None,
-    fileDialog: FileDialog = FileDialog.unavailable
+    fileDialog: Option[FileDialog] = None
   ): StateManager =
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerCoreCommandsSpec"))
@@ -359,7 +359,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "export the current theme through the native save-file dialog" in {
     val targetPath   = Files.createTempDirectory("serenity-theme-export").resolve("quiet-focus.conf")
-    val stateManager = createStateManager(fileDialog = TestFileDialog(saveSelection = Some(targetPath)))
+    val stateManager = createStateManager(fileDialog = Some(TestFileDialog(saveSelection = Some(targetPath))))
     val theme = Theme.light.copy(
       name = "quiet-focus",
       background = new java.awt.Color(0x112233),
@@ -409,7 +409,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "save the focused buffer through the native save-as file dialog" in {
     val targetPath   = Files.createTempDirectory("serenity-save-as").resolve("notes-copy.scala")
-    val stateManager = createStateManager(fileDialog = TestFileDialog(saveSelection = Some(targetPath)))
+    val stateManager = createStateManager(fileDialog = Some(TestFileDialog(saveSelection = Some(targetPath))))
     val bufferId     = BufferId(0)
     val filePath     = Path.of("temp", "notes.scala")
 
@@ -439,7 +439,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   it should "open a selected file through the native open-file dialog" in {
     val sourcePath = Files.createTempDirectory("serenity-open").resolve("notes.md")
     Files.writeString(sourcePath, "# Notes")
-    val stateManager = createStateManager(fileDialog = TestFileDialog(openSelection = Some(sourcePath)))
+    val stateManager = createStateManager(fileDialog = Some(TestFileDialog(openSelection = Some(sourcePath))))
     val viewportSize = ViewportSize(120, 40)
     stateManager.handleViewportResize(viewportSize).unsafeRunSync()
 
@@ -460,9 +460,49 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     openedBuffer.map(_.viewport.visibleLines) shouldBe Some(contentRect.height)
   }
 
+  it should "open the in-app save-as form when no native dialog is available" in {
+    val stateManager = createStateManager()
+    val bufferId     = BufferId(0)
+
+    stateManager
+      .updateState { state =>
+        val buffer = state
+          .buffers(bufferId)
+          .copy(content = com.serenity.rope.Rope("no dialog here"), filePath = Some(Path.of("temp", "notes.scala")))
+        state.copy(buffers = state.buffers + (bufferId -> buffer))
+      }
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "save-as", "save-as")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val workflow = updatedState.modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(w)) => Some(w)
+        case _                                                   => None)
+      .getOrElse(fail("Expected active file workflow modal"))
+    workflow.mode shouldBe FileWorkflowMode.SaveAs
+    workflow.filename shouldBe "notes.scala"
+    updatedState.buffers(bufferId).filePath shouldBe Some(Path.of("temp", "notes.scala"))
+  }
+
+  it should "open the in-app open-file form when no native dialog is available" in {
+    val stateManager = createStateManager()
+
+    executeCommandThroughRunner(stateManager, "open", "open")
+
+    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val workflow = updatedState.modalSurface
+      .flatMap(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(w)) => Some(w)
+        case _                                                   => None)
+      .getOrElse(fail("Expected active file workflow modal"))
+    workflow.mode shouldBe FileWorkflowMode.Open
+  }
+
   it should "save an unsaved buffer through the native save-as file dialog" in {
     val targetPath   = Files.createTempDirectory("serenity-unsaved-save").resolve("draft.txt")
-    val stateManager = createStateManager(fileDialog = TestFileDialog(saveSelection = Some(targetPath)))
+    val stateManager = createStateManager(fileDialog = Some(TestFileDialog(saveSelection = Some(targetPath))))
 
     stateManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()
 

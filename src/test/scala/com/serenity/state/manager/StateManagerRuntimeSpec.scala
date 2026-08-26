@@ -8,7 +8,6 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.AnimationState
 import com.serenity.command.{Command, CommandCategory, CommandIntent}
 import com.serenity.config.PreferredWindowSize
-import com.serenity.io.FileDialog
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -64,7 +63,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         uiPresetStore = UiPresetStore.default,
         windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-        fileDialog = FileDialog.unavailable
+        fileDialog = None
       )
     yield
       runtime.stateRef shouldBe stateRef
@@ -79,7 +78,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.bufferAnimationsRef shouldBe bufferAnimationsRef
       runtime.sessionManager.sessionExists.unsafeRunSync() shouldBe false
       runtime.fileManager should not be null
-      runtime.fileDialog shouldBe FileDialog.unavailable
+      runtime.fileDialog shouldBe None
       runtime.sessionPersistence should not be null
 
     program.unsafeRunSync()
@@ -126,7 +125,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         uiPresetStore = UiPresetStore.default,
         windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-        fileDialog = FileDialog.unavailable
+        fileDialog = None
       )
       operations <- StateManagerOperationBoundary.create(
         stateRef,
