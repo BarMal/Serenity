@@ -95,6 +95,8 @@ final private[manager] class StateManagerEffectHandlers(
       def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
   )
 
+  private val animationEffects = new AnimationEffectHandler(bufferAnimationsRef)
+
   private[manager] val behavior = new CommandEffectInterpreter(
     CommandEffectInterpreter.Dependencies(
       interpretLifecycleEffect,
@@ -104,7 +106,8 @@ final private[manager] class StateManagerEffectHandlers(
       interpretFileEffect,
       interpretExplorerEffect,
       interpretWorkflowEffect,
-      interpretLspQueueEffect
+      interpretLspQueueEffect,
+      animationEffects.interpret
     )
   )
 

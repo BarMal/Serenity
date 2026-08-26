@@ -2,6 +2,7 @@ package com.serenity.animation
 
 import java.awt.Color
 
+import com.serenity.rope.{Balance, Rope}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -222,4 +223,47 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
     val resumed = excluded.advanceAllAnimations(_ => true)
     resumed.getCell(1, 1) should be(empty)
     resumed.hasActiveAnimations should be(false)
+  }
+
+  "remapThroughEdits" should "move a key past an insertion earlier in the text" in {
+    given Balance = Balance.default
+    val before    = Rope("line one\nline two")
+    val after     = Rope("\nline one\nline two")
+    val state     = AnimationState.empty.addCharacterAnimation('X', 3, 1, black, white, 5)
+
+    val remapped = state.remapThroughEdits(before, after, List(TextEdit(0, 0, "\n")))
+
+    remapped.getCell(3, 1) should be(empty)
+    remapped.getCell(3, 2) should be(defined)
+  }
+
+  it should "drop an animation whose character an edit deletes" in {
+    given Balance = Balance.default
+    val before    = Rope("Helloa")
+    val after     = Rope("Hello")
+    val state     = AnimationState.empty.addCharacterAnimation('a', 5, 0, black, white, 5)
+
+    val remapped = state.remapThroughEdits(before, after, List(TextEdit(5, 6, "")))
+
+    remapped.animations shouldBe empty
+  }
+
+  it should "leave a key before every edit untouched" in {
+    given Balance = Balance.default
+    val before    = Rope("ab\ncd")
+    val after     = Rope("abX\ncd")
+    val state     = AnimationState.empty.addCharacterAnimation('a', 0, 0, black, white, 5)
+
+    val remapped = state.remapThroughEdits(before, after, List(TextEdit(2, 2, "X")))
+
+    remapped.getCell(0, 0) should be(defined)
+  }
+
+  it should "be a no-op when there are no edits or no animations" in {
+    given Balance = Balance.default
+    val before    = Rope("abc")
+    val state     = AnimationState.empty.addCharacterAnimation('a', 0, 0, black, white, 5)
+
+    state.remapThroughEdits(before, before, Nil) shouldEqual state
+    AnimationState.empty.remapThroughEdits(before, before, List(TextEdit(0, 0, "x"))) shouldEqual AnimationState.empty
   }

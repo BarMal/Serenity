@@ -408,7 +408,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
           file = _ => IO.raiseError(new IllegalStateException("file failed")),
           explorer = _ => observed.update(_ :+ "explorer"),
           workflow = _ => observed.update(_ :+ "workflow"),
-          lspQueue = _ => observed.update(_ :+ "lsp")
+          lspQueue = _ => observed.update(_ :+ "lsp"),
+          animation = _ => observed.update(_ :+ "animation")
         )
       )
       _       <- interpreter.interpret(AppEffect.Lifecycle(LifecycleEffect.CompleteQuit))
