@@ -345,6 +345,43 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     state.buffers(bufferId).isDirty shouldBe true
   }
 
+  it should "keep the modal open and surface a visible status when save-as targets an unwritable path" in {
+    val bufferId = BufferId(0)
+    // A regular file standing in for the target "directory" -- writing notes.md underneath it fails regardless of
+    // filesystem permissions or which user runs the test, unlike a permission-bit-based fixture.
+    val blockingFile = Files.createTempFile("workflow-unwritable", "")
+
+    try
+      val stateManager = createStateManager()
+      stateManager
+        .updateState { state =>
+          val buffer = state.buffers(bufferId).copy(content = com.serenity.rope.Rope("undeliverable"), isDirty = true)
+          state.copy(buffers = state.buffers + (bufferId -> buffer))
+        }
+        .unsafeRunSync()
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.SaveAs,
+              filename = "notes.md",
+              path = blockingFile.toString
+            )
+          )
+        )
+        .unsafeRunSync()
+
+      stateManager.applyEvent(Enter).unsafeRunSync()
+
+      val workflow = currentWorkflow(stateManager)
+      workflow.statusMessage shouldBe defined
+      workflow.statusMessage.get should startWith("Could not save:")
+      val state = stateManager.getCurrentState.unsafeRunSync()
+      state.buffers(bufferId).filePath shouldBe None
+      state.buffers(bufferId).isDirty shouldBe true
+    finally Files.deleteIfExists(blockingFile)
+  }
+
   it should "block a lossy rich-document overwrite and open Save As with a visible reason" in {
     val sourceFile = Files.createTempFile("workflow-lossy-save", ".docx")
     val reason = s"Saving $sourceFile would discard unsupported rich document content. Use Save As to write a new file."

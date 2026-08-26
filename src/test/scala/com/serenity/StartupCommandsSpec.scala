@@ -34,7 +34,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     java.nio.file.Files.writeString(selectedFile, "opened from startup")
 
     val program = for
-      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = TestFileDialog(Some(selectedFile)))
+      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = Some(TestFileDialog(Some(selectedFile))))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
@@ -63,7 +63,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = TestFileDialog(None))
+      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = Some(TestFileDialog(None)))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 

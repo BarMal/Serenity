@@ -16,10 +16,10 @@ main/scala/com/serenity/config/ConfigManager.scala	method configToString	179
 main/scala/com/serenity/config/FocusedKeymapConfig.scala	file length	672
 main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	983
 main/scala/com/serenity/session/SessionState.scala	file length	1238
-main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	799
-main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2427
+main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	802
+main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2436
 main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala	file length	2194
-main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	807
+main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	824
 main/scala/com/serenity/state/models/AppState.scala	file length	687
 main/scala/com/serenity/state/models/ContextualToolbar.scala	file length	905
 main/scala/com/serenity/state/models/ContextualToolbar.scala	method proseItems	167
@@ -39,7 +39,7 @@ main/scala/com/serenity/ui/renderer/TextOverlayRenderer.scala	file length	1008
 main/scala/com/serenity/ui/terminal/SwingWindow.scala	file length	1143
 main/scala/com/serenity/ui/theme/ThemeManager.scala	method highlightMarkdownLine	89
 test/scala/com/serenity/AppRuntimeSpec.scala	file length	896
-test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1624
+test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1664
 test/scala/com/serenity/CommandRunnerFloatingRenderingSpec.scala	file length	786
 test/scala/com/serenity/CommandRunnerReducerSpec.scala	file length	1226
 test/scala/com/serenity/CommandRunnerSpec.scala	file length	1054

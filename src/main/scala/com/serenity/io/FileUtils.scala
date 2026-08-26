@@ -54,13 +54,17 @@ object FileUtils:
   def getCurrentDirectory: IO[Path] =
     IO.blocking(Paths.get(System.getProperty("user.dir")))
 
-  /** Resolve path relative to current directory */
+  /** Resolve path relative to current directory, expanding a leading `~` to the user's home directory first. */
   def resolvePath(pathString: String): IO[Path] =
     for
       currentDir <- getCurrentDirectory
-      path =
-        if pathString.startsWith("/") || pathString.contains(":") then Paths.get(pathString) // Absolute path
-        else currentDir.resolve(pathString)                                                  // Relative path
+      path <-
+        if pathString == "~" || pathString.startsWith("~/") then
+          IO.blocking(Paths.get(System.getProperty("user.home"))).map { home =>
+            if pathString == "~" then home else home.resolve(pathString.stripPrefix("~/"))
+          }
+        else if pathString.startsWith("/") || pathString.contains(":") then IO.pure(Paths.get(pathString))
+        else IO.pure(currentDir.resolve(pathString))
     yield path.normalize()
 
   /** Check if file has been modified since last read */
