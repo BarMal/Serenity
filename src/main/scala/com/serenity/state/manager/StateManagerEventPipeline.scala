@@ -44,6 +44,15 @@ private[manager] object StateManagerEventPipeline:
   private[manager] def candidateLspBufferIds(previousState: AppState, currentState: AppState): Set[BufferId] =
     Set(focusedBufferId(previousState), focusedBufferId(currentState)).flatten
 
+  private[manager] def modalType(modal: Modal): ModalType =
+    modal match
+      case Modal.GotoLine(_)        => ModalType.GotoLine
+      case Modal.Find(_, _, _)      => ModalType.Find
+      case Modal.FileWorkflow(_)    => ModalType.FileWorkflow
+      case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
+      case Modal.CloseWorkflow(_)   => ModalType.CloseWorkflow
+      case Modal.Custom(name, _)    => ModalType.Custom(name)
+
 final private[manager] class StateManagerEventPipeline(
     state: EventStatePort,
     effects: EventEffectPort,
@@ -376,47 +385,23 @@ final private[manager] class StateManagerEventPipeline(
   private[manager] def scheduleDocumentAnalysis(): cats.effect.IO[Unit] =
     operations.scheduleDocumentAnalysis()
 
+  /** `paneId` is per-editor-pane identity, not a closed set of kinds -- unlike the `SurfaceContent`/ `PanelPosition`
+    * associations in [[FocusHandlerRouting]], it cannot be pooled, so this branch alone still builds a component per
+    * dispatch.
+    */
   private def getLocalHandlerForFocus(focus: Focus, state: AppState): LocalEventHandler =
     focus match
       case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId)(using balance)
       case Focus.Surface(surfaceId) =>
         state.surfaceById(surfaceId) match
-          case Some(surface) =>
-            surface.presentation match
-              case SurfacePresentation.Pinned(position, _) =>
-                new PinnedPanelComponent(position)
-              case SurfacePresentation.Expanded(position, _) =>
-                new PinnedPanelComponent(position)
-              case SurfacePresentation.Modal =>
-                surface.content match
-                  case SurfaceContent.ModalWorkflow(modal) =>
-                    new ModalComponent(modalType(modal))
-                  case _ =>
-                    new PeekOverlayComponent()
-              case SurfacePresentation.Floating(_, _) =>
-                surface.content match
-                  case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
-                    val registry = CommandRegistry.withToggleUI
-                    new CommandRunnerComponent(registry)
-                  case SurfaceContent.ThemePicker(_) =>
-                    new ThemePickerComponent()
-                  case SurfaceContent.ThemeCreator(_) =>
-                    new ThemeCreatorComponent()
-                  case SurfaceContent.FileSearch(_) =>
-                    new FileSearchComponent()
-                  case SurfaceContent.ContextualToolbar(_) =>
-                    val registry = CommandRegistry.withToggleUI
-                    new ContextualToolbarComponent(registry)
-                  case SurfaceContent.CommentLens(_) =>
-                    new CommentLensComponent()
-                  case SurfaceContent.StartPage(_) =>
-                    new StartupPageComponent()
-                  case SurfaceContent.ModalWorkflow(modal) =>
-                    new ModalComponent(modalType(modal))
-                  case _ =>
-                    new PeekOverlayComponent()
           case None =>
             NoOpLocalEventHandler
+          case Some(surface) =>
+            surface.presentation match
+              case SurfacePresentation.Pinned(position, _)   => FocusHandlerRouting.forPinnedPanel(position)
+              case SurfacePresentation.Expanded(position, _) => FocusHandlerRouting.forPinnedPanel(position)
+              case SurfacePresentation.Modal | SurfacePresentation.Floating(_, _) =>
+                FocusHandlerRouting.forSurfaceContent(surface.content)
 
   private[manager] def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
     for
@@ -1067,7 +1052,7 @@ final private[manager] class StateManagerEventPipeline(
       case click: MouseClick if click.button == MouseButton.Primary =>
         modalHitAt(click, state) match
           case Some((modal, hit)) =>
-            val modalType = this.modalType(modal)
+            val modalType = StateManagerEventPipeline.modalType(modal)
             val clicked = ModalEventReducer.reduce(
               modalType,
               ModalClick(hit.focusId.value, hit.actionId.map(_.value)),
@@ -2269,12 +2254,3 @@ final private[manager] class StateManagerEventPipeline(
 
     override def charAt(index: Int): Char =
       content.index(index).getOrElse('\u0000')
-
-  private def modalType(modal: Modal): ModalType =
-    modal match
-      case Modal.GotoLine(_)        => ModalType.GotoLine
-      case Modal.Find(_, _, _)      => ModalType.Find
-      case Modal.FileWorkflow(_)    => ModalType.FileWorkflow
-      case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
-      case Modal.CloseWorkflow(_)   => ModalType.CloseWorkflow
-      case Modal.Custom(name, _)    => ModalType.Custom(name)
