@@ -440,45 +440,40 @@ object UiPreset:
           None
 
     def fromPanelContent(content: PanelContent, position: PanelPosition, size: Int): Option[PinnedPanel] =
-      val surfaceContent = content match
-        case PanelContent.DirectoryTree(tree, selectedPath) => SurfaceContent.DirectoryTree(tree, selectedPath)
-        case PanelContent.Terminal(buffer, cursor)          => SurfaceContent.Terminal(buffer, cursor)
-        case PanelContent.Outline(symbols, activeLocation)  => SurfaceContent.Outline(symbols, activeLocation)
-        case PanelContent.Comments(symbols, activeLocation) => SurfaceContent.Comments(symbols, activeLocation)
-        case PanelContent.Diagnostics(issues)               => SurfaceContent.Diagnostics(issues)
-        case PanelContent.MarkdownPreview(bufferId, title)  => SurfaceContent.MarkdownPreview(bufferId, title)
-
-      fromSurfaceContent(surfaceContent, position, size)
+      fromSurfaceContent(content.asSurfaceContent, position, size)
 
     private def fromSurfaceContent(
       content: SurfaceContent,
       position: PanelPosition,
       size: Int
     ): Option[PinnedPanel] =
-      snapshot(content).map(PinnedPanel(position, size, _))
+      PanelContent.fromSurfaceContent(content).map(panel => PinnedPanel(position, size, toSnapshot(panel)))
 
-    private def snapshot(content: SurfaceContent): Option[PanelContentSnapshot] =
+    /** Persistence mapping from the pinnable content model to its saved form. Exhaustive over [[PanelContent]] with no
+      * wildcard, so adding a new pinnable case is a compile error here until it is given an explicit persistence
+      * decision.
+      *
+      * `activeLocation` on Outline, Comments, and Diagnostics tracks a live cursor/selection highlight; it has no
+      * meaning across a save/restore, so the snapshot form deliberately does not carry it.
+      */
+    private def toSnapshot(content: PanelContent): PanelContentSnapshot =
       content match
-        case SurfaceContent.DirectoryTree(tree, selectedPath) =>
-          Some(
-            PanelContentSnapshot.DirectoryTree(
-              rootPath = tree.rootPath.toString,
-              selectedPath = selectedPath.map(_.toString),
-              expandedPaths = tree.expandedPaths.toList.map(_.toString).sorted
-            )
+        case PanelContent.DirectoryTree(tree, selectedPath) =>
+          PanelContentSnapshot.DirectoryTree(
+            rootPath = tree.rootPath.toString,
+            selectedPath = selectedPath.map(_.toString),
+            expandedPaths = tree.expandedPaths.toList.map(_.toString).sorted
           )
-        case SurfaceContent.Terminal(buffer, cursor) =>
-          Some(PanelContentSnapshot.Terminal(buffer, cursor))
-        case SurfaceContent.Outline(symbols, _) =>
-          Some(PanelContentSnapshot.Outline(symbols))
-        case SurfaceContent.Comments(symbols, _) =>
-          Some(PanelContentSnapshot.Comments(symbols))
-        case SurfaceContent.Diagnostics(issues, _) =>
-          Some(PanelContentSnapshot.Diagnostics(issues))
-        case SurfaceContent.MarkdownPreview(bufferId, title) =>
-          Some(PanelContentSnapshot.MarkdownPreview(bufferId.value, title))
-        case _ =>
-          None
+        case PanelContent.Terminal(buffer, cursor) =>
+          PanelContentSnapshot.Terminal(buffer, cursor)
+        case PanelContent.Outline(symbols, _) =>
+          PanelContentSnapshot.Outline(symbols)
+        case PanelContent.Comments(symbols, _) =>
+          PanelContentSnapshot.Comments(symbols)
+        case PanelContent.Diagnostics(issues, _) =>
+          PanelContentSnapshot.Diagnostics(issues)
+        case PanelContent.MarkdownPreview(bufferId, title) =>
+          PanelContentSnapshot.MarkdownPreview(bufferId.value, title)
 
   def capture(
     name: String,
