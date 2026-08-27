@@ -17,7 +17,16 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
-import com.serenity.ui.renderer.{Java2DRenderSurface, RenderSurface, Renderer}
+import com.serenity.ui.renderer.{
+  Effects,
+  Java2DRenderSurface,
+  PixelDrawing,
+  RenderSurface,
+  Renderer,
+  RoundedRectDrawing,
+  SurfaceContentIdentity,
+  TextDrawing
+}
 import com.serenity.ui.theme.TextStyle
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -335,8 +344,7 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
 
   def styleCalls: List[ScenarioStyleCall] = styleCallsBuffer.toList
 
-  override def setFont(font: Font): Unit                    = delegate.setFont(font)
-  override def fontRenderContext: Option[FontRenderContext] = delegate.fontRenderContext
+  override def persistentContentKey: Option[SurfaceContentIdentity] = delegate.persistentContentKey
 
   def setForegroundColor(color: Color): Unit =
     foregroundColor.set(color)
@@ -347,6 +355,9 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     delegate.setBackgroundColor(color)
 
   def getBackgroundColor: Color = delegate.getBackgroundColor
+
+  override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
+    delegate.clearViewportExcept(color, preserved)
 
   def putString(x: Int, y: Int, text: String): Unit =
     recordText(text, LayoutRect(x, y, text.length.max(1), 1))
@@ -365,50 +376,87 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     styleCallsBuffer += ScenarioStyleCall("disable", style)
     delegate.disableStyle(style)
 
-  override def setAlpha(alpha: Float): Unit = delegate.setAlpha(alpha)
-  override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
-    delegate.blurRegion(x, y, width, height, radius)
-  override def applyPostProcessing(effect: com.serenity.config.PostProcessingEffect): Unit =
-    delegate.applyPostProcessing(effect)
   override def devicePixelScaleX: Double = delegate.devicePixelScaleX
   override def devicePixelScaleY: Double = delegate.devicePixelScaleY
 
-  override def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color,
-    strokeWidth: Float
-  ): Unit =
-    bordersBuffer += ScenarioBorder(LayoutRect(x, y, width, height), color)
-    delegate.strokeRoundRect(x, y, width, height, arcPx, color, strokeWidth)
+  /** Delegates every member to the wrapped surface's own [[TextDrawing]]. Being forced to implement every member here
+    * -- rather than inheriting a silent no-op default -- is what caught this decorator previously dropping
+    * `withLogicalPixelRow`'s pixel-row override on the floor (see #1012): it wasn't overridden, so it silently ran
+    * `render` un-adjusted instead of forwarding to the real surface.
+    */
+  private val textDrawing: TextDrawing = new TextDrawing:
+    def setFont(font: Font): Unit                    = delegate.text.setFont(font)
+    def fontRenderContext: Option[FontRenderContext] = delegate.text.fontRenderContext
 
-  def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, arcPx: Int)(render: => Unit): Unit =
-    delegate.withRoundRectClip(x, y, width, height, arcPx)(render)
-  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
-    delegate.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
+    def drawRunPx(
+      xPx: Float,
+      yPx: Int,
+      bgWidthPx: Float,
+      lineHeightPx: Int,
+      ascentPx: Int,
+      text: String,
+      clipGlyphToRun: Boolean = false
+    ): Unit =
+      val x     = math.floor(xPx / metrics.charWidth.max(1).toFloat).toInt
+      val y     = math.floor(yPx / metrics.lineHeight.max(1).toFloat).toInt
+      val width = math.ceil(bgWidthPx / metrics.charWidth.max(1).toFloat).toInt.max(1)
+      recordText(text, LayoutRect(x, y, width, 1))
+      recordPaint(LayoutRect(x, y, width, 1))
+      delegate.text.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, text, clipGlyphToRun)
 
-  override def drawRunPx(
-    xPx: Float,
-    yPx: Int,
-    bgWidthPx: Float,
-    lineHeightPx: Int,
-    ascentPx: Int,
-    text: String,
-    clipGlyphToRun: Boolean = false
-  ): Unit =
-    val x     = math.floor(xPx / metrics.charWidth.max(1).toFloat).toInt
-    val y     = math.floor(yPx / metrics.lineHeight.max(1).toFloat).toInt
-    val width = math.ceil(bgWidthPx / metrics.charWidth.max(1).toFloat).toInt.max(1)
-    recordText(text, LayoutRect(x, y, width, 1))
-    recordPaint(LayoutRect(x, y, width, 1))
-    delegate.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, text, clipGlyphToRun)
+    def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit =
+      delegate.text.withLogicalPixelRow(cellRow, pixelY)(render)
 
-  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
-    drawnImageBuffer += ScenarioDrawnImage(image, LayoutRect(x, y, width, height))
-    delegate.drawImage(image, x, y, width, height)
+  def text: TextDrawing = textDrawing
+
+  /** Same rationale as [[textDrawing]]: forwarding every member here caught `withPixelTranslation` not being delegated,
+    * which meant the wrapped surface's `Graphics2D` translate never ran for scenario-driven tests -- content drawn
+    * through this surface during a translated block rendered at the untranslated position.
+    */
+  private val pixelDrawing: PixelDrawing = new PixelDrawing:
+    def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
+      delegate.pixels.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
+
+    def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+      drawnImageBuffer += ScenarioDrawnImage(image, LayoutRect(x, y, width, height))
+      delegate.pixels.drawImage(image, x, y, width, height)
+
+    def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
+      delegate.pixels.withPixelTranslation(xPx, yPx)(render)
+
+  def pixels: PixelDrawing = pixelDrawing
+
+  override def effects: Option[Effects] = delegate.effects.map { delegateEffects =>
+    new Effects:
+      def setAlpha(alpha: Float): Unit = delegateEffects.setAlpha(alpha)
+      def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
+        delegateEffects.blurRegion(x, y, width, height, radius)
+      def applyPostProcessing(
+        effect: com.serenity.config.PostProcessingEffect,
+        animationPhase: Long
+      ): Unit = delegateEffects.applyPostProcessing(effect, animationPhase)
+  }
+
+  override def roundedRects: Option[RoundedRectDrawing] = delegate.roundedRects.map { delegateRoundedRects =>
+    new RoundedRectDrawing:
+      def strokeRoundRect(
+        x: Int,
+        y: Int,
+        width: Int,
+        height: Int,
+        arcPx: Int,
+        color: Color,
+        strokeWidth: Float = 1.5f
+      ): Unit =
+        bordersBuffer += ScenarioBorder(LayoutRect(x, y, width, height), color)
+        delegateRoundedRects.strokeRoundRect(x, y, width, height, arcPx, color, strokeWidth)
+
+      def drawRoundRectShadow(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color): Unit =
+        delegateRoundedRects.drawRoundRectShadow(x, y, width, height, arcPx, color)
+
+      def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, arcPx: Int)(render: => Unit): Unit =
+        delegateRoundedRects.withRoundRectClip(x, y, width, height, arcPx)(render)
+  }
 
   def hideCursor(): Unit  = delegate.hideCursor()
   def viewportWidth: Int  = delegate.viewportWidth

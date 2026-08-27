@@ -17,9 +17,9 @@ main/scala/com/serenity/config/ConfigManager.scala	method configToString	179
 main/scala/com/serenity/config/FocusedKeymapConfig.scala	file length	672
 main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	983
 main/scala/com/serenity/session/SessionState.scala	file length	1217
-main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	823
+main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	816
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2532
-main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala	file length	2280
+main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala	file length	2256
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	865
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	method submitReplaceNextEffect	85
 main/scala/com/serenity/state/models/AppState.scala	file length	726
@@ -35,8 +35,8 @@ main/scala/com/serenity/ui/layout/LayoutEngine.scala	file length	1551
 main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1174
 main/scala/com/serenity/ui/presets/UiPreset.scala	file length	878
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	method applyGlow	89
-main/scala/com/serenity/ui/renderer/Renderer.scala	file length	3008
-main/scala/com/serenity/ui/renderer/TextOverlayRenderer.scala	file length	1008
+main/scala/com/serenity/ui/renderer/Renderer.scala	file length	3030
+main/scala/com/serenity/ui/renderer/TextOverlayRenderer.scala	file length	1027
 main/scala/com/serenity/ui/terminal/SwingWindow.scala	file length	1143
 main/scala/com/serenity/ui/theme/ThemeManager.scala	method highlightMarkdownLine	89
 test/scala/com/serenity/AppRuntimeSpec.scala	file length	1060
