@@ -16,7 +16,7 @@ main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	218
 main/scala/com/serenity/config/ConfigManager.scala	method configToString	179
 main/scala/com/serenity/config/FocusedKeymapConfig.scala	file length	672
 main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	983
-main/scala/com/serenity/session/SessionState.scala	file length	1250
+main/scala/com/serenity/session/SessionState.scala	file length	1217
 main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	823
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2532
 main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala	file length	2280
@@ -60,7 +60,7 @@ test/scala/com/serenity/MouseClickSpec.scala	file length	1054
 test/scala/com/serenity/RendererMarkdownLensSpec.scala	file length	889
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	669
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	728
-test/scala/com/serenity/SessionStateSpec.scala	file length	1323
+test/scala/com/serenity/SessionStateSpec.scala	file length	1429
 test/scala/com/serenity/StateManagerElementTransitionSettingsSpec.scala	file length	724
 test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	1004
 test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1178

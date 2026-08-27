@@ -1321,3 +1321,109 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     restored.persisted.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
   }
+
+  it should "decode a session file written by the current release using old toString enum spellings" in {
+    val config = AppConfig.default
+      .withCursorMode(CursorMode.Breathe)
+      .withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+      .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+      .withWindowChromeMode(WindowChromeMode.NativeThemed)
+      .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      .withDefaultDocumentMode(DefaultDocumentMode.RichText)
+      .withInterfaceDensity(InterfaceDensity.Spacious)
+      .withMaterialPreset(MaterialPreset.Crystal)
+      .withMotionPreset(MotionPreset.Expressive)
+      .withMotionConfiguration(
+        MotionConfig(
+          accessibility = MotionAccessibility.Reduced,
+          baseline = MotionPreset.Expressive,
+          families = Map(
+            MotionFamily.Cursor -> MotionFamilyConfig(
+              enabled = true,
+              transitionKind = TransitionKind.Fade,
+              animation = None,
+              speedScale = 1.0
+            )
+          )
+        )
+      )
+
+    val currentJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = config)))
+      .asJson
+    val configObject =
+      currentJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val motionConfigObject =
+      configObject("motionConfiguration").flatMap(_.asObject).getOrElse(fail("Expected motionConfiguration object"))
+    val familiesObject =
+      motionConfigObject("families").flatMap(_.asObject).getOrElse(fail("Expected families object"))
+    val cursorFamilyJson = familiesObject("cursor").getOrElse(fail("Expected cursor family entry"))
+
+    // The pre-#1008 release wrote every one of these fields using the enum's `toString` spelling instead of
+    // `configKey` (e.g. "NativeThemed" instead of "native-themed"). This rebuilds that old shape from a
+    // current-format encode so the fixture stays in sync with the schema instead of being hand-typed JSON.
+    val legacyConfigObject = configObject
+      .add("cursorMode", Json.fromString("Breathe"))
+      .add("cursorInfoBarMode", Json.fromString("Detailed"))
+      .add("cursorInfoBarPlacement", Json.fromString("PinnedBottom"))
+      .add("windowChromeMode", Json.fromString("NativeThemed"))
+      .add("markdownViewMode", Json.fromString("InlineLens"))
+      .add("defaultDocumentMode", Json.fromString("RichText"))
+      .add("interfaceDensity", Json.fromString("Spacious"))
+      .add("materialPreset", Json.fromString("Crystal"))
+      .add("motionPreset", Json.fromString("Expressive"))
+      .add(
+        "motionConfiguration",
+        Json.fromJsonObject(
+          motionConfigObject
+            .add("accessibility", Json.fromString("Reduced"))
+            .add("baseline", Json.fromString("Expressive"))
+            .add("families", Json.obj("Cursor" -> cursorFamilyJson))
+        )
+      )
+    val legacyJson =
+      currentJson.mapObject(_.add("config", Json.fromJsonObject(legacyConfigObject)))
+
+    val decoded = legacyJson.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.cursorMode shouldBe CursorMode.Breathe
+    decoded.toOption.get.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
+    decoded.toOption.get.config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
+    decoded.toOption.get.config.windowChromeMode shouldBe WindowChromeMode.NativeThemed
+    decoded.toOption.get.config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
+    decoded.toOption.get.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
+    decoded.toOption.get.config.interfaceDensity shouldBe InterfaceDensity.Spacious
+    decoded.toOption.get.config.materialPreset shouldBe MaterialPreset.Crystal
+    decoded.toOption.get.config.motionPreset shouldBe MotionPreset.Expressive
+    decoded.toOption.get.config.motionConfiguration shouldBe Some(
+      MotionConfig(
+        accessibility = MotionAccessibility.Reduced,
+        baseline = MotionPreset.Expressive,
+        families = Map(
+          MotionFamily.Cursor -> MotionFamilyConfig(
+            enabled = true,
+            transitionKind = TransitionKind.Fade,
+            animation = None,
+            speedScale = 1.0
+          )
+        )
+      )
+    )
+
+    // Writing the same config back out must use the new spelling exclusively -- new writes never regress to
+    // toString, even for a session decoded from an old-spelling file.
+    val rewrittenJson = decoded.toOption.get.asJson
+    val rewrittenConfigObject =
+      rewrittenJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+
+    rewrittenConfigObject("cursorMode") shouldBe Some(Json.fromString("breathe"))
+    rewrittenConfigObject("cursorInfoBarMode") shouldBe Some(Json.fromString("detailed"))
+    rewrittenConfigObject("cursorInfoBarPlacement") shouldBe Some(Json.fromString("pinned-bottom"))
+    rewrittenConfigObject("windowChromeMode") shouldBe Some(Json.fromString("native-themed"))
+    rewrittenConfigObject("markdownViewMode") shouldBe Some(Json.fromString("inline-lens"))
+    rewrittenConfigObject("defaultDocumentMode") shouldBe Some(Json.fromString("rich-text"))
+    rewrittenConfigObject("interfaceDensity") shouldBe Some(Json.fromString("spacious"))
+    rewrittenConfigObject("materialPreset") shouldBe Some(Json.fromString("crystal"))
+    rewrittenConfigObject("motionPreset") shouldBe Some(Json.fromString("expressive"))
+  }
