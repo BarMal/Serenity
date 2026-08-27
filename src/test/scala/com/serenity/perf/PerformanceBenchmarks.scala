@@ -437,7 +437,7 @@ object PerformanceBenchmarks:
         () => renderedFrame(commentsState, deviceScale = 2.0)
       )
     ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++ DamageBenchmarks
-      .benchmarks() ++ List(
+      .benchmarks() ++ equalsBenchmarks() ++ List(
       BenchmarkRunner.Benchmark(
         "find_replace.large_result_set",
         3,
@@ -511,6 +511,67 @@ object PerformanceBenchmarks:
         30,
         () => assert(animationCells.nonEmpty && advancedAnimationState != animationState),
         () => animationState.advanceAllAnimations()
+      )
+    )
+
+  /** Measures `Buffer.equals`/`AppState.equals` under the three shapes of comparison the reducers actually perform:
+    * the same instance (the hand-rolled `eq` fast path), a `.copy()` of it (a different instance whose fields --
+    * including the `Rope` content -- are still the same shared references), and an independently built value with
+    * equal content but no shared references anywhere in the tree. Only the last case forces a full structural walk
+    * of the `Rope`, which has no custom `equals` of its own -- this is #1002's deferred "removed, or their retention
+    * is justified by measurement" acceptance criterion.
+    */
+  private def equalsBenchmarks(): List[BenchmarkRunner.Benchmark] =
+    val content = largeMultilineDocument(lines = 15_000)
+    val stateA     = editorState(content, None)
+    val stateB     = editorState(content, None)
+    val stateACopy = stateA.copy()
+    val bufferA     = stateA.persisted.buffers(BufferId(1))
+    val bufferB     = stateB.persisted.buffers(BufferId(1))
+    val bufferACopy = bufferA.copy()
+
+    List(
+      BenchmarkRunner.Benchmark(
+        "equals.appstate.same_reference",
+        3,
+        20,
+        () => assert(stateA == stateA),
+        () => stateA == stateA
+      ),
+      BenchmarkRunner.Benchmark(
+        "equals.appstate.shared_fields_different_instance",
+        3,
+        20,
+        () => assert(stateA == stateACopy),
+        () => stateA == stateACopy
+      ),
+      BenchmarkRunner.Benchmark(
+        "equals.appstate.independent_equal_content",
+        3,
+        20,
+        () => assert(stateA == stateB),
+        () => stateA == stateB
+      ),
+      BenchmarkRunner.Benchmark(
+        "equals.buffer.same_reference",
+        3,
+        20,
+        () => assert(bufferA == bufferA),
+        () => bufferA == bufferA
+      ),
+      BenchmarkRunner.Benchmark(
+        "equals.buffer.shared_fields_different_instance",
+        3,
+        20,
+        () => assert(bufferA == bufferACopy),
+        () => bufferA == bufferACopy
+      ),
+      BenchmarkRunner.Benchmark(
+        "equals.buffer.independent_equal_content",
+        3,
+        20,
+        () => assert(bufferA == bufferB),
+        () => bufferA == bufferB
       )
     )
 
