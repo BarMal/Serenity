@@ -22,7 +22,7 @@ main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file leng
 main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala	file length	2280
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	856
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	method submitReplaceNextEffect	82
-main/scala/com/serenity/state/models/AppState.scala	file length	731
+main/scala/com/serenity/state/models/AppState.scala	file length	720
 main/scala/com/serenity/state/models/ContextualToolbar.scala	file length	905
 main/scala/com/serenity/state/models/ContextualToolbar.scala	method proseItems	167
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	809
@@ -66,7 +66,7 @@ test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	1004
 test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1178
 test/scala/com/serenity/TextOverlayRendererSpec.scala	file length	673
 test/scala/com/serenity/UiPresetSpec.scala	file length	686
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	609
+test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	732
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320
 test/scala/com/serenity/rope/RopeSpec.scala	file length	724
 test/scala/com/serenity/state/manager/DamageProducerSpec.scala	file length	732

@@ -673,17 +673,6 @@ final case class AppState(
       tree.paneIds.toSet == persisted.layout.editorPanes.keySet &&
       persisted.layout.paneOrder.filter(persisted.layout.editorPanes.keySet.contains) == tree.paneIds
 
-  // buffers (walked transitively through `persisted`) dominates the cost of the compiler-generated equals, paid on
-  // every dispatched event including ones like MouseMove that never change state. Short-circuiting on reference
-  // identity covers the overwhelmingly common "nothing changed" case in O(1). Comparing via productIterator rather
-  // than hand-listing fields avoids the risk of silently dropping a field from the comparison as the case class
-  // evolves.
-  override def equals(obj: Any): Boolean =
-    obj match
-      case that: AnyRef if (this: AnyRef).eq(that) => true
-      case that: AppState                          => productIterator.sameElements(that.productIterator)
-      case _                                       => false
-
 object AppState:
 
   def initial(using com.serenity.rope.Balance): AppState = initial(AppConfig.default)
