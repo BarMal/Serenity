@@ -36,7 +36,10 @@ object BenchmarkRunner:
       "equals.appstate.independent_equal_content",
       "equals.buffer.same_reference",
       "equals.buffer.shared_fields_different_instance",
-      "equals.buffer.independent_equal_content"
+      "equals.buffer.independent_equal_content",
+      "equals.appstate.multi_buffer_session.same_reference",
+      "equals.appstate.multi_buffer_session.one_buffer_edited",
+      "equals.appstate.multi_buffer_session.independent_equal_content"
     )
 
   final private[perf] case class Benchmark(
