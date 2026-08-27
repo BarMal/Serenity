@@ -355,21 +355,27 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     val bufferId    = BufferId(0)
     val diagnostics = SpellChecker.check("wurld", config)
     val content     = NonCollectingRope(Rope("wurld"))
-    val baseBuffer  = AppState.initial.buffers(bufferId)
+    val baseBuffer  = AppState.initial.persisted.buffers(bufferId)
     val buffer      = baseBuffer.copy(document = baseBuffer.document.copy(content = content))
     val uri         = SpellChecker.diagnosticsUri(buffer)
     val fingerprint = SpellCheckFingerprint.from(buffer, config)
     val state = AppState.initial.copy(
-      config = AppConfig.default.withSpellCheck(config),
-      buffers = Map(bufferId -> buffer),
-      diagnostics = Map(uri -> diagnostics),
-      spellCheckCache = Map(uri -> SpellCheckCacheEntry(fingerprint, diagnostics))
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withSpellCheck(config),
+        buffers = Map(bufferId -> buffer)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        diagnosticsState = AppState.initial.runtime.diagnosticsState.copy(
+          diagnostics = Map(uri -> diagnostics),
+          spellCheckCache = Map(uri -> SpellCheckCacheEntry(fingerprint, diagnostics))
+        )
+      )
     )
 
     val refreshed = SpellChecker.refreshDiagnostics(state)
 
-    refreshed.diagnostics.getOrElse(uri, Nil) shouldBe diagnostics
-    refreshed.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(fingerprint)
+    refreshed.runtime.diagnosticsState.diagnostics.getOrElse(uri, Nil) shouldBe diagnostics
+    refreshed.runtime.diagnosticsState.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(fingerprint)
   }
 
   it should "invalidate cached spell-check diagnostics when buffer content changes" in {
@@ -377,25 +383,31 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     val bufferId         = BufferId(0)
     val staleContent     = Rope("wurld")
     val updatedContent   = Rope("hello")
-    val baseBuffer       = AppState.initial.buffers(bufferId)
+    val baseBuffer       = AppState.initial.persisted.buffers(bufferId)
     val staleBuffer      = baseBuffer.copy(document = baseBuffer.document.copy(content = staleContent))
     val updatedBuffer    = staleBuffer.copy(document = staleBuffer.document.copy(content = updatedContent))
     val uri              = SpellChecker.diagnosticsUri(updatedBuffer)
     val staleDiagnostics = SpellChecker.check("wurld", config)
     val state = AppState.initial.copy(
-      config = AppConfig.default.withSpellCheck(config),
-      buffers = Map(bufferId -> updatedBuffer),
-      diagnostics = Map(uri -> staleDiagnostics),
-      spellCheckCache = Map(
-        uri -> SpellCheckCacheEntry(SpellCheckFingerprint.from(staleBuffer, config), staleDiagnostics)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withSpellCheck(config),
+        buffers = Map(bufferId -> updatedBuffer)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        diagnosticsState = AppState.initial.runtime.diagnosticsState.copy(
+          diagnostics = Map(uri -> staleDiagnostics),
+          spellCheckCache = Map(
+            uri -> SpellCheckCacheEntry(SpellCheckFingerprint.from(staleBuffer, config), staleDiagnostics)
+          )
+        )
       )
     )
 
     val refreshed = SpellChecker.refreshDiagnostics(state)
 
-    refreshed.diagnostics.get(uri) shouldBe None
-    refreshed.spellCheckCache.get(uri).map(_.diagnostics) shouldBe Some(Nil)
-    refreshed.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(
+    refreshed.runtime.diagnosticsState.diagnostics.get(uri) shouldBe None
+    refreshed.runtime.diagnosticsState.spellCheckCache.get(uri).map(_.diagnostics) shouldBe Some(Nil)
+    refreshed.runtime.diagnosticsState.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(
       SpellCheckFingerprint.from(updatedBuffer, config)
     )
   }
@@ -404,22 +416,24 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     val dictionary = writeDic("serenity-cache", List("hello"))
     val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
     val bufferId   = BufferId(0)
-    val baseBuffer = AppState.initial.buffers(bufferId)
+    val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("hello added")))
     val uri        = SpellChecker.diagnosticsUri(buffer)
     val staleState = AppState.initial.copy(
-      config = AppConfig.default.withSpellCheck(config),
-      buffers = Map(bufferId -> buffer)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withSpellCheck(config),
+        buffers = Map(bufferId -> buffer)
+      )
     )
     val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState)
-    staleDiagnostics.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
+    staleDiagnostics.runtime.diagnosticsState.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
       List("Possible spelling issue: added")
 
     Files.writeString(dictionary, "2\nhello\nadded\n", StandardCharsets.UTF_8)
     Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
     val refreshed = SpellChecker.refreshDiagnostics(staleDiagnostics)
 
-    refreshed.diagnostics.get(uri) shouldBe None
+    refreshed.runtime.diagnosticsState.diagnostics.get(uri) shouldBe None
   }
 
   it should "invalidate cached spell-check diagnostics when affix file content changes" in {
@@ -430,15 +444,17 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     )
     val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
     val bufferId   = BufferId(0)
-    val baseBuffer = AppState.initial.buffers(bufferId)
+    val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("drafting")))
     val uri        = SpellChecker.diagnosticsUri(buffer)
     val staleState = AppState.initial.copy(
-      config = AppConfig.default.withSpellCheck(config),
-      buffers = Map(bufferId -> buffer)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withSpellCheck(config),
+        buffers = Map(bufferId -> buffer)
+      )
     )
     val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState)
-    staleDiagnostics.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
+    staleDiagnostics.runtime.diagnosticsState.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
       List("Possible spelling issue: drafting")
 
     Files.writeString(
@@ -449,22 +465,25 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     Files.setLastModifiedTime(affix, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
     val refreshed = SpellChecker.refreshDiagnostics(staleDiagnostics)
 
-    refreshed.diagnostics.get(uri) shouldBe None
+    refreshed.runtime.diagnosticsState.diagnostics.get(uri) shouldBe None
   }
 
   it should "drop stale spell-check analysis results when the buffer changes before publication" in {
     val config        = SpellCheckConfig(enabled = true)
     val bufferId      = BufferId(0)
-    val baseBuffer    = AppState.initial.buffers(bufferId)
+    val baseBuffer    = AppState.initial.persisted.buffers(bufferId)
     val staleBuffer   = baseBuffer.copy(document = baseBuffer.document.copy(content = Rope("wurld")))
     val currentBuffer = staleBuffer.copy(document = staleBuffer.document.copy(content = Rope("hello")))
     val staleState = AppState.initial.copy(
-      config = AppConfig.default.withSpellCheck(config),
-      buffers = Map(bufferId -> staleBuffer)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withSpellCheck(config),
+        buffers = Map(bufferId -> staleBuffer)
+      )
     )
-    val currentState = staleState.copy(buffers = Map(bufferId -> currentBuffer))
-    val expected     = SpellChecker.analysisFingerprints(staleState)
-    val analyzed     = SpellChecker.refreshDiagnostics(staleState)
+    val currentState =
+      staleState.copy(persisted = staleState.persisted.copy(buffers = Map(bufferId -> currentBuffer)))
+    val expected = SpellChecker.analysisFingerprints(staleState)
+    val analyzed = SpellChecker.refreshDiagnostics(staleState)
 
     val published = SpellChecker.applyIfCurrent(currentState, analyzed, expected)
 
@@ -480,12 +499,14 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     "wurld".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val immediateState = stateManager.getCurrentState.unsafeRunSync()
-    immediateState.diagnostics.getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil) shouldBe Nil
+    immediateState.runtime.diagnosticsState.diagnostics
+      .getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil) shouldBe Nil
 
     IO.sleep(300.millis).unsafeRunSync()
 
-    val state       = stateManager.getCurrentState.unsafeRunSync()
-    val diagnostics = state.diagnostics.getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil)
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    val diagnostics =
+      state.runtime.diagnosticsState.diagnostics.getOrElse(SpellChecker.bufferDiagnosticsUri(BufferId(0)), Nil)
 
     diagnostics.map(_.source) shouldBe List(Some("spell-check"))
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")

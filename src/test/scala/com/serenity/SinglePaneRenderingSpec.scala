@@ -23,7 +23,7 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
       state        <- stateManager.getCurrentState
     yield
       // Verify we start with 1 pane
-      state.layout.editorPanes.should(have).size(1)
+      state.persisted.layout.editorPanes.should(have).size(1)
 
       // When: Calculate layout for rendering
       val viewportSize     = ViewportSize(100, 30)
@@ -33,7 +33,7 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
       // Then: Should produce exactly one pane layout
       paneLayouts.should(have).size(1)
 
-      val paneId   = state.layout.editorPanes.keys.head
+      val paneId   = state.persisted.layout.editorPanes.keys.head
       val paneRect = paneLayouts(paneId)
 
       // And the single pane should use the full editor area
@@ -64,16 +64,16 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
       val newTabLayouts    = LayoutEngine.calculatePaneLayouts(stateAfterNewTab, newTabLayout)
 
       // Assertions
-      initialState.layout.editorPanes.should(have).size(1)
+      initialState.persisted.layout.editorPanes.should(have).size(1)
       paneLayouts.should(have).size(1)
 
       // NewTab creates a new buffer, not a new pane - pane count stays the same
-      stateAfterNewTab.layout.editorPanes.should(have).size(1)
+      stateAfterNewTab.persisted.layout.editorPanes.should(have).size(1)
       newTabLayouts.should(have).size(1)
 
       // But the buffer count should increase
-      initialState.buffers.should(have).size(1)
-      stateAfterNewTab.buffers.should(have).size(2)
+      initialState.persisted.buffers.should(have).size(1)
+      stateAfterNewTab.persisted.buffers.should(have).size(2)
 
     program.unsafeRunSync()
   }

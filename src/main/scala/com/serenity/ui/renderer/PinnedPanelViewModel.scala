@@ -38,7 +38,7 @@ final case class TextPanelView(
 object PinnedPanelViewModel:
 
   def fromState(state: AppState, layout: CalculatedLayout): List[TextPanelView] =
-    (state.pinnedSurfaces ++ state.uiSurfaces.filter {
+    (state.pinnedSurfaces ++ state.runtime.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
@@ -72,7 +72,7 @@ object PinnedPanelViewModel:
       surface.content match
         case SurfaceContent.MarkdownPreview(bufferId, title) =>
           val content = state
-            .flatMap(_.buffers.get(bufferId))
+            .flatMap(_.persisted.buffers.get(bufferId))
             .map(_.document.content.collect())
             .getOrElse("")
           SurfaceContentResolver.resolveMarkdownPreview(title, content, rect, SurfaceRenderMode.Pinned)

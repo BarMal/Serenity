@@ -85,15 +85,17 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(42)
     val paneId   = PaneId(0)
     val buffer   = Buffer.fromString(bufferId, text)
-    sm.updateState(
-      _.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId)
-        ),
-        focus = Focus.EditorPane(paneId)
+    sm.updateState(state =>
+      state.copy(persisted =
+        state.persisted.copy(
+          buffers = Map(bufferId -> buffer),
+          bufferOrder = List(bufferId),
+          layout = Layout(
+            editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+            activeEditorPaneId = Some(paneId)
+          ),
+          focus = Focus.EditorPane(paneId)
+        )
       )
     ).unsafeRunSync()
     bufferId
@@ -113,14 +115,14 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = explorerSurface(tree, selectedPath = Some(root))
     val sm      = makeStateManager()
-    sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 2)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe Focus.Surface(surface.id)
+    updated.persisted.focus shouldBe Focus.Surface(surface.id)
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
   }
 
@@ -137,7 +139,12 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Modal
     )
     val sm = makeStateManager()
-    sm.updateState(_.copy(uiSurfaces = List(panel, close), focus = Focus.Surface(close.id))).unsafeRunSync()
+    sm.updateState(state =>
+      state.copy(
+        persisted = state.persisted.copy(focus = Focus.Surface(close.id)),
+        runtime = state.runtime.copy(uiSurfaces = List(panel, close))
+      )
+    ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), panel.id, displayedItemRow = 1)
@@ -145,7 +152,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
-    after.focus shouldBe Focus.Surface(close.id)
+    after.persisted.focus shouldBe Focus.Surface(close.id)
     after.surfaceById(panel.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(root)))
   }
 
@@ -164,14 +171,14 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = expandedExplorerSurface(tree, selectedPath = Some(root))
     val sm      = makeStateManager()
-    sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 2)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe Focus.Surface(surface.id)
+    updated.persisted.focus shouldBe Focus.Surface(surface.id)
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
   }
 
@@ -181,7 +188,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val tree    = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
     val surface = expandedExplorerSurface(tree, selectedPath = Some(root))
     val sm      = makeStateManager()
-    sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
@@ -210,7 +217,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = explorerSurface(tree, selectedPath = Some(root))
     val sm      = makeStateManager()
-    sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
@@ -218,7 +225,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe before.focus
+    updated.persisted.focus shouldBe before.persisted.focus
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(src)))
   }
 
@@ -234,7 +241,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = explorerSurface(tree, selectedPath = Some(root))
     val sm      = makeStateManager()
-    sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 1)
@@ -242,7 +249,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val expandedTree = tree.copy(expandedPaths = Set(src))
     val updated      = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe Focus.Surface(surface.id)
+    updated.persisted.focus shouldBe Focus.Surface(surface.id)
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(expandedTree, Some(src)))
   }
 
@@ -258,15 +265,15 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       content = SurfaceContent.Outline(symbols),
       presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
     )
-    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 1)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 2))
+    updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 2))
   }
 
   it should "highlight an outline row on hover without stealing focus" in {
@@ -281,7 +288,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       content = SurfaceContent.Outline(symbols, Some(Location(0, 0))),
       presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
     )
-    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
@@ -289,7 +296,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe before.focus
+    updated.persisted.focus shouldBe before.persisted.focus
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.Outline(symbols, Some(Location(1, 2))))
   }
 
@@ -299,12 +306,16 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val comment  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
     sm.updateState(state =>
       state
-        .copy(buffers =
-          state.buffers.updated(
-            bufferId,
-            state
-              .buffers(bufferId)
-              .copy(annotations = state.buffers(bufferId).annotations.copy(documentComments = List(comment)))
+        .copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.updated(
+              bufferId,
+              state.persisted
+                .buffers(bufferId)
+                .copy(annotations =
+                  state.persisted.buffers(bufferId).annotations.copy(documentComments = List(comment))
+                )
+            )
           )
         )
     ).unsafeRunSync()
@@ -315,14 +326,14 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       content = SurfaceContent.Comments(symbols),
       presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
     )
-    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 0)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 0))
+    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 0))
 
     val lensSurface = updated.commentLensSurface.getOrElse(fail("Expected the comment lens to open"))
     val lensState = lensSurface.content match
@@ -330,7 +341,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       case other                            => fail(s"Expected CommentLens content, got $other")
     lensState.draft shouldBe "Tighten this"
     lensState.target shouldBe Some(comment)
-    updated.focus shouldBe Focus.Surface(lensSurface.id)
+    updated.persisted.focus shouldBe Focus.Surface(lensSurface.id)
   }
 
   it should "highlight a comments row on hover without stealing focus" in {
@@ -339,12 +350,16 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val comment  = DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this")
     sm.updateState(state =>
       state
-        .copy(buffers =
-          state.buffers.updated(
-            bufferId,
-            state
-              .buffers(bufferId)
-              .copy(annotations = state.buffers(bufferId).annotations.copy(documentComments = List(comment)))
+        .copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.updated(
+              bufferId,
+              state.persisted
+                .buffers(bufferId)
+                .copy(annotations =
+                  state.persisted.buffers(bufferId).annotations.copy(documentComments = List(comment))
+                )
+            )
           )
         )
     ).unsafeRunSync()
@@ -355,7 +370,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       content = SurfaceContent.Comments(symbols),
       presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
     )
-    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
@@ -363,7 +378,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe before.focus
+    updated.persisted.focus shouldBe before.persisted.focus
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.Comments(symbols, Some(Location(1, 0))))
   }
 
@@ -379,15 +394,15 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       content = SurfaceContent.Diagnostics(issues),
       presentation = SurfacePresentation.Pinned(PanelPosition.Left, 28)
     )
-    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 2)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(2, 3))
+    updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(2, 3))
   }
 
   it should "highlight a diagnostics row on hover without stealing focus" in {
@@ -402,7 +417,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       content = SurfaceContent.Diagnostics(issues),
       presentation = SurfacePresentation.Pinned(PanelPosition.Left, 28)
     )
-    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
@@ -410,7 +425,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe before.focus
+    updated.persisted.focus shouldBe before.persisted.focus
     updated.surfaceById(surface.id).map(_.content) shouldBe Some(
       SurfaceContent.Diagnostics(issues, Some(Location(2, 3)))
     )
@@ -428,10 +443,10 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       content = SurfaceContent.Diagnostics(issues),
       presentation = SurfacePresentation.Pinned(PanelPosition.Right, 18)
     )
-    sm.updateState(
-      _.copy(
-        config = AppConfig.default.copy(showLineNumbers = false, showGutter = false),
-        uiSurfaces = List(surface)
+    sm.updateState(state =>
+      state.copy(
+        persisted = state.persisted.copy(config = AppConfig.default.copy(showLineNumbers = false, showGutter = false)),
+        runtime = state.runtime.copy(uiSurfaces = List(surface))
       )
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(compactSquareViewport)).unsafeRunSync()
@@ -447,8 +462,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1))
+    updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1))
   }
 
   it should "not navigate from blank rows in a horizontal bottom diagnostics panel" in {
@@ -463,7 +478,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       content = SurfaceContent.Diagnostics(issues),
       presentation = SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
     )
-    sm.updateState(state => state.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val rect = panelContentRect(sm.getCurrentState.unsafeRunSync(), surface.id)
@@ -472,8 +487,8 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(rect.x + 1, rect.y + 1)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
+    updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
   }
 
   it should "update a pinned panel size from mouse drag before release" in {
@@ -485,7 +500,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = explorerSurface(tree, selectedPath = Some(root))
     val sm      = makeStateManager()
-    sm.updateState(_.copy(uiSurfaces = List(surface))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before       = sm.getCurrentState.unsafeRunSync()

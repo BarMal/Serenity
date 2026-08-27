@@ -71,23 +71,28 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val bufferId = BufferId(0)
     AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("find"),
-          SurfaceContent.ModalWorkflow(Modal.Find(query, Nil, 0)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(
+        focus = Focus.Surface(SurfaceId("find")),
+        buffers = AppState.initial.persisted.buffers.updated(
+          bufferId,
+          AppState.initial.persisted
+            .buffers(bufferId)
+            .copy(
+              document =
+                AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
+              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(cursor)),
+              viewport = viewport
+            )
         )
       ),
-      focus = Focus.Surface(SurfaceId("find")),
-      buffers = AppState.initial.buffers.updated(
-        bufferId,
-        AppState.initial
-          .buffers(bufferId)
-          .copy(
-            document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
-            editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(cursor)),
-            viewport = viewport
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("find"),
+            SurfaceContent.ModalWorkflow(Modal.Find(query, Nil, 0)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
+        )
       )
     )
 
@@ -102,7 +107,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     activeFindModal(state) match
       case Some(Modal.Find(query, _, _)) =>
         val bufferId = BufferId(0)
-        val content  = state.buffers(bufferId).document.content
+        val content  = state.persisted.buffers(bufferId).document.content
         val reducedState = ModalEventReducer.applyFindSearchResults(
           state,
           FindSearchRequest(SurfaceId("find"), bufferId, query, content),
@@ -114,14 +119,18 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   "ModalEventReducer" should "append digits in goto line mode" in {
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("goto-line"),
-          SurfaceContent.ModalWorkflow(Modal.GotoLine("1")),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        )
+      persisted = AppState.initial.persisted.copy(
+        focus = Focus.Surface(SurfaceId("goto-line"))
       ),
-      focus = Focus.Surface(SurfaceId("goto-line"))
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("goto-line"),
+            SurfaceContent.ModalWorkflow(Modal.GotoLine("1")),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
     )
 
     val updatedState = ModalEventReducer.reduce(ModalType.GotoLine, InsertChar('2'), initialState).state
@@ -135,9 +144,10 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ModalWorkflow(Modal.Find("needle", List(matchAt(0, 0), matchAt(1, 0)), 0)),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
-    val findState = stateWithFindModal("needle", "needle\nneedle").copy(
-      uiSurfaces = List(findSurface),
-      focus = Focus.Surface(findSurface.id)
+    val findModalBase = stateWithFindModal("needle", "needle\nneedle")
+    val findState = findModalBase.copy(
+      persisted = findModalBase.persisted.copy(focus = Focus.Surface(findSurface.id)),
+      runtime = findModalBase.runtime.copy(uiSurfaces = List(findSurface))
     )
     val selectedFind = ModalEventReducer
       .reduce(ModalType.Find, ModalClick("find-result-1", Some("find-result-1")), findState)
@@ -150,8 +160,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Modal
     )
     val replaceState = AppState.initial.copy(
-      uiSurfaces = List(replaceSurface),
-      focus = Focus.Surface(replaceSurface.id)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(replaceSurface.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(replaceSurface))
     )
     val selectedReplace = ModalEventReducer
       .reduce(ModalType.ReplaceWorkflow, ModalClick("replace-selection", Some("replace-selection")), replaceState)
@@ -172,7 +182,10 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       ),
       SurfacePresentation.Modal
     )
-    val fileState = AppState.initial.copy(uiSurfaces = List(fileSurface), focus = Focus.Surface(fileSurface.id))
+    val fileState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(fileSurface.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(fileSurface))
+    )
     val selectedFile = ModalEventReducer
       .reduce(ModalType.FileWorkflow, ModalClick("file-suggestion-1", Some("file-suggestion-1")), fileState)
       .state
@@ -185,29 +198,33 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("goto-line"),
-          SurfaceContent.ModalWorkflow(Modal.GotoLine("3")),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(
+        focus = Focus.Surface(SurfaceId("goto-line")),
+        buffers = AppState.initial.persisted.buffers.updated(
+          bufferId,
+          AppState.initial.persisted
+            .buffers(bufferId)
+            .copy(document =
+              AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\nb\nc\nd"))
+            )
         )
       ),
-      focus = Focus.Surface(SurfaceId("goto-line")),
-      buffers = AppState.initial.buffers.updated(
-        bufferId,
-        AppState.initial
-          .buffers(bufferId)
-          .copy(document =
-            AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\nb\nc\nd"))
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("goto-line"),
+            SurfaceContent.ModalWorkflow(Modal.GotoLine("3")),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
+        )
       )
     )
 
     val updatedState = ModalEventReducer.reduce(ModalType.GotoLine, Enter, initialState).state
 
     updatedState.modalSurface shouldBe None
-    updatedState.focus shouldBe Focus.EditorPane(paneId)
-    updatedState.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(2, 0)
+    updatedState.persisted.focus shouldBe Focus.EditorPane(paneId)
+    updatedState.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(2, 0)
   }
 
   it should "keep find open and move the cursor to the first completed hit" in {
@@ -217,9 +234,11 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = completeFind(initialState)
 
     activeFindModal(updatedState) shouldBe Some(Modal.Find("needle", List(matchAt(1, 0), matchAt(3, 0)), 0))
-    updatedState.focus shouldBe Focus.Surface(SurfaceId("find"))
-    updatedState.buffers(bufferId).findState shouldBe Some(FindState("needle", List(matchAt(1, 0), matchAt(3, 0)), 0))
-    updatedState.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(1, 0)
+    updatedState.persisted.focus shouldBe Focus.Surface(SurfaceId("find"))
+    updatedState.persisted.buffers(bufferId).findState shouldBe Some(
+      FindState("needle", List(matchAt(1, 0), matchAt(3, 0)), 0)
+    )
+    updatedState.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(1, 0)
   }
 
   it should "leave buffer find state unchanged when an empty find query is submitted" in {
@@ -229,8 +248,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = ModalEventReducer.reduce(ModalType.Find, Enter, initialState).state
 
     activeFindModal(updatedState) shouldBe Some(Modal.Find("", Nil, 0))
-    updatedState.buffers(bufferId).findState shouldBe None
-    updatedState.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 5)
+    updatedState.persisted.buffers(bufferId).findState shouldBe None
+    updatedState.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 5)
   }
 
   it should "update the live find query without searching in the reducer" in {
@@ -242,8 +261,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     }
 
     activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", Nil, 0))
-    withNeedle.buffers(bufferId).findState shouldBe None
-    withNeedle.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    withNeedle.persisted.buffers(bufferId).findState shouldBe None
+    withNeedle.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
     withNeedle.modalSurface shouldBe defined
   }
 
@@ -251,21 +270,23 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val initialState = stateWithFindModal("need", "needle needle")
       .copy(
-        buffers = AppState.initial.buffers.updated(
-          bufferId,
-          AppState.initial
-            .buffers(bufferId)
-            .copy(
-              document = AppState.initial.buffers(bufferId).document.copy(content = Rope("needle needle")),
-              findState = Some(FindState("need", List(matchAt(0, 0)), 0))
-            )
+        persisted = stateWithFindModal("need", "needle needle").persisted.copy(
+          buffers = AppState.initial.persisted.buffers.updated(
+            bufferId,
+            AppState.initial.persisted
+              .buffers(bufferId)
+              .copy(
+                document = AppState.initial.persisted.buffers(bufferId).document.copy(content = Rope("needle needle")),
+                findState = Some(FindState("need", List(matchAt(0, 0)), 0))
+              )
+          )
         )
       )
 
     val result = ModalEventReducer.reduce(ModalType.Find, InsertChar('l'), initialState)
 
     activeFindModal(result.state) shouldBe Some(Modal.Find("needl", Nil, 0))
-    result.state.buffers(bufferId).findState shouldBe None
+    result.state.persisted.buffers(bufferId).findState shouldBe None
     result.effects should matchPattern {
       case List(AppEffect.Workflow(WorkflowEffect.RefreshFind(FindSearchRequest(_, `bufferId`, "needl", _)))) =>
     }
@@ -277,7 +298,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       SurfaceId("find"),
       BufferId(0),
       "old",
-      initialState.buffers(BufferId(0)).document.content
+      initialState.persisted.buffers(BufferId(0)).document.content
     )
 
     ModalEventReducer.applyFindSearchResults(initialState, request, List(matchAt(0, 4))) shouldBe initialState
@@ -289,14 +310,16 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       SurfaceId("find"),
       BufferId(0),
       "needle",
-      initialState.buffers(BufferId(0)).document.content
+      initialState.persisted.buffers(BufferId(0)).document.content
     )
     val editedState = initialState.copy(
-      buffers = initialState.buffers.updated(
-        BufferId(0),
-        initialState
-          .buffers(BufferId(0))
-          .copy(document = initialState.buffers(BufferId(0)).document.copy(content = Rope("other")))
+      persisted = initialState.persisted.copy(
+        buffers = initialState.persisted.buffers.updated(
+          BufferId(0),
+          initialState.persisted
+            .buffers(BufferId(0))
+            .copy(document = initialState.persisted.buffers(BufferId(0)).document.copy(content = Rope("other")))
+        )
       )
     )
 
@@ -306,16 +329,18 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
   it should "update find queries without materialising the whole buffer" in {
     val bufferId = BufferId(0)
     val initialState = stateWithFindModal("", "alpha needle beta\nneedle again").copy(
-      buffers = AppState.initial.buffers.updated(
-        bufferId,
-        AppState.initial
-          .buffers(bufferId)
-          .copy(document =
-            AppState.initial
-              .buffers(bufferId)
-              .document
-              .copy(content = NonCollectingRope(Rope("alpha needle beta\nneedle again")))
-          )
+      persisted = stateWithFindModal("", "alpha needle beta\nneedle again").persisted.copy(
+        buffers = AppState.initial.persisted.buffers.updated(
+          bufferId,
+          AppState.initial.persisted
+            .buffers(bufferId)
+            .copy(document =
+              AppState.initial.persisted
+                .buffers(bufferId)
+                .document
+                .copy(content = NonCollectingRope(Rope("alpha needle beta\nneedle again")))
+            )
+        )
       )
     )
 
@@ -324,8 +349,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     }
 
     activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", Nil, 0))
-    withNeedle.buffers(bufferId).findState shouldBe None
-    withNeedle.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    withNeedle.persisted.buffers(bufferId).findState shouldBe None
+    withNeedle.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
   }
 
   it should "ignore find queries that would split a grapheme cluster" in {
@@ -335,8 +360,8 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val withAccent = ModalEventReducer.reduce(ModalType.Find, InsertChar('\u0301'), initialState).state
 
     activeFindModal(withAccent) shouldBe Some(Modal.Find("\u0301", Nil, 0))
-    withAccent.buffers(bufferId).findState shouldBe None
-    withAccent.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    withAccent.persisted.buffers(bufferId).findState shouldBe None
+    withAccent.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
   }
 
   it should "navigate find results forward and backward while the overlay remains open" in {
@@ -349,13 +374,13 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       ModalEventReducer.reduce(ModalType.Find, ModalNavigate(Direction.Up), third).state
 
     activeFindModal(second) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 1))
-    second.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(2, 0)
+    second.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(2, 0)
     activeFindModal(third) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 2))
-    third.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(3, 0)
+    third.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(3, 0)
     activeFindModal(secondAgain) shouldBe Some(
       Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 1)
     )
-    secondAgain.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(2, 0)
+    secondAgain.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(2, 0)
     secondAgain.modalSurface shouldBe defined
   }
 
@@ -367,11 +392,11 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
 
     activeFindModal(first) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 0))
-    first.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    first.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
     activeFindModal(second) shouldBe Some(
       Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 1)
     )
-    second.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, "needle and ".length)
+    second.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, "needle and ".length)
   }
 
   it should "track non-overlapping find results as distinct navigable matches" in {
@@ -384,7 +409,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val expectedResults = List(matchAt(0, 0), matchAt(0, 2))
     activeFindModal(first) shouldBe Some(Modal.Find("aa", expectedResults, 0))
     activeFindModal(second) shouldBe Some(Modal.Find("aa", expectedResults, 1))
-    second.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 2)
+    second.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 2)
   }
 
   it should "advance find results when the explicit find-next event is submitted" in {
@@ -394,11 +419,11 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val second = ModalEventReducer.reduce(ModalType.Find, ModalFindNext, initialState).state
 
     activeFindModal(second) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(1, 0), matchAt(2, 0)), 1))
-    second.buffers(bufferId).findState shouldBe Some(
+    second.persisted.buffers(bufferId).findState shouldBe Some(
       FindState("needle", List(matchAt(0, 0), matchAt(1, 0), matchAt(2, 0)), 1)
     )
-    second.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(1, 0)
-    second.focus shouldBe Focus.Surface(SurfaceId("find"))
+    second.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(1, 0)
+    second.persisted.focus shouldBe Focus.Surface(SurfaceId("find"))
   }
 
   it should "scroll wrapped text to the selected live find match visual row" in {
@@ -410,10 +435,11 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = initialState
-    val buffer       = updatedState.buffers(bufferId)
+    val buffer       = updatedState.persisted.buffers(bufferId)
     val cursor       = buffer.editing.cursors.head
-    val font         = FontLoader.previewTextFont(updatedState.config.fontConfig)
-    val wrapPx   = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, updatedState.config.fontConfig)
+    val font         = FontLoader.previewTextFont(updatedState.persisted.config.fontConfig)
+    val wrapPx =
+      TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, updatedState.persisted.config.fontConfig)
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
 
     buffer.viewport.topLine shouldBe 0
@@ -431,16 +457,21 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val initialState = stateWithFindModal("", "alpha beta")
       .copy(
-        buffers = AppState.initial.buffers.updated(
-          bufferId,
-          AppState.initial
-            .buffers(bufferId)
-            .copy(
-              document =
-                AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-              editing = AppState.initial.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5))),
-              findState = Some(FindState("alpha", List(matchAt(0, 0)), 0))
-            )
+        persisted = stateWithFindModal("", "alpha beta").persisted.copy(
+          buffers = AppState.initial.persisted.buffers.updated(
+            bufferId,
+            AppState.initial.persisted
+              .buffers(bufferId)
+              .copy(
+                document = AppState.initial.persisted
+                  .buffers(bufferId)
+                  .document
+                  .copy(content = com.serenity.rope.Rope("alpha beta")),
+                editing =
+                  AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5))),
+                findState = Some(FindState("alpha", List(matchAt(0, 0)), 0))
+              )
+          )
         )
       )
 
@@ -449,20 +480,22 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     }
 
     activeFindModal(noMatch) shouldBe Some(Modal.Find("zzz", Nil, 0))
-    noMatch.buffers(bufferId).findState shouldBe None
-    noMatch.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 5)
+    noMatch.persisted.buffers(bufferId).findState shouldBe None
+    noMatch.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 5)
   }
 
   it should "delete the previous word in find mode" in {
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("find"),
-          SurfaceContent.ModalWorkflow(Modal.Find("alpha beta", Nil, 0)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("find"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("find"),
+            SurfaceContent.ModalWorkflow(Modal.Find("alpha beta", Nil, 0)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("find"))
+      )
     )
 
     val updatedState = ModalEventReducer.reduce(ModalType.Find, DeleteWordBackward, initialState).state
@@ -477,24 +510,26 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = ModalEventReducer.reduce(ModalType.Find, DeleteWordForward, initialState).state
 
     activeFindModal(updatedState) shouldBe Some(Modal.Find("alpha beta", Nil, 0))
-    updatedState.buffers(bufferId).findState shouldBe None
-    updatedState.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    updatedState.persisted.buffers(bufferId).findState shouldBe None
+    updatedState.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
   }
 
   it should "update filename and path fields independently in file workflow mode" in {
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-workflow"),
-          SurfaceContent.ModalWorkflow(
-            Modal.FileWorkflow(
-              FileWorkflowState(mode = FileWorkflowMode.SaveAs)
-            )
-          ),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-workflow"),
+            SurfaceContent.ModalWorkflow(
+              Modal.FileWorkflow(
+                FileWorkflowState(mode = FileWorkflowMode.SaveAs)
+              )
+            ),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("file-workflow"))
+      )
     )
 
     val withFilenameResult = ModalEventReducer.reduce(ModalType.FileWorkflow, InsertChar('n'), initialState)
@@ -541,18 +576,20 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "cycle file workflow focus between filename and path with tab and reverse-tab" in {
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-workflow"),
-          SurfaceContent.ModalWorkflow(
-            Modal.FileWorkflow(
-              FileWorkflowState(mode = FileWorkflowMode.Open)
-            )
-          ),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-workflow"),
+            SurfaceContent.ModalWorkflow(
+              Modal.FileWorkflow(
+                FileWorkflowState(mode = FileWorkflowMode.Open)
+              )
+            ),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("file-workflow"))
+      )
     )
 
     val pathFocusedResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, initialState)
@@ -598,14 +635,16 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-workflow"),
-          SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("file-workflow"))
+      )
     )
 
     val moved = ModalEventReducer.reduce(ModalType.FileWorkflow, ModalNavigate(Direction.Down), initialState).state
@@ -639,14 +678,16 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-workflow"),
-          SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("file-workflow"))
+      )
     )
 
     val result = ModalEventReducer.reduce(ModalType.FileWorkflow, Enter, initialState)
@@ -665,14 +706,16 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-workflow"),
-          SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("file-workflow"))
+      )
     )
 
     val result = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, initialState)
@@ -691,14 +734,16 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       path = "/tmp/project"
     )
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-workflow"),
-          SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("file-workflow"))
+      )
     )
 
     val result = ModalEventReducer.reduce(ModalType.FileWorkflow, Enter, initialState)
@@ -710,14 +755,16 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
   it should "edit replace workflow fields, switch action and scope, and queue submission" in {
     val initialWorkflow = ReplaceWorkflowState()
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("replace-workflow"),
-          SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(initialWorkflow)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("replace-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("replace-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(initialWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("replace-workflow"))
+      )
     )
 
     val withFind = ModalEventReducer.reduce(ModalType.ReplaceWorkflow, InsertChar('n'), initialState).state
@@ -807,24 +854,28 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "preview replace match counts while editing the find text" in {
     val initialWorkflow = ReplaceWorkflowState()
-    val buffer = AppState.initial
+    val buffer = AppState.initial.persisted
       .buffers(BufferId(0))
       .copy(
-        document = AppState.initial
+        document = AppState.initial.persisted
           .buffers(BufferId(0))
           .document
           .copy(content = com.serenity.rope.Rope("needle one\nneedle two\nplain"))
       )
     val initialState = AppState.initial.copy(
-      buffers = AppState.initial.buffers + (BufferId(0) -> buffer),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("replace-workflow"),
-          SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(initialWorkflow)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        )
+      persisted = AppState.initial.persisted.copy(
+        buffers = AppState.initial.persisted.buffers + (BufferId(0) -> buffer),
+        focus = Focus.Surface(SurfaceId("replace-workflow"))
       ),
-      focus = Focus.Surface(SurfaceId("replace-workflow"))
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("replace-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(initialWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
     )
 
     val updatedState = "needle".foldLeft(initialState) { (state, char) =>
@@ -848,28 +899,32 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       selectedAction = ReplaceWorkflowAction.ReplaceNext,
       statusMessage = Some("2 matches in current buffer")
     )
-    val buffer = AppState.initial
+    val buffer = AppState.initial.persisted
       .buffers(BufferId(0))
       .copy(
-        document = AppState.initial
+        document = AppState.initial.persisted
           .buffers(BufferId(0))
           .document
           .copy(content = com.serenity.rope.Rope("needle one\nneedle two\nplain")),
-        editing = AppState.initial
+        editing = AppState.initial.persisted
           .buffers(BufferId(0))
           .editing
           .copy(selection = Some(Selection(CursorPosition(1, 0), CursorPosition(1, "needle two".length))))
       )
     val initialState = AppState.initial.copy(
-      buffers = AppState.initial.buffers + (BufferId(0) -> buffer),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("replace-workflow"),
-          SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(initialWorkflow)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        )
+      persisted = AppState.initial.persisted.copy(
+        buffers = AppState.initial.persisted.buffers + (BufferId(0) -> buffer),
+        focus = Focus.Surface(SurfaceId("replace-workflow"))
       ),
-      focus = Focus.Surface(SurfaceId("replace-workflow"))
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("replace-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(initialWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
     )
 
     val updatedState = ModalEventReducer
@@ -899,14 +954,16 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       currentBufferLabel = "notes.scala"
     )
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("close-workflow"),
-          SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(initialWorkflow)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("close-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("close-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(initialWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("close-workflow"))
+      )
     )
 
     val moved = ModalEventReducer.reduce(ModalType.CloseWorkflow, TabKey, initialState).state

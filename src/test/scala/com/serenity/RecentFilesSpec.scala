@@ -14,7 +14,7 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
 
   trait RecentFilesFixture:
     val sm: StateManager = createStateManager("RecentFilesSpec")
-    val initialBufferId  = sm.getCurrentState.unsafeRunSync().bufferOrder.head
+    val initialBufferId  = sm.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
     val tmpDir           = Files.createTempDirectory("recent-files-spec")
 
     def tmpFile(name: String): Path =
@@ -61,10 +61,11 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
 
   it should "round-trip recentFiles through SessionState serialization" in:
     val paths   = List(Path.of("/workspace/foo.scala"), Path.of("/workspace/bar.scala"))
-    val state   = AppState.initial.copy(recentFiles = paths)
+    val initial = AppState.initial
+    val state   = initial.copy(persisted = initial.persisted.copy(recentFiles = paths))
     val session = SessionState.fromAppState(state)
     session.recentFiles shouldBe paths.map(_.toString)
     val restored = SessionState.toAppState(session, Theme.default)
-    restored.recentFiles.map(_.toString) shouldBe paths.map(_.toString)
+    restored.persisted.recentFiles.map(_.toString) shouldBe paths.map(_.toString)
 
 end RecentFilesSpec

@@ -23,12 +23,14 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val pane = EditorPane(paneId, Some(buffer.id), Viewport.default, List(CursorPosition(0, 0)), 0)
     AppState.empty.copy(
-      buffers = Map(buffer.id -> buffer),
-      layout = Layout.empty.copy(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = focus
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        layout = Layout.empty.copy(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = focus
+      )
     )
 
   "FileEventReducer" should "emit a save-buffer effect for the focused file-backed buffer" in {
@@ -48,14 +50,17 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val buffer0 = Buffer.fromString(BufferId(2), "val y = 99")
     val buffer = buffer0
       .copy(document = buffer0.document.copy(filePath = Some(Paths.get("target.scala")), isDirty = true))
-    val state = stateWithPaneBuffer(buffer, paneId = paneId, focus = Focus.Surface(SurfaceId("command-runner"))).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(
-            CommandRunner.empty.activate(com.serenity.command.CommandRegistry.default, AppConfig.default)
-          ),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val baseState = stateWithPaneBuffer(buffer, paneId = paneId, focus = Focus.Surface(SurfaceId("command-runner")))
+    val state = baseState.copy(
+      runtime = baseState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(
+              CommandRunner.empty.activate(com.serenity.command.CommandRegistry.default, AppConfig.default)
+            ),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )

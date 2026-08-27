@@ -23,9 +23,11 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
     val cursor   = CursorPosition(0, 0)
     val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List(cursor), 0)
     val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),
-      config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),
+        config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
+      )
     )
 
     val component = new EditorPaneComponent(paneId)

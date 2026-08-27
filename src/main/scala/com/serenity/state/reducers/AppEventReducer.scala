@@ -47,14 +47,16 @@ object AppEventReducer:
       case Some((surface, runner)) if runner.isActive =>
         state
           .copy(
-            uiSurfaces = state.uiSurfaces.filterNot { current =>
-              current.id == surface.id || isCommandPaletteSubmenu(current.content)
-            }
+            runtime = state.runtime.copy(
+              uiSurfaces = state.runtime.uiSurfaces.filterNot { current =>
+                current.id == surface.id || isCommandPaletteSubmenu(current.content)
+              }
+            )
           )
           .popFocus
       case _ =>
         val activatedRunner = CommandRunner.empty
-          .activate(registry, state.config)
+          .activate(registry, state.persisted.config)
         val runnerWithPanelSelections = activatedRunner.copy(
           optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
         )
@@ -66,20 +68,27 @@ object AppEventReducer:
           presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
         )
         val clearedSurfaces =
-          stateWithId.uiSurfaces.filterNot(current => isFileSearch(current.content) || isModalWorkflow(current.content))
+          stateWithId.runtime.uiSurfaces.filterNot(current =>
+            isFileSearch(current.content) || isModalWorkflow(current.content)
+          )
         stateWithId
           .copy(
-            uiSurfaces = upsertSurface(clearedSurfaces, surface)
+            runtime = stateWithId.runtime.copy(
+              uiSurfaces = upsertSurface(clearedSurfaces, surface)
+            )
           )
           .pushFocus(Focus.Surface(surfaceId))
 
   private def toggleContextualToolbar(state: AppState): AppState =
-    if !state.config.contextualToolbarEnabled then state
+    if !state.persisted.config.contextualToolbarEnabled then state
     else
       state.contextualToolbarSurface match
         case Some(surface) =>
-          val cleared = state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id))
-          if state.focus == Focus.Surface(surface.id) then cleared.popFocus
+          val cleared =
+            state.copy(runtime =
+              state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id))
+            )
+          if state.persisted.focus == Focus.Surface(surface.id) then cleared.popFocus
           else cleared
         case None =>
           val items = ContextualToolbar.itemsFor(state)
@@ -89,16 +98,18 @@ object AppEventReducer:
             val surface = UiSurface(
               id = surfaceId,
               content = SurfaceContent.ContextualToolbar(
-                ContextualToolbarState(displayMode = state.config.contextualToolbarDisplayMode)
+                ContextualToolbarState(displayMode = state.persisted.config.contextualToolbarDisplayMode)
               ),
               presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
             )
             stateWithId
-              .copy(uiSurfaces = upsertSurface(stateWithId.uiSurfaces, surface))
+              .copy(runtime =
+                stateWithId.runtime.copy(uiSurfaces = upsertSurface(stateWithId.runtime.uiSurfaces, surface))
+              )
 
   private def closeTabState(state: AppState, registry: CommandRegistry)(using com.serenity.rope.Balance): AppState =
     val closedState = EditorState.closeFocusedTab(state)
-    if closedState.layout.activeEditorPaneId.isDefined then closedState
+    if closedState.persisted.layout.activeEditorPaneId.isDefined then closedState
     else toggleCommandRunner(closedState, registry)
 
   private def asCommandRunner(surface: UiSurface): Option[(UiSurface, CommandRunner)] =

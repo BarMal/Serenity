@@ -24,19 +24,23 @@ class PeekOverlayRenderingSpec extends AnyFlatSpec with Matchers:
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("peek"))
       ),
-      focus = Focus.Surface(SurfaceId("peek")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("peek"),
-          SurfaceContent.QuickInfo(text),
-          SurfacePresentation.Floating(Some(CursorPosition(4, 12)), SurfacePlacement.AboveCursor),
-          dismissOnMove = true
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("peek"),
+            SurfaceContent.QuickInfo(text),
+            SurfacePresentation.Floating(Some(CursorPosition(4, 12)), SurfacePlacement.AboveCursor),
+            dismissOnMove = true
+          )
         )
       )
     )

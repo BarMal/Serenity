@@ -36,13 +36,13 @@ class ActualStartupFlowSpec extends AnyFlatSpec with Matchers:
       stateAfterNav <- stateManager.getCurrentState
       startPage = stateAfterNav.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
     yield
-      stateAfterCreation.layout.editorPanes should not be empty
-      stateAfterCreation.buffers should not be empty
+      stateAfterCreation.persisted.layout.editorPanes should not be empty
+      stateAfterCreation.persisted.buffers should not be empty
 
-      initialState.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
+      initialState.persisted.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
       initialState.startPageSurface should be(defined)
-      initialState.layout.editorPanes shouldBe empty
-      initialState.buffers shouldBe empty
+      initialState.persisted.layout.editorPanes shouldBe empty
+      initialState.persisted.buffers shouldBe empty
 
       startPage.selectedIndex shouldBe 1
 

@@ -24,7 +24,7 @@ final private[manager] class StateManagerWorkflowCapability(
     statusMessage: Option[String] = None
   ): IO[Unit] =
     val targetBufferId = bufferIdOverride.orElse(state.focusedBufferId)
-    val focusedPath    = targetBufferId.flatMap(id => state.buffers.get(id)).flatMap(_.document.filePath)
+    val focusedPath    = targetBufferId.flatMap(id => state.persisted.buffers.get(id)).flatMap(_.document.filePath)
     val filename = mode match
       case FileWorkflowMode.SaveAs =>
         focusedPath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("")
@@ -50,7 +50,7 @@ final private[manager] class StateManagerWorkflowCapability(
       val predictedState = ModalStateReducer.show(Modal.FileWorkflow(workflow), state).state
       logger.info(
         s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
-          s"surfaceId=${predictedState.modalSurface.map(_.id).getOrElse("none")} focus=${predictedState.focus}"
+          s"surfaceId=${predictedState.modalSurface.map(_.id).getOrElse("none")} focus=${predictedState.persisted.focus}"
       ) >>
         updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state)
     }
@@ -60,7 +60,8 @@ final private[manager] class StateManagerWorkflowCapability(
 
   private[manager] def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
     val targetBufferIds = closeTargets(scope, state)
-    val dirtyBufferIds  = targetBufferIds.filter(bufferId => state.buffers.get(bufferId).exists(_.hasUnsavedChanges))
+    val dirtyBufferIds =
+      targetBufferIds.filter(bufferId => state.persisted.buffers.get(bufferId).exists(_.hasUnsavedChanges))
     val cleanBufferIds =
       if scope == CloseScope.Quit then Nil
       else targetBufferIds.filterNot(dirtyBufferIds.contains)
@@ -88,12 +89,12 @@ final private[manager] class StateManagerWorkflowCapability(
   protected def closeTargets(scope: CloseScope, state: AppState): List[BufferId] =
     scope match
       case CloseScope.Current => activeEditorBufferId(state).toList
-      case CloseScope.All     => state.bufferOrder
+      case CloseScope.All     => state.persisted.bufferOrder
       case CloseScope.Others =>
         activeEditorBufferId(state) match
-          case Some(focused) => state.bufferOrder.filterNot(_ == focused)
-          case None          => state.bufferOrder
-      case CloseScope.Quit => state.bufferOrder
+          case Some(focused) => state.persisted.bufferOrder.filterNot(_ == focused)
+          case None          => state.persisted.bufferOrder
+      case CloseScope.Quit => state.persisted.bufferOrder
 
   protected def promptCloseWorkflow(state: AppState, workflow: CloseWorkflowState): IO[Unit] =
     val focusedState = focusBufferForWorkflow(state, workflow.currentBufferId)
@@ -114,7 +115,7 @@ final private[manager] class StateManagerWorkflowCapability(
               val nextState      = closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
               stateRef.set(nextState) >> continueCloseWorkflow(workflow, nextState)
             case CloseWorkflowChoice.Save =>
-              state.buffers.get(workflow.currentBufferId) match
+              state.persisted.buffers.get(workflow.currentBufferId) match
                 case Some(buffer) if buffer.document.filePath.isDefined =>
                   saveBufferEffect(workflow.currentBufferId) >>
                     stateRef.get.flatMap { savedState =>
@@ -156,26 +157,30 @@ final private[manager] class StateManagerWorkflowCapability(
   protected def closeBufferUsingExistingFlow(state: AppState, bufferId: BufferId): AppState =
     val focusedState = focusBufferForWorkflow(state, bufferId)
     val closedState  = EditorState.closeFocusedTab(focusedState)
-    if closedState.layout.activeEditorPaneId.isDefined then closedState
+    if closedState.persisted.layout.activeEditorPaneId.isDefined then closedState
     else ensureCommandRunnerSurface(closedState)
 
   protected def closeBufferLabel(state: AppState, bufferId: BufferId): String =
-    state.buffers
+    state.persisted.buffers
       .get(bufferId)
       .flatMap(_.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)))
       .getOrElse(s"Buffer ${bufferId.value} - unsaved")
 
   protected def withCloseAction(state: AppState, workflow: CloseWorkflowState): AppState =
-    state.copy(actionStack = AppAction.CloseWorkflow(workflow) :: clearCloseActions(state).actionStack)
+    state.copy(runtime =
+      state.runtime.copy(actionStack =
+        AppAction.CloseWorkflow(workflow) :: clearCloseActions(state).runtime.actionStack
+      )
+    )
 
   private[manager] def clearCloseActions(state: AppState): AppState =
-    state.copy(actionStack = Nil)
+    state.copy(runtime = state.runtime.copy(actionStack = Nil))
 
   protected def dismissModalSurface(state: AppState): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.filterNot {
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot {
       case UiSurface(_, SurfaceContent.ModalWorkflow(_), _, _) => true
       case _                                                   => false
-    })
+    }))
 
   private[manager] def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
@@ -226,7 +231,7 @@ final private[manager] class StateManagerWorkflowCapability(
           workflow.copy(statusMessage = Some("Enter text to find"))
         )
       case Some(bufferId) =>
-        state.buffers.get(bufferId) match
+        state.persisted.buffers.get(bufferId) match
           case Some(buffer) =>
             workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.document.content, _)) match
               case Left(error) =>
@@ -275,12 +280,15 @@ final private[manager] class StateManagerWorkflowCapability(
                   )
                   recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
                     val updatedState = current.copy(
-                      buffers = current.buffers + (bufferId -> updatedBuffer),
-                      uiSurfaces = current.uiSurfaces.filterNot(_.id == surfaceId)
+                      persisted =
+                        current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer)),
+                      runtime =
+                        current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surfaceId))
                     )
-                    current.layout.activeEditorPaneId match
-                      case Some(paneId) => updatedState.copy(focus = Focus.EditorPane(paneId))
-                      case None         => updatedState
+                    current.persisted.layout.activeEditorPaneId match
+                      case Some(paneId) =>
+                        updatedState.copy(persisted = updatedState.persisted.copy(focus = Focus.EditorPane(paneId)))
+                      case None => updatedState
                   }
           case None =>
             updateReplaceWorkflowSurface(
@@ -301,7 +309,7 @@ final private[manager] class StateManagerWorkflowCapability(
           workflow.copy(statusMessage = Some("Enter text to find"))
         )
       case Some(bufferId) =>
-        state.buffers.get(bufferId) match
+        state.persisted.buffers.get(bufferId) match
           case Some(buffer) =>
             workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.document.content, _)) match
               case Left(error) =>
@@ -357,7 +365,9 @@ final private[manager] class StateManagerWorkflowCapability(
                     findState = updatedFindState
                   )
                   recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
-                    current.copy(buffers = current.buffers + (bufferId -> updatedBuffer))
+                    current.copy(persisted =
+                      current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer))
+                    )
                   } >> updateReplaceWorkflowSurface(
                     surfaceId,
                     workflow.copy(statusMessage = Some("Replaced next match"))
@@ -479,23 +489,25 @@ final private[manager] class StateManagerWorkflowCapability(
             case true =>
               stateRef
                 .modify { state =>
-                  val bufferId = state.nextBufferId
-                  (state.copy(nextBufferId = BufferId(bufferId.value + 1)), bufferId)
+                  val bufferId = state.runtime.nextBufferId
+                  (state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))), bufferId)
                 }
                 .flatMap(bufferId => fileManager.loadFile(targetPath, bufferId))
                 .flatMap { loadedBuffer =>
                   stateRef.modify { state =>
                     val newBufferId = loadedBuffer.id
                     val stateWithBuffer = state.copy(
-                      buffers = state.buffers + (newBufferId -> loadedBuffer),
-                      uiSurfaces = List.empty,
-                      recentFiles = trackRecentFile(state.recentFiles, targetPath)
+                      persisted = state.persisted.copy(
+                        buffers = state.persisted.buffers + (newBufferId -> loadedBuffer),
+                        recentFiles = trackRecentFile(state.persisted.recentFiles, targetPath)
+                      ),
+                      runtime = state.runtime.copy(uiSurfaces = List.empty)
                     )
                     val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
                     val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
                     val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
                     val resized =
-                      focused.viewportSize
+                      focused.runtime.viewportSize
                         .map(viewportSize => LayoutEngine.syncViewportDimensions(focused, viewportSize))
                         .getOrElse(focused)
                     (resized, ())
@@ -525,7 +537,7 @@ final private[manager] class StateManagerWorkflowCapability(
               saveBufferAsEffect(bufferId, targetPath)
                 .flatMap { _ =>
                   stateRef.get.flatMap { savedState =>
-                    savedState.actionStack.collectFirst {
+                    savedState.runtime.actionStack.collectFirst {
                       case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow
                     } match
                       case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
@@ -577,7 +589,7 @@ final private[manager] class StateManagerWorkflowCapability(
       case Some(bufferId) =>
         fileDialog match
           case Some(dialog) =>
-            val focusedPath = state.buffers.get(bufferId).flatMap(_.document.filePath)
+            val focusedPath = state.persisted.buffers.get(bufferId).flatMap(_.document.filePath)
             val initialDirectory =
               focusedPath
                 .flatMap(path => Option(path.getParent).map(IO.pure))
@@ -602,7 +614,7 @@ final private[manager] class StateManagerWorkflowCapability(
 
   private def continueCloseAfterNativeSaveAs(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { savedState =>
-      savedState.actionStack.collectFirst {
+      savedState.runtime.actionStack.collectFirst {
         case AppAction.CloseWorkflow(closeWorkflow) if closeWorkflow.currentBufferId == bufferId => closeWorkflow
       } match
         case Some(closeWorkflow) =>
@@ -616,8 +628,8 @@ final private[manager] class StateManagerWorkflowCapability(
     }
 
   private[manager] def activeEditorBufferId(state: AppState): Option[BufferId] =
-    state.layout.activeEditorPaneId
-      .flatMap(state.layout.editorPanes.get)
+    state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
       .flatMap(_.bufferId)
 
   protected def updateFileWorkflowSurface(surfaceId: SurfaceId, workflow: FileWorkflowState): IO[Unit] =
@@ -625,7 +637,9 @@ final private[manager] class StateManagerWorkflowCapability(
       state.surfaceById(surfaceId) match
         case Some(surface) =>
           val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)))
-          state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId) :+ updatedSurface)
+          state.copy(runtime =
+            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId) :+ updatedSurface)
+          )
         case None =>
           state
     }
@@ -635,16 +649,19 @@ final private[manager] class StateManagerWorkflowCapability(
       state.surfaceById(surfaceId) match
         case Some(surface) =>
           val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)))
-          state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId) :+ updatedSurface)
+          state.copy(runtime =
+            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId) :+ updatedSurface)
+          )
         case None =>
           state
     }
 
   protected def dismissSurfaceAndFocusEditor(surfaceId: SurfaceId): IO[Unit] =
     stateRef.update { state =>
-      val baseState = state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId))
-      state.layout.activeEditorPaneId match
-        case Some(paneId) => baseState.copy(focus = Focus.EditorPane(paneId))
+      val baseState =
+        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId)))
+      state.persisted.layout.activeEditorPaneId match
+        case Some(paneId) => baseState.copy(persisted = baseState.persisted.copy(focus = Focus.EditorPane(paneId)))
         case None         => baseState
     }
 
@@ -746,7 +763,7 @@ final private[manager] class StateManagerWorkflowCapability(
     Selection(adjust(selection.anchor), adjust(selection.focus))
 
   private def recordWorkflowUndo(bufferState: AppState, bufferId: BufferId, buffer: Buffer): IO[Unit] =
-    bufferState.layout.activeEditorPaneId match
+    bufferState.persisted.layout.activeEditorPaneId match
       case Some(paneId) =>
         undoRef.update { undo =>
           val flushed = undo.flushPendingGroup
@@ -812,21 +829,28 @@ final private[manager] class StateManagerWorkflowCapability(
             updateState(current => restoreSessionIntoCurrentViewport(restoredState, current))
         case None =>
           logger.info("[CMD] No session found - creating default session") >>
-            updateState(_.copy(uiSurfaces = List.empty)) >>
+            updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
             createNewEmptyBuffer().flatMap { bufferId =>
-              updateState(s => s.copy(bufferOrder = s.bufferOrder :+ bufferId)) >>
+              updateState(s =>
+                s.copy(persisted = s.persisted.copy(bufferOrder = s.persisted.bufferOrder :+ bufferId))
+              ) >>
                 createPane(Some(bufferId)).flatMap(paneId => switchToPane(paneId))
             }
       }
 
   private[manager] def createStartupSession(): IO[Unit] =
-    updateState(state => EditorState.openNewTab(state).copy(uiSurfaces = List.empty))
+    updateState { state =>
+      val opened = EditorState.openNewTab(state)
+      opened.copy(runtime = opened.runtime.copy(uiSurfaces = List.empty))
+    }
 
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
     val restored = restoredState.copy(
-      uiSurfaces = List.empty,
-      viewportSize = currentState.viewportSize
+      runtime = restoredState.runtime.copy(
+        uiSurfaces = List.empty,
+        viewportSize = currentState.runtime.viewportSize
+      )
     )
-    currentState.viewportSize
+    currentState.runtime.viewportSize
       .map(viewportSize => LayoutEngine.syncViewportDimensions(restored, viewportSize))
       .getOrElse(restored)

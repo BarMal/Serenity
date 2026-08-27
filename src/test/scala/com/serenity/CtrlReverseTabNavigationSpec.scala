@@ -25,12 +25,14 @@ class CtrlReverseTabNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "handle PreviousTab event and navigate to previous buffer" in new CtrlReverseTabFixture:
     // Given: Wide terminal and multiple buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(wideTerminal))))
+      .unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Create second buffer
     val state = stateManager.getCurrentState.unsafeRunSync()
 
-    state.buffers should have size 2
-    val bufferIds      = state.bufferOrder
+    state.persisted.buffers should have size 2
+    val bufferIds      = state.persisted.bufferOrder
     val firstBufferId  = bufferIds(0)
     val secondBufferId = bufferIds(1)
 
@@ -46,13 +48,15 @@ class CtrlReverseTabNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "cycle through multiple buffers with PreviousTab events" in new CtrlReverseTabFixture:
     // Given: Wide terminal and three buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(wideTerminal))))
+      .unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 2
     val state = stateManager.getCurrentState.unsafeRunSync()
 
-    state.buffers should have size 3
-    val bufferIds = state.bufferOrder
+    state.persisted.buffers should have size 3
+    val bufferIds = state.persisted.bufferOrder
 
     // Should start focused on third buffer (last created)
     state.focusedBufferId.get shouldBe bufferIds(2)

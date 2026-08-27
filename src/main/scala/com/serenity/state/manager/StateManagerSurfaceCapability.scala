@@ -105,7 +105,9 @@ final private[manager] class StateManagerSurfaceCapability(
               content = SurfaceContent.DirectoryTree(tree, selectedPath = None),
               presentation = SurfacePresentation.Pinned(position, size)
             )
-            state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
+            state.copy(runtime =
+              state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
+            )
           case Some(_) =>
             state
           case None =>
@@ -131,7 +133,11 @@ final private[manager] class StateManagerSurfaceCapability(
             case SurfaceContent.DirectoryTree(tree, _) =>
               val newContent = SurfaceContent.DirectoryTree(tree, Some(targetPath))
               val newSurface = surface.copy(content = newContent)
-              Some(state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface))
+              Some(
+                state.copy(runtime =
+                  state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface)
+                )
+              )
             case _ => None
         }
         .getOrElse(state)
@@ -165,7 +171,9 @@ final private[manager] class StateManagerSurfaceCapability(
                   )
                 )
                 currentState.copy(
-                  uiSurfaces = currentState.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface
+                  runtime = currentState.runtime.copy(
+                    uiSurfaces = currentState.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface
+                  )
                 )
               case _ =>
                 currentState

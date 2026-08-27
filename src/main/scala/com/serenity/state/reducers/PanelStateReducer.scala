@@ -8,20 +8,24 @@ object PanelStateReducer:
   def pin(content: PanelContent, position: PanelPosition, size: Int, state: AppState): ReducerResult =
     val (stateWithId, surfaceId) = state.allocateSurfaceId
     val panel                    = UiSurface.fromPanelContent(surfaceId, content, position, size)
-    val workspaceTree = stateWithId.layout.effectiveWorkspaceTree.flatMap { tree =>
+    val workspaceTree = stateWithId.persisted.layout.effectiveWorkspaceTree.flatMap { tree =>
       tree.dock(surfaceId, position, nextSplitId(tree, surfaceId), WorkspaceNodeId(s"dock-${surfaceId.value}"))
     }
     ReducerResult.noEffects(
       stateWithId.copy(
-        uiSurfaces = stateWithId.uiSurfaces :+ panel,
-        layout = stateWithId.layout.copy(workspaceTree = workspaceTree.orElse(stateWithId.layout.workspaceTree))
+        persisted = stateWithId.persisted.copy(
+          layout = stateWithId.persisted.layout
+            .copy(workspaceTree = workspaceTree.orElse(stateWithId.persisted.layout.workspaceTree))
+        ),
+        runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ panel)
       )
     )
 
   def focus(surfaceId: SurfaceId, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
-      case Some(_) => ReducerResult.noEffects(state.copy(focus = Focus.Surface(surfaceId)))
-      case None    => ReducerResult.noEffects(state)
+      case Some(_) =>
+        ReducerResult.noEffects(state.copy(persisted = state.persisted.copy(focus = Focus.Surface(surfaceId))))
+      case None => ReducerResult.noEffects(state)
 
   def focus(position: PanelPosition, state: AppState): ReducerResult =
     newestPinnedSurfaceAt(position, state).orElse(panelSurfaceAt(position, state)) match
@@ -32,13 +36,16 @@ object PanelStateReducer:
     state.surfaceById(surfaceId).filter(isPinned) match
       case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _)) =>
         val resized = surface.copy(presentation = SurfacePresentation.Pinned(position, newSize))
-        val resizedTree = state.layout.workspaceTree.flatMap(
+        val resizedTree = state.persisted.layout.workspaceTree.flatMap(
           _.resizeSurface(surfaceId, surfaceAllocationRatio(position, newSize, state))
         )
         ReducerResult.noEffects(
           state.copy(
-            uiSurfaces = replaceSurfaceInPlace(state.uiSurfaces, resized),
-            layout = state.layout.copy(workspaceTree = resizedTree.orElse(state.layout.workspaceTree))
+            persisted = state.persisted.copy(
+              layout =
+                state.persisted.layout.copy(workspaceTree = resizedTree.orElse(state.persisted.layout.workspaceTree))
+            ),
+            runtime = state.runtime.copy(uiSurfaces = replaceSurfaceInPlace(state.runtime.uiSurfaces, resized))
           )
         )
       case _ =>
@@ -53,20 +60,22 @@ object PanelStateReducer:
     state.surfaceById(surfaceId).filter(isPinned) match
       case Some(surface) =>
         val nextFocus =
-          if state.focus == Focus.Surface(surface.id) then fallbackEditorFocus(state)
-          else state.focus
-        val nextTree = state.layout.workspaceTree.flatMap(_.removeSurface(surfaceId))
-        val maximized = state.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
-          state.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).contains(surfaceId)
+          if state.persisted.focus == Focus.Surface(surface.id) then fallbackEditorFocus(state)
+          else state.persisted.focus
+        val nextTree = state.persisted.layout.workspaceTree.flatMap(_.removeSurface(surfaceId))
+        val maximized = state.persisted.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
+          state.persisted.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).contains(surfaceId)
         )
         ReducerResult.noEffects(
           state.copy(
-            uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id),
-            layout = state.layout.copy(
-              workspaceTree = nextTree.orElse(state.layout.workspaceTree),
-              maximizedWorkspaceNodeId = maximized
+            persisted = state.persisted.copy(
+              layout = state.persisted.layout.copy(
+                workspaceTree = nextTree.orElse(state.persisted.layout.workspaceTree),
+                maximizedWorkspaceNodeId = maximized
+              ),
+              focus = nextFocus
             ),
-            focus = nextFocus
+            runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id))
           )
         )
       case None =>
@@ -80,11 +89,11 @@ object PanelStateReducer:
   def move(surfaceId: SurfaceId, position: PanelPosition, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
       case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, size), _)) =>
-        val movedTree = state.layout.workspaceTree.flatMap { tree =>
+        val movedTree = state.persisted.layout.workspaceTree.flatMap { tree =>
           tree.moveSurface(surfaceId, position, nextSplitId(tree, surfaceId))
         }
         val moved           = surface.copy(presentation = SurfacePresentation.Pinned(position, size))
-        val updatedSurfaces = replaceSurfaceInPlace(state.uiSurfaces, moved)
+        val updatedSurfaces = replaceSurfaceInPlace(state.runtime.uiSurfaces, moved)
         val orderedSurfaces = movedTree
           .map(tree =>
             tree.dockedSurfaceIds.flatMap(surfaceId => updatedSurfaces.find(_.id == surfaceId)) ++
@@ -93,20 +102,25 @@ object PanelStateReducer:
           .getOrElse(updatedSurfaces)
         ReducerResult.noEffects(
           state.copy(
-            uiSurfaces = orderedSurfaces,
-            layout = state.layout.copy(workspaceTree = movedTree.orElse(state.layout.workspaceTree))
+            persisted = state.persisted.copy(
+              layout =
+                state.persisted.layout.copy(workspaceTree = movedTree.orElse(state.persisted.layout.workspaceTree))
+            ),
+            runtime = state.runtime.copy(uiSurfaces = orderedSurfaces)
           )
         )
       case _ =>
         ReducerResult.noEffects(state)
 
   def expand(surfaceId: SurfaceId, state: AppState): ReducerResult =
-    state.layout.workspaceTree.flatMap(_.nodeIdForSurface(surfaceId)) match
+    state.persisted.layout.workspaceTree.flatMap(_.nodeIdForSurface(surfaceId)) match
       case Some(nodeId) =>
         ReducerResult.noEffects(
           state.copy(
-            layout = state.layout.copy(maximizedWorkspaceNodeId = Some(nodeId)),
-            focus = Focus.Surface(surfaceId)
+            persisted = state.persisted.copy(
+              layout = state.persisted.layout.copy(maximizedWorkspaceNodeId = Some(nodeId)),
+              focus = Focus.Surface(surfaceId)
+            )
           )
         )
       case None =>
@@ -118,7 +132,11 @@ object PanelStateReducer:
       case None          => ReducerResult.noEffects(state)
 
   def collapseExpandedPanel(state: AppState): ReducerResult =
-    ReducerResult.noEffects(state.copy(layout = state.layout.copy(maximizedWorkspaceNodeId = None)))
+    ReducerResult.noEffects(
+      state.copy(persisted =
+        state.persisted.copy(layout = state.persisted.layout.copy(maximizedWorkspaceNodeId = None))
+      )
+    )
 
   def pinPeekOverlay(position: PanelPosition, state: AppState): ReducerResult =
     pinActiveFloatingSurface(position, state)
@@ -127,7 +145,7 @@ object PanelStateReducer:
     activeFloatingSurface(state)
       .flatMap(surface => toPinnedSurface(surface, position))
       .map { panel =>
-        val tree = state.layout.effectiveWorkspaceTree.flatMap { workspaceTree =>
+        val tree = state.persisted.layout.effectiveWorkspaceTree.flatMap { workspaceTree =>
           workspaceTree.dock(
             panel.id,
             position,
@@ -137,9 +155,11 @@ object PanelStateReducer:
         }
         ReducerResult.noEffects(
           state.copy(
-            uiSurfaces = replaceSurface(state.uiSurfaces, panel),
-            layout = state.layout.copy(workspaceTree = tree.orElse(state.layout.workspaceTree)),
-            focus = Focus.Surface(panel.id)
+            persisted = state.persisted.copy(
+              layout = state.persisted.layout.copy(workspaceTree = tree.orElse(state.persisted.layout.workspaceTree)),
+              focus = Focus.Surface(panel.id)
+            ),
+            runtime = state.runtime.copy(uiSurfaces = replaceSurface(state.runtime.uiSurfaces, panel))
           )
         )
       }
@@ -191,14 +211,14 @@ object PanelStateReducer:
     focusedPinnedSurfaceAt(position, state).orElse(newestPinnedSurfaceAt(position, state))
 
   private def focusedPinnedSurfaceAt(position: PanelPosition, state: AppState): Option[UiSurface] =
-    state.focus match
+    state.persisted.focus match
       case Focus.Surface(surfaceId) =>
         state.surfaceById(surfaceId).filter(isPinnedAt(position))
       case _ =>
         None
 
   private def newestPinnedSurfaceAt(position: PanelPosition, state: AppState): Option[UiSurface] =
-    state.uiSurfaces.reverse.find(isPinnedAt(position))
+    state.runtime.uiSurfaces.reverse.find(isPinnedAt(position))
 
   private def isPinnedAt(position: PanelPosition)(surface: UiSurface): Boolean =
     surface.presentation match
@@ -211,7 +231,7 @@ object PanelStateReducer:
       case _                                => false
 
   private def panelSurfaceAt(position: PanelPosition, state: AppState): Option[UiSurface] =
-    state.uiSurfaces.find {
+    state.runtime.uiSurfaces.find {
       _.presentation match
         case SurfacePresentation.Pinned(pos, _) if pos == position   => true
         case SurfacePresentation.Expanded(pos, _) if pos == position => true
@@ -228,7 +248,7 @@ object PanelStateReducer:
     WorkspaceNodeId(s"dock-split-${surfaceId.value}-${tree.nodeIds.size}")
 
   private def surfaceAllocationRatio(position: PanelPosition, requestedSize: Int, state: AppState): Double =
-    val total = state.viewportSize.fold(100) { viewport =>
+    val total = state.runtime.viewportSize.fold(100) { viewport =>
       position match
         case PanelPosition.Left | PanelPosition.Right => viewport.width
         case PanelPosition.Top | PanelPosition.Bottom => viewport.height
@@ -236,6 +256,6 @@ object PanelStateReducer:
     requestedSize.toDouble / total.max(1)
 
   private def fallbackEditorFocus(state: AppState): Focus =
-    state.layout.activeEditorPaneId match
+    state.persisted.layout.activeEditorPaneId match
       case Some(paneId) => Focus.EditorPane(paneId)
       case None         => Focus.EditorPane(PaneId(0))

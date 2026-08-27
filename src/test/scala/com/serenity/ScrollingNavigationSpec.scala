@@ -36,7 +36,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       largeContent <- IO.pure((1 to 1000).map(i => s"Line $i with some content").mkString("\n"))
       bufferId     <- sm.createBuffer(largeContent)
       state        <- sm.getCurrentState
-      paneId       <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId       <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _            <- sm.setBufferForPane(paneId, bufferId)
       _            <- sm.setCursorPosition(paneId, 0, 0)
       _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
@@ -50,13 +50,13 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       afterEndState <- sm.getCurrentState
     yield
       // Then: Viewport should move down after PageDown
-      val pane1   = afterPageDownState.layout.editorPanes(paneId)
-      val buffer1 = pane1.bufferId.flatMap(afterPageDownState.buffers.get).get
+      val pane1   = afterPageDownState.persisted.layout.editorPanes(paneId)
+      val buffer1 = pane1.bufferId.flatMap(afterPageDownState.persisted.buffers.get).get
       buffer1.viewport.topLine should be > 0
 
       // Then: Should be at end of file after MoveToEndOfFile
-      val pane2   = afterEndState.layout.editorPanes(paneId)
-      val buffer2 = pane2.bufferId.flatMap(afterEndState.buffers.get).get
+      val pane2   = afterEndState.persisted.layout.editorPanes(paneId)
+      val buffer2 = pane2.bufferId.flatMap(afterEndState.persisted.buffers.get).get
       buffer2.editing.cursors.head.line shouldBe 999    // Last line (0-indexed)
       buffer2.viewport.topLine should be >= (1000 - 25) // Viewport shows last lines
 
@@ -76,18 +76,20 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       )
       bufferId <- sm.createBuffer(wideContent)
       state    <- sm.getCurrentState
-      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId   <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _        <- sm.setBufferForPane(paneId, bufferId)
       _ <- sm.updateState { current =>
-        current.copy(
-          config = current.config.withWordWrap(false),
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(
-                document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala))
-              )
+        current.copy(persisted =
+          current.persisted.copy(
+            config = current.persisted.config.withWordWrap(false),
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(
+                  document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala))
+                )
+            )
           )
         )
       }
@@ -99,8 +101,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       afterScrollState <- sm.getCurrentState
     yield
       // Then: Viewport should scroll horizontally
-      val pane   = afterScrollState.layout.editorPanes(paneId)
-      val buffer = pane.bufferId.flatMap(afterScrollState.buffers.get).get
+      val pane   = afterScrollState.persisted.layout.editorPanes(paneId)
+      val buffer = pane.bufferId.flatMap(afterScrollState.persisted.buffers.get).get
       buffer.viewport.leftColumn should be >= (150 - 80) // Cursor should be visible
 
     program.unsafeRunSync()
@@ -108,21 +110,27 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "use measured horizontal scrolling for proportional markdown lines" in {
     val program = for
-      sm       <- IO.pure(makeStateManager())
-      _        <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+      sm <- IO.pure(makeStateManager())
+      _ <- sm.updateState(current =>
+        current.copy(persisted =
+          current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false))
+        )
+      )
       bufferId <- sm.createBuffer("iiiiiiiiWW")
       state    <- sm.getCurrentState
-      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId   <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _        <- sm.setBufferForPane(paneId, bufferId)
       _ <- sm.updateState { current =>
-        current.copy(
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(
-                document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown))
-              )
+        current.copy(persisted =
+          current.persisted.copy(
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(
+                  document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown))
+                )
+            )
           )
         )
       }
@@ -131,8 +139,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       _ <- sm.ensureCursorVisible(paneId)
       afterScrollState <- sm.getCurrentState
     yield
-      val pane   = afterScrollState.layout.editorPanes(paneId)
-      val buffer = pane.bufferId.flatMap(afterScrollState.buffers.get).get
+      val pane   = afterScrollState.persisted.layout.editorPanes(paneId)
+      val buffer = pane.bufferId.flatMap(afterScrollState.persisted.buffers.get).get
       buffer.viewport.leftColumn should be < 7
       buffer.viewport.leftColumn should be >= 0
 
@@ -141,33 +149,39 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "use measured horizontal scrolling after deleting a proportional selection" in {
     val program = for
-      sm       <- IO.pure(makeStateManager())
-      _        <- sm.updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+      sm <- IO.pure(makeStateManager())
+      _ <- sm.updateState(current =>
+        current.copy(persisted =
+          current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false))
+        )
+      )
       bufferId <- sm.createBuffer("iiiiiiiiWW")
       state    <- sm.getCurrentState
-      paneId   <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId   <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _        <- sm.setBufferForPane(paneId, bufferId)
       _ <- sm.updateState { current =>
-        current.copy(
-          buffers = current.buffers.updated(
-            bufferId, {
-              val existing = current.buffers(bufferId)
-              existing.copy(
-                document = existing.document.copy(language = Some(LanguageId.Markdown)),
-                viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 4),
-                editing = existing.editing.copy(
-                  cursors = List(CursorPosition(0, 10)),
-                  selection = Some(Selection(CursorPosition(0, 8), CursorPosition(0, 10)))
+        current.copy(persisted =
+          current.persisted.copy(
+            buffers = current.persisted.buffers.updated(
+              bufferId, {
+                val existing = current.persisted.buffers(bufferId)
+                existing.copy(
+                  document = existing.document.copy(language = Some(LanguageId.Markdown)),
+                  viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 4),
+                  editing = existing.editing.copy(
+                    cursors = List(CursorPosition(0, 10)),
+                    selection = Some(Selection(CursorPosition(0, 8), CursorPosition(0, 10)))
+                  )
                 )
-              )
-            }
+              }
+            )
           )
         )
       }
       _                <- sm.applyEvent(DeleteBackward)
       afterDeleteState <- sm.getCurrentState
     yield
-      val buffer = afterDeleteState.buffers(bufferId)
+      val buffer = afterDeleteState.persisted.buffers(bufferId)
       val font = FontLoader.previewTextFont(
         FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f, enableLigatures = true)
       )
@@ -191,7 +205,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val bufferId = stateManager.createBuffer(content).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
+    val paneId = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
     stateManager
@@ -203,8 +217,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Viewport should scroll down 3 lines
     val afterScrollDownState = stateManager.getCurrentState.unsafeRunSync()
-    val pane1                = afterScrollDownState.layout.editorPanes(paneId)
-    val buffer1              = pane1.bufferId.flatMap(afterScrollDownState.buffers.get).get
+    val pane1                = afterScrollDownState.persisted.layout.editorPanes(paneId)
+    val buffer1              = pane1.bufferId.flatMap(afterScrollDownState.persisted.buffers.get).get
     buffer1.viewport.topLine shouldBe 3
 
     // When: Mouse wheel scroll up (2 lines)
@@ -212,8 +226,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Viewport should scroll up
     val afterScrollUpState = stateManager.getCurrentState.unsafeRunSync()
-    val pane2              = afterScrollUpState.layout.editorPanes(paneId)
-    val buffer2            = pane2.bufferId.flatMap(afterScrollUpState.buffers.get).get
+    val pane2              = afterScrollUpState.persisted.layout.editorPanes(paneId)
+    val buffer2            = pane2.bufferId.flatMap(afterScrollUpState.persisted.buffers.get).get
     buffer2.viewport.topLine shouldBe 1
 
   it should "handle smooth scrolling animations" in new ScrollFixture:
@@ -222,7 +236,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val bufferId = stateManager.createBuffer(content).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
+    val paneId = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
     stateManager
@@ -234,7 +248,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should start smooth scrolling animation
     val duringScrollState = stateManager.getCurrentState.unsafeRunSync()
-    val pane              = duringScrollState.layout.editorPanes(paneId)
+    val pane              = duringScrollState.persisted.layout.editorPanes(paneId)
     pane.smoothScrolling shouldBe Some(SmoothScrollState(targetTopLine = 30, progress = 0.0))
 
     // When: Progress smooth scroll animation
@@ -242,8 +256,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should be partially scrolled
     val halfwayState = stateManager.getCurrentState.unsafeRunSync()
-    val pane2        = halfwayState.layout.editorPanes(paneId)
-    val buffer2      = pane2.bufferId.flatMap(halfwayState.buffers.get).get
+    val pane2        = halfwayState.persisted.layout.editorPanes(paneId)
+    val buffer2      = pane2.bufferId.flatMap(halfwayState.persisted.buffers.get).get
     buffer2.viewport.topLine should be > 0
     buffer2.viewport.topLine should be < 30
 
@@ -252,8 +266,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should reach target
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val pane3      = finalState.layout.editorPanes(paneId)
-    val buffer3    = pane3.bufferId.flatMap(finalState.buffers.get).get
+    val pane3      = finalState.persisted.layout.editorPanes(paneId)
+    val buffer3    = pane3.bufferId.flatMap(finalState.persisted.buffers.get).get
     buffer3.viewport.topLine shouldBe 30
     pane3.smoothScrolling shouldBe None
 
@@ -263,7 +277,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val bufferId = stateManager.createBuffer(content).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
+    val paneId = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
     stateManager
@@ -277,7 +291,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val modalState   = stateManager.getCurrentState.unsafeRunSync()
     val modalSurface = modalState.modalSurface
     modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
-    modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
+    modalState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
 
     // When: Type line number
     "250".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -286,8 +300,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Should jump to line 250
     val afterGotoState = stateManager.getCurrentState.unsafeRunSync()
     afterGotoState.modalSurface shouldBe None
-    val pane   = afterGotoState.layout.editorPanes(paneId)
-    val buffer = pane.bufferId.flatMap(afterGotoState.buffers.get).get
+    val pane   = afterGotoState.persisted.layout.editorPanes(paneId)
+    val buffer = pane.bufferId.flatMap(afterGotoState.persisted.buffers.get).get
     buffer.editing.cursors.head.line shouldBe 249   // 0-indexed, so line 250 = index 249
     buffer.viewport.topLine should be >= (249 - 12) // Center line in viewport
     buffer.viewport.topLine should be <= 249
@@ -303,7 +317,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val bufferId = stateManager.createBuffer(content).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
+    val paneId = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
     stateManager
@@ -319,8 +333,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Live find should scroll to first occurrence (line 50)
     val afterFindState = stateManager.getCurrentState.unsafeRunSync()
-    val pane1          = afterFindState.layout.editorPanes(paneId)
-    val buffer1        = pane1.bufferId.flatMap(afterFindState.buffers.get).get
+    val pane1          = afterFindState.persisted.layout.editorPanes(paneId)
+    val buffer1        = pane1.bufferId.flatMap(afterFindState.persisted.buffers.get).get
     buffer1.editing.cursors.head.line shouldBe 49   // Line 50 (0-indexed)
     buffer1.viewport.topLine should be >= (49 - 12) // Should be visible
     buffer1.viewport.topLine should be <= 49
@@ -330,8 +344,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should scroll to next occurrence (line 100)
     val afterNextState = stateManager.getCurrentState.unsafeRunSync()
-    val pane2          = afterNextState.layout.editorPanes(paneId)
-    val buffer2        = pane2.bufferId.flatMap(afterNextState.buffers.get).get
+    val pane2          = afterNextState.persisted.layout.editorPanes(paneId)
+    val buffer2        = pane2.bufferId.flatMap(afterNextState.persisted.buffers.get).get
     buffer2.editing.cursors.head.line shouldBe 99 // Line 100 (0-indexed)
 
     // When: Find next again while the overlay remains open
@@ -339,8 +353,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should scroll to line 150
     val afterNext2State = stateManager.getCurrentState.unsafeRunSync()
-    val pane3           = afterNext2State.layout.editorPanes(paneId)
-    val buffer3         = pane3.bufferId.flatMap(afterNext2State.buffers.get).get
+    val pane3           = afterNext2State.persisted.layout.editorPanes(paneId)
+    val buffer3         = pane3.bufferId.flatMap(afterNext2State.persisted.buffers.get).get
     buffer3.editing.cursors.head.line shouldBe 149 // Line 150 (0-indexed)
 
   it should "handle viewport synchronization across split panes" in new ScrollFixture:
@@ -349,7 +363,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val bufferId = stateManager.createBuffer(content).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    val pane1 = state.layout.editorPanes.keys.head
+    val pane1 = state.persisted.layout.editorPanes.keys.head
 
     // Associate the buffer with the first pane
     stateManager.setBufferForPane(pane1, bufferId).unsafeRunSync()
@@ -368,10 +382,10 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Both panes should scroll if synchronized
     val afterScrollState = stateManager.getCurrentState.unsafeRunSync()
-    val finalPane1       = afterScrollState.layout.editorPanes(pane1)
-    val finalPane2       = afterScrollState.layout.editorPanes(pane2)
-    val finalBuffer1     = finalPane1.bufferId.flatMap(afterScrollState.buffers.get).get
-    val finalBuffer2     = finalPane2.bufferId.flatMap(afterScrollState.buffers.get).get
+    val finalPane1       = afterScrollState.persisted.layout.editorPanes(pane1)
+    val finalPane2       = afterScrollState.persisted.layout.editorPanes(pane2)
+    val finalBuffer1     = finalPane1.bufferId.flatMap(afterScrollState.persisted.buffers.get).get
+    val finalBuffer2     = finalPane2.bufferId.flatMap(afterScrollState.persisted.buffers.get).get
 
     finalBuffer1.viewport.topLine shouldBe 10
     if finalPane2.syncedScrolling then finalBuffer2.viewport.topLine shouldBe 10
@@ -382,7 +396,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val bufferId = stateManager.createBuffer(content).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
+    val paneId = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
     stateManager
@@ -401,8 +415,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should scroll to clicked location
     val afterClickState = stateManager.getCurrentState.unsafeRunSync()
-    val pane            = afterClickState.layout.editorPanes(paneId)
-    val buffer          = pane.bufferId.flatMap(afterClickState.buffers.get).get
+    val pane            = afterClickState.persisted.layout.editorPanes(paneId)
+    val buffer          = pane.bufferId.flatMap(afterClickState.persisted.buffers.get).get
     buffer.viewport.topLine should be >= (targetLine - 12)
     buffer.viewport.topLine should be <= (targetLine + 12)
 
@@ -412,7 +426,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val bufferId = stateManager.createBuffer(content).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
+    val paneId = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
     stateManager
@@ -424,8 +438,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should clamp to file bounds
     val afterScrollState = stateManager.getCurrentState.unsafeRunSync()
-    val pane             = afterScrollState.layout.editorPanes(paneId)
-    val buffer           = pane.bufferId.flatMap(afterScrollState.buffers.get).get
+    val pane             = afterScrollState.persisted.layout.editorPanes(paneId)
+    val buffer           = pane.bufferId.flatMap(afterScrollState.persisted.buffers.get).get
     buffer.viewport.topLine shouldBe 0 // Can't scroll down in small file
 
     // When: Try to scroll up beyond beginning
@@ -433,8 +447,8 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should stay at beginning
     val afterScrollUpState = stateManager.getCurrentState.unsafeRunSync()
-    val pane2              = afterScrollUpState.layout.editorPanes(paneId)
-    val buffer2            = pane2.bufferId.flatMap(afterScrollUpState.buffers.get).get
+    val pane2              = afterScrollUpState.persisted.layout.editorPanes(paneId)
+    val buffer2            = pane2.bufferId.flatMap(afterScrollUpState.persisted.buffers.get).get
     buffer2.viewport.topLine shouldBe 0
 
   trait ScrollFixture:

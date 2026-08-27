@@ -198,40 +198,64 @@ final case class AnnotationLineIndex(
           .foldLeft(byLine)((updated, line) => updated.updated(line, comment :: updated.getOrElse(line, Nil)))
       }
 
-final case class AppState(
+/** Jump-history navigation: every write moves an entry between `backStack` and `forwardStack`. */
+final case class NavigationHistory(
+    backStack: List[NavigationPoint] = Nil,
+    forwardStack: List[NavigationPoint] = Nil
+)
+
+/** LSP diagnostics and the spell-check cache derived from them share a single production write site. */
+final case class DiagnosticsState(
+    diagnostics: Map[String, List[Diagnostic]] = Map.empty,
+    spellCheckCache: Map[String, SpellCheckCacheEntry] = Map.empty
+)
+
+/** State that round-trips through `session/SessionState.scala`. */
+final case class Persisted(
     layout: Layout,
     buffers: Map[BufferId, Buffer],
-    bufferOrder: List[BufferId] = List.empty, // Tracks buffer creation and navigation order
     focus: Focus,
+    bufferOrder: List[BufferId] = List.empty, // Tracks buffer creation and navigation order
+    theme: Theme = Theme.default,
+    config: AppConfig = AppConfig.default,
+    recentFiles: List[java.nio.file.Path] = Nil
+)
+
+/** State that is never persisted -- reset to defaults (or recomputed) on every session restore. */
+final case class Runtime(
     uiSurfaces: List[UiSurface] = List.empty,
     actionStack: List[AppAction] = Nil,
     viewportSize: Option[ViewportSize] = None,
-    theme: Theme = Theme.default,
-    config: AppConfig = AppConfig.default,
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: Int = 0,
     themeTransition: Option[ThemeTransition] = None,
     surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
-    clipboard: Option[String] = None, // not persisted between sessions
-    recentFiles: List[java.nio.file.Path] = Nil,
-    diagnostics: Map[String, List[Diagnostic]] = Map.empty,
-    spellCheckCache: Map[String, SpellCheckCacheEntry] = Map.empty,
+    clipboard: Option[String] = None,
     focusHistory: List[Focus] = List.empty,
-    navigationBackStack: List[NavigationPoint] = Nil,
-    navigationForwardStack: List[NavigationPoint] = Nil,
+    navigation: NavigationHistory = NavigationHistory(),
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
-    windowSitter: WindowSitter = WindowSitter.default
+    windowSitter: WindowSitter = WindowSitter.default,
+    diagnosticsState: DiagnosticsState = DiagnosticsState()
+)
+
+final case class AppState(
+    persisted: Persisted,
+    runtime: Runtime = Runtime()
 ):
 
   /** Lazily indexes annotations for this immutable state snapshot. A new state snapshot gets a fresh index, while
     * repeated render plans for the same scene reuse the existing one.
     */
   lazy val annotationIndexByBuffer: Map[BufferId, () => AnnotationLineIndex] =
-    buffers.iterator.map {
+    persisted.buffers.iterator.map {
       case (bufferId, buffer) =>
         lazy val index =
-          val diagnostics = this.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
+          val diagnostics =
+            runtime.diagnosticsState.diagnostics.getOrElse(
+              com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer),
+              Nil
+            )
           AnnotationLineIndex(
             buffer.annotations.documentComments.toVector,
             diagnostics.groupMap(_.range.start.line)(identity)
@@ -240,7 +264,7 @@ final case class AppState(
     }.toMap
 
   lazy val markdownFenceIndexByBuffer: Map[BufferId, () => MarkdownBlockLens.FenceRangeIndex] =
-    buffers.iterator.map {
+    persisted.buffers.iterator.map {
       case (bufferId, buffer) =>
         lazy val index =
           MarkdownBlockLens.fenceRangeIndex(buffer.document.content.lineCount, buffer.document.content.getLine)
@@ -248,28 +272,28 @@ final case class AppState(
     }.toMap
 
   /** Convenience accessor for syntax highlighting setting */
-  def syntaxHighlightingEnabled: Boolean = config.syntaxHighlightingEnabled
+  def syntaxHighlightingEnabled: Boolean = persisted.config.syntaxHighlightingEnabled
   def isValid: Boolean                   = validationErrors.isEmpty
 
   /** Cursor position for the currently active editor pane, if any. */
   def activeCursorPosition: Option[CursorPosition] =
-    layout.activeEditorPaneId
-      .flatMap(layout.editorPanes.get)
+    persisted.layout.activeEditorPaneId
+      .flatMap(persisted.layout.editorPanes.get)
       .flatMap(_.bufferId)
-      .flatMap(buffers.get)
+      .flatMap(persisted.buffers.get)
       .flatMap(_.editing.cursors.headOption)
 
   def cursorInfoBarSurface: Option[UiSurface] =
-    config.cursorInfoBarMode match
+    persisted.config.cursorInfoBarMode match
       case CursorInfoBarMode.Off => None
       case mode =>
-        config.cursorInfoBarPlacement match
+        persisted.config.cursorInfoBarPlacement match
           case CursorInfoBarPlacement.Floating =>
             for
-              paneId   <- layout.activeEditorPaneId
-              pane     <- layout.editorPanes.get(paneId)
+              paneId   <- persisted.layout.activeEditorPaneId
+              pane     <- persisted.layout.editorPanes.get(paneId)
               bufferId <- pane.bufferId
-              buffer   <- buffers.get(bufferId)
+              buffer   <- persisted.buffers.get(bufferId)
               cursor   <- buffer.editing.cursors.headOption
             yield UiSurface(
               id = SurfaceId("cursor-info-bar"),
@@ -280,14 +304,14 @@ final case class AppState(
             None
 
   def cursorInfoBarText: Option[String] =
-    config.cursorInfoBarMode match
+    persisted.config.cursorInfoBarMode match
       case CursorInfoBarMode.Off => None
       case mode =>
         for
-          paneId   <- layout.activeEditorPaneId
-          pane     <- layout.editorPanes.get(paneId)
+          paneId   <- persisted.layout.activeEditorPaneId
+          pane     <- persisted.layout.editorPanes.get(paneId)
           bufferId <- pane.bufferId
-          buffer   <- buffers.get(bufferId)
+          buffer   <- persisted.buffers.get(bufferId)
           cursor   <- buffer.editing.cursors.headOption
         yield formatCursorInfoBarText(mode, cursor, buffer)
 
@@ -305,19 +329,19 @@ final case class AppState(
         s"$position | $language | $fileName"
 
   def floatingSurfaces: List[UiSurface] =
-    uiSurfaces.filter {
+    runtime.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Floating(_, _) => true
         case _                                  => false
     }
 
   def pinnedSurfaces: List[UiSurface] =
-    val storedPinned = uiSurfaces.filter {
+    val storedPinned = runtime.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Pinned(_, _) => true
         case _                                => false
     }
-    val orderedStored = layout.workspaceTree match
+    val orderedStored = persisted.layout.workspaceTree match
       case Some(tree) =>
         tree.dockedSurfaceIds.flatMap(surfaceId => storedPinned.find(_.id == surfaceId)) ++
           storedPinned.filterNot(surface => tree.dockedSurfaceIds.contains(surface.id))
@@ -331,22 +355,22 @@ final case class AppState(
 
   def expandedPanelSurface: Option[UiSurface] =
     val maximized = for
-      tree      <- layout.workspaceTree
-      nodeId    <- layout.maximizedWorkspaceNodeId
+      tree      <- persisted.layout.workspaceTree
+      nodeId    <- persisted.layout.maximizedWorkspaceNodeId
       surfaceId <- tree.surfaceIdForNode(nodeId)
       surface   <- surfaceById(surfaceId)
     yield surface
-    maximized.orElse(uiSurfaces.find {
+    maximized.orElse(runtime.uiSurfaces.find {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
     })
 
   def surfaceById(surfaceId: SurfaceId): Option[UiSurface] =
-    uiSurfaces.find(_.id == surfaceId).orElse(cursorInfoBarSurface.filter(_.id == surfaceId))
+    runtime.uiSurfaces.find(_.id == surfaceId).orElse(cursorInfoBarSurface.filter(_.id == surfaceId))
 
   def activeSurface: Option[UiSurface] =
-    focus match
+    persisted.focus match
       case Focus.Surface(surfaceId) => surfaceById(surfaceId)
       case _                        => None
 
@@ -368,7 +392,7 @@ final case class AppState(
   def hasCommandRunnerDomain: Boolean =
     commandRunnerDomainSurfaceIds.nonEmpty
 
-  def isCommandRunnerDomainFocus(currentFocus: Focus = focus): Boolean =
+  def isCommandRunnerDomainFocus(currentFocus: Focus = persisted.focus): Boolean =
     currentFocus match
       case Focus.Surface(surfaceId) => commandRunnerDomainSurfaceIds.contains(surfaceId)
       case _                        => false
@@ -428,7 +452,7 @@ final case class AppState(
 
   /** Modal surfaces ordered from their parent to the topmost child. */
   def modalSurfaces: List[UiSurface] =
-    uiSurfaces.collect { case surface @ UiSurface(_, _, SurfacePresentation.Modal, _) => surface }
+    runtime.uiSurfaces.collect { case surface @ UiSurface(_, _, SurfacePresentation.Modal, _) => surface }
 
   /** Compatibility alias for callers that still name modal ownership as blocking. */
   def blockingModalSurfaces: List[UiSurface] =
@@ -443,7 +467,7 @@ final case class AppState(
 
   /** The active modal workflow, retaining modeless workflow lookup during migration. */
   def modalSurface: Option[UiSurface] =
-    topModalSurface.orElse(uiSurfaces.reverse.find(isModalWorkflow))
+    topModalSurface.orElse(runtime.uiSurfaces.reverse.find(isModalWorkflow))
 
   def hasBlockingModal: Boolean =
     topBlockingModalSurface.nonEmpty
@@ -451,18 +475,19 @@ final case class AppState(
   /** Remove the topmost modal workflow and restore the focus that opened it. */
   def dismissTopModal: AppState =
     topModalSurface.orElse(activeSurface.filter(isModalWorkflow)) match
-      case Some(surface) => copy(uiSurfaces = uiSurfaces.filterNot(_.id == surface.id)).popFocus
-      case None          => this
+      case Some(surface) =>
+        copy(runtime = runtime.copy(uiSurfaces = runtime.uiSurfaces.filterNot(_.id == surface.id))).popFocus
+      case None => this
 
   def peekSurface: Option[UiSurface] =
-    uiSurfaces.find {
+    runtime.uiSurfaces.find {
       _.presentation match
         case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
         case _                                                             => false
     }
 
   private def findSurface(matches: SurfaceContent => Boolean): Option[UiSurface] =
-    uiSurfaces.find(surface => matches(surface.content))
+    runtime.uiSurfaces.find(surface => matches(surface.content))
 
   private def isModalWorkflow(surface: UiSurface): Boolean =
     surface.content match
@@ -470,80 +495,84 @@ final case class AppState(
       case _                               => false
 
   def allocateSurfaceId: (AppState, SurfaceId) =
-    val surfaceId = SurfaceId(s"surface-$nextSurfaceId")
-    (copy(nextSurfaceId = nextSurfaceId + 1), surfaceId)
+    val surfaceId = SurfaceId(s"surface-${runtime.nextSurfaceId}")
+    (copy(runtime = runtime.copy(nextSurfaceId = runtime.nextSurfaceId + 1)), surfaceId)
 
   def pushFocus(newFocus: Focus): AppState =
-    val deduplicated = focusHistory.filterNot(_ == focus)
-    copy(focus = newFocus, focusHistory = focus :: deduplicated)
+    val deduplicated = runtime.focusHistory.filterNot(_ == persisted.focus)
+    copy(
+      persisted = persisted.copy(focus = newFocus),
+      runtime = runtime.copy(focusHistory = persisted.focus :: deduplicated)
+    )
 
   def popFocus: AppState =
-    focusHistory match
+    runtime.focusHistory match
       case head :: tail =>
         head match
           case Focus.Surface(sid) if surfaceById(sid).isEmpty =>
-            copy(focusHistory = tail).popFocus
+            copy(runtime = runtime.copy(focusHistory = tail)).popFocus
           case validFocus =>
-            copy(focus = validFocus, focusHistory = tail)
+            copy(persisted = persisted.copy(focus = validFocus), runtime = runtime.copy(focusHistory = tail))
       case Nil =>
-        val fallback = layout.activeEditorPaneId
+        val fallback = persisted.layout.activeEditorPaneId
           .map(Focus.EditorPane(_))
           .getOrElse(Focus.EditorPane(PaneId(0)))
-        copy(focus = fallback)
+        copy(persisted = persisted.copy(focus = fallback))
 
   /** Get the currently focused buffer ID, if any */
   def focusedBufferId: Option[BufferId] =
-    focus match
+    persisted.focus match
       case Focus.EditorPane(paneId) =>
-        layout.editorPanes.get(paneId).flatMap(_.bufferId)
+        persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId)
       case _ => None
 
   /** Get the next buffer ID in navigation order */
   def nextBufferInOrder(currentBufferId: BufferId): Option[BufferId] =
-    if bufferOrder.isEmpty then None
+    if persisted.bufferOrder.isEmpty then None
     else
-      val currentIndex = bufferOrder.indexOf(currentBufferId)
-      if currentIndex == -1 then bufferOrder.headOption
+      val currentIndex = persisted.bufferOrder.indexOf(currentBufferId)
+      if currentIndex == -1 then persisted.bufferOrder.headOption
       else
-        val nextIndex = (currentIndex + 1) % bufferOrder.size
-        Some(bufferOrder(nextIndex))
+        val nextIndex = (currentIndex + 1) % persisted.bufferOrder.size
+        Some(persisted.bufferOrder(nextIndex))
 
   /** Get the previous buffer ID in navigation order */
   def previousBufferInOrder(currentBufferId: BufferId): Option[BufferId] =
-    if bufferOrder.isEmpty then None
+    if persisted.bufferOrder.isEmpty then None
     else
-      val currentIndex = bufferOrder.indexOf(currentBufferId)
-      if currentIndex == -1 then bufferOrder.headOption
+      val currentIndex = persisted.bufferOrder.indexOf(currentBufferId)
+      if currentIndex == -1 then persisted.bufferOrder.headOption
       else
-        val prevIndex = (currentIndex - 1 + bufferOrder.size) % bufferOrder.size
-        Some(bufferOrder(prevIndex))
+        val prevIndex = (currentIndex - 1 + persisted.bufferOrder.size) % persisted.bufferOrder.size
+        Some(persisted.bufferOrder(prevIndex))
 
   def validationErrors: List[String] =
     val errors = List.newBuilder[String]
 
     // Focus validation
-    focus match
-      case Focus.EditorPane(paneId) if !layout.editorPanes.contains(paneId) =>
+    persisted.focus match
+      case Focus.EditorPane(paneId) if !persisted.layout.editorPanes.contains(paneId) =>
         errors += s"Focus points to non-existent pane: $paneId"
       case Focus.Surface(surfaceId) if surfaceById(surfaceId).isEmpty =>
         errors += s"Focus points to non-existent surface: $surfaceId"
       case _ => // Valid focus
     // Buffer-Pane consistency
-    layout.editorPanes.foreach { (paneId, pane) =>
+    persisted.layout.editorPanes.foreach { (paneId, pane) =>
       pane.bufferId.foreach { bufferId =>
-        if !buffers.contains(bufferId) then errors += s"Pane $paneId references non-existent buffer: $bufferId"
+        if !persisted.buffers.contains(bufferId) then
+          errors += s"Pane $paneId references non-existent buffer: $bufferId"
       }
     }
-    layout.workspaceTree.foreach { tree =>
-      val pinnedSurfaceIds = uiSurfaces.collect {
+    persisted.layout.workspaceTree.foreach { tree =>
+      val pinnedSurfaceIds = runtime.uiSurfaces.collect {
         case UiSurface(id, _, SurfacePresentation.Pinned(_, _), _) => id
       }.toSet
-      errors ++= tree.validationErrors(layout.editorPanes.keySet, pinnedSurfaceIds)
-      focus match
+      errors ++= tree.validationErrors(persisted.layout.editorPanes.keySet, pinnedSurfaceIds)
+      persisted.focus match
         case Focus.EditorPane(paneId) if !tree.paneIds.contains(paneId) =>
           errors += s"Focus points outside workspace tree: $paneId"
         case _ =>
-      layout.maximizedWorkspaceNodeId.foreach { nodeId =>
+      persisted.layout.maximizedWorkspaceNodeId.foreach { nodeId =>
         if tree.surfaceIdForNode(nodeId).isEmpty then
           errors += s"Maximised workspace node is not a docked surface: ${nodeId.value}"
       }
@@ -556,18 +585,18 @@ final case class AppState(
     if reconciled.isValid then Right(reconciled) else Left(reconciled.validationErrors)
 
   private def reconcileWorkspaceTree: AppState =
-    layout.workspaceTree match
+    persisted.layout.workspaceTree match
       case None                                               => this
       case Some(tree) if workspaceTreeAlreadyReconciled(tree) => this
       case Some(tree) =>
-        val paneIds = layout.editorPanes.keySet
+        val paneIds = persisted.layout.editorPanes.keySet
         val prunedPanes = tree.paneIds
           .filterNot(paneIds.contains)
           .foldLeft(Option(tree)) {
             case (Some(currentTree), paneId) => currentTree.remove(paneId)
             case (None, _)                   => None
           }
-        val paneReconciledTree = layout.paneOrder
+        val paneReconciledTree = persisted.layout.paneOrder
           .filter(paneIds.contains)
           .foldLeft(prunedPanes) {
             case (Some(currentTree), paneId) if !currentTree.paneIds.contains(paneId) =>
@@ -576,14 +605,14 @@ final case class AppState(
                 .split(
                   currentTree.paneIds.lastOption.getOrElse(paneId),
                   paneId,
-                  SplitAxis.fromLegacy(layout.splitDirection),
+                  SplitAxis.fromLegacy(persisted.layout.splitDirection),
                   splitId,
                   WorkspaceNodeId(s"reconcile-pane-leaf-${paneId.value}")
                 )
             case (currentTree, _) => currentTree
           }
           .getOrElse(tree)
-        val pinned = uiSurfaces.collect {
+        val pinned = runtime.uiSurfaces.collect {
           case UiSurface(id, _, SurfacePresentation.Pinned(position, _), _) => id -> position
         }
         val pinnedIds = pinned.map(_._1).toSet
@@ -627,24 +656,28 @@ final case class AppState(
                       .getOrElse(tree)
                 }
           }
-        copy(layout = layout.copy(workspaceTree = Some(orderedTree), paneOrder = orderedTree.paneIds))
+        copy(persisted =
+          persisted.copy(layout =
+            persisted.layout.copy(workspaceTree = Some(orderedTree), paneOrder = orderedTree.paneIds)
+          )
+        )
 
   // Cheap pre-check for the common case where no pane or pinned-surface change requires rebuilding the tree,
   // so events that don't touch panes/docking (e.g. command-palette navigation) skip the full reconciliation pass.
   private def workspaceTreeAlreadyReconciled(tree: WorkspaceTree): Boolean =
     tree.dockedSurfaceIds.isEmpty &&
-      !uiSurfaces.exists {
+      !runtime.uiSurfaces.exists {
         case UiSurface(_, _, SurfacePresentation.Pinned(_, _), _) => true
         case _                                                    => false
       } &&
-      tree.paneIds.toSet == layout.editorPanes.keySet &&
-      layout.paneOrder.filter(layout.editorPanes.keySet.contains) == tree.paneIds
+      tree.paneIds.toSet == persisted.layout.editorPanes.keySet &&
+      persisted.layout.paneOrder.filter(persisted.layout.editorPanes.keySet.contains) == tree.paneIds
 
-  // The compiler-generated equals walks every one of this class's ~20 fields (including the buffers map, which
-  // then walks every open buffer) with no fast path -- paid on every dispatched event, including ones like
-  // MouseMove that never change state. Short-circuiting on reference identity covers the overwhelmingly common
-  // "nothing changed" case in O(1). Comparing via productIterator rather than hand-listing fields avoids the risk
-  // of silently dropping a field from the comparison as the case class evolves.
+  // buffers (walked transitively through `persisted`) dominates the cost of the compiler-generated equals, paid on
+  // every dispatched event including ones like MouseMove that never change state. Short-circuiting on reference
+  // identity covers the overwhelmingly common "nothing changed" case in O(1). Comparing via productIterator rather
+  // than hand-listing fields avoids the risk of silently dropping a field from the comparison as the case class
+  // evolves.
   override def equals(obj: Any): Boolean =
     obj match
       case that: AnyRef if (this: AnyRef).eq(that) => true
@@ -666,26 +699,32 @@ object AppState:
       workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
     )
     AppState(
-      layout = layout,
-      buffers = Map(initialBufferId -> initialBuffer),
-      bufferOrder = List(initialBufferId),
-      focus = Focus.EditorPane(PaneId(0)),
-      config = config,
-      windowSitter = WindowSitter.fromConfig(config.windowSitterConfig),
-      nextBufferId = BufferId(1),
-      nextPaneId = PaneId(1),
-      nextSurfaceId = 0
+      persisted = Persisted(
+        layout = layout,
+        buffers = Map(initialBufferId -> initialBuffer),
+        bufferOrder = List(initialBufferId),
+        focus = Focus.EditorPane(PaneId(0)),
+        config = config
+      ),
+      runtime = Runtime(
+        windowSitter = WindowSitter.fromConfig(config.windowSitterConfig),
+        nextBufferId = BufferId(1),
+        nextPaneId = PaneId(1),
+        nextSurfaceId = 0
+      )
     )
 
   def empty: AppState = empty(AppConfig.default)
 
   def empty(config: AppConfig): AppState =
     AppState(
-      layout = Layout.empty,
-      buffers = Map.empty,
-      focus = Focus.EditorPane(PaneId(0)),
-      config = config,
-      windowSitter = WindowSitter.fromConfig(config.windowSitterConfig)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.EditorPane(PaneId(0)),
+        config = config
+      ),
+      runtime = Runtime(windowSitter = WindowSitter.fromConfig(config.windowSitterConfig))
     )
 
 enum AppAction:

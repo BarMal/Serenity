@@ -17,13 +17,14 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
     content: String,
     cursors: List[CursorPosition],
     selections: List[Selection] = Nil,
-    viewport: Viewport = AppState.initial.buffers(bufferId).viewport
+    viewport: Viewport = AppState.initial.persisted.buffers(bufferId).viewport
   ): AppState =
-    val buffer = AppState.initial
+    val buffer = AppState.initial.persisted
       .buffers(bufferId)
       .copy(
-        document = AppState.initial.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
-        editing = AppState.initial
+        document =
+          AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
+        editing = AppState.initial.persisted
           .buffers(bufferId)
           .editing
           .copy(
@@ -33,10 +34,12 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
           ),
         viewport = viewport
       )
-    AppState.initial.copy(buffers = AppState.initial.buffers.updated(bufferId, buffer))
+    AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = AppState.initial.persisted.buffers.updated(bufferId, buffer))
+    )
 
   private def reduce(event: EditorEvent, state: AppState): Buffer =
-    VerticalNavSupport.dispatch(event, paneId, state).state.buffers(bufferId)
+    VerticalNavSupport.dispatch(event, paneId, state).state.persisted.buffers(bufferId)
 
   "Multi-cursor editing" should "sort and deduplicate cursors before inserting text" in {
     val state = stateWithBuffer(
@@ -52,10 +55,11 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "paste multiline text at every cursor and place each cursor at its own insertion end" in {
-    val state = stateWithBuffer(
+    val baseState = stateWithBuffer(
       "ab\ncd",
       List(CursorPosition(0, 1), CursorPosition(1, 1))
-    ).copy(clipboard = Some("\nX"))
+    )
+    val state = baseState.copy(runtime = baseState.runtime.copy(clipboard = Some("\nX")))
 
     val buffer = reduce(Paste, state)
 
@@ -229,7 +233,10 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
     val afterDown = reduce(MoveDown, state)
     afterDown.editing.multiCursorVerticalStates should not be empty
 
-    val afterLeft = reduce(MoveLeft, state.copy(buffers = state.buffers.updated(bufferId, afterDown)))
+    val afterLeft = reduce(
+      MoveLeft,
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, afterDown)))
+    )
 
     afterLeft.editing.multiCursorVerticalStates shouldBe Nil
   }
@@ -274,7 +281,7 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
       "abcdef\nghijkl\nmnopqr\nstuvwx",
       List(CursorPosition(0, 2), CursorPosition(1, 4))
     )
-    val wrapped = state.copy(config = state.config.withWordWrap(true))
+    val wrapped = state.copy(persisted = state.persisted.copy(config = state.persisted.config.withWordWrap(true)))
 
     val buffer = reduce(MoveDown, wrapped)
 

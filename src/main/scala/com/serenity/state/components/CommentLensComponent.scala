@@ -84,32 +84,34 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
     lens.copy(cursor = math.max(0, math.min(lens.clampedCursor + delta, lens.draft.length)))
 
   private def replaceLens(state: AppState, surface: UiSurface, lens: CommentLensState): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.map {
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case current if current.id == surface.id =>
         current.copy(content = SurfaceContent.CommentLens(lens.copy(cursor = lens.clampedCursor)))
       case current =>
         current
-    })
+    }))
 
   private def saveAndDismiss(state: AppState, surface: UiSurface, lens: CommentLensState): AppState =
     val savedText = Option(lens.draft.trim).filter(_.nonEmpty).getOrElse("Comment")
     val withSavedComment = lens.target match
       case Some(target) =>
-        state.layout.activeEditorPaneId
-          .flatMap(state.layout.editorPanes.get)
+        state.persisted.layout.activeEditorPaneId
+          .flatMap(state.persisted.layout.editorPanes.get)
           .flatMap(_.bufferId)
-          .flatMap(state.buffers.get)
+          .flatMap(state.persisted.buffers.get)
           .fold(state) { buffer =>
             val updatedComments = buffer.annotations.documentComments.map { comment =>
               if comment == target then comment.copy(text = savedText) else comment
             }
             if updatedComments == buffer.annotations.documentComments then state
             else
-              state.copy(
-                buffers = state.buffers + (buffer.id -> buffer.copy(
-                  annotations = buffer.annotations.copy(documentComments = updatedComments),
-                  document = buffer.document.copy(isDirty = true)
-                ))
+              state.copy(persisted =
+                state.persisted.copy(buffers =
+                  state.persisted.buffers + (buffer.id -> buffer.copy(
+                    annotations = buffer.annotations.copy(documentComments = updatedComments),
+                    document = buffer.document.copy(isDirty = true)
+                  ))
+                )
               )
           }
       case None =>
@@ -117,7 +119,8 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
     dismiss(withSavedComment, surface)
 
   private def dismiss(state: AppState, surface: UiSurface): AppState =
-    val withoutLens = state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id))
+    val withoutLens =
+      state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
     withoutLens.popFocus
 
 end CommentLensComponent

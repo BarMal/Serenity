@@ -15,12 +15,14 @@ class PaneWidthConstraintRegressionSpec extends AnyFlatSpec with Matchers:
   it should "keep panes narrower than the minimum off screen while preserving their layout entries" in {
     val panes = (0 until 6).map(index => PaneId(index) -> EditorPane.empty(PaneId(index))).toMap
     val state = AppState.initial.copy(
-      layout = Layout(
-        editorPanes = panes,
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = panes.keys.toList.sortBy(_.value)
-      ),
-      focus = Focus.EditorPane(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        layout = Layout(
+          editorPanes = panes,
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = panes.keys.toList.sortBy(_.value)
+        ),
+        focus = Focus.EditorPane(PaneId(0))
+      )
     )
     val viewportSize = ViewportSize(80, 24)
     val layout       = LayoutEngine.calculateLayout(state, viewportSize)

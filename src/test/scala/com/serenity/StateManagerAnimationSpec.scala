@@ -33,11 +33,11 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     val sm    = makeStateManager()
     val state = sm.getCurrentState.unsafeRunSync()
     val bufferId =
-      if state.buffers.nonEmpty then state.buffers.head._1 else state.nextBufferId
-    if state.buffers.isEmpty then
+      if state.persisted.buffers.nonEmpty then state.persisted.buffers.head._1 else state.runtime.nextBufferId
+    if state.persisted.buffers.isEmpty then
       sm.updateState { s =>
-        val buffer = com.serenity.state.models.Buffer.newEmpty(s.nextBufferId)
-        s.copy(buffers = s.buffers + (bufferId -> buffer))
+        val buffer = com.serenity.state.models.Buffer.newEmpty(s.runtime.nextBufferId)
+        s.copy(persisted = s.persisted.copy(buffers = s.persisted.buffers + (bufferId -> buffer)))
       }.unsafeRunSync()
 
     val existingAnimations =
@@ -60,11 +60,11 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     val sm    = makeStateManager()
     val state = sm.getCurrentState.unsafeRunSync()
     val bufferId =
-      if state.buffers.nonEmpty then state.buffers.head._1 else state.nextBufferId
-    if state.buffers.isEmpty then
+      if state.persisted.buffers.nonEmpty then state.persisted.buffers.head._1 else state.runtime.nextBufferId
+    if state.persisted.buffers.isEmpty then
       sm.updateState { s =>
-        val buffer = com.serenity.state.models.Buffer.newEmpty(s.nextBufferId)
-        s.copy(buffers = s.buffers + (bufferId -> buffer))
+        val buffer = com.serenity.state.models.Buffer.newEmpty(s.runtime.nextBufferId)
+        s.copy(persisted = s.persisted.copy(buffers = s.persisted.buffers + (bufferId -> buffer)))
       }.unsafeRunSync()
 
     val existingAnimations =
@@ -110,13 +110,13 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
 
     val before           = sm.getCurrentState.unsafeRunSync()
-    val inactiveBefore   = before.buffers(inactiveBufferId)
+    val inactiveBefore   = before.persisted.buffers(inactiveBufferId)
     val animationsBefore = sm.getBufferAnimations.unsafeRunSync()
 
     sm.advanceAnimationsOnTick().unsafeRunSync()
 
     val after           = sm.getCurrentState.unsafeRunSync()
-    val inactiveAfter   = after.buffers(inactiveBufferId)
+    val inactiveAfter   = after.persisted.buffers(inactiveBufferId)
     val animationsAfter = sm.getBufferAnimations.unsafeRunSync()
 
     inactiveAfter should be theSameInstanceAs inactiveBefore
@@ -131,14 +131,16 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     val sm = makeStateManager()
     sm.updateState { state =>
       state.copy(
-        config = AppConfig.default
-          .withMotionPreset(MotionPreset.Smooth)
-          .withElementTransitionSpeedScale(2.0),
-        viewportSize = Some(ViewportSize(80, 24))
+        persisted = state.persisted.copy(
+          config = AppConfig.default
+            .withMotionPreset(MotionPreset.Smooth)
+            .withElementTransitionSpeedScale(2.0)
+        ),
+        runtime = state.runtime.copy(viewportSize = Some(ViewportSize(80, 24)))
       )
     }.unsafeRunSync()
 
-    val firstBufferId = sm.getCurrentState.unsafeRunSync().bufferOrder.head
+    val firstBufferId = sm.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
     sm.updateBuffer(firstBufferId, "First").unsafeRunSync()
     val secondBufferId = sm.createBuffer("Second").unsafeRunSync()
 

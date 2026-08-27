@@ -40,13 +40,17 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.elementTransitionSpeedScale shouldBe 2.25
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.elementTransitionSpeedScale shouldBe 2.25
   }
 
   it should "update the global motion accessibility override without changing the baseline" in {
     val stateManager = createStateManager()
     stateManager
-      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Expressive)))
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(config = state.persisted.config.withMotionPreset(MotionPreset.Expressive))
+        )
+      )
       .unsafeRunSync()
 
     stateManager
@@ -62,6 +66,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
 
     val motion = stateManager.getCurrentState
       .unsafeRunSync()
+      .persisted
       .config
       .surfaceConfig
       .motionConfiguration
@@ -73,7 +78,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
   it should "settle the window sitter when accessibility disables UI motion" in {
     val stateManager = createStateManager()
     stateManager
-      .updateState(state => state.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L)))
+      .updateState(state =>
+        state.copy(runtime = state.runtime.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L)))
+      )
       .unsafeRunSync()
 
     stateManager
@@ -87,7 +94,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    val sitter = stateManager.getCurrentState.unsafeRunSync().windowSitter
+    val sitter = stateManager.getCurrentState.unsafeRunSync().runtime.windowSitter
     sitter.isActive shouldBe false
     sitter.glyph shouldBe "·"
   }
@@ -117,7 +124,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().windowSitter.glyph shouldBe "rest"
+    stateManager.getCurrentState.unsafeRunSync().runtime.windowSitter.glyph shouldBe "rest"
   }
 
   it should "update persisted window sitter controls through settings commands" in {
@@ -137,7 +144,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
           .unsafeRunSync()
     }
 
-    stateManager.getCurrentState.unsafeRunSync().config.windowSitterConfig shouldBe WindowSitterConfig(
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.windowSitterConfig shouldBe WindowSitterConfig(
       enabled = false,
       action = com.serenity.animation.WindowSitterAction.Blink,
       frames = Vector(".", "x"),
@@ -150,7 +157,10 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
   it should "mark the motion preset custom when an explicit motion speed is edited" in {
     val stateManager = createStateManager()
     stateManager
-      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .updateState(state =>
+        state
+          .copy(persisted = state.persisted.copy(config = state.persisted.config.withMotionPreset(MotionPreset.Smooth)))
+      )
       .unsafeRunSync()
 
     stateManager
@@ -164,13 +174,16 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Custom
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.motionPreset shouldBe MotionPreset.Custom
   }
 
   it should "persist custom as the authoritative baseline after a manual motion edit" in {
     val stateManager = createStateManager()
     stateManager
-      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .updateState(state =>
+        state
+          .copy(persisted = state.persisted.copy(config = state.persisted.config.withMotionPreset(MotionPreset.Smooth)))
+      )
       .unsafeRunSync()
 
     stateManager
@@ -184,7 +197,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    val config     = stateManager.getCurrentState.unsafeRunSync().config
+    val config     = stateManager.getCurrentState.unsafeRunSync().persisted.config
     val configFile = Files.createTempFile("serenity-custom-motion-baseline", ".conf")
     Files.writeString(configFile, ConfigManager.configToString(config))
 
@@ -207,7 +220,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
           .unsafeRunSync()
     }
 
-    val config     = stateManager.getCurrentState.unsafeRunSync().config
+    val config     = stateManager.getCurrentState.unsafeRunSync().persisted.config
     val configFile = Files.createTempFile("serenity-custom-editor-timing", ".conf")
     Files.writeString(configFile, ConfigManager.configToString(config))
     val persistedFamily = ConfigManager
@@ -299,7 +312,11 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       case (accessibility, edit) =>
         val stateManager = createStateManager()
         stateManager
-          .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+          .updateState(state =>
+            state.copy(persisted =
+              state.persisted.copy(config = state.persisted.config.withMotionPreset(MotionPreset.Smooth))
+            )
+          )
           .unsafeRunSync()
 
         stateManager
@@ -316,7 +333,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
           .executeCommand(Command.typed("motion-edit", "Edit motion", edit, CommandCategory.Settings))
           .unsafeRunSync()
 
-        val config = stateManager.getCurrentState.unsafeRunSync().config
+        val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
         config.motionPreset shouldBe MotionPreset.Custom
         config.surfaceConfig.motionConfiguration.map(_.accessibility) shouldBe Some(accessibility)
         config.surfaceConfig.effectiveMotionConfiguration.families.values.foreach(_.enabled shouldBe false)
@@ -327,8 +344,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager
       .updateState(state =>
         state.copy(
-          config =
+          persisted = state.persisted.copy(config =
             com.serenity.config.AppConfig.withTestAnimations.withMotionAccessibility(MotionAccessibility.Standard)
+          )
         )
       )
       .unsafeRunSync()
@@ -344,7 +362,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    val config = stateManager.getCurrentState.unsafeRunSync().config
+    val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
     config.surfaceConfig.effectiveMotionConfiguration
       .family(com.serenity.config.MotionFamily.EditorText)
       .enabled shouldBe false
@@ -364,7 +382,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.editorTextTransitionSpeedScale shouldBe Some(0.5)
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.editorTextTransitionSpeedScale shouldBe Some(0.5)
   }
 
   it should "retain editor text animations while starting a pane UI transition" in {
@@ -372,13 +390,13 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     stateManager
       .updateState(state =>
         state.copy(
-          config = state.config.withMotionPreset(MotionPreset.Smooth),
-          viewportSize = Some(ViewportSize(80, 24))
+          persisted = state.persisted.copy(config = state.persisted.config.withMotionPreset(MotionPreset.Smooth)),
+          runtime = state.runtime.copy(viewportSize = Some(ViewportSize(80, 24)))
         )
       )
       .unsafeRunSync()
 
-    val firstBufferId = stateManager.getCurrentState.unsafeRunSync().bufferOrder.head
+    val firstBufferId = stateManager.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
     stateManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
     val secondBufferId = stateManager.createBuffer("Second").unsafeRunSync()
     stateManager
@@ -415,7 +433,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
   }
 
   it should "update the UI transition speed scale config" in {
@@ -432,7 +450,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.uiTransitionSpeedScale shouldBe Some(1.25)
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiTransitionSpeedScale shouldBe Some(1.25)
   }
 
   it should "update the cursor transition speed scale config" in {
@@ -449,7 +467,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.cursorTransitionSpeedScale shouldBe Some(0.75)
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.cursorTransitionSpeedScale shouldBe Some(0.75)
   }
 
   it should "update the editor text transition kind config" in {
@@ -466,13 +484,20 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .editorInsertionTransitionKind shouldBe TransitionKind.TypedText
   }
 
   it should "mark the motion preset custom when an explicit transition kind is edited" in {
     val stateManager = createStateManager()
     stateManager
-      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .updateState(state =>
+        state
+          .copy(persisted = state.persisted.copy(config = state.persisted.config.withMotionPreset(MotionPreset.Smooth)))
+      )
       .unsafeRunSync()
 
     stateManager
@@ -486,7 +511,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Custom
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.motionPreset shouldBe MotionPreset.Custom
   }
 
   it should "update the panel open transition kind config" in {
@@ -503,7 +528,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.panelOpenTransitionKind shouldBe Some(
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.panelOpenTransitionKind shouldBe Some(
       TransitionKind.OutlineThenContent
     )
   }
@@ -522,7 +547,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.panelCloseTransitionKind shouldBe Some(
+      TransitionKind.Disabled
+    )
   }
 
   it should "update the command runner transition kind config" in {
@@ -539,7 +566,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.commandRunnerTransitionKind shouldBe Some(
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.commandRunnerTransitionKind shouldBe Some(
       TransitionKind.OutlineThenContent
     )
   }
@@ -547,7 +574,10 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
   it should "mark the motion preset custom when command runner transition kind is edited" in {
     val stateManager = createStateManager()
     stateManager
-      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .updateState(state =>
+        state
+          .copy(persisted = state.persisted.copy(config = state.persisted.config.withMotionPreset(MotionPreset.Smooth)))
+      )
       .unsafeRunSync()
 
     stateManager
@@ -561,7 +591,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    val config = stateManager.getCurrentState.unsafeRunSync().config
+    val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
     config.commandRunnerTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
     config.motionPreset shouldBe MotionPreset.Custom
   }
@@ -580,13 +610,16 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.commandRunnerAnimation shouldBe AnimationConfig.subtle
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.commandRunnerAnimation shouldBe AnimationConfig.subtle
   }
 
   it should "mark the motion preset custom when command runner fade is edited" in {
     val stateManager = createStateManager()
     stateManager
-      .updateState(state => state.copy(config = state.config.withMotionPreset(MotionPreset.Smooth)))
+      .updateState(state =>
+        state
+          .copy(persisted = state.persisted.copy(config = state.persisted.config.withMotionPreset(MotionPreset.Smooth)))
+      )
       .unsafeRunSync()
 
     stateManager
@@ -600,7 +633,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    val config = stateManager.getCurrentState.unsafeRunSync().config
+    val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
     config.commandRunnerAnimation shouldBe None
     config.motionPreset shouldBe MotionPreset.Custom
   }
@@ -619,7 +652,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.uiAnimation shouldBe AnimationConfig.subtle
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiAnimation shouldBe AnimationConfig.subtle
   }
 
   it should "update the render FPS target config" in {
@@ -636,7 +669,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
   }
 
   it should "update the UI element gap config" in {
@@ -653,7 +686,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.uiElementGap shouldBe 3
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiElementGap shouldBe 3
   }
 
   it should "update the UI corner radius config" in {
@@ -670,7 +703,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.uiCornerRadiusPx shouldBe 14
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiCornerRadiusPx shouldBe 14
   }
 
   it should "update the UI outline thickness config" in {
@@ -687,5 +720,5 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.uiOutlineThicknessPx shouldBe 4
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiOutlineThicknessPx shouldBe 4
   }

@@ -19,11 +19,11 @@ object FocusedInputTranslator:
           runner.activeSubmenu.exists(_.recordingItemId.nonEmpty)
         case _ => false
     }
-    val editorTranslator        = new EditorInputTranslator(state.config)
-    val commandRunnerTranslator = new CommandRunnerTranslator(state.config)
-    val formTranslator          = new SingleLineFormTranslator(state.config)
-    val pinnedPanelTranslator   = new PinnedPanelTranslator(state.config)
-    val peekOverlayTranslator   = new PeekOverlayTranslator(state.config)
+    val editorTranslator        = new EditorInputTranslator(state.persisted.config)
+    val commandRunnerTranslator = new CommandRunnerTranslator(state.persisted.config)
+    val formTranslator          = new SingleLineFormTranslator(state.persisted.config)
+    val pinnedPanelTranslator   = new PinnedPanelTranslator(state.persisted.config)
+    val peekOverlayTranslator   = new PeekOverlayTranslator(state.persisted.config)
     val localTranslator =
       if state.hasCommandRunnerDomain then commandRunnerTranslator
       else
@@ -53,4 +53,4 @@ object FocusedInputTranslator:
 
     if state.hasBlockingModal then formTranslator
     else if recordingBinding then new HotkeyRecordingTranslator(now)
-    else CompositeTranslator(new GlobalHotkeyTranslator(state.config), localTranslator)
+    else CompositeTranslator(new GlobalHotkeyTranslator(state.persisted.config), localTranslator)

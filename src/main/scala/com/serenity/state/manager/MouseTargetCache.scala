@@ -122,7 +122,14 @@ private[manager] object MouseTargetLayoutKey:
       previous.uiSurfaces.eq(current.uiSurfaces)
 
   def from(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
-    val inputs = FastPathInputs(viewportSize, state.config, state.layout, state.focus, state.buffers, state.uiSurfaces)
+    val inputs = FastPathInputs(
+      viewportSize,
+      state.persisted.config,
+      state.persisted.layout,
+      state.persisted.focus,
+      state.persisted.buffers,
+      state.runtime.uiSurfaces
+    )
     lastComputation.get() match
       case Some((previousInputs, previousResult)) if unchangedSince(previousInputs, inputs) =>
         previousResult
@@ -134,33 +141,34 @@ private[manager] object MouseTargetLayoutKey:
   private def compute(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     MouseTargetLayoutKey(
       viewportSize = viewportSize,
-      fontConfig = state.config.fontConfig,
-      showGutter = state.config.showGutter,
-      showLineNumbers = state.config.showLineNumbers,
-      wordWrapEnabled = state.config.wordWrapEnabled,
-      minimumPaneWidth = state.config.minimumPaneWidth,
-      textAreaInsets = state.config.textAreaInsets,
-      interfaceDensity = state.config.interfaceDensity,
-      uiElementGap = state.config.uiElementGap,
-      showPaneHeaders = state.config.showPaneHeaders,
-      cursorInfoBarMode = state.config.cursorInfoBarMode,
-      cursorInfoBarPlacement = state.config.cursorInfoBarPlacement,
-      commandRunnerVisibleRows = state.config.commandRunnerVisibleRows,
-      commandRunnerItemGapRows = state.config.commandRunnerItemGapRows,
-      commandRunnerCursorGapRows = state.config.commandRunnerCursorGapRows,
-      layoutState = state.layout,
-      focus = state.focus,
-      focusPaneId = state.focus match
-        case Focus.EditorPane(paneId) if state.layout.editorPanes.contains(paneId) => Some(paneId)
-        case _                                                                     => None,
-      orderedPaneIds = state.layout.orderedPaneIds,
-      paneBuffers =
-        state.layout.orderedPaneIds.map(paneId => paneId -> state.layout.editorPanes.get(paneId).flatMap(_.bufferId)),
-      paneSnapshotInputs = state.layout.orderedPaneIds.map { paneId =>
-        paneId -> state.layout.editorPanes
+      fontConfig = state.persisted.config.fontConfig,
+      showGutter = state.persisted.config.showGutter,
+      showLineNumbers = state.persisted.config.showLineNumbers,
+      wordWrapEnabled = state.persisted.config.wordWrapEnabled,
+      minimumPaneWidth = state.persisted.config.minimumPaneWidth,
+      textAreaInsets = state.persisted.config.textAreaInsets,
+      interfaceDensity = state.persisted.config.interfaceDensity,
+      uiElementGap = state.persisted.config.uiElementGap,
+      showPaneHeaders = state.persisted.config.showPaneHeaders,
+      cursorInfoBarMode = state.persisted.config.cursorInfoBarMode,
+      cursorInfoBarPlacement = state.persisted.config.cursorInfoBarPlacement,
+      commandRunnerVisibleRows = state.persisted.config.commandRunnerVisibleRows,
+      commandRunnerItemGapRows = state.persisted.config.commandRunnerItemGapRows,
+      commandRunnerCursorGapRows = state.persisted.config.commandRunnerCursorGapRows,
+      layoutState = state.persisted.layout,
+      focus = state.persisted.focus,
+      focusPaneId = state.persisted.focus match
+        case Focus.EditorPane(paneId) if state.persisted.layout.editorPanes.contains(paneId) => Some(paneId)
+        case _                                                                               => None,
+      orderedPaneIds = state.persisted.layout.orderedPaneIds,
+      paneBuffers = state.persisted.layout.orderedPaneIds.map(paneId =>
+        paneId -> state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId)
+      ),
+      paneSnapshotInputs = state.persisted.layout.orderedPaneIds.map { paneId =>
+        paneId -> state.persisted.layout.editorPanes
           .get(paneId)
           .flatMap(_.bufferId)
-          .flatMap(state.buffers.get)
+          .flatMap(state.persisted.buffers.get)
           .map(buffer =>
             (
               RopeIdentity(buffer.document.content),
@@ -171,14 +179,14 @@ private[manager] object MouseTargetLayoutKey:
             )
           )
       },
-      uiSurfaces = state.uiSurfaces.map(SurfaceGeometryKey.from),
+      uiSurfaces = state.runtime.uiSurfaces.map(SurfaceGeometryKey.from),
       derivedCursorInfoBarSurface = state.cursorInfoBarSurface,
-      pinnedPanels = state.uiSurfaces.collect {
+      pinnedPanels = state.runtime.uiSurfaces.collect {
         case UiSurface(id, _, SurfacePresentation.Pinned(position, size), _) => (id, position, size)
       },
       lineNumberContent =
-        if state.config.showLineNumbers then
-          state.buffers.toList
+        if state.persisted.config.showLineNumbers then
+          state.persisted.buffers.toList
             .sortBy(_._1.value)
             .map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
         else Nil
@@ -202,11 +210,11 @@ private[serenity] object AuthoritativeUiScene:
     codeFont: Font,
     textFont: Font
   ): UiSceneSnapshot = synchronized {
-    val paneFonts = state.layout.orderedPaneIds.flatMap { paneId =>
-      state.layout.editorPanes
+    val paneFonts = state.persisted.layout.orderedPaneIds.flatMap { paneId =>
+      state.persisted.layout.editorPanes
         .get(paneId)
         .flatMap(_.bufferId)
-        .flatMap(state.buffers.get)
+        .flatMap(state.persisted.buffers.get)
         .map { buffer =>
           val font = if buffer.usesTextFont then textFont else codeFont
           paneId -> SceneFontKey(font.getFamily, font.getStyle, font.getSize2D)
@@ -223,18 +231,18 @@ private[serenity] object AuthoritativeUiScene:
       val snapshots = base.paneLayouts.flatMap {
         case (paneId, paneLayout) =>
           for
-            pane     <- state.layout.editorPanes.get(paneId)
+            pane     <- state.persisted.layout.editorPanes.get(paneId)
             bufferId <- pane.bufferId
-            buffer   <- state.buffers.get(bufferId)
+            buffer   <- state.persisted.buffers.get(bufferId)
           yield
             val font        = if buffer.usesTextFont then textFont else codeFont
             val fontMetrics = CellMetrics.fromFont(font)
             val width       = paneLayout.contentRect.width * gridMetrics.charWidth
             val heightPx    = paneLayout.contentRect.height * gridMetrics.lineHeight
             val baseViewport = LayoutEngine
-              .updateBufferViewportDimensions(buffer, paneLayout.contentRect, state.config.wordWrapEnabled)
+              .updateBufferViewportDimensions(buffer, paneLayout.contentRect, state.persisted.config.wordWrapEnabled)
             val visibleColumns =
-              if state.config.wordWrapEnabled then baseViewport.visibleColumns
+              if state.persisted.config.wordWrapEnabled then baseViewport.visibleColumns
               else
                 val averageAdvance = math.max(
                   1.0f,
@@ -254,7 +262,7 @@ private[serenity] object AuthoritativeUiScene:
                   .max(paneLayout.contentRect.width + 64)
             val cursorColumn = buffer.editing.cursors.headOption.map(_.column).getOrElse(baseViewport.leftColumn)
             val leftColumn =
-              if state.config.wordWrapEnabled then 0
+              if state.persisted.config.wordWrapEnabled then 0
               else baseViewport.leftColumn.max(0).max(cursorColumn - visibleColumns + 1)
             val viewport = baseViewport.copy(
               leftColumn = leftColumn,
@@ -265,7 +273,7 @@ private[serenity] object AuthoritativeUiScene:
               buffer.copy(viewport = viewport),
               width,
               font,
-              wordWrapEnabled = state.config.wordWrapEnabled
+              wordWrapEnabled = state.persisted.config.wordWrapEnabled
             )
       }
       val scene = base.withTextSnapshots(snapshots)
@@ -278,8 +286,8 @@ private[serenity] object AuthoritativeUiScene:
     forState(
       state,
       viewportSize,
-      FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Code),
-      FontLoader.previewFontForRole(state.config.fontConfig, TypographyRole.Prose)
+      FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Code),
+      FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Prose)
     )
 
 final private[manager] case class MouseTargetCache(

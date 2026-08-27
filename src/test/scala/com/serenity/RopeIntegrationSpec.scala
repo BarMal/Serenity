@@ -235,7 +235,7 @@ let anotherOldName = oldName * 2;"""
     }
 
     // Then: Final state should reflect all rope operations
-    val finalBuffer = currentState.buffers(BufferId(1))
+    val finalBuffer = currentState.persisted.buffers(BufferId(1))
     finalBuffer.document.content.collect() shouldBe "Hello, beautiful world!"
     finalBuffer.document.isDirty shouldBe true
 
@@ -284,10 +284,14 @@ let anotherOldName = oldName * 2;"""
       )
 
       AppState(
-        layout = layout,
-        buffers = buffers,
-        focus = Focus.EditorPane(panes.keys.head),
-        uiSurfaces = Nil,
-        nextBufferId = BufferId(buffers.size + 1),
-        nextPaneId = PaneId(panes.size + 1)
+        persisted = Persisted(
+          layout = layout,
+          buffers = buffers,
+          focus = Focus.EditorPane(panes.keys.head)
+        ),
+        runtime = Runtime(
+          uiSurfaces = Nil,
+          nextBufferId = BufferId(buffers.size + 1),
+          nextPaneId = PaneId(panes.size + 1)
+        )
       )

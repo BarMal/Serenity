@@ -292,13 +292,15 @@ object Renderer:
     new java.awt.Rectangle(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)
 
   private def withEffectiveTheme(state: AppState): AppState =
-    state.themeTransition match
+    state.runtime.themeTransition match
       case None => state
       case Some(t) =>
-        state.copy(theme = ThemeInterpolator.blend(t.previousTheme, state.theme, t.progress))
+        state.copy(persisted =
+          state.persisted.copy(theme = ThemeInterpolator.blend(t.previousTheme, state.persisted.theme, t.progress))
+        )
 
   private def startPageOnly(state: AppState): Option[StartupPage] =
-    state.uiSurfaces match
+    state.runtime.uiSurfaces match
       case List(UiSurface(_, SurfaceContent.StartPage(page), _, _)) => Some(page)
       case _                                                        => None
 
@@ -313,10 +315,10 @@ object Renderer:
     output: Option[FrameOutput]
   ): Unit =
     surface.hideCursor()
-    surface.clearViewport(state.theme.background)
+    surface.clearViewport(state.persisted.theme.background)
     forgetPreservedContent(surface, output)
-    renderStartPage(page, surface, viewportSize, state.theme, uiFont, cellMetrics, uiMetrics)
-    surface.applyPostProcessing(state.config.postProcessingEffect)
+    renderStartPage(page, surface, viewportSize, state.persisted.theme, uiFont, cellMetrics, uiMetrics)
+    surface.applyPostProcessing(state.persisted.config.postProcessingEffect)
     surface.flush()
 
   private[serenity] def withSceneIfNeeded[A](
@@ -968,9 +970,9 @@ object Renderer:
         case _                              => None
     } match
       case Some(page) =>
-        surface.clearViewport(state.theme.background)
+        surface.clearViewport(state.persisted.theme.background)
         forgetPreservedContent(surface, output)
-        renderStartPage(page, surface, viewportSize, state.theme, uiFont, cellMetrics, uiMetrics)
+        renderStartPage(page, surface, viewportSize, state.persisted.theme, uiFont, cellMetrics, uiMetrics)
         val floatContext =
           RenderContext(
             surface,
@@ -1023,9 +1025,9 @@ object Renderer:
         val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
-            surface.clearViewportExcept(state.theme.background, plan.preserved)
+            surface.clearViewportExcept(state.persisted.theme.background, plan.preserved)
           case _ =>
-            surface.clearViewport(state.theme.background)
+            surface.clearViewport(state.persisted.theme.background)
         renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
         renderLineNumbers(state, context, editorRenderPlan)
         renderGutter(state, context, editorRenderPlan.layoutContract)
@@ -1041,7 +1043,7 @@ object Renderer:
         commitFramePlan(framePlan, output)
         Some(editorRenderPlan)
 
-    surface.applyPostProcessing(state.config.postProcessingEffect)
+    surface.applyPostProcessing(state.persisted.config.postProcessingEffect)
     surface.flush()
     editorRenderPlan
 
@@ -1095,13 +1097,13 @@ object Renderer:
     accumulateScreenDamage(output, damage)
 
     val plan = context.surface.persistentContentKey
-      .filter(_ => state.config.postProcessingEffect == PostProcessingEffect.Off)
+      .filter(_ => state.persisted.config.postProcessingEffect == PostProcessingEffect.Off)
       .map { persistenceKey =>
         val panes   = paneRecordsFor(state, context, renderPlan)
         val paneIds = panes.keySet
         val allPanesReusable =
           renderPlan.paneLayouts.keySet.forall(panes.contains) &&
-            state.layout.orderedPaneIds.forall(panes.contains)
+            state.persisted.layout.orderedPaneIds.forall(panes.contains)
 
         val bufferDamageSinceLastDraw = drainBufferDamage(output, persistenceKey)
         val inputsOrPanesChanged = drawStateChanged(persistenceKey, paneIds, renderInputsFor(context, viewportSize))
@@ -1167,12 +1169,12 @@ object Renderer:
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan
   ): Map[PaneId, PaneFrameRecord] =
-    state.layout.editorPanes.flatMap {
+    state.persisted.layout.editorPanes.flatMap {
       case (paneId, pane) =>
         for
           paneLayout <- renderPlan.paneLayouts.get(paneId)
           bufferId   <- pane.bufferId
-          buffer     <- state.buffers.get(bufferId)
+          buffer     <- state.persisted.buffers.get(bufferId)
           snapshot   <- renderPlan.snapshots.get(paneId)
           if buffer.document.content.weight > 0 && !isInlineMarkdownLens(buffer, state)
         yield paneId -> paneFrameRecord(bufferId, paneLayout.contentRect, context, snapshot)
@@ -1264,7 +1266,7 @@ object Renderer:
 
   private def renderSpacerColumns(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     val surface = context.surface
-    surface.setBackgroundColor(state.theme.margin)
+    surface.setBackgroundColor(state.persisted.theme.margin)
     List(contract.leftSpacerRect, contract.rightSpacerRect)
       .filter(rect => rect.width > 0 && rect.height > 0)
       .foreach(rect => surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
@@ -1277,12 +1279,12 @@ object Renderer:
     val layoutContract  = scene.editorContract
     val workspaceLayout = layoutContract.workspace
     val snapshots =
-      state.layout.editorPanes.flatMap {
+      state.persisted.layout.editorPanes.flatMap {
         case (paneId, pane) =>
           for
             paneLayout <- workspaceLayout.paneLayouts.get(paneId)
             bufferId   <- pane.bufferId
-            buffer     <- state.buffers.get(bufferId)
+            buffer     <- state.persisted.buffers.get(bufferId)
           yield paneId -> scene
             .textSnapshot(paneId)
             .getOrElse(
@@ -1290,7 +1292,7 @@ object Renderer:
             )
       }
 
-    val visibleLinesByBuffer = state.layout.editorPanes.toList
+    val visibleLinesByBuffer = state.persisted.layout.editorPanes.toList
       .flatMap {
         case (paneId, pane) =>
           for
@@ -1303,12 +1305,12 @@ object Renderer:
       .mapValues(_.foldLeft(Set.empty[Int])(_ ++ _))
       .toMap
 
-    val annotations = state.layout.editorPanes.values
+    val annotations = state.persisted.layout.editorPanes.values
       .flatMap(_.bufferId)
       .toList
       .distinct
       .flatMap { bufferId =>
-        state.buffers.get(bufferId).map { _ =>
+        state.persisted.buffers.get(bufferId).map { _ =>
           val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
           val cached =
             state.annotationIndexByBuffer.get(bufferId).map(_()).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
@@ -1337,7 +1339,8 @@ object Renderer:
     val panelWidthPx  = contentRect.width * context.cellMetrics.charWidth
     val panelHeightPx = contentRect.height * context.cellMetrics.lineHeight
     val bufferMetrics = CellMetrics.fromFont(bufferFont)
-    val baseViewport  = LayoutEngine.updateBufferViewportDimensions(buffer, contentRect, state.config.wordWrapEnabled)
+    val baseViewport =
+      LayoutEngine.updateBufferViewportDimensions(buffer, contentRect, state.persisted.config.wordWrapEnabled)
     val fontRenderContext =
       context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     val visibleColumns =
@@ -1355,7 +1358,7 @@ object Renderer:
     )
     val leftColumn =
       if visibleColumns == baseViewport.visibleColumns then baseViewport.leftColumn
-      else renderedLeftColumn(buffer, scrollViewport, state.config.wordWrapEnabled)
+      else renderedLeftColumn(buffer, scrollViewport, state.persisted.config.wordWrapEnabled)
     val renderedViewport = sizedViewport.copy(
       leftColumn = leftColumn
     )
@@ -1368,7 +1371,7 @@ object Renderer:
       panelWidthPx,
       bufferFont,
       fontRenderContext,
-      wordWrapEnabled = state.config.wordWrapEnabled
+      wordWrapEnabled = state.persisted.config.wordWrapEnabled
     )
 
   private def visibleColumnsFor(
@@ -1403,10 +1406,10 @@ object Renderer:
     renderPlan: EditorPaneRenderPlan,
     dirtyRowsByPane: Map[PaneId, Set[Int]]
   ): Unit =
-    val activePaneId = state.layout.activeEditorPaneId
+    val activePaneId = state.persisted.layout.activeEditorPaneId
     val orderedPanes =
-      state.layout.orderedPaneIds
-        .flatMap(paneId => state.layout.editorPanes.get(paneId).map(paneId -> _))
+      state.persisted.layout.orderedPaneIds
+        .flatMap(paneId => state.persisted.layout.editorPanes.get(paneId).map(paneId -> _))
         .sortBy((paneId, _) => if activePaneId.contains(paneId) then 1 else 0)
 
     orderedPanes.foreach { (paneId, pane) =>
@@ -1431,19 +1434,26 @@ object Renderer:
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan
   ): List[PixelRect] =
-    val activePaneId = state.layout.activeEditorPaneId
+    val activePaneId = state.persisted.layout.activeEditorPaneId
     val orderedPanes =
-      activePaneId.toList.flatMap(id => state.layout.editorPanes.get(id).map(id -> _)) ++
-        state.layout.editorPanes.toList.filterNot((id, _) => activePaneId.contains(id)).sortBy(_._1.value)
+      activePaneId.toList.flatMap(id => state.persisted.layout.editorPanes.get(id).map(id -> _)) ++
+        state.persisted.layout.editorPanes.toList.filterNot((id, _) => activePaneId.contains(id)).sortBy(_._1.value)
 
     orderedPanes.flatMap {
       case (paneId, pane) =>
         (for
           paneLayout <- renderPlan.paneLayouts.get(paneId)
           bufferId   <- pane.bufferId
-          buffer     <- state.buffers.get(bufferId)
+          buffer     <- state.persisted.buffers.get(bufferId)
           snapshot   <- renderPlan.snapshots.get(paneId)
-        yield renderCursors(buffer, paneLayout.contentRect, state.theme, state.config, context, snapshot))
+        yield renderCursors(
+          buffer,
+          paneLayout.contentRect,
+          state.persisted.theme,
+          state.persisted.config,
+          context,
+          snapshot
+        ))
           .getOrElse(Nil)
     }
 
@@ -1457,7 +1467,7 @@ object Renderer:
     annotations: Option[BufferRenderAnnotations],
     dirtyRows: Option[Set[Int]]
   ): Unit =
-    val buffer = pane.bufferId.flatMap(state.buffers.get)
+    val buffer = pane.bufferId.flatMap(state.persisted.buffers.get)
 
     renderBufferHeader(pane, buffer, paneLayout, state, context, contract)
     renderEditorPaneVerticalSpacers(paneLayout, state, context)
@@ -1472,9 +1482,9 @@ object Renderer:
 
     buffer match
       case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
-        renderWelcomeText(contentRect, state.theme, context)
+        renderWelcomeText(contentRect, state.persisted.theme, context)
       case Some(buf) if buf.document.content.weight == 0 =>
-        renderEmptyPane(contentRect, state.theme, context)
+        renderEmptyPane(contentRect, state.persisted.theme, context)
       case Some(buf) =>
         renderBufferContent(
           buf,
@@ -1487,7 +1497,7 @@ object Renderer:
           dirtyRows
         )
       case None =>
-        renderEmptyPane(contentRect, state.theme, context)
+        renderEmptyPane(contentRect, state.persisted.theme, context)
 
     val cursorContext =
       if state.hasCommandRunnerDomain then context.copy(cursorVisible = true)
@@ -1497,14 +1507,21 @@ object Renderer:
         renderMarkdownLensCursors(
           buf,
           contentRect,
-          state.theme,
-          state.config,
+          state.persisted.theme,
+          state.persisted.config,
           cursorContext,
           bufferSnapshot.get,
           markdownLensFrame.getOrElse(markdownLensFrameFor(buf, bufferSnapshot.get))
         )
       else
-        val _ = renderCursors(buf, contentRect, state.theme, state.config, cursorContext, bufferSnapshot.get)
+        val _ = renderCursors(
+          buf,
+          contentRect,
+          state.persisted.theme,
+          state.persisted.config,
+          cursorContext,
+          bufferSnapshot.get
+        )
     }
 
   private def renderBufferHeader(
@@ -1519,15 +1536,15 @@ object Renderer:
     val headerRect = contract.paneHeaderRect(pane.id).getOrElse(paneLayout.headerRect)
     if headerRect.height > 0 then
       context.surface.setFont(context.uiFont)
-      val isActive  = state.layout.activeEditorPaneId.contains(pane.id)
+      val isActive  = state.persisted.layout.activeEditorPaneId.contains(pane.id)
       val titleRect = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
 
       if isActive then
-        surface.setBackgroundColor(state.theme.highlighted.background)
-        surface.setForegroundColor(state.theme.highlighted.foreground)
+        surface.setBackgroundColor(state.persisted.theme.highlighted.background)
+        surface.setForegroundColor(state.persisted.theme.highlighted.foreground)
       else
-        surface.setBackgroundColor(state.theme.panel.background)
-        surface.setForegroundColor(state.theme.panel.foreground)
+        surface.setBackgroundColor(state.persisted.theme.panel.background)
+        surface.setForegroundColor(state.persisted.theme.panel.foreground)
 
       val bufferTitle = buffer match
         case Some(buf) =>
@@ -1571,20 +1588,20 @@ object Renderer:
         displayTitle
       )
 
-    surface.setBackgroundColor(state.theme.background)
-    surface.setForegroundColor(state.theme.foreground)
+    surface.setBackgroundColor(state.persisted.theme.background)
+    surface.setForegroundColor(state.persisted.theme.foreground)
 
   private def renderEditorPaneVerticalSpacers(
     paneLayout: EditorPaneLayout,
     state: AppState,
     context: RenderContext
   ): Unit =
-    context.surface.setBackgroundColor(state.theme.margin)
+    context.surface.setBackgroundColor(state.persisted.theme.margin)
     List(paneLayout.topSpacerRect, paneLayout.bottomSpacerRect)
       .filter(rect => rect.width > 0 && rect.height > 0)
       .foreach(rect => context.surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
-    context.surface.setBackgroundColor(state.theme.background)
-    context.surface.setForegroundColor(state.theme.foreground)
+    context.surface.setBackgroundColor(state.persisted.theme.background)
+    context.surface.setForegroundColor(state.persisted.theme.foreground)
 
   private def renderBufferContent(
     buffer: Buffer,
@@ -1631,7 +1648,7 @@ object Renderer:
           val lineTopPx = visualLineTopPx(rect, screenLineIndex, context, snapshot)
           val screenX   = rect.x + visualLineCellOffset(visualLine, context)
 
-          context.surface.setForegroundColor(state.theme.foreground)
+          context.surface.setForegroundColor(state.persisted.theme.foreground)
 
           if visualLineVisible(rect, screenLineIndex, context, snapshot) &&
               screenY >= 0 &&
@@ -1639,7 +1656,7 @@ object Renderer:
               screenX >= 0 &&
               screenX < rect.right
           then
-            val lineTheme      = state.theme
+            val lineTheme      = state.persisted.theme
             val styledSegments = visualLineStyledSegments(visualLine, lineTheme, snapshot, activeBodyLines)
             if snapshot.usesMeasuredLayout then
               CharacterRenderer.renderMeasuredLineWithAnimation(
@@ -1678,7 +1695,7 @@ object Renderer:
               rect,
               screenY,
               lineTopPx,
-              state.theme,
+              state.persisted.theme,
               context,
               snapshot
             )
@@ -1690,7 +1707,7 @@ object Renderer:
               rect,
               screenY,
               lineTopPx,
-              state.theme,
+              state.persisted.theme,
               context,
               snapshot
             )
@@ -1704,7 +1721,7 @@ object Renderer:
               .foreach { (col, cell) =>
                 val bgScreenX = rect.x + visualLineCellOffset(visualLine, context) + (col - visualLine.startColumn)
                 if bgScreenX >= 0 && bgScreenX < rect.right then
-                  context.surface.setForegroundColor(state.theme.foreground)
+                  context.surface.setForegroundColor(state.persisted.theme.foreground)
                   context.surface.setBackgroundColor(cell.currentBackground.get)
                   context.surface.putString(bgScreenX, screenY, " ")
               }
@@ -1781,7 +1798,7 @@ object Renderer:
       Some(baseSegments.map(segment => segment.copy(foregroundColor = theme.muted, backgroundColor = theme.background)))
 
   private def focusedTextBodyLines(buffer: Buffer, state: AppState): Int => Boolean =
-    if !state.config.focusedTextBodyEnabled then _ => true
+    if !state.persisted.config.focusedTextBodyEnabled then _ => true
     else
       val activeLine = buffer.editing.cursors.headOption.map(_.line)
       FocusedTextBody
@@ -1812,7 +1829,7 @@ object Renderer:
       title = title,
       widthPx = widthPx,
       heightPx = heightPx,
-      theme = state.theme,
+      theme = state.persisted.theme,
       font = previewFont,
       inlineLineHeightPx = MarkdownDocumentPreview.lineHeightForDeviceScale(
         context.cellMetrics.lineHeight,
@@ -1996,7 +2013,7 @@ object Renderer:
   private def isInlineMarkdownLens(buffer: Buffer, state: AppState): Boolean =
     buffer.document.language.contains(
       LanguageId.Markdown
-    ) && state.config.markdownViewMode == MarkdownViewMode.InlineLens
+    ) && state.persisted.config.markdownViewMode == MarkdownViewMode.InlineLens
 
   private def markdownLensFrameFor(buffer: Buffer, snapshot: TextLayoutSnapshot): MarkdownLensFrame =
     val previewWindow = markdownPreviewWindow(buffer, buffer.viewport.visibleLines)
@@ -2169,15 +2186,15 @@ object Renderer:
           markdownLensPlacement(blockRange, blockVisualLines, rect.height, lines, previewWindow)
         )
         val lensY = rect.y + placement.top
-        context.surface.setBackgroundColor(state.theme.panel.background)
+        context.surface.setBackgroundColor(state.persisted.theme.panel.background)
         context.surface.fillRect(rect.x, lensY, rect.width, placement.height, ' ')
         blockVisualLines.zipWithIndex.foreach {
           case (visualLine, index) =>
             val screenY = lensY + index
             if screenY >= rect.y && screenY < rect.bottom && screenY >= 0 && screenY < context.surface.viewportHeight
             then
-              context.surface.setForegroundColor(state.theme.foreground)
-              context.surface.setBackgroundColor(state.theme.panel.background)
+              context.surface.setForegroundColor(state.persisted.theme.foreground)
+              context.surface.setBackgroundColor(state.persisted.theme.panel.background)
               if snapshot.usesMeasuredLayout then
                 CharacterRenderer.renderMeasuredLineWithAnimation(
                   context.surface,
@@ -2186,7 +2203,7 @@ object Renderer:
                   snapshot.lineHeightPx,
                   snapshot.ascentPx,
                   visualLine,
-                  state.theme.copy(background = state.theme.panel.background),
+                  state.persisted.theme.copy(background = state.persisted.theme.panel.background),
                   context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
@@ -2198,7 +2215,7 @@ object Renderer:
                   rect.x,
                   screenY,
                   visualLine.text,
-                  state.theme.copy(background = state.theme.panel.background),
+                  state.persisted.theme.copy(background = state.persisted.theme.panel.background),
                   context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
@@ -2212,7 +2229,7 @@ object Renderer:
                 rect,
                 screenY,
                 context.cellMetrics.toPixelY(screenY),
-                state.theme,
+                state.persisted.theme,
                 context,
                 snapshot
               )
@@ -2573,13 +2590,13 @@ object Renderer:
     val overlays = OverlayViewModel.fromState(state, scene)
 
     overlays.aboveCursor.foreach { overlay =>
-      val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
-      if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.config, context)
+      val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
+      if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.persisted.config, context)
       TextOverlayRenderer.render(
         context.surface,
         overlay,
-        state.theme,
-        state.config,
+        state.persisted.theme,
+        state.persisted.config,
         context.cursorVisible,
         context.uiFont,
         context.cellMetrics
@@ -2588,13 +2605,13 @@ object Renderer:
     val belowOverlays =
       if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
     belowOverlays.foreach { overlay =>
-      val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
-      if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.config, context)
+      val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
+      if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.persisted.config, context)
       TextOverlayRenderer.render(
         context.surface,
         overlay,
-        state.theme,
-        state.config,
+        state.persisted.theme,
+        state.persisted.config,
         context.cursorVisible,
         context.uiFont,
         context.cellMetrics
@@ -2629,7 +2646,7 @@ object Renderer:
   private def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
     scene.modalBackdrop.foreach { backdrop =>
       context.surface.setAlpha(0.4f)
-      context.surface.setBackgroundColor(state.theme.margin)
+      context.surface.setBackgroundColor(state.persisted.theme.margin)
       context.surface.fillRect(
         backdrop.frameRect.x,
         backdrop.frameRect.y,
@@ -2643,8 +2660,8 @@ object Renderer:
       TextOverlayRenderer.render(
         context.surface,
         overlay,
-        state.theme,
-        state.config,
+        state.persisted.theme,
+        state.persisted.config,
         context.cursorVisible,
         context.uiFont,
         context.cellMetrics
@@ -2660,7 +2677,7 @@ object Renderer:
     val surfaceNodes = scene.workspace.collect {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) => surfaceId -> node
     }.toMap
-    (state.pinnedSurfaces ++ state.uiSurfaces.filter {
+    (state.pinnedSurfaces ++ state.runtime.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
@@ -2669,11 +2686,11 @@ object Renderer:
         surfaceNodes.get(surface.id).foreach { node =>
           val rect = node.frameRect
           val animationState =
-            state.surfaceAnimations
+            state.runtime.surfaceAnimations
               .get(surface.id)
               .map(_.animationState)
               .getOrElse(com.serenity.animation.AnimationState.empty)
-          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
+          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
           if blurRadius > 0f then
             context.surface.blurRegion(
               rect.x,
@@ -2697,8 +2714,8 @@ object Renderer:
               PinnedPanelRenderer.render(
                 context.surface,
                 PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
-                state.theme,
-                state.config,
+                state.persisted.theme,
+                state.persisted.config,
                 animationState
               )
         }
@@ -2706,11 +2723,11 @@ object Renderer:
         surfaceNodes.get(surface.id).foreach { node =>
           val rect = node.frameRect
           val animationState =
-            state.surfaceAnimations
+            state.runtime.surfaceAnimations
               .get(surface.id)
               .map(_.animationState)
               .getOrElse(com.serenity.animation.AnimationState.empty)
-          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.config)
+          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
           if blurRadius > 0f then
             context.surface.blurRegion(
               rect.x,
@@ -2734,8 +2751,8 @@ object Renderer:
               PinnedPanelRenderer.render(
                 context.surface,
                 PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
-                state.theme,
-                state.config,
+                state.persisted.theme,
+                state.persisted.config,
                 animationState
               )
         }
@@ -2752,7 +2769,7 @@ object Renderer:
     animationState: com.serenity.animation.AnimationState
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = s"Preview: $title", rows = Nil)
-    PinnedPanelRenderer.render(context.surface, shell, state.theme, state.config, animationState)
+    PinnedPanelRenderer.render(context.surface, shell, state.persisted.theme, state.persisted.config, animationState)
 
     val imageRect          = markdownPreviewImageRect(rect, contentRect, context)
     val contentWidthCells  = math.max(1, imageRect.width)
@@ -2761,7 +2778,7 @@ object Renderer:
       scaledImagePixelDimension(contentWidthCells * context.cellMetrics.charWidth, context.surface.devicePixelScaleX)
     val heightPx =
       scaledImagePixelDimension(contentHeightCells * context.cellMetrics.lineHeight, context.surface.devicePixelScaleY)
-    val buffer = state.buffers.get(bufferId)
+    val buffer = state.persisted.buffers.get(bufferId)
     val content = buffer
       .map(buffer => markdownSplitPreviewWindow(buffer, contentHeightCells).source)
       .getOrElse("")
@@ -2772,7 +2789,7 @@ object Renderer:
       title = title,
       widthPx = widthPx,
       heightPx = heightPx,
-      theme = state.theme,
+      theme = state.persisted.theme,
       font = context.textFont,
       baseUri = baseUri,
       reuseLastRenderWhileEditing =
@@ -2821,25 +2838,25 @@ object Renderer:
       )
 
   private def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
-    if state.config.showLineNumbers then
+    if state.persisted.config.showLineNumbers then
       context.surface.setFont(context.uiFont)
       renderPlan.layoutContract.lineNumberRect foreach { lineRect =>
         val surface = context.surface
 
-        surface.setBackgroundColor(state.theme.panel.background)
-        surface.setForegroundColor(state.theme.muted)
+        surface.setBackgroundColor(state.persisted.theme.panel.background)
+        surface.setForegroundColor(state.persisted.theme.muted)
 
         surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
-        state.layout.activeEditorPaneId
-          .flatMap(state.layout.editorPanes.get)
+        state.persisted.layout.activeEditorPaneId
+          .flatMap(state.persisted.layout.editorPanes.get)
           .foreach { pane =>
-            val buffer = pane.bufferId.flatMap(state.buffers.get)
+            val buffer = pane.bufferId.flatMap(state.persisted.buffers.get)
             val snapshot =
-              state.layout.activeEditorPaneId
+              state.persisted.layout.activeEditorPaneId
                 .flatMap(renderPlan.snapshots.get)
                 .orElse {
                   for
-                    paneLayout <- state.layout.activeEditorPaneId.flatMap(renderPlan.paneLayouts.get)
+                    paneLayout <- state.persisted.layout.activeEditorPaneId.flatMap(renderPlan.paneLayouts.get)
                     buf        <- buffer
                   yield snapshotForBuffer(buf, paneLayout.contentRect, state, context)
                 }
@@ -2850,7 +2867,7 @@ object Renderer:
                   snapshot.visualLines.lift(index).foreach { visualLine =>
                     val lineTopPx = visualLineTopPx(lineRect, index, context, snapshot)
                     val rendersLineNumber =
-                      shouldRenderLineNumberForVisualLine(visualLine, state.config.wordWrapEnabled)
+                      shouldRenderLineNumberForVisualLine(visualLine, state.persisted.config.wordWrapEnabled)
                     val lineNumberText =
                       if rendersLineNumber then
                         val numberWidth = math.max(1, lineRect.width - 1)
@@ -2909,11 +2926,11 @@ object Renderer:
     if lineDiags.nonEmpty then
       val worstCode = lineDiags.flatMap(_.severity).map(_.code).minOption
       val color = worstCode match
-        case Some(1) => state.theme.error.foreground
-        case Some(2) => state.theme.warning.foreground
-        case _       => state.theme.muted
+        case Some(1) => state.persisted.theme.error.foreground
+        case Some(2) => state.persisted.theme.warning.foreground
+        case _       => state.persisted.theme.muted
       surface.setForegroundColor(color)
-      surface.setBackgroundColor(state.theme.panel.background)
+      surface.setBackgroundColor(state.persisted.theme.panel.background)
       surface.putString(lineRect.x + lineRect.width - 1, screenY, "!")
 
   private def renderGutter(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
@@ -2921,8 +2938,8 @@ object Renderer:
       context.surface.setFont(context.uiFont)
       val surface = context.surface
 
-      surface.setBackgroundColor(state.theme.panel.background)
-      surface.setForegroundColor(state.theme.panel.foreground)
+      surface.setBackgroundColor(state.persisted.theme.panel.background)
+      surface.setForegroundColor(state.persisted.theme.panel.foreground)
 
       surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
 
@@ -2969,14 +2986,14 @@ object Renderer:
     )
 
   private def buildGutterContent(state: AppState): String =
-    if state.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom then
+    if state.persisted.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom then
       state.cursorInfoBarText.map(text => s" $text ").getOrElse(legacyGutterContent(state))
     else legacyGutterContent(state)
 
   private def legacyGutterContent(state: AppState): String =
-    state.layout.activeEditorPaneId.flatMap(state.layout.editorPanes.get) match
+    state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get) match
       case Some(pane) =>
-        pane.bufferId.flatMap(state.buffers.get) match
+        pane.bufferId.flatMap(state.persisted.buffers.get) match
           case Some(buffer) =>
             val cursor   = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
             val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"

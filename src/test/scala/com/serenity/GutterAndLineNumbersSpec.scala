@@ -37,15 +37,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val buffer0 = Buffer.fromString(BufferId(1), "# Heading")
     val buffer  = buffer0.copy(document = buffer0.document.copy(language = Some(LanguageId.Markdown)))
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
-      ),
-      focus = Focus.EditorPane(PaneId(0)),
-      theme = Theme.light
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        theme = Theme.light
+      )
     )
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
@@ -78,22 +80,29 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       )
     }
     val baseState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        theme = Theme.light
       ),
-      uiSurfaces = surfaces,
-      theme = Theme.light
+      runtime = AppState.initial.runtime.copy(uiSurfaces = surfaces)
     )
     val expected = " Line 3, Col 5 | Language: Markdown | active.md "
 
     (Focus.EditorPane(paneId) :: surfaces.map(surface => Focus.Surface(surface.id))).foreach { focus =>
       val surface = new MockRenderSurface(100, 30)
 
-      Renderer.render(baseState.copy(focus = focus), cursorVisible = true, surface, ViewportSize(100, 30))
+      Renderer.render(
+        baseState.copy(persisted = baseState.persisted.copy(focus = focus)),
+        cursorVisible = true,
+        surface,
+        ViewportSize(100, 30)
+      )
 
       surface.drawRunPxCalls.map(_.s).find(_.contains("Line 3, Col 5")) shouldBe Some(expected)
       surface.drawRunPxCalls.map(_.s).mkString should not include "No active editor pane"
@@ -118,14 +127,14 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       // Given: Buffer with content and cursor at specific position
       bufferId     <- stateManager.createBuffer("Line 1\nLine 2\nLine 3")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
       _ <- stateManager.setCursorPosition(paneId, 1, 5) // Line 2, column 5
 
       // When: Gutter is enabled (should be default)
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
-      pane   = finalState.layout.editorPanes(paneId)
+      buffer = finalState.persisted.buffers(bufferId)
+      pane   = finalState.persisted.layout.editorPanes(paneId)
     yield
       // Then: Buffer should have gutter information available
       val gutterInfo = calculateGutterInfo(buffer, pane, None) // No file path yet
@@ -145,19 +154,20 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       // Given: Buffer with file path
       bufferId     <- stateManager.createBuffer("File content")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Simulate setting file path (this would normally happen during file open/save)
       stateWithPath <- stateManager.getCurrentState
       bufferWithPath =
-        val current = stateWithPath.buffers(bufferId)
+        val current = stateWithPath.persisted.buffers(bufferId)
         current.copy(document = current.document.copy(filePath = Some(java.nio.file.Paths.get("/path/to/myfile.txt"))))
       updatedState = stateWithPath.copy(
-        buffers = stateWithPath.buffers + (bufferId -> bufferWithPath)
+        persisted =
+          stateWithPath.persisted.copy(buffers = stateWithPath.persisted.buffers + (bufferId -> bufferWithPath))
       )
 
-      pane = updatedState.layout.editorPanes(paneId)
+      pane = updatedState.persisted.layout.editorPanes(paneId)
     yield
       // Then: Gutter should show file path
       val gutterInfo = calculateGutterInfo(bufferWithPath, pane, bufferWithPath.document.filePath)
@@ -179,9 +189,11 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       bufferId     <- stateManager.createBuffer("Line 1\nLine 2\nLine 3") // Small buffer for testing
       initialState <- stateManager.getCurrentState
       stateWithLineNumbers = initialState.copy(
-        config = initialState.config.copy(
-          showLineNumbers = true,
-          showGutter = true
+        persisted = initialState.persisted.copy(
+          config = initialState.persisted.config.copy(
+            showLineNumbers = true,
+            showGutter = true
+          )
         )
       )
 
@@ -191,15 +203,15 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
       // Calculate expected dimensions based on actual buffer content (3 lines = 1 digit + 1 space = min 3 chars)
       lineNumberWidth = 3 // Based on actual LayoutEngine calculation for 3-line buffer
-      gutterHeight    = if stateWithLineNumbers.config.showGutter then 1 else 0
+      gutterHeight    = if stateWithLineNumbers.persisted.config.showGutter then 1 else 0
     yield
       // Then: Layout should allocate space for line numbers and gutter
-      if stateWithLineNumbers.config.showLineNumbers then
+      if stateWithLineNumbers.persisted.config.showLineNumbers then
         layout.editorPanelRect.x should be >= lineNumberWidth
         layout.lineNumberRect should be(defined)
         layout.lineNumberRect.get.width should be(lineNumberWidth)
 
-      if stateWithLineNumbers.config.showGutter then
+      if stateWithLineNumbers.persisted.config.showGutter then
         layout.gutterRect should be(defined)
         layout.gutterRect.get.height should be(gutterHeight)
         // Gutter should be at bottom of terminal
@@ -227,12 +239,12 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       lines = (1 to 50).map(i => s"Line $i").mkString("\n")
       bufferId     <- stateManager.createBuffer(lines)
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
-      pane   = finalState.layout.editorPanes(paneId)
+      buffer = finalState.persisted.buffers(bufferId)
+      pane   = finalState.persisted.layout.editorPanes(paneId)
 
       // Simulate viewport showing lines 10-20 (0-indexed, so lines 11-21 in display)
       viewportLines = (10 to 20).toList
@@ -250,15 +262,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       .fromString(BufferId(1), lines)
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 5, visibleColumns = 20))
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = com.serenity.ui.layout.Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
-      ),
-      focus = Focus.EditorPane(PaneId(0)),
-      theme = Theme.light
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = com.serenity.ui.layout.Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        theme = Theme.light
+      )
     )
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
@@ -279,18 +293,20 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       .fromString(BufferId(2), (1 to 20).map(i => s"right $i").mkString("\n"))
       .copy(viewport = Viewport(topLine = 5, leftColumn = 0, visibleLines = 10, visibleColumns = 20))
     val state = AppState.initial.copy(
-      buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
-      bufferOrder = List(buffer1.id, buffer2.id),
-      layout = com.serenity.ui.layout.Layout(
-        editorPanes = Map(
-          PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
-          PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
+        bufferOrder = List(buffer1.id, buffer2.id),
+        layout = com.serenity.ui.layout.Layout(
+          editorPanes = Map(
+            PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
+            PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+          ),
+          activeEditorPaneId = Some(PaneId(1)),
+          paneOrder = List(PaneId(0), PaneId(1))
         ),
-        activeEditorPaneId = Some(PaneId(1)),
-        paneOrder = List(PaneId(0), PaneId(1))
-      ),
-      focus = Focus.EditorPane(PaneId(1)),
-      theme = Theme.light
+        focus = Focus.EditorPane(PaneId(1)),
+        theme = Theme.light
+      )
     )
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
@@ -311,18 +327,20 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         .fromString(BufferId(5), "alpha\nbeta\ngamma")
         .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 8, visibleColumns = 40))
       val state = AppState.initial.copy(
-        buffers = Map(buffer.id -> buffer),
-        bufferOrder = List(buffer.id),
-        layout = AppState.initial.layout.copy(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
-        ),
-        focus = Focus.EditorPane(PaneId(0)),
-        config = AppState.initial.config
-          .withInterfaceDensity(density)
-          .copy(showLineNumbers = true),
-        theme = Theme.light
+        persisted = AppState.initial.persisted.copy(
+          buffers = Map(buffer.id -> buffer),
+          bufferOrder = List(buffer.id),
+          layout = AppState.initial.persisted.layout.copy(
+            editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+            activeEditorPaneId = Some(PaneId(0)),
+            paneOrder = List(PaneId(0))
+          ),
+          focus = Focus.EditorPane(PaneId(0)),
+          config = AppState.initial.persisted.config
+            .withInterfaceDensity(density)
+            .copy(showLineNumbers = true),
+          theme = Theme.light
+        )
       )
       val surface  = new MockRenderSurface(80, 24)
       val viewport = ViewportSize(80, 24)
@@ -350,15 +368,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       .fromString(BufferId(3), s"$longLine\nsecond")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 8, visibleColumns = 20))
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
-      ),
-      focus = Focus.EditorPane(PaneId(0)),
-      theme = Theme.light
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        theme = Theme.light
+      )
     )
     val surface  = new MockRenderSurface(40, 12)
     val viewport = ViewportSize(40, 12)
@@ -396,12 +416,12 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       // Given: Buffer with header and gutter enabled
       bufferId     <- stateManager.createBuffer("Some content")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // When: Calculate layout with gutter enabled
       stateWithGutter = initialState.copy(
-        config = initialState.config.copy(showGutter = true)
+        persisted = initialState.persisted.copy(config = initialState.persisted.config.copy(showGutter = true))
       )
       viewportSize = ViewportSize(80, 24)
       layout       = LayoutEngine.calculateLayoutWithUI(stateWithGutter, viewportSize)
@@ -425,19 +445,21 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val buffer0 = Buffer.fromString(BufferId(4), "alpha\nbeta")
     val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
-      ),
-      focus = Focus.EditorPane(PaneId(0)),
-      config = AppState.initial.config
-        .withCursorInfoBarMode(CursorInfoBarMode.Position)
-        .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-        .copy(showGutter = false),
-      theme = Theme.light
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        config = AppState.initial.persisted.config
+          .withCursorInfoBarMode(CursorInfoBarMode.Position)
+          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+          .copy(showGutter = false),
+        theme = Theme.light
+      )
     )
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
@@ -454,19 +476,21 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val buffer0 = Buffer.fromString(BufferId(5), "alpha")
     val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(0, 4))))
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
-      ),
-      focus = Focus.EditorPane(PaneId(0)),
-      config = AppState.initial.config
-        .withCursorInfoBarMode(CursorInfoBarMode.Position)
-        .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-        .copy(showGutter = false),
-      theme = Theme.light
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        config = AppState.initial.persisted.config
+          .withCursorInfoBarMode(CursorInfoBarMode.Position)
+          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+          .copy(showGutter = false),
+        theme = Theme.light
+      )
     )
     val surface     = new MockRenderSurface(80, 12)
     val viewport    = ViewportSize(80, 12)

@@ -19,7 +19,11 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     val store  = UiPresetStore(Files.createTempDirectory("ui-scenario-preset").resolve("presets.json"))
     val driver = UiScenarioDriver.create("ui-preset", uiPresetStore = Some(store)).unsafeRunSync()
     driver
-      .updateState(state => state.copy(config = state.config.withBackgroundStyle(BackgroundStyle.Solid)))
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(config = state.persisted.config.withBackgroundStyle(BackgroundStyle.Solid))
+        )
+      )
       .unsafeRunSync()
     driver.stateManager
       .executeCommand(
@@ -44,27 +48,31 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("ui-preset-transactions", uiPresetStore = Some(store)).unsafeRunSync()
 
     driver
-      .updateState(state => state.copy(config = state.config.withBackgroundStyle(BackgroundStyle.Solid)))
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(config = state.persisted.config.withBackgroundStyle(BackgroundStyle.Solid))
+        )
+      )
       .unsafeRunSync()
-    val savedMotion = driver.state.unsafeRunSync().config.motionPreset
+    val savedMotion = driver.state.unsafeRunSync().persisted.config.motionPreset
     execute(driver, CommandIntent.SaveUiPresetAsNew("Scenario"))
     val beforeChange = driver.renderFrame("before-settings-change").unsafeRunSync()
     execute(driver, CommandIntent.SetMotionPreset(MotionPreset.Subtle))
     val changed = driver.renderFrame("changed").unsafeRunSync()
-    driver.state.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Subtle
+    driver.state.unsafeRunSync().persisted.config.motionPreset shouldBe MotionPreset.Subtle
     changed.evidence.layoutViolations shouldBe empty
     store.find("Scenario").unsafeRunSync().map(_.config.motionPreset) shouldBe Some(savedMotion)
 
     execute(driver, CommandIntent.ApplyUiPreset("Scenario"))
     val reapplied = driver.state.unsafeRunSync()
-    reapplied.config.backgroundStyle shouldBe BackgroundStyle.Solid
-    reapplied.config.motionPreset shouldBe savedMotion
+    reapplied.persisted.config.backgroundStyle shouldBe BackgroundStyle.Solid
+    reapplied.persisted.config.motionPreset shouldBe savedMotion
     beforeChange.evidence.layoutViolations shouldBe empty
     driver.renderFrame("after-reapply").unsafeRunSync().evidence.layoutViolations shouldBe empty
 
     val restarted = UiScenarioDriver.create("ui-preset-restarted", uiPresetStore = Some(store)).unsafeRunSync()
     execute(restarted, CommandIntent.ApplyUiPreset("Scenario"))
-    restarted.state.unsafeRunSync().config.backgroundStyle shouldBe BackgroundStyle.Solid
+    restarted.state.unsafeRunSync().persisted.config.backgroundStyle shouldBe BackgroundStyle.Solid
     restarted.renderFrame("restarted").unsafeRunSync().evidence.layoutViolations shouldBe empty
   }
 
@@ -88,7 +96,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     execute(restarted, CommandIntent.ApplyUiPreset("Scenario"))
     val appliedAfterRestart = restarted.renderFrame("applied-after-restart").unsafeRunSync()
 
-    restarted.state.unsafeRunSync().config.motionPreset shouldBe MotionPreset.Subtle
+    restarted.state.unsafeRunSync().persisted.config.motionPreset shouldBe MotionPreset.Subtle
     beforeChange.evidence.layoutViolations shouldBe empty
     changed.evidence.layoutViolations shouldBe empty
     saved.evidence.layoutViolations shouldBe empty
@@ -120,7 +128,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
         case _                                      => None)
       .getOrElse(fail("command runner should reopen after session restore"))
 
-    reopened.config.materialPreset shouldBe MaterialPreset.Solid
+    reopened.persisted.config.materialPreset shouldBe MaterialPreset.Solid
     store.find("Restart Draft").unsafeRunSync() shouldBe None
     inputIds(runner.settingsGroups) should contain allOf ("ui-preset-save-as-new", "ui-preset-overwrite")
     changed.evidence.layoutViolations shouldBe empty

@@ -31,7 +31,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
     // Create buffer with long text
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Insert long line
@@ -43,7 +43,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
     val panelRect  = layout.editorPanelRect
 
     // Get the viewport settings
-    val pane     = finalState.layout.editorPanes(paneId)
+    val pane     = finalState.persisted.layout.editorPanes(paneId)
     val viewport = pane.viewport
 
     info(s"Viewport visible columns: ${viewport.visibleColumns}")
@@ -99,6 +99,6 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val bufferId     = stateManager.createBuffer("test").unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val paneId       = initialState.layout.editorPanes.keys.head
+    val paneId       = initialState.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync()

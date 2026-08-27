@@ -27,16 +27,16 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
   it should "start with an empty initial state" in new EditorFixture:
     val state = stateManager.getCurrentState.unsafeRunSync()
 
-    state.buffers should have size 1 // Initial empty buffer
-    state.layout.editorPanes should have size 1
-    state.focus shouldBe Focus.EditorPane(PaneId(0))
-    state.uiSurfaces shouldBe Nil
+    state.persisted.buffers should have size 1 // Initial empty buffer
+    state.persisted.layout.editorPanes should have size 1
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    state.runtime.uiSurfaces shouldBe Nil
 
   it should "create a buffer and handle basic text insertion" in new EditorFixture:
     // Given: Create a buffer and associate it with the default pane
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     // Associate buffer with pane
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -46,11 +46,11 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Buffer should contain "Hello" and cursor should be at end
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe "Hello"
 
-    val pane       = finalState.layout.editorPanes(paneId)
-    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    val pane       = finalState.persisted.layout.editorPanes(paneId)
+    val paneBuffer = pane.bufferId.flatMap(finalState.persisted.buffers.get).get
     paneBuffer.editing.cursors.head.column shouldBe 5
     paneBuffer.editing.cursors.head.line shouldBe 0
 
@@ -58,7 +58,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Given: A buffer with text "Hello World"
     val bufferId = stateManager.createBuffer("Hello World").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     // Associate buffer with pane and position cursor at end
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -69,18 +69,18 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Last character 'd' should be deleted
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe "Hello Worl"
 
-    val pane       = finalState.layout.editorPanes(paneId)
-    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    val pane       = finalState.persisted.layout.editorPanes(paneId)
+    val paneBuffer = pane.bufferId.flatMap(finalState.persisted.buffers.get).get
     paneBuffer.editing.cursors.head.column shouldBe 10 // Cursor moves back
 
   it should "handle multiline text creation with newlines" in new EditorFixture:
     // Given: Empty buffer
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     // Associate buffer with pane
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -92,11 +92,11 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Buffer should contain multiline text
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe "Line 1\nLine 2"
 
-    val pane       = finalState.layout.editorPanes(paneId)
-    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    val pane       = finalState.persisted.layout.editorPanes(paneId)
+    val paneBuffer = pane.bufferId.flatMap(finalState.persisted.buffers.get).get
     paneBuffer.editing.cursors.head.line shouldBe 1
     paneBuffer.editing.cursors.head.column shouldBe 6
 
@@ -104,7 +104,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Given: Buffer with multiline text
     val bufferId = stateManager.createBuffer("First\nSecond\nThird").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     // Associate buffer with pane and start cursor at beginning
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -116,8 +116,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Cursor should be on third line
     val afterDownState  = stateManager.getCurrentState.unsafeRunSync()
-    val afterDownPane   = afterDownState.layout.editorPanes(paneId)
-    val afterDownBuffer = afterDownPane.bufferId.flatMap(afterDownState.buffers.get).get
+    val afterDownPane   = afterDownState.persisted.layout.editorPanes(paneId)
+    val afterDownBuffer = afterDownPane.bufferId.flatMap(afterDownState.persisted.buffers.get).get
     afterDownBuffer.editing.cursors.head.line shouldBe 2
     afterDownBuffer.editing.cursors.head.column shouldBe 0
 
@@ -126,15 +126,15 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Cursor should be at end of "Third"
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val pane       = finalState.layout.editorPanes(paneId)
-    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    val pane       = finalState.persisted.layout.editorPanes(paneId)
+    val paneBuffer = pane.bufferId.flatMap(finalState.persisted.buffers.get).get
     paneBuffer.editing.cursors.head.column shouldBe 5
 
   it should "handle complex keystroke sequences for word manipulation" in new EditorFixture:
     // Given: Buffer with text
     val bufferId = stateManager.createBuffer("Hello world").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     // Place cursor at end of "Hello"
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -147,16 +147,16 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Text should be "Hello, world"
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe "Hello, world"
 
   it should "maintain buffer dirty state correctly during edits" in new EditorFixture:
     // Given: Clean buffer
     val bufferId     = stateManager.createBuffer("Initial").unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    initialState.buffers(bufferId).document.isDirty shouldBe false
+    initialState.persisted.buffers(bufferId).document.isDirty shouldBe false
 
-    val paneId = initialState.layout.editorPanes.keys.head
+    val paneId = initialState.persisted.layout.editorPanes.keys.head
 
     // Associate buffer with pane and position cursor at end
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -167,7 +167,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Buffer should be marked dirty
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
     buffer.document.isDirty shouldBe true
     buffer.document.content.collect() shouldBe "Initial!"
 
@@ -175,7 +175,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Given: Empty buffer
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     // Associate buffer with pane
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -199,11 +199,11 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Final text should be "AXCY" with cursor after Y
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe "AXCY"
 
-    val pane       = finalState.layout.editorPanes(paneId)
-    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    val pane       = finalState.persisted.layout.editorPanes(paneId)
+    val paneBuffer = pane.bufferId.flatMap(finalState.persisted.buffers.get).get
     paneBuffer.editing.cursors.head.column shouldBe 4
 
   it should "validate state consistency after complex operations" in new EditorFixture:
@@ -223,14 +223,14 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Then: State should be valid
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.isValid shouldBe true
-    finalState.buffers should have size 3 // Initial buffer + 2 created buffers
-    finalState.buffers(buffer2).document.content.collect() shouldBe "Buffer 2!"
+    finalState.persisted.buffers should have size 3 // Initial buffer + 2 created buffers
+    finalState.persisted.buffers(buffer2).document.content.collect() shouldBe "Buffer 2!"
 
   it should "handle edge cases with cursor at line boundaries" in new EditorFixture:
     // Given: Multiline buffer
     val bufferId = stateManager.createBuffer("Line1\n\nLine3").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     // Position cursor at end of first line
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -241,8 +241,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should be on empty line
     val afterMoveState  = stateManager.getCurrentState.unsafeRunSync()
-    val afterMovePane   = afterMoveState.layout.editorPanes(paneId)
-    val afterMoveBuffer = afterMovePane.bufferId.flatMap(afterMoveState.buffers.get).get
+    val afterMovePane   = afterMoveState.persisted.layout.editorPanes(paneId)
+    val afterMoveBuffer = afterMovePane.bufferId.flatMap(afterMoveState.persisted.buffers.get).get
     afterMoveBuffer.editing.cursors.head.line shouldBe 1
     afterMoveBuffer.editing.cursors.head.column shouldBe 0
 
@@ -251,20 +251,20 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should be at start of Line3
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val pane       = finalState.layout.editorPanes(paneId)
-    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    val pane       = finalState.persisted.layout.editorPanes(paneId)
+    val paneBuffer = pane.bufferId.flatMap(finalState.persisted.buffers.get).get
     paneBuffer.editing.cursors.head.line shouldBe 2
     paneBuffer.editing.cursors.head.column shouldBe 0
 
   it should "handle writing to a completely blank buffer" in new EditorFixture:
     // Given: Editor starts with no buffers at all
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    initialState.buffers should have size 1 // Initial empty buffer
+    initialState.persisted.buffers should have size 1 // Initial empty buffer
 
     // When: Create a blank buffer and start typing
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     // Associate buffer with pane
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -274,37 +274,39 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Buffer should contain the text
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe "Writing into empty space!"
     buffer.document.isDirty shouldBe true
 
-    val pane       = finalState.layout.editorPanes(paneId)
-    val paneBuffer = pane.bufferId.flatMap(finalState.buffers.get).get
+    val pane       = finalState.persisted.layout.editorPanes(paneId)
+    val paneBuffer = pane.bufferId.flatMap(finalState.persisted.buffers.get).get
     paneBuffer.editing.cursors.head.line shouldBe 0
     paneBuffer.editing.cursors.head.column shouldBe "Writing into empty space!".length
 
   it should "handle overwriting selection with new text" in new EditorFixture:
     val bufferId = stateManager.createBuffer("Hello World Program").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(editing =
-                current
-                  .buffers(bufferId)
-                  .editing
-                  .copy(
-                    cursors = List(CursorPosition(0, 6)),
-                    selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
-                  )
-              )
+        current.copy(persisted =
+          current.persisted.copy(buffers =
+            current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(editing =
+                  current.persisted
+                    .buffers(bufferId)
+                    .editing
+                    .copy(
+                      cursors = List(CursorPosition(0, 6)),
+                      selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
+                    )
+                )
+            )
           )
         )
       }
@@ -313,7 +315,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     "Universe".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe "Hello Universe Program"
     buffer.editing.selection shouldBe None
     buffer.editing.cursors.head shouldBe CursorPosition(0, 14)
@@ -321,36 +323,43 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
   it should "preserve the preferred column when moving through shorter lines" in new EditorFixture:
     val bufferId = stateManager.createBuffer("abcdef\nxy\nwxyzuv").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 4).unsafeRunSync()
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
-    val afterFirstDown = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.head
+    val afterFirstDown = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
     afterFirstDown shouldBe CursorPosition(1, 2)
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
-    val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.head
+    val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
     afterSecondDown shouldBe CursorPosition(2, 4)
 
   it should "preserve measured visual x when moving through proportional text lines" in new EditorFixture:
     val bufferId = stateManager.createBuffer("iiii\nW\nWWWW").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     stateManager
-      .updateState(_.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+      .updateState(current =>
+        current
+          .copy(persisted = current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+      )
       .unsafeRunSync()
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown)))
+        current.copy(persisted =
+          current.persisted.copy(buffers =
+            current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(document =
+                  current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown))
+                )
+            )
           )
         )
       }
@@ -367,7 +376,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
     val panelWidthPx = layout.editorPanelRect.width * CellMetrics.fromFont(font).charWidth
     val snapshot = TextLayoutSnapshot.fromBuffer(
-      currentState.buffers(bufferId),
+      currentState.persisted.buffers(bufferId),
       panelWidthPx,
       font
     )
@@ -375,17 +384,17 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val expectedCol  = snapshot.visualLines(2).nearestColumnForXPx(preferredXPx)
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
-    val afterFirstDown = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.head
+    val afterFirstDown = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
     afterFirstDown shouldBe CursorPosition(1, 1)
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
-    val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.head
+    val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
     afterSecondDown shouldBe CursorPosition(2, expectedCol)
 
   it should "preserve each multi-cursor measured visual x through proportional text lines" in new EditorFixture:
     val bufferId = stateManager.createBuffer("iiiiiiii\nW\nWWWWWWWW").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     val fontConfig = FontConfig(
       textFontFamily = "SansSerif",
       fontSize = 12.0f,
@@ -393,30 +402,34 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     )
 
     stateManager
-      .updateState(
-        _.copy(
-          config = AppConfig.default
-            .withLineNumbers(false)
-            .withGutter(false)
-            .withFontConfig(fontConfig)
+      .updateState(current =>
+        current.copy(persisted =
+          current.persisted.copy(
+            config = AppConfig.default
+              .withLineNumbers(false)
+              .withGutter(false)
+              .withFontConfig(fontConfig)
+          )
         )
       )
       .unsafeRunSync()
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(
-                document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown)),
-                editing = current
-                  .buffers(bufferId)
-                  .editing
-                  .copy(cursors = List(CursorPosition(0, 4), CursorPosition(0, 8)))
-              )
+        current.copy(persisted =
+          current.persisted.copy(buffers =
+            current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(
+                  document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Markdown)),
+                  editing = current.persisted
+                    .buffers(bufferId)
+                    .editing
+                    .copy(cursors = List(CursorPosition(0, 4), CursorPosition(0, 8)))
+                )
+            )
           )
         )
       }
@@ -428,7 +441,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
     val panelWidthPx = layout.editorPanelRect.width * CellMetrics.fromFont(font).charWidth
     val snapshot = TextLayoutSnapshot.fromBuffer(
-      currentState.buffers(bufferId),
+      currentState.persisted.buffers(bufferId),
       panelWidthPx,
       font
     )
@@ -446,7 +459,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
-    val finalCursors = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors
+    val finalCursors = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors
     finalCursors shouldBe expectedCursors
 
   it should "move between logical lines when word wrap is disabled and the cursor is past the viewport" in new EditorFixture:
@@ -454,10 +467,12 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val secondLine = "i" * 100
     val bufferId   = stateManager.createBuffer(s"$firstLine\n$secondLine").unsafeRunSync()
     val state      = stateManager.getCurrentState.unsafeRunSync()
-    val paneId     = state.layout.editorPanes.keys.head
+    val paneId     = state.persisted.layout.editorPanes.keys.head
 
     stateManager
-      .updateState(current => current.copy(config = AppConfig.default.withWordWrap(false)))
+      .updateState(current =>
+        current.copy(persisted = current.persisted.copy(config = AppConfig.default.withWordWrap(false)))
+      )
       .unsafeRunSync()
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
@@ -465,28 +480,30 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
-    val cursor = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).editing.cursors.head
+    val cursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
     cursor shouldBe CursorPosition(1, 60)
 
   it should "clear in-flight multi-cursor vertical state when an explicit single cursor is set" in new EditorFixture:
     val bufferId = stateManager.createBuffer("abcdef\nxy\nabcdef").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(editing =
-                current
-                  .buffers(bufferId)
-                  .editing
-                  .copy(cursors = List(CursorPosition(0, 3), CursorPosition(0, 4)))
-              )
+        current.copy(persisted =
+          current.persisted.copy(buffers =
+            current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(editing =
+                  current.persisted
+                    .buffers(bufferId)
+                    .editing
+                    .copy(cursors = List(CursorPosition(0, 3), CursorPosition(0, 4)))
+                )
+            )
           )
         )
       }
@@ -496,28 +513,30 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
-    val finalBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    val finalBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     finalBuffer.editing.cursors shouldBe List(CursorPosition(1, 0))
 
   it should "clear in-flight multi-cursor vertical state when a single-cursor edit takes over" in new EditorFixture:
     val bufferId = stateManager.createBuffer("abcdef\nxy\nabcdef").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(editing =
-                current
-                  .buffers(bufferId)
-                  .editing
-                  .copy(cursors = List(CursorPosition(0, 3), CursorPosition(0, 4)))
-              )
+        current.copy(persisted =
+          current.persisted.copy(buffers =
+            current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(editing =
+                  current.persisted
+                    .buffers(bufferId)
+                    .editing
+                    .copy(cursors = List(CursorPosition(0, 3), CursorPosition(0, 4)))
+                )
+            )
           )
         )
       }
@@ -527,7 +546,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveLeft).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
-    val finalBuffer = stateManager.getCurrentState.unsafeRunSync().buffers(bufferId)
+    val finalBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     finalBuffer.editing.cursors shouldBe List(CursorPosition(2, 1))
 
   it should "handle undo/redo operations correctly" in new EditorFixture:
@@ -535,7 +554,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // Given: Buffer with initial content
     val bufferId = stateManager.createBuffer("Initial").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
 
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 7).unsafeRunSync()
@@ -548,21 +567,21 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('t')).unsafeRunSync()
 
     val afterEditsState = stateManager.getCurrentState.unsafeRunSync()
-    afterEditsState.buffers(bufferId).document.content.collect() shouldBe "Initial Text"
+    afterEditsState.persisted.buffers(bufferId).document.content.collect() shouldBe "Initial Text"
 
     // When: Try undo operations (will fail until Undo event is implemented)
     // stateManager.applyEvent(Undo).unsafeRunSync()
 
     // Then: Should revert changes (assertion will fail until implemented)
     // val afterUndoState = stateManager.getCurrentState.unsafeRunSync()
-    // afterUndoState.buffers(bufferId).content.collect() shouldBe "Initial"
+    // afterUndoState.persisted.buffers(bufferId).content.collect() shouldBe "Initial"
 
     // When: Try redo operations (will fail until Redo event is implemented)
     // stateManager.applyEvent(Redo).unsafeRunSync()
 
     // Then: Should restore changes (assertion will fail until implemented)
     // val afterRedoState = stateManager.getCurrentState.unsafeRunSync()
-    // afterRedoState.buffers(bufferId).content.collect() shouldBe "Initial Text"
+    // afterRedoState.persisted.buffers(bufferId).content.collect() shouldBe "Initial Text"
 
   it should "handle opening an existing file" in new EditorFixture:
     // TODO: Implement file system operations - stubs will log but not actually work
@@ -573,7 +592,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: Buffer should contain file content and not be dirty (stub doesn't set filePath yet)
     val state  = stateManager.getCurrentState.unsafeRunSync()
-    val buffer = state.buffers(bufferId)
+    val buffer = state.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe fileContent
     buffer.document.isDirty shouldBe false
     // buffer.filePath shouldBe Some("/path/to/file.txt") // Will fail until setBufferFilePath is implemented
@@ -585,7 +604,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.setBufferFilePath(bufferId, "/path/to/save.txt").unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.layout.editorPanes.keys.head
+    val paneId = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.setCursorPosition(paneId, 0, 16).unsafeRunSync()
 
@@ -598,15 +617,15 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('s')).unsafeRunSync()
 
     val beforeSaveState = stateManager.getCurrentState.unsafeRunSync()
-    beforeSaveState.buffers(bufferId).document.isDirty shouldBe true
+    beforeSaveState.persisted.buffers(bufferId).document.isDirty shouldBe true
 
     // When: Save file (stub will log but not actually save)
     stateManager.saveBuffer(bufferId).unsafeRunSync()
 
     // Then: Buffer should no longer be dirty (will fail until saveBuffer is implemented)
     val afterSaveState = stateManager.getCurrentState.unsafeRunSync()
-    // afterSaveState.buffers(bufferId).isDirty shouldBe false // Will fail until saveBuffer is implemented
-    afterSaveState.buffers(bufferId).document.content.collect() shouldBe "Original content + mods"
+    // afterSaveState.persisted.buffers(bufferId).isDirty shouldBe false // Will fail until saveBuffer is implemented
+    afterSaveState.persisted.buffers(bufferId).document.content.collect() shouldBe "Original content + mods"
 
   trait EditorFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]

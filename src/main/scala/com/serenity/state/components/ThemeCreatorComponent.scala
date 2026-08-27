@@ -40,7 +40,12 @@ class ThemeCreatorComponent extends TypedFocusedComponent[ModalInputEvent]:
   ): ComponentResult =
     creatorState.validConfig match
       case Right(config) =>
-        val savedState = dismiss(state.copy(theme = creatorState.previewTheme.toOption.getOrElse(state.theme)), surface)
+        val savedState = dismiss(
+          state.copy(persisted =
+            state.persisted.copy(theme = creatorState.previewTheme.toOption.getOrElse(state.persisted.theme))
+          ),
+          surface
+        )
         ComponentResult.reducerResult(ReducerResult(savedState, List(AppEffect.SaveThemeConfig(config))))
       case Left(error) =>
         ComponentResult.updateState(_ => replaceSurface(state, surface, creatorState.withStatus(error)))
@@ -52,7 +57,7 @@ class ThemeCreatorComponent extends TypedFocusedComponent[ModalInputEvent]:
   ): AppState =
     val withSurface = replaceSurface(state, surface, creatorState)
     creatorState.previewTheme match
-      case Right(theme) => withSurface.copy(theme = theme)
+      case Right(theme) => withSurface.copy(persisted = withSurface.persisted.copy(theme = theme))
       case Left(_)      => withSurface
 
   private def replaceSurface(
@@ -60,21 +65,23 @@ class ThemeCreatorComponent extends TypedFocusedComponent[ModalInputEvent]:
     surface: UiSurface,
     creatorState: com.serenity.ui.theme.config.ThemeCreatorState
   ): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.map {
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case current if current.id == surface.id =>
         current.copy(content = SurfaceContent.ThemeCreator(creatorState))
       case current =>
         current
-    })
+    }))
 
   private def dismissAndRestore(
     state: AppState,
     surface: UiSurface,
     creatorState: com.serenity.ui.theme.config.ThemeCreatorState
   ): AppState =
-    dismiss(state.copy(theme = creatorState.originalTheme), surface)
+    dismiss(state.copy(persisted = state.persisted.copy(theme = creatorState.originalTheme)), surface)
 
   private def dismiss(state: AppState, surface: UiSurface): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id)).popFocus
+    state
+      .copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
+      .popFocus
 
 end ThemeCreatorComponent

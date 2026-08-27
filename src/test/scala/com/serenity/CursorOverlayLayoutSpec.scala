@@ -24,24 +24,30 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(cursor)))
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
-    AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.EditorPane(paneId)
+    val initial = AppState.initial
+    initial.copy(
+      persisted = initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
     )
 
   "LayoutEngine.calculateLayout" should "place a peek overlay above the anchored cursor when space is available" in {
-    val state = baseState().copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("peek"),
-          SurfaceContent.QuickInfo("map(value: A => B): List[B]"),
-          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.AboveCursor),
-          dismissOnMove = true
+    val base = baseState()
+    val state = base.copy(
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("peek"),
+            SurfaceContent.QuickInfo("map(value: A => B): List[B]"),
+            SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.AboveCursor),
+            dismissOnMove = true
+          )
         )
       )
     )
@@ -65,14 +71,17 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "clamp an above-cursor peek overlay into the active pane when the cursor is near the top" in {
-    val state = baseState(cursor = CursorPosition(0, 5)).copy(
-      config = AppState.initial.config.withUiElementGap(0.5),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("peek-top"),
-          SurfaceContent.QuickInfo("near-top"),
-          SurfacePresentation.Floating(Some(CursorPosition(0, 5)), SurfacePlacement.AboveCursor),
-          dismissOnMove = true
+    val base = baseState(cursor = CursorPosition(0, 5))
+    val state = base.copy(
+      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withUiElementGap(0.5)),
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("peek-top"),
+            SurfaceContent.QuickInfo("near-top"),
+            SurfacePresentation.Floating(Some(CursorPosition(0, 5)), SurfacePlacement.AboveCursor),
+            dismissOnMove = true
+          )
         )
       )
     )
@@ -94,19 +103,22 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "place an active command runner below the editor cursor when there is room" in {
-    val state = baseState().copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(
-            CommandRunner(
-              isActive = true,
-              searchTerm = "",
-              selectedIndex = 0,
-              filteredCommands = List.empty
-            )
-          ),
-          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+    val base = baseState()
+    val state = base.copy(
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(
+              CommandRunner(
+                isActive = true,
+                searchTerm = "",
+                selectedIndex = 0,
+                filteredCommands = List.empty
+              )
+            ),
+            SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -128,20 +140,25 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "place compact command runner overlays directly below the cursor row" in {
-    val state = baseState().copy(
-      config = AppState.initial.config.withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(
-            CommandRunner(
-              isActive = true,
-              searchTerm = "",
-              selectedIndex = 0,
-              filteredCommands = List.empty
-            )
-          ),
-          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+    val base = baseState()
+    val state = base.copy(
+      persisted = base.persisted.copy(config =
+        AppState.initial.persisted.config.withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
+      ),
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(
+              CommandRunner(
+                isActive = true,
+                searchTerm = "",
+                selectedIndex = 0,
+                filteredCommands = List.empty
+              )
+            ),
+            SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -156,15 +173,19 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use the explicit command runner cursor gap instead of the interface gap" in {
-    val state = baseState().copy(
-      config = AppState.initial.config.withUiElementGap(0).withCommandRunnerCursorGapRows(Some(3)),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(
-            CommandRunner(isActive = true, searchTerm = "", selectedIndex = 0, filteredCommands = Nil)
-          ),
-          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+    val base = baseState()
+    val state = base.copy(
+      persisted = base.persisted
+        .copy(config = AppState.initial.persisted.config.withUiElementGap(0).withCommandRunnerCursorGapRows(Some(3))),
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(
+              CommandRunner(isActive = true, searchTerm = "", selectedIndex = 0, filteredCommands = Nil)
+            ),
+            SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -178,19 +199,22 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "place command runner overlays immediately below a top-row cursor" in {
     val cursor = CursorPosition(0, 0)
-    val state = baseState(cursor = cursor).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(
-            CommandRunner(
-              isActive = true,
-              searchTerm = "",
-              selectedIndex = 0,
-              filteredCommands = List.empty
-            )
-          ),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    val base   = baseState(cursor = cursor)
+    val state = base.copy(
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(
+              CommandRunner(
+                isActive = true,
+                searchTerm = "",
+                selectedIndex = 0,
+                filteredCommands = List.empty
+              )
+            ),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -207,19 +231,22 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   it should "place command runner overlays from the live editor cursor rather than a stale surface anchor" in {
     val cursor      = CursorPosition(0, 0)
     val staleAnchor = CursorPosition(3, 0)
-    val state = baseState(cursor = cursor).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(
-            CommandRunner(
-              isActive = true,
-              searchTerm = "",
-              selectedIndex = 0,
-              filteredCommands = List.empty
-            )
-          ),
-          SurfacePresentation.Floating(Some(staleAnchor), SurfacePlacement.BelowCursor)
+    val base        = baseState(cursor = cursor)
+    val state = base.copy(
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(
+              CommandRunner(
+                isActive = true,
+                searchTerm = "",
+                selectedIndex = 0,
+                filteredCommands = List.empty
+              )
+            ),
+            SurfacePresentation.Floating(Some(staleAnchor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -242,27 +269,32 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         editing = EditingState(cursors = List(cursor)),
         viewport = Viewport(topLine = 0, topVisualLine = 2, leftColumn = 0, visibleColumns = 80, visibleLines = 20)
       )
-    val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+    val pane    = EditorPane.withBuffer(paneId, bufferId)
+    val initial = AppState.initial
+    val state = initial.copy(
+      persisted = initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("command-runner"))
       ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(
-            CommandRunner(
-              isActive = true,
-              searchTerm = "",
-              selectedIndex = 0,
-              filteredCommands = List.empty
-            )
-          ),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+      runtime = initial.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(
+              CommandRunner(
+                isActive = true,
+                searchTerm = "",
+                selectedIndex = 0,
+                filteredCommands = List.empty
+              )
+            ),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -290,28 +322,33 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         editing = EditingState(cursors = List(cursor)),
         viewport = Viewport(topLine = 8, leftColumn = 0, visibleLines = 30, visibleColumns = 80)
       )
-    val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      config = AppState.initial.config.withWordWrap(false),
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+    val pane    = EditorPane.withBuffer(paneId, bufferId)
+    val initial = AppState.initial
+    val state = initial.copy(
+      persisted = initial.persisted.copy(
+        config = initial.persisted.config.withWordWrap(false),
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("command-runner"))
       ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(
-            CommandRunner(
-              isActive = true,
-              searchTerm = "",
-              selectedIndex = 0,
-              filteredCommands = List.empty
-            )
-          ),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+      runtime = initial.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(
+              CommandRunner(
+                isActive = true,
+                searchTerm = "",
+                selectedIndex = 0,
+                filteredCommands = List.empty
+              )
+            ),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -326,20 +363,23 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "size command runner overlays from configured visible rows" in {
-    val state = baseState().copy(
-      config = AppState.initial.config.withCommandRunnerVisibleRows(Some(7)),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(
-            CommandRunner(
-              isActive = true,
-              searchTerm = "",
-              selectedIndex = 0,
-              filteredCommands = List.empty
-            )
-          ),
-          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+    val base = baseState()
+    val state = base.copy(
+      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withCommandRunnerVisibleRows(Some(7))),
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(
+              CommandRunner(
+                isActive = true,
+                searchTerm = "",
+                selectedIndex = 0,
+                filteredCommands = List.empty
+              )
+            ),
+            SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -356,18 +396,21 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .updateSearchTerm("op")(using registry)
     val cursor = CursorPosition(1, 2)
-    val state = baseState(cursor = cursor).copy(
-      config = AppState.initial.config.withUiElementGap(2),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("contextual-toolbar"),
-          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
-        ),
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    val base   = baseState(cursor = cursor)
+    val state = base.copy(
+      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withUiElementGap(2)),
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("contextual-toolbar"),
+            SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -387,20 +430,25 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   it should "preserve fractional cursor and nested-surface gaps as logical-pixel offsets" in {
     val cursor = CursorPosition(1, 2)
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
-    val state = baseState(cursor = cursor).copy(
-      config = AppState.initial.config
-        .withUiElementGap(0.25)
-        .withCommandRunnerCursorGapRows(Some(0.5)),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("contextual-toolbar"),
-          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
-        ),
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    val base   = baseState(cursor = cursor)
+    val state = base.copy(
+      persisted = base.persisted.copy(config =
+        AppState.initial.persisted.config
+          .withUiElementGap(0.25)
+          .withCommandRunnerCursorGapRows(Some(0.5))
+      ),
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("contextual-toolbar"),
+            SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -419,18 +467,22 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
       .enterSelectedGroup
     val cursor = CursorPosition(1, 2)
-    val state = baseState(cursor = cursor).copy(
-      config = AppState.initial.config.withUiElementGap(1).withCommandRunnerCursorGapRows(Some(3)),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
-        ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    val base   = baseState(cursor = cursor)
+    val state = base.copy(
+      persisted = base.persisted
+        .copy(config = AppState.initial.persisted.config.withUiElementGap(1).withCommandRunnerCursorGapRows(Some(3))),
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -454,17 +506,20 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       .withActiveCategory(com.serenity.command.CommandCategory.Settings)
       .enterSelectedGroup
     val cursor = CursorPosition(18, 4)
-    val state = baseState(cursor = cursor).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
-        ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+    val base   = baseState(cursor = cursor)
+    val state = base.copy(
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -485,12 +540,15 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "size a find overlay to fit its header, query row, result, and footer" in {
-    val state = baseState().copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("find"),
-          SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(1, 0), FindResult(3, 0)), 0)),
-          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+    val base = baseState()
+    val state = base.copy(
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("find"),
+            SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(1, 0), FindResult(3, 0)), 0)),
+            SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -501,20 +559,23 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "size a close workflow overlay to fit its text and density-aware action targets" in {
-    val state = baseState().copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("close"),
-          SurfaceContent.ModalWorkflow(
-            Modal.CloseWorkflow(
-              CloseWorkflowState(
-                scope = CloseScope.Current,
-                currentBufferId = BufferId(0),
-                currentBufferLabel = "Buffer 0 - unsaved"
+    val base = baseState()
+    val state = base.copy(
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("close"),
+            SurfaceContent.ModalWorkflow(
+              Modal.CloseWorkflow(
+                CloseWorkflowState(
+                  scope = CloseScope.Current,
+                  currentBufferId = BufferId(0),
+                  currentBufferLabel = "Buffer 0 - unsaved"
+                )
               )
-            )
-          ),
-          SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+            ),
+            SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -523,7 +584,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
     layout.belowCursorOverlayRect.map(_.height) shouldBe Some(
       ModalSurfaceComposition.closeFrameHeight(
-        SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+        SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
       )
     )
   }
@@ -531,13 +592,16 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   it should "size a replace overlay to fit fields, actions, scope, and status" in
     List(InterfaceDensity.Comfortable, InterfaceDensity.Spacious).foreach { density =>
       val modal = Modal.ReplaceWorkflow(ReplaceWorkflowState(statusMessage = Some("3 matches will be replaced")))
-      val state = baseState().copy(
-        config = baseState().config.withInterfaceDensity(density),
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("replace"),
-            SurfaceContent.ModalWorkflow(modal),
-            SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+      val base  = baseState()
+      val state = base.copy(
+        persisted = base.persisted.copy(config = base.persisted.config.withInterfaceDensity(density)),
+        runtime = base.runtime.copy(uiSurfaces =
+          List(
+            UiSurface(
+              SurfaceId("replace"),
+              SurfaceContent.ModalWorkflow(modal),
+              SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
+            )
           )
         )
       )

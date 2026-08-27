@@ -20,11 +20,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface),
-      focusHistory = List(Focus.EditorPane(PaneId(2)))
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(surface.id)
+      ),
+      runtime = Runtime(
+        uiSurfaces = List(surface),
+        focusHistory = List(Focus.EditorPane(PaneId(2)))
+      )
     )
 
   "CommandRunnerReducer" should "ignore global activation events because activation is owned by the app reducer" in {
@@ -35,10 +39,12 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val initialState = AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.EditorPane(PaneId(1)),
-      uiSurfaces = List(inactiveSurface)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.EditorPane(PaneId(1))
+      ),
+      runtime = Runtime(uiSurfaces = List(inactiveSurface))
     )
 
     val result = CommandRunnerReducer.reduce(ToggleCommandRunner, initialState, registry)
@@ -53,7 +59,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = activeState(registry)
 
     val typed = CommandRunnerReducer.reduce(InsertChar('t'), state, registry)
-    val typedRunner = typed.state.uiSurfaces.collectFirst {
+    val typedRunner = typed.state.runtime.uiSurfaces.collectFirst {
       case UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) => runner
     }.get
     typedRunner.searchTerm shouldBe "t"
@@ -68,7 +74,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
         fail(s"Expected ExecuteCommand effect, got $other")
 
     executed.state.commandRunnerSurface shouldBe None
-    executed.state.focus shouldBe Focus.EditorPane(PaneId(2))
+    executed.state.persisted.focus shouldBe Focus.EditorPane(PaneId(2))
   }
 
   it should "surface typed command intents through execute effects" in {
@@ -94,7 +100,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val closed = CommandRunnerReducer.reduce(Escape, state, registry)
 
     closed.state.commandRunnerSurface shouldBe None
-    closed.state.focus shouldBe Focus.EditorPane(PaneId(2))
+    closed.state.persisted.focus shouldBe Focus.EditorPane(PaneId(2))
   }
 
   it should "select a category directly from palette interaction" in {
@@ -124,7 +130,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "paste clipboard text into the command search when active" in {
     val registry = CommandRegistry.default
-    val state    = activeState(registry).copy(clipboard = Some("UI Outline Thickness"))
+    val base     = activeState(registry)
+    val state    = base.copy(runtime = base.runtime.copy(clipboard = Some("UI Outline Thickness")))
 
     val result = CommandRunnerReducer.reduce(Paste, state, registry)
 
@@ -140,15 +147,18 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
         CommandRunnerSubmenuState("settings-keymap", selectedIndex = items.indexWhere(_.id == "keymap-global-find"))
       )
     )
-    val state = activeState(registry).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val activated = activeState(registry)
+    val state = activated.copy(
+      persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
+      runtime = activated.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner"))
+      )
     )
 
     val result = CommandRunnerReducer.reduce(Enter, state, registry)
@@ -170,15 +180,18 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val state = activeState(registry).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val activated = activeState(registry)
+    val state = activated.copy(
+      persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
+      runtime = activated.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner"))
+      )
     )
 
     val result = CommandRunnerReducer.reduce(
@@ -224,15 +237,18 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val state = activeState(registry).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val activated = activeState(registry)
+    val state = activated.copy(
+      persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
+      runtime = activated.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner"))
+      )
     )
 
     val first = CommandRunnerReducer.reduce(
@@ -270,15 +286,18 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val state = activeState(registry).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val activated = activeState(registry)
+    val state = activated.copy(
+      persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
+      runtime = activated.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner"))
+      )
     )
 
     val result = CommandRunnerReducer.reduce(
@@ -309,15 +328,18 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val state = activeState(registry).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val activated = activeState(registry)
+    val state = activated.copy(
+      persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
+      runtime = activated.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner"))
+      )
     )
 
     val result = CommandRunnerReducer.reduce(RunnerBindingRecordingExpired(1_000L), state, registry)
@@ -406,12 +428,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .copy(editingPresetName = Some("Review"))
       .updateSearchTerm("default document")
-    val state = activeState(registry).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val activated = activeState(registry)
+    val state = activated.copy(
+      runtime = activated.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -441,12 +466,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .updateSearchTerm("overwrite preset")
-    val state = activeState(registry).copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val activated = activeState(registry)
+    val state = activated.copy(
+      runtime = activated.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -478,10 +506,12 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(surface.id)
+      ),
+      runtime = Runtime(uiSurfaces = List(surface))
     )
 
     val typed = CommandRunnerReducer.reduce(InsertChar('t'), state, registry)
@@ -560,10 +590,12 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(submenuSurface.id),
-      uiSurfaces = List(surface, submenuSurface)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(submenuSurface.id)
+      ),
+      runtime = Runtime(uiSurfaces = List(surface, submenuSurface))
     )
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
@@ -613,10 +645,12 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(submenuSurface.id),
-      uiSurfaces = List(surface, submenuSurface)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(submenuSurface.id)
+      ),
+      runtime = Runtime(uiSurfaces = List(surface, submenuSurface))
     )
 
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), state, registry)
@@ -641,17 +675,19 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(surface.id)
+      ),
+      runtime = Runtime(uiSurfaces = List(surface))
     )
 
     val previewed = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), state, registry)
 
     previewed.state.commandRunnerSurface shouldBe defined
     previewed.state.commandRunnerSubmenuSurface shouldBe defined
-    previewed.state.focus shouldBe Focus.Surface(surface.id)
+    previewed.state.persisted.focus shouldBe Focus.Surface(surface.id)
   }
 
   it should "focus the submenu on enter and return to the parent runner on escape" in {
@@ -666,23 +702,25 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(surface.id)
+      ),
+      runtime = Runtime(uiSurfaces = List(surface))
     )
 
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
 
     entered.state.commandRunnerSurface shouldBe defined
     entered.state.commandRunnerSubmenuSurface shouldBe defined
-    entered.state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    entered.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
 
     val exited = CommandRunnerReducer.reduce(RunnerDismiss, entered.state, registry)
 
     exited.state.commandRunnerSurface shouldBe defined
     exited.state.commandRunnerSubmenuSurface shouldBe defined
-    exited.state.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
+    exited.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
   }
 
   it should "exit submenu edit mode on escape before leaving the submenu" in {
@@ -703,7 +741,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
     runner.activeSubmenu.map(_.editingText) shouldBe Some("")
     escaped.state.commandRunnerSubmenuSurface shouldBe defined
-    escaped.state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    escaped.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
   }
 
   it should "preserve submenu selection when exiting to the parent and re-entering the same group" in {
@@ -830,10 +868,12 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(surface.id)
+      ),
+      runtime = Runtime(uiSurfaces = List(surface))
     )
 
     runner.selectedItem.map(_.id) shouldBe Some("settings-preset-fonts")
@@ -865,10 +905,12 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(surface.id)
+      ),
+      runtime = Runtime(uiSurfaces = List(surface))
     )
 
     searchedRunner.selectedItem.map(_.id) shouldBe Some("settings-search:ui-outline-thickness")
@@ -896,7 +938,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     runner.activeSubmenu.map(_.searchTerm) shouldBe Some("")
     cleared.state.commandRunnerSubmenuSurface shouldBe defined
-    cleared.state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    cleared.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
   }
 
   it should "discard in-progress submenu edit text when exiting and re-entering the group" in {
@@ -953,10 +995,12 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(submenuSurface.id),
-      uiSurfaces = List(surface, submenuSurface)
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(submenuSurface.id)
+      ),
+      runtime = Runtime(uiSurfaces = List(surface, submenuSurface))
     )
 
   private def settingsGroupSearchTerm(groupId: String): String =
@@ -1026,8 +1070,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = settingsStateOnItem("settings-surface-appearance", "blur-radius")
 
     val after0 = CommandRunnerReducer.reduce(RunnerInsertChar('0'), state, registry)
-    val s0 = state.copy(uiSurfaces =
-      state.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(runnerFrom(after0.state))))
+    val s0 = state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(runnerFrom(after0.state))))
+      )
     )
 
     val afterDot = CommandRunnerReducer.reduce(RunnerInsertChar('.'), s0, registry)
@@ -1039,10 +1085,18 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = settingsStateOnItem("settings-surface-appearance", "blur-radius")
 
     val after0 = runnerFrom(CommandRunnerReducer.reduce(RunnerInsertChar('0'), state, registry).state)
-    val s1 = state.copy(uiSurfaces = state.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(after0))))
+    val s1 = state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(after0)))
+      )
+    )
     val afterDot = runnerFrom(CommandRunnerReducer.reduce(RunnerInsertChar('.'), s1, registry).state)
     val s2 =
-      state.copy(uiSurfaces = state.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(afterDot))))
+      state.copy(runtime =
+        state.runtime.copy(uiSurfaces =
+          state.runtime.uiSurfaces.map(s => s.copy(content = SurfaceContent.CommandPalette(afterDot)))
+        )
+      )
     val afterSecondDot = runnerFrom(CommandRunnerReducer.reduce(RunnerInsertChar('.'), s2, registry).state)
 
     afterSecondDot.activeSubmenu.map(_.editingText) shouldBe afterDot.activeSubmenu.map(_.editingText)
@@ -1070,8 +1124,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val typed = List('2', '0').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
-      s.copy(uiSurfaces =
-        s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+      s.copy(runtime =
+        s.runtime.copy(uiSurfaces =
+          s.runtime.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+        )
       )
     }
 
@@ -1106,8 +1162,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val typedOutOfBounds = List('9', '9', '9').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
-      s.copy(uiSurfaces =
-        s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+      s.copy(runtime =
+        s.runtime.copy(uiSurfaces =
+          s.runtime.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+        )
       )
     }
 
@@ -1122,8 +1180,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val typedState = List('5').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
-      s.copy(uiSurfaces =
-        s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+      s.copy(runtime =
+        s.runtime.copy(uiSurfaces =
+          s.runtime.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+        )
       )
     }
 
@@ -1138,8 +1198,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val state = List('5').foldLeft(settingsStateOnItem("settings-animation", "animation-steps")) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
-      s.copy(uiSurfaces =
-        s.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+      s.copy(runtime =
+        s.runtime.copy(uiSurfaces =
+          s.runtime.uiSurfaces.map(surf => surf.copy(content = SurfaceContent.CommandPalette(runnerFrom(r.state))))
+        )
       )
     }
 
@@ -1215,8 +1277,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "paste clipboard text into a selected submenu input item" in {
-    val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-interface-layout", "ui-outline-thickness").copy(clipboard = Some("4"))
+    val registry  = CommandRegistry.default
+    val baseState = settingsStateOnItem("settings-interface-layout", "ui-outline-thickness")
+    val state     = baseState.copy(runtime = baseState.runtime.copy(clipboard = Some("4")))
 
     val pasted = CommandRunnerReducer.reduce(Paste, state, registry)
     val runner = runnerFrom(pasted.state)

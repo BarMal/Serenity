@@ -24,14 +24,14 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "cycle forward through buffers with Ctrl+Tab (NextTab)" in new NavigationFixture:
     // Given: Wide terminal to allow multiple panes, then create three buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(wideTerminal)))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 2
     val state = stateManager.getCurrentState.unsafeRunSync()
 
     // Should have 3 buffers
-    state.buffers should have size 3
-    val bufferIds = state.bufferOrder
+    state.persisted.buffers should have size 3
+    val bufferIds = state.persisted.bufferOrder
     bufferIds should have size 3
 
     // Should start focused on Buffer 2 (last created)
@@ -60,7 +60,8 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     stateAfterNext3.focusedBufferId.get shouldBe bufferIds(2)
 
   it should "keep workspace leaves stable while opening and navigating buffers" in new NavigationFixture:
-    val initialLeaves = stateManager.getCurrentState.unsafeRunSync().layout.effectiveWorkspaceTree.map(_.paneIds)
+    val initialLeaves =
+      stateManager.getCurrentState.unsafeRunSync().persisted.layout.effectiveWorkspaceTree.map(_.paneIds)
 
     stateManager.applyEvent(NewTab).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
@@ -68,17 +69,17 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(PreviousTab).unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.layout.effectiveWorkspaceTree.map(_.paneIds) shouldBe initialLeaves
-    finalState.layout.editorPanes.keySet shouldBe initialLeaves.toList.flatten.toSet
+    finalState.persisted.layout.effectiveWorkspaceTree.map(_.paneIds) shouldBe initialLeaves
+    finalState.persisted.layout.editorPanes.keySet shouldBe initialLeaves.toList.flatten.toSet
 
   it should "cycle backward through buffers with Ctrl+Shift+Tab (PreviousTab)" in new NavigationFixture:
     // Given: Wide terminal to allow multiple panes, then create three buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(wideTerminal)))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 2
     val state = stateManager.getCurrentState.unsafeRunSync()
 
-    val bufferIds = state.bufferOrder
+    val bufferIds = state.persisted.bufferOrder
     bufferIds should have size 3
 
     // Should start focused on Buffer 2 (last created)
@@ -107,11 +108,11 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "handle navigation with only two buffers" in new NavigationFixture:
     // Given: Wide terminal and two buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(wideTerminal)))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     val state = stateManager.getCurrentState.unsafeRunSync()
 
-    val bufferIds = state.bufferOrder
+    val bufferIds = state.persisted.bufferOrder
     bufferIds should have size 2
 
     // Should start focused on Buffer 1 (last created)
@@ -135,8 +136,8 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     // Given: Only one buffer (initial state)
     val state = stateManager.getCurrentState.unsafeRunSync()
 
-    state.buffers should have size 1
-    state.bufferOrder should have size 1
+    state.persisted.buffers should have size 1
+    state.persisted.bufferOrder should have size 1
     val initialBufferId = state.focusedBufferId.get
 
     // When: Try to navigate with Ctrl+Tab
@@ -155,11 +156,11 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain correct focus when buffers are closed during navigation" in new NavigationFixture:
     // Given: Wide terminal and four buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(wideTerminal)))).unsafeRunSync()
     (1 to 3).foreach(_ => stateManager.applyEvent(NewTab).unsafeRunSync())
     val state = stateManager.getCurrentState.unsafeRunSync()
 
-    val bufferIds = state.bufferOrder
+    val bufferIds = state.persisted.bufferOrder
     bufferIds should have size 4
 
     // Navigate to Buffer 1 (second buffer in order)
@@ -193,14 +194,14 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
   it should "navigate through all buffers regardless of pane visibility constraints" in new NavigationFixture:
     // Given: Many buffers but limited terminal width (fewer visible panes)
     val narrowTerminal = com.serenity.ui.layout.ViewportSize(120, 24) // Limited width
-    stateManager.updateState(_.copy(viewportSize = Some(narrowTerminal))).unsafeRunSync()
+    stateManager.updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(narrowTerminal)))).unsafeRunSync()
 
     // Create 5 buffers
     (1 to 4).foreach(_ => stateManager.applyEvent(NewTab).unsafeRunSync())
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.buffers should have size 5
+    state.persisted.buffers should have size 5
 
-    val bufferIds              = state.bufferOrder
+    val bufferIds              = state.persisted.bufferOrder
     val initialFocusedBufferId = state.focusedBufferId.get
 
     // When: Navigate with Ctrl+Tab multiple times
@@ -228,33 +229,39 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     focusedBufferIds.foreach(bufferId => bufferIds should contain(bufferId))
 
   it should "focus deterministic geometric neighbours in a nested workspace" in new NavigationFixture:
-    stateManager.updateState(_.copy(viewportSize = Some(ViewportSize(120, 36)))).unsafeRunSync()
-    val first  = stateManager.getCurrentState.unsafeRunSync().layout.activeEditorPaneId.get
+    stateManager
+      .updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(ViewportSize(120, 36)))))
+      .unsafeRunSync()
+    val first  = stateManager.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
     val second = stateManager.splitPaneHorizontal(first).unsafeRunSync()
     val third  = stateManager.splitPaneVertical(second).unsafeRunSync()
 
     stateManager.switchToPane(first).unsafeRunSync()
     stateManager.focusPaneInDirection(Direction.Right).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.EditorPane(second)
+    stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.EditorPane(second)
 
     stateManager.focusPaneInDirection(Direction.Down).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.EditorPane(third)
+    stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.EditorPane(third)
 
     stateManager.focusPaneInDirection(Direction.Left).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.EditorPane(first)
+    stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.EditorPane(first)
 
   it should "ignore floating surfaces and unusable leaves during directional focus in constrained viewports" in new NavigationFixture:
-    stateManager.updateState(_.copy(viewportSize = Some(ViewportSize(8, 5)))).unsafeRunSync()
-    val first  = stateManager.getCurrentState.unsafeRunSync().layout.activeEditorPaneId.get
+    stateManager
+      .updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(ViewportSize(8, 5)))))
+      .unsafeRunSync()
+    val first  = stateManager.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
     val second = stateManager.splitPaneHorizontal(first).unsafeRunSync()
     stateManager
       .updateState { state =>
         state.copy(
-          uiSurfaces = List(
-            UiSurface(
-              SurfaceId("quick-info"),
-              SurfaceContent.QuickInfo("details"),
-              SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+          runtime = state.runtime.copy(
+            uiSurfaces = List(
+              UiSurface(
+                SurfaceId("quick-info"),
+                SurfaceContent.QuickInfo("details"),
+                SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+              )
             )
           )
         )
@@ -265,5 +272,5 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     stateManager.focusPaneInDirection(Direction.Right).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.focus should (be(Focus.EditorPane(second)) or be(Focus.EditorPane(first)))
-    state.focus should not be Focus.Surface(SurfaceId("quick-info"))
+    state.persisted.focus should (be(Focus.EditorPane(second)) or be(Focus.EditorPane(first)))
+    state.persisted.focus should not be Focus.Surface(SurfaceId("quick-info"))

@@ -31,25 +31,25 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val state = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: All buffers should be available
-    state.buffers.should(have).size(4) // Initial buffer + 3 created buffers
-    state.buffers.keys.should(contain).allOf(buffer1, buffer2, buffer3)
+    state.persisted.buffers.should(have).size(4) // Initial buffer + 3 created buffers
+    state.persisted.buffers.keys.should(contain).allOf(buffer1, buffer2, buffer3)
 
     // And their content should be accessible
-    state.buffers(buffer1).document.content.collect().shouldBe("Content of file 1")
-    state.buffers(buffer2).document.content.collect().shouldBe("Content of file 2")
-    state.buffers(buffer3).document.content.collect().shouldBe("Content of file 3")
+    state.persisted.buffers(buffer1).document.content.collect().shouldBe("Content of file 1")
+    state.persisted.buffers(buffer2).document.content.collect().shouldBe("Content of file 2")
+    state.persisted.buffers(buffer3).document.content.collect().shouldBe("Content of file 3")
 
     // And they should have the correct file paths
-    state.buffers(buffer1).document.filePath.shouldBe(Some(java.nio.file.Paths.get("file1.txt")))
-    state.buffers(buffer2).document.filePath.shouldBe(Some(java.nio.file.Paths.get("file2.txt")))
-    state.buffers(buffer3).document.filePath.shouldBe(Some(java.nio.file.Paths.get("file3.txt")))
+    state.persisted.buffers(buffer1).document.filePath.shouldBe(Some(java.nio.file.Paths.get("file1.txt")))
+    state.persisted.buffers(buffer2).document.filePath.shouldBe(Some(java.nio.file.Paths.get("file2.txt")))
+    state.persisted.buffers(buffer3).document.filePath.shouldBe(Some(java.nio.file.Paths.get("file3.txt")))
 
   it should "switch between tabs correctly" in new MultiFileFixture:
     // Given: Create multiple buffers and get the default pane
     val buffer1 = stateManager.createBuffer("First buffer content").unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Second buffer content").unsafeRunSync()
     val state   = stateManager.getCurrentState.unsafeRunSync()
-    val paneId  = state.layout.editorPanes.keys.head
+    val paneId  = state.persisted.layout.editorPanes.keys.head
 
     // When: Switch between buffers in the pane (simulating tab switching)
     stateManager.setBufferForPane(paneId, buffer1).unsafeRunSync()
@@ -62,13 +62,13 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val backToBuffer1 = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: The active buffer should change correctly
-    stateWithBuffer1.layout.editorPanes(paneId).bufferId.shouldBe(Some(buffer1))
-    stateWithBuffer2.layout.editorPanes(paneId).bufferId.shouldBe(Some(buffer2))
-    backToBuffer1.layout.editorPanes(paneId).bufferId.shouldBe(Some(buffer1))
+    stateWithBuffer1.persisted.layout.editorPanes(paneId).bufferId.shouldBe(Some(buffer1))
+    stateWithBuffer2.persisted.layout.editorPanes(paneId).bufferId.shouldBe(Some(buffer2))
+    backToBuffer1.persisted.layout.editorPanes(paneId).bufferId.shouldBe(Some(buffer1))
 
     // And the content should be accessible in each state
-    stateWithBuffer1.buffers(buffer1).document.content.collect().shouldBe("First buffer content")
-    stateWithBuffer2.buffers(buffer2).document.content.collect().shouldBe("Second buffer content")
+    stateWithBuffer1.persisted.buffers(buffer1).document.content.collect().shouldBe("First buffer content")
+    stateWithBuffer2.persisted.buffers(buffer2).document.content.collect().shouldBe("Second buffer content")
 
   it should "close tabs without affecting other tabs" in new MultiFileFixture:
     // Given: Create multiple buffers
@@ -78,25 +78,25 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val initialState = stateManager.getCurrentState.unsafeRunSync()
 
     // Verify all buffers exist
-    initialState.buffers.should(have).size(4) // Initial buffer + 3 created buffers
+    initialState.persisted.buffers.should(have).size(4) // Initial buffer + 3 created buffers
 
     // When: "Close" one buffer by removing it from state
     stateManager.closeBuffer(buffer2).unsafeRunSync()
     val stateAfterClose = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Only the specified buffer should be removed
-    stateAfterClose.buffers.should(have).size(3) // Initial buffer + 2 remaining created buffers
-    stateAfterClose.buffers.keys.should(contain).allOf(buffer1, buffer3)
-    stateAfterClose.buffers.keys.should(not).contain(buffer2)
+    stateAfterClose.persisted.buffers.should(have).size(3) // Initial buffer + 2 remaining created buffers
+    stateAfterClose.persisted.buffers.keys.should(contain).allOf(buffer1, buffer3)
+    stateAfterClose.persisted.buffers.keys.should(not).contain(buffer2)
 
     // And the remaining buffers should be unaffected
-    stateAfterClose.buffers(buffer1).document.content.collect().shouldBe("First buffer")
-    stateAfterClose.buffers(buffer3).document.content.collect().shouldBe("Third buffer")
+    stateAfterClose.persisted.buffers(buffer1).document.content.collect().shouldBe("First buffer")
+    stateAfterClose.persisted.buffers(buffer3).document.content.collect().shouldBe("Third buffer")
 
   it should "handle closing tab with unsaved changes" in new MultiFileFixture:
     // Given: Create a tab with content and make changes
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val paneId       = initialState.layout.editorPanes.keys.head
+    val paneId       = initialState.persisted.layout.editorPanes.keys.head
 
     // Create buffer with file path and content, then modify it
     val bufferId =
@@ -106,7 +106,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
 
     val modifiedState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer        = modifiedState.buffers(bufferId)
+    val buffer        = modifiedState.persisted.buffers(bufferId)
 
     // Then: Buffer should be dirty with unsaved changes
     buffer.document.isDirty.shouldBe(true)
@@ -118,7 +118,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val stateAfterClose = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: A close workflow should intercept the hotkey and keep the buffer open
-    stateAfterClose.buffers should contain key bufferId
+    stateAfterClose.persisted.buffers should contain key bufferId
     stateAfterClose.modalSurface.flatMap(_.content match
       case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow.currentBufferId)
       case _                                                           => None) shouldBe Some(bufferId)
@@ -137,7 +137,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val state = stateManager.getCurrentState.unsafeRunSync()
 
     // When: Check that buffers are accessible in creation order
-    val bufferIds     = state.buffers.keys.toList.sorted
+    val bufferIds     = state.persisted.buffers.keys.toList.sorted
     val expectedOrder = List(BufferId(0), buffer1, buffer2, buffer3, buffer4).sorted // Include initial buffer
 
     // Then: Buffer IDs should be in the expected order (since BufferId is likely ordered by creation)
@@ -148,39 +148,41 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val stateAfterRemoval = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Remaining buffers should maintain their relative order
-    val remainingIds      = stateAfterRemoval.buffers.keys.toList.sorted
+    val remainingIds      = stateAfterRemoval.persisted.buffers.keys.toList.sorted
     val expectedRemaining = List(BufferId(0), buffer1, buffer3, buffer4).sorted // Include initial buffer
 
     remainingIds.shouldBe(expectedRemaining)
-    stateAfterRemoval.buffers.should(have).size(4) // Initial buffer + 3 remaining created buffers
+    stateAfterRemoval.persisted.buffers.should(have).size(4) // Initial buffer + 3 remaining created buffers
 
   it should "handle tab switching with keyboard shortcuts" in new MultiFileFixture:
     // Given: Wide terminal to allow multiple panes
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(wideTerminal))))
+      .unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    initialState.layout.editorPanes should have size 1
-    initialState.buffers should have size 1 // Initial buffer
-    initialState.bufferOrder should have size 1
-    val initialBufferId = initialState.bufferOrder.head
+    initialState.persisted.layout.editorPanes should have size 1
+    initialState.persisted.buffers should have size 1 // Initial buffer
+    initialState.persisted.bufferOrder should have size 1
+    val initialBufferId = initialState.persisted.bufferOrder.head
 
     // When: Ctrl+T creates new buffer (using buffer-based navigation)
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val singlePaneState = stateManager.getCurrentState.unsafeRunSync()
-    val originalPaneId  = singlePaneState.layout.activeEditorPaneId.get
+    val originalPaneId  = singlePaneState.persisted.layout.activeEditorPaneId.get
     stateManager.splitPaneHorizontal(originalPaneId, Some(initialBufferId)).unsafeRunSync()
     stateManager.switchToPane(originalPaneId).unsafeRunSync()
     val stateAfterNewTab = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: The explicit split gives both buffers persistent views.
-    stateAfterNewTab.buffers should have size 2
-    stateAfterNewTab.bufferOrder should have size 2
-    stateAfterNewTab.layout.editorPanes should have size 2
+    stateAfterNewTab.persisted.buffers should have size 2
+    stateAfterNewTab.persisted.bufferOrder should have size 2
+    stateAfterNewTab.persisted.layout.editorPanes should have size 2
 
-    val newBufferId = stateAfterNewTab.bufferOrder.last
+    val newBufferId = stateAfterNewTab.persisted.bufferOrder.last
     stateAfterNewTab.focusedBufferId.get shouldBe newBufferId
 
     // The new buffer should be empty
-    stateAfterNewTab.buffers(newBufferId).document.content.collect() shouldBe ""
+    stateAfterNewTab.persisted.buffers(newBufferId).document.content.collect() shouldBe ""
 
     // When: Ctrl+Tab switches to next buffer (cycles through buffer order)
     stateManager.applyEvent(NextTab).unsafeRunSync()
@@ -200,7 +202,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     // Given: A buffer with content
     val bufferId       = stateManager.createBuffer("Shared content between panes").unsafeRunSync()
     val state          = stateManager.getCurrentState.unsafeRunSync()
-    val originalPaneId = state.layout.editorPanes.keys.head
+    val originalPaneId = state.persisted.layout.editorPanes.keys.head
 
     // Set the buffer in the original pane
     stateManager.setBufferForPane(originalPaneId, bufferId).unsafeRunSync()
@@ -215,24 +217,26 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Both panes should exist and reference the same buffer
-    finalState.layout.editorPanes should have size 2
-    finalState.layout.editorPanes.keys should contain allOf (originalPaneId, newPaneId)
+    finalState.persisted.layout.editorPanes should have size 2
+    finalState.persisted.layout.editorPanes.keys should contain allOf (originalPaneId, newPaneId)
 
     // And both panes should reference the same buffer
-    finalState.layout.editorPanes(originalPaneId).bufferId shouldBe Some(bufferId)
-    finalState.layout.editorPanes(newPaneId).bufferId shouldBe Some(bufferId)
+    finalState.persisted.layout.editorPanes(originalPaneId).bufferId shouldBe Some(bufferId)
+    finalState.persisted.layout.editorPanes(newPaneId).bufferId shouldBe Some(bufferId)
 
     // And the buffer content should be accessible from both panes
-    finalState.buffers(bufferId).document.content.collect() shouldBe "Shared content between panes"
+    finalState.persisted.buffers(bufferId).document.content.collect() shouldBe "Shared content between panes"
 
   it should "handle pane resizing with minimum width constraints" in new MultiFileFixture:
     // Given: Limited terminal width where only 1-2 panes can fit
     val constrainedTerminal = com.serenity.ui.layout.ViewportSize(120, 24) // About 100 chars for editor
-    stateManager.updateState(_.copy(viewportSize = Some(constrainedTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(constrainedTerminal))))
+      .unsafeRunSync()
 
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    initialState.layout.editorPanes should have size 1
-    initialState.buffers should have size 1
+    initialState.persisted.layout.editorPanes should have size 1
+    initialState.persisted.buffers should have size 1
 
     // When: Create multiple buffers using Ctrl+T
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 2
@@ -240,27 +244,27 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val stateWith3Buffers = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Should have 3 buffers but layout engine limits panes based on width
-    stateWith3Buffers.buffers should have size 3
-    stateWith3Buffers.bufferOrder should have size 3
+    stateWith3Buffers.persisted.buffers should have size 3
+    stateWith3Buffers.persisted.bufferOrder should have size 3
 
     // With constrained width, should have fewer panes than buffers
-    stateWith3Buffers.layout.editorPanes.size should be <= 2
+    stateWith3Buffers.persisted.layout.editorPanes.size should be <= 2
 
     // When: Create a 4th buffer (more buffers than can be displayed)
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val stateWith4Buffers = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Should have 4 buffers in memory, but still limited panes
-    stateWith4Buffers.buffers should have size 4
-    stateWith4Buffers.bufferOrder should have size 4
-    stateWith4Buffers.layout.editorPanes.size should be <= 2
+    stateWith4Buffers.persisted.buffers should have size 4
+    stateWith4Buffers.persisted.bufferOrder should have size 4
+    stateWith4Buffers.persisted.layout.editorPanes.size should be <= 2
 
     // The focused buffer should still be accessible via navigation
     val focusedBufferId = stateWith4Buffers.focusedBufferId.get
-    stateWith4Buffers.bufferOrder should contain(focusedBufferId)
+    stateWith4Buffers.persisted.bufferOrder should contain(focusedBufferId)
 
     // Navigation should work to access all buffers regardless of pane count
-    val allBufferIds = stateWith4Buffers.bufferOrder
+    val allBufferIds = stateWith4Buffers.persisted.bufferOrder
 
     // Navigate through all buffers to ensure they're accessible
     val visitedBuffers = (1 until allBufferIds.size).foldLeft(Set(focusedBufferId)) { (visited, _) =>
@@ -282,7 +286,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
     // When: Simulate session state capture
     val sessionData =
-      state.buffers.values
+      state.persisted.buffers.values
         .map(buffer => (buffer.document.filePath, buffer.document.content.collect(), buffer.document.isDirty))
         .toList
 

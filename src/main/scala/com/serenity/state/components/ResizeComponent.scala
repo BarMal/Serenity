@@ -10,6 +10,7 @@ class ResizeComponent extends FocusedComponent:
     event match
       case ResizeEvent(newSize) =>
         ComponentResult.StateChange { currentState =>
-          LayoutEngine.syncViewportDimensions(currentState, newSize).copy(viewportSize = Some(newSize))
+          val synced = LayoutEngine.syncViewportDimensions(currentState, newSize)
+          synced.copy(runtime = synced.runtime.copy(viewportSize = Some(newSize)))
         }
       case _ => ComponentResult.NoChange

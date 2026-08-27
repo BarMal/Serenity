@@ -32,8 +32,8 @@ final private[manager] class ResizeEventHandler(port: ResizeEventPort):
 private[manager] object StateManagerEventPipeline:
 
   private def focusedBufferId(state: AppState): Option[BufferId] =
-    state.focus match
-      case Focus.EditorPane(paneId) => state.layout.editorPanes.get(paneId).flatMap(_.bufferId)
+    state.persisted.focus match
+      case Focus.EditorPane(paneId) => state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId)
       case _                        => None
 
   /** The buffer(s) a single event dispatch could plausibly have changed: the focused buffer before dispatch, and the
@@ -168,7 +168,7 @@ final private[manager] class StateManagerEventPipeline(
       case move: MouseMove =>
         handleMouseMove(move, prevState)
       case vertical: VerticalNavigationEvent =>
-        prevState.focus match
+        prevState.persisted.focus match
           case Focus.EditorPane(paneId) =>
             EditorGeometryProducer.forPane(prevState, paneId) match
               case Some(geometry) =>
@@ -191,7 +191,7 @@ final private[manager] class StateManagerEventPipeline(
           cats.effect.IO.unit
 
     val result =
-      getLocalHandlerForFocus(prevState.focus, prevState).processEvent(event, prevState)
+      getLocalHandlerForFocus(prevState.persisted.focus, prevState).processEvent(event, prevState)
 
     logCommandRunnerEvent >>
       applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
@@ -211,11 +211,11 @@ final private[manager] class StateManagerEventPipeline(
   private def enqueueChangedLspDocuments(previousState: AppState): cats.effect.IO[Unit] =
     stateRef.get.flatMap { currentState =>
       StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState).toList.traverse_ { bufferId =>
-        currentState.buffers.get(bufferId) match
+        currentState.persisted.buffers.get(bufferId) match
           case None => cats.effect.IO.unit
           case Some(buffer) =>
             val changedContent =
-              previousState.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
+              previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
             (for
               path       <- buffer.document.filePath
               languageId <- buffer.document.language
@@ -236,14 +236,18 @@ final private[manager] class StateManagerEventPipeline(
   private[manager] def scheduleMarkdownPreviewCommits(previousState: AppState): cats.effect.IO[Unit] =
     stateRef.get.flatMap { currentState =>
       StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState).toList.traverse_ { bufferId =>
-        currentState.buffers.get(bufferId) match
+        currentState.persisted.buffers.get(bufferId) match
           case Some(buffer)
               if hasLiveMarkdownPreview(currentState, bufferId) &&
-                previousState.buffers.get(bufferId).exists(_.document.content != buffer.document.content) =>
+                previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content) =>
             val nextGeneration = buffer.markdownPreviewEditGeneration + 1
             stateRef.update { s =>
-              s.buffers.get(bufferId).fold(s) { b =>
-                s.copy(buffers = s.buffers.updated(bufferId, b.copy(markdownPreviewEditGeneration = nextGeneration)))
+              s.persisted.buffers.get(bufferId).fold(s) { b =>
+                s.copy(persisted =
+                  s.persisted.copy(buffers =
+                    s.persisted.buffers.updated(bufferId, b.copy(markdownPreviewEditGeneration = nextGeneration))
+                  )
+                )
               }
             } >> operations.scheduleMarkdownPreviewCommit(bufferId, nextGeneration)
           case _ => cats.effect.IO.unit
@@ -251,12 +255,14 @@ final private[manager] class StateManagerEventPipeline(
     }
 
   private[manager] def hasLiveMarkdownPreview(state: AppState, bufferId: BufferId): Boolean =
-    state.uiSurfaces.exists {
+    state.runtime.uiSurfaces.exists {
       case UiSurface(_, SurfaceContent.MarkdownPreview(id, _), _, _) => id == bufferId
       case _                                                         => false
     } || (
-      state.config.markdownViewMode == com.serenity.config.MarkdownViewMode.InlineLens &&
-        state.buffers.get(bufferId).exists(_.document.language.contains(com.serenity.lsp.config.LanguageId.Markdown))
+      state.persisted.config.markdownViewMode == com.serenity.config.MarkdownViewMode.InlineLens &&
+        state.persisted.buffers
+          .get(bufferId)
+          .exists(_.document.language.contains(com.serenity.lsp.config.LanguageId.Markdown))
     )
 
   private def recordUndoableEdit(event: Event, prevState: AppState): cats.effect.IO[Unit] =
@@ -264,7 +270,7 @@ final private[manager] class StateManagerEventPipeline(
       case None => cats.effect.IO.unit
       case Some((bufferId, paneId, buffer)) =>
         stateRef.get.flatMap { currentState =>
-          currentState.buffers.get(bufferId) match
+          currentState.persisted.buffers.get(bufferId) match
             case Some(currentBuffer) if isUndoableContentMutation(event) && bufferChanged(buffer, currentBuffer) =>
               val beforeSnapshot = BufferSnapshot.fromBuffer(buffer)
               event match
@@ -293,7 +299,7 @@ final private[manager] class StateManagerEventPipeline(
         case Nil => cats.effect.IO.unit
         case entry :: rest =>
           stateRef.get.flatMap { state =>
-            state.buffers.get(entry.bufferId) match
+            state.persisted.buffers.get(entry.bufferId) match
               case None => cats.effect.IO.unit
               case Some(current) =>
                 val redoEntry      = HistoryEntry(entry.bufferId, entry.paneId, BufferSnapshot.fromBuffer(current))
@@ -301,7 +307,10 @@ final private[manager] class StateManagerEventPipeline(
                 val snappedState   = snapFocusToPane(state, entry.paneId)
                 undoRef.set(flushed.copy(undoStack = rest).pushRedo(redoEntry)) >>
                   validateAndUpdateState(
-                    snappedState.copy(buffers = snappedState.buffers + (entry.bufferId -> restoredBuffer)),
+                    snappedState.copy(persisted =
+                      snappedState.persisted
+                        .copy(buffers = snappedState.persisted.buffers + (entry.bufferId -> restoredBuffer))
+                    ),
                     state
                   )
           }
@@ -313,7 +322,7 @@ final private[manager] class StateManagerEventPipeline(
         case Nil => cats.effect.IO.unit
         case entry :: rest =>
           stateRef.get.flatMap { state =>
-            state.buffers.get(entry.bufferId) match
+            state.persisted.buffers.get(entry.bufferId) match
               case None => cats.effect.IO.unit
               case Some(current) =>
                 val undoEntry      = HistoryEntry(entry.bufferId, entry.paneId, BufferSnapshot.fromBuffer(current))
@@ -321,17 +330,20 @@ final private[manager] class StateManagerEventPipeline(
                 val snappedState   = snapFocusToPane(state, entry.paneId)
                 undoRef.set(undo.copy(redoStack = rest).pushUndo(undoEntry, clearRedo = false)) >>
                   validateAndUpdateState(
-                    snappedState.copy(buffers = snappedState.buffers + (entry.bufferId -> restoredBuffer)),
+                    snappedState.copy(persisted =
+                      snappedState.persisted
+                        .copy(buffers = snappedState.persisted.buffers + (entry.bufferId -> restoredBuffer))
+                    ),
                     state
                   )
           }
     }
 
   private def focusedBufferAndPane(state: AppState): Option[(BufferId, PaneId, Buffer)] =
-    state.focus match
+    state.persisted.focus match
       case Focus.EditorPane(paneId) =>
-        state.layout.editorPanes.get(paneId).flatMap { pane =>
-          pane.bufferId.flatMap(state.buffers.get).map(buf => (buf.id, paneId, buf))
+        state.persisted.layout.editorPanes.get(paneId).flatMap { pane =>
+          pane.bufferId.flatMap(state.persisted.buffers.get).map(buf => (buf.id, paneId, buf))
         }
       case _ => None
 
@@ -349,11 +361,13 @@ final private[manager] class StateManagerEventPipeline(
       before.editing.selections != after.editing.selections
 
   private def snapFocusToPane(state: AppState, paneId: PaneId): AppState =
-    if state.focus == Focus.EditorPane(paneId) then state
+    if state.persisted.focus == Focus.EditorPane(paneId) then state
     else
-      state.copy(
-        focus = Focus.EditorPane(paneId),
-        layout = state.layout.copy(activeEditorPaneId = Some(paneId))
+      state.copy(persisted =
+        state.persisted.copy(
+          focus = Focus.EditorPane(paneId),
+          layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId))
+        )
       )
 
   private[manager] def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
@@ -423,7 +437,7 @@ final private[manager] class StateManagerEventPipeline(
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
             val updatedRunner = runner.withUiPresetPreviews(previews)
-            val updatedSurfaces = state.uiSurfaces.map {
+            val updatedSurfaces = state.runtime.uiSurfaces.map {
               case current if current.id == surface.id =>
                 current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
               case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
@@ -431,7 +445,7 @@ final private[manager] class StateManagerEventPipeline(
               case current =>
                 current
             }
-            state.copy(uiSurfaces = updatedSurfaces)
+            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
           case _ =>
             state
       case None =>
@@ -440,23 +454,23 @@ final private[manager] class StateManagerEventPipeline(
   private def normalizeCommandRunnerFocus(state: AppState): AppState =
     if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
       state.preferredCommandRunnerFocus match
-        case Some(focus) => state.copy(focus = focus)
+        case Some(focus) => state.copy(persisted = state.persisted.copy(focus = focus))
         case None        => state
     else state
 
   private def applyPaneFlowAnimation(sweep: SweepDirection): cats.effect.IO[Unit] =
     stateRef.get.flatMap { state =>
       val animOpt = for
-        config <- state.config.scaledUiAnimation
-        paneId <- state.layout.activeEditorPaneId
-        pane   <- state.layout.editorPanes.get(paneId)
+        config <- state.persisted.config.scaledUiAnimation
+        paneId <- state.persisted.layout.activeEditorPaneId
+        pane   <- state.persisted.layout.editorPanes.get(paneId)
         buffId <- pane.bufferId
-        buffer <- state.buffers.get(buffId)
+        buffer <- state.persisted.buffers.get(buffId)
         cells = VisibleBufferAnimationCells.fromBuffer(
           buffer,
-          state.config.wordWrapEnabled,
-          state.theme.background,
-          state.theme.foreground
+          state.persisted.config.wordWrapEnabled,
+          state.persisted.theme.background,
+          state.persisted.theme.foreground
         )
         if cells.nonEmpty
       yield
@@ -506,9 +520,9 @@ final private[manager] class StateManagerEventPipeline(
       }
 
   private[manager] def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
-    state.surfaceAnimations.nonEmpty ||
-      state.config.scaledCommandRunnerAnimation.exists(config => !config.isDisabled) ||
-      state.config.pinnedPanelTransitionSettings.enabled
+    state.runtime.surfaceAnimations.nonEmpty ||
+      state.persisted.config.scaledCommandRunnerAnimation.exists(config => !config.isDisabled) ||
+      state.persisted.config.pinnedPanelTransitionSettings.enabled
 
   private def commandSurfaceTransitionKey(surface: UiSurface): Option[(String, Boolean, Option[String], List[String])] =
     surface.content match
@@ -525,24 +539,24 @@ final private[manager] class StateManagerEventPipeline(
         None
 
   private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): cats.effect.IO[Unit] =
-    state.config.scaledCommandRunnerAnimation match
+    state.persisted.config.scaledCommandRunnerAnimation match
       case Some(config) if !config.isDisabled =>
         stateRef.update { s =>
           val steps         = config.steps
-          val tSize         = s.viewportSize.getOrElse(ViewportSize(80, 24))
+          val tSize         = s.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
           val layout        = LayoutEngine.calculateLayoutWithUI(s, tSize)
           val contract      = EditorLayoutContract.from(s, tSize, layout)
           val overlayRect   = contract.overlayRect(surface.id)
           val overlayHeight = overlayRect.map(_.height).getOrElse(4)
           val exitingGhost  = matchingExitingCommandGhost(surface, s)
-          val revealKind    = s.config.effectiveCommandRunnerTransitionKind
+          val revealKind    = s.persisted.config.effectiveCommandRunnerTransitionKind
           val animationState =
             if revealKind == TransitionKind.Fade then
               commandRunnerFadeInAnimation(
                 overlayHeight,
                 steps,
                 s,
-                exitingGhost.flatMap(ghost => s.surfaceAnimations.get(ghost.id).map(_.animationState))
+                exitingGhost.flatMap(ghost => s.runtime.surfaceAnimations.get(ghost.id).map(_.animationState))
               )
             else
               val plan = ElementTransitionPlanner.plan(
@@ -561,23 +575,27 @@ final private[manager] class StateManagerEventPipeline(
               )
           val surfaceAnimations =
             if animationState.hasActiveAnimations then
-              s.surfaceAnimations + (surface.id -> SurfaceAnimationState(
+              s.runtime.surfaceAnimations + (surface.id -> SurfaceAnimationState(
                 phase = SurfacePhase.Visible,
                 animationState = animationState,
                 overlayHeight = overlayHeight,
                 bufferFadeLength = 0,
                 phaseTick = 0
               ))
-            else s.surfaceAnimations - surface.id
-          exitingGhost.fold(s.copy(surfaceAnimations = surfaceAnimations)) { ghost =>
-            s.copy(
-              uiSurfaces = s.uiSurfaces.filterNot(_.id == ghost.id),
-              surfaceAnimations = surfaceAnimations - ghost.id
+            else s.runtime.surfaceAnimations - surface.id
+          exitingGhost.fold(s.copy(runtime = s.runtime.copy(surfaceAnimations = surfaceAnimations))) { ghost =>
+            s.copy(runtime =
+              s.runtime.copy(
+                uiSurfaces = s.runtime.uiSurfaces.filterNot(_.id == ghost.id),
+                surfaceAnimations = surfaceAnimations - ghost.id
+              )
             )
           }
         }
       case _ =>
-        stateRef.update(s => s.copy(surfaceAnimations = s.surfaceAnimations - surface.id))
+        stateRef.update(s =>
+          s.copy(runtime = s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations - surface.id))
+        )
 
   private def commandRunnerFadeInAnimation(
     overlayHeight: Int,
@@ -587,8 +605,8 @@ final private[manager] class StateManagerEventPipeline(
   ): AnimationState =
     val overlayFadeIn = (0 until overlayHeight).map { rowOffset =>
       val delay        = rowOffset
-      val panelBg      = state.theme.panel.background
-      val panelFg      = state.theme.panel.foreground
+      val panelBg      = state.persisted.theme.panel.background
+      val panelFg      = state.persisted.theme.panel.foreground
       val previousCell = previous.flatMap(_.getCell(0, rowOffset))
       val initialBg    = previousCell.flatMap(_.currentBackground).getOrElse(transparent(panelBg))
       val initialFg    = previousCell.flatMap(_.currentForeground).getOrElse(transparent(panelFg))
@@ -606,16 +624,16 @@ final private[manager] class StateManagerEventPipeline(
     AnimationState(overlayFadeIn)
 
   private def commandRunnerOpenCells(width: Int, height: Int, state: AppState): ElementTransitionCells =
-    val transparentPanelForeground = transparent(state.theme.panel.foreground)
-    val transparentBorder          = transparent(state.theme.border)
+    val transparentPanelForeground = transparent(state.persisted.theme.panel.foreground)
+    val transparentBorder          = transparent(state.persisted.theme.border)
     val borderCell =
-      CharacterKey(-1, -1) -> CellAnimation(' ', transparentBorder, state.theme.border)
+      CharacterKey(-1, -1) -> CellAnimation(' ', transparentBorder, state.persisted.theme.border)
     val contentCells =
       (0 until math.max(0, height - 1))
         .flatMap { row =>
           (0 until math.max(1, width - 2)).map { column =>
             CharacterKey(column, row) ->
-              CellAnimation(' ', transparentPanelForeground, state.theme.panel.foreground)
+              CellAnimation(' ', transparentPanelForeground, state.persisted.theme.panel.foreground)
           }
         }
         .take(VisibleBufferAnimationCells.DefaultMaxAnimatedCells)
@@ -626,14 +644,14 @@ final private[manager] class StateManagerEventPipeline(
     closedSurface: UiSurface,
     prevState: AppState
   ): cats.effect.IO[Unit] =
-    prevState.config.scaledCommandRunnerAnimation match
+    prevState.persisted.config.scaledCommandRunnerAnimation match
       case Some(config) if !config.isDisabled =>
         stateRef.update { s =>
-          val steps          = config.steps
-          val tSize          = prevState.viewportSize.orElse(s.viewportSize).getOrElse(ViewportSize(80, 24))
+          val steps = config.steps
+          val tSize = prevState.runtime.viewportSize.orElse(s.runtime.viewportSize).getOrElse(ViewportSize(80, 24))
           val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
           val contract       = EditorLayoutContract.from(prevState, tSize, previousLayout)
-          val overlayHeight = prevState.surfaceAnimations
+          val overlayHeight = prevState.runtime.surfaceAnimations
             .get(closedSurface.id)
             .map(_.overlayHeight)
             .orElse(contract.overlayRect(closedSurface.id).map(_.height))
@@ -642,11 +660,11 @@ final private[manager] class StateManagerEventPipeline(
             .overlayRect(closedSurface.id)
             .getOrElse(LayoutRect(12, 2, 56, overlayHeight))
           val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
-            val panelBg  = s.theme.panel.background
-            val panelFg  = s.theme.panel.foreground
+            val panelBg  = s.persisted.theme.panel.background
+            val panelFg  = s.persisted.theme.panel.foreground
             val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
             val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-            val previousCell = prevState.surfaceAnimations
+            val previousCell = prevState.runtime.surfaceAnimations
               .get(closedSurface.id)
               .flatMap(_.animationState.getCell(0, rowOffset))
             val currentBg = previousCell.flatMap(_.currentBackground).getOrElse(panelBg)
@@ -677,18 +695,22 @@ final private[manager] class StateManagerEventPipeline(
             bufferFadeLength = 0,
             phaseTick = 0
           )
-          stateWithId.copy(
-            uiSurfaces = stateWithId.uiSurfaces :+ ghostSurface,
-            surfaceAnimations = stateWithId.surfaceAnimations
-              - closedSurface.id
-              + (ghostId -> ghostAnimState)
+          stateWithId.copy(runtime =
+            stateWithId.runtime.copy(
+              uiSurfaces = stateWithId.runtime.uiSurfaces :+ ghostSurface,
+              surfaceAnimations = stateWithId.runtime.surfaceAnimations
+                - closedSurface.id
+                + (ghostId -> ghostAnimState)
+            )
           )
         }
       case _ =>
-        stateRef.update(s => s.copy(surfaceAnimations = s.surfaceAnimations - closedSurface.id))
+        stateRef.update(s =>
+          s.copy(runtime = s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations - closedSurface.id))
+        )
 
   private def animatedCommandSurfaces(state: AppState): List[UiSurface] =
-    state.uiSurfaces.filter {
+    state.runtime.uiSurfaces.filter {
       _.content match
         case SurfaceContent.CommandPalette(_)              => true
         case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
@@ -696,9 +718,9 @@ final private[manager] class StateManagerEventPipeline(
     }
 
   private def matchingExitingCommandGhost(surface: UiSurface, state: AppState): Option[UiSurface] =
-    state.uiSurfaces.find {
+    state.runtime.uiSurfaces.find {
       case UiSurface(id, SurfaceContent.GhostOverlay(content, _), _, _) =>
-        state.surfaceAnimations.get(id).exists(_.phase == SurfacePhase.Exiting) &&
+        state.runtime.surfaceAnimations.get(id).exists(_.phase == SurfacePhase.Exiting) &&
         ((surface.content, content) match
           case (SurfaceContent.CommandPalette(_), SurfaceContent.CommandPalette(_))                           => true
           case (SurfaceContent.CommandPaletteSubmenu(_, _, _), SurfaceContent.CommandPaletteSubmenu(_, _, _)) => true
@@ -707,7 +729,7 @@ final private[manager] class StateManagerEventPipeline(
     }
 
   private def animatedPanelSurfaces(state: AppState): List[UiSurface] =
-    state.uiSurfaces.filter {
+    state.runtime.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Pinned(_, _)   => true
         case SurfacePresentation.Expanded(_, _) => true
@@ -716,7 +738,7 @@ final private[manager] class StateManagerEventPipeline(
 
   private def applyPinnedPanelOpenAnimation(surface: UiSurface): cats.effect.IO[Unit] =
     stateRef.update { state =>
-      val viewportSize = state.viewportSize.getOrElse(ViewportSize(80, 24))
+      val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
       val layout       = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val contract     = EditorLayoutContract.from(state, viewportSize, layout)
       val maybeAnimation =
@@ -727,13 +749,17 @@ final private[manager] class StateManagerEventPipeline(
         yield animation
 
       maybeAnimation
-        .map(animation => state.copy(surfaceAnimations = state.surfaceAnimations + (surface.id -> animation)))
+        .map(animation =>
+          state.copy(runtime =
+            state.runtime.copy(surfaceAnimations = state.runtime.surfaceAnimations + (surface.id -> animation))
+          )
+        )
         .getOrElse(state)
     }
 
   private def applyPinnedPanelCloseAnimation(closedSurface: UiSurface, prevState: AppState): cats.effect.IO[Unit] =
     stateRef.update { state =>
-      val tSize          = prevState.viewportSize.orElse(state.viewportSize).getOrElse(ViewportSize(80, 24))
+      val tSize = prevState.runtime.viewportSize.orElse(state.runtime.viewportSize).getOrElse(ViewportSize(80, 24))
       val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
       val contract       = EditorLayoutContract.from(prevState, tSize, previousLayout)
       val maybeGhost =
@@ -748,11 +774,13 @@ final private[manager] class StateManagerEventPipeline(
             content = SurfaceContent.GhostOverlay(closedSurface.content, rect),
             presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
-          stateWithId.copy(
-            uiSurfaces = stateWithId.uiSurfaces :+ ghostSurface,
-            surfaceAnimations = stateWithId.surfaceAnimations
-              - closedSurface.id
-              + (ghostId -> animation)
+          stateWithId.copy(runtime =
+            stateWithId.runtime.copy(
+              uiSurfaces = stateWithId.runtime.uiSurfaces :+ ghostSurface,
+              surfaceAnimations = stateWithId.runtime.surfaceAnimations
+                - closedSurface.id
+                + (ghostId -> animation)
+            )
           )
 
       maybeGhost.getOrElse(state)
@@ -765,7 +793,7 @@ final private[manager] class StateManagerEventPipeline(
   ): Option[SurfaceAnimationState] =
     val plan = ElementTransitionPlanner.plan(
       ElementTransitionRequest(TransitionScope.PanelOpen, Some(position)),
-      state.config.pinnedPanelTransitionSettings
+      state.persisted.config.pinnedPanelTransitionSettings
     )
     val animationState = ElementTransitionLowerer.lower(plan, pinnedPanelOpenCells(rect, state), tickRateMs = 16)
     Option.when(animationState.hasActiveAnimations)(
@@ -785,7 +813,7 @@ final private[manager] class StateManagerEventPipeline(
   ): Option[SurfaceAnimationState] =
     val plan = ElementTransitionPlanner.plan(
       ElementTransitionRequest(TransitionScope.PanelClose, Some(position)),
-      state.config.pinnedPanelTransitionSettings
+      state.persisted.config.pinnedPanelTransitionSettings
     )
     val animationState = ElementTransitionLowerer.lower(plan, pinnedPanelCloseCells(rect, state), tickRateMs = 16)
     Option.when(animationState.hasActiveAnimations)(
@@ -799,16 +827,16 @@ final private[manager] class StateManagerEventPipeline(
     )
 
   private def pinnedPanelOpenCells(rect: LayoutRect, state: AppState): ElementTransitionCells =
-    val transparentPanelForeground = transparent(state.theme.panel.foreground)
-    val transparentBorder          = transparent(state.theme.border)
+    val transparentPanelForeground = transparent(state.persisted.theme.panel.foreground)
+    val transparentBorder          = transparent(state.persisted.theme.border)
     val borderCell =
-      CharacterKey(-1, -1) -> CellAnimation(' ', transparentBorder, state.theme.border)
+      CharacterKey(-1, -1) -> CellAnimation(' ', transparentBorder, state.persisted.theme.border)
     val contentCells =
       (0 until math.max(0, rect.height - 1))
         .flatMap { row =>
           (0 until math.max(0, rect.width - 2)).map { column =>
             CharacterKey(column, row) ->
-              CellAnimation(' ', transparentPanelForeground, state.theme.panel.foreground)
+              CellAnimation(' ', transparentPanelForeground, state.persisted.theme.panel.foreground)
           }
         }
         .take(VisibleBufferAnimationCells.DefaultMaxAnimatedCells)
@@ -816,16 +844,16 @@ final private[manager] class StateManagerEventPipeline(
     ElementTransitionCells(frame = Map(borderCell), content = contentCells)
 
   private def pinnedPanelCloseCells(rect: LayoutRect, state: AppState): ElementTransitionCells =
-    val transparentPanelForeground = transparent(state.theme.panel.foreground)
-    val transparentBorder          = transparent(state.theme.border)
+    val transparentPanelForeground = transparent(state.persisted.theme.panel.foreground)
+    val transparentBorder          = transparent(state.persisted.theme.border)
     val borderCell =
-      CharacterKey(-1, -1) -> CellAnimation(' ', state.theme.border, transparentBorder)
+      CharacterKey(-1, -1) -> CellAnimation(' ', state.persisted.theme.border, transparentBorder)
     val contentCells =
       (0 until math.max(0, rect.height - 1))
         .flatMap { row =>
           (0 until math.max(0, rect.width - 2)).map { column =>
             CharacterKey(column, row) ->
-              CellAnimation(' ', state.theme.panel.foreground, transparentPanelForeground)
+              CellAnimation(' ', state.persisted.theme.panel.foreground, transparentPanelForeground)
           }
         }
         .take(VisibleBufferAnimationCells.DefaultMaxAnimatedCells)
@@ -845,56 +873,71 @@ final private[manager] class StateManagerEventPipeline(
       case _                                         => None
 
   private[manager] def advanceSurfaceAnimations(state: AppState): AppState =
-    state.surfaceAnimations.foldLeft(state) {
+    state.runtime.surfaceAnimations.foldLeft(state) {
       case (s, (surfaceId, surfAnim)) =>
         surfAnim.phase match
           case SurfacePhase.BufferFadingOut =>
             val newTick = surfAnim.phaseTick + 1
             if newTick >= surfAnim.bufferFadeLength then
-              val overlayFadeIn = s.config.scaledUiAnimation.fold(Map.empty[CharacterKey, AnimatedCell]) { config =>
-                (0 until surfAnim.overlayHeight).map { rowOffset =>
-                  val delay    = rowOffset
-                  val panelBg  = s.theme.panel.background
-                  val panelFg  = s.theme.panel.foreground
-                  val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
-                  val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
-                  val bgSteps = List.fill(delay)(transpBg) ++
-                    RgbInterpolator.interpolateRgba(transpBg, panelBg, config.steps)
-                  val fgSteps = List.fill(delay)(transpFg) ++
-                    RgbInterpolator.interpolateRgba(transpFg, panelFg, config.steps)
-                  CharacterKey(0, rowOffset) -> AnimatedCell(
-                    content = None,
-                    foregroundSteps = fgSteps,
-                    backgroundSteps = bgSteps
-                  )
-                }.toMap
-              }
+              val overlayFadeIn =
+                s.persisted.config.scaledUiAnimation.fold(Map.empty[CharacterKey, AnimatedCell]) { config =>
+                  (0 until surfAnim.overlayHeight).map { rowOffset =>
+                    val delay    = rowOffset
+                    val panelBg  = s.persisted.theme.panel.background
+                    val panelFg  = s.persisted.theme.panel.foreground
+                    val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
+                    val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+                    val bgSteps = List.fill(delay)(transpBg) ++
+                      RgbInterpolator.interpolateRgba(transpBg, panelBg, config.steps)
+                    val fgSteps = List.fill(delay)(transpFg) ++
+                      RgbInterpolator.interpolateRgba(transpFg, panelFg, config.steps)
+                    CharacterKey(0, rowOffset) -> AnimatedCell(
+                      content = None,
+                      foregroundSteps = fgSteps,
+                      backgroundSteps = bgSteps
+                    )
+                  }.toMap
+                }
               val newSurfAnim = surfAnim.copy(
                 phase = SurfacePhase.Visible,
                 animationState = AnimationState(overlayFadeIn),
                 phaseTick = 0
               )
-              s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> newSurfAnim))
-            else s.copy(surfaceAnimations = s.surfaceAnimations + (surfaceId -> surfAnim.copy(phaseTick = newTick)))
+              s.copy(runtime =
+                s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations + (surfaceId -> newSurfAnim))
+              )
+            else
+              s.copy(runtime =
+                s.runtime.copy(surfaceAnimations =
+                  s.runtime.surfaceAnimations + (surfaceId -> surfAnim.copy(phaseTick = newTick))
+                )
+              )
 
           case SurfacePhase.Visible =>
             val newAnimState = surfAnim.animationState.advanceAllAnimations()
-            if !newAnimState.hasActiveAnimations then s.copy(surfaceAnimations = s.surfaceAnimations - surfaceId)
+            if !newAnimState.hasActiveAnimations then
+              s.copy(runtime = s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations - surfaceId))
             else
-              s.copy(surfaceAnimations =
-                s.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+              s.copy(runtime =
+                s.runtime.copy(surfaceAnimations =
+                  s.runtime.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+                )
               )
 
           case SurfacePhase.Exiting =>
             val newAnimState = surfAnim.animationState.advanceAllAnimations()
             if !newAnimState.hasActiveAnimations then
-              s.copy(
-                uiSurfaces = s.uiSurfaces.filterNot(_.id == surfaceId),
-                surfaceAnimations = s.surfaceAnimations - surfaceId
+              s.copy(runtime =
+                s.runtime.copy(
+                  uiSurfaces = s.runtime.uiSurfaces.filterNot(_.id == surfaceId),
+                  surfaceAnimations = s.runtime.surfaceAnimations - surfaceId
+                )
               )
             else
-              s.copy(surfaceAnimations =
-                s.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+              s.copy(runtime =
+                s.runtime.copy(surfaceAnimations =
+                  s.runtime.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+                )
               )
     }
 
@@ -904,18 +947,21 @@ final private[manager] class StateManagerEventPipeline(
       case ComponentResult.StateChange(update) => cats.effect.IO.pure(update(state))
       case ComponentResult.ReducerUpdate(result) =>
         applyReducerResult(result, state) >> stateRef.get
-      case ComponentResult.FocusTransfer(newFocus) => cats.effect.IO.pure(state.copy(focus = newFocus))
+      case ComponentResult.FocusTransfer(newFocus) =>
+        cats.effect.IO.pure(state.copy(persisted = state.persisted.copy(focus = newFocus)))
       case ComponentResult.Dismiss =>
         val dismissedState = dismissCurrentFocus(state)
-        dismissedState.layout.activeEditorPaneId match
+        dismissedState.persisted.layout.activeEditorPaneId match
           case Some(paneId) =>
-            cats.effect.IO.pure(dismissedState.copy(focus = Focus.EditorPane(paneId)))
+            cats.effect.IO.pure(
+              dismissedState.copy(persisted = dismissedState.persisted.copy(focus = Focus.EditorPane(paneId)))
+            )
           case None =>
             for
               _        <- stateRef.set(dismissedState)
               bufferId <- createBuffer("")
               paneId   <- createPane(Some(bufferId))
-              newState <- stateRef.get.map(_.copy(focus = Focus.EditorPane(paneId)))
+              newState <- stateRef.get.map(s => s.copy(persisted = s.persisted.copy(focus = Focus.EditorPane(paneId))))
             yield newState
       case ComponentResult.ExecuteCommand(command) =>
         for
@@ -927,9 +973,9 @@ final private[manager] class StateManagerEventPipeline(
         results.foldLeftM(state)((s, r) => applyComponentResult(r, s))
 
   private def dismissCurrentFocus(state: AppState): AppState =
-    state.focus match
+    state.persisted.focus match
       case Focus.Surface(surfaceId) =>
-        state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surfaceId))
+        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId)))
       case _ =>
         state
 
@@ -972,7 +1018,7 @@ final private[manager] class StateManagerEventPipeline(
                                   resolveMouseTarget(click, state).flatMap {
                                     _.fold(dismissContextMenuIfOpen(state)) { (paneId, buffer, clickedCursor) =>
                                       stateRef.update { s =>
-                                        s.buffers.get(buffer.id) match
+                                        s.persisted.buffers.get(buffer.id) match
                                           case Some(current) =>
                                             val selection =
                                               if click.shiftDown then rangeSelectionFromAnchor(current, clickedCursor)
@@ -983,22 +1029,24 @@ final private[manager] class StateManagerEventPipeline(
                                               else None
                                             val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
                                             dismissContextMenu(
-                                              s.copy(
-                                                buffers = s.buffers.updated(
-                                                  buffer.id,
-                                                  current.copy(editing =
-                                                    current.editing.copy(
-                                                      cursors = List(focusCursor),
-                                                      selection = selection,
-                                                      selections = Nil,
-                                                      preferredColumn = Some(focusCursor.column),
-                                                      preferredXPx = None,
-                                                      multiCursorVerticalStates = Nil
+                                              s.copy(persisted =
+                                                s.persisted.copy(
+                                                  buffers = s.persisted.buffers.updated(
+                                                    buffer.id,
+                                                    current.copy(editing =
+                                                      current.editing.copy(
+                                                        cursors = List(focusCursor),
+                                                        selection = selection,
+                                                        selections = Nil,
+                                                        preferredColumn = Some(focusCursor.column),
+                                                        preferredXPx = None,
+                                                        multiCursorVerticalStates = Nil
+                                                      )
                                                     )
-                                                  )
-                                                ),
-                                                focus = Focus.EditorPane(paneId),
-                                                layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                                                  ),
+                                                  focus = Focus.EditorPane(paneId),
+                                                  layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
+                                                )
                                               )
                                             )
                                           case None => dismissContextMenu(s)
@@ -1044,7 +1092,7 @@ final private[manager] class StateManagerEventPipeline(
 
   private def modalHitAt(click: MouseClick, state: AppState): Option[(Modal, SurfaceHitRegion)] =
     for
-      viewportSize <- state.viewportSize
+      viewportSize <- state.runtime.viewportSize
       surface      <- state.topModalSurface.orElse(focusedFloatingModalWorkflow(state))
       node <- UiSceneSnapshot
         .from(state, viewportSize)
@@ -1054,7 +1102,7 @@ final private[manager] class StateManagerEventPipeline(
       modal <- surface.content match
         case SurfaceContent.ModalWorkflow(modal) => Some(modal)
         case _                                   => None
-      targetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+      targetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
       hit <- ModalSurfaceComposition
         .forModal(modal, node.frameRect, targetRows)
         .flatMap(_.hitAt(click.col.toDouble, click.row.toDouble))
@@ -1062,10 +1110,10 @@ final private[manager] class StateManagerEventPipeline(
 
   private def focusedFloatingModalWorkflow(state: AppState): Option[UiSurface] =
     for
-      surfaceId <- state.focus match
+      surfaceId <- state.persisted.focus match
         case Focus.Surface(id) => Some(id)
         case _                 => None
-      surface <- state.uiSurfaces.find(_.id == surfaceId)
+      surface <- state.runtime.uiSurfaces.find(_.id == surfaceId)
       _ <- surface.presentation match
         case SurfacePresentation.Floating(_, _) => Some(())
         case _                                  => None
@@ -1079,7 +1127,7 @@ final private[manager] class StateManagerEventPipeline(
       surface.content match
         case SurfaceContent.StartPage(page) =>
           for
-            viewportSize <- state.viewportSize
+            viewportSize <- state.runtime.viewportSize
             pixelX       <- click.pixelX
             pixelY       <- click.pixelY
             metrics      <- click.renderMetrics
@@ -1108,27 +1156,29 @@ final private[manager] class StateManagerEventPipeline(
                     resolveMouseTarget(press, state).flatMap {
                       _.fold(cats.effect.IO.unit) { (paneId, buffer, pressedCursor) =>
                         stateRef.update { s =>
-                          s.buffers.get(buffer.id) match
+                          s.persisted.buffers.get(buffer.id) match
                             case Some(current) =>
                               val selection =
                                 Option.when(press.shiftDown)(rangeSelectionFromAnchor(current, pressedCursor)).flatten
                               val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
-                              s.copy(
-                                buffers = s.buffers.updated(
-                                  buffer.id,
-                                  current.copy(editing =
-                                    current.editing.copy(
-                                      cursors = List(focusCursor),
-                                      selection = selection,
-                                      selections = Nil,
-                                      preferredColumn = Some(focusCursor.column),
-                                      preferredXPx = None,
-                                      multiCursorVerticalStates = Nil
+                              s.copy(persisted =
+                                s.persisted.copy(
+                                  buffers = s.persisted.buffers.updated(
+                                    buffer.id,
+                                    current.copy(editing =
+                                      current.editing.copy(
+                                        cursors = List(focusCursor),
+                                        selection = selection,
+                                        selections = Nil,
+                                        preferredColumn = Some(focusCursor.column),
+                                        preferredXPx = None,
+                                        multiCursorVerticalStates = Nil
+                                      )
                                     )
-                                  )
-                                ),
-                                focus = Focus.EditorPane(paneId),
-                                layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                                  ),
+                                  focus = Focus.EditorPane(paneId),
+                                  layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
+                                )
                               )
                             case None => s
                         }
@@ -1152,7 +1202,7 @@ final private[manager] class StateManagerEventPipeline(
                 resolveMouseTarget(drag, state).flatMap {
                   _.fold(cats.effect.IO.unit) { (paneId, buffer, draggedCursor) =>
                     stateRef.update { s =>
-                      s.buffers.get(buffer.id) match
+                      s.persisted.buffers.get(buffer.id) match
                         case Some(current) =>
                           val anchor =
                             current.primarySelection
@@ -1161,22 +1211,24 @@ final private[manager] class StateManagerEventPipeline(
                               .getOrElse(draggedCursor)
                           val selection =
                             Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
-                          s.copy(
-                            buffers = s.buffers.updated(
-                              buffer.id,
-                              current.copy(editing =
-                                current.editing.copy(
-                                  cursors = List(draggedCursor),
-                                  selection = selection,
-                                  selections = Nil,
-                                  preferredColumn = Some(draggedCursor.column),
-                                  preferredXPx = None,
-                                  multiCursorVerticalStates = Nil
+                          s.copy(persisted =
+                            s.persisted.copy(
+                              buffers = s.persisted.buffers.updated(
+                                buffer.id,
+                                current.copy(editing =
+                                  current.editing.copy(
+                                    cursors = List(draggedCursor),
+                                    selection = selection,
+                                    selections = Nil,
+                                    preferredColumn = Some(draggedCursor.column),
+                                    preferredXPx = None,
+                                    multiCursorVerticalStates = Nil
+                                  )
                                 )
-                              )
-                            ),
-                            focus = Focus.EditorPane(paneId),
-                            layout = s.layout.copy(activeEditorPaneId = Some(paneId))
+                              ),
+                              focus = Focus.EditorPane(paneId),
+                              layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
+                            )
                           )
                         case None => s
                     }
@@ -1287,12 +1339,15 @@ final private[manager] class StateManagerEventPipeline(
     focusPanel: Boolean
   ): AppState =
     val updatedContent = SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path))
-    val updatedSurfaces = state.uiSurfaces.map {
+    val updatedSurfaces = state.runtime.uiSurfaces.map {
       case surface if surface.id == hit.surface.id => surface.copy(content = updatedContent)
       case surface                                 => surface
     }
-    val nextFocus = if focusPanel then Focus.Surface(hit.surface.id) else state.focus
-    state.copy(uiSurfaces = updatedSurfaces, focus = nextFocus)
+    val nextFocus = if focusPanel then Focus.Surface(hit.surface.id) else state.persisted.focus
+    state.copy(
+      persisted = state.persisted.copy(focus = nextFocus),
+      runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)
+    )
 
   private def selectPinnedOutlineLocation(
     state: AppState,
@@ -1300,12 +1355,12 @@ final private[manager] class StateManagerEventPipeline(
     symbols: List[Symbol],
     location: Location
   ): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.map {
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case existing if existing.id == surface.id =>
         existing.copy(content = SurfaceContent.Outline(symbols, Some(location)))
       case existing =>
         existing
-    })
+    }))
 
   private def selectPinnedCommentsLocation(
     state: AppState,
@@ -1313,12 +1368,12 @@ final private[manager] class StateManagerEventPipeline(
     symbols: List[Symbol],
     location: Location
   ): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.map {
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case existing if existing.id == surface.id =>
         existing.copy(content = SurfaceContent.Comments(symbols, Some(location)))
       case existing =>
         existing
-    })
+    }))
 
   private def selectPinnedDiagnosticsLocation(
     state: AppState,
@@ -1326,12 +1381,12 @@ final private[manager] class StateManagerEventPipeline(
     issues: List[Diagnostic],
     location: Location
   ): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.map {
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case existing if existing.id == surface.id =>
         existing.copy(content = SurfaceContent.Diagnostics(issues, Some(location)))
       case existing =>
         existing
-    })
+    }))
 
   private def pinnedDirectoryMouseHitAt(
     event: MouseInputEvent,
@@ -1430,9 +1485,9 @@ final private[manager] class StateManagerEventPipeline(
     yield location
 
   private def navigateActiveEditorToLocation(state: AppState, location: Location): AppState =
-    state.layout.activeEditorPaneId match
+    state.persisted.layout.activeEditorPaneId match
       case Some(paneId) =>
-        state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get) match
+        state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.persisted.buffers.get) match
           case Some(buffer) =>
             val line =
               math.max(0, math.min(location.line, math.max(0, buffer.document.content.lineCount - 1)))
@@ -1451,10 +1506,12 @@ final private[manager] class StateManagerEventPipeline(
               ),
               viewport = viewport
             )
-            state.copy(
-              buffers = state.buffers.updated(buffer.id, updatedBuffer),
-              focus = Focus.EditorPane(paneId),
-              layout = state.layout.copy(activeEditorPaneId = Some(paneId))
+            state.copy(persisted =
+              state.persisted.copy(
+                buffers = state.persisted.buffers.updated(buffer.id, updatedBuffer),
+                focus = Focus.EditorPane(paneId),
+                layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId))
+              )
             )
           case None =>
             state
@@ -1469,7 +1526,7 @@ final private[manager] class StateManagerEventPipeline(
   )
 
   private def pinnedPanelRowHitAt(event: MouseInputEvent, state: AppState): Option[PinnedPanelRowHit] =
-    state.viewportSize.flatMap { viewportSize =>
+    state.runtime.viewportSize.flatMap { viewportSize =>
       val scene = AuthoritativeUiScene.forState(state, viewportSize)
       scene.workspace.reverseIterator
         .flatMap {
@@ -1509,13 +1566,15 @@ final private[manager] class StateManagerEventPipeline(
   private def updateEditorHoverTarget(move: MouseMove, state: AppState): cats.effect.IO[Unit] =
     resolveMouseTarget(move, state).flatMap {
       case Some((paneId, buffer, cursor)) =>
-        stateRef.update(_.copy(hoveredEditorTarget = Some(HoveredEditorTarget(paneId, buffer.id, cursor))))
+        stateRef.update(s =>
+          s.copy(runtime = s.runtime.copy(hoveredEditorTarget = Some(HoveredEditorTarget(paneId, buffer.id, cursor))))
+        )
       case None =>
         clearEditorHoverTarget
     }
 
   private def clearEditorHoverTarget: cats.effect.IO[Unit] =
-    stateRef.update(_.copy(hoveredEditorTarget = None))
+    stateRef.update(s => s.copy(runtime = s.runtime.copy(hoveredEditorTarget = None)))
 
   private def openEditorContextMenu(click: MouseClick, state: AppState): cats.effect.IO[Unit] =
     resolveMouseTarget(click, state).flatMap {
@@ -1529,7 +1588,10 @@ final private[manager] class StateManagerEventPipeline(
                 presentation = SurfacePresentation.Floating(Some(clickedCursor), SurfacePlacement.BelowCursor)
               )
               current
-                .copy(uiSurfaces = current.uiSurfaces.filterNot(isContextMenuSurface) :+ surface)
+                .copy(runtime =
+                  current.runtime
+                    .copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(isContextMenuSurface) :+ surface)
+                )
                 .pushFocus(Focus.Surface(ContextMenuSurfaceId))
             }
           case None =>
@@ -1543,11 +1605,11 @@ final private[manager] class StateManagerEventPipeline(
       case Some((surface, menu, index)) =>
         stateRef
           .update { current =>
-            current.copy(uiSurfaces = current.uiSurfaces.map {
+            current.copy(runtime = current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.map {
               case existing if existing.id == surface.id =>
                 existing.copy(content = SurfaceContent.ContextMenu(menu.withSelectedIndex(index)))
               case existing => existing
-            })
+            }))
           }
           .as(true)
       case None =>
@@ -1558,7 +1620,10 @@ final private[manager] class StateManagerEventPipeline(
       case Some((_, menu, index)) =>
         menu.items.lift(index) match
           case Some(item) =>
-            stateRef.update(current => dismissContextMenu(current).copy(focus = menu.targetFocus)) >>
+            stateRef.update { current =>
+              val dismissed = dismissContextMenu(current)
+              dismissed.copy(persisted = dismissed.persisted.copy(focus = menu.targetFocus))
+            } >>
               executeCommand(item.command).as(true)
           case None =>
             cats.effect.IO.pure(false)
@@ -1574,7 +1639,7 @@ final private[manager] class StateManagerEventPipeline(
     state: AppState
   ): Option[(UiSurface, ContextMenu, Int)] =
     for
-      viewportSize <- state.viewportSize
+      viewportSize <- state.runtime.viewportSize
       surface      <- state.contextMenuSurface
       menu <- surface.content match
         case SurfaceContent.ContextMenu(menu) => Some(menu)
@@ -1593,14 +1658,14 @@ final private[manager] class StateManagerEventPipeline(
         menu.selectedIndex,
         hasHeader = true,
         hasFooter = menu.items.nonEmpty,
-        itemGapRows = state.config.commandRunnerItemGapRows,
-        itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity)
+        itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+        itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
       )
     yield (surface, menu, index)
 
   private def isContextMenuItemGap(event: MouseInputEvent, state: AppState): Boolean =
     (for
-      viewportSize <- state.viewportSize
+      viewportSize <- state.runtime.viewportSize
       surface      <- state.contextMenuSurface
       scene    = AuthoritativeUiScene.forState(state, viewportSize)
       layout   = scene.calculatedLayout
@@ -1621,7 +1686,9 @@ final private[manager] class StateManagerEventPipeline(
     else cats.effect.IO.unit
 
   private def dismissContextMenu(state: AppState): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.filterNot(isContextMenuSurface)).popFocus
+    state
+      .copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isContextMenuSurface)))
+      .popFocus
 
   private def isContextMenuSurface(surface: UiSurface): Boolean =
     surface.content match
@@ -1650,7 +1717,7 @@ final private[manager] class StateManagerEventPipeline(
             case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>
               updated.pushFocus(Focus.Surface(surface.id))
             case Some(_: ContextualToolbarItem.Button) =>
-              updated.copy(focus = editorFocus(current))
+              updated.copy(persisted = updated.persisted.copy(focus = editorFocus(current)))
             case _ =>
               updated
         } >>
@@ -1668,9 +1735,10 @@ final private[manager] class StateManagerEventPipeline(
       case Some((surface, toolbarState, ContextualToolbarHit.DropdownOption(itemId, optionIndex))) =>
         val detailState =
           toolbarState.copy(detailState = Some(ContextualToolbarDetailState.Dropdown(itemId, optionIndex)))
-        stateRef.update(current =>
-          replaceContextualToolbar(current, surface, detailState.closeDetail).copy(focus = editorFocus(current))
-        ) >>
+        stateRef.update { current =>
+          val replaced = replaceContextualToolbar(current, surface, detailState.closeDetail)
+          replaced.copy(persisted = replaced.persisted.copy(focus = editorFocus(current)))
+        } >>
           stateRef.get.flatMap { current =>
             ContextualToolbar.detailCommand(detailState, current) match
               case Some(command) => executeCommand(command).as(true)
@@ -1690,7 +1758,7 @@ final private[manager] class StateManagerEventPipeline(
     state: AppState
   ): Option[(UiSurface, ContextualToolbarState, ContextualToolbarHit)] =
     for
-      viewportSize <- state.viewportSize
+      viewportSize <- state.runtime.viewportSize
       surface      <- state.contextualToolbarSurface
       toolbarState <- surface.content match
         case SurfaceContent.ContextualToolbar(toolbarState) => Some(toolbarState)
@@ -1735,10 +1803,10 @@ final private[manager] class StateManagerEventPipeline(
               itemCount = rowCount,
               hasHeader = false,
               hasFooter = false,
-              itemGapRows = state.config.uiElementGap,
+              itemGapRows = state.persisted.config.uiElementGap,
               itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(
                 SurfaceContent.ContextualToolbar(toolbarState),
-                state.config.interfaceDensity
+                state.persisted.config.interfaceDensity
               )
             )
             .translated(0.0, FloatingSurfaceGeometry.signedRowOffsetPixels(floatingOffsetRows, metrics))
@@ -1751,7 +1819,7 @@ final private[manager] class StateManagerEventPipeline(
           rowSlots,
           SurfaceFrameLayout.itemTargetRowsFor(
             SurfaceContent.ContextualToolbar(toolbarState),
-            state.config.interfaceDensity
+            state.persisted.config.interfaceDensity
           )
         )
     rowIndex.flatMap { rowIndex =>
@@ -1765,7 +1833,7 @@ final private[manager] class StateManagerEventPipeline(
     }
 
   private def isInsideFloatingSurface(event: MouseInputEvent, state: AppState): Boolean =
-    state.viewportSize.exists { viewportSize =>
+    state.runtime.viewportSize.exists { viewportSize =>
       val scene    = AuthoritativeUiScene.forState(state, viewportSize)
       val layout   = scene.calculatedLayout
       val contract = scene.editorContract
@@ -1797,22 +1865,22 @@ final private[manager] class StateManagerEventPipeline(
     }
 
   private def floatingCellMetrics(state: AppState): CellMetrics =
-    CellMetrics.fromFont(FontLoader.previewCodeFont(state.config.fontConfig))
+    CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.fontConfig))
 
   private def replaceContextualToolbar(
     state: AppState,
     surface: UiSurface,
     toolbarState: ContextualToolbarState
   ): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.map {
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case existing if existing.id == surface.id =>
         existing.copy(content = SurfaceContent.ContextualToolbar(toolbarState))
       case existing =>
         existing
-    })
+    }))
 
   private def editorFocus(state: AppState): Focus =
-    state.layout.activeEditorPaneId
+    state.persisted.layout.activeEditorPaneId
       .map(Focus.EditorPane.apply)
       .getOrElse(Focus.EditorPane(PaneId(0)))
 
@@ -1845,13 +1913,14 @@ final private[manager] class StateManagerEventPipeline(
     val surfaces =
       event match
         case _: MouseMove
-            if state.commandRunnerSubmenuSurface.exists(surface => state.focus == Focus.Surface(surface.id)) =>
+            if state.commandRunnerSubmenuSurface
+              .exists(surface => state.persisted.focus == Focus.Surface(surface.id)) =>
           state.commandRunnerSubmenuSurface.toList
         case _ =>
           List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
     if surfaces.isEmpty then None
     else
-      state.viewportSize.flatMap { viewportSize =>
+      state.runtime.viewportSize.flatMap { viewportSize =>
         val scene    = AuthoritativeUiScene.forState(state, viewportSize)
         val layout   = scene.calculatedLayout
         val contract = scene.editorContract
@@ -1874,7 +1943,7 @@ final private[manager] class StateManagerEventPipeline(
         cats.effect.IO.pure(false)
 
   private def handlePinnedPanelResizeDrag(drag: MouseDrag, state: AppState): cats.effect.IO[Boolean] =
-    state.viewportSize.flatMap(viewportSize =>
+    state.runtime.viewportSize.flatMap(viewportSize =>
       LayoutEngine.pinnedPanelResizeFromDrag(state, viewportSize, drag.col, drag.row)
     ) match
       case Some(LayoutEngine.PinnedPanelDragResize(position, size)) =>
@@ -1889,7 +1958,7 @@ final private[manager] class StateManagerEventPipeline(
     case Bottom(value: Double)
 
   private def textAreaInsetFromDrag(drag: MouseDrag, state: AppState): Option[TextAreaInsetDrag] =
-    state.viewportSize.flatMap { viewportSize =>
+    state.runtime.viewportSize.flatMap { viewportSize =>
       val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val contract = EditorLayoutContract.from(state, viewportSize, layout)
       contract.activePaneLayout.flatMap { _ =>
@@ -1942,8 +2011,9 @@ final private[manager] class StateManagerEventPipeline(
               runner.settingsSurfaceSelectedIndex,
               hasHeader = true,
               hasFooter = true,
-              itemGapRows = state.config.commandRunnerItemGapRows,
-              itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity)
+              itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+              itemTargetRows =
+                SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
             ).map { index =>
               if runner.activeSubmenu.nonEmpty then RunnerSelectSubmenuItem(index) else RunnerSelectVisibleItem(index)
             }
@@ -1961,8 +2031,9 @@ final private[manager] class StateManagerEventPipeline(
                   runner.selectedIndex,
                   hasHeader = true,
                   hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-                  itemGapRows = state.config.commandRunnerItemGapRows,
-                  itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity)
+                  itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+                  itemTargetRows =
+                    SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
                 ).map(RunnerSelectVisibleItem(_))
               )
         case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
@@ -1984,8 +2055,9 @@ final private[manager] class StateManagerEventPipeline(
             hasHeader = group.nonEmpty,
             hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
             reservedContentRows = detailRows,
-            itemGapRows = state.config.commandRunnerItemGapRows,
-            itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity)
+            itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+            itemTargetRows =
+              SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
           ).map { index =>
             if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
             else RunnerSelectSubmenuItem(index)
@@ -2089,7 +2161,7 @@ final private[manager] class StateManagerEventPipeline(
     click: MouseInputEvent,
     state: AppState
   ): cats.effect.IO[Option[(PaneId, Buffer, CursorPosition)]] =
-    state.viewportSize match
+    state.runtime.viewportSize match
       case None => cats.effect.IO.pure(None)
       case Some(tSize) =>
         mouseTargetLayout(state, tSize).flatMap { cache =>
@@ -2098,7 +2170,9 @@ final private[manager] class StateManagerEventPipeline(
               paneLayout.contentRect.contains(click.col, click.row)
           } match
             case Some((paneId, paneLayout)) =>
-              state.layout.editorPanes.get(paneId).flatMap(pane => pane.bufferId.flatMap(state.buffers.get)) match
+              state.persisted.layout.editorPanes
+                .get(paneId)
+                .flatMap(pane => pane.bufferId.flatMap(state.persisted.buffers.get)) match
                 case Some(buffer) =>
                   val contentRect = paneLayout.contentRect
                   val vp          = buffer.viewport

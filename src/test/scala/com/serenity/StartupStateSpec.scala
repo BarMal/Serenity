@@ -25,20 +25,20 @@ class StartupStateSpec extends AnyFlatSpec with Matchers:
     val initialState = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Should have exactly 1 pane and 1 buffer
-    initialState.layout.editorPanes should have size 1
-    initialState.buffers should have size 1
+    initialState.persisted.layout.editorPanes should have size 1
+    initialState.persisted.buffers should have size 1
 
     // And the pane should have the buffer associated
-    val paneId = initialState.layout.editorPanes.keys.head
-    val pane   = initialState.layout.editorPanes(paneId)
+    val paneId = initialState.persisted.layout.editorPanes.keys.head
+    val pane   = initialState.persisted.layout.editorPanes(paneId)
     pane.bufferId shouldBe defined
 
     val bufferId = pane.bufferId.get
-    initialState.buffers should contain key bufferId
+    initialState.persisted.buffers should contain key bufferId
 
     // And focus should be on the single pane
-    initialState.focus shouldBe Focus.EditorPane(paneId)
-    initialState.layout.activeEditorPaneId shouldBe Some(paneId)
+    initialState.persisted.focus shouldBe Focus.EditorPane(paneId)
+    initialState.persisted.layout.activeEditorPaneId shouldBe Some(paneId)
   }
 
   it should "have correct initial IDs for next buffer and pane" in {
@@ -50,6 +50,6 @@ class StartupStateSpec extends AnyFlatSpec with Matchers:
     val initialState = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Next IDs should be set correctly for future creations
-    initialState.nextPaneId shouldBe PaneId(1)     // Since PaneId(0) is used
-    initialState.nextBufferId shouldBe BufferId(1) // Since BufferId(0) is used
+    initialState.runtime.nextPaneId shouldBe PaneId(1)     // Since PaneId(0) is used
+    initialState.runtime.nextBufferId shouldBe BufferId(1) // Since BufferId(0) is used
   }

@@ -27,20 +27,20 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
     darkTheme.name shouldBe "dark"
 
     // Update state manager with the theme
-    stateManager.updateState(_.copy(theme = darkTheme)).unsafeRunSync()
+    stateManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = darkTheme))).unsafeRunSync()
 
     // Verify the theme is applied
     val currentState = stateManager.getCurrentState.unsafeRunSync()
-    currentState.theme.name shouldBe "dark"
+    currentState.persisted.theme.name shouldBe "dark"
 
     // Switch to light theme
     val lightTheme = themeManager.loadTheme("light").unsafeRunSync()
-    stateManager.updateState(_.copy(theme = lightTheme)).unsafeRunSync()
+    stateManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = lightTheme))).unsafeRunSync()
 
     // Verify the theme was switched
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.theme.name shouldBe "light"
-    updatedState.theme.foregroundColor should not be darkTheme.foregroundColor
+    updatedState.persisted.theme.name shouldBe "light"
+    updatedState.persisted.theme.foregroundColor should not be darkTheme.foregroundColor
   }
 
   it should "preserve theme configuration through editor operations" in {
@@ -51,7 +51,7 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
 
     // Set up with light theme
     val theme = themeManager.loadTheme("light").unsafeRunSync()
-    stateManager.updateState(_.copy(theme = theme)).unsafeRunSync()
+    stateManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = theme))).unsafeRunSync()
 
     // Perform typical editor operations
     val bufferId = stateManager.createBuffer("function test() { return 'hello'; }").unsafeRunSync()
@@ -59,9 +59,9 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
 
     // Verify theme is preserved
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.theme.name shouldBe "light"
-    finalState.buffers should contain key bufferId
-    finalState.layout.editorPanes should contain key paneId
+    finalState.persisted.theme.name shouldBe "light"
+    finalState.persisted.buffers should contain key bufferId
+    finalState.persisted.layout.editorPanes should contain key paneId
   }
 
   it should "allow theme reloading without losing application state" in {
@@ -76,7 +76,9 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
 
     // Apply initial theme
     val initialTheme = themeManager.loadTheme("dark").unsafeRunSync()
-    stateManager.updateState(_.copy(theme = initialTheme)).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(persisted = state.persisted.copy(theme = initialTheme)))
+      .unsafeRunSync()
 
     val stateBeforeReload = stateManager.getCurrentState.unsafeRunSync()
 
@@ -88,9 +90,9 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
         val stateAfterReload = stateManager.getCurrentState.unsafeRunSync()
 
         // Theme should be reloaded but other state preserved
-        stateAfterReload.theme.name shouldBe "dark"
-        stateAfterReload.buffers shouldBe stateBeforeReload.buffers
-        stateAfterReload.layout shouldBe stateBeforeReload.layout
+        stateAfterReload.persisted.theme.name shouldBe "dark"
+        stateAfterReload.persisted.buffers shouldBe stateBeforeReload.persisted.buffers
+        stateAfterReload.persisted.layout shouldBe stateBeforeReload.persisted.layout
 
       case None =>
         // No theme was active to reload, which is also valid

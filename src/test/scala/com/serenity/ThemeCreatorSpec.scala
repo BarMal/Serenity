@@ -106,12 +106,14 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
 
   "ThemeCreatorComponent" should "edit the selected field and apply a live preview theme" in {
     val base = AppState.empty.copy(
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), BufferId(0))),
-        activeEditorPaneId = Some(PaneId(0))
-      ),
-      buffers = Map(BufferId(0) -> Buffer.newEmpty(BufferId(0))),
-      theme = DefaultThemes.defaultDark
+      persisted = AppState.empty.persisted.copy(
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), BufferId(0))),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        buffers = Map(BufferId(0) -> Buffer.newEmpty(BufferId(0))),
+        theme = DefaultThemes.defaultDark
+      )
     )
     val creator = ThemeCreatorState
       .fromTheme(DefaultThemes.defaultDark)
@@ -122,7 +124,10 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ThemeCreator(creator),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
-    val state = base.copy(uiSurfaces = List(surface), focus = Focus.Surface(surface.id))
+    val state = base.copy(
+      persisted = base.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = base.runtime.copy(uiSurfaces = List(surface))
+    )
 
     val result = List('#', '1', '2', '3', '4', '5', '6').foldLeft(state) { (current, char) =>
       val updated = ThemeCreatorComponent().processEvent(InsertChar(char), current)
@@ -131,7 +136,7 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
         case other                                                        => fail(s"Expected StateChange, got $other")
     }
 
-    result.theme.background.getRGB & 0x00ffffff shouldBe 0x123456
+    result.persisted.theme.background.getRGB & 0x00ffffff shouldBe 0x123456
     result.themeCreatorSurface
       .flatMap(_.content match
         case SurfaceContent.ThemeCreator(draft) => draft.selectedRow.map(_.value)
@@ -139,7 +144,7 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "submit a save effect for a valid draft" in {
-    val base = AppState.empty.copy(theme = DefaultThemes.defaultDark)
+    val base = AppState.empty.copy(persisted = AppState.empty.persisted.copy(theme = DefaultThemes.defaultDark))
     val creator = ThemeCreatorState
       .fromTheme(DefaultThemes.defaultDark.copy(name = "quiet-focus"))
       .selectPath("theme.name")
@@ -148,7 +153,10 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ThemeCreator(creator),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
-    val state = base.copy(uiSurfaces = List(surface), focus = Focus.Surface(surface.id))
+    val state = base.copy(
+      persisted = base.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = base.runtime.copy(uiSurfaces = List(surface))
+    )
 
     val result = ThemeCreatorComponent().processEvent(Enter, state)
 

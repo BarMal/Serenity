@@ -36,9 +36,8 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       32
     )
     val state = AppState.initial.copy(
-      config = config,
-      theme = Theme.light,
-      uiSurfaces = List(panel)
+      persisted = AppState.initial.persisted.copy(config = config, theme = Theme.light),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(panel))
     )
 
     val preset = UiPreset.capture("Writing", state, Some(PreferredWindowSize(1440, 960)))
@@ -55,12 +54,14 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   it should "restore captured config, theme, and pinned panels onto app state" in {
     val root = Files.createTempDirectory("ui-preset-restore")
     val initial = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface.fromPanelContent(
-          SurfaceId("old-panel"),
-          PanelContent.Diagnostics(Nil),
-          PanelPosition.Bottom,
-          8
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface.fromPanelContent(
+            SurfaceId("old-panel"),
+            PanelContent.Diagnostics(Nil),
+            PanelPosition.Bottom,
+            8
+          )
         )
       )
     )
@@ -83,10 +84,10 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     val restored = UiPreset.applyToState(preset, initial, Theme.dark)
 
-    restored.theme.name shouldBe Theme.dark.name
-    restored.config.fontConfig.textFontFamily shouldBe "Serif"
-    restored.config.fontConfig.textFontSize shouldBe 17.0f
-    restored.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 800))
+    restored.persisted.theme.name shouldBe Theme.dark.name
+    restored.persisted.config.fontConfig.textFontFamily shouldBe "Serif"
+    restored.persisted.config.fontConfig.textFontSize shouldBe 17.0f
+    restored.persisted.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 800))
     restored.pinnedSurfaces should have size 1
     restored.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Right, 44)
     restored.pinnedSurfaces.head.content shouldBe a[SurfaceContent.DirectoryTree]
@@ -96,15 +97,17 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val pane0 = PaneId(0)
     val pane1 = PaneId(1)
     val state = AppState.initial.copy(
-      layout = Layout(
-        editorPanes = Map(
-          pane0 -> EditorPane.withBuffer(pane0, BufferId(0)),
-          pane1 -> EditorPane.empty(pane1)
-        ),
-        activeEditorPaneId = Some(pane0),
-        paneOrder = List(pane0, pane1)
+      persisted = AppState.initial.persisted.copy(
+        layout = Layout(
+          editorPanes = Map(
+            pane0 -> EditorPane.withBuffer(pane0, BufferId(0)),
+            pane1 -> EditorPane.empty(pane1)
+          ),
+          activeEditorPaneId = Some(pane0),
+          paneOrder = List(pane0, pane1)
+        )
       ),
-      nextPaneId = PaneId(2)
+      runtime = AppState.initial.runtime.copy(nextPaneId = PaneId(2))
     )
 
     val preset = UiPreset.capture("Two Pane Drafting", state, preferredWindowSize = None)
@@ -174,9 +177,9 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val compactState = UiPreset.applyToState(compact, UiPreset.applyToState(writing, initial, Theme.dark), Theme.dark)
     val restoredWriting = UiPreset.applyToState(writing, compactState, Theme.dark)
 
-    compactState.config shouldBe compact.config
+    compactState.persisted.config shouldBe compact.config
     compactState.pinnedSurfaces shouldBe Nil
-    restoredWriting.config shouldBe writing.config
+    restoredWriting.persisted.config shouldBe writing.config
     restoredWriting.pinnedSurfaces shouldBe Nil
   }
 
@@ -383,30 +386,31 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val pane1             = PaneId(1)
     val secondaryBuffer   = Buffer.newEmpty(secondaryBufferId)
     val state = AppState.initial.copy(
-      buffers = AppState.initial.buffers + (secondaryBufferId -> secondaryBuffer),
-      bufferOrder = List(primaryBufferId, secondaryBufferId),
-      layout = Layout(
-        editorPanes = Map(
-          pane0 -> EditorPane.withBuffer(pane0, primaryBufferId),
-          pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = AppState.initial.persisted.buffers + (secondaryBufferId -> secondaryBuffer),
+        bufferOrder = List(primaryBufferId, secondaryBufferId),
+        layout = Layout(
+          editorPanes = Map(
+            pane0 -> EditorPane.withBuffer(pane0, primaryBufferId),
+            pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
+          ),
+          activeEditorPaneId = Some(pane1),
+          paneOrder = List(pane0, pane1)
         ),
-        activeEditorPaneId = Some(pane1),
-        paneOrder = List(pane0, pane1)
+        focus = Focus.EditorPane(pane1)
       ),
-      focus = Focus.EditorPane(pane1),
-      nextBufferId = BufferId(2),
-      nextPaneId = PaneId(2)
+      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(2), nextPaneId = PaneId(2))
     )
     val preset = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
 
     val restored = UiPreset.applyToState(preset, state, Theme.dark)
 
-    restored.layout.editorPanes should have size 1
-    restored.layout.activeEditorPaneId shouldBe Some(pane1)
-    restored.layout.paneOrder shouldBe List(pane1)
-    restored.layout.editorPanes(pane1).bufferId shouldBe Some(secondaryBufferId)
-    restored.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
-    restored.bufferOrder shouldBe List(primaryBufferId, secondaryBufferId)
+    restored.persisted.layout.editorPanes should have size 1
+    restored.persisted.layout.activeEditorPaneId shouldBe Some(pane1)
+    restored.persisted.layout.paneOrder shouldBe List(pane1)
+    restored.persisted.layout.editorPanes(pane1).bufferId shouldBe Some(secondaryBufferId)
+    restored.persisted.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
+    restored.persisted.bufferOrder shouldBe List(primaryBufferId, secondaryBufferId)
   }
 
   it should "restore editor pane count targets above one pane" in {
@@ -414,15 +418,16 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val secondaryBufferId = BufferId(1)
     val pane0             = PaneId(0)
     val state = AppState.initial.copy(
-      buffers = AppState.initial.buffers + (secondaryBufferId -> Buffer.newEmpty(secondaryBufferId)),
-      bufferOrder = List(primaryBufferId, secondaryBufferId),
-      layout = Layout(
-        editorPanes = Map(pane0 -> EditorPane.withBuffer(pane0, primaryBufferId)),
-        activeEditorPaneId = Some(pane0),
-        paneOrder = List(pane0)
+      persisted = AppState.initial.persisted.copy(
+        buffers = AppState.initial.persisted.buffers + (secondaryBufferId -> Buffer.newEmpty(secondaryBufferId)),
+        bufferOrder = List(primaryBufferId, secondaryBufferId),
+        layout = Layout(
+          editorPanes = Map(pane0 -> EditorPane.withBuffer(pane0, primaryBufferId)),
+          activeEditorPaneId = Some(pane0),
+          paneOrder = List(pane0)
+        )
       ),
-      nextBufferId = BufferId(2),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(2), nextPaneId = PaneId(1))
     )
     val preset = UiPreset(
       name = "Two Pane Drafting",
@@ -434,12 +439,12 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     val restored = UiPreset.applyToState(preset, state, Theme.dark)
 
-    restored.layout.editorPanes should have size 2
-    restored.layout.paneOrder shouldBe List(PaneId(0), PaneId(1))
-    restored.layout.editorPanes(PaneId(0)).bufferId shouldBe Some(primaryBufferId)
-    restored.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(secondaryBufferId)
-    restored.nextPaneId shouldBe PaneId(2)
-    restored.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
+    restored.persisted.layout.editorPanes should have size 2
+    restored.persisted.layout.paneOrder shouldBe List(PaneId(0), PaneId(1))
+    restored.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe Some(primaryBufferId)
+    restored.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(secondaryBufferId)
+    restored.runtime.nextPaneId shouldBe PaneId(2)
+    restored.persisted.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
   }
 
   it should "decode saved presets that do not include editor pane layout intent" in {

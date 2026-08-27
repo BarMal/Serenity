@@ -21,10 +21,12 @@ class TabCreationBehaviorSpec extends AnyFlatSpec with Matchers:
     val logger                      = LoggerFactory[IO].getLogger(using LoggerName("TabCreationBehaviorSpec"))
     val stateManager                = StateManager.apply(logger).unsafeRunSync()
 
-    stateManager.updateState(_.copy(viewportSize = Some(ViewportSize(80, 24)))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(ViewportSize(80, 24)))))
+      .unsafeRunSync()
 
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val initialPanes = initialState.layout.editorPanes
+    val initialPanes = initialState.persisted.layout.editorPanes
 
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val stateAfterNewTab = stateManager.getCurrentState.unsafeRunSync()
@@ -34,14 +36,14 @@ class TabCreationBehaviorSpec extends AnyFlatSpec with Matchers:
     val prevBuffer      = stateAfterNewTab.previousBufferInOrder(currentBufferId)
     val focusedBufferId = stateAfterNewTab.focusedBufferId.getOrElse(fail("expected a focused buffer"))
 
-    stateAfterNewTab.buffers.size shouldBe initialState.buffers.size + 1
-    stateAfterNewTab.bufferOrder should contain theSameElementsAs stateAfterNewTab.buffers.keys
-    stateAfterNewTab.layout.editorPanes.keySet shouldBe initialPanes.keySet
-    stateAfterNewTab.focusedBufferId shouldBe stateAfterNewTab.bufferOrder.lastOption
-    stateAfterNewTab.layout.editorPanes.values.flatMap(_.bufferId).toSet should contain(focusedBufferId)
-    stateAfterNewTab.layout.activeEditorPaneId.map(paneId => Focus.EditorPane(paneId)) shouldBe Some(
-      stateAfterNewTab.focus
+    stateAfterNewTab.persisted.buffers.size shouldBe initialState.persisted.buffers.size + 1
+    stateAfterNewTab.persisted.bufferOrder should contain theSameElementsAs stateAfterNewTab.persisted.buffers.keys
+    stateAfterNewTab.persisted.layout.editorPanes.keySet shouldBe initialPanes.keySet
+    stateAfterNewTab.focusedBufferId shouldBe stateAfterNewTab.persisted.bufferOrder.lastOption
+    stateAfterNewTab.persisted.layout.editorPanes.values.flatMap(_.bufferId).toSet should contain(focusedBufferId)
+    stateAfterNewTab.persisted.layout.activeEditorPaneId.map(paneId => Focus.EditorPane(paneId)) shouldBe Some(
+      stateAfterNewTab.persisted.focus
     )
-    nextBuffer shouldBe stateAfterNewTab.bufferOrder.lift(1)
-    prevBuffer shouldBe stateAfterNewTab.bufferOrder.lastOption
+    nextBuffer shouldBe stateAfterNewTab.persisted.bufferOrder.lift(1)
+    prevBuffer shouldBe stateAfterNewTab.persisted.bufferOrder.lastOption
   }

@@ -18,12 +18,14 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   private def stateFor(page: StartupPage): AppState =
     val surfaceId = SurfaceId("startup")
     AppState.empty.copy(
-      focus = Focus.Surface(surfaceId),
-      uiSurfaces = List(
-        UiSurface(
-          surfaceId,
-          SurfaceContent.StartPage(page),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.empty.persisted.copy(focus = Focus.Surface(surfaceId)),
+      runtime = AppState.empty.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            surfaceId,
+            SurfaceContent.StartPage(page),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )

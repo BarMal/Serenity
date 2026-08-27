@@ -32,14 +32,16 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(language = language))
     val pane       = EditorPane.withBuffer(paneId, bufferId)
     AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      )
     )
 
   "Renderer" should "use drawRunPx for a Markdown buffer (proportional textFont)" in {
@@ -80,7 +82,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
 
     val expectedAscent = com.serenity.ui.layout.TextLayoutSnapshot
       .fromBuffer(
-        state.buffers(BufferId(1)),
+        state.persisted.buffers(BufferId(1)),
         panelWidthPx = 400,
         propFont,
         surface.fontRenderContext.getOrElse(fail("Expected mock render surface font context"))
@@ -103,14 +105,16 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 

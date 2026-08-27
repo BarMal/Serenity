@@ -34,7 +34,9 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   "AppRuntime" should "keep fast rendering active while the window sitter is ticking" in {
-    val state = AppState.initial.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L))
+    val state = AppState.initial.copy(runtime =
+      AppState.initial.runtime.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L))
+    )
 
     AppRuntime.hasActiveAnimations(state, Map.empty) shouldBe true
   }
@@ -44,7 +46,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       WindowSitterConfig(frames = Vector("rest", "active"), activeTicks = 3)
     )
 
-    AppState.initial(config).windowSitter shouldBe WindowSitter.fromConfig(config.windowSitterConfig)
+    AppState.initial(config).runtime.windowSitter shouldBe WindowSitter.fromConfig(config.windowSitterConfig)
   }
 
   it should "wake and settle the window sitter through a real typing and tick sequence" in {
@@ -55,7 +57,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       .observeWindowSitterTyping(InsertChar('a'), stateManager)
       .unsafeRunSync()
 
-    val awakened = stateManager.getCurrentState.unsafeRunSync().windowSitter
+    val awakened = stateManager.getCurrentState.unsafeRunSync().runtime.windowSitter
     awakened.isActive shouldBe true
     awakened.glyph should not be WindowSitter.default.glyph
 
@@ -64,7 +66,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       .takeWhile(identity)
       .toList
 
-    stateManager.getCurrentState.unsafeRunSync().windowSitter.isActive shouldBe false
+    stateManager.getCurrentState.unsafeRunSync().runtime.windowSitter.isActive shouldBe false
   }
 
   private class SilentInputHandler extends InputHandler[IO]:
@@ -145,10 +147,14 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
   it should "render an input-requested first fast frame immediately, pace its follow-up, and defer its animation tick" in {
     val frameInterval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30)
     val state = AppState.initial.copy(
-      config = AppState.initial.config.copy(renderFpsTarget = RenderFpsTarget.Fps30),
-      surfaceAnimations = Map(
-        com.serenity.state.models.SurfaceId("fast-render-regression") -> com.serenity.state.models
-          .SurfaceAnimationState()
+      persisted = AppState.initial.persisted.copy(
+        config = AppState.initial.persisted.config.copy(renderFpsTarget = RenderFpsTarget.Fps30)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        surfaceAnimations = Map(
+          com.serenity.state.models.SurfaceId("fast-render-regression") -> com.serenity.state.models
+            .SurfaceAnimationState()
+        )
       )
     )
 
@@ -241,10 +247,12 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
   it should "route fast-mode frames through the cursor-only render path when only the window sitter is active" in {
     val state = AppState.initial.copy(
-      config = AppState.initial.config.copy(renderFpsTarget = RenderFpsTarget.Fps30),
-      windowSitter = WindowSitter.default.observeTyping(1_000_000_000L)
+      persisted = AppState.initial.persisted.copy(
+        config = AppState.initial.persisted.config.copy(renderFpsTarget = RenderFpsTarget.Fps30)
+      ),
+      runtime = AppState.initial.runtime.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L))
     )
-    state.windowSitter.isActive shouldBe true
+    state.runtime.windowSitter.isActive shouldBe true
     AppRuntime.needsFullContentRender(state, Map.empty) shouldBe false
 
     val program = for
@@ -744,16 +752,17 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "describe active document state for crash diagnostics" in {
-    val state    = AppState.initial.copy(viewportSize = Some(ViewportSize(120, 40)))
+    val state =
+      AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(120, 40))))
     val bufferId = BufferId(0)
-    val buffer = state
+    val buffer = state.persisted
       .buffers(bufferId)
       .copy(
-        document = state.buffers(bufferId).document.copy(language = Some(LanguageId.JsonLang)),
-        editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4)))
+        document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.JsonLang)),
+        editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4)))
       )
     val described = AppRuntime.describeStateForDiagnostics(
-      state.copy(buffers = state.buffers.updated(bufferId, buffer))
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
     )
 
     described should include("focus=EditorPane(PaneId(0))")
@@ -770,7 +779,8 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
   it should "wrap runtime loop failures with current state diagnostics" in {
     given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
-    val state        = AppState.initial.copy(viewportSize = Some(ViewportSize(120, 40)))
+    val state =
+      AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(120, 40))))
 
     val result = AppRuntime
       .withRuntimeDiagnostics(
@@ -856,8 +866,10 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "derive breathing cursor colours for idle frames" in {
-    val state             = AppState.initial.copy(config = AppState.initial.config.withCursorMode(CursorMode.Breathe))
-    val expectedBaseColor = state.config.cursorColors.activeOr(state.theme.cursor)
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(config = AppState.initial.persisted.config.withCursorMode(CursorMode.Breathe))
+    )
+    val expectedBaseColor = state.persisted.config.cursorColors.activeOr(state.persisted.theme.cursor)
     val expectedAlpha     = ((math.sin(math.Pi / 24) + 1.0) / 2.0 * 255).toInt
 
     val program = for
@@ -906,7 +918,9 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
   it should "skip idle cursor rendering when the cursor idle interval is disabled" in {
     val state = AppState.initial.copy(
-      config = AppState.initial.config.withCursorTransitionSpeedScale(Some(0.0))
+      persisted = AppState.initial.persisted.copy(
+        config = AppState.initial.persisted.config.withCursorTransitionSpeedScale(Some(0.0))
+      )
     )
 
     val program = for

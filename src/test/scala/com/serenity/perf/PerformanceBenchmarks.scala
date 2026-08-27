@@ -82,27 +82,29 @@ object PerformanceBenchmarks:
     richScrollState: AppState,
     deepViewport: Viewport
   ): List[BenchmarkRunner.Benchmark] =
-    val normalEditingResult    = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
-    val backspaceResult        = EditorEventReducer.reduce(DeleteBackward, PaneId(0), editingState)
-    val wordDeleteResult       = EditorEventReducer.reduce(DeleteWordBackward, PaneId(0), editingState)
-    val moveRightResult        = EditorEventReducer.reduce(MoveRight, PaneId(0), editingState)
-    val extendRightResult      = EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
-    val multiCursorState       = withCursorsOnConsecutiveLines(editingState, 50, fromLine = 5_000, column = 4)
-    val multiCursorWrapState   = multiCursorState.copy(config = multiCursorState.config.withWordWrap(true))
-    val multiInsertResult      = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
-    val multiMoveResult        = EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
-    val multiMoveDownResult    = com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
-    val plainScrollResult      = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
-    val richScrollResult       = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
-    val originalLine           = editingState.buffers.get(BufferId(1)).flatMap(_.document.content.getLine(6_000))
-    val expectedEditedLine     = originalLine.map(_.patch(12, "x", 0))
+    val normalEditingResult = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), editingState)
+    val backspaceResult     = EditorEventReducer.reduce(DeleteBackward, PaneId(0), editingState)
+    val wordDeleteResult    = EditorEventReducer.reduce(DeleteWordBackward, PaneId(0), editingState)
+    val moveRightResult     = EditorEventReducer.reduce(MoveRight, PaneId(0), editingState)
+    val extendRightResult   = EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
+    val multiCursorState    = withCursorsOnConsecutiveLines(editingState, 50, fromLine = 5_000, column = 4)
+    val multiCursorWrapState = multiCursorState.copy(persisted =
+      multiCursorState.persisted.copy(config = multiCursorState.persisted.config.withWordWrap(true))
+    )
+    val multiInsertResult   = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
+    val multiMoveResult     = EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
+    val multiMoveDownResult = com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
+    val plainScrollResult   = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
+    val richScrollResult    = EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
+    val originalLine        = editingState.persisted.buffers.get(BufferId(1)).flatMap(_.document.content.getLine(6_000))
+    val expectedEditedLine  = originalLine.map(_.patch(12, "x", 0))
     val expectedBackspacedLine = originalLine.map(_.patch(11, "", 1))
 
     def editedLine(result: com.serenity.state.reducers.ReducerResult): Option[String] =
-      result.state.buffers.get(BufferId(1)).flatMap(_.document.content.getLine(6_000))
+      result.state.persisted.buffers.get(BufferId(1)).flatMap(_.document.content.getLine(6_000))
 
     def reducedBuffer(result: com.serenity.state.reducers.ReducerResult): Option[Buffer] =
-      result.state.buffers.get(BufferId(1))
+      result.state.persisted.buffers.get(BufferId(1))
 
     def reducedCursor(result: com.serenity.state.reducers.ReducerResult): Option[CursorPosition] =
       reducedBuffer(result).flatMap(_.editing.cursors.headOption)
@@ -203,18 +205,21 @@ object PerformanceBenchmarks:
       bufferLine = 0,
       textFont
     )
-    val richDocument   = largeRichTextDocument(lines = 6_000)
-    val richState      = editorStateForRichDocument(richDocument)
-    val multilineState = editorState(multilineText, None)
-    val markdownState = editorState(markdownSource, Some(LanguageId.Markdown)).copy(
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withWordWrap(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val richDocument      = largeRichTextDocument(lines = 6_000)
+    val richState         = editorStateForRichDocument(richDocument)
+    val multilineState    = editorState(multilineText, None)
+    val markdownStateBase = editorState(markdownSource, Some(LanguageId.Markdown))
+    val markdownState = markdownStateBase.copy(persisted =
+      markdownStateBase.persisted.copy(config =
+        AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withWordWrap(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
-    val commentsState = multilineState.copy(
-      buffers = multilineState.buffers.view.mapValues { buffer =>
+    val commentsState = multilineState.copy(persisted =
+      multilineState.persisted.copy(buffers = multilineState.persisted.buffers.view.mapValues { buffer =>
         buffer.copy(annotations =
           buffer.annotations.copy(documentComments =
             (10 until 3_000 by 3)
@@ -222,43 +227,53 @@ object PerformanceBenchmarks:
               .toList
           )
         )
-      }.toMap
+      }.toMap)
     )
-    val diagnosticsState = commentsState.copy(
-      diagnostics = Map(
-        "file:///benchmark.scala" ->
-          (0 until 2_000).toList.map { line =>
-            com.serenity.lsp.model.Diagnostic(
-              com.serenity.lsp.model.LspRange(
-                com.serenity.lsp.model.LspPosition(line, 0),
-                com.serenity.lsp.model.LspPosition(line, 8)
-              ),
-              Some(com.serenity.lsp.model.DiagnosticSeverity.Warning),
-              s"benchmark diagnostic $line",
-              Some("benchmark")
-            )
-          }
+    val diagnosticsState = commentsState.copy(runtime =
+      commentsState.runtime.copy(diagnosticsState =
+        commentsState.runtime.diagnosticsState.copy(diagnostics =
+          Map(
+            "file:///benchmark.scala" ->
+              (0 until 2_000).toList.map { line =>
+                com.serenity.lsp.model.Diagnostic(
+                  com.serenity.lsp.model.LspRange(
+                    com.serenity.lsp.model.LspPosition(line, 0),
+                    com.serenity.lsp.model.LspPosition(line, 8)
+                  ),
+                  Some(com.serenity.lsp.model.DiagnosticSeverity.Warning),
+                  s"benchmark diagnostic $line",
+                  Some("benchmark")
+                )
+              }
+          )
+        )
       )
     )
-    val plainScrollState = multilineState.copy(
-      buffers = multilineState.buffers.view.mapValues(_.copy(viewport = deepViewport)).toMap
+    val plainScrollState = multilineState.copy(persisted =
+      multilineState.persisted.copy(buffers =
+        multilineState.persisted.buffers.view.mapValues(_.copy(viewport = deepViewport)).toMap
+      )
     )
     val deepRichDocument = largeRichTextDocument(lines = 15_000)
     val deepRichState    = editorStateForRichDocument(deepRichDocument)
-    val richScrollState = deepRichState.copy(
-      buffers = deepRichState.buffers.view
-        .mapValues(_.copy(viewport = deepViewport))
-        .toMap
+    val richScrollState = deepRichState.copy(persisted =
+      deepRichState.persisted.copy(buffers =
+        deepRichState.persisted.buffers.view
+          .mapValues(_.copy(viewport = deepViewport))
+          .toMap
+      )
     )
     val findState = editorState(findText, None)
-    val editingState = findState.copy(
-      buffers = findState.buffers.view
-        .mapValues(buffer => buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(6_000, 12)))))
-        .toMap
+    val editingState = findState.copy(persisted =
+      findState.persisted.copy(buffers =
+        findState.persisted.buffers.view
+          .mapValues(buffer => buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(6_000, 12)))))
+          .toMap
+      )
     )
     val jsonSearchResults = Rope(jsonText).searchAll("\"k19999\"")
     val jsonCursorOffset  = Rope(jsonText).lineColumnToOffset(0, jsonText.length - 5)
-    val layoutSnapshot = plainScrollState.buffers
+    val layoutSnapshot = plainScrollState.persisted.buffers
       .get(BufferId(1))
       .map(buffer =>
         com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
@@ -275,32 +290,36 @@ object PerformanceBenchmarks:
     )
     val findQuerySurfaceId = SurfaceId("benchmark-find")
     val findQueryState = findState.copy(
-      uiSurfaces = List(
-        UiSurface(
-          findQuerySurfaceId,
-          SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = findState.persisted.copy(focus = Focus.Surface(findQuerySurfaceId)),
+      runtime = findState.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            findQuerySurfaceId,
+            SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(findQuerySurfaceId)
+      )
     )
     val findQueryRequest = FindSearchRequest(
       findQuerySurfaceId,
       BufferId(1),
       "needle",
-      findQueryState.buffers(BufferId(1)).document.content
+      findQueryState.persisted.buffers(BufferId(1)).document.content
     )
     val completeFindQuery = ModalEventReducer.applyFindSearchResults(
       findQueryState,
       findQueryRequest,
       FindSearch.results(findQueryRequest.content, findQueryRequest.query)
     )
-    val findKeystrokeState = findQueryState.copy(
-      uiSurfaces = List(
-        UiSurface(
-          findQuerySurfaceId,
-          SurfaceContent.ModalWorkflow(Modal.Find("needl", Nil, 0)),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val findKeystrokeState = findQueryState.copy(runtime =
+      findQueryState.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            findQuerySurfaceId,
+            SurfaceContent.ModalWorkflow(Modal.Find("needl", Nil, 0)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -311,7 +330,7 @@ object PerformanceBenchmarks:
     val framedLspMessages = lspMessages.flatMap(LspFramer.encode).toArray
     val projectTask       = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
     prepareCursorBaseFrame(plainScrollState, cursorWindow)
-    val animationCells = multilineState.buffers
+    val animationCells = multilineState.persisted.buffers
       .get(BufferId(1))
       .map(buffer =>
         com.serenity.state.manager.VisibleBufferAnimationCells.fromBuffer(
@@ -364,7 +383,7 @@ object PerformanceBenchmarks:
         20,
         () => assert(layoutSnapshot.exists(_.visualLines.size == viewportSize.height)),
         () =>
-          plainScrollState.buffers.get(BufferId(1)).foreach { buffer =>
+          plainScrollState.persisted.buffers.get(BufferId(1)).foreach { buffer =>
             val _ = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
               buffer,
               panelWidthPx = frameWidthPx,
@@ -430,7 +449,7 @@ object PerformanceBenchmarks:
         "find_replace.large_query_update",
         3,
         20,
-        () => assert(completeFindQuery.buffers(BufferId(1)).findState.exists(_.results.length == 12_000)),
+        () => assert(completeFindQuery.persisted.buffers(BufferId(1)).findState.exists(_.results.length == 12_000)),
         () =>
           ModalEventReducer.applyFindSearchResults(
             findQueryState,
@@ -560,7 +579,7 @@ object PerformanceBenchmarks:
     Renderer.renderCursorOnly(state, cursorVisible = true, window, monoFont, textFont, uiFont, uiMetrics, None)
 
   private def reducedTopLine(result: com.serenity.state.reducers.ReducerResult): Option[Int] =
-    result.state.buffers.get(BufferId(1)).map(_.viewport.topLine)
+    result.state.persisted.buffers.get(BufferId(1)).map(_.viewport.topLine)
 
   private def decodeLspMessages(bytes: Array[Byte]): List[Json] =
     import cats.effect.unsafe.implicits.global

@@ -190,7 +190,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
         stateManager.applyEvent(InsertChar(char)).unsafeRunSync()
         val state  = stateManager.getCurrentState.unsafeRunSync()
         val pane   = getCurrentPane(state)
-        val buffer = pane.bufferId.flatMap(state.buffers.get).get
+        val buffer = pane.bufferId.flatMap(state.persisted.buffers.get).get
         buffer.editing.cursors.head.column.shouldBe(index + 1)
     }
 
@@ -207,14 +207,14 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
     def setupBuffer(content: String): BufferId =
       val bufferId = stateManager.createBuffer(content).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
-      val paneId   = state.layout.editorPanes.keys.head
+      val paneId   = state.persisted.layout.editorPanes.keys.head
       stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
       bufferId
 
     def getBufferContent(bufferId: BufferId): String =
       val state = stateManager.getCurrentState.unsafeRunSync()
-      state.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
+      state.persisted.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
 
     def getCurrentPane(state: AppState): EditorPane =
-      val paneId = state.layout.editorPanes.keys.head
-      state.layout.editorPanes(paneId)
+      val paneId = state.persisted.layout.editorPanes.keys.head
+      state.persisted.layout.editorPanes(paneId)

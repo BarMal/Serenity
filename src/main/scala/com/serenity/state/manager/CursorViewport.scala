@@ -12,16 +12,20 @@ import com.serenity.ui.layout.TextLayoutSnapshot
 object CursorViewport:
 
   def ensureVisibleCursors(before: AppState, after: AppState): AppState =
-    after.buffers.foldLeft(after) {
+    after.persisted.buffers.foldLeft(after) {
       case (state, (bufferId, buffer)) =>
         val cursorMoved =
-          before.buffers.get(bufferId).exists(_.editing.cursors.headOption != buffer.editing.cursors.headOption)
+          before.persisted.buffers
+            .get(bufferId)
+            .exists(_.editing.cursors.headOption != buffer.editing.cursors.headOption)
         if !cursorMoved then state
         else
           buffer.editing.cursors.headOption match
             case Some(cursor) =>
               val updatedBuffer = buffer.copy(viewport = adjustForCursor(buffer, state, cursor))
-              state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
+              state.copy(persisted =
+                state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
+              )
             case None => state
     }
 
@@ -30,12 +34,13 @@ object CursorViewport:
     currentState: AppState,
     cursor: CursorPosition
   ): Viewport =
-    val wordWrapEnabled  = currentState.config.wordWrapEnabled
+    val wordWrapEnabled  = currentState.persisted.config.wordWrapEnabled
     val viewport         = buffer.viewport
     val halfVisibleLines = viewport.visibleLines / 2
-    val font             = previewFontForBuffer(buffer, currentState.config.fontConfig)
-    val visibleWidthPx   = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, currentState.config.fontConfig)
-    val lineText         = buffer.document.content.getLine(cursor.line).getOrElse("")
+    val font             = previewFontForBuffer(buffer, currentState.persisted.config.fontConfig)
+    val visibleWidthPx =
+      TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, currentState.persisted.config.fontConfig)
+    val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
     val measuredCursorVisualLine =
       if buffer.usesTextFont then
         TextLayoutSnapshot.visualLineIndexForCursor(

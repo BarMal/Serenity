@@ -22,13 +22,15 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
     val buffer   = Buffer.fromString(bufferId, "hello")
     val pane     = EditorPane.withBuffer(paneId, bufferId)
     AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.EditorPane(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
     )
 
   "PinnedPanelComponent" should "treat pinned ui surfaces as the live source of truth" in {
@@ -39,8 +41,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
       24
     )
     val state = baseState.copy(
-      uiSurfaces = List(surface),
-      focus = Focus.Surface(surface.id)
+      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -58,8 +60,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
       24
     )
     val state = baseState.copy(
-      uiSurfaces = List(surface),
-      focus = Focus.Surface(surface.id)
+      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -86,8 +88,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
       presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
     )
     val state = baseState.copy(
-      uiSurfaces = List(surface),
-      focus = Focus.Surface(surface.id)
+      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -95,7 +97,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
     component.processEvent(PanelInputEvent.Navigate(Direction.Down), state) match
       case ComponentResult.StateChange(update) =>
         val updatedState = update(state)
-        updatedState.uiSurfaces.head.content shouldBe SurfaceContent.DirectoryTree(
+        updatedState.runtime.uiSurfaces.head.content shouldBe SurfaceContent.DirectoryTree(
           DirectoryTreeData(
             root,
             entries = Map(
@@ -126,8 +128,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
       presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
     )
     val state = baseState.copy(
-      uiSurfaces = List(surface),
-      focus = Focus.Surface(surface.id)
+      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -153,8 +155,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
       presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
     )
     val state = baseState.copy(
-      uiSurfaces = List(surface),
-      focus = Focus.Surface(surface.id)
+      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -188,8 +190,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
       presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
     )
     val state = baseState.copy(
-      uiSurfaces = List(surface),
-      focus = Focus.Surface(surface.id)
+      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -197,7 +199,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
     component.processEvent(PanelInputEvent.Navigate(Direction.Left), state) match
       case ComponentResult.StateChange(update) =>
         val updatedState = update(state)
-        updatedState.uiSurfaces.head.content shouldBe SurfaceContent.DirectoryTree(
+        updatedState.runtime.uiSurfaces.head.content shouldBe SurfaceContent.DirectoryTree(
           DirectoryTreeData(
             root,
             expandedPaths = Set.empty,

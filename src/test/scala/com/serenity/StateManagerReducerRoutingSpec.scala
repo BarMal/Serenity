@@ -30,12 +30,12 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val openedState = stateManager.getCurrentState.unsafeRunSync()
-    val commandSurface = openedState.uiSurfaces.collectFirst {
+    val commandSurface = openedState.runtime.uiSurfaces.collectFirst {
       case surface @ UiSurface(_, SurfaceContent.CommandPalette(_), _, _) => surface
     }
 
     commandSurface shouldBe defined
-    openedState.focus shouldBe Focus.Surface(commandSurface.get.id)
+    openedState.persisted.focus shouldBe Focus.Surface(commandSurface.get.id)
     commandSurface.get.content match
       case SurfaceContent.CommandPalette(runner) => runner.isActive shouldBe true
       case other                                 => fail(s"Expected command palette, got $other")
@@ -43,7 +43,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val closedState = stateManager.getCurrentState.unsafeRunSync()
 
-    closedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    closedState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
     closedState.commandRunnerSurface shouldBe None
   }
 
@@ -65,18 +65,22 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
       stateManager
         .updateState { state =>
-          state.copy(
-            buffers = state.buffers.updated(
-              bufferId,
-              state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(filePath = Some(tempFile)))
-            ),
-            layout = state.layout.copy(
-              editorPanes = state.layout.editorPanes.updated(
-                PaneId(0),
-                state.layout.editorPanes(PaneId(0)).copy(bufferId = Some(bufferId))
-              )
-            ),
-            focus = Focus.EditorPane(PaneId(0))
+          state.copy(persisted =
+            state.persisted.copy(
+              buffers = state.persisted.buffers.updated(
+                bufferId,
+                state.persisted
+                  .buffers(bufferId)
+                  .copy(document = state.persisted.buffers(bufferId).document.copy(filePath = Some(tempFile)))
+              ),
+              layout = state.persisted.layout.copy(
+                editorPanes = state.persisted.layout.editorPanes.updated(
+                  PaneId(0),
+                  state.persisted.layout.editorPanes(PaneId(0)).copy(bufferId = Some(bufferId))
+                )
+              ),
+              focus = Focus.EditorPane(PaneId(0))
+            )
           )
         }
         .unsafeRunSync()
@@ -92,7 +96,12 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
         SurfacePresentation.Modal
       )
       stateManager
-        .updateState(state => state.copy(uiSurfaces = state.uiSurfaces :+ modal, focus = Focus.Surface(modal.id)))
+        .updateState(state =>
+          state.copy(
+            runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ modal),
+            persisted = state.persisted.copy(focus = Focus.Surface(modal.id))
+          )
+        )
         .unsafeRunSync()
       val before = stateManager.getCurrentState.unsafeRunSync()
 
@@ -120,7 +129,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     updatedState.modalSurface.flatMap(_.content match
       case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow.selectedChoice)
       case _ => None) shouldBe Some(CloseWorkflowChoice.Discard)
-    updatedState.viewportSize shouldBe Some(ViewportSize(120, 40))
+    updatedState.runtime.viewportSize shouldBe Some(ViewportSize(120, 40))
   }
 
   it should "save the focused buffer through the file event path" in {
@@ -138,15 +147,17 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
       stateManager
         .updateState { state =>
-          state.copy(
-            buffers = state.buffers + (bufferId -> buffer),
-            layout = state.layout.copy(
-              editorPanes = state.layout.editorPanes.updated(
-                paneId,
-                state.layout.editorPanes(paneId).copy(bufferId = Some(bufferId))
-              )
-            ),
-            focus = Focus.EditorPane(paneId)
+          state.copy(persisted =
+            state.persisted.copy(
+              buffers = state.persisted.buffers + (bufferId -> buffer),
+              layout = state.persisted.layout.copy(
+                editorPanes = state.persisted.layout.editorPanes.updated(
+                  paneId,
+                  state.persisted.layout.editorPanes(paneId).copy(bufferId = Some(bufferId))
+                )
+              ),
+              focus = Focus.EditorPane(paneId)
+            )
           )
         }
         .unsafeRunSync()
@@ -155,7 +166,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
       Files.readString(tempFile) shouldBe "val x = 100"
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.buffers(bufferId).document.isDirty shouldBe false
+      updatedState.persisted.buffers(bufferId).document.isDirty shouldBe false
     finally Files.deleteIfExists(tempFile)
   }
 
@@ -163,26 +174,29 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
 
     stateManager.showModal(Modal.GotoLine("7")).unsafeRunSync()
-    val modalState   = stateManager.getCurrentState.unsafeRunSync()
-    val modalSurface = modalState.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7")))
+    val modalState = stateManager.getCurrentState.unsafeRunSync()
+    val modalSurface =
+      modalState.runtime.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7")))
     modalSurface shouldBe defined
-    modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
+    modalState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
 
     stateManager.dismissModal().unsafeRunSync()
     val afterDismiss = stateManager.getCurrentState.unsafeRunSync()
-    afterDismiss.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
-    afterDismiss.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7"))) shouldBe false
+    afterDismiss.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    afterDismiss.runtime.uiSurfaces.exists(
+      _.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7"))
+    ) shouldBe false
 
     stateManager.showPeek(PeekContent.QuickInfo("hint"), CursorPosition(1, 2)).unsafeRunSync()
     val peekState   = stateManager.getCurrentState.unsafeRunSync()
-    val peekSurface = peekState.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("hint"))
+    val peekSurface = peekState.runtime.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("hint"))
     peekSurface shouldBe defined
-    peekState.focus shouldBe Focus.Surface(peekSurface.get.id)
+    peekState.persisted.focus shouldBe Focus.Surface(peekSurface.get.id)
 
     stateManager.dismissPeek().unsafeRunSync()
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
-    finalState.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("hint")) shouldBe false
+    finalState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    finalState.runtime.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("hint")) shouldBe false
   }
 
   it should "route focused editor events through the typed local handler path" in {
@@ -193,8 +207,8 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.buffers(initialBufferId).document.content.collect() shouldBe "x"
-    updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    updatedState.persisted.buffers(initialBufferId).document.content.collect() shouldBe "x"
+    updatedState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
   }
 
   it should "route focused modal events through the typed local handler path" in {
@@ -223,12 +237,14 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         state
-          .copy(buffers =
-            state.buffers.updated(
-              bufferId,
-              state
-                .buffers(bufferId)
-                .copy(document = state.buffers(bufferId).document.copy(content = Rope("needle need")))
+          .copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers.updated(
+                bufferId,
+                state.persisted
+                  .buffers(bufferId)
+                  .copy(document = state.persisted.buffers(bufferId).document.copy(content = Rope("needle need")))
+              )
             )
           )
       }
@@ -238,10 +254,14 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     "need".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager
       .updateState { state =>
-        state.copy(buffers =
-          state.buffers.updated(
-            bufferId,
-            state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(content = Rope("other")))
+        state.copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.updated(
+              bufferId,
+              state.persisted
+                .buffers(bufferId)
+                .copy(document = state.persisted.buffers(bufferId).document.copy(content = Rope("other")))
+            )
           )
         )
       }
@@ -251,7 +271,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("need", Nil, 0)))
-    updatedState.buffers(bufferId).findState shouldBe None
+    updatedState.persisted.buffers(bufferId).findState shouldBe None
   }
 
   it should "route focused pinned panel events through the typed local handler path" in {
@@ -266,6 +286,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val pinnedSurfaceId = stateManager.getCurrentState
       .unsafeRunSync()
+      .runtime
       .uiSurfaces
       .collectFirst {
         case surface @ UiSurface(
@@ -282,7 +303,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(PanelInputEvent.ReturnFocus).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    updatedState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
   }
 
   it should "route focused peek events through the typed local handler path" in {
@@ -292,26 +313,28 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(PeekInputEvent.Navigate(Direction.Up)).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("hint")) shouldBe false
-    updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    updatedState.runtime.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("hint")) shouldBe false
+    updatedState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
   }
 
   it should "ignore local events when surface focus points at no surface" in {
     val stateManager = createStateManager()
     val missingFocus = Focus.Surface(SurfaceId("missing"))
 
-    stateManager.updateState(_.copy(focus = missingFocus)).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(persisted = state.persisted.copy(focus = missingFocus)))
+      .unsafeRunSync()
     stateManager.applyEvent(PeekInputEvent.Dismiss).unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().focus shouldBe missingFocus
+    stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe missingFocus
   }
 
   it should "route theme events through the application event path" in {
     val stateManager = createStateManager()
 
     stateManager.applyEvent(SwitchTheme("light")).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().theme.name shouldBe "light"
+    stateManager.getCurrentState.unsafeRunSync().persisted.theme.name shouldBe "light"
 
     stateManager.applyEvent(ReloadCurrentTheme).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().theme.name shouldBe "light"
+    stateManager.getCurrentState.unsafeRunSync().persisted.theme.name shouldBe "light"
   }

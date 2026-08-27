@@ -50,9 +50,11 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
       val pane          = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
 
       val initialState = AppState(
-        buffers = Map(bufferId -> initialBuffer),
-        layout = Layout(Map(paneId -> pane), Some(paneId)),
-        focus = Focus.EditorPane(paneId)
+        persisted = Persisted(
+          buffers = Map(bufferId -> initialBuffer),
+          layout = Layout(Map(paneId -> pane), Some(paneId)),
+          focus = Focus.EditorPane(paneId)
+        )
       )
 
       val component = EditorPaneComponent(paneId)
@@ -66,7 +68,7 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
       result match
         case ComponentResult.ReducerUpdate(reducerResult) =>
           val newState      = reducerResult.state
-          val updatedBuffer = newState.buffers(bufferId)
+          val updatedBuffer = newState.persisted.buffers(bufferId)
 
           // After typing, should no longer be new empty
           updatedBuffer.document.isNewEmpty shouldEqual false
@@ -86,9 +88,11 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
       val pane   = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
 
       val initialState = AppState(
-        buffers = Map(bufferId -> bufferWithContent),
-        layout = Layout(Map(paneId -> pane), Some(paneId)),
-        focus = Focus.EditorPane(paneId)
+        persisted = Persisted(
+          buffers = Map(bufferId -> bufferWithContent),
+          layout = Layout(Map(paneId -> pane), Some(paneId)),
+          focus = Focus.EditorPane(paneId)
+        )
       )
 
       val component = EditorPaneComponent(paneId)
@@ -98,7 +102,7 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
       result match
         case ComponentResult.ReducerUpdate(reducerResult) =>
           val newState      = reducerResult.state
-          val updatedBuffer = newState.buffers(bufferId)
+          val updatedBuffer = newState.persisted.buffers(bufferId)
 
           // Should be empty but not new empty (shows ~Empty~)
           updatedBuffer.document.content.weight shouldEqual 0

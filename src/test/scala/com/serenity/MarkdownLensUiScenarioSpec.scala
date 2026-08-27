@@ -72,8 +72,9 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = markdownDriver("markdown-multi-pane")
     driver
       .updateState { state =>
-        val original = state.focusedBufferId.flatMap(state.buffers.get).getOrElse(fail("Expected Markdown buffer"))
-        val firstId  = BufferId(50)
+        val original =
+          state.focusedBufferId.flatMap(state.persisted.buffers.get).getOrElse(fail("Expected Markdown buffer"))
+        val firstId = BufferId(50)
         val firstBuffer = original.copy(
           id = firstId,
           editing = original.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(4, 0)))
@@ -85,20 +86,24 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
           editing = firstBuffer.editing.copy(cursors = List(CursorPosition(2, 0)))
         )
         state.copy(
-          buffers = Map(firstId -> firstBuffer, secondId -> secondBuffer),
-          bufferOrder = List(firstId, secondId),
-          layout = state.layout.copy(
-            editorPanes = Map(
-              PaneId(0) -> EditorPane.withBuffer(PaneId(0), firstId),
-              PaneId(1) -> EditorPane.withBuffer(PaneId(1), secondId)
+          persisted = state.persisted.copy(
+            buffers = Map(firstId -> firstBuffer, secondId -> secondBuffer),
+            bufferOrder = List(firstId, secondId),
+            layout = state.persisted.layout.copy(
+              editorPanes = Map(
+                PaneId(0) -> EditorPane.withBuffer(PaneId(0), firstId),
+                PaneId(1) -> EditorPane.withBuffer(PaneId(1), secondId)
+              ),
+              activeEditorPaneId = Some(PaneId(1)),
+              paneOrder = List(PaneId(0), PaneId(1)),
+              splitDirection = PaneSplitDirection.Vertical
             ),
-            activeEditorPaneId = Some(PaneId(1)),
-            paneOrder = List(PaneId(0), PaneId(1)),
-            splitDirection = PaneSplitDirection.Vertical
+            focus = Focus.EditorPane(PaneId(1))
           ),
-          focus = Focus.EditorPane(PaneId(1)),
-          nextBufferId = BufferId(100),
-          nextPaneId = PaneId(2)
+          runtime = state.runtime.copy(
+            nextBufferId = BufferId(100),
+            nextPaneId = PaneId(2)
+          )
         )
       }
       .unsafeRunSync()
@@ -107,7 +112,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
     evidence.previewPlacements.values.map(_.bounds).toSet should have size 2
     evidence.sourcePreviewMappings.values.exists(_.contains(0)) shouldBe true
     evidence.sourcePreviewMappings.values.exists(_.contains(2)) shouldBe true
-    driver.state.unsafeRunSync().buffers(BufferId(50)).editing.cursors should have size 2
+    driver.state.unsafeRunSync().persisted.buffers(BufferId(50)).editing.cursors should have size 2
   }
 
   private def markdownDriver(name: String): UiScenarioDriver =

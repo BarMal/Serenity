@@ -21,14 +21,18 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
     focus: Focus
   ): AppState =
     AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = focus,
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = Persisted(
+        buffers = Map.empty,
+        layout = Layout.empty,
+        focus = focus
+      ),
+      runtime = Runtime(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -50,21 +54,24 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       val runner   = runnerFrom(newState)
 
       runner.isActive shouldEqual true
-      newState.focus shouldEqual Focus.Surface(SurfaceId("command-runner"))
-      newState.focusHistory should contain(Focus.EditorPane(PaneId(1)))
+      newState.persisted.focus shouldEqual Focus.Surface(SurfaceId("command-runner"))
+      newState.runtime.focusHistory should contain(Focus.EditorPane(PaneId(1)))
 
     it("should replace an open find modal when toggled"):
-      val registry = CommandRegistry.default
-      val initialState = AppState.initial.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("find"),
-            SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        ),
-        focus = Focus.Surface(SurfaceId("find")),
-        focusHistory = List(Focus.EditorPane(PaneId(0)))
+      val registry  = CommandRegistry.default
+      val baseState = AppState.initial
+      val initialState = baseState.copy(
+        persisted = baseState.persisted.copy(focus = Focus.Surface(SurfaceId("find"))),
+        runtime = baseState.runtime.copy(
+          uiSurfaces = List(
+            UiSurface(
+              SurfaceId("find"),
+              SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+              SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+            )
+          ),
+          focusHistory = List(Focus.EditorPane(PaneId(0)))
+        )
       )
 
       val result   = AppEventReducer.reduce(ToggleCommandRunner, initialState, registry)
@@ -72,7 +79,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
       newState.modalSurface shouldBe None
       newState.commandRunnerSurface shouldBe defined
-      newState.commandRunnerSurface.map(surface => Focus.Surface(surface.id)) shouldBe Some(newState.focus)
+      newState.commandRunnerSurface.map(surface => Focus.Surface(surface.id)) shouldBe Some(newState.persisted.focus)
 
     it("should deactivate and restore previous focus when escaped"):
       val registry  = CommandRegistry.default
@@ -80,14 +87,16 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       val activeRunner = CommandRunner.empty
         .activate(registry, AppConfig.default)
 
-      val initialState = runnerState(registry, activeRunner, Focus.Surface(SurfaceId("command-runner")))
-        .copy(focusHistory = List(Focus.EditorPane(PaneId(2))))
+      val baseInitialState = runnerState(registry, activeRunner, Focus.Surface(SurfaceId("command-runner")))
+      val initialState = baseInitialState.copy(
+        runtime = baseInitialState.runtime.copy(focusHistory = List(Focus.EditorPane(PaneId(2))))
+      )
 
       component.processEvent(Escape, initialState) match
         case ComponentResult.StateChange(update) =>
           val newState = update(initialState)
           newState.commandRunnerSurface shouldBe None
-          newState.focus shouldEqual Focus.EditorPane(PaneId(2))
+          newState.persisted.focus shouldEqual Focus.EditorPane(PaneId(2))
         case _ =>
           fail("Expected state change")
 
@@ -175,11 +184,13 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       val commands = List(
         Command.typed("test", "Test command", CommandIntent.ToggleLineNumbers)
       )
-      val registry  = CommandRegistry(commands)
-      val component = CommandRunnerComponent(registry)
-      val runner    = CommandRunner.empty.activate(registry, AppConfig.default)
-      val initialState = runnerState(registry, runner, Focus.Surface(SurfaceId("command-runner")))
-        .copy(focusHistory = List(Focus.EditorPane(PaneId(1))))
+      val registry         = CommandRegistry(commands)
+      val component        = CommandRunnerComponent(registry)
+      val runner           = CommandRunner.empty.activate(registry, AppConfig.default)
+      val baseInitialState = runnerState(registry, runner, Focus.Surface(SurfaceId("command-runner")))
+      val initialState = baseInitialState.copy(
+        runtime = baseInitialState.runtime.copy(focusHistory = List(Focus.EditorPane(PaneId(1))))
+      )
 
       component.processEvent(Enter, initialState) match
         case ComponentResult.Composite(
@@ -189,7 +200,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
           command.intent shouldEqual CommandIntent.ToggleLineNumbers
           newState.commandRunnerSurface shouldBe None
-          newState.focus shouldEqual Focus.EditorPane(PaneId(1))
+          newState.persisted.focus shouldEqual Focus.EditorPane(PaneId(1))
         case _ =>
           fail("Expected state change")
 

@@ -218,7 +218,9 @@ object AppRuntime:
     val quitSignal = stateManager.awaitQuit.attempt
     superviseLoop("input loop", stateManager.forceQuit())(
       inputHandler.eventStream
-        .evalTap(event => stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.focus, logger)))
+        .evalTap(event =>
+          stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.persisted.focus, logger))
+        )
         .through(inputFunnel)
         .interruptWhen(quitSignal)
         .compile
@@ -250,7 +252,7 @@ object AppRuntime:
     Stream
       .repeatEval(
         loadState
-          .map(state => cursorIdleInterval(state.config).getOrElse(DefaultCursorIdleInterval))
+          .map(state => cursorIdleInterval(state.persisted.config).getOrElse(DefaultCursorIdleInterval))
           .flatMap(IO.sleep)
       )
       .interruptWhen(fastModeSignal.discrete)
@@ -302,10 +304,13 @@ object AppRuntime:
     event match
       case _: com.serenity.keystroke.events.InsertChar =>
         stateManager.updateState { state =>
-          val motion = state.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
-          if motion.enabled && state.config.windowSitterConfig.enabled then
-            state.copy(windowSitter =
-              state.windowSitter.observeTyping(System.nanoTime(), state.config.windowSitterConfig)
+          val motion =
+            state.persisted.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
+          if motion.enabled && state.persisted.config.windowSitterConfig.enabled then
+            state.copy(runtime =
+              state.runtime.copy(windowSitter =
+                state.runtime.windowSitter.observeTyping(System.nanoTime(), state.persisted.config.windowSitterConfig)
+              )
             )
           else state
         }
@@ -344,7 +349,7 @@ object AppRuntime:
           case (stateAtFrameStart, frameIndex) =>
             for
               isInitialFrame <- IO.pure(frameIndex == 0L)
-              interval       <- IO.pure(fastFrameInterval(stateAtFrameStart.config.renderFpsTarget))
+              interval       <- IO.pure(fastFrameInterval(stateAtFrameStart.persisted.config.renderFpsTarget))
               _              <- sleep(fastFrameDelay(interval, isInitialFrame))
               _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
                 checkResizeAndHandle
@@ -367,7 +372,7 @@ object AppRuntime:
               bufferAnimations <- stateManager.getBufferAnimations
               paintDamage      <- pendingPaintDamage.getAndSet(Damage.Nothing)
               _ <-
-                if state.windowSitter.isActive && !needsFullContentRender(state, bufferAnimations) then
+                if state.runtime.windowSitter.isActive && !needsFullContentRender(state, bufferAnimations) then
                   withRuntimeDiagnostics("render loop", "fast.cursor-only-render", IO.pure(Some(state)))(
                     renderCursorOnly(state, true, None, paintDamage, bufferAnimations)
                   )
@@ -433,13 +438,13 @@ object AppRuntime:
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int]
   ): IO[(Boolean, Option[Color])] =
-    state.config.cursorMode match
+    state.persisted.config.cursorMode match
       case CursorMode.Blink =>
         cursorVisible.updateAndGet(!_).map(vis => (vis, None))
       case CursorMode.Breathe =>
         for
           i <- breathIndex.updateAndGet(i => (i + 1) % 48)
-          c     = state.config.cursorColors.activeOr(state.theme.cursor)
+          c     = state.persisted.config.cursorColors.activeOr(state.persisted.theme.cursor)
           alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
         yield (true, Some(new Color(c.getRed, c.getGreen, c.getBlue, alpha)))
 
@@ -474,7 +479,7 @@ object AppRuntime:
       state <- withRuntimeDiagnostics("render loop", "idle.state", currentStateForDiagnostics)(
         loadState
       )
-      _ <- cursorIdleInterval(state.config) match
+      _ <- cursorIdleInterval(state.persisted.config) match
         case Some(_) =>
           for
             (visible, cursor) <- withRuntimeDiagnostics(
@@ -532,7 +537,7 @@ object AppRuntime:
     state: AppState,
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
   ): Boolean =
-    needsFullContentRender(state, bufferAnimations) || state.windowSitter.isActive
+    needsFullContentRender(state, bufferAnimations) || state.runtime.windowSitter.isActive
 
   /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
     * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every
@@ -547,9 +552,9 @@ object AppRuntime:
     state: AppState,
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
   ): Boolean =
-    state.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-      state.themeTransition.isDefined ||
-      state.surfaceAnimations.nonEmpty
+    state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
+      state.runtime.themeTransition.isDefined ||
+      state.runtime.surfaceAnimations.nonEmpty
 
   private def logSelectiveEvents(
     event: Event,
@@ -590,10 +595,12 @@ object AppRuntime:
       case _ => false
 
   private[serenity] def describeStateForDiagnostics(state: AppState): String =
-    val viewport   = state.viewportSize.map(size => s"${size.width}x${size.height}").getOrElse("unknown")
-    val activePane = state.layout.activeEditorPaneId
+    val viewport   = state.runtime.viewportSize.map(size => s"${size.width}x${size.height}").getOrElse("unknown")
+    val activePane = state.persisted.layout.activeEditorPaneId
     val activeBuffer =
-      activePane.flatMap(paneId => state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get))
+      activePane.flatMap(paneId =>
+        state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.persisted.buffers.get)
+      )
     val activeBufferSummary = activeBuffer match
       case Some(buffer) =>
         val language = buffer.document.language.map(_.id).getOrElse("plaintext")
@@ -609,13 +616,13 @@ object AppRuntime:
       case None =>
         "activeBuffer=none"
     List(
-      s"focus=${state.focus}",
+      s"focus=${state.persisted.focus}",
       s"viewport=$viewport",
-      s"buffers=${state.buffers.size}",
-      s"panes=${state.layout.editorPanes.size}",
-      s"surfaces=${state.uiSurfaces.size}",
+      s"buffers=${state.persisted.buffers.size}",
+      s"panes=${state.persisted.layout.editorPanes.size}",
+      s"surfaces=${state.runtime.uiSurfaces.size}",
       s"activePane=${activePane.map(_.toString).getOrElse("none")}",
       activeBufferSummary,
-      s"themeTransition=${state.themeTransition.isDefined}",
-      s"surfaceAnimations=${state.surfaceAnimations.size}"
+      s"themeTransition=${state.runtime.themeTransition.isDefined}",
+      s"surfaceAnimations=${state.runtime.surfaceAnimations.size}"
     ).mkString(" ")

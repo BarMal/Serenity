@@ -10,6 +10,6 @@ object ThemeEventReducer:
       case SwitchTheme(themeName) =>
         ReducerResult.withEffect(state, AppEffect.SwitchTheme(themeName))
       case ReloadCurrentTheme =>
-        ReducerResult.withEffect(state, AppEffect.ReloadTheme(state.theme.name))
+        ReducerResult.withEffect(state, AppEffect.ReloadTheme(state.persisted.theme.name))
       case ListAvailableThemes =>
         ReducerResult.withEffect(state, AppEffect.OpenThemePicker())

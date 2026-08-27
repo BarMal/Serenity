@@ -19,7 +19,7 @@ object EditorEventReducer:
     paneId: PaneId,
     currentState: AppState
   )(using balance: com.serenity.rope.Balance): ReducerResult =
-    currentState.layout.editorPanes.get(paneId) match
+    currentState.persisted.layout.editorPanes.get(paneId) match
       case Some(pane) => reduceForPane(event, paneId, pane, currentState)
       case None       => ReducerResult.noEffects(currentState)
 
@@ -34,7 +34,10 @@ object EditorEventReducer:
     currentState: AppState,
     geometry: EditorGeometry
   ): ReducerResult =
-    currentState.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(currentState.buffers.get) match
+    currentState.persisted.layout.editorPanes
+      .get(paneId)
+      .flatMap(_.bufferId)
+      .flatMap(currentState.persisted.buffers.get) match
       case Some(buffer) =>
         val direction = event match
           case MoveUp | ExtendSelectionUp     => -1
@@ -105,23 +108,31 @@ object EditorEventReducer:
   )(using balance: com.serenity.rope.Balance): ReducerResult =
     event match
       case ScrollDown(lines) =>
-        pane.bufferId.flatMap(currentState.buffers.get) match
+        pane.bufferId.flatMap(currentState.persisted.buffers.get) match
           case Some(buffer) =>
             val totalLines    = countLines(buffer.document.content)
             val maxTopLine    = math.max(0, totalLines - buffer.viewport.visibleLines)
             val newTopLine    = math.min(buffer.viewport.topLine + lines, maxTopLine)
             val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            ReducerResult.noEffects(
+              currentState.copy(persisted =
+                currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
+              )
+            )
           case None => ReducerResult.noEffects(currentState)
 
       case ScrollUp(lines) =>
-        pane.bufferId.flatMap(currentState.buffers.get) match
+        pane.bufferId.flatMap(currentState.persisted.buffers.get) match
           case Some(buffer) =>
             val newTopLine    = math.max(0, buffer.viewport.topLine - lines)
             val newViewport   = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)
-            ReducerResult.noEffects(currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)))
+            ReducerResult.noEffects(
+              currentState.copy(persisted =
+                currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
+              )
+            )
           case None => ReducerResult.noEffects(currentState)
 
       case textEvent: TextEntryEvent =>
@@ -135,7 +146,7 @@ object EditorEventReducer:
   )(using balance: com.serenity.rope.Balance): ReducerResult =
     pane.bufferId match
       case Some(bufferId) =>
-        currentState.buffers.get(bufferId) match
+        currentState.persisted.buffers.get(bufferId) match
           case Some(buffer) => reduceTextEventForBuffer(event, buffer, paneId, currentState)
           case None         => ReducerResult.noEffects(currentState)
       case None =>
@@ -166,9 +177,11 @@ object EditorEventReducer:
       case _                                          => false
 
   private def invalidateFindState(state: AppState, bufferId: BufferId): AppState =
-    state.buffers.get(bufferId) match
+    state.persisted.buffers.get(bufferId) match
       case Some(buffer) =>
-        state.copy(buffers = state.buffers + (bufferId -> buffer.copy(findState = None)))
+        state.copy(persisted =
+          state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer.copy(findState = None)))
+        )
       case _ =>
         state
 
@@ -333,11 +346,13 @@ object EditorEventReducer:
       case None =>
         val currentState  = Focused.replaceBuffer(incomingState, rawBuffer)
         val defaultCursor = CursorPosition(0, 0)
-        val updatedPane   = currentState.layout.editorPanes(paneId).copy(cursors = List(defaultCursor))
+        val updatedPane   = currentState.persisted.layout.editorPanes(paneId).copy(cursors = List(defaultCursor))
         ReducerResult.noEffects(
-          currentState.copy(
-            layout = currentState.layout.copy(
-              editorPanes = currentState.layout.editorPanes + (paneId -> updatedPane)
+          currentState.copy(persisted =
+            currentState.persisted.copy(
+              layout = currentState.persisted.layout.copy(
+                editorPanes = currentState.persisted.layout.editorPanes + (paneId -> updatedPane)
+              )
             )
           )
         )
@@ -532,21 +547,28 @@ object EditorEventReducer:
 
           case Copy =>
             if hasSelection then
-              ReducerResult.noEffects(currentState.copy(clipboard = Some(selectedTexts(buffer).mkString("\n"))))
+              ReducerResult.noEffects(
+                currentState.copy(runtime =
+                  currentState.runtime.copy(clipboard = Some(selectedTexts(buffer).mkString("\n")))
+                )
+              )
             else
               val clipboardText =
                 distinctCursorLines(buffer)
                   .map(line => buffer.document.content.getLine(line).getOrElse(""))
                   .mkString("\n")
-              ReducerResult.noEffects(currentState.copy(clipboard = Some(clipboardText)))
+              ReducerResult.noEffects(
+                currentState.copy(runtime = currentState.runtime.copy(clipboard = Some(clipboardText)))
+              )
 
           case Cut =>
             if hasSelection then
               val (updated, edits) = deleteSelectedRanges(buffer)
               ReducerResult(
                 currentState.copy(
-                  buffers = currentState.buffers + (buffer.id -> updated),
-                  clipboard = Some(selectedTexts(buffer).mkString("\n"))
+                  persisted =
+                    currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
+                  runtime = currentState.runtime.copy(clipboard = Some(selectedTexts(buffer).mkString("\n")))
                 ),
                 animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
               )
@@ -557,14 +579,15 @@ object EditorEventReducer:
               val (updated, edits) = applyMultiCursorLineCut(buffer, targetLines)
               ReducerResult(
                 currentState.copy(
-                  buffers = currentState.buffers + (buffer.id -> updated),
-                  clipboard = Some(clipboardText)
+                  persisted =
+                    currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
+                  runtime = currentState.runtime.copy(clipboard = Some(clipboardText))
                 ),
                 animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
               )
 
           case Paste =>
-            currentState.clipboard.filter(_.nonEmpty) match
+            currentState.runtime.clipboard.filter(_.nonEmpty) match
               case None => ReducerResult.noEffects(currentState)
               case Some(text) if hasSelection =>
                 applyEditedBuffer(applyMultiSelectionReplacement(_, text))
@@ -597,7 +620,9 @@ object EditorEventReducer:
                   ) ++
                     animationMergeEffects(buffer.id, delta)
                 ReducerResult(
-                  currentState.copy(buffers = currentState.buffers + (buffer.id -> updatedBuffer)),
+                  currentState.copy(persisted =
+                    currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
+                  ),
                   effects
                 )
 
@@ -612,7 +637,7 @@ object EditorEventReducer:
   )(using balance: com.serenity.rope.Balance): ReducerResult =
     event match
       case InsertChar(char) =>
-        val bufferId    = currentState.nextBufferId
+        val bufferId    = currentState.runtime.nextBufferId
         val fresh       = Buffer.fromString(bufferId, char.toString)
         val buffer      = fresh.copy(document = fresh.document.copy(isDirty = true, isNewEmpty = false))
         val newCursor   = CursorPosition(0, 1)
@@ -624,11 +649,13 @@ object EditorEventReducer:
         )
         ReducerResult(
           currentState.copy(
-            buffers = currentState.buffers + (bufferId -> bufferWithAnimation),
-            layout = currentState.layout.copy(
-              editorPanes = currentState.layout.editorPanes + (paneId -> updatedPane)
+            persisted = currentState.persisted.copy(
+              buffers = currentState.persisted.buffers + (bufferId -> bufferWithAnimation),
+              layout = currentState.persisted.layout.copy(
+                editorPanes = currentState.persisted.layout.editorPanes + (paneId -> updatedPane)
+              )
             ),
-            nextBufferId = BufferId(bufferId.value + 1)
+            runtime = currentState.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
           ),
           animationMergeEffects(bufferId, delta)
         )
@@ -1266,14 +1293,21 @@ object EditorEventReducer:
     direction: Int
   ): CursorPosition =
     measuredVerticalMoveBySnapshot(
-      currentState.config.wordWrapEnabled,
+      currentState.persisted.config.wordWrapEnabled,
       cursor,
       geometry.navigation,
       preferredXPx,
       direction
     )
       .getOrElse(
-        fallbackVerticalMove(cursor, buffer, geometry, currentState.config.wordWrapEnabled, preferredColumn, direction)
+        fallbackVerticalMove(
+          cursor,
+          buffer,
+          geometry,
+          currentState.persisted.config.wordWrapEnabled,
+          preferredColumn,
+          direction
+        )
       )
 
   private def multiCursorVerticalStates(
@@ -1389,11 +1423,11 @@ object EditorEventReducer:
       else
         val plan = ElementTransitionPlanner.plan(
           ElementTransitionRequest(TransitionScope.EditorInsertion),
-          state.config.editorInsertionTransitionSettings
+          state.persisted.config.editorInsertionTransitionSettings
         )
         if plan.kind == TransitionKind.Disabled then (buffer, Map.empty)
         else if plan.kind == TransitionKind.Fade then
-          state.config.scaledCharacterAnimation match
+          state.persisted.config.scaledCharacterAnimation match
             case Some(animConfig) =>
               if insertedCells.size == 1 then
                 val (key, cell) = insertedCells.head
@@ -1441,8 +1475,8 @@ object EditorEventReducer:
           content,
           finalStartOffset,
           edit.insertedText.take(remainingBudget),
-          state.theme.backgroundColor,
-          state.theme.foregroundColor
+          state.persisted.theme.backgroundColor,
+          state.persisted.theme.foregroundColor
         )
     }
 
@@ -1492,14 +1526,21 @@ object EditorEventReducer:
     val preferredXPx    = buffer.editing.preferredXPx.getOrElse(measuredCursorXPxFrom(geometry, from))
     val landed =
       measuredVerticalMoveBySnapshot(
-        currentState.config.wordWrapEnabled,
+        currentState.persisted.config.wordWrapEnabled,
         from,
         geometry.navigation,
         preferredXPx,
         direction
       )
         .getOrElse(
-          fallbackVerticalMove(from, buffer, geometry, currentState.config.wordWrapEnabled, preferredColumn, direction)
+          fallbackVerticalMove(
+            from,
+            buffer,
+            geometry,
+            currentState.persisted.config.wordWrapEnabled,
+            preferredColumn,
+            direction
+          )
         )
 
     CursorTarget(landed, preferredColumn, Some(preferredXPx))

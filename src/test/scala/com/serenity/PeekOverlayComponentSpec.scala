@@ -17,20 +17,24 @@ class PeekOverlayComponentSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromString(bufferId, "hello")
     AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("peek"))
       ),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("peek"),
-          SurfaceContent.QuickInfo("hint"),
-          SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("peek"),
+            SurfaceContent.QuickInfo("hint"),
+            SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(SurfaceId("peek"))
+      )
     )
 
   "PeekOverlayComponent" should "dismiss on typed navigation events" in {

@@ -35,11 +35,11 @@ class StartupPageComponent extends TypedFocusedComponent[StartupPageEvent]:
     surfaceId: com.serenity.state.models.SurfaceId,
     updatedPage: com.serenity.state.models.StartupPage
   )(state: AppState): AppState =
-    val updatedSurfaces = state.uiSurfaces.map { surface =>
+    val updatedSurfaces = state.runtime.uiSurfaces.map { surface =>
       if surface.id == surfaceId then surface.copy(content = SurfaceContent.StartPage(updatedPage))
       else surface
     }
-    state.copy(uiSurfaces = updatedSurfaces)
+    state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
 
   private def executeSelectedAction(startPage: com.serenity.state.models.StartupPage): ComponentResult =
     startPage.selectedAction.fold(ComponentResult.noChange)(action => ComponentResult.executeCommand(action.command))

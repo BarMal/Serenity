@@ -118,7 +118,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
       )
       .unsafeRunSync()
 
-    val fontConfig = stateManager.getCurrentState.unsafeRunSync().config.fontConfig
+    val fontConfig = stateManager.getCurrentState.unsafeRunSync().persisted.config.fontConfig
     fontConfig.textScaleMode shouldBe TextScaleMode.Auto
     fontConfig.textScaleMultiplier shouldBe 2.0
     observed.get() should not be empty
@@ -138,7 +138,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     deviceScale.set(2.0)
     stateManager.handleViewportResize(ViewportSize(120, 40)).unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.fontConfig.textScaleMultiplier shouldBe 2.0
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.fontConfig.textScaleMultiplier shouldBe 2.0
     observed.get().last.textScaleMultiplier shouldBe 2.0
   }
 
@@ -160,7 +160,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
 
     val loaded = stateManager.loadSession().unsafeRunSync()
 
-    loaded.map(_.config.fontConfig.uiFontFamily) shouldBe Some(expectedFont)
+    loaded.map(_.persisted.config.fontConfig.uiFontFamily) shouldBe Some(expectedFont)
   }
 
   it should "persist font size changes made through code font settings to the config file" in {

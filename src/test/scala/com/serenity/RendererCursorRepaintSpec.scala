@@ -27,15 +27,17 @@ class RendererCursorRepaintSpec extends AnyFlatSpec with Matchers:
     val buffer            = Buffer.fromString(bufferId, lines.mkString("\n"))
     val bufferWithCursors = buffer.copy(editing = buffer.editing.copy(cursors = cursors))
     AppState.initial.copy(
-      buffers = Map(bufferWithCursors.id -> bufferWithCursors),
-      bufferOrder = List(bufferWithCursors.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferWithCursors.id)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      theme = Theme.light
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferWithCursors.id -> bufferWithCursors),
+        bufferOrder = List(bufferWithCursors.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferWithCursors.id)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        theme = Theme.light
+      )
     )
 
   private def cursorRects(cursors: List[CursorPosition]): List[PixelRect] =

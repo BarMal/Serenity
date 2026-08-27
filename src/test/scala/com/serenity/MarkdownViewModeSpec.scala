@@ -58,19 +58,21 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport.default.copy(visibleLines = 10)
       )
     AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppConfig.default
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(mode)
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppConfig.default
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(mode)
+      )
     )
 
   "Markdown view mode settings" should "default to source editing" in {
@@ -114,7 +116,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         val bufferId = BufferId(0)
-        val existing = state.buffers(bufferId)
+        val existing = state.persisted.buffers(bufferId)
         val buffer = existing
           .copy(
             document = existing.document.copy(
@@ -122,14 +124,14 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
               language = Some(LanguageId.Markdown)
             )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "markdown-view-split", "markdown-view-split")
 
     val splitState = stateManager.getCurrentState.unsafeRunSync()
-    splitState.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
+    splitState.persisted.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
     splitState.pinnedSurfaces.collectFirst {
       case UiSurface(
             _,
@@ -143,10 +145,10 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         val bufferId = BufferId(0)
-        val existing = state.buffers(bufferId)
+        val existing = state.persisted.buffers(bufferId)
         val updated =
           existing.copy(document = existing.document.copy(content = Rope("# Notes\n\nUpdated live text")))
-        state.copy(buffers = state.buffers + (bufferId -> updated))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updated)))
       }
       .unsafeRunSync()
 
@@ -166,20 +168,24 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState { state =>
         state.copy(
-          uiSurfaces = state.uiSurfaces ++ List(
-            UiSurface(
-              SurfaceId("outline"),
-              SurfaceContent.Outline(Nil),
-              SurfacePresentation.Pinned(PanelPosition.Right, 30)
-            ),
-            UiSurface(
-              SurfaceId("markdown-preview"),
-              SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
-              SurfacePresentation.Pinned(PanelPosition.Right, 40)
-            )
+          persisted = state.persisted.copy(
+            config = state.persisted.config.withMarkdownViewMode(MarkdownViewMode.SplitPreview),
+            focus = Focus.Surface(SurfaceId("outline"))
           ),
-          config = state.config.withMarkdownViewMode(MarkdownViewMode.SplitPreview),
-          focus = Focus.Surface(SurfaceId("outline"))
+          runtime = state.runtime.copy(
+            uiSurfaces = state.runtime.uiSurfaces ++ List(
+              UiSurface(
+                SurfaceId("outline"),
+                SurfaceContent.Outline(Nil),
+                SurfacePresentation.Pinned(PanelPosition.Right, 30)
+              ),
+              UiSurface(
+                SurfaceId("markdown-preview"),
+                SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
+                SurfacePresentation.Pinned(PanelPosition.Right, 40)
+              )
+            )
+          )
         )
       }
       .unsafeRunSync()
@@ -196,38 +202,42 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.config.markdownViewMode shouldBe MarkdownViewMode.Source
+    state.persisted.config.markdownViewMode shouldBe MarkdownViewMode.Source
     state.pinnedSurfaces.map(_.id) should contain only SurfaceId("outline")
-    state.focus shouldBe Focus.Surface(SurfaceId("outline"))
+    state.persisted.focus shouldBe Focus.Surface(SurfaceId("outline"))
   }
 
   it should "render split previews as a Java2D markdown image" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
     val state = AppState.empty.copy(
-      buffers = Map(
-        bufferId -> {
-          val base = Buffer.fromString(bufferId, "# Notes\n\n| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |")
-          base.copy(document = base.document.copy(language = Some(LanguageId.Markdown)))
-        }
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(
+          bufferId -> {
+            val base = Buffer.fromString(bufferId, "# Notes\n\n| Task | Owner |\n| ---- | ----- |\n| Ship | Codex |")
+            base.copy(document = base.document.copy(language = Some(LanguageId.Markdown)))
+          }
+        ),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
       ),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("markdown-preview"),
-          SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
-          SurfacePresentation.Pinned(PanelPosition.Right, 40)
+      runtime = AppState.empty.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("markdown-preview"),
+            SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+            SurfacePresentation.Pinned(PanelPosition.Right, 40)
+          )
         )
-      ),
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
+      )
     )
     val surface = new MockRenderSurface(120, 32)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
@@ -317,12 +327,14 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
   it should "reuse the last preview image mid-burst, then render fresh once the commit generation catches up" in {
     val bufferId = BufferId(1)
     def withGenerations(state: AppState, editGeneration: Long, committedGeneration: Long): AppState =
-      state.copy(buffers =
-        state.buffers.updatedWith(bufferId)(
-          _.map(
-            _.copy(
-              markdownPreviewEditGeneration = editGeneration,
-              markdownPreviewCommittedGeneration = committedGeneration
+      state.copy(persisted =
+        state.persisted.copy(buffers =
+          state.persisted.buffers.updatedWith(bufferId)(
+            _.map(
+              _.copy(
+                markdownPreviewEditGeneration = editGeneration,
+                markdownPreviewCommittedGeneration = committedGeneration
+              )
             )
           )
         )
@@ -416,35 +428,37 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
     val state = AppState.empty.copy(
-      buffers = Map(
-        bufferId -> {
-          val base = Buffer.fromString(
-            bufferId,
-            """|| Task | Owner |
-              || ---- | ----- |
-              || Ship | Codex |
-              |
-              |Editing here""".stripMargin
-          )
-          base.copy(
-            document = base.document.copy(language = Some(LanguageId.Markdown)),
-            editing = base.editing.copy(cursors = List(CursorPosition(4, 0))),
-            viewport = Viewport.default.copy(visibleLines = 10)
-          )
-        }
-      ),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppConfig.default
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(
+          bufferId -> {
+            val base = Buffer.fromString(
+              bufferId,
+              """|| Task | Owner |
+                || ---- | ----- |
+                || Ship | Codex |
+                |
+                |Editing here""".stripMargin
+            )
+            base.copy(
+              document = base.document.copy(language = Some(LanguageId.Markdown)),
+              editing = base.editing.copy(cursors = List(CursorPosition(4, 0))),
+              viewport = Viewport.default.copy(visibleLines = 10)
+            )
+          }
+        ),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppConfig.default
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(100, 20)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
@@ -476,34 +490,38 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
     AppState.empty.copy(
-      buffers = Map(
-        bufferId -> {
-          val base = Buffer.fromString(bufferId, source)
-          base.copy(
-            document = base.document.copy(language = Some(LanguageId.Markdown)),
-            editing = base.editing.copy(cursors = List(cursor)),
-            viewport = Viewport.default.copy(visibleLines = 10)
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(
+          bufferId -> {
+            val base = Buffer.fromString(bufferId, source)
+            base.copy(
+              document = base.document.copy(language = Some(LanguageId.Markdown)),
+              editing = base.editing.copy(cursors = List(cursor)),
+              viewport = Viewport.default.copy(visibleLines = 10)
+            )
+          }
+        ),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
+      ),
+      runtime = AppState.empty.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("markdown-preview"),
+            SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+            SurfacePresentation.Pinned(PanelPosition.Right, 40)
           )
-        }
-      ),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("markdown-preview"),
-          SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
-          SurfacePresentation.Pinned(PanelPosition.Right, 40)
         )
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
+      )
     )
 
   private def renderSplitPreviewImage(state: AppState): java.awt.image.BufferedImage =

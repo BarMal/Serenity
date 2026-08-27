@@ -43,14 +43,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = config
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = config
+      )
     )
 
     val surface     = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -98,14 +100,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withGutter(false).withWordWrap(true)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withGutter(false).withWordWrap(true)
+      )
     )
     val viewportSize = ViewportSize(11, 6)
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -128,13 +132,15 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       base.copy(document = base.document.copy(filePath = Some(Path.of(title))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light
+      )
     )
     val viewportSize = ViewportSize(100, 30)
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -302,14 +308,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         )
       )
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      )
     )
     val surface = new MockRenderSurface(viewport.width, viewport.height)
     val contentRect =
@@ -339,14 +347,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         editing = base.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      )
     )
     val surface     = new MockRenderSurface(100, 30)
     val cellMetrics = CellMetrics.fromFont(font)
@@ -369,14 +379,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         editing = base.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      )
     )
     val cellMetrics    = CellMetrics.fromFont(font)
     val visibleSurface = new MockRenderSurface(100, 30)
@@ -406,17 +418,19 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         editing = base.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withCursorColors(CursorColorConfig(active = Some(activeColor), inactive = Some(inactiveColor)))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withCursorColors(CursorColorConfig(active = Some(activeColor), inactive = Some(inactiveColor)))
+      )
     )
     val surface     = new MockRenderSurface(100, 30)
     val cellMetrics = CellMetrics.fromFont(font)
@@ -443,14 +457,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         editing = base.editing.copy(cursors = List(CursorPosition(0, 1)))
       )
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      )
     )
     val cellMetrics = CellMetrics.fromFont(font)
 

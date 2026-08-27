@@ -47,16 +47,16 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
   private def dirtyStateWithText(text: String): AppState =
     val initial     = AppState.initial
-    val bufferId    = initial.bufferOrder.head
+    val bufferId    = initial.persisted.bufferOrder.head
     val plainBuffer = Buffer.fromString(bufferId, text)
     val buffer      = plainBuffer.copy(document = plainBuffer.document.copy(isDirty = true))
-    initial.copy(buffers = Map(bufferId -> buffer))
+    initial.copy(persisted = initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
   private def stateWithText(text: String): AppState =
     val initial  = AppState.initial
-    val bufferId = initial.bufferOrder.head
+    val bufferId = initial.persisted.bufferOrder.head
     val buffer   = Buffer.fromString(bufferId, text)
-    initial.copy(buffers = Map(bufferId -> buffer))
+    initial.copy(persisted = initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
   private def writeIndex(sessionRoot: Path, index: SessionIndex): Unit =
     Files.writeString(
@@ -79,16 +79,21 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       Files.writeString(tempFile, diskText)
       val plainBuffer = Buffer.fromFile(BufferId(7), tempFile, unsavedText)
       val buffer      = plainBuffer.copy(document = plainBuffer.document.copy(isDirty = true))
-      AppState.initial.copy(
-        buffers = Map(buffer.id -> buffer),
-        bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+      val initial     = AppState.initial
+      initial.copy(
+        persisted = initial.persisted.copy(
+          buffers = Map(buffer.id -> buffer),
+          bufferOrder = List(buffer.id),
+          layout = Layout(
+            editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+            activeEditorPaneId = Some(PaneId(0))
+          ),
+          focus = Focus.EditorPane(PaneId(0))
         ),
-        focus = Focus.EditorPane(PaneId(0)),
-        nextBufferId = BufferId(8),
-        nextPaneId = PaneId(1)
+        runtime = initial.runtime.copy(
+          nextBufferId = BufferId(8),
+          nextPaneId = PaneId(1)
+        )
       )
     }
 
@@ -103,8 +108,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       loadedSecond    <- sessionManager.loadSession(secondSessionId)
     yield
       sessions.map(_.displayName).shouldBe(List("Daily notes", "Refactor branch"))
-      loadedFirst.map(_.buffers.values.head.document.content.toString).shouldBe(Some("alpha"))
-      loadedSecond.map(_.buffers.values.head.document.content.toString).shouldBe(Some("beta"))
+      loadedFirst.map(_.persisted.buffers.values.head.document.content.toString).shouldBe(Some("alpha"))
+      loadedSecond.map(_.persisted.buffers.values.head.document.content.toString).shouldBe(Some("beta"))
 
     program.unsafeRunSync()
   }
@@ -148,7 +153,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val program = for
       sessionId <- sessionManager.saveSessionAs("Draft", dirtyStateWithText("unsaved work"))
       loaded    <- sessionManager.loadSession(sessionId)
-    yield loaded.map(_.buffers.values.head.document.content.toString).shouldBe(Some(""))
+    yield loaded.map(_.persisted.buffers.values.head.document.content.toString).shouldBe(Some(""))
 
     program.unsafeRunSync()
   }
@@ -161,8 +166,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       sessionId <- sessionManager.saveSessionAs("File draft", state)
       loaded    <- sessionManager.loadSession(sessionId)
     yield
-      loaded.map(_.buffers.values.head.document.content.toString) shouldBe Some("saved on disk")
-      loaded.map(_.buffers.values.head.document.isDirty) shouldBe Some(false)
+      loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("saved on disk")
+      loaded.map(_.persisted.buffers.values.head.document.isDirty) shouldBe Some(false)
 
     program.unsafeRunSync()
   }
@@ -186,7 +191,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val program = for
       _      <- sessionManager.saveSession(stateWithText("current session content"))
       loaded <- sessionManager.loadSession()
-    yield loaded.map(_.buffers.values.head.document.content.toString) shouldBe Some("current session content")
+    yield loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("current session content")
 
     program.unsafeRunSync()
   }
@@ -239,13 +244,15 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       _      <- IO.blocking(Files.writeString(sessionFile, migratedJson.spaces2))
       loaded <- sessionManager.loadSession()
     yield
-      loaded.map(_.buffers.values.head.document.content.toString) shouldBe Some("legacy config")
-      loaded.map(_.config.characterAnimation) shouldBe Some(AppConfig.default.characterAnimation)
-      loaded.map(_.config.syntaxHighlightingEnabled) shouldBe Some(AppConfig.default.syntaxHighlightingEnabled)
-      loaded.map(_.config.fontConfig) shouldBe Some(AppConfig.default.fontConfig)
-      loaded.map(_.config.minimumPaneWidth) shouldBe Some(AppConfig.default.minimumPaneWidth)
-      loaded.map(_.config.showLineNumbers) shouldBe Some(AppConfig.default.showLineNumbers)
-      loaded.map(_.config.showGutter) shouldBe Some(AppConfig.default.showGutter)
+      loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("legacy config")
+      loaded.map(_.persisted.config.characterAnimation) shouldBe Some(AppConfig.default.characterAnimation)
+      loaded.map(_.persisted.config.syntaxHighlightingEnabled) shouldBe Some(
+        AppConfig.default.syntaxHighlightingEnabled
+      )
+      loaded.map(_.persisted.config.fontConfig) shouldBe Some(AppConfig.default.fontConfig)
+      loaded.map(_.persisted.config.minimumPaneWidth) shouldBe Some(AppConfig.default.minimumPaneWidth)
+      loaded.map(_.persisted.config.showLineNumbers) shouldBe Some(AppConfig.default.showLineNumbers)
+      loaded.map(_.persisted.config.showGutter) shouldBe Some(AppConfig.default.showGutter)
 
     program.unsafeRunSync()
   }
@@ -271,14 +278,16 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
   it should "preserve config fields including blurRadius through full disk save/load" in {
     val sessionManager = createManager()
 
-    val state = AppState.initial.copy(config = AppConfig(blurRadius = 0.75f, showLineNumbers = false))
+    val initial = AppState.initial
+    val state =
+      initial.copy(persisted = initial.persisted.copy(config = AppConfig(blurRadius = 0.75f, showLineNumbers = false)))
 
     val program = for
       _      <- sessionManager.saveSession(state)
       loaded <- sessionManager.loadSession()
     yield
-      loaded.map(_.config.blurRadius) shouldBe Some(0.75f)
-      loaded.map(_.config.showLineNumbers) shouldBe Some(false)
+      loaded.map(_.persisted.config.blurRadius) shouldBe Some(0.75f)
+      loaded.map(_.persisted.config.showLineNumbers) shouldBe Some(false)
 
     program.unsafeRunSync()
   }
@@ -400,7 +409,10 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
     Files.readString(outsideFile) shouldBe "untouched"
     Files.exists(currentSessionFile(sessionRoot)) shouldBe true
-    sessionManager.loadSession().unsafeRunSync().map(_.buffers.values.head.document.content.toString) shouldBe Some(
+    sessionManager
+      .loadSession()
+      .unsafeRunSync()
+      .map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some(
       "safe"
     )
   }
@@ -427,7 +439,10 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
     sessionManager.saveSession(stateWithText("current after recovery")).unsafeRunSync()
 
-    sessionManager.loadSession(sessionId).unsafeRunSync().map(_.buffers.values.head.document.content.toString) shouldBe
+    sessionManager
+      .loadSession(sessionId)
+      .unsafeRunSync()
+      .map(_.persisted.buffers.values.head.document.content.toString) shouldBe
       Some("preserve me")
     Files
       .list(sessionRoot)

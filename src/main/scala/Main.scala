@@ -78,10 +78,12 @@ object Main extends IOApp:
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
             Trace.timed("render.syncChromeTheme") {
               IO {
-                swingWin.updateChromeTheme(state.theme)
-                val sitterVisible = state.config.windowSitterConfig.enabled &&
-                  state.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).enabled
-                swingWin.updateWindowSitter(state.windowSitter, sitterVisible)
+                swingWin.updateChromeTheme(state.persisted.theme)
+                val sitterVisible = state.persisted.config.windowSitterConfig.enabled &&
+                  state.persisted.config.surfaceConfig.effectiveMotionConfiguration
+                    .family(MotionFamily.UiTransitions)
+                    .enabled
+                swingWin.updateWindowSitter(state.runtime.windowSitter, sitterVisible)
               }.evalOn(paintEc)
             }
 

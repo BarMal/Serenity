@@ -24,15 +24,17 @@ class CommandRunnerCloseAnimationPerformanceSpec extends AnyFlatSpec with Matche
     driver
       .updateState { state =>
         val bufferId = BufferId(1)
-        val paneId   = state.layout.activeEditorPaneId.getOrElse(PaneId(1))
+        val paneId   = state.persisted.layout.activeEditorPaneId.getOrElse(PaneId(1))
         val buffer   = Buffer.fromString(bufferId, bigContent)
         state.copy(
-          buffers = Map(bufferId -> buffer),
-          bufferOrder = List(bufferId),
-          layout = state.layout.copy(
-            editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-            activeEditorPaneId = Some(paneId),
-            paneOrder = List(paneId)
+          persisted = state.persisted.copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = state.persisted.layout.copy(
+              editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+              activeEditorPaneId = Some(paneId),
+              paneOrder = List(paneId)
+            )
           )
         )
       }

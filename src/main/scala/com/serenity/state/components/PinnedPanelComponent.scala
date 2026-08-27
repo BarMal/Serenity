@@ -13,7 +13,7 @@ class PinnedPanelComponent(
     PanelInputEvent.fromEvent(event)
 
   protected def processTypedEvent(event: PanelInputEvent, currentState: AppState): ComponentResult =
-    currentState.uiSurfaces.find {
+    currentState.runtime.uiSurfaces.find {
       _.presentation match
         case SurfacePresentation.Pinned(pos, _) if pos == position   => true
         case SurfacePresentation.Expanded(pos, _) if pos == position => true
@@ -32,7 +32,7 @@ class PinnedPanelComponent(
       case PanelInputEvent.NoOp =>
         ComponentResult.noChange
       case PanelInputEvent.ReturnFocus =>
-        currentState.layout.activeEditorPaneId match
+        currentState.persisted.layout.activeEditorPaneId match
           case Some(paneId) => ComponentResult.transferFocus(Focus.EditorPane(paneId))
           case None         => ComponentResult.noChange
 
@@ -143,7 +143,7 @@ class PinnedPanelComponent(
       .getOrElse(0)
 
   private def activeDirectorySurface(currentState: AppState) =
-    focusedPinnedSurface(currentState).orElse(currentState.uiSurfaces.reverse.find {
+    focusedPinnedSurface(currentState).orElse(currentState.runtime.uiSurfaces.reverse.find {
       _.presentation match
         case SurfacePresentation.Pinned(pos, _) if pos == position   => true
         case SurfacePresentation.Expanded(pos, _) if pos == position => true
@@ -151,7 +151,7 @@ class PinnedPanelComponent(
     })
 
   private def focusedPinnedSurface(currentState: AppState) =
-    currentState.focus match
+    currentState.persisted.focus match
       case Focus.Surface(surfaceId) =>
         currentState.surfaceById(surfaceId).filter { surface =>
           surface.presentation match
@@ -163,4 +163,6 @@ class PinnedPanelComponent(
         None
 
   private def replaceSurface(currentState: AppState, updated: com.serenity.state.models.UiSurface): AppState =
-    currentState.copy(uiSurfaces = currentState.uiSurfaces.filterNot(_.id == updated.id) :+ updated)
+    currentState.copy(runtime =
+      currentState.runtime.copy(uiSurfaces = currentState.runtime.uiSurfaces.filterNot(_.id == updated.id) :+ updated)
+    )

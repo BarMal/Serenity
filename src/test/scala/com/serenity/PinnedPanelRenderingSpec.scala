@@ -165,16 +165,20 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "request backdrop blur for pinned panels using the configured blur radius" in {
     val state = AppState.initial.copy(
-      theme = Theme.light,
-      config = AppConfig.default.withBlurRadius(0.4f),
-      viewportSize = Some(ViewportSize(100, 30)),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("diagnostics"),
-          SurfaceContent.Diagnostics(
-            List(Diagnostic("unused import", DiagnosticSeverity.Warning, Location(1, 0)))
-          ),
-          SurfacePresentation.Pinned(PanelPosition.Right, 24)
+      persisted = AppState.initial.persisted.copy(
+        theme = Theme.light,
+        config = AppConfig.default.withBlurRadius(0.4f)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        viewportSize = Some(ViewportSize(100, 30)),
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("diagnostics"),
+            SurfaceContent.Diagnostics(
+              List(Diagnostic("unused import", DiagnosticSeverity.Warning, Location(1, 0)))
+            ),
+            SurfacePresentation.Pinned(PanelPosition.Right, 24)
+          )
         )
       )
     )
@@ -192,18 +196,22 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "skip backdrop blur for pinned panels when the background style is solid" in {
     val state = AppState.initial.copy(
-      theme = Theme.light,
-      config = AppConfig.default
-        .withBlurRadius(0.4f)
-        .withBackgroundStyle(BackgroundStyle.Solid),
-      viewportSize = Some(ViewportSize(100, 30)),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("diagnostics"),
-          SurfaceContent.Diagnostics(
-            List(Diagnostic("unused import", DiagnosticSeverity.Warning, Location(1, 0)))
-          ),
-          SurfacePresentation.Pinned(PanelPosition.Right, 24)
+      persisted = AppState.initial.persisted.copy(
+        theme = Theme.light,
+        config = AppConfig.default
+          .withBlurRadius(0.4f)
+          .withBackgroundStyle(BackgroundStyle.Solid)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        viewportSize = Some(ViewportSize(100, 30)),
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("diagnostics"),
+            SurfaceContent.Diagnostics(
+              List(Diagnostic("unused import", DiagnosticSeverity.Warning, Location(1, 0)))
+            ),
+            SurfacePresentation.Pinned(PanelPosition.Right, 24)
+          )
         )
       )
     )

@@ -71,17 +71,19 @@ class EditorLargeJsonNavigationSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 24)
       )
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        )
       ),
-      viewportSize = Some(ViewportSize(100, 30))
+      runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(100, 30)))
     )
 
     val moved = (1 to 100).foldLeft(state)((current, _) => EditorEventReducer.reduce(MoveRight, paneId, current).state)
 
-    moved.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 100)
+    moved.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 100)
   }

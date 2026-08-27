@@ -21,14 +21,18 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(0)
 
-  private val editorState = AppState.initial.copy(
-    config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")),
-    layout = Layout(
-      editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-      activeEditorPaneId = Some(paneId)
-    ),
-    focus = Focus.EditorPane(paneId)
-  )
+  private val editorState =
+    val initial = AppState.initial
+    initial.copy(
+      persisted = initial.persisted.copy(
+        config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
+    )
 
   "FocusedInputTranslator" should "treat Enter as newline in editor focus" in {
     val translator = FocusedInputTranslator.forState(editorState)
@@ -38,12 +42,16 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "treat Enter as submit in command-runner focus while preserving global hotkeys" in {
     val commandRunnerState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("command-runner"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -61,8 +69,16 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "dispatch conventional core editing shortcuts from platform-resolved hotkeys" in {
-    val linuxState = editorState.copy(config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")))
-    val macState   = editorState.copy(config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")))
+    val linuxState = editorState.copy(persisted =
+      editorState.persisted.copy(
+        config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux"))
+      )
+    )
+    val macState = editorState.copy(persisted =
+      editorState.persisted.copy(
+        config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X"))
+      )
+    )
 
     val linux = FocusedInputTranslator.forState(linuxState)
     val mac   = FocusedInputTranslator.forState(macState)
@@ -111,8 +127,12 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = editorState.copy(
-      focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(surface.id)
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(surface)
+      )
     )
 
     FocusedInputTranslator
@@ -140,8 +160,12 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = editorState.copy(
-      focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(surface.id)
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(surface)
+      )
     )
     val doubleTap = KeyStrokeInfo(InputKey.Ctrl, None, Set.empty)
 
@@ -159,8 +183,12 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         |hotkey.find = ctrl+k
         |""".stripMargin
     )
-    val loadedState = editorState.copy(config = ConfigManager.loadConfig(Some(configFile.toString)))
-    val duplicate   = HotkeyTrigger(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
+    val loadedState = editorState.copy(persisted =
+      editorState.persisted.copy(
+        config = ConfigManager.loadConfig(Some(configFile.toString))
+      )
+    )
+    val duplicate = HotkeyTrigger(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
     val invalidConfig = AppConfig.default.withHotkeyConfig(
       HotkeyConfig(
         AppConfig.default.hotkeyConfig.bindings ++ Map(
@@ -175,7 +203,13 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
       .isInstanceOf[UnhandledEvent[?]] shouldBe true
     FocusedInputTranslator
-      .forState(editorState.copy(config = invalidConfig))
+      .forState(
+        editorState.copy(persisted =
+          editorState.persisted.copy(
+            config = invalidConfig
+          )
+        )
+      )
       .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
       .isInstanceOf[UnhandledEvent[?]] shouldBe true
   }
@@ -201,14 +235,18 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "treat Enter and Tab as modal form actions in modal focus" in {
     val modalState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("file-modal")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-modal"),
-          SurfaceContent.ModalWorkflow(
-            Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
-          ),
-          SurfacePresentation.Modal
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("file-modal"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-modal"),
+            SurfaceContent.ModalWorkflow(
+              Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
+            ),
+            SurfacePresentation.Modal
+          )
         )
       )
     )
@@ -222,14 +260,18 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "prevent global commands from reaching the editor through a blocking close confirmation" in {
     val closeState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("close-confirmation")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("close-confirmation"),
-          SurfaceContent.ModalWorkflow(
-            Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
-          ),
-          SurfacePresentation.Modal
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("close-confirmation"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("close-confirmation"),
+            SurfaceContent.ModalWorkflow(
+              Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
+            ),
+            SurfacePresentation.Modal
+          )
         )
       )
     )
@@ -243,12 +285,16 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "treat focused contextual toolbar input as modal-style submit, dismiss, and directional navigation" in {
     val toolbarState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("contextual-toolbar")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("contextual-toolbar"),
-          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("contextual-toolbar"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("contextual-toolbar"),
+            SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -261,13 +307,17 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "treat pinned panel focus as panel-local navigation and focus-return input" in {
     val pinnedState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("left-panel")),
-      uiSurfaces = List(
-        UiSurface.fromPanelContent(
-          SurfaceId("left-panel"),
-          PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
-          PanelPosition.Left,
-          24
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("left-panel"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface.fromPanelContent(
+            SurfaceId("left-panel"),
+            PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
+            PanelPosition.Left,
+            24
+          )
         )
       )
     )
@@ -281,12 +331,16 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "treat floating peek focus as dismiss-oriented local input" in {
     val peekState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("peek")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("peek"),
-          SurfaceContent.QuickInfo("map"),
-          SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("peek"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("peek"),
+            SurfaceContent.QuickInfo("map"),
+            SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+          )
         )
       )
     )
@@ -300,19 +354,23 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "treat comment lens focus as form editing input" in {
     val commentState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("comment-lens")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("comment-lens"),
-          SurfaceContent.CommentLens(
-            CommentLensState(
-              RenderedComment(0, "Review this", "Review this"),
-              "Review this",
-              11,
-              Some(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 6), "Review this"))
-            )
-          ),
-          SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("comment-lens"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("comment-lens"),
+            SurfaceContent.CommentLens(
+              CommentLensState(
+                RenderedComment(0, "Review this", "Review this"),
+                "Review this",
+                11,
+                Some(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 6), "Review this"))
+              )
+            ),
+            SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+          )
         )
       )
     )
@@ -325,12 +383,16 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "route Tab and Shift+Tab to command-runner category navigation" in {
     val commandRunnerState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("command-runner"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -343,17 +405,21 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   it should "treat submenu focus as command-runner input rather than peek input" in {
     val runner = CommandRunner.empty
     val submenuState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("command-runner-submenu"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -366,12 +432,14 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep routing input to the command runner while its surfaces remain open" in {
-    val leakedFocusState = editorState.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val leakedFocusState = editorState.copy(runtime =
+      editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -383,12 +451,16 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "route Ctrl+Tab and Ctrl+Shift+Tab to pane navigation regardless of focus" in {
     val commandRunnerState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("command-runner"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -404,19 +476,25 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "respect configured global hotkey overrides in focused routing" in {
     val commandRunnerState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("command-runner"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
-    val configuredState = commandRunnerState.copy(
-      config = commandRunnerState.config.withHotkeyOverride(
-        HotkeyAction.ToggleCommandRunner,
-        "ctrl+k"
+    val configuredState = commandRunnerState.copy(persisted =
+      commandRunnerState.persisted.copy(
+        config = commandRunnerState.persisted.config.withHotkeyOverride(
+          HotkeyAction.ToggleCommandRunner,
+          "ctrl+k"
+        )
       )
     )
     val translator = FocusedInputTranslator.forState(configuredState)
@@ -431,15 +509,19 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "respect configured command-runner keymap overrides" in {
     val commandRunnerState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        )
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("command-runner")),
+        config = editorState.persisted.config.withCommandRunnerKeyOverride(CommandRunnerKeyAction.Submit, "ctrl+enter")
       ),
-      config = editorState.config.withCommandRunnerKeyOverride(CommandRunnerKeyAction.Submit, "ctrl+enter")
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(com.serenity.command.CommandRunner.empty),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
     )
     val translator = FocusedInputTranslator.forState(commandRunnerState)
 
@@ -453,17 +535,21 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "respect configured modal keymap overrides" in {
     val modalState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("file-modal")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-modal"),
-          SurfaceContent.ModalWorkflow(
-            Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
-          ),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        )
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("file-modal")),
+        config = editorState.persisted.config.withModalKeyOverride(ModalKeyAction.Dismiss, "ctrl+escape")
       ),
-      config = editorState.config.withModalKeyOverride(ModalKeyAction.Dismiss, "ctrl+escape")
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-modal"),
+            SurfaceContent.ModalWorkflow(
+              Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
+            ),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
     )
     val translator = FocusedInputTranslator.forState(modalState)
 
@@ -477,16 +563,20 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "respect configured panel keymap overrides" in {
     val panelState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("left-panel")),
-      uiSurfaces = List(
-        UiSurface.fromPanelContent(
-          SurfaceId("left-panel"),
-          PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
-          PanelPosition.Left,
-          24
-        )
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("left-panel")),
+        config = editorState.persisted.config.withPanelKeyOverride(PanelKeyAction.Activate, "ctrl+enter")
       ),
-      config = editorState.config.withPanelKeyOverride(PanelKeyAction.Activate, "ctrl+enter")
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface.fromPanelContent(
+            SurfaceId("left-panel"),
+            PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
+            PanelPosition.Left,
+            24
+          )
+        )
+      )
     )
     val translator = FocusedInputTranslator.forState(panelState)
 
@@ -500,15 +590,19 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "respect configured peek keymap overrides" in {
     val peekState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("peek")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("peek"),
-          SurfaceContent.QuickInfo("map"),
-          SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
-        )
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("peek")),
+        config = editorState.persisted.config.withPeekKeyOverride(PeekKeyAction.Dismiss, "ctrl+escape")
       ),
-      config = editorState.config.withPeekKeyOverride(PeekKeyAction.Dismiss, "ctrl+escape")
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("peek"),
+            SurfaceContent.QuickInfo("map"),
+            SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)
+          )
+        )
+      )
     )
     val translator = FocusedInputTranslator.forState(peekState)
 
@@ -522,12 +616,16 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "route the contextual toolbar hotkey regardless of local surface focus" in {
     val toolbarState = editorState.copy(
-      focus = Focus.Surface(SurfaceId("contextual-toolbar")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("contextual-toolbar"),
-          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = editorState.persisted.copy(
+        focus = Focus.Surface(SurfaceId("contextual-toolbar"))
+      ),
+      runtime = editorState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("contextual-toolbar"),
+            SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )

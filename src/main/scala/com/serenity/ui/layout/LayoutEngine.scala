@@ -34,7 +34,7 @@ final case class EditorWorkspaceLayout(
     paneLayouts: Map[PaneId, EditorPaneLayout]
 ):
   def activePaneLayout(state: AppState): Option[EditorPaneLayout] =
-    state.layout.activeEditorPaneId.flatMap(paneLayouts.get)
+    state.persisted.layout.activeEditorPaneId.flatMap(paneLayouts.get)
 
   def activeHeaderRect(state: AppState): Option[LayoutRect] =
     activePaneLayout(state).map(_.headerRect)
@@ -100,21 +100,21 @@ object LayoutEngine:
     viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
-    val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
+    val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
-    val uiElementGap   = math.ceil(math.max(0.0, state.config.uiElementGap)).toInt
+    val uiElementGap   = math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
     val textAreaInsets =
-      if spacerPercentage == DefaultSpacerPercentage then state.config.textAreaInsets.normalized
+      if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.textAreaInsets.normalized
       else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
     val lineNumberWidth =
-      if state.config.showLineNumbers then calculateLineNumberWidth(state)
+      if state.persisted.config.showLineNumbers then calculateLineNumberWidth(state)
       else 0
     val horizontalTextFraction = (1.0 - textAreaInsets.left - textAreaInsets.right).max(0.01)
     val minimumEditorWorkspaceWidth =
-      math.ceil((state.config.minimumPaneWidth.max(1) + lineNumberWidth) / horizontalTextFraction).toInt
+      math.ceil((state.persisted.config.minimumPaneWidth.max(1) + lineNumberWidth) / horizontalTextFraction).toInt
     val pinnedPanelLayout =
-      state.layout.workspaceTree
+      state.persisted.layout.workspaceTree
         .filter(_.dockedSurfaceIds.nonEmpty)
         .map(
           calculateDockedPanelLayout(
@@ -170,7 +170,7 @@ object LayoutEngine:
 
     val leftSpacerRect = LayoutRect(workspaceX, workspaceY, leftSpacerWidth, availableHeight)
     val lineNumberRect =
-      if state.config.showLineNumbers then
+      if state.persisted.config.showLineNumbers then
         val lineNumberY      = workspaceY + editorPaneHeaderHeight + topSpacerHeight
         val lineNumberHeight = math.max(1, contentAreaHeight - topSpacerHeight - bottomSpacerHeight)
         Some(
@@ -267,12 +267,12 @@ object LayoutEngine:
     )
 
   private def usesBottomGutter(state: AppState): Boolean =
-    state.config.showGutter ||
-      (state.config.cursorInfoBarMode != com.serenity.config.CursorInfoBarMode.Off &&
-        state.config.cursorInfoBarPlacement == com.serenity.config.CursorInfoBarPlacement.PinnedBottom)
+    state.persisted.config.showGutter ||
+      (state.persisted.config.cursorInfoBarMode != com.serenity.config.CursorInfoBarMode.Off &&
+        state.persisted.config.cursorInfoBarPlacement == com.serenity.config.CursorInfoBarPlacement.PinnedBottom)
 
   private def paneHeaderHeight(state: AppState): Int =
-    if state.config.showPaneHeaders then EditorPaneHeaderHeight else 0
+    if state.persisted.config.showPaneHeaders then EditorPaneHeaderHeight else 0
 
   final private case class PinnedPanelLayout(
       panelRects: Map[PanelPosition, LayoutRect],
@@ -435,7 +435,7 @@ object LayoutEngine:
   ): Option[PinnedPanelDragResize] =
     val layout         = calculateLayoutWithUI(state, viewportSize)
     val contentHeight  = calculateContentHeight(state, viewportSize)
-    val uiElementGap   = math.ceil(math.max(0.0, state.config.uiElementGap)).toInt
+    val uiElementGap   = math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
     val pinnedSurfaces = state.pinnedSurfaces
     val panelSizes = pinnedSurfaces.foldLeft(Map.empty[PanelPosition, Int]) {
       case (acc, UiSurface(_, _, SurfacePresentation.Pinned(position, size), _)) =>
@@ -597,7 +597,7 @@ object LayoutEngine:
         }
 
   private def calculateContentHeight(state: AppState, viewportSize: ViewportSize): Int =
-    val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
+    val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
     math.max(1, viewportSize.height - gutterHeight)
 
@@ -665,8 +665,8 @@ object LayoutEngine:
   private def calculateLineNumberWidth(state: AppState): Int =
     // Find the maximum line count across all buffers to determine width needed
     val maxLines =
-      if state.buffers.isEmpty then 10
-      else state.buffers.values.map(_.document.content.lineCount).max
+      if state.persisted.buffers.isEmpty then 10
+      else state.persisted.buffers.values.map(_.document.content.lineCount).max
 
     math.max(3, maxLines.toString.length + 1) // +1 for spacing, minimum 3 chars
 
@@ -678,11 +678,11 @@ object LayoutEngine:
     forcedHeight: Option[Int] = None
   ): Option[LayoutRect] =
     for
-      paneId     <- state.layout.activeEditorPaneId
-      pane       <- state.layout.editorPanes.get(paneId)
+      paneId     <- state.persisted.layout.activeEditorPaneId
+      pane       <- state.persisted.layout.editorPanes.get(paneId)
       paneLayout <- paneLayouts.get(paneId)
       bufferId   <- pane.bufferId
-      buffer     <- state.buffers.get(bufferId)
+      buffer     <- state.persisted.buffers.get(bufferId)
       rect <- calculateFloatingSurfaceRect(surface, buffer, paneLayout.contentRect, state, topYOverride, forcedHeight)
     yield rect
 
@@ -717,7 +717,7 @@ object LayoutEngine:
         buffer.document.content,
         contentRect,
         buffer.viewport,
-        state.config.wordWrapEnabled
+        state.persisted.config.wordWrapEnabled
       )
       if surface.content match
         case SurfaceContent.ContextualToolbar(_) => contentRect.contains(screenPosition.x, screenPosition.y)
@@ -776,7 +776,7 @@ object LayoutEngine:
             buffer.document.content,
             contentRect,
             buffer.viewport,
-            state.config.wordWrapEnabled
+            state.persisted.config.wordWrapEnabled
           )
         )
       case _ =>
@@ -790,18 +790,18 @@ object LayoutEngine:
     paneLayouts: Map[PaneId, EditorPaneLayout]
   ): Option[FloatingAnchorFrame] =
     for
-      paneId     <- state.layout.activeEditorPaneId
-      pane       <- state.layout.editorPanes.get(paneId)
+      paneId     <- state.persisted.layout.activeEditorPaneId
+      pane       <- state.persisted.layout.editorPanes.get(paneId)
       paneLayout <- paneLayouts.get(paneId)
       bufferId   <- pane.bufferId
-      buffer     <- state.buffers.get(bufferId)
+      buffer     <- state.persisted.buffers.get(bufferId)
       anchor     <- floatingAnchor(surface, state, buffer)
       screenPosition <- CursorLayout.calculateScreenPositionInContent(
         anchor,
         buffer.document.content,
         paneLayout.contentRect,
         buffer.viewport,
-        state.config.wordWrapEnabled
+        state.persisted.config.wordWrapEnabled
       )
     yield FloatingAnchorFrame(paneLayout.contentRect, screenPosition)
 
@@ -822,7 +822,7 @@ object LayoutEngine:
           case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
           case _                                                             => false
       }
-      state.focus match
+      state.persisted.focus match
         case Focus.Surface(surfaceId) =>
           belowSurfaces.find(_.id == surfaceId) match
             case Some(focused) => List(focused)
@@ -911,13 +911,13 @@ object LayoutEngine:
   private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
-        math.max(0.0, state.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state)))
+        math.max(0.0, state.persisted.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state)))
       case _ => floatingStackGapRows(state)
 
   private def floatingStackGapRows(state: AppState): Double =
     Option
-      .when(state.config.uiElementGap > 0.0)(state.config.uiElementGap)
-      .getOrElse(InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows.toDouble)
+      .when(state.persisted.config.uiElementGap > 0.0)(state.persisted.config.uiElementGap)
+      .getOrElse(InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity).overlayGapRows.toDouble)
 
   private def wholeRowOrigin(rows: Double): Int =
     math.floor(math.max(0.0, rows)).toInt
@@ -979,17 +979,17 @@ object LayoutEngine:
     maxHeight: Int,
     state: AppState
   ): Int =
-    val densityMetrics = InterfaceDensityMetrics.forDensity(state.config.interfaceDensity)
+    val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
     val commandMaxHeight =
-      state.config.commandRunnerVisibleRows
+      state.persisted.config.commandRunnerVisibleRows
         .map(rows =>
           SurfaceFrameLayout.frameHeightForItemRows(
             AppConfig.clampCommandRunnerVisibleRows(rows),
             hasHeader = true,
             hasFooter = true,
             borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-            itemGapRows = state.config.commandRunnerItemGapRows,
-            itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+            itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+            itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
           )
         )
         .getOrElse(densityMetrics.commandSurfaceMaxHeight)
@@ -1023,8 +1023,8 @@ object LayoutEngine:
           hasHeader = false,
           hasFooter = false,
           borderCells = borderCells,
-          itemGapRows = state.config.uiElementGap,
-          itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
+          itemGapRows = state.persisted.config.uiElementGap,
+          itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
         )
       case SurfaceContent.ContextMenu(menu) =>
         SurfaceFrameLayout.frameHeightForItemRows(
@@ -1032,8 +1032,8 @@ object LayoutEngine:
           hasHeader = true,
           hasFooter = menu.items.nonEmpty,
           borderCells = SurfaceFrameLayout.borderCellsFor(content),
-          itemGapRows = state.config.commandRunnerItemGapRows,
-          itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
+          itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+          itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
         )
       case SurfaceContent.CommentLens(lens) =>
         math.max(4, math.min(8, lens.draft.split("\n", -1).length + 3))
@@ -1052,15 +1052,15 @@ object LayoutEngine:
               hasHeader = true,
               hasFooter = true,
               borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-              itemGapRows = state.config.commandRunnerItemGapRows,
-              itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+              itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+              itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
             )
           )
         )
       case SurfaceContent.ModalWorkflow(modal) =>
         ModalSurfaceComposition.frameHeight(
           modal,
-          SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+          SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
         )
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
           SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
@@ -1186,7 +1186,7 @@ object LayoutEngine:
     val calculatedLayout = calculateLayout(state, viewportSize)
     val workspaceLayout  = calculateEditorWorkspaceLayout(state, calculatedLayout)
     val (updatedBuffers, updatedPanes) =
-      state.layout.editorPanes.foldLeft((state.buffers, state.layout.editorPanes)) {
+      state.persisted.layout.editorPanes.foldLeft((state.persisted.buffers, state.persisted.layout.editorPanes)) {
         case ((buffers, panes), (paneId, pane)) =>
           val paneRect =
             workspaceLayout.paneLayouts.get(paneId).map(_.paneRect).getOrElse(calculatedLayout.editorPanelRect)
@@ -1195,7 +1195,9 @@ object LayoutEngine:
           val nextPanes    = panes + (paneId -> pane.copy(viewport = paneViewport))
           val updatedBuffer = pane.bufferId.flatMap(buffers.get).map { buffer =>
             buffer.id -> buffer
-              .copy(viewport = updateBufferViewportDimensions(buffer, contentRect, state.config.wordWrapEnabled))
+              .copy(viewport =
+                updateBufferViewportDimensions(buffer, contentRect, state.persisted.config.wordWrapEnabled)
+              )
           }
           val nextBuffers = updatedBuffer.fold(buffers)(buffers + _)
 
@@ -1203,8 +1205,10 @@ object LayoutEngine:
       }
 
     state.copy(
-      buffers = updatedBuffers,
-      layout = state.layout.copy(editorPanes = updatedPanes)
+      persisted = state.persisted.copy(
+        buffers = updatedBuffers,
+        layout = state.persisted.layout.copy(editorPanes = updatedPanes)
+      )
     )
 
   /** Calculate individual pane layouts within the editor area */
@@ -1220,7 +1224,7 @@ object LayoutEngine:
     calculateEditorPaneLayoutsWithMinWidth(state, calculatedLayout, minWidth).view.mapValues(_.paneRect).toMap
 
   def calculateEditorPaneLayouts(state: AppState, calculatedLayout: CalculatedLayout): Map[PaneId, EditorPaneLayout] =
-    calculateEditorPaneLayoutsWithMinWidth(state, calculatedLayout, state.config.minimumPaneWidth)
+    calculateEditorPaneLayoutsWithMinWidth(state, calculatedLayout, state.persisted.config.minimumPaneWidth)
 
   /** Finds the nearest usable pane in a cardinal direction using authoritative pane rectangles. */
   def directionalPaneNeighbor(
@@ -1231,7 +1235,7 @@ object LayoutEngine:
   ): Option[PaneId] =
     val paneRects = calculatePaneLayouts(state, calculatedLayout)
     paneRects.get(paneId).flatMap { current =>
-      val order = state.layout.orderedPaneIds.zipWithIndex.toMap
+      val order = state.persisted.layout.orderedPaneIds.zipWithIndex.toMap
       paneRects.iterator
         .filter { case (candidateId, rect) => candidateId != paneId && rect.width > 0 && rect.height > 0 }
         .flatMap { (candidateId, candidate) =>
@@ -1281,14 +1285,14 @@ object LayoutEngine:
   ): Map[PaneId, LayoutRect] =
     // A stored tree that predates a direct state update can omit panes the update just added; trust it
     // only when it still accounts for every current editor pane, matching Layout.effectiveWorkspaceTree.
-    val editorPaneIds = state.layout.editorPanes.keySet
-    state.layout.workspaceTree.filter(tree => editorPaneIds.subsetOf(tree.paneIds.toSet)) match
+    val editorPaneIds = state.persisted.layout.editorPanes.keySet
+    state.persisted.layout.workspaceTree.filter(tree => editorPaneIds.subsetOf(tree.paneIds.toSet)) match
       case Some(tree) =>
         calculateWorkspaceTreePaneRects(tree, calculatedLayout.editorPanelRect, minWidth)
           .filter { case (paneId, _) => editorPaneIds.contains(paneId) }
       case None =>
         val editorRect = calculatedLayout.editorPanelRect
-        val paneIds    = state.layout.orderedPaneIds
+        val paneIds    = state.persisted.layout.orderedPaneIds
         val paneCount  = paneIds.size
 
         if paneCount == 0 then Map.empty
@@ -1297,7 +1301,7 @@ object LayoutEngine:
           val paneId = paneIds.head
           Map(paneId -> editorRect)
         else
-          state.layout.splitDirection match
+          state.persisted.layout.splitDirection match
             case PaneSplitDirection.Horizontal =>
               calculateHorizontalPaneLayouts(state, editorRect, paneIds, minWidth)
             case PaneSplitDirection.Vertical =>
@@ -1356,10 +1360,10 @@ object LayoutEngine:
     calculatedLayout: CalculatedLayout
   ): EditorPaneLayout =
     val headerHeight   = paneHeaderHeight(state)
-    val insets         = state.config.textAreaInsets.normalized
+    val insets         = state.persisted.config.textAreaInsets.normalized
     val paneHeaderRect = paneRect.copy(height = headerHeight)
     val headerRect =
-      if state.layout.activeEditorPaneId.contains(paneId) then
+      if state.persisted.layout.activeEditorPaneId.contains(paneId) then
         activeWorkspaceHeaderRect(paneRect.y, calculatedLayout, headerHeight)
       else paneHeaderRect
     EditorPaneLayout(
@@ -1510,9 +1514,9 @@ object LayoutEngine:
     }.toMap
 
   private def focusedPane(state: AppState): Option[PaneId] =
-    state.focus match
-      case Focus.EditorPane(paneId) if state.layout.editorPanes.contains(paneId) => Some(paneId)
-      case _                                                                     => None
+    state.persisted.focus match
+      case Focus.EditorPane(paneId) if state.persisted.layout.editorPanes.contains(paneId) => Some(paneId)
+      case _                                                                               => None
 
   private def splitLengths(total: Int, count: Int): List[Int] =
     val base      = total / count

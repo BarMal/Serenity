@@ -196,7 +196,7 @@ final private[manager] class StateManagerEffectHandlers(
           case _ =>
             None
       }
-    val updatedSurfaces = state.uiSurfaces.map {
+    val updatedSurfaces = state.runtime.uiSurfaces.map {
       case current if updatedRunner.isDefined && commandRunnerSurfaceId.contains(current.id) =>
         current.copy(content = SurfaceContent.CommandPalette(updatedRunner.get))
       case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _)
@@ -210,7 +210,7 @@ final private[manager] class StateManagerEffectHandlers(
       case other =>
         other
     }
-    state.copy(uiSurfaces = updatedSurfaces)
+    state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
 
   private[manager] def updateConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
@@ -231,7 +231,7 @@ final private[manager] class StateManagerEffectHandlers(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
     stateRef.get.flatMap { previousState =>
-      applyConfigUpdate(update).flatTap(cancelDisabledMotion(previousState.config, _))
+      applyConfigUpdate(update).flatTap(cancelDisabledMotion(previousState.persisted.config, _))
     }
 
   private def updateMotionAccessibility(
@@ -248,18 +248,20 @@ final private[manager] class StateManagerEffectHandlers(
           if config.windowSitterConfig.enabled then
             com.serenity.animation.WindowSitter.fromConfig(config.windowSitterConfig)
           else com.serenity.animation.WindowSitter.default
-        state.copy(windowSitter = sitter)
+        state.copy(runtime = state.runtime.copy(windowSitter = sitter))
       }
     }.void
 
   private def cancelActiveMotion(): IO[Unit] =
     clearBufferAnimations() >>
       stateRef.update(state =>
-        state.copy(
-          themeTransition = None,
-          uiSurfaces = state.uiSurfaces.filterNot(isGhostOverlay),
-          surfaceAnimations = Map.empty,
-          windowSitter = com.serenity.animation.WindowSitter.default
+        state.copy(runtime =
+          state.runtime.copy(
+            themeTransition = None,
+            uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
+            surfaceAnimations = Map.empty,
+            windowSitter = com.serenity.animation.WindowSitter.default
+          )
         )
       )
 
@@ -281,7 +283,11 @@ final private[manager] class StateManagerEffectHandlers(
             current.windowSitterConfig.enabled
         )(
           stateRef.update(state =>
-            state.copy(windowSitter = com.serenity.animation.WindowSitter.fromConfig(current.windowSitterConfig))
+            state.copy(runtime =
+              state.runtime.copy(windowSitter =
+                com.serenity.animation.WindowSitter.fromConfig(current.windowSitterConfig)
+              )
+            )
           )
         )
 
@@ -296,9 +302,11 @@ final private[manager] class StateManagerEffectHandlers(
       case com.serenity.config.MotionFamily.UiTransitions =>
         clearBufferAnimations(com.serenity.animation.AnimationOwner.UiTransitions) >>
           stateRef.update(state =>
-            state.copy(
-              themeTransition = None,
-              windowSitter = com.serenity.animation.WindowSitter.default
+            state.copy(runtime =
+              state.runtime.copy(
+                themeTransition = None,
+                windowSitter = com.serenity.animation.WindowSitter.default
+              )
             )
           )
       case com.serenity.config.MotionFamily.Cursor =>
@@ -326,10 +334,13 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def cancelSurfaceMotion(matches: UiSurface => Boolean): IO[Unit] =
     stateRef.update { state =>
-      val matchingIds = state.uiSurfaces.collect { case surface if matches(surface) => surface.id }.toSet
-      state.copy(
-        uiSurfaces = state.uiSurfaces.filterNot(surface => matches(surface) && isGhostOverlay(surface)),
-        surfaceAnimations = state.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
+      val matchingIds = state.runtime.uiSurfaces.collect { case surface if matches(surface) => surface.id }.toSet
+      state.copy(runtime =
+        state.runtime.copy(
+          uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => matches(surface) && isGhostOverlay(surface)),
+          surfaceAnimations =
+            state.runtime.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
+        )
       )
     }
 
@@ -370,8 +381,9 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[com.serenity.config.AppConfig] =
     stateRef
       .modify { state =>
-        val newConfig = update(state.config)
-        val newState  = withUpdatedRunnerConfig(state.copy(config = newConfig), newConfig)
+        val newConfig = update(state.persisted.config)
+        val newState =
+          withUpdatedRunnerConfig(state.copy(persisted = state.persisted.copy(config = newConfig)), newConfig)
         (newState, newConfig)
       }
       .flatTap(config =>
@@ -423,11 +435,11 @@ final private[manager] class StateManagerEffectHandlers(
             case Some(surface) =>
               surface.content match
                 case SurfaceContent.CommandPalette(runner) =>
-                  opened.copy(uiSurfaces = opened.uiSurfaces.map {
+                  opened.copy(runtime = opened.runtime.copy(uiSurfaces = opened.runtime.uiSurfaces.map {
                     case currentSurface if currentSurface.id == surface.id =>
                       currentSurface.copy(content = SurfaceContent.CommandPalette(runner.openSettings))
                     case currentSurface => currentSurface
-                  })
+                  }))
                 case _ => opened
             case None => opened
         }
@@ -460,7 +472,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.SaveCurrentFileAs =>
         requestSaveAsFileDialog(state, state.focusedBufferId)
       case CommandIntent.SaveConfig =>
-        persistConfigFile(state.config)
+        persistConfigFile(state.persisted.config)
       case CommandIntent.SaveSession =>
         saveSession()
       case CommandIntent.RestoreSession =>
@@ -809,12 +821,16 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.SetBufferLanguage(language) =>
         state.focusedBufferId match
           case Some(bufferId) =>
-            state.buffers.get(bufferId) match
+            state.persisted.buffers.get(bufferId) match
               case Some(buffer) =>
                 val updateLanguage =
                   updateState(s =>
-                    s.copy(buffers =
-                      s.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(language = language)))
+                    s.copy(persisted =
+                      s.persisted.copy(buffers =
+                        s.persisted.buffers + (bufferId -> buffer.copy(document =
+                          buffer.document.copy(language = language)
+                        ))
+                      )
                     )
                   )
 
@@ -876,9 +892,9 @@ final private[manager] class StateManagerEffectHandlers(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[Unit] =
     stateRef.get.flatMap { state =>
-      val updatedConfig = update(state.config)
-      if updatedConfig == state.config then
-        if currentFocusedKeymapOwnsBinding(state.config, itemId, binding) then IO.unit
+      val updatedConfig = update(state.persisted.config)
+      if updatedConfig == state.persisted.config then
+        if currentFocusedKeymapOwnsBinding(state.persisted.config, itemId, binding) then IO.unit
         else stateRef.update(withFocusedKeymapConflictMessage(itemId, binding))
       else updateConfig(_ => updatedConfig).void
     }
@@ -942,8 +958,8 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def updateGlobalHotkeyBinding(action: com.serenity.config.HotkeyAction, binding: String): IO[Unit] =
     stateRef.get.flatMap { state =>
-      val updatedConfig = state.config.withHotkeyOverride(action, binding)
-      if updatedConfig == state.config then
+      val updatedConfig = state.persisted.config.withHotkeyOverride(action, binding)
+      if updatedConfig == state.persisted.config then
         stateRef.update(
           withGlobalKeymapConflictMessage(action, binding)
         )
@@ -951,7 +967,7 @@ final private[manager] class StateManagerEffectHandlers(
     }
 
   private def withFocusedKeymapConflictMessage(itemId: String, binding: String)(state: AppState): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.map {
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case current @ UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) =>
         current.copy(content = SurfaceContent.CommandPalette(withFocusedKeymapConflict(runner, itemId, binding)))
       case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly), _, _) =>
@@ -963,7 +979,7 @@ final private[manager] class StateManagerEffectHandlers(
           )
         )
       case current => current
-    })
+    }))
 
   private def withFocusedKeymapConflict(runner: CommandRunner, itemId: String, binding: String): CommandRunner =
     runner.copy(
@@ -989,7 +1005,7 @@ final private[manager] class StateManagerEffectHandlers(
       case Some(surface) =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
-            state.copy(uiSurfaces = state.uiSurfaces.map {
+            state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
               case current if current.id == surface.id =>
                 current.copy(content =
                   SurfaceContent.CommandPalette(
@@ -1011,7 +1027,7 @@ final private[manager] class StateManagerEffectHandlers(
                 )
               case current =>
                 current
-            })
+            }))
           case _ => state
       case None => state
 
@@ -1038,14 +1054,16 @@ final private[manager] class StateManagerEffectHandlers(
             selections
               .foldLeft(baseDocument)((document, selection) => document.toggleMark(richTextRange(selection), mark))
               .normalized
-        state.copy(
-          buffers = state.buffers.updated(
-            buffer.id,
-            buffer.copy(
-              document = buffer.document.copy(isDirty = true, isNewEmpty = false),
-              richText = buffer.richText.copy(
-                richTextDocument = Some(updatedDocument),
-                insertionRichTextStyle = Some(insertionStyle)
+        state.copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.updated(
+              buffer.id,
+              buffer.copy(
+                document = buffer.document.copy(isDirty = true, isNewEmpty = false),
+                richText = buffer.richText.copy(
+                  richTextDocument = Some(updatedDocument),
+                  insertionRichTextStyle = Some(insertionStyle)
+                )
               )
             )
           )
@@ -1083,12 +1101,14 @@ final private[manager] class StateManagerEffectHandlers(
           val updatedDocument = ranges.foldLeft(baseDocument)(update).normalized
           if updatedDocument == baseDocument.normalized then state
           else
-            state.copy(
-              buffers = state.buffers.updated(
-                buffer.id,
-                buffer.copy(
-                  document = buffer.document.copy(isDirty = true, isNewEmpty = false),
-                  richText = buffer.richText.copy(richTextDocument = Some(updatedDocument))
+            state.copy(persisted =
+              state.persisted.copy(buffers =
+                state.persisted.buffers.updated(
+                  buffer.id,
+                  buffer.copy(
+                    document = buffer.document.copy(isDirty = true, isNewEmpty = false),
+                    richText = buffer.richText.copy(richTextDocument = Some(updatedDocument))
+                  )
                 )
               )
             )
@@ -1110,12 +1130,14 @@ final private[manager] class StateManagerEffectHandlers(
           val updatedDocument = ranges.foldLeft(baseDocument)(update).normalized
           if updatedDocument == baseDocument.normalized then state
           else
-            state.copy(
-              buffers = state.buffers.updated(
-                buffer.id,
-                buffer.copy(
-                  document = buffer.document.copy(isDirty = true, isNewEmpty = false),
-                  richText = buffer.richText.copy(richTextDocument = Some(updatedDocument))
+            state.copy(persisted =
+              state.persisted.copy(buffers =
+                state.persisted.buffers.updated(
+                  buffer.id,
+                  buffer.copy(
+                    document = buffer.document.copy(isDirty = true, isNewEmpty = false),
+                    richText = buffer.richText.copy(richTextDocument = Some(updatedDocument))
+                  )
                 )
               )
             )
@@ -1134,10 +1156,10 @@ final private[manager] class StateManagerEffectHandlers(
       }
 
   private def activeEditorContentBuffer(state: AppState): Option[Buffer] =
-    state.layout.activeEditorPaneId
-      .flatMap(state.layout.editorPanes.get)
+    state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
       .flatMap(_.bufferId)
-      .flatMap(state.buffers.get)
+      .flatMap(state.persisted.buffers.get)
 
   private def richTextRange(selection: Selection): com.serenity.richtext.RichTextRange =
     com.serenity.richtext.RichTextRange(
@@ -1242,8 +1264,9 @@ final private[manager] class StateManagerEffectHandlers(
                           preset.config.defaultDocumentMode
                         )
                       val restoredOutlineState = hydratePresetSymbolPanels(restoredDocumentState)
-                      val restored = withUpdatedRunnerConfig(restoredOutlineState, restoredOutlineState.config)
-                      (restored, restored.config)
+                      val restored =
+                        withUpdatedRunnerConfig(restoredOutlineState, restoredOutlineState.persisted.config)
+                      (restored, restored.persisted.config)
                     }
                     _ <- persistConfigFile(appliedConfig)
                     _ <- onFontConfigChanged(appliedConfig.fontConfig)
@@ -1259,7 +1282,7 @@ final private[manager] class StateManagerEffectHandlers(
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
 
   private def applyPresetDocumentModeToActiveEmptyBuffer(state: AppState, mode: DefaultDocumentMode): AppState =
-    state.focusedBufferId.flatMap(state.buffers.get) match
+    state.focusedBufferId.flatMap(state.persisted.buffers.get) match
       case Some(buffer)
           if buffer.document.isNewEmpty && buffer.document.content.weight == 0 && buffer.document.filePath.isEmpty =>
         val updatedBuffer =
@@ -1279,7 +1302,7 @@ final private[manager] class StateManagerEffectHandlers(
                 document = buffer.document.copy(language = None),
                 richText = buffer.richText.copy(richTextDocument = Some(RichTextDocument.fromPlainText("")))
               )
-        state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer)))
       case _ =>
         state
 
@@ -1288,7 +1311,7 @@ final private[manager] class StateManagerEffectHandlers(
     val outlineActive      = currentSymbolActiveLocation(outlineSymbolsList, state)
     val commentSymbolsList = commentPanelSymbols(state)
     val commentActive      = currentSymbolActiveLocation(commentSymbolsList, state)
-    val hydratedSurfaces = state.uiSurfaces.map {
+    val hydratedSurfaces = state.runtime.uiSurfaces.map {
       case surface @ UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Pinned(_, _), _) =>
         surface.copy(content = SurfaceContent.Outline(outlineSymbolsList, outlineActive))
       case surface @ UiSurface(_, SurfaceContent.Comments(_, _), SurfacePresentation.Pinned(_, _), _) =>
@@ -1296,7 +1319,7 @@ final private[manager] class StateManagerEffectHandlers(
       case surface =>
         surface
     }
-    state.copy(uiSurfaces = hydratedSurfaces)
+    state.copy(runtime = state.runtime.copy(uiSurfaces = hydratedSurfaces))
 
   private def openPresetMarkdownPreviewIfNeeded(preset: UiPreset): IO[Unit] =
     if preset.config.markdownViewMode == MarkdownViewMode.SplitPreview then openMarkdownPreview
@@ -1389,7 +1412,7 @@ final private[manager] class StateManagerEffectHandlers(
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
             val updatedRunner = runner.withUiPresetPreviews(previews)
-            val updatedSurfaces = state.uiSurfaces.map {
+            val updatedSurfaces = state.runtime.uiSurfaces.map {
               case current if current.id == surface.id =>
                 current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
               case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
@@ -1397,7 +1420,7 @@ final private[manager] class StateManagerEffectHandlers(
               case current =>
                 current
             }
-            state.copy(uiSurfaces = updatedSurfaces)
+            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
           case _ =>
             state
       case None =>
@@ -1436,7 +1459,7 @@ final private[manager] class StateManagerEffectHandlers(
               editingText = "",
               statusMessage = Some(statusMessage)
             )
-            val updatedSurfaces = state.uiSurfaces.map {
+            val updatedSurfaces = state.runtime.uiSurfaces.map {
               case current if current.id == surface.id =>
                 current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
               case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
@@ -1444,7 +1467,7 @@ final private[manager] class StateManagerEffectHandlers(
               case current =>
                 current
             }
-            state.copy(uiSurfaces = updatedSurfaces)
+            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
           case _ =>
             state
       case None =>
@@ -1479,7 +1502,7 @@ final private[manager] class StateManagerEffectHandlers(
                 ),
                 presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
               )
-              val updatedSurfaces = state.uiSurfaces
+              val updatedSurfaces = state.runtime.uiSurfaces
                 .filterNot(_.id == CommandRunnerSubmenuSurfaceId)
                 .map {
                   case current if current.id == surface.id =>
@@ -1487,7 +1510,10 @@ final private[manager] class StateManagerEffectHandlers(
                   case current =>
                     current
                 } :+ submenuSurface
-              state.copy(uiSurfaces = updatedSurfaces, focus = Focus.Surface(CommandRunnerSubmenuSurfaceId))
+              state.copy(
+                persisted = state.persisted.copy(focus = Focus.Surface(CommandRunnerSubmenuSurfaceId)),
+                runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)
+              )
             case _ =>
               state
         case None =>
@@ -1543,7 +1569,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def projectTaskStartPath(state: AppState): IO[Path] =
     state.focusedBufferId
-      .flatMap(state.buffers.get)
+      .flatMap(state.persisted.buffers.get)
       .flatMap(_.document.filePath)
       .fold(FileUtils.getCurrentDirectory)(path => IO.pure(path))
 
@@ -1589,7 +1615,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def activeLspRequestTarget(state: AppState): Option[(String, LanguageId, CursorPosition, Buffer)] =
     for
       bufferId   <- activeEditorBufferId(state)
-      buffer     <- state.buffers.get(bufferId)
+      buffer     <- state.persisted.buffers.get(bufferId)
       path       <- buffer.document.filePath
       languageId <- buffer.document.language
       cursor     <- buffer.editing.cursors.headOption
@@ -1649,7 +1675,9 @@ final private[manager] class StateManagerEffectHandlers(
             logger.debug("[CMD] Comment lens requested without an active comment")
 
   private def dismissCommentLens(state: AppState): AppState =
-    state.copy(uiSurfaces = state.uiSurfaces.filterNot(isCommentLensSurface)).popFocus
+    state
+      .copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isCommentLensSurface)))
+      .popFocus
 
   private def isCommentLensSurface(surface: UiSurface): Boolean =
     surface.content match
@@ -1723,7 +1751,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def markdownPreviewContent(state: AppState): Option[SurfaceContent] =
     state.focusedBufferId
-      .flatMap(state.buffers.get)
+      .flatMap(state.persisted.buffers.get)
       .filter(_.document.language.contains(LanguageId.Markdown))
       .map { buffer =>
         val title = buffer.document.filePath
@@ -1739,17 +1767,18 @@ final private[manager] class StateManagerEffectHandlers(
     }
 
   private def removePanelKind(kind: PanelKind)(state: AppState): AppState =
-    val removedIds = state.uiSurfaces.collect {
+    val removedIds = state.runtime.uiSurfaces.collect {
       case surface if panelKindOf(surface.content).contains(kind) => surface.id
     }.toSet
-    val nextFocus = state.focus match
+    val nextFocus = state.persisted.focus match
       case Focus.Surface(surfaceId) if removedIds.contains(surfaceId) =>
-        state.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.focus)
+        state.persisted.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.persisted.focus)
       case _ =>
-        state.focus
+        state.persisted.focus
     state.copy(
-      uiSurfaces = state.uiSurfaces.filterNot(surface => removedIds.contains(surface.id)),
-      focus = nextFocus
+      persisted = state.persisted.copy(focus = nextFocus),
+      runtime =
+        state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => removedIds.contains(surface.id)))
     )
 
   private def upsertPanelKind(
@@ -1758,10 +1787,12 @@ final private[manager] class StateManagerEffectHandlers(
     position: PanelPosition,
     size: Int
   )(state: AppState): AppState =
-    val matchingSurfaces = state.uiSurfaces.filter(surface => panelKindOf(surface.content).contains(kind))
+    val matchingSurfaces = state.runtime.uiSurfaces.filter(surface => panelKindOf(surface.content).contains(kind))
     val retainedSurface  = matchingSurfaces.reverse.headOption
-    val stateWithoutKind = state.copy(
-      uiSurfaces = state.uiSurfaces.filterNot(surface => panelKindOf(surface.content).contains(kind))
+    val stateWithoutKind = state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.filterNot(surface => panelKindOf(surface.content).contains(kind))
+      )
     )
     val (stateWithId, surface) = retainedSurface match
       case Some(existing) =>
@@ -1778,15 +1809,18 @@ final private[manager] class StateManagerEffectHandlers(
           SurfacePresentation.Pinned(position, size),
           dismissOnMove = false
         )
-    val nextFocus = state.focus match
+    val nextFocus = state.persisted.focus match
       case Focus.Surface(surfaceId) if matchingSurfaces.exists(_.id == surfaceId) => Focus.Surface(surface.id)
-      case _                                                                      => state.focus
-    stateWithId.copy(uiSurfaces = stateWithId.uiSurfaces :+ surface, focus = nextFocus)
+      case _                                                                      => state.persisted.focus
+    stateWithId.copy(
+      persisted = stateWithId.persisted.copy(focus = nextFocus),
+      runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface)
+    )
 
   private def reorderPanelKind(kind: PanelKind, delta: Int)(state: AppState): AppState =
     if delta == 0 then state
     else
-      val pinnedPanels = state.uiSurfaces.collect {
+      val pinnedPanels = state.runtime.uiSurfaces.collect {
         case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _)
             if panelKindOf(surface.content).isDefined =>
           surface -> position
@@ -1803,11 +1837,11 @@ final private[manager] class StateManagerEffectHandlers(
           else
             val reorderedSameEdge = moveWithinList(sameEdge, currentIndex, targetIndex)
             val replacements      = reorderedSameEdge.iterator
-            val updatedSurfaces = state.uiSurfaces.map { surface =>
+            val updatedSurfaces = state.runtime.uiSurfaces.map { surface =>
               if sameEdge.exists(_.id == surface.id) then replacements.next()
               else surface
             }
-            state.copy(uiSurfaces = updatedSurfaces)
+            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
 
   private def moveWithinList[A](values: List[A], from: Int, to: Int): List[A] =
     if from == to then values
@@ -1819,7 +1853,7 @@ final private[manager] class StateManagerEffectHandlers(
           withoutValue.patch(to, List(value), 0)
 
   private def newestPanelKindSurface(kind: PanelKind, state: AppState): Option[UiSurface] =
-    state.uiSurfaces.reverse.find(surface => panelKindOf(surface.content).contains(kind))
+    state.runtime.uiSurfaces.reverse.find(surface => panelKindOf(surface.content).contains(kind))
 
   private def panelKindOf(content: SurfaceContent): Option[PanelKind] =
     content match
@@ -1845,7 +1879,7 @@ final private[manager] class StateManagerEffectHandlers(
   private def refreshCommandRunnerPanelSelections: IO[Unit] =
     stateRef.update { state =>
       val selections = CommandRunnerPanelSelections.fromState(state)
-      val updatedSurfaces = state.uiSurfaces.map {
+      val updatedSurfaces = state.runtime.uiSurfaces.map {
         case surface @ UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) =>
           surface.copy(content =
             SurfaceContent.CommandPalette(runner.copy(optionSelections = runner.optionSelections ++ selections))
@@ -1860,12 +1894,12 @@ final private[manager] class StateManagerEffectHandlers(
           )
         case other => other
       }
-      state.copy(uiSurfaces = updatedSurfaces)
+      state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
     }
 
   private def outlineSymbols(state: AppState): List[Symbol] =
     state.focusedBufferId
-      .flatMap(state.buffers.get)
+      .flatMap(state.persisted.buffers.get)
       .map(outlineSymbolsForBuffer)
       .getOrElse(Nil)
 
@@ -1883,7 +1917,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def commentPanelSymbols(state: AppState): List[Symbol] =
     state.focusedBufferId
-      .flatMap(state.buffers.get)
+      .flatMap(state.persisted.buffers.get)
       .map(buffer => DocumentNavigation.commentSymbols(buffer.annotations.documentComments))
       .getOrElse(Nil)
 
@@ -1937,9 +1971,14 @@ final private[manager] class StateManagerEffectHandlers(
       case Some((before, after)) if before != after =>
         val sweep = navigationSweep(before, after)
         stateRef.modify { current =>
-          val moved = moveToNavigationPoint(current, after).copy(
-            navigationBackStack = pushNavigationPoint(before, current.navigationBackStack),
-            navigationForwardStack = Nil
+          val movedBase = moveToNavigationPoint(current, after)
+          val moved = movedBase.copy(runtime =
+            movedBase.runtime.copy(navigation =
+              NavigationHistory(
+                backStack = pushNavigationPoint(before, current.runtime.navigation.backStack),
+                forwardStack = Nil
+              )
+            )
           )
           val animationUpdate = applyNavigationAnimationUpdate(animationUpdateForNavigationTarget(moved, after, sweep))
           (onTargetResolved.fold(moved)(_(moved)), animationUpdate)
@@ -1962,17 +2001,17 @@ final private[manager] class StateManagerEffectHandlers(
     point: NavigationPoint,
     sweep: com.serenity.animation.SweepDirection
   ): Option[(BufferId, com.serenity.animation.AnimationState => com.serenity.animation.AnimationState)] =
-    state.buffers.get(point.bufferId).flatMap { buffer =>
+    state.persisted.buffers.get(point.bufferId).flatMap { buffer =>
       val cells = VisibleBufferAnimationCells.fromBuffer(
         buffer,
-        state.config.wordWrapEnabled,
-        state.theme.background,
-        state.theme.foreground
+        state.persisted.config.wordWrapEnabled,
+        state.persisted.theme.background,
+        state.persisted.theme.foreground
       )
 
       if cells.isEmpty then None
       else
-        state.config.scaledUiAnimation.map { config =>
+        state.persisted.config.scaledUiAnimation.map { config =>
           val animated = com.serenity.animation.FlowAnimationBuilder.build(
             cells,
             com.serenity.animation.FlowDirection.ByRow,
@@ -2006,15 +2045,15 @@ final private[manager] class StateManagerEffectHandlers(
     forwardStack: List[NavigationPoint],
     sweep: com.serenity.animation.SweepDirection
   ): (AppState, IO[Unit]) =
-    val moved = moveToNavigationPoint(state, target).copy(
-      navigationBackStack = backStack,
-      navigationForwardStack = forwardStack
+    val movedBase = moveToNavigationPoint(state, target)
+    val moved = movedBase.copy(runtime =
+      movedBase.runtime.copy(navigation = NavigationHistory(backStack = backStack, forwardStack = forwardStack))
     )
     (moved, applyNavigationAnimationUpdate(animationUpdateForNavigationTarget(moved, target, sweep)))
 
   private def navigateHistoryBack(): IO[Unit] =
     stateRef.modify { current =>
-      current.navigationBackStack match
+      current.runtime.navigation.backStack match
         case target :: remaining =>
           currentNavigationPoint(current) match
             case Some(point) =>
@@ -2022,7 +2061,7 @@ final private[manager] class StateManagerEffectHandlers(
                 current,
                 target,
                 remaining,
-                pushNavigationPoint(point, current.navigationForwardStack),
+                pushNavigationPoint(point, current.runtime.navigation.forwardStack),
                 navigationSweep(point, target)
               )
             case None => (current, IO.unit)
@@ -2031,14 +2070,14 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def navigateHistoryForward(): IO[Unit] =
     stateRef.modify { current =>
-      current.navigationForwardStack match
+      current.runtime.navigation.forwardStack match
         case target :: remaining =>
           currentNavigationPoint(current) match
             case Some(point) =>
               updateNavigationHistory(
                 current,
                 target,
-                pushNavigationPoint(point, current.navigationBackStack),
+                pushNavigationPoint(point, current.runtime.navigation.backStack),
                 remaining,
                 navigationSweep(point, target)
               )
@@ -2058,7 +2097,7 @@ final private[manager] class StateManagerEffectHandlers(
       case _                          => point :: stack
 
   private def moveToNavigationPoint(state: AppState, point: NavigationPoint): AppState =
-    (state.layout.editorPanes.get(point.paneId), state.buffers.get(point.bufferId)) match
+    (state.persisted.layout.editorPanes.get(point.paneId), state.persisted.buffers.get(point.bufferId)) match
       case (Some(pane), Some(buffer)) =>
         val viewport = CursorViewport.adjustForCursor(buffer, state, point.cursor)
         val updatedBuffer = buffer.copy(
@@ -2072,13 +2111,16 @@ final private[manager] class StateManagerEffectHandlers(
           ),
           viewport = viewport
         )
-        state.copy(
-          buffers = state.buffers + (point.bufferId -> updatedBuffer),
-          layout = state.layout.copy(
-            editorPanes = state.layout.editorPanes + (point.paneId -> pane.copy(bufferId = Some(point.bufferId))),
-            activeEditorPaneId = Some(point.paneId)
-          ),
-          focus = Focus.EditorPane(point.paneId)
+        state.copy(persisted =
+          state.persisted.copy(
+            buffers = state.persisted.buffers + (point.bufferId -> updatedBuffer),
+            layout = state.persisted.layout.copy(
+              editorPanes =
+                state.persisted.layout.editorPanes + (point.paneId -> pane.copy(bufferId = Some(point.bufferId))),
+              activeEditorPaneId = Some(point.paneId)
+            ),
+            focus = Focus.EditorPane(point.paneId)
+          )
         )
       case _ => state
 
@@ -2087,7 +2129,7 @@ final private[manager] class StateManagerEffectHandlers(
       case Some((_, buffer)) =>
         val cursor = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
         updateState { current =>
-          current.buffers.get(buffer.id) match
+          current.persisted.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
               val bookmarks =
                 if currentBuffer.annotations.bookmarks.contains(cursor) then
@@ -2096,9 +2138,11 @@ final private[manager] class StateManagerEffectHandlers(
                   (cursor :: currentBuffer.annotations.bookmarks).distinct
                     .sortBy(position => (position.line, position.column))
 
-              current.copy(buffers =
-                current.buffers + (buffer.id ->
-                  currentBuffer.copy(annotations = currentBuffer.annotations.copy(bookmarks = bookmarks)))
+              current.copy(persisted =
+                current.persisted.copy(buffers =
+                  current.persisted.buffers + (buffer.id ->
+                    currentBuffer.copy(annotations = currentBuffer.annotations.copy(bookmarks = bookmarks)))
+                )
               )
             case None => current
         }
@@ -2116,7 +2160,7 @@ final private[manager] class StateManagerEffectHandlers(
         val commentText = Option(text.trim).filter(_.nonEmpty).getOrElse("Comment")
         val comment     = DocumentComment(range._1, range._2, commentText)
         updateState: current =>
-          current.buffers.get(buffer.id) match
+          current.persisted.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
               val existingCommentAtCursor =
                 currentBuffer.annotations.documentComments.find(_.contains(normalizedCursor))
@@ -2127,12 +2171,14 @@ final private[manager] class StateManagerEffectHandlers(
                 existingCommentAtCursor.contains(existing) ||
                   (existing.start == comment.start && existing.end == comment.end)
               )).sortBy(existing => (existing.start.line, existing.start.column, existing.text))
-              current.copy(
-                buffers = current.buffers + (buffer.id ->
-                  currentBuffer.copy(
-                    annotations = currentBuffer.annotations.copy(documentComments = comments),
-                    document = currentBuffer.document.copy(isDirty = true)
-                  ))
+              current.copy(persisted =
+                current.persisted.copy(buffers =
+                  current.persisted.buffers + (buffer.id ->
+                    currentBuffer.copy(
+                      annotations = currentBuffer.annotations.copy(documentComments = comments),
+                      document = currentBuffer.document.copy(isDirty = true)
+                    ))
+                )
               )
             case None => current
       case None =>
@@ -2177,17 +2223,20 @@ final private[manager] class StateManagerEffectHandlers(
       case Some((_, buffer)) =>
         val cursor = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
         updateState: current =>
-          current.buffers.get(buffer.id) match
+          current.persisted.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
               val comments = currentBuffer.annotations.documentComments.filterNot(_.contains(cursor))
-              current.copy(
-                buffers = current.buffers + (buffer.id ->
-                  currentBuffer.copy(
-                    annotations = currentBuffer.annotations.copy(documentComments = comments),
-                    document = currentBuffer.document.copy(
-                      isDirty = currentBuffer.document.isDirty || comments != currentBuffer.annotations.documentComments
-                    )
-                  ))
+              current.copy(persisted =
+                current.persisted.copy(buffers =
+                  current.persisted.buffers + (buffer.id ->
+                    currentBuffer.copy(
+                      annotations = currentBuffer.annotations.copy(documentComments = comments),
+                      document = currentBuffer.document.copy(
+                        isDirty =
+                          currentBuffer.document.isDirty || comments != currentBuffer.annotations.documentComments
+                      )
+                    ))
+                )
               )
             case None => current
       case None =>
@@ -2195,10 +2244,10 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def activeEditorBuffer(state: AppState): Option[(PaneId, Buffer)] =
     for
-      paneId   <- state.layout.activeEditorPaneId
-      pane     <- state.layout.editorPanes.get(paneId)
+      paneId   <- state.persisted.layout.activeEditorPaneId
+      pane     <- state.persisted.layout.editorPanes.get(paneId)
       bufferId <- pane.bufferId
-      buffer   <- state.buffers.get(bufferId)
+      buffer   <- state.persisted.buffers.get(bufferId)
     yield (paneId, buffer)
 
   private def setMarkdownViewMode(mode: MarkdownViewMode): IO[Unit] =
@@ -2215,14 +2264,16 @@ final private[manager] class StateManagerEffectHandlers(
       val markdownPreviewSurfaceIds = state.pinnedSurfaces.collect {
         case UiSurface(id, SurfaceContent.MarkdownPreview(_, _), SurfacePresentation.Pinned(_, _), _) => id
       }.toSet
-      val nextFocus = state.focus match
+      val nextFocus = state.persisted.focus match
         case Focus.Surface(surfaceId) if markdownPreviewSurfaceIds.contains(surfaceId) =>
-          state.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.focus)
+          state.persisted.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.persisted.focus)
         case _ =>
-          state.focus
+          state.persisted.focus
       state.copy(
-        uiSurfaces = state.uiSurfaces.filterNot(surface => markdownPreviewSurfaceIds.contains(surface.id)),
-        focus = nextFocus
+        persisted = state.persisted.copy(focus = nextFocus),
+        runtime = state.runtime.copy(uiSurfaces =
+          state.runtime.uiSurfaces.filterNot(surface => markdownPreviewSurfaceIds.contains(surface.id))
+        )
       )
     }
 
@@ -2257,21 +2308,21 @@ final private[manager] class StateManagerEffectHandlers(
       case true =>
         stateRef
           .modify { state =>
-            val bufferId = state.nextBufferId
-            (state.copy(nextBufferId = BufferId(bufferId.value + 1)), bufferId)
+            val bufferId = state.runtime.nextBufferId
+            (state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))), bufferId)
           }
           .flatMap(bufferId => fileManager.loadFile(path, bufferId))
           .flatMap { loadedBuffer =>
             stateRef.modify { state =>
               val newBufferId = loadedBuffer.id
-              val stateWithBuffer = state.copy(
-                buffers = state.buffers + (newBufferId -> loadedBuffer)
+              val stateWithBuffer = state.copy(persisted =
+                state.persisted.copy(buffers = state.persisted.buffers + (newBufferId -> loadedBuffer))
               )
               val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
               val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
               val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
               val resized =
-                focused.viewportSize
+                focused.runtime.viewportSize
                   .map(viewportSize => LayoutEngine.syncViewportDimensions(focused, viewportSize))
                   .getOrElse(focused)
               (resized, loadedBuffer)
@@ -2285,14 +2336,18 @@ final private[manager] class StateManagerEffectHandlers(
                 lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
               case None => IO.unit
           }
-          .flatTap(_ => stateRef.update(s => s.copy(recentFiles = trackRecentFile(s.recentFiles, path))))
+          .flatTap(_ =>
+            stateRef.update(s =>
+              s.copy(persisted = s.persisted.copy(recentFiles = trackRecentFile(s.persisted.recentFiles, path)))
+            )
+          )
           .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path"))
           .void
     }
 
   private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
-      state.buffers.get(bufferId) match
+      state.persisted.buffers.get(bufferId) match
         case Some(buffer) if buffer.document.filePath.isDefined =>
           saveExistingBuffer(bufferId).handleErrorWith {
             case error: com.serenity.richtext.LossyRichTextOverwriteException =>
@@ -2314,7 +2369,7 @@ final private[manager] class StateManagerEffectHandlers(
           .flatMap(currentDirectory => dialog.chooseOpenFile(Some(currentDirectory)))
           .flatMap {
             case Some(path) =>
-              updateState(_.copy(uiSurfaces = List.empty)) >> directLoadFileEffect(path)
+              updateState(s => s.copy(runtime = s.runtime.copy(uiSurfaces = List.empty))) >> directLoadFileEffect(path)
             case None =>
               IO.unit
           }
@@ -2324,7 +2379,7 @@ final private[manager] class StateManagerEffectHandlers(
         stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
 
   protected def exportCurrentThemeEffect(state: AppState): IO[Unit] =
-    val config            = ThemeConfigWriter.themeToConfig(state.theme)
+    val config            = ThemeConfigWriter.themeToConfig(state.persisted.theme)
     val suggestedFileName = s"${ThemeConfigWriter.fileNameFor(config.name)}.conf"
     fileDialog match
       case Some(dialog) =>
@@ -2344,7 +2399,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>
-      state.buffers.get(bufferId) match
+      state.persisted.buffers.get(bufferId) match
         case Some(_) =>
           saveBufferAs(bufferId, path)
         case None =>
@@ -2353,7 +2408,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def findModalForState(state: AppState): Modal =
     activeEditorBufferId(state)
-      .flatMap(state.buffers.get)
+      .flatMap(state.persisted.buffers.get)
       .flatMap { buffer =>
         buffer.findState match
           case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
@@ -2383,7 +2438,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   protected def toggleThemeEffect(state: AppState): IO[Unit] =
     val targetThemeName =
-      state.theme.name match
+      state.persisted.theme.name match
         case "light"                                    => "dark"
         case "dark"                                     => "light"
         case "default-light"                            => "default-dark"
@@ -2394,7 +2449,7 @@ final private[manager] class StateManagerEffectHandlers(
     interpretEffect(AppEffect.SwitchTheme(targetThemeName))
 
   protected def reloadThemeEffect(state: AppState): IO[Unit] =
-    interpretEffect(AppEffect.ReloadTheme(state.theme.name))
+    interpretEffect(AppEffect.ReloadTheme(state.persisted.theme.name))
 
   protected def applyThemeByName(themeName: String): IO[Unit] =
     themeManager
@@ -2402,9 +2457,14 @@ final private[manager] class StateManagerEffectHandlers(
       .flatMap { newTheme =>
         updateState { state =>
           val transition =
-            if state.theme == newTheme then None
-            else state.config.scaledUiAnimation.map(config => ThemeTransition(state.theme, 0, config.steps))
-          state.copy(theme = newTheme, themeTransition = transition)
+            if state.persisted.theme == newTheme then None
+            else
+              state.persisted.config.scaledUiAnimation
+                .map(config => ThemeTransition(state.persisted.theme, 0, config.steps))
+          state.copy(
+            persisted = state.persisted.copy(theme = newTheme),
+            runtime = state.runtime.copy(themeTransition = transition)
+          )
         }
       }
       .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to switch theme to $themeName"))
@@ -2412,14 +2472,14 @@ final private[manager] class StateManagerEffectHandlers(
   protected def reloadThemeByName(themeName: String): IO[Unit] =
     themeManager
       .loadTheme(themeName)
-      .flatMap(theme => updateState(_.copy(theme = theme)))
+      .flatMap(theme => updateState(s => s.copy(persisted = s.persisted.copy(theme = theme))))
       .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to reload theme $themeName"))
 
   protected def openThemePickerEffect(state: AppState): IO[Unit] =
     themeNamesRef.get.flatMap { themeNames =>
       if themeNames.isEmpty then IO.unit
       else
-        val currentTheme             = state.theme.name
+        val currentTheme             = state.persisted.theme.name
         val selectedIndex            = themeNames.indexOf(currentTheme).max(0)
         val pickerState              = ThemePickerState(themeNames, selectedIndex, currentTheme)
         val (stateWithId, surfaceId) = state.allocateSurfaceId
@@ -2430,15 +2490,15 @@ final private[manager] class StateManagerEffectHandlers(
         )
         validateAndUpdateState(
           stateWithId.copy(
-            uiSurfaces = stateWithId.uiSurfaces :+ surface,
-            focus = Focus.Surface(surfaceId)
+            persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
+            runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface)
           ),
           state
         )
     }
 
   protected def openThemeCreatorEffect(state: AppState): IO[Unit] =
-    val creatorState             = ThemeCreatorState.fromTheme(state.theme)
+    val creatorState             = ThemeCreatorState.fromTheme(state.persisted.theme)
     val (stateWithId, surfaceId) = state.allocateSurfaceId
     val surface = UiSurface(
       id = surfaceId,
@@ -2447,13 +2507,11 @@ final private[manager] class StateManagerEffectHandlers(
     )
     validateAndUpdateState(
       stateWithId
-        .copy(
-          uiSurfaces = stateWithId.uiSurfaces.filterNot {
-            _.content match
-              case SurfaceContent.ThemeCreator(_) => true
-              case _                              => false
-          } :+ surface
-        )
+        .copy(runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces.filterNot {
+          _.content match
+            case SurfaceContent.ThemeCreator(_) => true
+            case _                              => false
+        } :+ surface))
         .pushFocus(Focus.Surface(surfaceId)),
       state
     )
@@ -2467,8 +2525,8 @@ final private[manager] class StateManagerEffectHandlers(
     )
     validateAndUpdateState(
       stateWithId.copy(
-        uiSurfaces = stateWithId.uiSurfaces :+ surface,
-        focus = Focus.Surface(surfaceId)
+        persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
+        runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface)
       ),
       state
     )

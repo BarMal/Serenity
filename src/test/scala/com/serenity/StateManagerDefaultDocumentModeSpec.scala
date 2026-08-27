@@ -25,7 +25,7 @@ class StateManagerDefaultDocumentModeSpec extends AnyFlatSpec with Matchers:
   "StateManager startup" should "retain the explicit default workspace tree" in {
     val stateManager = createStateManager()
 
-    stateManager.getCurrentState.unsafeRunSync().layout.workspaceTree shouldBe Some(
+    stateManager.getCurrentState.unsafeRunSync().persisted.layout.workspaceTree shouldBe Some(
       WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
     )
   }
@@ -44,5 +44,9 @@ class StateManagerDefaultDocumentModeSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
   }

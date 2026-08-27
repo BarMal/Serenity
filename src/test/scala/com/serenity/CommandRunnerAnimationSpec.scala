@@ -29,7 +29,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     state.commandRunnerSurface shouldBe defined
     val surfaceId = state.commandRunnerSurface.get.id
-    val animState = state.surfaceAnimations.get(surfaceId)
+    val animState = state.runtime.surfaceAnimations.get(surfaceId)
     animState shouldBe defined
     animState.get.phase shouldBe SurfacePhase.Visible
   }
@@ -39,7 +39,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state     = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state.commandRunnerSurface.get.id
-    val anim      = state.surfaceAnimations(surfaceId)
+    val anim      = state.runtime.surfaceAnimations(surfaceId)
     anim.bufferFadeLength shouldBe 0
   }
 
@@ -50,28 +50,31 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val surfaceId        = state.commandRunnerSurface.get.id
     val bufferAnimations = sm.getBufferAnimations.unsafeRunSync()
     bufferAnimations.values.exists(_.hasActiveAnimations) shouldBe false
-    state.surfaceAnimations(surfaceId).animationState.hasActiveAnimations shouldBe true
+    state.runtime.surfaceAnimations(surfaceId).animationState.hasActiveAnimations shouldBe true
   }
 
   it should "skip command runner fade when the command runner animation is disabled" in {
     val sm = createStateManager()
-    sm.updateState(_.copy(config = AppConfig.default.withCommandRunnerAnimation(None)))
-      .unsafeRunSync()
+    sm.updateState(state =>
+      state.copy(persisted = state.persisted.copy(config = AppConfig.default.withCommandRunnerAnimation(None)))
+    ).unsafeRunSync()
 
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val state     = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state.commandRunnerSurface.get.id
-    state.surfaceAnimations.get(surfaceId) shouldBe None
+    state.runtime.surfaceAnimations.get(surfaceId) shouldBe None
   }
 
   it should "skip command runner fade when the global animation speed is zero" in {
     val sm = createStateManager()
     sm.updateState { state =>
-      state.copy(config =
-        AppConfig.default
-          .withMotionPreset(MotionPreset.Smooth)
-          .withElementTransitionSpeedScale(0.0)
+      state.copy(persisted =
+        state.persisted.copy(config =
+          AppConfig.default
+            .withMotionPreset(MotionPreset.Smooth)
+            .withElementTransitionSpeedScale(0.0)
+        )
       )
     }.unsafeRunSync()
 
@@ -79,7 +82,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     val state     = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state.commandRunnerSurface.get.id
-    state.surfaceAnimations.get(surfaceId) shouldBe None
+    state.runtime.surfaceAnimations.get(surfaceId) shouldBe None
   }
 
   it should "cancel all active animation state when a motion policy disables animation" in
@@ -90,9 +93,12 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       CommandIntent.SetElementTransitionSpeedScale(0.0)
     ).foreach { intent =>
       val sm = createStateManager()
-      sm.updateState(_.copy(config = AppConfig.withTestAnimations)).unsafeRunSync()
+      sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
+        .unsafeRunSync()
       sm.applyEvent(InsertChar('a')).unsafeRunSync()
-      sm.updateState(state => state.copy(themeTransition = Some(ThemeTransition(state.theme, 0, 2)))).unsafeRunSync()
+      sm.updateState(state =>
+        state.copy(runtime = state.runtime.copy(themeTransition = Some(ThemeTransition(state.persisted.theme, 0, 2))))
+      ).unsafeRunSync()
       sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
       advanceToVisible(sm)
       sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
@@ -100,9 +106,9 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       val activeState            = sm.getCurrentState.unsafeRunSync()
       val activeBufferAnimations = sm.getBufferAnimations.unsafeRunSync()
       activeBufferAnimations.values.exists(_.hasActiveAnimations) shouldBe true
-      activeState.themeTransition shouldBe defined
-      activeState.surfaceAnimations should not be empty
-      activeState.uiSurfaces
+      activeState.runtime.themeTransition shouldBe defined
+      activeState.runtime.surfaceAnimations should not be empty
+      activeState.runtime.uiSurfaces
         .exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
 
       sm.executeCommand(
@@ -116,17 +122,20 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
       val state = sm.getCurrentState.unsafeRunSync()
       sm.getBufferAnimations.unsafeRunSync().values.foreach(_.animations shouldBe Map.empty)
-      state.themeTransition shouldBe None
-      state.surfaceAnimations shouldBe Map.empty
-      state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
+      state.runtime.themeTransition shouldBe None
+      state.runtime.surfaceAnimations shouldBe Map.empty
+      state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
       sm.advanceAnimationsOnTick().unsafeRunSync() shouldBe false
     }
 
   it should "cancel only editor animations when the editor text family is disabled" in {
     val sm = createStateManager()
-    sm.updateState(_.copy(config = AppConfig.withTestAnimations)).unsafeRunSync()
+    sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
+      .unsafeRunSync()
     sm.applyEvent(InsertChar('a')).unsafeRunSync()
-    sm.updateState(state => state.copy(themeTransition = Some(ThemeTransition(state.theme, 0, 2)))).unsafeRunSync()
+    sm.updateState(state =>
+      state.copy(runtime = state.runtime.copy(themeTransition = Some(ThemeTransition(state.persisted.theme, 0, 2))))
+    ).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     advanceToVisible(sm)
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
@@ -142,18 +151,20 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
     sm.getBufferAnimations.unsafeRunSync().values.foreach(_.animations shouldBe Map.empty)
-    state.themeTransition shouldBe defined
-    state.surfaceAnimations should not be empty
-    state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
+    state.runtime.themeTransition shouldBe defined
+    state.runtime.surfaceAnimations should not be empty
+    state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
   }
 
   it should "scale command runner fade length with the global animation speed" in {
     val sm = createStateManager()
     sm.updateState { state =>
-      state.copy(config =
-        AppConfig.default
-          .withMotionPreset(MotionPreset.Smooth)
-          .withElementTransitionSpeedScale(2.0)
+      state.copy(persisted =
+        state.persisted.copy(config =
+          AppConfig.default
+            .withMotionPreset(MotionPreset.Smooth)
+            .withElementTransitionSpeedScale(2.0)
+        )
       )
     }.unsafeRunSync()
 
@@ -161,16 +172,18 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     val state     = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state.commandRunnerSurface.get.id
-    val firstCell = state.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
+    val firstCell = state.runtime.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
     firstCell.backgroundSteps.length shouldBe AnimationConfig.smooth.get.steps * 2
   }
 
   it should "use the command runner reveal kind for open choreography" in {
     val sm = createStateManager()
     sm.updateState { state =>
-      state.copy(config =
-        AppConfig.default
-          .withCommandRunnerTransitionKind(Some(TransitionKind.DirectionalSweep))
+      state.copy(persisted =
+        state.persisted.copy(config =
+          AppConfig.default
+            .withCommandRunnerTransitionKind(Some(TransitionKind.DirectionalSweep))
+        )
       )
     }.unsafeRunSync()
 
@@ -178,7 +191,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     val state       = sm.getCurrentState.unsafeRunSync()
     val surfaceId   = state.commandRunnerSurface.get.id
-    val animatedCol = state.surfaceAnimations(surfaceId).animationState.animations.keys.map(_.column).max
+    val animatedCol = state.runtime.surfaceAnimations(surfaceId).animationState.animations.keys.map(_.column).max
     animatedCol should be > 0
   }
 
@@ -187,12 +200,12 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state0    = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state0.commandRunnerSurface.get.id
-    val fadeLen   = state0.surfaceAnimations(surfaceId).bufferFadeLength
+    val fadeLen   = state0.runtime.surfaceAnimations(surfaceId).bufferFadeLength
 
     (1 to fadeLen).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
 
     val state1 = sm.getCurrentState.unsafeRunSync()
-    state1.surfaceAnimations.get(surfaceId).map(_.phase) shouldBe Some(SurfacePhase.Visible)
+    state1.runtime.surfaceAnimations.get(surfaceId).map(_.phase) shouldBe Some(SurfacePhase.Visible)
   }
 
   it should "have overlay fade-in animation after transitioning to Visible" in {
@@ -200,12 +213,12 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state0  = sm.getCurrentState.unsafeRunSync()
     val surfId  = state0.commandRunnerSurface.get.id
-    val fadeLen = state0.surfaceAnimations(surfId).bufferFadeLength
+    val fadeLen = state0.runtime.surfaceAnimations(surfId).bufferFadeLength
 
     (1 to fadeLen).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
 
     val state1 = sm.getCurrentState.unsafeRunSync()
-    val anim   = state1.surfaceAnimations(surfId)
+    val anim   = state1.runtime.surfaceAnimations(surfId)
     anim.phase shouldBe SurfacePhase.Visible
     anim.animationState.hasActiveAnimations shouldBe true
   }
@@ -219,7 +232,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.commandRunnerSurface shouldBe None
-    val ghost = state.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay])
+    val ghost = state.runtime.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay])
     ghost shouldBe defined
   }
 
@@ -231,8 +244,8 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
 
-    val ghost     = state.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
-    val ghostAnim = state.surfaceAnimations.get(ghost.id)
+    val ghost     = state.runtime.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
+    val ghostAnim = state.runtime.surfaceAnimations.get(ghost.id)
     ghostAnim shouldBe defined
     ghostAnim.get.phase shouldBe SurfacePhase.Exiting
     ghostAnim.get.animationState.hasActiveAnimations shouldBe true
@@ -257,8 +270,8 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
 
-    val ghost        = state.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
-    val ghostAnim    = state.surfaceAnimations(ghost.id).animationState
+    val ghost        = state.runtime.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
+    val ghostAnim    = state.runtime.surfaceAnimations(ghost.id).animationState
     val animatedRows = ghostAnim.animations.keys.map(_.line).toSet.toList.sorted
 
     val firstRowSteps = ghostAnim.getCell(0, animatedRows.head).map(_.backgroundSteps.length).getOrElse(0)
@@ -277,7 +290,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     (1 to 3).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
 
     val partialState       = sm.getCurrentState.unsafeRunSync()
-    val partialFadeCell    = partialState.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
+    val partialFadeCell    = partialState.runtime.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
     val partialBackground  = partialFadeCell.currentBackground.get
     val totalFadeSteps     = com.serenity.animation.AnimationConfig.smooth.get.steps
     val remainingFadeSteps = partialFadeCell.backgroundSteps.length
@@ -285,8 +298,8 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val closedState = sm.getCurrentState.unsafeRunSync()
-    val ghost       = closedState.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
-    val ghostCell   = closedState.surfaceAnimations(ghost.id).animationState.getCell(0, 0).get
+    val ghost       = closedState.runtime.uiSurfaces.find(_.content.isInstanceOf[SurfaceContent.GhostOverlay]).get
+    val ghostCell   = closedState.runtime.surfaceAnimations(ghost.id).animationState.getCell(0, 0).get
 
     ghostCell.currentBackground shouldBe Some(partialBackground)
     ghostCell.backgroundSteps.length shouldBe (totalFadeSteps - remainingFadeSteps + 1)
@@ -299,12 +312,13 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val closingState = sm.getCurrentState.unsafeRunSync()
-    val ghost = closingState.uiSurfaces
+    val ghost = closingState.runtime.uiSurfaces
       .find(_.content.isInstanceOf[SurfaceContent.GhostOverlay])
       .getOrElse(fail("Expected exiting command runner ghost"))
     sm.advanceAnimationsOnTick().unsafeRunSync()
     val ghostBackground = sm.getCurrentState
       .unsafeRunSync()
+      .runtime
       .surfaceAnimations(ghost.id)
       .animationState
       .getCell(0, 0)
@@ -314,8 +328,8 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     val reopened  = sm.getCurrentState.unsafeRunSync()
     val surfaceId = reopened.commandRunnerSurface.map(_.id).getOrElse(fail("Expected reopened command runner"))
-    reopened.uiSurfaces.exists(_.id == ghost.id) shouldBe false
-    reopened
+    reopened.runtime.uiSurfaces.exists(_.id == ghost.id) shouldBe false
+    reopened.runtime
       .surfaceAnimations(surfaceId)
       .animationState
       .getCell(0, 0)
@@ -332,7 +346,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     (1 to 60).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
 
     val state = sm.getCurrentState.unsafeRunSync()
-    state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
+    state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
   }
 
   it should "work via Escape key as well as toggle" in {
@@ -344,7 +358,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.commandRunnerSurface shouldBe None
-    state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
+    state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
   }
 
   it should "animate the submenu preview when settings browsing opens a child panel" in {
@@ -355,8 +369,8 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val state   = sm.getCurrentState.unsafeRunSync()
     val submenu = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
 
-    state.surfaceAnimations.get(submenu.id) shouldBe defined
-    state.surfaceAnimations(submenu.id).phase shouldBe SurfacePhase.Visible
+    state.runtime.surfaceAnimations.get(submenu.id) shouldBe defined
+    state.runtime.surfaceAnimations(submenu.id).phase shouldBe SurfacePhase.Visible
   }
 
   it should "restart the submenu animation when the preview changes to another settings group" in {
@@ -368,7 +382,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val firstSubmenu = firstState.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
     advanceSurfaceAnimations(sm)
 
-    sm.getCurrentState.unsafeRunSync().surfaceAnimations.get(firstSubmenu.id) shouldBe None
+    sm.getCurrentState.unsafeRunSync().runtime.surfaceAnimations.get(firstSubmenu.id) shouldBe None
 
     sm.applyEvent(MoveDown).unsafeRunSync()
     val updatedState   = sm.getCurrentState.unsafeRunSync()
@@ -376,8 +390,8 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     updatedSubmenu.id shouldBe firstSubmenu.id
     updatedSubmenu.content should not be firstSubmenu.content
-    updatedState.surfaceAnimations.get(updatedSubmenu.id) shouldBe defined
-    updatedState.surfaceAnimations(updatedSubmenu.id).phase shouldBe SurfacePhase.Visible
+    updatedState.runtime.surfaceAnimations.get(updatedSubmenu.id) shouldBe defined
+    updatedState.runtime.surfaceAnimations(updatedSubmenu.id).phase shouldBe SurfacePhase.Visible
   }
 
   it should "restart the submenu animation when a preview becomes the focused submenu" in {
@@ -389,7 +403,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val previewSubmenu = previewState.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
     advanceSurfaceAnimations(sm)
 
-    sm.getCurrentState.unsafeRunSync().surfaceAnimations.get(previewSubmenu.id) shouldBe None
+    sm.getCurrentState.unsafeRunSync().runtime.surfaceAnimations.get(previewSubmenu.id) shouldBe None
 
     sm.applyEvent(Enter).unsafeRunSync()
     val focusedState   = sm.getCurrentState.unsafeRunSync()
@@ -397,8 +411,8 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     focusedSubmenu.id shouldBe previewSubmenu.id
     focusedSubmenu.content should not be previewSubmenu.content
-    focusedState.surfaceAnimations.get(focusedSubmenu.id) shouldBe defined
-    focusedState.surfaceAnimations(focusedSubmenu.id).phase shouldBe SurfacePhase.Visible
+    focusedState.runtime.surfaceAnimations.get(focusedSubmenu.id) shouldBe defined
+    focusedState.runtime.surfaceAnimations(focusedSubmenu.id).phase shouldBe SurfacePhase.Visible
   }
 
   it should "add a ghost overlay when the submenu preview is dismissed" in {
@@ -411,7 +425,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.commandRunnerSubmenuSurface shouldBe None
-    state.uiSurfaces.exists {
+    state.runtime.uiSurfaces.exists {
       case UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.CommandPaletteSubmenu(_, _, _), _), _, _) => true
       case _                                                                                                 => false
     } shouldBe true
@@ -420,7 +434,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
   private def advanceToVisible(sm: StateManager): Unit =
     val state0  = sm.getCurrentState.unsafeRunSync()
     val surfId  = state0.commandRunnerSurface.get.id
-    val fadeLen = state0.surfaceAnimations.get(surfId).map(_.bufferFadeLength).getOrElse(0)
+    val fadeLen = state0.runtime.surfaceAnimations.get(surfId).map(_.bufferFadeLength).getOrElse(0)
     (1 to (fadeLen + 1)).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
 
   private def advanceSurfaceAnimations(sm: StateManager): Unit =

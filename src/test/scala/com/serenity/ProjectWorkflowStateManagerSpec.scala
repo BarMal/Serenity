@@ -54,9 +54,9 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
       stateManager
         .updateState { state =>
-          val buffer  = state.buffers(BufferId(0))
+          val buffer  = state.persisted.buffers(BufferId(0))
           val updated = buffer.copy(document = buffer.document.copy(filePath = Some(bufferPath)))
-          state.copy(buffers = state.buffers + (BufferId(0) -> updated))
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (BufferId(0) -> updated)))
         }
         .unsafeRunSync()
 

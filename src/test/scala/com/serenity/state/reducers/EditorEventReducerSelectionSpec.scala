@@ -17,9 +17,10 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
   private val paneId   = PaneId(0)
 
   private def reduce(buffer: Buffer, events: EditorEvent*): Buffer =
-    val initial = AppState.initial.copy(buffers = Map(bufferId -> buffer))
+    val initial = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
     events
       .foldLeft(initial)((state, event) => com.serenity.VerticalNavSupport.dispatch(event, paneId, state).state)
+      .persisted
       .buffers(bufferId)
 
   private def bufferOf(text: String, cursor: CursorPosition, selection: Option[Selection] = None): Buffer =

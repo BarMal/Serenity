@@ -23,15 +23,18 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(editing = EditingState(cursors = List(cursor)))
-    AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = config
+    val initialState = AppState.initial
+    initialState.copy(persisted =
+      initialState.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = config
+      )
     )
 
   "AppState.cursorInfoBarSurface" should "derive a below-cursor surface from the active editor cursor" in {
@@ -87,7 +90,8 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.CommandPalette(runner),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
-    val state = editorState().copy(uiSurfaces = List(commandRunnerSurface))
+    val baseState = editorState()
+    val state     = baseState.copy(runtime = baseState.runtime.copy(uiSurfaces = List(commandRunnerSurface)))
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
 

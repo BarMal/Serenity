@@ -210,13 +210,13 @@ object ContextualToolbar:
   )
 
   def itemsFor(state: AppState): List[ContextualToolbarItem] =
-    state.layout.activeEditorPaneId
-      .flatMap(state.layout.editorPanes.get)
+    state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
       .flatMap(_.bufferId)
-      .flatMap(state.buffers.get)
+      .flatMap(state.persisted.buffers.get)
       .map {
         case buffer if buffer.document.language.contains(LanguageId.Markdown) =>
-          applyMarkdownSelections(markdownItems, state.config.markdownViewMode)
+          applyMarkdownSelections(markdownItems, state.persisted.config.markdownViewMode)
         case buffer if buffer.typographyRole == TypographyRole.Code =>
           codeItems
         case buffer =>
@@ -630,8 +630,8 @@ object ContextualToolbar:
     val document         = richTextDocumentFor(buffer)
     val style            = activeStyle(buffer, document)
     val paragraph        = activeParagraph(buffer, document)
-    val currentFamily    = style.fontFamily.orElse(Some(state.config.fontConfig.textFontFamily)).getOrElse("")
-    val currentFontSize  = style.fontSize.getOrElse(state.config.fontConfig.textFontSize)
+    val currentFamily    = style.fontFamily.orElse(Some(state.persisted.config.fontConfig.textFontFamily)).getOrElse("")
+    val currentFontSize  = style.fontSize.getOrElse(state.persisted.config.fontConfig.textFontSize)
     val currentColor     = normalizedColor(style.color)
     val currentColorText = currentColor.getOrElse("#202020")
     val familyOptions = normalizedFontFamilies(currentFamily).map(family =>

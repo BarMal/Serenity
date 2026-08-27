@@ -73,34 +73,41 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
       case None         => dismiss(state, surface)
 
   private def navigateToResult(state: AppState, surface: UiSurface, result: FileSearchResult): AppState =
-    val updatedBuffers = state.buffers.get(result.bufferId).fold(state.buffers) { buffer =>
-      state.buffers + (result.bufferId -> buffer
+    val updatedBuffers = state.persisted.buffers.get(result.bufferId).fold(state.persisted.buffers) { buffer =>
+      state.persisted.buffers + (result.bufferId -> buffer
         .copy(editing = buffer.editing.copy(cursors = List(CursorPosition(result.line, 0)))))
     }
     val withoutSearch = state.copy(
-      uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id),
-      buffers = updatedBuffers
+      persisted = state.persisted.copy(buffers = updatedBuffers),
+      runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id))
     )
-    withoutSearch.layout.editorPanes.find(_._2.bufferId.contains(result.bufferId)) match
+    withoutSearch.persisted.layout.editorPanes.find(_._2.bufferId.contains(result.bufferId)) match
       case Some((paneId, _)) =>
         withoutSearch.copy(
-          focus = Focus.EditorPane(paneId),
-          layout = withoutSearch.layout.copy(activeEditorPaneId = Some(paneId))
+          persisted = withoutSearch.persisted.copy(
+            focus = Focus.EditorPane(paneId),
+            layout = withoutSearch.persisted.layout.copy(activeEditorPaneId = Some(paneId))
+          )
         )
       case None =>
-        withoutSearch.layout.activeEditorPaneId match
-          case Some(paneId) => withoutSearch.copy(focus = Focus.EditorPane(paneId))
-          case None         => withoutSearch
+        withoutSearch.persisted.layout.activeEditorPaneId match
+          case Some(paneId) =>
+            withoutSearch.copy(persisted = withoutSearch.persisted.copy(focus = Focus.EditorPane(paneId)))
+          case None => withoutSearch
 
   private def dismiss(state: AppState, surface: UiSurface): AppState =
-    val withoutSearch = state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id))
-    withoutSearch.layout.activeEditorPaneId match
-      case Some(paneId) => withoutSearch.copy(focus = Focus.EditorPane(paneId))
-      case None         => withoutSearch
+    val withoutSearch =
+      state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
+    withoutSearch.persisted.layout.activeEditorPaneId match
+      case Some(paneId) =>
+        withoutSearch.copy(persisted = withoutSearch.persisted.copy(focus = Focus.EditorPane(paneId)))
+      case None => withoutSearch
 
   private def replaceSurface(state: AppState, surface: UiSurface, newContent: SurfaceContent): AppState =
     val newSurface = surface.copy(content = newContent)
-    state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface)
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface)
+    )
 
   final private case class FileSearchBatch(results: List[FileSearchResult], nextCursor: Option[FileSearchCursor])
 
@@ -126,7 +133,7 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
     if query.isEmpty || maxResults <= 0 then FileSearchBatch(Nil, None)
     else
       val lowerQuery = query.toLowerCase
-      val buffers    = state.buffers.values.toList.sortBy(_.id.value)
+      val buffers    = state.persisted.buffers.values.toList.sortBy(_.id.value)
       val matchedBuffers = startCursor match
         case None         => buffers
         case Some(cursor) => buffers.dropWhile(_.id.value < cursor.bufferId.value)

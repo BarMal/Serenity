@@ -9,12 +9,20 @@ object SystemEventReducer:
   def reduce(event: SystemEvent, state: AppState): ReducerResult =
     event match
       case ResizeEvent(newSize) =>
+        val synced = LayoutEngine.syncViewportDimensions(state, newSize)
         ReducerResult.noEffects(
-          LayoutEngine.syncViewportDimensions(state, newSize).copy(viewportSize = Some(newSize))
+          synced.copy(runtime = synced.runtime.copy(viewportSize = Some(newSize)))
         )
 
       case LspEvent.LspDiagnosticsReceived(uri, diagnostics) =>
-        ReducerResult.noEffects(state.copy(diagnostics = state.diagnostics + (uri -> diagnostics)))
+        ReducerResult.noEffects(
+          state.copy(runtime =
+            state.runtime.copy(diagnosticsState =
+              state.runtime.diagnosticsState
+                .copy(diagnostics = state.runtime.diagnosticsState.diagnostics + (uri -> diagnostics))
+            )
+          )
+        )
 
       case LspEvent.LspHoverReceived(text, anchor) =>
         PeekStateReducer.show(PeekContent.QuickInfo(text), anchor, state)
@@ -80,6 +88,8 @@ object SystemEventReducer:
               entries = Map(path -> entries)
             )
             surface.copy(content = SurfaceContent.DirectoryTree(tree, Some(path)))
-        state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+        state.copy(runtime =
+          state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+        )
       }
       .getOrElse(state)

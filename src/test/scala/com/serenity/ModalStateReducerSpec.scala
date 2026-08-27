@@ -19,9 +19,10 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.ModalWorkflow(closeWorkflow),
       SurfacePresentation.Modal
     )
-    val parentState = AppState.initial.copy(
-      uiSurfaces = List(parent),
-      focus = Focus.Surface(parent.id)
+    val initialState = AppState.initial
+    val parentState = initialState.copy(
+      persisted = initialState.persisted.copy(focus = Focus.Surface(parent.id)),
+      runtime = initialState.runtime.copy(uiSurfaces = List(parent))
     )
 
     val shown     = ModalStateReducer.show(closeWorkflow, parentState).state
@@ -32,9 +33,9 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
     child.presentation shouldBe SurfacePresentation.Modal
     shown.modalSurfaces.map(_.id) shouldBe List(parent.id, child.id)
     shown.blockingModalSurfaces.map(_.id) shouldBe List(parent.id, child.id)
-    shown.focus shouldBe Focus.Surface(child.id)
+    shown.persisted.focus shouldBe Focus.Surface(child.id)
     dismissed.blockingModalSurfaces.map(_.id) shouldBe List(parent.id)
-    dismissed.focus shouldBe Focus.Surface(parent.id)
+    dismissed.persisted.focus shouldBe Focus.Surface(parent.id)
   }
 
   it should "keep non-blocking find workflows on the floating layer" in {

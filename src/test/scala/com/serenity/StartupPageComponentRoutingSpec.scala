@@ -34,7 +34,7 @@ class StartupPageComponentRoutingSpec extends AnyFlatSpec with Matchers:
       initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
 
       // Verify the startup state
-      _ = initialState.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
+      _ = initialState.persisted.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
       _ = initialState.startPageSurface should be(defined)
 
       // Test that the startup component handles the local event contract used by state-manager routing.

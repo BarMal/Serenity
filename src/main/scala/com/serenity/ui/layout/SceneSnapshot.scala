@@ -87,7 +87,7 @@ object UiSceneSnapshot:
       viewportSize,
       calculatedLayout
     )
-    val workspacePanes = state.layout.orderedPaneIds.flatMap { paneId =>
+    val workspacePanes = state.persisted.layout.orderedPaneIds.flatMap { paneId =>
       paneLayouts.get(paneId).toList.flatMap { pane =>
         val paneNode = SceneNode(
           id = SceneNodeId.EditorPane(paneId),
@@ -96,14 +96,14 @@ object UiSceneSnapshot:
           contentRect = pane.contentRect,
           hitRegions = List(SceneHitRegion(SceneHitKind.Frame, pane.paneRect)) ++
             Option
-              .when(!state.layout.activeEditorPaneId.contains(paneId))(
+              .when(!state.persisted.layout.activeEditorPaneId.contains(paneId))(
                 SceneHitRegion(SceneHitKind.Header, pane.headerRect)
               )
               .toList ++
             List(SceneHitRegion(SceneHitKind.Content, pane.contentRect)),
           zIndex = 0
         )
-        val activeHeader = Option.when(state.layout.activeEditorPaneId.contains(paneId))(
+        val activeHeader = Option.when(state.persisted.layout.activeEditorPaneId.contains(paneId))(
           SceneNode(
             id = SceneNodeId.EditorPaneHeader(paneId),
             layer = SceneLayer.Workspace,
@@ -146,7 +146,7 @@ object UiSceneSnapshot:
         if modal.nonEmpty then modal.lastOption.toList.map(_.id)
         else
           orderedForFocus(
-            state.focus,
+            state.persisted.focus,
             nodes.filterNot(_.id match
               case SceneNodeId.EditorPaneHeader(_) => true
               case _                               => false)
@@ -166,7 +166,7 @@ object UiSceneSnapshot:
     initialZIndex: Int
   ): List[SceneNode] =
     val pinned = state.pinnedSurfaces
-    val expanded = state.uiSurfaces.filter {
+    val expanded = state.runtime.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false

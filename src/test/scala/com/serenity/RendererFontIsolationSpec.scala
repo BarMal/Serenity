@@ -35,23 +35,27 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val pane   = EditorPane.withBuffer(paneId, bufferId)
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val base = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        )
       )
     )
     val (stateWithId, surfaceId) = base.allocateSurfaceId
     stateWithId.copy(
-      uiSurfaces = List(
-        UiSurface(
-          surfaceId,
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(0, cursorCol)), SurfacePlacement.BelowCursor)
+      persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
+      runtime = stateWithId.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            surfaceId,
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(0, cursorCol)), SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(surfaceId)
+      )
     )
 
   private def stateWithRunnerAndMarkdownBuffer: AppState =
@@ -77,7 +81,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       Some(cursorColor)
     )
 
-    val buffer       = state.buffers(bufferId)
+    val buffer       = state.persisted.buffers(bufferId)
     val layout       = LayoutEngine.calculateLayout(state, viewportSize)
     val paneRect     = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect  = LayoutRect(paneRect.x, paneRect.y + 1, paneRect.width, math.max(1, paneRect.height - 1))
@@ -163,7 +167,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       Some(cursorColor)
     )
 
-    val buffer       = state.buffers(bufferId)
+    val buffer       = state.persisted.buffers(bufferId)
     val layout       = LayoutEngine.calculateLayout(state, viewportSize)
     val paneRect     = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect  = LayoutRect(paneRect.x, paneRect.y + 1, paneRect.width, math.max(1, paneRect.height - 1))

@@ -33,7 +33,8 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
 
   it should "recompute when the state reference changes, threading the previous snapshot through" in {
     val stateA = AppState.initial
-    val stateB = AppState.initial.copy(focus = Focus.Surface(SurfaceId("changed")))
+    val stateB =
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("changed"))))
     val program = for
       sync         <- AccessibilitySync.empty
       seenPrevious <- IO.ref(List.empty[Option[AccessibilitySnapshot]])
@@ -73,7 +74,9 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
 
   it should "not recompute when only the decorative window sitter ticked" in {
     val stateA = AppState.initial
-    val stateB = stateA.copy(windowSitter = stateA.windowSitter.copy(activeTicks = 5, frameIndex = 2))
+    val stateB = stateA.copy(runtime =
+      stateA.runtime.copy(windowSitter = stateA.runtime.windowSitter.copy(activeTicks = 5, frameIndex = 2))
+    )
     val program = for
       sync      <- AccessibilitySync.empty
       callCount <- IO.ref(0)
@@ -93,8 +96,10 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
   it should "not recompute when only a theme transition or surface animation ticked" in {
     val stateA = AppState.initial
     val stateB = stateA.copy(
-      themeTransition = Some(ThemeTransition(stateA.theme, currentStep = 1, totalSteps = 5)),
-      surfaceAnimations = Map(SurfaceId("runner") -> SurfaceAnimationState())
+      runtime = stateA.runtime.copy(
+        themeTransition = Some(ThemeTransition(stateA.persisted.theme, currentStep = 1, totalSteps = 5)),
+        surfaceAnimations = Map(SurfaceId("runner") -> SurfaceAnimationState())
+      )
     )
     val program = for
       sync      <- AccessibilitySync.empty
@@ -122,8 +127,11 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
   // per-buffer decorative field) is reintroduced onto `Buffer` without also being blanked in `normalize`.
   it should "not recompute when only a buffer's decorative character-reveal animation ticked" in {
     val bufferId = BufferId(1)
-    val stateA   = AppState.initial.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
-    val stateB   = stateA.copy(buffers = Map(bufferId -> stateA.buffers(bufferId)))
+    val stateA = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
+    )
+    val stateB =
+      stateA.copy(persisted = stateA.persisted.copy(buffers = Map(bufferId -> stateA.persisted.buffers(bufferId))))
     stateB shouldBe stateA
     val program = for
       sync      <- AccessibilitySync.empty
@@ -141,11 +149,17 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
 
   it should "not recompute when only a buffer's markdown-preview commit generation caught up" in {
     val bufferId = BufferId(1)
-    val stateA = AppState.initial.copy(buffers =
-      Map(bufferId -> Buffer.fromString(bufferId, "# hello").copy(markdownPreviewEditGeneration = 3L))
+    val stateA = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers =
+        Map(bufferId -> Buffer.fromString(bufferId, "# hello").copy(markdownPreviewEditGeneration = 3L))
+      )
     )
     val stateB =
-      stateA.copy(buffers = Map(bufferId -> stateA.buffers(bufferId).copy(markdownPreviewCommittedGeneration = 3L)))
+      stateA.copy(persisted =
+        stateA.persisted.copy(buffers =
+          Map(bufferId -> stateA.persisted.buffers(bufferId).copy(markdownPreviewCommittedGeneration = 3L))
+        )
+      )
     val program = for
       sync      <- AccessibilitySync.empty
       callCount <- IO.ref(0)
@@ -164,8 +178,9 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     val stateA = AppState.initial
     val stateB = AppState.initial
       .copy(
-        focus = Focus.Surface(SurfaceId("changed")),
-        windowSitter = AppState.initial.windowSitter.copy(activeTicks = 5)
+        persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("changed"))),
+        runtime =
+          AppState.initial.runtime.copy(windowSitter = AppState.initial.runtime.windowSitter.copy(activeTicks = 5))
       )
     val program = for
       sync      <- AccessibilitySync.empty

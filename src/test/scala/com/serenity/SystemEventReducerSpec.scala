@@ -24,14 +24,14 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
       SystemEventReducer.reduce(ResizeEvent(newSize), initialState)
 
     effects shouldBe Nil
-    updatedState.viewportSize shouldBe Some(newSize)
+    updatedState.runtime.viewportSize shouldBe Some(newSize)
 
     val expectedLayout = LayoutEngine.calculateLayout(updatedState, newSize)
     val contentRect = LayoutEngine
       .calculateEditorPaneLayouts(updatedState, expectedLayout)(PaneId(0))
       .contentRect
-    val bufferId = updatedState.bufferOrder.head
-    val buffer   = updatedState.buffers(bufferId)
+    val bufferId = updatedState.persisted.bufferOrder.head
+    val buffer   = updatedState.persisted.buffers(bufferId)
 
     buffer.viewport.visibleColumns shouldBe contentRect.width
     buffer.viewport.visibleLines shouldBe contentRect.height
@@ -84,15 +84,17 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
       DirEntry(selectedPath.resolve("Main.scala"), "Main.scala", isDirectory = false)
     )
     val initialState = AppState.initial.copy(
-      uiSurfaces = List(
-        com.serenity.state.models.UiSurface.fromPanelContent(
-          com.serenity.state.models.SurfaceId("left-panel"),
-          com.serenity.ui.layout.PanelContent.DirectoryTree(
-            com.serenity.ui.layout.DirectoryTreeData(rootPath, entries = Map(rootPath -> initialEntries)),
-            Some(selectedPath)
-          ),
-          PanelPosition.Left,
-          24
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          com.serenity.state.models.UiSurface.fromPanelContent(
+            com.serenity.state.models.SurfaceId("left-panel"),
+            com.serenity.ui.layout.PanelContent.DirectoryTree(
+              com.serenity.ui.layout.DirectoryTreeData(rootPath, entries = Map(rootPath -> initialEntries)),
+              Some(selectedPath)
+            ),
+            PanelPosition.Left,
+            24
+          )
         )
       )
     )

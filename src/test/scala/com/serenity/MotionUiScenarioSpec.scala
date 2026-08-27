@@ -33,7 +33,7 @@ class MotionUiScenarioSpec extends AnyFlatSpec with Matchers:
     execute(driver, CommandIntent.SetCommandRunnerTransitionSpeedScale(1.5))
     execute(driver, CommandIntent.SetUiTransitionSpeedScale(2.0))
     execute(driver, CommandIntent.SetCursorTransitionSpeedScale(0.75))
-    val overridden = driver.state.unsafeRunSync().config
+    val overridden = driver.state.unsafeRunSync().persisted.config
 
     overridden.motionPreset shouldBe MotionPreset.Custom
     overridden.effectiveEditorTextTransitionSpeedScale shouldBe 0.5

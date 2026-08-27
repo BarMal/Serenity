@@ -299,7 +299,7 @@ object CommandRunnerReducer:
               else ReducerResult.noEffects(state)
 
       case RunnerPaste =>
-        state.clipboard
+        state.runtime.clipboard
           .getOrElse("")
           .filter(char => char != '\r' && char != '\n')
           .foldLeft(ReducerResult.noEffects(state))((result, char) =>
@@ -317,7 +317,7 @@ object CommandRunnerReducer:
 
       case RunnerSelectVisibleItem(index) =>
         val mainFocusedState = state.commandRunnerSurface
-          .map(surface => state.copy(focus = Focus.Surface(surface.id)))
+          .map(surface => state.copy(persisted = state.persisted.copy(focus = Focus.Surface(surface.id))))
           .getOrElse(state)
         ReducerResult.noEffects(
           replaceRunner(
@@ -328,7 +328,7 @@ object CommandRunnerReducer:
 
       case RunnerSelectSubmenuItem(index) =>
         val submenuFocusedState = state.commandRunnerSubmenuSurface
-          .map(surface => state.copy(focus = Focus.Surface(surface.id)))
+          .map(surface => state.copy(persisted = state.persisted.copy(focus = Focus.Surface(surface.id))))
           .getOrElse(state)
         ReducerResult.noEffects(
           replaceRunner(submenuFocusedState, _.withSelectedFocusedSubmenuIndex(index))
@@ -336,7 +336,7 @@ object CommandRunnerReducer:
 
       case RunnerSelectPreviewSubmenuItem(groupId, index) =>
         val submenuFocusedState = state.commandRunnerSubmenuSurface
-          .map(surface => state.copy(focus = Focus.Surface(surface.id)))
+          .map(surface => state.copy(persisted = state.persisted.copy(focus = Focus.Surface(surface.id))))
           .getOrElse(state)
         ReducerResult.noEffects(
           replaceRunner(
@@ -444,9 +444,13 @@ object CommandRunnerReducer:
 
   private def deactivate(state: AppState): AppState =
     state
-      .copy(
-        uiSurfaces = state.uiSurfaces
-          .filterNot(surface => surface.id == SubmenuSurfaceId || state.commandRunnerSurface.exists(_.id == surface.id))
+      .copy(runtime =
+        state.runtime.copy(uiSurfaces =
+          state.runtime.uiSurfaces
+            .filterNot(surface =>
+              surface.id == SubmenuSurfaceId || state.commandRunnerSurface.exists(_.id == surface.id)
+            )
+        )
       )
       .popFocus
 
@@ -464,7 +468,7 @@ object CommandRunnerReducer:
       case _                                                                         => false
 
   private def submenuHasFocus(state: AppState): Boolean =
-    state.focus == Focus.Surface(SubmenuSurfaceId) ||
+    state.persisted.focus == Focus.Surface(SubmenuSurfaceId) ||
       currentRunner(state).exists(runner => runner.isSettingsSurface && runner.activeSubmenu.nonEmpty)
 
   private def submenuEditing(state: AppState): Boolean =
@@ -762,7 +766,7 @@ object CommandRunnerReducer:
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
             val updatedRunner = update(runner)
-            val updatedSurfaces = state.uiSurfaces.flatMap {
+            val updatedSurfaces = state.runtime.uiSurfaces.flatMap {
               case current if current.id == surface.id =>
                 List(current.copy(content = SurfaceContent.CommandPalette(updatedRunner)))
               case current if current.id == SubmenuSurfaceId =>
@@ -770,16 +774,20 @@ object CommandRunnerReducer:
               case other =>
                 List(other)
             }
-            syncSubmenuSurface(state.copy(uiSurfaces = updatedSurfaces), updatedRunner)
+            syncSubmenuSurface(state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)), updatedRunner)
           case _ =>
             state
       case None =>
         state
 
   private def syncSubmenuSurface(state: AppState, runner: CommandRunner): AppState =
-    val baseSurfaces  = state.uiSurfaces.filterNot(_.id == SubmenuSurfaceId)
+    val baseSurfaces  = state.runtime.uiSurfaces.filterNot(_.id == SubmenuSurfaceId)
     val mainSurfaceId = state.commandRunnerSurface.map(_.id).getOrElse(SurfaceId("command-runner"))
-    if runner.isSettingsSurface then state.copy(uiSurfaces = baseSurfaces, focus = Focus.Surface(mainSurfaceId))
+    if runner.isSettingsSurface then
+      state.copy(
+        runtime = state.runtime.copy(uiSurfaces = baseSurfaces),
+        persisted = state.persisted.copy(focus = Focus.Surface(mainSurfaceId))
+      )
     else
       runner.previewOrFocusedGroupId match
         case Some(groupId) =>
@@ -789,9 +797,13 @@ object CommandRunnerReducer:
             presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
           )
           state.copy(
-            uiSurfaces = baseSurfaces :+ submenuSurface,
-            focus =
+            runtime = state.runtime.copy(uiSurfaces = baseSurfaces :+ submenuSurface),
+            persisted = state.persisted.copy(focus =
               if runner.activeSubmenu.isDefined then Focus.Surface(SubmenuSurfaceId) else Focus.Surface(mainSurfaceId)
+            )
           )
         case None =>
-          state.copy(uiSurfaces = baseSurfaces, focus = Focus.Surface(mainSurfaceId))
+          state.copy(
+            runtime = state.runtime.copy(uiSurfaces = baseSurfaces),
+            persisted = state.persisted.copy(focus = Focus.Surface(mainSurfaceId))
+          )

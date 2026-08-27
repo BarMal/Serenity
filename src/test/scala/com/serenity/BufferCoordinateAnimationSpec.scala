@@ -28,11 +28,11 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
   "Character animation" should "store at buffer coordinates, not screen coordinates" in {
     val program = for
-      sm               <- IO.pure(makeStateManager())
-      _                <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
+      sm <- IO.pure(makeStateManager())
+      _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
       bufferId         <- sm.createBuffer("Hello")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 0, 5)
       _                <- sm.applyEvent(InsertChar('a'))
@@ -48,11 +48,11 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "remain stable after viewport scrolling" in {
     val program = for
-      sm                    <- IO.pure(makeStateManager())
-      _                     <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
+      sm <- IO.pure(makeStateManager())
+      _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
       bufferId              <- sm.createNewEmptyBuffer()
       state                 <- sm.getCurrentState
-      paneId                <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId                <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                     <- sm.setBufferForPane(paneId, bufferId)
       _                     <- sm.applyEvent(InsertChar('a'))
       animationsAfterType   <- sm.getBufferAnimations
@@ -70,11 +70,11 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "key multi-line content at the correct buffer line" in {
     val program = for
-      sm               <- IO.pure(makeStateManager())
-      _                <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
+      sm <- IO.pure(makeStateManager())
+      _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
       bufferId         <- sm.createBuffer("line one\nline two")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 1, 3)
       _                <- sm.applyEvent(InsertChar('X'))
@@ -92,15 +92,17 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     val program = for
       sm <- IO.pure(makeStateManager())
       _ <- sm.updateState(state =>
-        state.copy(config =
-          AppConfig.default
-            .withMotionPreset(MotionPreset.Smooth)
-            .withElementTransitionSpeedScale(2.0)
+        state.copy(persisted =
+          state.persisted.copy(config =
+            AppConfig.default
+              .withMotionPreset(MotionPreset.Smooth)
+              .withElementTransitionSpeedScale(2.0)
+          )
         )
       )
       bufferId         <- sm.createBuffer("Hello")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 0, 5)
       _                <- sm.applyEvent(InsertChar('a'))
@@ -124,22 +126,24 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     val program = for
       sm <- IO.pure(makeStateManager())
       _ <- sm.updateState(state =>
-        state.copy(config =
-          AppConfig.default
-            .withMotionPreset(MotionPreset.Smooth)
-            .withEditorInsertionTransitionKind(TransitionKind.Disabled)
+        state.copy(persisted =
+          state.persisted.copy(config =
+            AppConfig.default
+              .withMotionPreset(MotionPreset.Smooth)
+              .withEditorInsertionTransitionKind(TransitionKind.Disabled)
+          )
         )
       )
       bufferId         <- sm.createBuffer("Hello")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 0, 5)
       _                <- sm.applyEvent(InsertChar('a'))
       newState         <- sm.getCurrentState
       bufferAnimations <- sm.getBufferAnimations
     yield
-      val buffer     = newState.buffers(bufferId)
+      val buffer     = newState.persisted.buffers(bufferId)
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
       buffer.document.content.collect() shouldBe "Helloa"
       animations.animations shouldBe empty
@@ -152,22 +156,24 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       sm <- IO.pure(makeStateManager())
       _ <- sm.updateState(state =>
         state.copy(
-          config = AppConfig.default
-            .withMotionPreset(MotionPreset.Subtle)
-            .withEditorInsertionTransitionKind(TransitionKind.DirectionalSweep),
-          clipboard = Some("ab")
+          persisted = state.persisted.copy(config =
+            AppConfig.default
+              .withMotionPreset(MotionPreset.Subtle)
+              .withEditorInsertionTransitionKind(TransitionKind.DirectionalSweep)
+          ),
+          runtime = state.runtime.copy(clipboard = Some("ab"))
         )
       )
       bufferId         <- sm.createBuffer("Hello")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 0, 5)
       _                <- sm.applyEvent(Paste)
       newState         <- sm.getCurrentState
       bufferAnimations <- sm.getBufferAnimations
     yield
-      val buffer     = newState.buffers(bufferId)
+      val buffer     = newState.persisted.buffers(bufferId)
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
       val firstCell  = animations.getCell(5, 0).getOrElse(fail("Expected first pasted cell animation"))
       val secondCell = animations.getCell(6, 0).getOrElse(fail("Expected second pasted cell animation"))
@@ -184,13 +190,13 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       sm <- IO.pure(makeStateManager())
       _ <- sm.updateState(state =>
         state.copy(
-          config = AppConfig.default.withMotionPreset(MotionPreset.Smooth),
-          clipboard = Some("abc")
+          persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Smooth)),
+          runtime = state.runtime.copy(clipboard = Some("abc"))
         )
       )
       bufferId         <- sm.createBuffer("Hello")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 0, 5)
       _                <- sm.applyEvent(Paste)
@@ -214,13 +220,13 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       sm <- IO.pure(makeStateManager())
       _ <- sm.updateState(state =>
         state.copy(
-          config = AppConfig.default.withMotionPreset(MotionPreset.Smooth),
-          clipboard = Some("abc\ndef")
+          persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Smooth)),
+          runtime = state.runtime.copy(clipboard = Some("abc\ndef"))
         )
       )
       bufferId         <- sm.createBuffer("prefix\nsuffix")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 0, 3)
       _                <- sm.applyEvent(Paste)
@@ -246,17 +252,19 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       sm <- IO.pure(makeStateManager())
       _ <- sm.updateState(state =>
         state.copy(
-          config = AppConfig.default
-            .withMotionPreset(MotionPreset.Smooth)
-            .withEditorInsertionTransitionKind(TransitionKind.DirectionalSweep)
-            .withEditorTextTransitionSpeedScale(Some(0.5))
-            .withUiTransitionSpeedScale(Some(2.0)),
-          clipboard = Some("ab")
+          persisted = state.persisted.copy(config =
+            AppConfig.default
+              .withMotionPreset(MotionPreset.Smooth)
+              .withEditorInsertionTransitionKind(TransitionKind.DirectionalSweep)
+              .withEditorTextTransitionSpeedScale(Some(0.5))
+              .withUiTransitionSpeedScale(Some(2.0))
+          ),
+          runtime = state.runtime.copy(clipboard = Some("ab"))
         )
       )
       bufferId         <- sm.createBuffer("Hello")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 0, 5)
       _                <- sm.applyEvent(Paste)
@@ -284,20 +292,20 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       sm <- IO.pure(makeStateManager())
       _ <- sm.updateState(state =>
         state.copy(
-          config = AppConfig.default.withMotionPreset(MotionPreset.Subtle),
-          clipboard = Some(largeText)
+          persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Subtle)),
+          runtime = state.runtime.copy(clipboard = Some(largeText))
         )
       )
       bufferId         <- sm.createBuffer("")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 0, 0)
       _                <- sm.applyEvent(Paste)
       newState         <- sm.getCurrentState
       bufferAnimations <- sm.getBufferAnimations
     yield
-      val buffer     = newState.buffers(bufferId)
+      val buffer     = newState.persisted.buffers(bufferId)
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
       buffer.document.content.collect() shouldBe largeText
       animations.animations.size should be <=
@@ -308,11 +316,11 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "remap an animating character's key when an edit inserts a line above it" in {
     val program = for
-      sm               <- IO.pure(makeStateManager())
-      _                <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
+      sm <- IO.pure(makeStateManager())
+      _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
       bufferId         <- sm.createBuffer("line one\nline two")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 1, 3)
       _                <- sm.applyEvent(InsertChar('X'))
@@ -324,7 +332,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     yield
       typedAnimations.getOrElse(bufferId, AnimationState.empty).animations should contain key CharacterKey(3, 1)
 
-      val buffer     = newState.buffers(bufferId)
+      val buffer     = newState.persisted.buffers(bufferId)
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
       buffer.document.content.collect() shouldBe "\nline one\nlinXe two"
       animations.animations should contain key CharacterKey(3, 2)
@@ -336,11 +344,11 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "drop an animation when a later edit deletes that exact character" in {
     val program = for
-      sm               <- IO.pure(makeStateManager())
-      _                <- sm.updateState(_.copy(config = AppConfig.withTestAnimations))
+      sm <- IO.pure(makeStateManager())
+      _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
       bufferId         <- sm.createBuffer("Hello")
       state            <- sm.getCurrentState
-      paneId           <- IO.pure(state.layout.editorPanes.keys.head)
+      paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
       _                <- sm.setCursorPosition(paneId, 0, 5)
       _                <- sm.applyEvent(InsertChar('a'))
@@ -351,7 +359,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     yield
       typedAnimations.getOrElse(bufferId, AnimationState.empty).animations should contain key CharacterKey(5, 0)
 
-      val buffer     = newState.buffers(bufferId)
+      val buffer     = newState.persisted.buffers(bufferId)
       val animations = bufferAnimations.getOrElse(bufferId, AnimationState.empty)
       buffer.document.content.collect() shouldBe "Hello"
       animations.animations shouldBe empty

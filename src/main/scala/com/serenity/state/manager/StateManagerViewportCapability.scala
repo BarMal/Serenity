@@ -16,27 +16,31 @@ final private[manager] class StateManagerViewportCapability(
 
   def ensureCursorVisible(paneId: PaneId): IO[Unit] =
     stateRef.update { state =>
-      state.layout.editorPanes.get(paneId) match
+      state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
-          pane.bufferId.flatMap(state.buffers.get) match
+          pane.bufferId.flatMap(state.persisted.buffers.get) match
             case Some(buffer) =>
               val cursor        = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
               val updatedBuffer = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
-              state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+              state.copy(persisted =
+                state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer))
+              )
             case None => state
         case None => state
     }
 
   def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit] =
     stateRef.update { state =>
-      state.layout.editorPanes.get(paneId) match
+      state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
           val updatedPane = pane.copy(
             smoothScrolling = Some(SmoothScrollState(targetTopLine = targetLine, progress = 0.0))
           )
-          state.copy(layout =
-            state.layout.copy(
-              editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+          state.copy(persisted =
+            state.persisted.copy(layout =
+              state.persisted.layout.copy(
+                editorPanes = state.persisted.layout.editorPanes + (paneId -> updatedPane)
+              )
             )
           )
         case None => state
@@ -44,9 +48,9 @@ final private[manager] class StateManagerViewportCapability(
 
   def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit] =
     stateRef.update { state =>
-      state.layout.editorPanes.get(paneId) match
+      state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
-          pane.bufferId.flatMap(state.buffers.get) match
+          pane.bufferId.flatMap(state.persisted.buffers.get) match
             case Some(buffer) =>
               pane.smoothScrolling match
                 case Some(SmoothScrollState(targetTopLine, _)) =>
@@ -63,9 +67,11 @@ final private[manager] class StateManagerViewportCapability(
                   val updatedPane = pane.copy(smoothScrolling = newSmoothing)
 
                   state.copy(
-                    buffers = state.buffers + (buffer.id -> updatedBuffer),
-                    layout = state.layout.copy(
-                      editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+                    persisted = state.persisted.copy(
+                      buffers = state.persisted.buffers + (buffer.id -> updatedBuffer),
+                      layout = state.persisted.layout.copy(
+                        editorPanes = state.persisted.layout.editorPanes + (paneId -> updatedPane)
+                      )
                     )
                   )
                 case None => state
@@ -75,9 +81,9 @@ final private[manager] class StateManagerViewportCapability(
 
   def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit] =
     stateRef.update { state =>
-      state.layout.editorPanes.get(paneId) match
+      state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
-          pane.bufferId.flatMap(state.buffers.get) match
+          pane.bufferId.flatMap(state.persisted.buffers.get) match
             case Some(buffer) =>
               val halfVisible = buffer.viewport.visibleLines / 2
               val newTopLine  = math.max(0, targetLine - halfVisible)
@@ -85,7 +91,9 @@ final private[manager] class StateManagerViewportCapability(
                 editing = buffer.editing.copy(cursors = List(CursorPosition(targetLine, 0))),
                 viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
               )
-              state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+              state.copy(persisted =
+                state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer))
+              )
             case None => state
         case None => state
     }
@@ -103,7 +111,7 @@ final private[manager] class StateManagerViewportCapability(
   private def refreshAutoTextScale: IO[Unit] =
     deviceTextScaleProvider.flatMap { deviceScale =>
       stateRef.get.flatMap { state =>
-        val fontConfig = state.config.fontConfig
+        val fontConfig = state.persisted.config.fontConfig
         if fontConfig.resolveAutoTextScale(deviceScale) == fontConfig then IO.unit
         else updateFontConfig(identity)
       }

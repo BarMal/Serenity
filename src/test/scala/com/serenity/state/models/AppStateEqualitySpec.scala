@@ -19,23 +19,29 @@ class AppStateEqualitySpec extends AnyFlatSpec with Matchers:
 
   it should "detect a difference confined to its last declared field (windowSitter)" in {
     val base    = AppState.initial
-    val changed = base.copy(windowSitter = base.windowSitter.copy(activeTicks = 1))
+    val changed = base.copy(runtime = base.runtime.copy(windowSitter = base.runtime.windowSitter.copy(activeTicks = 1)))
 
     (base == changed) shouldBe false
   }
 
   it should "detect a difference in an early field (focus)" in {
     val base    = AppState.initial
-    val changed = base.copy(focus = Focus.Surface(SurfaceId("changed")))
+    val changed = base.copy(persisted = base.persisted.copy(focus = Focus.Surface(SurfaceId("changed"))))
 
     (base == changed) shouldBe false
   }
 
   it should "still compare buffers structurally through the buffers map" in {
-    val bufferId         = BufferId(1)
-    val base             = AppState.initial.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
-    val sameContent      = AppState.initial.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
-    val differentContent = AppState.initial.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "world")))
+    val bufferId = BufferId(1)
+    val base = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
+    )
+    val sameContent = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
+    )
+    val differentContent = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "world")))
+    )
 
     (base == sameContent) shouldBe true
     (base == differentContent) shouldBe false

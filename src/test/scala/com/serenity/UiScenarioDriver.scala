@@ -173,13 +173,15 @@ final class UiScenarioDriver private (
           val content = contract.overlayContentRect(surfaceId).getOrElse(LayoutRect(0, y, 0, 1))
           val itemTargetRows = state
             .surfaceById(surfaceId)
-            .map(surface => SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.config.interfaceDensity))
+            .map(surface =>
+              SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
+            )
             .getOrElse(1)
           LayoutRect(content.x, y, content.width, itemTargetRows)
       }
       surfaceId -> rects
     }.toMap
-    val mappings = state.buffers.map {
+    val mappings = state.persisted.buffers.map {
       case (bufferId, buffer) =>
         bufferId -> MarkdownBlockLens.activeBlockLineSet(
           buffer.document.content.toString.linesIterator.toVector,
@@ -189,20 +191,26 @@ final class UiScenarioDriver private (
     val previewPlacements = contract.workspace.paneLayouts.toList.flatMap {
       case (paneId, paneLayout) =>
         for
-          pane       <- state.layout.editorPanes.get(paneId).toList
+          pane       <- state.persisted.layout.editorPanes.get(paneId).toList
           bufferId   <- pane.bufferId.toList
-          buffer     <- state.buffers.get(bufferId).toList
+          buffer     <- state.persisted.buffers.get(bufferId).toList
           drawnImage <- recordingSurface.drawnImages.find(_.bounds == paneLayout.contentRect).toList
           placement  <- previewPlacementFor(buffer, Some(drawnImage)).toList
         yield bufferId -> placement
     }.toMap
     val visiblePreviewSourceLines = previewPlacements.map {
       case (bufferId, placement) =>
-        val buffer = state.buffers(bufferId)
-        bufferId -> compositedPreviewSourceLines(image, state.theme.background, buffer, placement, mappings(bufferId))
+        val buffer = state.persisted.buffers(bufferId)
+        bufferId -> compositedPreviewSourceLines(
+          image,
+          state.persisted.theme.background,
+          buffer,
+          placement,
+          mappings(bufferId)
+        )
     }
     val visibleText = state.focusedBufferId.toList.flatMap { bufferId =>
-      state.buffers.get(bufferId).toList.flatMap { buffer =>
+      state.persisted.buffers.get(bufferId).toList.flatMap { buffer =>
         buffer.document.content.toString.linesIterator
           .drop(buffer.viewport.topLine)
           .take(buffer.viewport.visibleLines)
@@ -213,7 +221,7 @@ final class UiScenarioDriver private (
       (0 until environment.viewport.height * environment.cellMetrics.lineHeight).collect {
         case row
             if (0 until environment.viewport.width * environment.cellMetrics.charWidth)
-              .exists(column => image.getRGB(column, row) != state.theme.background.getRGB) =>
+              .exists(column => image.getRGB(column, row) != state.persisted.theme.background.getRGB) =>
           row
       }.toSet
     val drawnItems = itemRects.view.mapValues { targets =>
@@ -225,7 +233,7 @@ final class UiScenarioDriver private (
       }
     }.toMap
     ScenarioFrameEvidence(
-      state.focus,
+      state.persisted.focus,
       surfaceRects,
       itemRects,
       mappings,
@@ -239,7 +247,7 @@ final class UiScenarioDriver private (
       drawnItems,
       recordingSurface.drawnImages.map(_.bounds),
       renderedContentRows,
-      animationComplete = state.surfaceAnimations.values.forall(_.animationState.animations.isEmpty) &&
+      animationComplete = state.runtime.surfaceAnimations.values.forall(_.animationState.animations.isEmpty) &&
         bufferAnimations.values.forall(_.animations.isEmpty),
       contract.violations
     )
@@ -442,7 +450,9 @@ object UiScenarioDriver:
         uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default)
       )
       _ <- manager.handleViewportResize(environment.viewport)
-      _ <- manager.updateState(_.copy(theme = themeFor(environment.themeName)))
+      _ <- manager.updateState(state =>
+        state.copy(persisted = state.persisted.copy(theme = themeFor(environment.themeName)))
+      )
     yield new UiScenarioDriver(manager, environment, artifactDirectory)
 
   private def themeFor(name: String): com.serenity.ui.theme.Theme =

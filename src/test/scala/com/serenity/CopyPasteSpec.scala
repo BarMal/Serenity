@@ -39,7 +39,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     applyEvent(Copy)
 
-    getState.buffers(bufferId).document.isDirty shouldBe false
+    getState.persisted.buffers(bufferId).document.isDirty shouldBe false
 
   it should "copy the correct line when cursor is on a non-first line" in new ClipFixture:
     setupBuffer("first\nsecond\nthird")
@@ -102,7 +102,9 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     setCursor(0, 0)
 
     getState // warm up
-    stateManager.updateState(_.copy(clipboard = Some("hello "))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some("hello "))))
+      .unsafeRunSync()
     applyEvent(Paste)
 
     getContent(bufferId) shouldBe "hello world"
@@ -116,7 +118,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
   it should "advance the cursor past the pasted text" in new ClipFixture:
     setupBuffer("")
-    stateManager.updateState(_.copy(clipboard = Some("hi"))).unsafeRunSync()
+    stateManager.updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some("hi")))).unsafeRunSync()
 
     applyEvent(Paste)
 
@@ -125,18 +127,22 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
   it should "replace the active selection when pasting" in new ClipFixture:
     val bufferId = setupBuffer("Hello World Program")
     setSelection(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
-    stateManager.updateState(_.copy(clipboard = Some("Universe"))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some("Universe"))))
+      .unsafeRunSync()
 
     applyEvent(Paste)
 
     getContent(bufferId) shouldBe "Hello Universe Program"
     getCursor shouldBe CursorPosition(0, 14)
-    getState.buffers(bufferId).editing.selection shouldBe None
+    getState.persisted.buffers(bufferId).editing.selection shouldBe None
 
   it should "place the cursor at the true multiline insertion end after paste" in new ClipFixture:
     val bufferId = setupBuffer("alpha\nomega")
     setCursor(0, 5)
-    stateManager.updateState(_.copy(clipboard = Some("\nbeta\ngamma"))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some("\nbeta\ngamma"))))
+      .unsafeRunSync()
 
     applyEvent(Paste)
 
@@ -165,7 +171,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     applyEvent(Cut)
 
-    getState.buffers(bufferId).document.isDirty shouldBe true
+    getState.persisted.buffers(bufferId).document.isDirty shouldBe true
 
   it should "cut the active selection instead of the whole line" in new ClipFixture:
     val bufferId = setupBuffer("Hello World Program")
@@ -176,7 +182,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     getClipboard shouldBe Some("World")
     getContent(bufferId) shouldBe "Hello  Program"
     getCursor shouldBe CursorPosition(0, 6)
-    getState.buffers(bufferId).editing.selection shouldBe None
+    getState.persisted.buffers(bufferId).editing.selection shouldBe None
 
   it should "cut a multiline selection and join the remaining text" in new ClipFixture:
     val bufferId = setupBuffer("alpha\nbeta\ngamma")
@@ -187,7 +193,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     getClipboard shouldBe Some("pha\nbe")
     getContent(bufferId) shouldBe "alta\ngamma"
     getCursor shouldBe CursorPosition(0, 2)
-    getState.buffers(bufferId).editing.selection shouldBe None
+    getState.persisted.buffers(bufferId).editing.selection shouldBe None
 
   it should "cut all active selections when multiple selections are present" in new ClipFixture:
     val bufferId = setupBuffer("alpha beta gamma")
@@ -202,8 +208,8 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     getClipboard shouldBe Some("alpha\ngamma")
     getContent(bufferId) shouldBe " beta "
-    getState.buffers(bufferId).allSelections shouldBe Nil
-    getState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 6))
+    getState.persisted.buffers(bufferId).allSelections shouldBe Nil
+    getState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 6))
 
   it should "cut the current line for every distinct cursor line when multiple cursors are present" in new ClipFixture:
     val bufferId = setupBuffer("alpha\nbeta\ngamma\ndelta")
@@ -213,7 +219,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     getClipboard shouldBe Some("alpha\ngamma")
     getContent(bufferId) shouldBe "beta\ndelta"
-    getState.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0))
+    getState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0))
 
   it should "round-trip: cut then paste restores the line" in new ClipFixture:
     val bufferId = setupBuffer("original")
@@ -237,7 +243,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     def setupBuffer(content: String): BufferId =
       val bufferId = stateManager.createBuffer(content).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
-      activePaneId.set(state.layout.editorPanes.keys.head)
+      activePaneId.set(state.persisted.layout.editorPanes.keys.head)
       activeBufferId.set(bufferId)
       stateManager.setBufferForPane(activePaneId.get(), bufferId).unsafeRunSync()
       bufferId
@@ -248,20 +254,22 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     def setSelection(selection: Selection): Unit =
       stateManager
         .updateState { state =>
-          state.copy(
-            buffers = state.buffers.updated(
-              activeBufferId.get(),
-              state
-                .buffers(activeBufferId.get())
-                .copy(editing =
-                  state
-                    .buffers(activeBufferId.get())
-                    .editing
-                    .copy(
-                      cursors = List(selection.start),
-                      selection = Some(selection)
-                    )
-                )
+          state.copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers.updated(
+                activeBufferId.get(),
+                state.persisted
+                  .buffers(activeBufferId.get())
+                  .copy(editing =
+                    state.persisted
+                      .buffers(activeBufferId.get())
+                      .editing
+                      .copy(
+                        cursors = List(selection.start),
+                        selection = Some(selection)
+                      )
+                  )
+              )
             )
           )
         }
@@ -271,21 +279,23 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
       val primary = selections.head
       stateManager
         .updateState { state =>
-          state.copy(
-            buffers = state.buffers.updated(
-              activeBufferId.get(),
-              state
-                .buffers(activeBufferId.get())
-                .copy(editing =
-                  state
-                    .buffers(activeBufferId.get())
-                    .editing
-                    .copy(
-                      cursors = selections.map(_.focus),
-                      selection = Some(primary),
-                      selections = selections
-                    )
-                )
+          state.copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers.updated(
+                activeBufferId.get(),
+                state.persisted
+                  .buffers(activeBufferId.get())
+                  .copy(editing =
+                    state.persisted
+                      .buffers(activeBufferId.get())
+                      .editing
+                      .copy(
+                        cursors = selections.map(_.focus),
+                        selection = Some(primary),
+                        selections = selections
+                      )
+                  )
+              )
             )
           )
         }
@@ -294,21 +304,23 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     def setCursors(cursors: List[CursorPosition]): Unit =
       stateManager
         .updateState { state =>
-          state.copy(
-            buffers = state.buffers.updated(
-              activeBufferId.get(),
-              state
-                .buffers(activeBufferId.get())
-                .copy(editing =
-                  state
-                    .buffers(activeBufferId.get())
-                    .editing
-                    .copy(
-                      cursors = cursors,
-                      selection = None,
-                      selections = Nil
-                    )
-                )
+          state.copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers.updated(
+                activeBufferId.get(),
+                state.persisted
+                  .buffers(activeBufferId.get())
+                  .copy(editing =
+                    state.persisted
+                      .buffers(activeBufferId.get())
+                      .editing
+                      .copy(
+                        cursors = cursors,
+                        selection = None,
+                        selections = Nil
+                      )
+                  )
+              )
             )
           )
         }
@@ -321,10 +333,10 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
       stateManager.getCurrentState.unsafeRunSync()
 
     def getContent(bufferId: BufferId): String =
-      getState.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
+      getState.persisted.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
 
     def getClipboard: Option[String] =
-      getState.clipboard
+      getState.runtime.clipboard
 
     def getCursor: CursorPosition =
       getState.activeCursorPosition.getOrElse(CursorPosition(0, 0))

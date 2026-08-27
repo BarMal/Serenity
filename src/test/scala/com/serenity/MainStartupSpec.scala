@@ -42,12 +42,12 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
 
     val finalState = result.unsafeRunSync()
 
-    finalState.viewportSize.shouldBe(Some(initialViewportSize))
-    finalState.theme.should(not.be(com.serenity.ui.theme.Theme.default))
-    finalState.buffers.shouldBe(Map.empty)
-    finalState.layout.editorPanes.shouldBe(Map.empty)
+    finalState.runtime.viewportSize.shouldBe(Some(initialViewportSize))
+    finalState.persisted.theme.should(not.be(com.serenity.ui.theme.Theme.default))
+    finalState.persisted.buffers.shouldBe(Map.empty)
+    finalState.persisted.layout.editorPanes.shouldBe(Map.empty)
     finalState.startPageSurface.shouldBe(defined)
-    finalState.focus.shouldBe(Focus.Surface(finalState.startPageSurface.get.id))
+    finalState.persisted.focus.shouldBe(Focus.Surface(finalState.startPageSurface.get.id))
   }
 
   it should "render the expected startup choices on the dedicated start page" in {
@@ -105,19 +105,22 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       val finalState = result.unsafeRunSync()
 
       finalState.startPageSurface shouldBe None
-      finalState.buffers.size shouldBe 1
-      finalState.layout.editorPanes.size shouldBe 1
-      finalState.bufferOrder.size shouldBe 1
-      finalState.buffers.values
+      finalState.persisted.buffers.size shouldBe 1
+      finalState.persisted.layout.editorPanes.size shouldBe 1
+      finalState.persisted.bufferOrder.size shouldBe 1
+      finalState.persisted.buffers.values
         .find(_.document.filePath.contains(selectedFile))
         .map(_.document.content.collect()) shouldBe Some(
         "opened from launch option"
       )
-      val paneId = finalState.layout.activeEditorPaneId.getOrElse(fail("Expected an active editor pane"))
-      finalState.focus shouldBe Focus.EditorPane(paneId)
+      val paneId = finalState.persisted.layout.activeEditorPaneId.getOrElse(fail("Expected an active editor pane"))
+      finalState.persisted.focus shouldBe Focus.EditorPane(paneId)
       val activeBufferId =
-        finalState.layout.editorPanes.get(paneId).flatMap(_.bufferId).getOrElse(fail("Expected active pane buffer"))
-      finalState.buffers(activeBufferId).document.filePath shouldBe Some(selectedFile)
+        finalState.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(_.bufferId)
+          .getOrElse(fail("Expected active pane buffer"))
+      finalState.persisted.buffers(activeBufferId).document.filePath shouldBe Some(selectedFile)
 
       val surface     = new MockRenderSurface(initialViewportSize.width, initialViewportSize.height)
       val font        = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
@@ -141,8 +144,8 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       firstManager <- StateManager.apply(logger, sessionRootOverride = Some(sessionRoot))
-      _            <- firstManager.updateState(_.copy(theme = Theme.light))
-      _            <- firstManager.saveSession()
+      _ <- firstManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = Theme.light)))
+      _ <- firstManager.saveSession()
       secondManager <- StateManager.apply(
         logger,
         sessionRootOverride = Some(sessionRoot)
@@ -157,5 +160,5 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
 
     val finalState = program.unsafeRunSync()
 
-    finalState.theme.name shouldBe Theme.light.name
+    finalState.persisted.theme.name shouldBe Theme.light.name
   }

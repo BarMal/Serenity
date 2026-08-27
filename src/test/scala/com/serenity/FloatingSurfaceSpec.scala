@@ -19,14 +19,18 @@ class FloatingSurfaceSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma").copy(editing = EditingState(cursors = List(cursor)))
     val pane   = EditorPane.withBuffer(paneId, bufferId)
 
-    AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.EditorPane(paneId)
+    val initial = AppState.initial
+
+    initial.copy(
+      persisted = initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
     )
 
   "AppState.floatingSurfaces" should "return only floating ui surfaces" in {
@@ -36,23 +40,26 @@ class FloatingSurfaceSpec extends AnyFlatSpec with Matchers:
       selectedIndex = 0,
       filteredCommands = List.empty
     )
-    val state = baseState().copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("peek"),
-          SurfaceContent.QuickInfo("map"),
-          SurfacePresentation.Floating(Some(CursorPosition(2, 5)), SurfacePlacement.AboveCursor),
-          dismissOnMove = true
-        ),
-        UiSurface(
-          SurfaceId("command"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(4, 9)), SurfacePlacement.BelowCursor)
-        ),
-        UiSurface(
-          SurfaceId("pinned"),
-          SurfaceContent.Diagnostics(Nil),
-          SurfacePresentation.Pinned(com.serenity.ui.layout.PanelPosition.Bottom, 8)
+    val base = baseState()
+    val state = base.copy(
+      runtime = base.runtime.copy(uiSurfaces =
+        List(
+          UiSurface(
+            SurfaceId("peek"),
+            SurfaceContent.QuickInfo("map"),
+            SurfacePresentation.Floating(Some(CursorPosition(2, 5)), SurfacePlacement.AboveCursor),
+            dismissOnMove = true
+          ),
+          UiSurface(
+            SurfaceId("command"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(4, 9)), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("pinned"),
+            SurfaceContent.Diagnostics(Nil),
+            SurfacePresentation.Pinned(com.serenity.ui.layout.PanelPosition.Bottom, 8)
+          )
         )
       )
     )
@@ -66,8 +73,9 @@ class FloatingSurfaceSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.Diagnostics(Nil),
       SurfacePresentation.Expanded(PanelPosition.Right, 22)
     )
-    val state   = baseState().copy(uiSurfaces = List(expanded))
-    val surface = new MockRenderSurface(80, 24)
+    val expandedBase = baseState()
+    val state        = expandedBase.copy(runtime = expandedBase.runtime.copy(uiSurfaces = List(expanded)))
+    val surface      = new MockRenderSurface(80, 24)
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
 

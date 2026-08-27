@@ -41,10 +41,10 @@ object DamageProducer:
     beforeAnimations: Map[BufferId, AnimationState] = Map.empty,
     afterAnimations: Map[BufferId, AnimationState] = Map.empty
   )(using Balance): Damage =
-    val granularity = after.config.surfaceConfig.renderDamageGranularity
-    val bufferDamage = after.buffers.foldLeft(Damage.Nothing: Damage) {
+    val granularity = after.persisted.config.surfaceConfig.renderDamageGranularity
+    val bufferDamage = after.persisted.buffers.foldLeft(Damage.Nothing: Damage) {
       case (acc, (bufferId, afterBuffer)) =>
-        before.buffers.get(bufferId) match
+        before.persisted.buffers.get(bufferId) match
           case None => acc
           case Some(beforeBuffer) =>
             acc |+| bufferDamageFor(
@@ -169,8 +169,10 @@ object DamageProducer:
     beforeBuffer: Buffer,
     afterBuffer: Buffer
   ): Damage =
-    val beforeDiagnostics = before.diagnostics.getOrElse(SpellChecker.diagnosticsUri(beforeBuffer), Nil)
-    val afterDiagnostics  = after.diagnostics.getOrElse(SpellChecker.diagnosticsUri(afterBuffer), Nil)
+    val beforeDiagnostics =
+      before.runtime.diagnosticsState.diagnostics.getOrElse(SpellChecker.diagnosticsUri(beforeBuffer), Nil)
+    val afterDiagnostics =
+      after.runtime.diagnosticsState.diagnostics.getOrElse(SpellChecker.diagnosticsUri(afterBuffer), Nil)
     if beforeDiagnostics == afterDiagnostics then Damage.Nothing
     else Damage.BufferRows(bufferId, diagnosticLines(beforeDiagnostics) ++ diagnosticLines(afterDiagnostics))
 
@@ -217,7 +219,7 @@ object DamageProducer:
     beforeBuffer: Buffer,
     afterBuffer: Buffer
   ): Damage =
-    if !after.config.focusedTextBodyEnabled then Damage.Nothing
+    if !after.persisted.config.focusedTextBodyEnabled then Damage.Nothing
     else
       val beforeRange = FocusedTextBody.activeRange(beforeBuffer, beforeBuffer.editing.cursors.headOption.map(_.line))
       val afterRange  = FocusedTextBody.activeRange(afterBuffer, afterBuffer.editing.cursors.headOption.map(_.line))
@@ -241,7 +243,8 @@ object DamageProducer:
     * having to enumerate what every field does to a rendered frame.
     */
   private def chromeDamage(before: AppState, after: AppState): Damage =
-    if before.theme != after.theme || before.config != after.config then Damage.Everything
+    if before.persisted.theme != after.persisted.theme || before.persisted.config != after.persisted.config then
+      Damage.Everything
     else Damage.Nothing
 
   /** Transitions that touch every visible glyph rather than any one buffer's rows, matching what
@@ -262,10 +265,10 @@ object DamageProducer:
     * itself changing (tabbing between two already-open floating panels).
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
-    if before.themeTransition != after.themeTransition ||
-        before.surfaceAnimations != after.surfaceAnimations ||
-        before.uiSurfaces != after.uiSurfaces ||
-        before.focus != after.focus
+    if before.runtime.themeTransition != after.runtime.themeTransition ||
+        before.runtime.surfaceAnimations != after.runtime.surfaceAnimations ||
+        before.runtime.uiSurfaces != after.runtime.uiSurfaces ||
+        before.persisted.focus != after.persisted.focus
     then Damage.Everything
     else Damage.Nothing
 
@@ -278,7 +281,7 @@ object DamageProducer:
     * out a narrower blast radius from `AppState` alone would just re-derive what `Renderer`'s layout engine computes.
     */
   private def paneChromeDamage(before: AppState, after: AppState): Damage =
-    if before.layout ne after.layout then Damage.Everything
+    if before.persisted.layout ne after.persisted.layout then Damage.Everything
     else paneHeaderDamage(before, after) |+| gutterDamage(before, after)
 
   /** A pane's header shows the active highlight, the buffer's filename and its dirty indicator -- exactly the four
@@ -286,14 +289,14 @@ object DamageProducer:
     * reference is unchanged, see [[paneChromeDamage]]), so only title/dirty/buffer-identity ever trip this.
     */
   private def paneHeaderDamage(before: AppState, after: AppState): Damage =
-    after.layout.orderedPaneIds.foldLeft(Damage.Nothing: Damage) { (acc, paneId) =>
+    after.persisted.layout.orderedPaneIds.foldLeft(Damage.Nothing: Damage) { (acc, paneId) =>
       if headerInputs(before, paneId) == headerInputs(after, paneId) then acc
       else acc |+| Damage.PaneChrome(paneId)
     }
 
   private def headerInputs(state: AppState, paneId: PaneId) =
-    state.layout.editorPanes.get(paneId).map { pane =>
-      val buffer = pane.bufferId.flatMap(state.buffers.get)
+    state.persisted.layout.editorPanes.get(paneId).map { pane =>
+      val buffer = pane.bufferId.flatMap(state.persisted.buffers.get)
       (
         buffer.flatMap(_.document.filePath).flatMap(path => Option(path.getFileName)).map(_.toString),
         buffer.exists(_.document.isDirty),
@@ -310,10 +313,10 @@ object DamageProducer:
 
   private def activeGutterInputs(state: AppState) =
     for
-      paneId   <- state.layout.activeEditorPaneId
-      pane     <- state.layout.editorPanes.get(paneId)
+      paneId   <- state.persisted.layout.activeEditorPaneId
+      pane     <- state.persisted.layout.editorPanes.get(paneId)
       bufferId <- pane.bufferId
-      buffer   <- state.buffers.get(bufferId)
+      buffer   <- state.persisted.buffers.get(bufferId)
     yield (buffer.editing.cursors, buffer.document.language, buffer.document.filePath, buffer.viewport)
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b

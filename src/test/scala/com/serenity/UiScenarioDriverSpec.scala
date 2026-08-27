@@ -31,7 +31,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       first.image.getWidth shouldBe (environment.viewport.width * environment.cellMetrics.charWidth * scale).toInt
       first.image.getHeight shouldBe (environment.viewport.height * environment.cellMetrics.lineHeight * scale).toInt
       first.image.getRGB(0, 0) shouldBe second.image.getRGB(0, 0)
-      driver.state.unsafeRunSync().theme shouldBe (if theme == "light" then Theme.light else Theme.dark)
+      driver.state.unsafeRunSync().persisted.theme shouldBe (if theme == "light" then Theme.light else Theme.dark)
   }
 
   it should "emit semantic diagnostics and a PNG for a controlled red/green regression" in {
@@ -52,7 +52,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
 
   it should "load the isolated scenario configuration fixture" in {
     val driver = UiScenarioDriver.create("isolated-config", isolatedConfig = true).unsafeRunSync()
-    val config = driver.state.unsafeRunSync().config
+    val config = driver.state.unsafeRunSync().persisted.config
 
     config.motionPreset shouldBe MotionPreset.Reduced
     config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
@@ -149,9 +149,12 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     driver.stateManager.updateBuffer(bufferId, content).unsafeRunSync()
     driver
       .updateState { state =>
-        val buffer = state.buffers(bufferId)
-        state.copy(buffers =
-          state.buffers.updated(bufferId, buffer.copy(document = buffer.document.copy(language = Some(language))))
+        val buffer = state.persisted.buffers(bufferId)
+        state.copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers
+              .updated(bufferId, buffer.copy(document = buffer.document.copy(language = Some(language))))
+          )
         )
       }
       .unsafeRunSync()

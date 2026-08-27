@@ -239,12 +239,16 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "derive the active outline symbol from the editor cursor when state is available" in {
     val initialState = AppState.initial
-    val state = initialState.copy(
-      buffers = initialState.buffers.updated(
-        BufferId(0),
-        initialState
-          .buffers(BufferId(0))
-          .copy(editing = initialState.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(12, 1))))
+    val state = initialState.copy(persisted =
+      initialState.persisted.copy(buffers =
+        initialState.persisted.buffers.updated(
+          BufferId(0),
+          initialState.persisted
+            .buffers(BufferId(0))
+            .copy(editing =
+              initialState.persisted.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(12, 1)))
+            )
+        )
       )
     )
 
@@ -260,12 +264,16 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "prefer an explicit outline active location when state is available" in {
     val initialState = AppState.initial
-    val state = initialState.copy(
-      buffers = initialState.buffers.updated(
-        BufferId(0),
-        initialState
-          .buffers(BufferId(0))
-          .copy(editing = initialState.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(12, 1))))
+    val state = initialState.copy(persisted =
+      initialState.persisted.copy(buffers =
+        initialState.persisted.buffers.updated(
+          BufferId(0),
+          initialState.persisted
+            .buffers(BufferId(0))
+            .copy(editing =
+              initialState.persisted.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(12, 1)))
+            )
+        )
       )
     )
     val hoveredPanel = outlinePanel.copy(content = SurfaceContent.Outline(outlineSymbols, Some(Location(30, 0))))
@@ -310,12 +318,16 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "derive the active comment location from the editor cursor when state is available" in {
     val initialState = AppState.initial
-    val state = initialState.copy(
-      buffers = initialState.buffers.updated(
-        BufferId(0),
-        initialState
-          .buffers(BufferId(0))
-          .copy(editing = initialState.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(15, 4))))
+    val state = initialState.copy(persisted =
+      initialState.persisted.copy(buffers =
+        initialState.persisted.buffers.updated(
+          BufferId(0),
+          initialState.persisted
+            .buffers(BufferId(0))
+            .copy(editing =
+              initialState.persisted.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(15, 4)))
+            )
+        )
       )
     )
 

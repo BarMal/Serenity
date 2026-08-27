@@ -98,7 +98,8 @@ object OverlayViewModel:
     collapsed: Boolean,
     verticalOffsetRows: Double
   ): Option[TextOverlayView] =
-    val animState = state.surfaceAnimations.get(surface.id).map(_.animationState).getOrElse(AnimationState.empty)
+    val animState =
+      state.runtime.surfaceAnimations.get(surface.id).map(_.animationState).getOrElse(AnimationState.empty)
     surface.content match
       case com.serenity.state.models.SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
         contentView(originalContent, state, cachedRect).map { content =>
@@ -114,7 +115,8 @@ object OverlayViewModel:
             rows = content.rows,
             footer = content.footer,
             itemGapRows = itemGapRowsFor(originalContent, state),
-            itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(originalContent, state.config.interfaceDensity),
+            itemTargetRows =
+              SurfaceFrameLayout.itemTargetRowsFor(originalContent, state.persisted.config.interfaceDensity),
             verticalOffsetRows = verticalOffsetRows,
             surfaceId = Some(surface.id),
             composition = compositionFor(originalContent, cachedRect, state)
@@ -134,7 +136,7 @@ object OverlayViewModel:
               rows = resolved.rows,
               footer = resolved.footer,
               itemGapRows = itemGapRowsFor(content, state),
-              itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity),
+              itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity),
               verticalOffsetRows = verticalOffsetRows,
               surfaceId = Some(surface.id),
               composition = compositionFor(content, rect, state)
@@ -146,8 +148,8 @@ object OverlayViewModel:
     state: AppState,
     placement: SurfacePlacement
   ): Option[com.serenity.state.models.UiSurface] =
-    val matchingSurfaces = state.uiSurfaces.filter { surface =>
-      val phase = state.surfaceAnimations.get(surface.id).map(_.phase).getOrElse(SurfacePhase.Visible)
+    val matchingSurfaces = state.runtime.uiSurfaces.filter { surface =>
+      val phase = state.runtime.surfaceAnimations.get(surface.id).map(_.phase).getOrElse(SurfacePhase.Visible)
       phase != SurfacePhase.BufferFadingOut &&
       (surface match
         case com.serenity.state.models.UiSurface(_, _, SurfacePresentation.Floating(_, currentPlacement), _) =>
@@ -155,7 +157,7 @@ object OverlayViewModel:
         case _ => false)
     }
 
-    val selectedSurface = state.focus match
+    val selectedSurface = state.persisted.focus match
       case com.serenity.state.models.Focus.Surface(surfaceId) =>
         matchingSurfaces.find(_.id == surfaceId).orElse(matchingSurfaces.headOption)
       case _ =>
@@ -163,7 +165,7 @@ object OverlayViewModel:
 
     selectedSurface.foreach { surface =>
       logger.info(
-        s"[OVERLAY SELECTED] placement=$placement focus=${state.focus} surfaceId=${surface.id} " +
+        s"[OVERLAY SELECTED] placement=$placement focus=${state.persisted.focus} surfaceId=${surface.id} " +
           s"content=${surface.content.getClass.getSimpleName}"
       )
     }
@@ -207,7 +209,7 @@ object OverlayViewModel:
               rect,
               SurfaceRenderMode.Floating,
               itemGapRowsFor(content, state),
-              SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
+              SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
             )
     Option.when(
       resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty || isComposedContent(content)
@@ -234,9 +236,9 @@ object OverlayViewModel:
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
           com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
-        state.config.commandRunnerItemGapRows
+        state.persisted.config.commandRunnerItemGapRows
       case com.serenity.state.models.SurfaceContent.ContextualToolbar(_) =>
-        state.config.uiElementGap
+        state.persisted.config.uiElementGap
       case _ => 0
 
   private def compositionFor(
@@ -249,13 +251,13 @@ object OverlayViewModel:
         ModalSurfaceComposition.forModal(
           modal,
           rect,
-          SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+          SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
         )
       case _ => None
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =
     val focusMultiplier =
-      state.focus match
+      state.persisted.focus match
         case Focus.Surface(focusedId) if focusedId != surface.id && isCommandRunnerSurface(surface.content) =>
           InactiveFloatingPanelAlphaMultiplier
         case _ => 1.0f

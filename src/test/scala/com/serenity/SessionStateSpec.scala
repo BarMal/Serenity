@@ -37,23 +37,27 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val buffer = Buffer.fromFile(BufferId(7), tempFile, "content from disk")
     val appState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
       ),
-      focus = Focus.EditorPane(PaneId(0)),
-      nextBufferId = BufferId(8),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(8),
+        nextPaneId = PaneId(1)
+      )
     )
 
     val restoredState =
       SessionState.toAppState(SessionState.fromAppState(appState), Theme.default)
 
-    restoredState.buffers(buffer.id).document.content.toString.shouldBe("content from disk")
-    restoredState.buffers(buffer.id).document.filePath.shouldBe(Some(tempFile))
-    restoredState.buffers(buffer.id).document.isDirty.shouldBe(false)
+    restoredState.persisted.buffers(buffer.id).document.content.toString.shouldBe("content from disk")
+    restoredState.persisted.buffers(buffer.id).document.filePath.shouldBe(Some(tempFile))
+    restoredState.persisted.buffers(buffer.id).document.isDirty.shouldBe(false)
   }
 
   it should "restore dirty file-backed buffers from unsaved in-memory content" in {
@@ -63,23 +67,27 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromFile(BufferId(9), tempFile, "unsaved in memory")
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(isDirty = true))
     val appState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
       ),
-      focus = Focus.EditorPane(PaneId(0)),
-      nextBufferId = BufferId(10),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(10),
+        nextPaneId = PaneId(1)
+      )
     )
 
     val restoredState =
       SessionState.toAppState(SessionState.fromAppState(appState), Theme.default)
 
-    restoredState.buffers(buffer.id).document.content.toString.shouldBe("unsaved in memory")
-    restoredState.buffers(buffer.id).document.filePath.shouldBe(Some(tempFile))
-    restoredState.buffers(buffer.id).document.isDirty.shouldBe(true)
+    restoredState.persisted.buffers(buffer.id).document.content.toString.shouldBe("unsaved in memory")
+    restoredState.persisted.buffers(buffer.id).document.filePath.shouldBe(Some(tempFile))
+    restoredState.persisted.buffers(buffer.id).document.isDirty.shouldBe(true)
   }
 
   it should "discard dirty buffer content when persistUnsavedBuffers is false" in {
@@ -89,15 +97,19 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromFile(BufferId(11), tempFile, "unsaved in memory")
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(isDirty = true))
     val appState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
       ),
-      focus = Focus.EditorPane(PaneId(0)),
-      nextBufferId = BufferId(12),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(12),
+        nextPaneId = PaneId(1)
+      )
     )
 
     val sessionState  = SessionState.fromAppState(appState, persistUnsaved = false)
@@ -113,15 +125,19 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val buffer = Buffer.fromFile(BufferId(13), tempFile, "saved on disk")
     val appState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
       ),
-      focus = Focus.EditorPane(PaneId(0)),
-      nextBufferId = BufferId(14),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(14),
+        nextPaneId = PaneId(1)
+      )
     )
 
     val sessionState  = SessionState.fromAppState(appState, persistUnsaved = false)
@@ -148,15 +164,19 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       )
     )
     val appState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
       ),
-      focus = Focus.EditorPane(PaneId(0)),
-      nextBufferId = BufferId(21),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(21),
+        nextPaneId = PaneId(1)
+      )
     )
 
     val sessionState = SessionState.fromAppState(appState)
@@ -165,7 +185,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.isRight shouldBe true
 
     val restored       = SessionState.toAppState(decoded.toOption.get, Theme.default)
-    val restoredBuffer = restored.buffers(buffer.id)
+    val restoredBuffer = restored.persisted.buffers(buffer.id)
 
     restoredBuffer.document.content.toString shouldBe "json round trip content"
     restoredBuffer.editing.cursors.head shouldBe CursorPosition(3, 7)
@@ -193,15 +213,19 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(BufferId(22), richDocument.plainText)
     val buffer     = baseBuffer.copy(richText = baseBuffer.richText.copy(richTextDocument = Some(richDocument)))
     val appState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
       ),
-      focus = Focus.EditorPane(PaneId(0)),
-      nextBufferId = BufferId(23),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(23),
+        nextPaneId = PaneId(1)
+      )
     )
 
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
@@ -210,6 +234,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val restoredBuffer = SessionState
       .toAppState(decoded.toOption.get, Theme.default)
+      .persisted
       .buffers(buffer.id)
 
     restoredBuffer.document.content.toString shouldBe "plain bold"
@@ -229,15 +254,19 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       )
     )
     val appState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
       ),
-      focus = Focus.EditorPane(PaneId(0)),
-      nextBufferId = BufferId(24),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(24),
+        nextPaneId = PaneId(1)
+      )
     )
 
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
@@ -245,6 +274,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.isRight shouldBe true
     SessionState
       .toAppState(decoded.toOption.get, Theme.default)
+      .persisted
       .buffers(buffer.id)
       .richText
       .richTextFidelity shouldBe Some(
@@ -260,19 +290,24 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       richText = baseBuffer.richText.copy(richTextDocument = Some(richDocument))
     )
     val appState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
       ),
-      focus = Focus.EditorPane(PaneId(0)),
-      nextBufferId = BufferId(25),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(25),
+        nextPaneId = PaneId(1)
+      )
     )
 
     val restoredBuffer = SessionState
       .toAppState(SessionState.fromAppState(appState), Theme.default)
+      .persisted
       .buffers(buffer.id)
 
     restoredBuffer.document.content.toString shouldBe "edited text"
@@ -296,19 +331,24 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       richText = baseBuffer.richText.copy(richTextDocument = Some(richDocument))
     )
     val appState = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
       ),
-      focus = Focus.EditorPane(PaneId(0)),
-      nextBufferId = BufferId(27),
-      nextPaneId = PaneId(1)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(27),
+        nextPaneId = PaneId(1)
+      )
     )
 
     val restoredBuffer = SessionState
       .toAppState(SessionState.fromAppState(appState), Theme.default)
+      .persisted
       .buffers(buffer.id)
 
     restoredBuffer.document.content.toString shouldBe "plain bold"
@@ -343,101 +383,103 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve config fields including blurRadius and backgroundStyle through JSON round trip" in {
     val appState = AppState.initial.copy(
-      config = AppConfig(
-        characterAnimation = AnimationConfig.quick,
-        fontConfig = com.serenity.ui.fonts.FontLoader.FontConfig(
-          codeFontFamily = "Monospaced",
-          textFontFamily = "SansSerif",
-          uiFontFamily = "Dialog",
-          fontSize = 15.0f,
-          textFontSize = 16.0f,
-          uiFontSize = 13.0f,
-          enableLigatures = false,
-          textLigatures = true,
-          uiLigatures = true
-        ),
-        blurRadius = 0.42f,
-        backgroundStyle = BackgroundStyle.GlassLike,
-        materialPreset = MaterialPreset.Crystal,
-        motionPreset = MotionPreset.Reduced,
-        elementTransitionSpeedScale = 1.75,
-        editorTextTransitionSpeedScale = Some(0.5),
-        commandRunnerTransitionSpeedScale = Some(2.25),
-        uiTransitionSpeedScale = Some(1.25),
-        cursorTransitionSpeedScale = Some(0.75),
-        commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
-        panelOpenTransitionKind = Some(TransitionKind.DirectionalSweep),
-        panelCloseTransitionKind = Some(TransitionKind.Disabled),
-        uiAnimation = AnimationConfig.subtle,
-        motionConfiguration = Some(
-          MotionConfig(
-            MotionAccessibility.Off,
-            MotionPreset.Smooth,
-            Map(
-              MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-                enabled = true,
-                transitionKind = TransitionKind.TypedText,
-                animation = AnimationConfig.subtle,
-                speedScale = 0.5
-              ),
-              MotionFamily.PinnedPanels -> MotionFamilyConfig(
-                enabled = true,
-                transitionKind = TransitionKind.DirectionalSweep,
-                animation = AnimationConfig.smooth,
-                speedScale = 1.0,
-                transitionOverrides = Map(
-                  TransitionScope.PanelOpen  -> TransitionKind.DirectionalSweep,
-                  TransitionScope.PanelClose -> TransitionKind.Disabled
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig(
+          characterAnimation = AnimationConfig.quick,
+          fontConfig = com.serenity.ui.fonts.FontLoader.FontConfig(
+            codeFontFamily = "Monospaced",
+            textFontFamily = "SansSerif",
+            uiFontFamily = "Dialog",
+            fontSize = 15.0f,
+            textFontSize = 16.0f,
+            uiFontSize = 13.0f,
+            enableLigatures = false,
+            textLigatures = true,
+            uiLigatures = true
+          ),
+          blurRadius = 0.42f,
+          backgroundStyle = BackgroundStyle.GlassLike,
+          materialPreset = MaterialPreset.Crystal,
+          motionPreset = MotionPreset.Reduced,
+          elementTransitionSpeedScale = 1.75,
+          editorTextTransitionSpeedScale = Some(0.5),
+          commandRunnerTransitionSpeedScale = Some(2.25),
+          uiTransitionSpeedScale = Some(1.25),
+          cursorTransitionSpeedScale = Some(0.75),
+          commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
+          panelOpenTransitionKind = Some(TransitionKind.DirectionalSweep),
+          panelCloseTransitionKind = Some(TransitionKind.Disabled),
+          uiAnimation = AnimationConfig.subtle,
+          motionConfiguration = Some(
+            MotionConfig(
+              MotionAccessibility.Off,
+              MotionPreset.Smooth,
+              Map(
+                MotionFamily.CommandSurfaces -> MotionFamilyConfig(
+                  enabled = true,
+                  transitionKind = TransitionKind.TypedText,
+                  animation = AnimationConfig.subtle,
+                  speedScale = 0.5
+                ),
+                MotionFamily.PinnedPanels -> MotionFamilyConfig(
+                  enabled = true,
+                  transitionKind = TransitionKind.DirectionalSweep,
+                  animation = AnimationConfig.smooth,
+                  speedScale = 1.0,
+                  transitionOverrides = Map(
+                    TransitionScope.PanelOpen  -> TransitionKind.DirectionalSweep,
+                    TransitionScope.PanelClose -> TransitionKind.Disabled
+                  )
                 )
               )
             )
-          )
-        ),
-        commandRunnerVisibleRows = Some(9),
-        commandRunnerItemGapRows = 1,
-        commandRunnerCursorGapRows = Some(3),
-        renderFpsTarget = RenderFpsTarget.Fps120,
-        cursorConfig = CursorConfig(
-          mode = CursorMode.Breathe,
-          colors = CursorColorConfig(
-            active = Some(Color(0x22, 0x44, 0x88)),
-            inactive = Some(Color(0x88, 0x44, 0x22, 0x99))
           ),
-          infoBarMode = CursorInfoBarMode.Detailed,
-          infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
-        ),
-        windowConfig = WindowConfig(
-          chromeMode = WindowChromeMode.Custom,
-          preferredSize = Some(PreferredWindowSize(1400, 900))
-        ),
-        documentConfig = DocumentConfig(
-          markdownViewMode = MarkdownViewMode.InlineLens,
-          defaultMode = DefaultDocumentMode.Markdown
-        ),
-        interfaceConfig = InterfaceConfig(
-          density = InterfaceDensity.Spacious,
-          elementGap = 3,
-          cornerRadiusPx = 12,
-          outlineThicknessPx = 4
-        ),
-        showLineNumbers = false,
-        showGutter = false,
-        lspUserConfig = LspUserConfig(
-          servers = Some(
-            Map(
-              LanguageId.Scala.id -> LspServerOverride(
-                command = Some("custom-metals"),
-                args = Some(List("--stdio")),
-                enabled = Some(true)
+          commandRunnerVisibleRows = Some(9),
+          commandRunnerItemGapRows = 1,
+          commandRunnerCursorGapRows = Some(3),
+          renderFpsTarget = RenderFpsTarget.Fps120,
+          cursorConfig = CursorConfig(
+            mode = CursorMode.Breathe,
+            colors = CursorColorConfig(
+              active = Some(Color(0x22, 0x44, 0x88)),
+              inactive = Some(Color(0x88, 0x44, 0x22, 0x99))
+            ),
+            infoBarMode = CursorInfoBarMode.Detailed,
+            infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
+          ),
+          windowConfig = WindowConfig(
+            chromeMode = WindowChromeMode.Custom,
+            preferredSize = Some(PreferredWindowSize(1400, 900))
+          ),
+          documentConfig = DocumentConfig(
+            markdownViewMode = MarkdownViewMode.InlineLens,
+            defaultMode = DefaultDocumentMode.Markdown
+          ),
+          interfaceConfig = InterfaceConfig(
+            density = InterfaceDensity.Spacious,
+            elementGap = 3,
+            cornerRadiusPx = 12,
+            outlineThicknessPx = 4
+          ),
+          showLineNumbers = false,
+          showGutter = false,
+          lspUserConfig = LspUserConfig(
+            servers = Some(
+              Map(
+                LanguageId.Scala.id -> LspServerOverride(
+                  command = Some("custom-metals"),
+                  args = Some(List("--stdio")),
+                  enabled = Some(true)
+                )
               )
             )
+          ),
+          spellCheck = SpellCheckConfig(
+            enabled = true,
+            languages = List("en", "fr"),
+            dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
+            additionalWords = List("serenity")
           )
-        ),
-        spellCheck = SpellCheckConfig(
-          enabled = true,
-          languages = List("en", "fr"),
-          dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
-          additionalWords = List("serenity")
         )
       )
     )
@@ -457,7 +499,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
     decoded.config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
     decoded.config.uiAnimation shouldBe AnimationConfig.subtle
-    decoded.config.motionConfiguration shouldBe appState.config.motionConfiguration
+    decoded.config.motionConfiguration shouldBe appState.persisted.config.motionConfiguration
     decoded.config.commandRunnerVisibleRows shouldBe Some(9)
     decoded.config.commandRunnerItemGapRows shouldBe 1
     decoded.config.commandRunnerCursorGapRows shouldBe Some(3)
@@ -517,7 +559,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default.withSpellCheck(
       SpellCheckConfig(enabled = true, languages = List("en"), additionalWords = List("serenity"))
     )
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = config)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = config)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val spellCheckObject =
@@ -547,7 +591,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default backgroundStyle to Frosted when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutBackgroundStyle =
@@ -562,7 +608,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default material and motion presets when loading older JSON without the fields" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutPresets =
@@ -581,7 +629,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default element transition speed scale when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutSpeedScale =
@@ -596,7 +646,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default per-family animation speed scales when loading older JSON without the fields" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutFamilyScales =
@@ -623,7 +675,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default command and panel transition kind overrides when loading older JSON without the fields" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutPanelKinds =
@@ -648,7 +702,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default command runner animation when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutCommandRunnerAnimation =
@@ -663,7 +719,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default UI animation when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutUiAnimation =
@@ -678,7 +736,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default renderFpsTarget to 60 FPS when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutRenderFps =
@@ -693,7 +753,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default windowChromeMode to the app default when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutWindowChromeMode =
@@ -709,7 +771,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   it should "round-trip native-themed window chrome" in {
     val original = SessionState.fromAppState(
-      AppState.initial.copy(config = AppConfig.default.withWindowChromeMode(WindowChromeMode.NativeThemed))
+      AppState.initial.copy(persisted =
+        AppState.initial.persisted.copy(config = AppConfig.default.withWindowChromeMode(WindowChromeMode.NativeThemed))
+      )
     )
 
     val decoded = original.asJson.as[SessionState]
@@ -719,14 +783,18 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   it should "round-trip automatic window chrome" in {
     val original = SessionState.fromAppState(
-      AppState.initial.copy(config = AppConfig.default.withWindowChromeMode(WindowChromeMode.Auto))
+      AppState.initial.copy(persisted =
+        AppState.initial.persisted.copy(config = AppConfig.default.withWindowChromeMode(WindowChromeMode.Auto))
+      )
     )
 
     original.asJson.as[SessionState].toOption.map(_.config.windowChromeMode) shouldBe Some(WindowChromeMode.Auto)
   }
 
   it should "default interfaceDensity to Comfortable when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutInterfaceDensity =
@@ -741,7 +809,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default UI element gap to zero when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutUiElementGap =
@@ -757,10 +827,12 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   it should "round trip decimal floating-surface spacing" in {
     val state = AppState.initial.copy(
-      config = AppConfig.default
-        .withUiElementGap(0.75)
-        .withCommandRunnerItemGapRows(0.25)
-        .withCommandRunnerCursorGapRows(Some(0.5))
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default
+          .withUiElementGap(0.75)
+          .withCommandRunnerItemGapRows(0.25)
+          .withCommandRunnerCursorGapRows(Some(0.5))
+      )
     )
 
     val decoded = SessionState.fromAppState(state).asJson.as[SessionState].toOption.get
@@ -771,7 +843,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default UI corner radius to the existing panel radius when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutUiCornerRadius =
@@ -786,7 +860,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default UI outline thickness when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutUiOutlineThickness =
@@ -801,7 +877,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default cursorInfoBarMode to Off when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutCursorInfoBarMode =
@@ -816,7 +894,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default cursorInfoBarPlacement to Floating when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutCursorInfoBarPlacement =
@@ -831,7 +911,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default uiFontFamily to SansSerif when loading older JSON without the field" in {
-    val originalJson = SessionState.fromAppState(AppState.initial.copy(config = AppConfig.default)).asJson
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val fontConfigObject = configObject("fontConfig").flatMap(_.asObject).getOrElse(fail("Expected fontConfig object"))
@@ -863,29 +945,33 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val buffer1 = Buffer.fromFile(BufferId(30), file1, "pane one content")
     val buffer2 = Buffer.fromFile(BufferId(31), file2, "pane two content")
     val appState = AppState.initial.copy(
-      buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
-      bufferOrder = List(buffer1.id, buffer2.id),
-      layout = Layout(
-        editorPanes = Map(
-          PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
-          PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
+        bufferOrder = List(buffer1.id, buffer2.id),
+        layout = Layout(
+          editorPanes = Map(
+            PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
+            PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+          ),
+          activeEditorPaneId = Some(PaneId(1))
         ),
-        activeEditorPaneId = Some(PaneId(1))
+        focus = Focus.EditorPane(PaneId(1))
       ),
-      focus = Focus.EditorPane(PaneId(1)),
-      nextBufferId = BufferId(32),
-      nextPaneId = PaneId(2)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(32),
+        nextPaneId = PaneId(2)
+      )
     )
 
     val restored = SessionState.toAppState(SessionState.fromAppState(appState), Theme.default)
 
-    restored.buffers should have size 2
-    restored.buffers(buffer1.id).document.content.toString shouldBe "pane one content"
-    restored.buffers(buffer2.id).document.content.toString shouldBe "pane two content"
-    restored.layout.editorPanes should have size 2
-    restored.layout.activeEditorPaneId shouldBe Some(PaneId(1))
-    restored.focus shouldBe Focus.EditorPane(PaneId(1))
-    restored.bufferOrder shouldBe List(buffer1.id, buffer2.id)
+    restored.persisted.buffers should have size 2
+    restored.persisted.buffers(buffer1.id).document.content.toString shouldBe "pane one content"
+    restored.persisted.buffers(buffer2.id).document.content.toString shouldBe "pane two content"
+    restored.persisted.layout.editorPanes should have size 2
+    restored.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(1))
+    restored.persisted.focus shouldBe Focus.EditorPane(PaneId(1))
+    restored.persisted.bufferOrder shouldBe List(buffer1.id, buffer2.id)
   }
 
   it should "serialize buffers and panes in their canonical order" in {
@@ -894,12 +980,14 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val pane1   = EditorPane.withBuffer(PaneId(1), buffer1.id)
     val pane2   = EditorPane.withBuffer(PaneId(2), buffer2.id)
     val appState = AppState.initial.copy(
-      buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
-      bufferOrder = List(buffer2.id, buffer1.id),
-      layout = Layout(
-        editorPanes = Map(pane1.id -> pane1, pane2.id -> pane2),
-        activeEditorPaneId = Some(pane2.id),
-        paneOrder = List(pane2.id, pane1.id)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
+        bufferOrder = List(buffer2.id, buffer1.id),
+        layout = Layout(
+          editorPanes = Map(pane1.id -> pane1, pane2.id -> pane2),
+          activeEditorPaneId = Some(pane2.id),
+          paneOrder = List(pane2.id, pane1.id)
+        )
       )
     )
 
@@ -913,20 +1001,22 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val pane1 = EditorPane.empty(PaneId(1))
     val pane2 = EditorPane.empty(PaneId(2))
     val appState = AppState.initial.copy(
-      layout = Layout(
-        editorPanes = Map(pane1.id -> pane1, pane2.id -> pane2),
-        activeEditorPaneId = Some(pane2.id),
-        paneOrder = List(pane1.id, pane2.id),
-        splitDirection = PaneSplitDirection.Vertical
-      ),
-      focus = Focus.EditorPane(pane2.id)
+      persisted = AppState.initial.persisted.copy(
+        layout = Layout(
+          editorPanes = Map(pane1.id -> pane1, pane2.id -> pane2),
+          activeEditorPaneId = Some(pane2.id),
+          paneOrder = List(pane1.id, pane2.id),
+          splitDirection = PaneSplitDirection.Vertical
+        ),
+        focus = Focus.EditorPane(pane2.id)
+      )
     )
 
     val sessionState = SessionState.fromAppState(appState)
     val restored     = SessionState.toAppState(sessionState, Theme.default)
 
     sessionState.layout.splitDirection shouldBe "Vertical"
-    restored.layout.splitDirection shouldBe PaneSplitDirection.Vertical
+    restored.persisted.layout.splitDirection shouldBe PaneSplitDirection.Vertical
   }
 
   it should "round-trip nested workspace trees, docked panels on every edge, and maximisation" in {
@@ -969,19 +1059,23 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
           .getOrElse(fail(s"Panel $index should dock"))
     }
     val state = AppState.initial.copy(
-      layout = Layout(
-        editorPanes = Map(
-          pane0 -> EditorPane.withBuffer(pane0, BufferId(0)),
-          pane1 -> EditorPane.empty(pane1)
-        ),
-        activeEditorPaneId = Some(pane0),
-        paneOrder = List(pane0, pane1),
-        workspaceTree = Some(workspaceTree),
-        maximizedWorkspaceNodeId = workspaceTree.nodeIdForSurface(panels(2).id)
+      persisted = AppState.initial.persisted.copy(
+        layout = Layout(
+          editorPanes = Map(
+            pane0 -> EditorPane.withBuffer(pane0, BufferId(0)),
+            pane1 -> EditorPane.empty(pane1)
+          ),
+          activeEditorPaneId = Some(pane0),
+          paneOrder = List(pane0, pane1),
+          workspaceTree = Some(workspaceTree),
+          maximizedWorkspaceNodeId = workspaceTree.nodeIdForSurface(panels(2).id)
+        )
       ),
-      uiSurfaces = panels,
-      nextPaneId = PaneId(2),
-      nextSurfaceId = panels.size
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = panels,
+        nextPaneId = PaneId(2),
+        nextSurfaceId = panels.size
+      )
     )
 
     val encoded = SessionState.fromAppState(state).asJson
@@ -990,11 +1084,11 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .map(SessionState.toAppState(_, Theme.default))
       .getOrElse(fail("workspace session should decode"))
 
-    restored.layout.workspaceTree shouldBe Some(workspaceTree)
-    restored.layout.maximizedWorkspaceNodeId shouldBe workspaceTree.nodeIdForSurface(panels(2).id)
+    restored.persisted.layout.workspaceTree shouldBe Some(workspaceTree)
+    restored.persisted.layout.maximizedWorkspaceNodeId shouldBe workspaceTree.nodeIdForSurface(panels(2).id)
     restored.pinnedSurfaces.map(_.id) shouldBe state.pinnedSurfaces.map(_.id)
     restored.pinnedSurfaces.map(_.presentation) shouldBe state.pinnedSurfaces.map(_.presentation)
-    restored.nextSurfaceId shouldBe panels.size
+    restored.runtime.nextSurfaceId shouldBe panels.size
     restored.isValid shouldBe true
     encoded.hcursor.downField("schemaVersion").as[Int] shouldBe Right(SessionState.CurrentSchemaVersion)
   }
@@ -1003,14 +1097,16 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val pane0 = PaneId(0)
     val pane1 = PaneId(1)
     val state = AppState.initial.copy(
-      layout = Layout(
-        editorPanes = Map(pane0 -> EditorPane.empty(pane0), pane1 -> EditorPane.empty(pane1)),
-        activeEditorPaneId = Some(pane1),
-        paneOrder = List(pane1, pane0),
-        splitDirection = PaneSplitDirection.Vertical
+      persisted = AppState.initial.persisted.copy(
+        layout = Layout(
+          editorPanes = Map(pane0 -> EditorPane.empty(pane0), pane1 -> EditorPane.empty(pane1)),
+          activeEditorPaneId = Some(pane1),
+          paneOrder = List(pane1, pane0),
+          splitDirection = PaneSplitDirection.Vertical
+        ),
+        focus = Focus.EditorPane(pane1)
       ),
-      focus = Focus.EditorPane(pane1),
-      nextPaneId = PaneId(2)
+      runtime = AppState.initial.runtime.copy(nextPaneId = PaneId(2))
     )
     val currentJson = SessionState.fromAppState(state).asJson
     val legacyJson = currentJson.mapObject(
@@ -1034,9 +1130,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .map(SessionState.toAppState(_, Theme.default))
       .getOrElse(fail("schema-v1 session should decode"))
 
-    restored.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane1, pane0))
-    restored.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(SplitAxis.Vertical))
-    restored.layout.maximizedWorkspaceNodeId shouldBe None
+    restored.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane1, pane0))
+    restored.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(SplitAxis.Vertical))
+    restored.persisted.layout.maximizedWorkspaceNodeId shouldBe None
     restored.isValid shouldBe true
   }
 
@@ -1051,10 +1147,10 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val restored = SessionState.toAppState(invalid, Theme.default)
 
-    restored.buffers shouldBe state.buffers
-    restored.bufferOrder shouldBe state.bufferOrder
-    restored.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
-    restored.layout.maximizedWorkspaceNodeId shouldBe None
+    restored.persisted.buffers shouldBe state.persisted.buffers
+    restored.persisted.bufferOrder shouldBe state.persisted.bufferOrder
+    restored.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
+    restored.persisted.layout.maximizedWorkspaceNodeId shouldBe None
     restored.isValid shouldBe true
   }
 
@@ -1072,11 +1168,11 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val restored = SessionState.toAppState(corrupt, Theme.default)
 
-    restored.buffers shouldBe state.buffers
-    restored.layout.editorPanes(PaneId(0)).bufferId shouldBe None
-    restored.layout.activeEditorPaneId shouldBe Some(PaneId(0))
-    restored.focus shouldBe Focus.EditorPane(PaneId(0))
-    restored.bufferOrder shouldBe List(BufferId(0))
+    restored.persisted.buffers shouldBe state.persisted.buffers
+    restored.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe None
+    restored.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(0))
+    restored.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    restored.persisted.bufferOrder shouldBe List(BufferId(0))
     restored.isValid shouldBe true
   }
 
@@ -1095,12 +1191,12 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val restored = SessionState.toAppState(corrupt, Theme.default)
 
-    restored.buffers shouldBe state.buffers
-    restored.layout.editorPanes.keySet shouldBe Set(PaneId(0))
-    restored.layout.editorPanes(PaneId(0)).bufferId shouldBe None
-    restored.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
-    restored.layout.activeEditorPaneId shouldBe Some(PaneId(0))
-    restored.focus shouldBe Focus.EditorPane(PaneId(0))
+    restored.persisted.buffers shouldBe state.persisted.buffers
+    restored.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0))
+    restored.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe None
+    restored.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
+    restored.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(0))
+    restored.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     restored.isValid shouldBe true
   }
 
@@ -1120,9 +1216,13 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       )
       .getOrElse(fail("Panel should dock"))
     val state = AppState.initial.copy(
-      layout = AppState.initial.layout.copy(workspaceTree = Some(tree)),
-      uiSurfaces = List(panel),
-      nextSurfaceId = 1
+      persisted = AppState.initial.persisted.copy(
+        layout = AppState.initial.persisted.layout.copy(workspaceTree = Some(tree))
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(panel),
+        nextSurfaceId = 1
+      )
     )
     val encoded = SessionState.fromAppState(state).asJson
     val unsupportedPanel = Json.obj(
@@ -1149,9 +1249,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .map(SessionState.toAppState(_, Theme.default))
       .getOrElse(fail("unsupported panel content should not reject the session"))
 
-    restored.buffers shouldBe state.buffers
+    restored.persisted.buffers shouldBe state.persisted.buffers
     restored.pinnedSurfaces shouldBe Nil
-    restored.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
+    restored.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
     restored.isValid shouldBe true
   }
 
@@ -1168,18 +1268,22 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .fromFile(BufferId(41), file2, "dog elephant fox")
       .copy(findState = Some(FindState("elephant", List(FindResult(1, 0)), 0)))
     val appState = AppState.initial.copy(
-      buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
-      bufferOrder = List(buffer1.id, buffer2.id),
-      layout = Layout(
-        editorPanes = Map(
-          PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
-          PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
+        bufferOrder = List(buffer1.id, buffer2.id),
+        layout = Layout(
+          editorPanes = Map(
+            PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
+            PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
+          ),
+          activeEditorPaneId = Some(PaneId(1))
         ),
-        activeEditorPaneId = Some(PaneId(1))
+        focus = Focus.EditorPane(PaneId(1))
       ),
-      focus = Focus.EditorPane(PaneId(1)),
-      nextBufferId = BufferId(42),
-      nextPaneId = PaneId(2)
+      runtime = AppState.initial.runtime.copy(
+        nextBufferId = BufferId(42),
+        nextPaneId = PaneId(2)
+      )
     )
 
     val sessionState = SessionState.fromAppState(appState)
@@ -1189,13 +1293,15 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val restored = SessionState.toAppState(decoded.toOption.get, Theme.default)
 
-    restored.buffers(buffer1.id).findState shouldBe Some(FindState("apple", List(FindResult(0, 0)), 0))
-    restored.buffers(buffer2.id).findState shouldBe Some(FindState("elephant", List(FindResult(1, 0)), 0))
+    restored.persisted.buffers(buffer1.id).findState shouldBe Some(FindState("apple", List(FindResult(0, 0)), 0))
+    restored.persisted.buffers(buffer2.id).findState shouldBe Some(FindState("elephant", List(FindResult(1, 0)), 0))
   }
 
   it should "ignore a legacy UI preset draft field when restoring a session" in {
     val state = AppState.initial.copy(
-      config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike)
+      )
     )
     val legacy = SessionState.fromAppState(state).asJson.mapObject { session =>
       session.add(
@@ -1213,5 +1319,5 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded  = legacy.as[SessionState].toOption.getOrElse(fail("legacy session should decode"))
     val restored = SessionState.toAppState(decoded, Theme.dark)
 
-    restored.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    restored.persisted.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
   }

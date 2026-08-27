@@ -20,11 +20,15 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     AppState(
-      buffers = Map.empty,
-      layout = Layout.empty,
-      focus = Focus.Surface(surface.id),
-      uiSurfaces = List(surface),
-      focusHistory = List(Focus.EditorPane(PaneId(1)))
+      persisted = Persisted(
+        buffers = Map.empty,
+        layout = Layout.empty,
+        focus = Focus.Surface(surface.id)
+      ),
+      runtime = Runtime(
+        uiSurfaces = List(surface),
+        focusHistory = List(Focus.EditorPane(PaneId(1)))
+      )
     )
 
   "Settings surface" should "show peer categories and search leaves with their current values and paths" in {

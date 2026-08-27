@@ -36,19 +36,23 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("file-modal")),
+        theme = Theme.light
       ),
-      focus = Focus.Surface(SurfaceId("file-modal")),
-      theme = Theme.light,
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-modal"),
-          SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-modal"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -83,7 +87,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
 
     val suggestionRowsHighlighted =
       List(overlay.y + 4, overlay.y + 5).exists { y =>
-        surface.getBg(overlay.x + 1, y) == state.theme.highlighted.background
+        surface.getBg(overlay.x + 1, y) == state.persisted.theme.highlighted.background
       }
     suggestionRowsHighlighted shouldBe true
   }
@@ -102,19 +106,23 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("file-modal")),
+        theme = Theme.light
       ),
-      focus = Focus.Surface(SurfaceId("file-modal")),
-      theme = Theme.light,
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("file-modal"),
-          SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-modal"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -148,8 +156,8 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Modal
     )
     val state = AppState.initial.copy(
-      focus = Focus.Surface(close.id),
-      uiSurfaces = List(close)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(close.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(close))
     )
     val surface = new MockRenderSurface(100, 30)
 

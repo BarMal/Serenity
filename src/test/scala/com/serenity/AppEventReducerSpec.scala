@@ -31,36 +31,40 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "toggle the command runner and restore focus via history" in {
-    val initialState = AppState.initial.copy(focus = Focus.EditorPane(PaneId(0)))
+    val initialState =
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
 
     val opened = AppEventReducer.reduce(ToggleCommandRunner, initialState, registry)
 
     opened.state.commandRunnerSurface shouldBe defined
-    opened.state.focus shouldBe Focus.Surface(opened.state.commandRunnerSurface.get.id)
-    opened.state.focusHistory should contain(Focus.EditorPane(PaneId(0)))
+    opened.state.persisted.focus shouldBe Focus.Surface(opened.state.commandRunnerSurface.get.id)
+    opened.state.runtime.focusHistory should contain(Focus.EditorPane(PaneId(0)))
 
     val closed = AppEventReducer.reduce(ToggleCommandRunner, opened.state, registry)
 
-    closed.state.focus shouldBe Focus.EditorPane(PaneId(0))
+    closed.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     closed.state.commandRunnerSurface shouldBe None
     closed.effects shouldBe Nil
   }
 
   it should "not open the contextual toolbar when the setting is disabled" in {
     val initialState = AppState.initial.copy(
-      config = AppState.initial.config.withContextualToolbarEnabled(false),
-      focus = Focus.EditorPane(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        config = AppState.initial.persisted.config.withContextualToolbarEnabled(false),
+        focus = Focus.EditorPane(PaneId(0))
+      )
     )
 
     val result = AppEventReducer.reduce(ToggleContextualToolbar, initialState, registry)
 
     result.state.contextualToolbarSurface shouldBe None
-    result.state.focus shouldBe Focus.EditorPane(PaneId(0))
+    result.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     result.effects shouldBe Nil
   }
 
   it should "open the contextual toolbar below the cursor without stealing editor focus" in {
-    val initialState = AppState.initial.copy(focus = Focus.EditorPane(PaneId(0)))
+    val initialState =
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
 
     val result  = AppEventReducer.reduce(ToggleContextualToolbar, initialState, registry)
     val surface = result.state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar"))
@@ -69,12 +73,12 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
       initialState.activeCursorPosition,
       SurfacePlacement.BelowCursor
     )
-    result.state.focus shouldBe Focus.EditorPane(PaneId(0))
+    result.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     result.effects shouldBe Nil
   }
 
   it should "restore editor focus when runner replaces a modal that held focus" in {
-    val base = AppState.initial.copy(focus = Focus.EditorPane(PaneId(0)))
+    val base = AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
 
     val withModal = ModalStateReducer
       .show(
@@ -83,7 +87,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
       )
       .state
     val modalSurfaceId = withModal.modalSurface.get.id
-    withModal.focus shouldBe Focus.Surface(modalSurfaceId)
+    withModal.persisted.focus shouldBe Focus.Surface(modalSurfaceId)
 
     val withRunner = AppEventReducer.reduce(ToggleCommandRunner, withModal, registry)
     withRunner.state.modalSurface shouldBe None
@@ -91,7 +95,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val closed = AppEventReducer.reduce(ToggleCommandRunner, withRunner.state, registry)
 
-    closed.state.focus shouldBe Focus.EditorPane(PaneId(0))
+    closed.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     closed.state.commandRunnerSurface shouldBe None
     closed.state.modalSurface shouldBe None
   }
@@ -103,18 +107,20 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val closed1 = AppEventReducer.reduce(ToggleCommandRunner, opened1.state, registry)
     val opened2 = AppEventReducer.reduce(ToggleCommandRunner, closed1.state, registry)
 
-    val editorEntries = opened2.state.focusHistory.count(_ == Focus.EditorPane(PaneId(0)))
+    val editorEntries = opened2.state.runtime.focusHistory.count(_ == Focus.EditorPane(PaneId(0)))
     editorEntries shouldBe 1
   }
 
   it should "hydrate workspace panel pin options from current pinned surfaces" in {
     val base = AppState.initial.copy(
-      focus = Focus.EditorPane(PaneId(0)),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("outline-panel"),
-          SurfaceContent.Outline(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Right, 30)
+      persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("outline-panel"),
+            SurfaceContent.Outline(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Right, 30)
+          )
         )
       )
     )
@@ -144,18 +150,17 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = AppEventReducer.reduce(NewTab, initialState, registry)
     val state  = result.state
 
-    state.buffers should have size 2
-    state.bufferOrder shouldBe List(BufferId(0), BufferId(1))
+    state.persisted.buffers should have size 2
+    state.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1))
     state.focusedBufferId shouldBe Some(BufferId(1))
-    state.buffers(BufferId(1)).document.isNewEmpty shouldBe true
+    state.persisted.buffers(BufferId(1)).document.isNewEmpty shouldBe true
     result.effects shouldBe Nil
   }
 
   it should "navigate to the next and previous buffer according to buffer order" in {
-    val stateWithBuffers = AppEventReducer
-      .reduce(NewTab, AppState.initial, registry)
-      .state
-      .copy(viewportSize = Some(ViewportSize(200, 24)))
+    val newTabState = AppEventReducer.reduce(NewTab, AppState.initial, registry).state
+    val stateWithBuffers =
+      newTabState.copy(runtime = newTabState.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
 
     val movedBack = AppEventReducer.reduce(PreviousTab, stateWithBuffers, registry).state
     movedBack.focusedBufferId shouldBe Some(BufferId(0))

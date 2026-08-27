@@ -15,16 +15,17 @@ object PeekStateReducer:
     )
     ReducerResult.noEffects(
       stateWithId.copy(
-        uiSurfaces = stateWithId.uiSurfaces.filterNot(isPeekSurface) :+ surface,
-        focus = Focus.Surface(surfaceId)
+        persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
+        runtime =
+          stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces.filterNot(isPeekSurface) :+ surface)
       )
     )
 
   def dismiss(state: AppState): ReducerResult =
     ReducerResult.noEffects(
       state.copy(
-        uiSurfaces = state.uiSurfaces.filterNot(isPeekSurface),
-        focus = fallbackEditorFocus(state)
+        persisted = state.persisted.copy(focus = fallbackEditorFocus(state)),
+        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isPeekSurface))
       )
     )
 
@@ -45,6 +46,6 @@ object PeekStateReducer:
         SurfaceContent.DirectoryListing(path, entries)
 
   private def fallbackEditorFocus(state: AppState): Focus =
-    state.layout.activeEditorPaneId match
+    state.persisted.layout.activeEditorPaneId match
       case Some(paneId) => Focus.EditorPane(paneId)
       case None         => Focus.EditorPane(PaneId(0))

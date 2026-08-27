@@ -888,20 +888,22 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     ).normalized
     val paneId = PaneId(0)
     val state = AppState.initial.copy(
-      buffers = Map(
-        bufferId -> Buffer
-          .fromString(bufferId, "alpha beta")
-          .copy(
-            editing = EditingState(selection = Some(selection), cursors = List(selection.focus)),
-            richText = RichTextState(richTextDocument = Some(richDocument))
-          )
-      ),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.EditorPane(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(
+          bufferId -> Buffer
+            .fromString(bufferId, "alpha beta")
+            .copy(
+              editing = EditingState(selection = Some(selection), cursors = List(selection.focus)),
+              richText = RichTextState(richTextDocument = Some(richDocument))
+            )
+        ),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
     )
 
     val resolved = SurfaceContentResolver.resolveContextualToolbar(
@@ -926,7 +928,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "retain icon-font runs alongside labels in IconAndText toolbars" in {
     val state = AppState.initial.copy(
-      config = AppConfig.default.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
+      )
     )
 
     val resolved = SurfaceContentResolver.resolveContextualToolbar(
@@ -970,20 +974,22 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     ).normalized
     val paneId = PaneId(0)
     val state = AppState.initial.copy(
-      buffers = Map(
-        bufferId -> Buffer
-          .fromString(bufferId, "alpha beta")
-          .copy(
-            editing = EditingState(selection = Some(selection), cursors = List(selection.focus)),
-            richText = RichTextState(richTextDocument = Some(richDocument))
-          )
-      ),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.EditorPane(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(
+          bufferId -> Buffer
+            .fromString(bufferId, "alpha beta")
+            .copy(
+              editing = EditingState(selection = Some(selection), cursors = List(selection.focus)),
+              richText = RichTextState(richTextDocument = Some(richDocument))
+            )
+        ),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
     )
 
     val resolved = SurfaceContentResolver.resolveContextualToolbar(
