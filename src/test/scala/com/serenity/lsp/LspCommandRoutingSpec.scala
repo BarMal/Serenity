@@ -39,12 +39,12 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
     try
       stateManager
         .updateState { state =>
-          val original = state.buffers(BufferId(0))
+          val original = state.persisted.buffers(BufferId(0))
           val buffer = original.copy(
             document = original.document.copy(filePath = Some(file), language = Some(LanguageId.Scala)),
             editing = original.editing.copy(cursors = List(CursorPosition(3, 7)))
           )
-          state.copy(buffers = state.buffers + (BufferId(0) -> buffer))
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (BufferId(0) -> buffer)))
         }
         .unsafeRunSync()
 
@@ -76,7 +76,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
     try
       stateManager
         .updateState { state =>
-          val original = state.buffers(BufferId(0))
+          val original = state.persisted.buffers(BufferId(0))
           val buffer = original.copy(
             document = original.document.copy(
               content = com.serenity.rope.Rope("val total = subtotal + 1"),
@@ -85,7 +85,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
             ),
             editing = original.editing.copy(cursors = List(CursorPosition(0, 14)))
           )
-          state.copy(buffers = state.buffers + (BufferId(0) -> buffer))
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (BufferId(0) -> buffer)))
         }
         .unsafeRunSync()
 
@@ -118,12 +118,12 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
     try
       stateManager
         .updateState { state =>
-          val original = state.buffers(BufferId(0))
+          val original = state.persisted.buffers(BufferId(0))
           val buffer = original.copy(
             document = original.document.copy(filePath = Some(file), language = Some(LanguageId.Scala)),
             editing = original.editing.copy(cursors = List(CursorPosition(2, 5)))
           )
-          state.copy(buffers = state.buffers + (BufferId(0) -> buffer))
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (BufferId(0) -> buffer)))
         }
         .unsafeRunSync()
 

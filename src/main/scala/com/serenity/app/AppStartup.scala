@@ -85,14 +85,17 @@ object AppStartup:
   ): IO[AppState] =
     for
       sessionExists <- stateManager.sessionExists
-      recentFiles   <- stateManager.loadSession().map(_.fold(Nil)(_.recentFiles))
+      recentFiles   <- stateManager.loadSession().map(_.fold(Nil)(_.persisted.recentFiles))
       startPage = createStartPage(sessionExists, recentFiles)
     yield
       val startPageSurfaceId = SurfaceId("surface-0")
-      AppState
-        .empty(appConfig)
-        .copy(
+      val base               = AppState.empty(appConfig)
+      base.copy(
+        persisted = base.persisted.copy(
           focus = Focus.Surface(startPageSurfaceId),
+          theme = theme
+        ),
+        runtime = base.runtime.copy(
           uiSurfaces = List(
             UiSurface(
               id = startPageSurfaceId,
@@ -101,9 +104,9 @@ object AppStartup:
             )
           ),
           viewportSize = Some(initialViewportSize),
-          theme = theme,
           nextSurfaceId = 1
         )
+      )
 
   /** Resolve the theme to use for startup before a saved session is restored. */
   def startupTheme(
@@ -127,15 +130,16 @@ object AppStartup:
     openPath match
       case Some(path) =>
         for
-          _ <- stateManager.updateState(_ =>
-            AppState
-              .empty(appConfig)
-              .copy(
+          _ <- stateManager.updateState { _ =>
+            val base = AppState.empty(appConfig)
+            base.copy(
+              persisted = base.persisted.copy(theme = theme),
+              runtime = base.runtime.copy(
                 uiSurfaces = List.empty,
-                viewportSize = Some(initialViewportSize),
-                theme = theme
+                viewportSize = Some(initialViewportSize)
               )
-          )
+            )
+          }
           _     <- stateManager.openFile(path)
           state <- stateManager.getCurrentState
         yield state

@@ -22,12 +22,14 @@ class StartupPageDismissSpec extends AnyFlatSpec with Matchers:
     )
     val surfaceId = SurfaceId("test-surface")
     val state = AppState.empty.copy(
-      focus = Focus.Surface(surfaceId),
-      uiSurfaces = List(
-        UiSurface(
-          id = surfaceId,
-          content = SurfaceContent.StartPage(startPage),
-          presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.empty.persisted.copy(focus = Focus.Surface(surfaceId)),
+      runtime = AppState.empty.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            id = surfaceId,
+            content = SurfaceContent.StartPage(startPage),
+            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )

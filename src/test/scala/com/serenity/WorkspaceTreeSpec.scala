@@ -84,32 +84,34 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "initialize the default app state with one explicit editor leaf" in {
-    AppState.initial.layout.workspaceTree shouldBe Some(
+    AppState.initial.persisted.layout.workspaceTree shouldBe Some(
       WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
     )
   }
 
   it should "reconcile pinned surfaces added to an explicit default tree" in {
     val state = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("surface-0"),
-          SurfaceContent.Outline(Nil, None),
-          SurfacePresentation.Pinned(PanelPosition.Left, 30)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("surface-0"),
+            SurfaceContent.Outline(Nil, None),
+            SurfacePresentation.Pinned(PanelPosition.Left, 30)
+          )
         )
       )
     )
 
-    state.validated.map(_.layout.workspaceTree.map(_.dockedSurfaceIds)) shouldBe Right(
+    state.validated.map(_.persisted.layout.workspaceTree.map(_.dockedSurfaceIds)) shouldBe Right(
       Some(List(SurfaceId("surface-0")))
     )
   }
 
   it should "skip rebuilding an already-reconciled workspace tree" in {
     val state = AppState.initial
-    val tree  = state.layout.workspaceTree
+    val tree  = state.persisted.layout.workspaceTree
 
-    state.validated.map(_.layout.workspaceTree) shouldBe Right(tree)
-    state.validated.toOption.flatMap(_.layout.workspaceTree).get should be theSameInstanceAs tree.get
+    state.validated.map(_.persisted.layout.workspaceTree) shouldBe Right(tree)
+    state.validated.toOption.flatMap(_.persisted.layout.workspaceTree).get should be theSameInstanceAs tree.get
   }
 end WorkspaceTreeSpec

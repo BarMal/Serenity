@@ -611,14 +611,16 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       stateManager
         .updateState { state =>
           state.copy(
-            buffers = state.buffers + (modifiedBuffer.id -> modifiedBuffer),
-            layout = state.layout.copy(
-              editorPanes = state.layout.editorPanes.updated(
-                PaneId(0),
-                state.layout.editorPanes(PaneId(0)).copy(bufferId = Some(modifiedBuffer.id))
-              )
-            ),
-            focus = Focus.EditorPane(PaneId(0))
+            persisted = state.persisted.copy(
+              buffers = state.persisted.buffers + (modifiedBuffer.id -> modifiedBuffer),
+              layout = state.persisted.layout.copy(
+                editorPanes = state.persisted.layout.editorPanes.updated(
+                  PaneId(0),
+                  state.persisted.layout.editorPanes(PaneId(0)).copy(bufferId = Some(modifiedBuffer.id))
+                )
+              ),
+              focus = Focus.EditorPane(PaneId(0))
+            )
           )
         }
         .unsafeRunSync()
@@ -629,7 +631,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       val savedContent = Files.readString(tempFile)
       savedContent shouldBe "val x = 43"
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.buffers(modifiedBuffer.id).document.isDirty shouldBe false
+      updatedState.persisted.buffers(modifiedBuffer.id).document.isDirty shouldBe false
 
     finally Files.deleteIfExists(tempFile)
   }

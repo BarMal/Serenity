@@ -35,8 +35,8 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     afterInsertState should not be theSameInstanceAs(afterMoveState)
 
     // Original state should remain unchanged
-    initialStateSnapshot.buffers shouldBe initialState.buffers
-    initialStateSnapshot.layout shouldBe initialState.layout
+    initialStateSnapshot.persisted.buffers shouldBe initialState.persisted.buffers
+    initialStateSnapshot.persisted.layout shouldBe initialState.persisted.layout
 
   it should "demonstrate referential transparency in event processing" in new FunctionalFixture:
     // Given: Same initial state and events
@@ -68,8 +68,8 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     val final2 = stateManager2.getCurrentState.unsafeRunSync()
 
     // Content should be identical
-    final1.buffers.headOption.map(_._2.document.content.collect()) shouldBe
-      final2.buffers.headOption.map(_._2.document.content.collect())
+    final1.persisted.buffers.headOption.map(_._2.document.content.collect()) shouldBe
+      final2.persisted.buffers.headOption.map(_._2.document.content.collect())
 
   it should "compose operations functionally without side effects" in new FunctionalFixture:
     // Given: Buffer with content
@@ -78,31 +78,31 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // When: Compose multiple pure operations
     val operation1: AppState => AppState = state =>
-      val buffer        = state.buffers(bufferId)
+      val buffer        = state.persisted.buffers(bufferId)
       val newContent    = buffer.document.content.insert(buffer.document.content.weight, " this")
       val updatedBuffer = buffer.copy(document = buffer.document.copy(content = newContent))
-      state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer)))
 
     val operation2: AppState => AppState = state =>
-      val buffer        = state.buffers(bufferId)
+      val buffer        = state.persisted.buffers(bufferId)
       val newContent    = buffer.document.content.insert(0, "Let's ")
       val updatedBuffer = buffer.copy(document = buffer.document.copy(content = newContent))
-      state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer)))
 
     val operation3: AppState => AppState = state =>
-      val buffer        = state.buffers(bufferId)
+      val buffer        = state.persisted.buffers(bufferId)
       val newContent    = buffer.document.content.insert(buffer.document.content.weight, " functionally!")
       val updatedBuffer = buffer.copy(document = buffer.document.copy(content = newContent))
-      state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer)))
 
     // Compose operations
     val composedOperation = operation1 andThen operation2 andThen operation3
     val finalState        = composedOperation(initialState)
 
     // Then: Should produce expected result without side effects
-    finalState.buffers(bufferId).document.content.collect() shouldBe "Let's compose this functionally!"
+    finalState.persisted.buffers(bufferId).document.content.collect() shouldBe "Let's compose this functionally!"
     // Original state unchanged
-    initialState.buffers(bufferId).document.content.collect() shouldBe "compose"
+    initialState.persisted.buffers(bufferId).document.content.collect() shouldBe "compose"
 
   it should "handle state transitions through monadic composition" in new FunctionalFixture:
     // Given: Initial state wrapped in IO
@@ -122,7 +122,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     val result = monadicChain.unsafeRunSync()
 
     // Then: Should chain operations correctly
-    result.buffers(bufferId).document.content.collect() shouldBe "Mmonadic"
+    result.persisted.buffers(bufferId).document.content.collect() shouldBe "Mmonadic"
 
   it should "maintain state consistency through functional transformations" in new FunctionalFixture:
     // Given: Complex state with multiple components
@@ -135,15 +135,17 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
       // Transform 1: Update buffer content
       (state: AppState) =>
         val updatedBuffer1 =
-          state.buffers(buffer1).copy(document = state.buffers(buffer1).document.copy(isDirty = true))
-        state.copy(buffers = state.buffers + (buffer1 -> updatedBuffer1))
+          state.persisted
+            .buffers(buffer1)
+            .copy(document = state.persisted.buffers(buffer1).document.copy(isDirty = true))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer1 -> updatedBuffer1)))
       ,
       // Transform 2: Switch focus
-      (state: AppState) => state.copy(focus = Focus.EditorPane(pane2)),
+      (state: AppState) => state.copy(persisted = state.persisted.copy(focus = Focus.EditorPane(pane2))),
       // Transform 3: Update layout
       (state: AppState) =>
-        val updatedLayout = state.layout.copy(activeEditorPaneId = Some(pane2))
-        state.copy(layout = updatedLayout)
+        val updatedLayout = state.persisted.layout.copy(activeEditorPaneId = Some(pane2))
+        state.copy(persisted = state.persisted.copy(layout = updatedLayout))
     )
 
     // Apply transformations functionally
@@ -152,9 +154,9 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // Then: All transformations should maintain consistency
     finalState.isValid shouldBe true
-    finalState.focus shouldBe Focus.EditorPane(pane2)
-    finalState.layout.activeEditorPaneId shouldBe Some(pane2)
-    finalState.buffers(buffer1).document.isDirty shouldBe true
+    finalState.persisted.focus shouldBe Focus.EditorPane(pane2)
+    finalState.persisted.layout.activeEditorPaneId shouldBe Some(pane2)
+    finalState.persisted.buffers(buffer1).document.isDirty shouldBe true
 
   it should "demonstrate pure functions for cursor operations" in new FunctionalFixture:
     // Given: Cursor utility functions (pure)
@@ -243,24 +245,30 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     // When: Create multiple derived states (simulating undo/redo or multiple views)
     val state1 = baseState // Original
     val state2 =
-      val buffer        = state1.buffers(bufferId)
+      val buffer        = state1.persisted.buffers(bufferId)
       val newContent    = buffer.document.content.insert(buffer.document.content.weight, " - modified")
       val updatedBuffer = buffer.copy(document = buffer.document.copy(content = newContent))
-      state1.copy(buffers = state1.buffers + (bufferId -> updatedBuffer))
+      state1.copy(persisted = state1.persisted.copy(buffers = state1.persisted.buffers + (bufferId -> updatedBuffer)))
     val state3 =
-      val buffer        = state2.buffers(bufferId)
+      val buffer        = state2.persisted.buffers(bufferId)
       val newContent    = buffer.document.content.replaceAll("modified", "enhanced")
       val updatedBuffer = buffer.copy(document = buffer.document.copy(content = newContent))
-      state2.copy(buffers = state2.buffers + (bufferId -> updatedBuffer))
+      state2.copy(persisted = state2.persisted.copy(buffers = state2.persisted.buffers + (bufferId -> updatedBuffer)))
 
     // Then: All states should coexist without interference
-    state1.buffers(bufferId).document.content.collect() shouldBe "Shared content"
-    state2.buffers(bufferId).document.content.collect() shouldBe "Shared content - modified"
-    state3.buffers(bufferId).document.content.collect() shouldBe "Shared content - enhanced"
+    state1.persisted.buffers(bufferId).document.content.collect() shouldBe "Shared content"
+    state2.persisted.buffers(bufferId).document.content.collect() shouldBe "Shared content - modified"
+    state3.persisted.buffers(bufferId).document.content.collect() shouldBe "Shared content - enhanced"
 
     // Memory sharing through structural sharing (rope benefits)
-    state1.buffers(bufferId).document.content should not be theSameInstanceAs(state2.buffers(bufferId).document.content)
-    state2.buffers(bufferId).document.content should not be theSameInstanceAs(state3.buffers(bufferId).document.content)
+    state1.persisted
+      .buffers(bufferId)
+      .document
+      .content should not be theSameInstanceAs(state2.persisted.buffers(bufferId).document.content)
+    state2.persisted
+      .buffers(bufferId)
+      .document
+      .content should not be theSameInstanceAs(state3.persisted.buffers(bufferId).document.content)
 
   trait FunctionalFixture:
 

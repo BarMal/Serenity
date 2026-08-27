@@ -52,9 +52,11 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
   private def stateWithPickerAndRunner(selectedIndex: Int = 1): (AppState, SurfaceId, SurfaceId) =
     val base = AppState.empty.copy(
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), BufferId(0))),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.empty.persisted.copy(
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), BufferId(0))),
+          activeEditorPaneId = Some(PaneId(0))
+        )
       )
     )
     val runner         = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
@@ -72,8 +74,8 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val finalState = s2.copy(
-      uiSurfaces = List(runnerSurface, pickerSurface),
-      focus = Focus.Surface(pickerId)
+      persisted = s2.persisted.copy(focus = Focus.Surface(pickerId)),
+      runtime = s2.runtime.copy(uiSurfaces = List(runnerSurface, pickerSurface))
     )
     (finalState, runnerId, pickerId)
 
@@ -117,7 +119,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
       case other                                                        => fail(s"Expected StateChange, got $other")
 
     newState.themePickerSurface shouldBe None
-    newState.focus shouldBe Focus.Surface(runnerId)
+    newState.persisted.focus shouldBe Focus.Surface(runnerId)
   }
 
   it should "dismiss picker and emit SwitchTheme(originalTheme) on ESC" in {
@@ -131,7 +133,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
     reducerResult.effects shouldBe List(AppEffect.SwitchTheme("dark"))
     reducerResult.state.themePickerSurface shouldBe None
-    reducerResult.state.focus shouldBe Focus.Surface(runnerId)
+    reducerResult.state.persisted.focus shouldBe Focus.Surface(runnerId)
   }
 
   it should "do nothing for unrecognised events" in {

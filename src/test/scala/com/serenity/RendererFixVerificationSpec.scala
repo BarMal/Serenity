@@ -30,17 +30,19 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          config = current.config.withWordWrap(false),
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        current.copy(persisted =
+          current.persisted.copy(
+            config = current.persisted.config.withWordWrap(false),
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            )
           )
         )
       }
@@ -51,8 +53,8 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     val panelRect  = layout.editorPanelRect
 
     // The fix should ensure that content is clipped to panel width regardless of viewport.visibleColumns
-    finalState.layout.editorPanes(paneId)
-    val buffer   = finalState.buffers(bufferId)
+    finalState.persisted.layout.editorPanes(paneId)
+    val buffer   = finalState.persisted.buffers(bufferId)
     val viewport = buffer.viewport
 
     info(s"Viewport visible columns: ${viewport.visibleColumns}")
@@ -79,17 +81,19 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          config = current.config.withWordWrap(false),
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        current.copy(persisted =
+          current.persisted.copy(
+            config = current.persisted.config.withWordWrap(false),
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            )
           )
         )
       }
@@ -104,13 +108,13 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     longText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
 
     // Buffer should contain all text
     buffer.document.content.collect() shouldBe longText
 
     // Viewport should scroll to keep cursor visible
-    finalState.layout.editorPanes(paneId)
+    finalState.persisted.layout.editorPanes(paneId)
     val cursor = buffer.editing.cursors.head
     cursor.column shouldBe longText.length
 
@@ -134,17 +138,19 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          config = current.config.withWordWrap(false),
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        current.copy(persisted =
+          current.persisted.copy(
+            config = current.persisted.config.withWordWrap(false),
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            )
           )
         )
       }
@@ -159,8 +165,8 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
     veryLongText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.layout.editorPanes(paneId)
-    val buffer   = finalState.buffers(bufferId)
+    finalState.persisted.layout.editorPanes(paneId)
+    val buffer   = finalState.persisted.buffers(bufferId)
     val cursor   = buffer.editing.cursors.head
     val viewport = buffer.viewport
 
@@ -191,16 +197,18 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        current.copy(persisted =
+          current.persisted.copy(
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            )
           )
         )
       }
@@ -217,8 +225,8 @@ class RendererFixVerificationSpec extends AnyFlatSpec with Matchers:
       if lineNum < 5 then stateManager.applyEvent(NewLine).unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.layout.editorPanes(paneId)
-    val buffer = finalState.buffers(bufferId)
+    finalState.persisted.layout.editorPanes(paneId)
+    val buffer = finalState.persisted.buffers(bufferId)
     val cursor = buffer.editing.cursors.head
 
     // Should be on last line

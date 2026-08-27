@@ -69,8 +69,10 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     sm.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 12).unsafeRunSync()
     sm.updateState(state =>
       state.copy(
-        config = state.config.copy(backgroundStyle = BackgroundStyle.GlassLike),
-        theme = Theme.light
+        persisted = state.persisted.copy(
+          config = state.persisted.config.copy(backgroundStyle = BackgroundStyle.GlassLike),
+          theme = Theme.light
+        )
       )
     ).unsafeRunSync()
 
@@ -129,10 +131,10 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.config.backgroundStyle shouldBe BackgroundStyle.Solid
-    state.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 720))
-    state.viewportSize shouldBe Some(ViewportSize(90, 28))
-    state.theme.name shouldBe Theme.dark.name
+    state.persisted.config.backgroundStyle shouldBe BackgroundStyle.Solid
+    state.persisted.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 720))
+    state.runtime.viewportSize shouldBe Some(ViewportSize(90, 28))
+    state.persisted.theme.name shouldBe Theme.dark.name
     state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 36))
     observedWindowSize.get.unsafeRunSync() shouldBe None
   }
@@ -148,19 +150,23 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       val pane0             = PaneId(0)
       val pane1             = PaneId(1)
       state.copy(
-        buffers = state.buffers + (secondaryBufferId -> Buffer.newEmpty(secondaryBufferId)),
-        bufferOrder = List(primaryBufferId, secondaryBufferId),
-        layout = Layout(
-          editorPanes = Map(
-            pane0 -> EditorPane.withBuffer(pane0, primaryBufferId),
-            pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
+        persisted = state.persisted.copy(
+          buffers = state.persisted.buffers + (secondaryBufferId -> Buffer.newEmpty(secondaryBufferId)),
+          bufferOrder = List(primaryBufferId, secondaryBufferId),
+          layout = Layout(
+            editorPanes = Map(
+              pane0 -> EditorPane.withBuffer(pane0, primaryBufferId),
+              pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
+            ),
+            activeEditorPaneId = Some(pane1),
+            paneOrder = List(pane0, pane1)
           ),
-          activeEditorPaneId = Some(pane1),
-          paneOrder = List(pane0, pane1)
+          focus = Focus.EditorPane(pane1)
         ),
-        focus = Focus.EditorPane(pane1),
-        nextBufferId = BufferId(2),
-        nextPaneId = PaneId(2)
+        runtime = state.runtime.copy(
+          nextBufferId = BufferId(2),
+          nextPaneId = PaneId(2)
+        )
       )
     }.unsafeRunSync()
 
@@ -175,14 +181,14 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.config.fontConfig.textFontFamily shouldBe Font.SERIF
-    state.config.showLineNumbers shouldBe false
-    state.config.showGutter shouldBe false
-    state.layout.editorPanes should have size 1
-    state.layout.activeEditorPaneId shouldBe Some(PaneId(1))
-    state.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(1))
-    state.buffers(BufferId(1)).richText.richTextDocument should not be empty
-    state.config.showPaneHeaders shouldBe false
+    state.persisted.config.fontConfig.textFontFamily shouldBe Font.SERIF
+    state.persisted.config.showLineNumbers shouldBe false
+    state.persisted.config.showGutter shouldBe false
+    state.persisted.layout.editorPanes should have size 1
+    state.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(1))
+    state.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(1))
+    state.persisted.buffers(BufferId(1)).richText.richTextDocument should not be empty
+    state.persisted.config.showPaneHeaders shouldBe false
     state.pinnedSurfaces shouldBe Nil
   }
 
@@ -209,10 +215,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.layout.editorPanes should have size 1
-    state.layout.activeEditorPaneId.flatMap(state.layout.editorPanes.get).flatMap(_.bufferId) shouldBe
-      state.bufferOrder.lastOption
-    state.focusedBufferId.flatMap(state.buffers.get).flatMap(_.richText.richTextDocument) should not be empty
+    state.persisted.layout.editorPanes should have size 1
+    state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
+      .flatMap(_.bufferId) shouldBe
+      state.persisted.bufferOrder.lastOption
+    state.focusedBufferId.flatMap(state.persisted.buffers.get).flatMap(_.richText.richTextDocument) should not be empty
   }
 
   it should "preserve unrelated persisted configuration when applying a built-in workflow" in {
@@ -230,13 +238,15 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     sm.updateState { state =>
       state.copy(
-        config = state.config
-          .withHotkeyOverride(HotkeyAction.ToggleCommandRunner, "alt+p")
-          .withEditorKeyOverride(EditorKeyAction.MoveLeft, "alt+h")
-          .withLanguageToolsConfig(
-            state.config.languageToolsConfig.copy(lspUserConfig = lspConfig, spellCheck = spellCheck)
-          )
-          .withWindowConfig(windowConfig)
+        persisted = state.persisted.copy(
+          config = state.persisted.config
+            .withHotkeyOverride(HotkeyAction.ToggleCommandRunner, "alt+p")
+            .withEditorKeyOverride(EditorKeyAction.MoveLeft, "alt+h")
+            .withLanguageToolsConfig(
+              state.persisted.config.languageToolsConfig.copy(lspUserConfig = lspConfig, spellCheck = spellCheck)
+            )
+            .withWindowConfig(windowConfig)
+        )
       )
     }.unsafeRunSync()
 
@@ -249,7 +259,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
-    val config = sm.getCurrentState.unsafeRunSync().config
+    val config = sm.getCurrentState.unsafeRunSync().persisted.config
 
     config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List("alt+p")
     config.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.MoveLeft).map(_.render) shouldBe List("alt+h")
@@ -276,7 +286,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.buffers(BufferId(0)).document.language shouldBe Some(LanguageId.Markdown)
+    state.persisted.buffers(BufferId(0)).document.language shouldBe Some(LanguageId.Markdown)
     state.pinnedSurfaces.collectFirst {
       case UiSurface(
             _,
@@ -295,10 +305,10 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     sm.updateState { state =>
       val bufferId = BufferId(0)
-      val buffer = state
+      val buffer = state.persisted
         .buffers(bufferId)
         .copy(
-          document = state
+          document = state.persisted
             .buffers(bufferId)
             .document
             .copy(
@@ -306,7 +316,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
               language = Some(LanguageId.Markdown)
             )
         )
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
     }.unsafeRunSync()
 
     sm.executeCommand(
@@ -320,7 +330,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.config.defaultDocumentMode shouldBe com.serenity.config.DefaultDocumentMode.Markdown
+    state.persisted.config.defaultDocumentMode shouldBe com.serenity.config.DefaultDocumentMode.Markdown
     state.pinnedSurfaces.collect { case UiSurface(_, SurfaceContent.Outline(_, _), _, _) => () } shouldBe Nil
     state.pinnedSurfaces.collectFirst {
       case UiSurface(
@@ -340,24 +350,24 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     sm.updateState { state =>
       val bufferId = BufferId(0)
-      val buffer = state
+      val buffer = state.persisted
         .buffers(bufferId)
         .copy(
-          document = state
+          document = state.persisted
             .buffers(bufferId)
             .document
             .copy(
               content = Rope("# Chapter One\n\nBody\n\n## Scene Two"),
               language = Some(LanguageId.Markdown)
             ),
-          annotations = state
+          annotations = state.persisted
             .buffers(bufferId)
             .annotations
             .copy(
               bookmarks = List(CursorPosition(2, 4))
             )
         )
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
     }.unsafeRunSync()
 
     sm.executeCommand(
@@ -381,24 +391,24 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     sm.updateState { state =>
       val bufferId = BufferId(0)
-      val buffer = state
+      val buffer = state.persisted
         .buffers(bufferId)
         .copy(
-          document = state
+          document = state.persisted
             .buffers(bufferId)
             .document
             .copy(
               content = Rope("# Finding\n\nNeeds review"),
               language = Some(LanguageId.Markdown)
             ),
-          annotations = state
+          annotations = state.persisted
             .buffers(bufferId)
             .annotations
             .copy(
               bookmarks = List(CursorPosition(2, 0))
             )
         )
-      state.copy(buffers = state.buffers + (bufferId -> buffer))
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
     }.unsafeRunSync()
 
     sm.executeCommand(
@@ -589,7 +599,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     sm.executeCommand(
       Command.typed("apply", "Apply", CommandIntent.ApplyUiPreset("Missing Theme"), CommandCategory.Settings)
     ).unsafeRunSync()
-    sm.getCurrentState.unsafeRunSync().config shouldBe initial.config
+    sm.getCurrentState.unsafeRunSync().persisted.config shouldBe initial.persisted.config
     commandRunnerState(sm).statusMessage.getOrElse(fail("missing preset error")) should include(
       "Theme 'not-installed' could not be loaded"
     )
@@ -597,7 +607,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     sm.executeCommand(
       Command.typed("apply-font", "Apply", CommandIntent.ApplyUiPreset("Missing Font"), CommandCategory.Settings)
     ).unsafeRunSync()
-    sm.getCurrentState.unsafeRunSync().config shouldBe initial.config
+    sm.getCurrentState.unsafeRunSync().persisted.config shouldBe initial.persisted.config
     commandRunnerState(sm).statusMessage.getOrElse(fail("missing preset error")) should include(
       "Preset requires unavailable text font 'not-installed'"
     )
@@ -782,7 +792,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
           case _                                     => None
       }
       .getOrElse(fail("command runner should stay open"))
-    val submenu = state.uiSurfaces.collectFirst {
+    val submenu = state.runtime.uiSurfaces.collectFirst {
       case UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
         groupId -> previewOnly
     }
@@ -791,7 +801,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
     runner.editingPresetName shouldBe Some("Drafting")
     runner.statusMessage shouldBe Some("Preset saved. Configure Drafting.")
-    state.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
     submenu shouldBe Some("settings-preset-edit" -> false)
   }
 
@@ -824,10 +834,10 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    state.config.motionPreset shouldBe MotionPreset.Subtle
-    state.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
-    state.config.fontConfig.textFontSize shouldBe 18.0f
+    state.persisted.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
+    state.persisted.config.motionPreset shouldBe MotionPreset.Subtle
+    state.persisted.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    state.persisted.config.fontConfig.textFontSize shouldBe 18.0f
     store.find("Drafting").unsafeRunSync() shouldBe Some(savedBefore)
   }
 
@@ -861,7 +871,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         CommandCategory.Settings
       )
     ).unsafeRunSync()
-    sm.updateState(state => state.copy(theme = Theme.light)).unsafeRunSync()
+    sm.updateState(state => state.copy(persisted = state.persisted.copy(theme = Theme.light))).unsafeRunSync()
     sm.executeCommand(
       Command.typed("overwrite", "Overwrite", CommandIntent.OverwriteUiPreset("Drafting"), CommandCategory.Settings)
     ).unsafeRunSync()
@@ -989,6 +999,6 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     store.find("Writing").unsafeRunSync() shouldBe None
-    state.config.fontConfig.textFontFamily shouldBe Font.SERIF
+    state.persisted.config.fontConfig.textFontFamily shouldBe Font.SERIF
     state.pinnedSurfaces shouldBe Nil
   }

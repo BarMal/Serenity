@@ -22,7 +22,11 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     val stateManager                = StateManager.apply(logger).unsafeRunSync()
     val wideTerminal                = com.serenity.ui.layout.ViewportSize(400, 24) // Wide enough for multiple panes
     stateManager
-      .updateState(state => state.copy(config = state.config.withCharacterAnimation(AnimationConfig.smooth.get)))
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(config = state.persisted.config.withCharacterAnimation(AnimationConfig.smooth.get))
+        )
+      )
       .unsafeRunSync()
 
     @annotation.tailrec
@@ -36,20 +40,22 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
 
   it should "isolate animations to focused buffer only" in new AnimationFixture:
     // Given: Wide terminal to allow multiple panes, then two buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(wideTerminal))))
+      .unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer1Id    = initialState.bufferOrder.head
+    val buffer1Id    = initialState.persisted.bufferOrder.head
 
     // Create second buffer
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val twoBufferState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer2Id      = twoBufferState.bufferOrder.last
-    val originalPaneId = twoBufferState.layout.activeEditorPaneId.get
+    val buffer2Id      = twoBufferState.persisted.bufferOrder.last
+    val originalPaneId = twoBufferState.persisted.layout.activeEditorPaneId.get
     stateManager.splitPaneHorizontal(originalPaneId, Some(buffer1Id)).unsafeRunSync()
     stateManager.switchToPane(originalPaneId).unsafeRunSync()
 
     // Explicitly split the workspace so both buffers have persistent views.
-    stateManager.getCurrentState.unsafeRunSync().layout.editorPanes should have size 2
+    stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes should have size 2
 
     // Navigate to first buffer, type a character (should trigger animation)
     stateManager.applyEvent(com.serenity.keystroke.events.PreviousTab).unsafeRunSync() // Go to first buffer
@@ -75,11 +81,13 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain separate character animation states per buffer" in new AnimationFixture:
     // Given: Wide terminal and three buffers with different content
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(wideTerminal))))
+      .unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 1
     stateManager.applyEvent(NewTab).unsafeRunSync() // Buffer 2
     val state     = stateManager.getCurrentState.unsafeRunSync()
-    val bufferIds = state.bufferOrder
+    val bufferIds = state.persisted.bufferOrder
 
     bufferIds should have size 3
 
@@ -95,7 +103,7 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
 
     // Then: Each buffer should have independent animation state
     val bufferContents = bufferIds.map { bufferId =>
-      val buffer = finalState.buffers(bufferId)
+      val buffer = finalState.persisted.buffers(bufferId)
       buffer.document.content.collect()
     }
 
@@ -111,10 +119,12 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
 
   it should "not leak animations between buffers when switching focus rapidly" in new AnimationFixture:
     // Given: Wide terminal and two buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(wideTerminal))))
+      .unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val state     = stateManager.getCurrentState.unsafeRunSync()
-    val bufferIds = state.bufferOrder
+    val bufferIds = state.persisted.bufferOrder
     val buffer1Id = bufferIds(0)
     val buffer2Id = bufferIds(1)
 
@@ -134,8 +144,8 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
 
     // Debug: Check what's actually in each buffer
-    val buffer1Content = finalState.buffers(buffer1Id).document.content.collect()
-    val buffer2Content = finalState.buffers(buffer2Id).document.content.collect()
+    val buffer1Content = finalState.persisted.buffers(buffer1Id).document.content.collect()
+    val buffer2Content = finalState.persisted.buffers(buffer2Id).document.content.collect()
 
     // Then: Buffers should have correct independent content
     // Note: the order depends on which buffer was focused when, adjust expectation
@@ -147,11 +157,11 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
       // Original expectation
       buffer1Content shouldBe "13"
       buffer2Content shouldBe "2"
-    finalState.buffers(buffer2Id).document.content.collect() shouldBe "2"
+    finalState.persisted.buffers(buffer2Id).document.content.collect() shouldBe "2"
 
     // And animation states should be independent
-    val buffer1 = finalState.buffers(buffer1Id)
-    val buffer2 = finalState.buffers(buffer2Id)
+    val buffer1 = finalState.persisted.buffers(buffer1Id)
+    val buffer2 = finalState.persisted.buffers(buffer2Id)
 
     // At least they should not interfere with each other's content
     buffer1.document.content.collect().should(not).contain('2')

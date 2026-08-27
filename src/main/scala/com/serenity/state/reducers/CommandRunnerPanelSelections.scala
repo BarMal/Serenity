@@ -16,7 +16,7 @@ private[serenity] object CommandRunnerPanelSelections:
     ).map(kind => optionId(kind) -> selectedIndex(kind, state)).toMap
 
   private def selectedIndex(kind: PanelKind, state: AppState): Int =
-    state.uiSurfaces.reverse
+    state.runtime.uiSurfaces.reverse
       .find(surface => panelKind(surface.content).contains(kind))
       .flatMap(positionOf)
       .map(positionIndex)

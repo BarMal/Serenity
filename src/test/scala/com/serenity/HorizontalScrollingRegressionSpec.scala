@@ -22,24 +22,26 @@ class HorizontalScrollingRegressionSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          config = current.config.withWordWrap(false),
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        current.copy(persisted =
+          current.persisted.copy(
+            config = current.persisted.config.withWordWrap(false),
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            )
           )
         )
       }
       .unsafeRunSync()
 
     val initialState  = stateManager.getCurrentState.unsafeRunSync()
-    val initialBuffer = initialState.buffers(bufferId)
+    val initialBuffer = initialState.persisted.buffers(bufferId)
     initialBuffer.viewport.leftColumn shouldBe 0
     initialBuffer.editing.cursors.head.column shouldBe 0
 
@@ -49,7 +51,7 @@ class HorizontalScrollingRegressionSpec extends AnyFlatSpec with Matchers:
     longText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalState  = stateManager.getCurrentState.unsafeRunSync()
-    val finalBuffer = finalState.buffers(bufferId)
+    val finalBuffer = finalState.persisted.buffers(bufferId)
 
     finalBuffer.viewport.leftColumn should be > 0
     finalBuffer.editing.cursors.head.column shouldBe longText.length

@@ -19,7 +19,7 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val sm: StateManager    = StateManager.apply(logger).unsafeRunSync()
-    val pane0: PaneId       = sm.getCurrentState.unsafeRunSync().layout.activeEditorPaneId.get
+    val pane0: PaneId       = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
 
   behavior of "Pane tab order"
 
@@ -64,7 +64,7 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
-    state.layout.workspaceTree.map(_.root) shouldBe Some(
+    state.persisted.layout.workspaceTree.map(_.root) shouldBe Some(
       WorkspaceNode.Split(
         WorkspaceNodeId(s"split-${pane0.value}-${pane1.value}"),
         SplitAxis.Horizontal,
@@ -86,7 +86,8 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
 
     sm.closePane(pane1).unsafeRunSync()
 
-    val tree = sm.getCurrentState.unsafeRunSync().layout.workspaceTree.getOrElse(fail("expected workspace tree"))
+    val tree =
+      sm.getCurrentState.unsafeRunSync().persisted.layout.workspaceTree.getOrElse(fail("expected workspace tree"))
     tree.paneIds shouldBe List(pane0, pane2)
     tree.root.axis shouldBe Some(SplitAxis.Horizontal)
 
@@ -94,10 +95,10 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     sm.closePane(pane0).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
-    state.layout.editorPanes.keySet shouldBe Set(pane0)
-    state.layout.editorPanes(pane0).bufferId shouldBe None
-    state.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane0))
-    state.layout.activeEditorPaneId shouldBe Some(pane0)
+    state.persisted.layout.editorPanes.keySet shouldBe Set(pane0)
+    state.persisted.layout.editorPanes(pane0).bufferId shouldBe None
+    state.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane0))
+    state.persisted.layout.activeEditorPaneId shouldBe Some(pane0)
     state.commandRunnerSurface shouldBe defined
 
   it should "resize the owning split ratio with clamping" in new PaneFixture:
@@ -106,7 +107,8 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
 
     sm.resizePaneSplit(splitId, 2.0).unsafeRunSync()
 
-    val tree = sm.getCurrentState.unsafeRunSync().layout.workspaceTree.getOrElse(fail("expected workspace tree"))
+    val tree =
+      sm.getCurrentState.unsafeRunSync().persisted.layout.workspaceTree.getOrElse(fail("expected workspace tree"))
     tree.root shouldBe WorkspaceNode.Split(
       splitId,
       SplitAxis.Horizontal,

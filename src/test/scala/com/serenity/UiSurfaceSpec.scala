@@ -25,13 +25,15 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.EditorPane(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
     )
 
   "AppState" should "store non-editor UI directly as surfaces" in {
@@ -62,13 +64,14 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val state = baseState().copy(
-      focus = Focus.Surface(SurfaceId("command")),
-      uiSurfaces = surfaces
+    val base = baseState()
+    val state = base.copy(
+      persisted = base.persisted.copy(focus = Focus.Surface(SurfaceId("command"))),
+      runtime = base.runtime.copy(uiSurfaces = surfaces)
     )
 
-    state.uiSurfaces shouldBe surfaces
-    state.focus shouldBe Focus.Surface(SurfaceId("command"))
+    state.runtime.uiSurfaces shouldBe surfaces
+    state.persisted.focus shouldBe Focus.Surface(SurfaceId("command"))
   }
 
   it should "derive floating and pinned surface projections from stored surfaces" in {
@@ -97,7 +100,7 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val state = baseState().copy(uiSurfaces = surfaces)
+    val state = baseState().copy(runtime = baseState().runtime.copy(uiSurfaces = surfaces))
 
     state.floatingSurfaces.map(_.id) shouldBe List(SurfaceId("peek"))
     state.pinnedSurfaces.map(_.id) shouldBe List(SurfaceId("pinned"))

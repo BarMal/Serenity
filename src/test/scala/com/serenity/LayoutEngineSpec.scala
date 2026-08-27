@@ -21,9 +21,11 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       activeEditorPaneId = Some(PaneId(0))
     )
     val state = AppState(
-      layout = layout,
-      buffers = Map.empty,
-      focus = Focus.EditorPane(PaneId(0))
+      persisted = Persisted(
+        layout = layout,
+        buffers = Map.empty,
+        focus = Focus.EditorPane(PaneId(0))
+      )
     )
     val viewportSize = ViewportSize(100, 30)
 
@@ -51,7 +53,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "remove single-pane chrome when the selected configuration disables pane headers" in {
-    val state  = AppState.initial.copy(config = AppConfig.default.withPaneHeaders(false))
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(config = AppConfig.default.withPaneHeaders(false))
+    )
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val pane   = LayoutEngine.calculateEditorPaneLayouts(state, layout)(PaneId(0))
 
@@ -74,11 +78,13 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose a single editor workspace contract for panes, line numbers, and gutter" in {
-    val state = AppState.initial.copy(
-      config = AppConfig.default
-        .withLineNumbers(true)
-        .withGutter(true)
-        .copy(textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20))
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        config = AppConfig.default
+          .withLineNumbers(true)
+          .withGutter(true)
+          .copy(textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20))
+      )
     )
     val viewportSize     = ViewportSize(100, 30)
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
@@ -105,15 +111,17 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
   it should "derive reusable line-number row slots from the shared workspace contract" in {
     val buffer = Buffer.fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-    val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
-      ),
-      config = AppConfig.default.withLineNumbers(true)
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        config = AppConfig.default.withLineNumbers(true)
+      )
     )
     val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val workspaceLayout  = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
@@ -134,12 +142,14 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   it should "place cursors using the pane content rectangle owned by editor pane layout" in {
     val buffer =
       Buffer.fromString(BufferId(0), "abc\ndef").copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
-    val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0))
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        )
       )
     )
     val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
@@ -165,20 +175,24 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   it should "apply text area insets inside the workspace without resizing pinned panels or line numbers" in {
     val buffer = Buffer.fromString(BufferId(0), "one\ntwo\nthree")
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      config = AppConfig.default.copy(
-        textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        config = AppConfig.default.copy(
+          textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15)
+        )
       ),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("left-panel"),
-          SurfaceContent.Outline(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Left, 10)
-        ),
-        UiSurface(
-          SurfaceId("right-panel"),
-          SurfaceContent.Diagnostics(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Right, 20)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("left-panel"),
+            SurfaceContent.Outline(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Left, 10)
+          ),
+          UiSurface(
+            SurfaceId("right-panel"),
+            SurfaceContent.Diagnostics(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Right, 20)
+          )
         )
       )
     )
@@ -205,32 +219,36 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
   it should "apply configured gaps between pinned panels and the editor workspace" in {
     val state = AppState.initial.copy(
-      config = AppConfig.default
-        .copy(
-          showLineNumbers = false,
-          textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
-        )
-        .withUiElementGap(2),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("left-panel"),
-          SurfaceContent.Outline(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Left, 10)
-        ),
-        UiSurface(
-          SurfaceId("right-panel"),
-          SurfaceContent.Diagnostics(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Right, 20)
-        ),
-        UiSurface(
-          SurfaceId("top-panel"),
-          SurfaceContent.Terminal("Build", 0),
-          SurfacePresentation.Pinned(PanelPosition.Top, 3)
-        ),
-        UiSurface(
-          SurfaceId("bottom-panel"),
-          SurfaceContent.Diagnostics(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Bottom, 4)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default
+          .copy(
+            showLineNumbers = false,
+            textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
+          )
+          .withUiElementGap(2)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("left-panel"),
+            SurfaceContent.Outline(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Left, 10)
+          ),
+          UiSurface(
+            SurfaceId("right-panel"),
+            SurfaceContent.Diagnostics(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Right, 20)
+          ),
+          UiSurface(
+            SurfaceId("top-panel"),
+            SurfaceContent.Terminal("Build", 0),
+            SurfacePresentation.Pinned(PanelPosition.Top, 3)
+          ),
+          UiSurface(
+            SurfaceId("bottom-panel"),
+            SurfaceContent.Diagnostics(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Bottom, 4)
+          )
         )
       )
     )
@@ -257,9 +275,11 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       activeEditorPaneId = Some(PaneId(1))
     )
     val state = AppState(
-      layout = layout,
-      buffers = Map.empty,
-      focus = Focus.EditorPane(PaneId(1))
+      persisted = Persisted(
+        layout = layout,
+        buffers = Map.empty,
+        focus = Focus.EditorPane(PaneId(1))
+      )
     )
     val viewportSize = ViewportSize(100, 30)
 
@@ -294,9 +314,11 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       splitDirection = PaneSplitDirection.Vertical
     )
     val state = AppState(
-      layout = layout,
-      buffers = Map.empty,
-      focus = Focus.EditorPane(PaneId(0))
+      persisted = Persisted(
+        layout = layout,
+        buffers = Map.empty,
+        focus = Focus.EditorPane(PaneId(0))
+      )
     )
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
@@ -327,17 +349,19 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       )
     )
     val state = AppState(
-      layout = Layout(
-        editorPanes = Map(
-          first  -> EditorPane.empty(first),
-          second -> EditorPane.empty(second),
-          third  -> EditorPane.empty(third)
+      persisted = Persisted(
+        layout = Layout(
+          editorPanes = Map(
+            first  -> EditorPane.empty(first),
+            second -> EditorPane.empty(second),
+            third  -> EditorPane.empty(third)
+          ),
+          activeEditorPaneId = Some(first),
+          workspaceTree = Some(tree)
         ),
-        activeEditorPaneId = Some(first),
-        workspaceTree = Some(tree)
-      ),
-      buffers = Map.empty,
-      focus = Focus.EditorPane(first)
+        buffers = Map.empty,
+        focus = Focus.EditorPane(first)
+      )
     )
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
@@ -370,17 +394,19 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       )
     )
     val state = AppState(
-      layout = Layout(
-        editorPanes = Map(
-          first  -> EditorPane.empty(first),
-          second -> EditorPane.empty(second),
-          third  -> EditorPane.empty(third)
+      persisted = Persisted(
+        layout = Layout(
+          editorPanes = Map(
+            first  -> EditorPane.empty(first),
+            second -> EditorPane.empty(second),
+            third  -> EditorPane.empty(third)
+          ),
+          activeEditorPaneId = Some(first),
+          workspaceTree = Some(tree)
         ),
-        activeEditorPaneId = Some(first),
-        workspaceTree = Some(tree)
-      ),
-      buffers = Map.empty,
-      focus = Focus.EditorPane(first)
+        buffers = Map.empty,
+        focus = Focus.EditorPane(first)
+      )
     )
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
@@ -397,23 +423,25 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val first  = PaneId(0)
     val second = PaneId(1)
     val state = AppState(
-      layout = Layout(
-        editorPanes = Map(first -> EditorPane.empty(first), second -> EditorPane.empty(second)),
-        activeEditorPaneId = Some(first),
-        workspaceTree = Some(
-          WorkspaceTree(
-            WorkspaceNode.Split(
-              WorkspaceNodeId("root"),
-              SplitAxis.Horizontal,
-              1.5,
-              WorkspaceNode.Leaf(WorkspaceNodeId("first"), first),
-              WorkspaceNode.Leaf(WorkspaceNodeId("second"), second)
+      persisted = Persisted(
+        layout = Layout(
+          editorPanes = Map(first -> EditorPane.empty(first), second -> EditorPane.empty(second)),
+          activeEditorPaneId = Some(first),
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("root"),
+                SplitAxis.Horizontal,
+                1.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId("first"), first),
+                WorkspaceNode.Leaf(WorkspaceNodeId("second"), second)
+              )
             )
           )
-        )
-      ),
-      buffers = Map.empty,
-      focus = Focus.EditorPane(first)
+        ),
+        buffers = Map.empty,
+        focus = Focus.EditorPane(first)
+      )
     )
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(4, 2))
     val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
@@ -430,8 +458,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       PaneId(1) -> EditorPane.empty(PaneId(1)),
       PaneId(2) -> EditorPane.empty(PaneId(2))
     )
-    val layout       = Layout(editorPanes = panes, activeEditorPaneId = Some(PaneId(0)))
-    val state        = AppState(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0)))
+    val layout = Layout(editorPanes = panes, activeEditorPaneId = Some(PaneId(0)))
+    val state =
+      AppState(persisted = Persisted(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0))))
     val viewportSize = ViewportSize(120, 24)
 
     // When: Calculate layout
@@ -465,7 +494,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val panes = (0 until 5).map(i => PaneId(i) -> EditorPane.empty(PaneId(i))).toMap
 
     val layout = Layout(editorPanes = panes, activeEditorPaneId = Some(PaneId(0)))
-    val state  = AppState(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0)))
+    val state =
+      AppState(persisted = Persisted(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0))))
 
     // When: Calculate layout with minimum width constraint
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
@@ -496,7 +526,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val panes = (0 until 4).map(i => PaneId(i) -> EditorPane.empty(PaneId(i))).toMap
 
     val layout = Layout(editorPanes = panes, activeEditorPaneId = Some(PaneId(2))) // Focus on pane 2
-    val state  = AppState(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(2)))
+    val state =
+      AppState(persisted = Persisted(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(2))))
 
     // When: Calculate layout ensuring focused pane is visible
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
@@ -525,22 +556,28 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val baseState = AppState.initial.copy(
-      buffers = Map(bufferId -> Buffer.fromString(bufferId, "alpha\nbeta\ngamma")),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> Buffer.fromString(bufferId, "alpha\nbeta\ngamma")),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
       ),
-      focus = Focus.EditorPane(paneId),
-      uiSurfaces = List(commandSurface)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(commandSurface))
     )
     val compact = LayoutEngine.calculateLayout(
-      baseState.copy(config = baseState.config.withInterfaceDensity(InterfaceDensity.Compact)),
+      baseState.copy(persisted =
+        baseState.persisted.copy(config = baseState.persisted.config.withInterfaceDensity(InterfaceDensity.Compact))
+      ),
       ViewportSize(120, 30)
     )
     val comfortable = LayoutEngine.calculateLayout(baseState, ViewportSize(120, 30))
     val spacious = LayoutEngine.calculateLayout(
-      baseState.copy(config = baseState.config.withInterfaceDensity(InterfaceDensity.Spacious)),
+      baseState.copy(persisted =
+        baseState.persisted.copy(config = baseState.persisted.config.withInterfaceDensity(InterfaceDensity.Spacious))
+      ),
       ViewportSize(120, 30)
     )
 
@@ -565,13 +602,15 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     )
     val bufferId = BufferId(1)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> Buffer.fromString(bufferId, "palette")),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> Buffer.fromString(bufferId, "palette")),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
+          activeEditorPaneId = Some(PaneId(0))
+        )
       ),
-      uiSurfaces = List(surface)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
     )
 
     LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(72)
@@ -586,13 +625,15 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
     )
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> Buffer.fromString(bufferId, "search")),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
-        activeEditorPaneId = Some(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> Buffer.fromString(bufferId, "search")),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
+          activeEditorPaneId = Some(PaneId(0))
+        )
       ),
-      uiSurfaces = List(surface)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
     )
 
     LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(97)

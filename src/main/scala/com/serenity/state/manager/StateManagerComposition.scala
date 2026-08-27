@@ -98,7 +98,7 @@ final private[manager] class StateManagerOperationBoundary private (
 
   def ensureCommandRunnerSurface(state: AppState): AppState =
     val registry        = CommandRegistry.default
-    val activatedRunner = CommandRunner.empty.activate(registry, state.config)
+    val activatedRunner = CommandRunner.empty.activate(registry, state.persisted.config)
     val runner = activatedRunner.copy(
       optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
     )
@@ -110,7 +110,9 @@ final private[manager] class StateManagerOperationBoundary private (
       presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
     )
     stateWithId
-      .copy(uiSurfaces = stateWithId.uiSurfaces.filterNot(_.id == surfaceId) :+ surface)
+      .copy(runtime =
+        stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces.filterNot(_.id == surfaceId) :+ surface)
+      )
       .pushFocus(Focus.Surface(surfaceId))
 
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
@@ -121,7 +123,7 @@ final private[manager] class StateManagerOperationBoundary private (
             case (before, after) if before != after =>
               logger.info(
                 s"[STATE MODAL] before=${before.map(_.id).getOrElse("none")} " +
-                  s"after=${after.map(_.id).getOrElse("none")} focus=${validState.focus}"
+                  s"after=${after.map(_.id).getOrElse("none")} focus=${validState.persisted.focus}"
               )
             case _ => IO.unit
         modalTransitionLog >> stateRef.set(validState) >> scheduleDocumentAnalysis()
@@ -178,9 +180,12 @@ final private[manager] class StateManagerOperationBoundary private (
       prior.traverse_(_.cancel) >>
         (IO.sleep(MarkdownPreviewCommitDebounce) >>
           stateRef.update { state =>
-            state.buffers.get(bufferId).fold(state) { buffer =>
-              state.copy(buffers =
-                state.buffers.updated(bufferId, buffer.copy(markdownPreviewCommittedGeneration = generation))
+            state.persisted.buffers.get(bufferId).fold(state) { buffer =>
+              state.copy(persisted =
+                state.persisted.copy(buffers =
+                  state.persisted.buffers
+                    .updated(bufferId, buffer.copy(markdownPreviewCommittedGeneration = generation))
+                )
               )
             }
           }).start.flatMap(fiber => markdownPreviewCommitFibersRef.update(_ + (bufferId -> fiber)))
@@ -200,11 +205,13 @@ final private[manager] class StateManagerOperationBoundary private (
     )
 
   private def requiresDocumentAnalysis(state: AppState): Boolean =
-    state.config.spellCheck.enabled || state.spellCheckCache.nonEmpty
+    state.persisted.config.spellCheck.enabled || state.runtime.diagnosticsState.spellCheckCache.nonEmpty
 
   private def normalizeCommandRunnerFocus(state: AppState): AppState =
     if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
-      state.preferredCommandRunnerFocus.fold(state)(focus => state.copy(focus = focus))
+      state.preferredCommandRunnerFocus.fold(state)(focus =>
+        state.copy(persisted = state.persisted.copy(focus = focus))
+      )
     else state
 
 private[manager] object StateManagerOperationBoundary:
@@ -248,13 +255,16 @@ final private[manager] class StateManagerFilePersistence(
 
   def saveExistingBuffer(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
-      state.buffers.get(bufferId).flatMap(_.document.filePath) match
+      state.persisted.buffers.get(bufferId).flatMap(_.document.filePath) match
         case Some(_) =>
-          state.buffers.get(bufferId).fold(IO.unit) { buffer =>
+          state.persisted.buffers.get(bufferId).fold(IO.unit) { buffer =>
             fileManager
               .saveBuffer(buffer)
               .flatMap(saved =>
-                stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> saved)))
+                stateRef.update(current =>
+                  current
+                    .copy(persisted = current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> saved)))
+                )
               )
               .flatTap(_ => persistAfterSave)
           }
@@ -263,15 +273,22 @@ final private[manager] class StateManagerFilePersistence(
 
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>
-      state.buffers.get(bufferId).fold(IO.unit) { buffer =>
+      state.persisted.buffers.get(bufferId).fold(IO.unit) { buffer =>
         fileManager
           .saveBuffer(buffer, path)
           .flatMap { saved =>
-            stateRef.update(current => current.copy(buffers = current.buffers + (bufferId -> saved))) >>
+            stateRef.update(current =>
+              current
+                .copy(persisted = current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> saved)))
+            ) >>
               refreshLspBindingAfterSaveAs(buffer, saved)
           }
           .flatTap(_ =>
-            stateRef.update(current => current.copy(recentFiles = trackRecentFile(current.recentFiles, path)))
+            stateRef.update(current =>
+              current.copy(persisted =
+                current.persisted.copy(recentFiles = trackRecentFile(current.persisted.recentFiles, path))
+              )
+            )
           )
           .flatTap(_ => persistAfterSave)
       }

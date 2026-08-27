@@ -56,9 +56,9 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     newLayout.editorPanelRect.width shouldBe 117
     newLayout.editorPanelRect.height shouldBe 39
 
-    updatedState.buffers.get(bufferId) match
+    updatedState.persisted.buffers.get(bufferId) match
       case Some(buffer) =>
-        val paneId = updatedState.layout.editorPanes
+        val paneId = updatedState.persisted.layout.editorPanes
           .collectFirst {
             case (paneId, pane) if pane.bufferId.contains(bufferId) => paneId
           }
@@ -75,20 +75,24 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val firstBuffer  = Buffer.fromString(BufferId(0), "first")
     val secondBuffer = Buffer.fromString(BufferId(1), "second")
     val initialState = com.serenity.state.models.AppState.initial.copy(
-      buffers = Map(firstBuffer.id -> firstBuffer, secondBuffer.id -> secondBuffer),
-      bufferOrder = List(firstBuffer.id, secondBuffer.id),
-      layout = Layout(
-        editorPanes = Map(
-          firstPaneId  -> EditorPane.withBuffer(firstPaneId, firstBuffer.id),
-          secondPaneId -> EditorPane.withBuffer(secondPaneId, secondBuffer.id)
+      persisted = com.serenity.state.models.AppState.initial.persisted.copy(
+        buffers = Map(firstBuffer.id -> firstBuffer, secondBuffer.id -> secondBuffer),
+        bufferOrder = List(firstBuffer.id, secondBuffer.id),
+        layout = Layout(
+          editorPanes = Map(
+            firstPaneId  -> EditorPane.withBuffer(firstPaneId, firstBuffer.id),
+            secondPaneId -> EditorPane.withBuffer(secondPaneId, secondBuffer.id)
+          ),
+          activeEditorPaneId = Some(firstPaneId),
+          paneOrder = List(firstPaneId, secondPaneId),
+          splitDirection = PaneSplitDirection.Horizontal
         ),
-        activeEditorPaneId = Some(firstPaneId),
-        paneOrder = List(firstPaneId, secondPaneId),
-        splitDirection = PaneSplitDirection.Horizontal
+        focus = Focus.EditorPane(firstPaneId)
       ),
-      focus = Focus.EditorPane(firstPaneId),
-      nextBufferId = BufferId(2),
-      nextPaneId = PaneId(2)
+      runtime = com.serenity.state.models.AppState.initial.runtime.copy(
+        nextBufferId = BufferId(2),
+        nextPaneId = PaneId(2)
+      )
     )
     val newSize = ViewportSize(120, 40)
 
@@ -98,20 +102,28 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val calculatedLayout = LayoutEngine.calculateLayout(resizedState, newSize)
     val paneLayouts      = LayoutEngine.calculateEditorPaneLayouts(resizedState, calculatedLayout)
 
-    resizedState.buffers(firstBuffer.id).viewport.visibleColumns shouldBe paneLayouts(firstPaneId).contentRect.width
-    resizedState.buffers(firstBuffer.id).viewport.visibleLines shouldBe paneLayouts(firstPaneId).contentRect.height
-    resizedState.layout.editorPanes(firstPaneId).viewport.visibleColumns shouldBe paneLayouts(
+    resizedState.persisted.buffers(firstBuffer.id).viewport.visibleColumns shouldBe paneLayouts(
       firstPaneId
     ).contentRect.width
-    resizedState.layout.editorPanes(firstPaneId).viewport.visibleLines shouldBe paneLayouts(
+    resizedState.persisted.buffers(firstBuffer.id).viewport.visibleLines shouldBe paneLayouts(
       firstPaneId
     ).contentRect.height
-    resizedState.buffers(secondBuffer.id).viewport.visibleColumns shouldBe paneLayouts(secondPaneId).contentRect.width
-    resizedState.buffers(secondBuffer.id).viewport.visibleLines shouldBe paneLayouts(secondPaneId).contentRect.height
-    resizedState.layout.editorPanes(secondPaneId).viewport.visibleColumns shouldBe paneLayouts(
+    resizedState.persisted.layout.editorPanes(firstPaneId).viewport.visibleColumns shouldBe paneLayouts(
+      firstPaneId
+    ).contentRect.width
+    resizedState.persisted.layout.editorPanes(firstPaneId).viewport.visibleLines shouldBe paneLayouts(
+      firstPaneId
+    ).contentRect.height
+    resizedState.persisted.buffers(secondBuffer.id).viewport.visibleColumns shouldBe paneLayouts(
       secondPaneId
     ).contentRect.width
-    resizedState.layout.editorPanes(secondPaneId).viewport.visibleLines shouldBe paneLayouts(
+    resizedState.persisted.buffers(secondBuffer.id).viewport.visibleLines shouldBe paneLayouts(
+      secondPaneId
+    ).contentRect.height
+    resizedState.persisted.layout.editorPanes(secondPaneId).viewport.visibleColumns shouldBe paneLayouts(
+      secondPaneId
+    ).contentRect.width
+    resizedState.persisted.layout.editorPanes(secondPaneId).viewport.visibleLines shouldBe paneLayouts(
       secondPaneId
     ).contentRect.height
   }
@@ -122,7 +134,9 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
       height = ViewportAxisSizing(percent = 1.0, maxCells = Some(20))
     )
     val initialState = com.serenity.state.models.AppState.initial.copy(
-      config = AppConfig.default.copy(viewportSizing = viewportSizing)
+      persisted = com.serenity.state.models.AppState.initial.persisted.copy(
+        config = AppConfig.default.copy(viewportSizing = viewportSizing)
+      )
     )
     val newSize = ViewportSize(120, 40)
 
@@ -130,14 +144,15 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
       .reduce(ResizeEvent(newSize), initialState)
       .state
     val calculatedLayout = LayoutEngine.calculateLayout(resizedState, newSize)
-    val paneId           = resizedState.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
+    val paneId           = resizedState.persisted.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
     val paneRect         = LayoutEngine.calculatePaneLayouts(resizedState, calculatedLayout)(paneId)
-    val bufferId         = resizedState.layout.editorPanes(paneId).bufferId.getOrElse(fail("Expected active buffer"))
+    val bufferId =
+      resizedState.persisted.layout.editorPanes(paneId).bufferId.getOrElse(fail("Expected active buffer"))
 
-    resizedState.buffers(bufferId).viewport.visibleColumns shouldBe paneRect.width
-    resizedState.buffers(bufferId).viewport.visibleLines shouldBe paneRect.height - 1
-    resizedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe paneRect.width
-    resizedState.layout.editorPanes(paneId).viewport.visibleLines shouldBe paneRect.height - 1
+    resizedState.persisted.buffers(bufferId).viewport.visibleColumns shouldBe paneRect.width
+    resizedState.persisted.buffers(bufferId).viewport.visibleLines shouldBe paneRect.height - 1
+    resizedState.persisted.layout.editorPanes(paneId).viewport.visibleColumns shouldBe paneRect.width
+    resizedState.persisted.layout.editorPanes(paneId).viewport.visibleLines shouldBe paneRect.height - 1
   }
 
   it should "sync a newly assigned buffer to the current pane viewport" in {
@@ -151,6 +166,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val bufferId = stateManager.createBuffer("assigned after resize").unsafeRunSync()
     val paneId = stateManager.getCurrentState
       .unsafeRunSync()
+      .persisted
       .layout
       .activeEditorPaneId
       .getOrElse(fail("Expected active pane"))
@@ -160,10 +176,10 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val updatedState     = stateManager.getCurrentState.unsafeRunSync()
     val calculatedLayout = LayoutEngine.calculateLayout(updatedState, viewportSize)
     val contentRect      = LayoutEngine.calculateEditorPaneLayouts(updatedState, calculatedLayout)(paneId).contentRect
-    updatedState.buffers(bufferId).viewport.visibleColumns shouldBe contentRect.width
-    updatedState.buffers(bufferId).viewport.visibleLines shouldBe contentRect.height
-    updatedState.layout.editorPanes(paneId).viewport.visibleColumns shouldBe contentRect.width
-    updatedState.layout.editorPanes(paneId).viewport.visibleLines shouldBe contentRect.height
+    updatedState.persisted.buffers(bufferId).viewport.visibleColumns shouldBe contentRect.width
+    updatedState.persisted.buffers(bufferId).viewport.visibleLines shouldBe contentRect.height
+    updatedState.persisted.layout.editorPanes(paneId).viewport.visibleColumns shouldBe contentRect.width
+    updatedState.persisted.layout.editorPanes(paneId).viewport.visibleLines shouldBe contentRect.height
   }
 
   it should "handle text wrapping recalculation on resize" in {
@@ -198,9 +214,9 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     // Verify that layout dimensions changed
     layout1.editorPanelRect.width should be < layout2.editorPanelRect.width
 
-    state2.buffers.get(bufferId) match
+    state2.persisted.buffers.get(bufferId) match
       case Some(buffer) =>
-        val paneId = state2.layout.editorPanes
+        val paneId = state2.persisted.layout.editorPanes
           .collectFirst {
             case (paneId, pane) if pane.bufferId.contains(bufferId) => paneId
           }
@@ -219,7 +235,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     // Initial state - has default viewport dimensions
     val initialState   = stateManager.getCurrentState.unsafeRunSync()
-    val activeBuffer   = initialState.buffers(initialState.bufferOrder.head)
+    val activeBuffer   = initialState.persisted.buffers(initialState.persisted.bufferOrder.head)
     val initialLines   = activeBuffer.viewport.visibleLines
     val initialColumns = activeBuffer.viewport.visibleColumns
     initialLines should be > 0
@@ -234,10 +250,10 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     // State should now reflect the resize
     val resizedState  = stateManager.getCurrentState.unsafeRunSync()
-    val resizedBuffer = resizedState.buffers(resizedState.bufferOrder.head)
+    val resizedBuffer = resizedState.persisted.buffers(resizedState.persisted.bufferOrder.head)
     val resizedLayout = LayoutEngine.calculateLayout(resizedState, newViewportSize)
     val contentRect = LayoutEngine
-      .calculateEditorPaneLayouts(resizedState, resizedLayout)(resizedState.layout.activeEditorPaneId.get)
+      .calculateEditorPaneLayouts(resizedState, resizedLayout)(resizedState.persisted.layout.activeEditorPaneId.get)
       .contentRect
     resizedBuffer.viewport.visibleLines.shouldBe(contentRect.height)
     resizedBuffer.viewport.visibleColumns.shouldBe(contentRect.width)
@@ -250,15 +266,19 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val paneId   = PaneId(0)
     val state = com.serenity.state.models.AppState.initial.copy(
-      buffers = Map(bufferId -> Buffer.fromString(bufferId, longLine)),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
+      persisted = com.serenity.state.models.AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> Buffer.fromString(bufferId, longLine)),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        )
       ),
-      nextBufferId = BufferId(1),
-      nextPaneId = PaneId(1)
+      runtime = com.serenity.state.models.AppState.initial.runtime.copy(
+        nextBufferId = BufferId(1),
+        nextPaneId = PaneId(1)
+      )
     )
 
     // Start with narrow terminal (40 chars wide)
@@ -275,7 +295,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     // Verify that layout calculations reflect the size change
     layoutAfterNarrow.editorPanelRect.width.should(be < layoutAfterWide.editorPanelRect.width)
 
-    stateAfterWide.buffers.get(bufferId) match
+    stateAfterWide.persisted.buffers.get(bufferId) match
       case Some(buffer) =>
         val contentRect = LayoutEngine.calculateEditorPaneLayouts(stateAfterWide, layoutAfterWide)(paneId).contentRect
         buffer.viewport.visibleColumns.shouldBe(contentRect.width)

@@ -36,7 +36,7 @@ class ResizeResponsivenessSpec extends AnyFlatSpec with Matchers:
       triggered shouldBe true
 
       // State should be updated with new terminal size
-      finalState.viewportSize shouldBe Some(newSize)
+      finalState.runtime.viewportSize shouldBe Some(newSize)
 
     program.unsafeRunSync()
   }

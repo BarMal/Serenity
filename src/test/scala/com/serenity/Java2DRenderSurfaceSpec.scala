@@ -377,9 +377,11 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-    val state = AppState.initial.copy(
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      )
     )
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
@@ -392,12 +394,14 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-    val state = AppState.initial.copy(
-      theme = Theme.light,
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withPostProcessingEffect(PostProcessingEffect.Scanlines)
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        theme = Theme.light,
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withPostProcessingEffect(PostProcessingEffect.Scanlines)
+      )
     )
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)

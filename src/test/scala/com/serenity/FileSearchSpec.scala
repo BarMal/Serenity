@@ -79,19 +79,19 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val finalState = s1.copy(
-      uiSurfaces = List(surface),
-      focus = Focus.Surface(surfaceId)
+      runtime = s1.runtime.copy(uiSurfaces = List(surface)),
+      persisted = s1.persisted.copy(focus = Focus.Surface(surfaceId))
     )
     (finalState, surfaceId)
 
   private def stateWithSearchAndBuffer(query: String, bufferContent: String): (AppState, SurfaceId, BufferId) =
     val base     = AppState.initial
     val bufferId = BufferId(0)
-    val updatedBuffers = base.buffers.get(bufferId).fold(base.buffers) { buf =>
+    val updatedBuffers = base.persisted.buffers.get(bufferId).fold(base.persisted.buffers) { buf =>
       import com.serenity.rope.Rope
-      base.buffers + (bufferId -> buf.copy(document = buf.document.copy(content = Rope(bufferContent))))
+      base.persisted.buffers + (bufferId -> buf.copy(document = buf.document.copy(content = Rope(bufferContent))))
     }
-    val withContent     = base.copy(buffers = updatedBuffers)
+    val withContent     = base.copy(persisted = base.persisted.copy(buffers = updatedBuffers))
     val (s1, surfaceId) = withContent.allocateSurfaceId
     val searchState     = FileSearchState(query, Nil, 0)
     val surface = UiSurface(
@@ -100,8 +100,8 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val finalState = s1.copy(
-      uiSurfaces = List(surface),
-      focus = Focus.Surface(surfaceId)
+      runtime = s1.runtime.copy(uiSurfaces = List(surface)),
+      persisted = s1.persisted.copy(focus = Focus.Surface(surfaceId))
     )
     (finalState, surfaceId, bufferId)
 
@@ -175,10 +175,10 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
     )
     val (base, surfaceId) = stateWithSearchSurface("x", results)
     val stateAtIdx1 = base.copy(
-      uiSurfaces = base.uiSurfaces.map { s =>
+      runtime = base.runtime.copy(uiSurfaces = base.runtime.uiSurfaces.map { s =>
         if s.id == surfaceId then s.copy(content = SurfaceContent.FileSearch(FileSearchState("x", results, 1)))
         else s
-      }
+      })
     )
     val result = component.processEvent(MoveUp, stateAtIdx1)
     result match
@@ -196,7 +196,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       case ComponentResult.StateChange(f) =>
         val newState = f(state)
         newState.fileSearchSurface shouldBe None
-        newState.focus shouldBe a[Focus.EditorPane]
+        newState.persisted.focus shouldBe a[Focus.EditorPane]
       case other => fail(s"Expected StateChange, got $other")
   }
 
@@ -209,8 +209,8 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       case ComponentResult.StateChange(f) =>
         val newState = f(state)
         newState.fileSearchSurface shouldBe None
-        newState.focus shouldBe a[Focus.EditorPane]
-        newState.buffers.get(bufferId).flatMap(_.editing.cursors.headOption).map(_.line) shouldBe Some(5)
+        newState.persisted.focus shouldBe a[Focus.EditorPane]
+        newState.persisted.buffers.get(bufferId).flatMap(_.editing.cursors.headOption).map(_.line) shouldBe Some(5)
       case other => fail(s"Expected StateChange, got $other")
   }
 
@@ -249,18 +249,22 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       allowedLines = (0 to 100).toSet
     )
     val base       = AppState.initial
-    val baseBuffer = base.buffers(bufferId)
+    val baseBuffer = base.persisted.buffers(bufferId)
     val buffer = baseBuffer.copy(document =
       baseBuffer.document.copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
     )
-    val withBuffer       = base.copy(buffers = base.buffers.updated(bufferId, buffer))
+    val withBuffer =
+      base.copy(persisted = base.persisted.copy(buffers = base.persisted.buffers.updated(bufferId, buffer)))
     val (withId, search) = withBuffer.allocateSurfaceId
     val surface = UiSurface(
       search,
       SurfaceContent.FileSearch(FileSearchState("needl", Nil, 0)),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
-    val state = withId.copy(uiSurfaces = List(surface), focus = Focus.Surface(search))
+    val state = withId.copy(
+      runtime = withId.runtime.copy(uiSurfaces = List(surface)),
+      persisted = withId.persisted.copy(focus = Focus.Surface(search))
+    )
 
     val result = component.processEvent(InsertChar('e'), state)
 
@@ -283,30 +287,34 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       allowedLines = (0 to 200).toSet
     )
     val base       = AppState.initial
-    val baseBuffer = base.buffers(bufferId)
+    val baseBuffer = base.persisted.buffers(bufferId)
     val buffer = baseBuffer.copy(document =
       baseBuffer.document.copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
     )
-    val withBuffer       = base.copy(buffers = base.buffers.updated(bufferId, buffer))
+    val withBuffer =
+      base.copy(persisted = base.persisted.copy(buffers = base.persisted.buffers.updated(bufferId, buffer)))
     val (withId, search) = withBuffer.allocateSurfaceId
     val surface = UiSurface(
       search,
       SurfaceContent.FileSearch(FileSearchState("needl", Nil, 0)),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
-    val state = withId.copy(uiSurfaces = List(surface), focus = Focus.Surface(search))
+    val state = withId.copy(
+      runtime = withId.runtime.copy(uiSurfaces = List(surface)),
+      persisted = withId.persisted.copy(focus = Focus.Surface(search))
+    )
     val typed = component.processEvent(InsertChar('e'), state) match
       case ComponentResult.StateChange(f) => f(state)
       case other                          => fail(s"Expected StateChange, got $other")
     val selectedAtEnd = typed.copy(
-      uiSurfaces = typed.uiSurfaces.map {
+      runtime = typed.runtime.copy(uiSurfaces = typed.runtime.uiSurfaces.map {
         case searchSurface if searchSurface.id == search =>
           searchSurface.content match
             case SurfaceContent.FileSearch(fs) =>
               searchSurface.copy(content = SurfaceContent.FileSearch(fs.copy(selectedIndex = 99)))
             case _ => searchSurface
         case other => other
-      }
+      })
     )
 
     val result = component.processEvent(MoveDown, selectedAtEnd)

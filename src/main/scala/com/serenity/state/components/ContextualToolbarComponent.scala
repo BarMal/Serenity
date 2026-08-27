@@ -115,7 +115,9 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
       val items          = ContextualToolbar.itemsFor(current)
       val normalized     = toolbarState.normalized(items)
       val updatedSurface = surface.copy(content = SurfaceContent.ContextualToolbar(normalized))
-      current.copy(uiSurfaces = current.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+      current.copy(runtime =
+        current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+      )
     }
 
   private def moveTopLevelVertical(
@@ -146,7 +148,7 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
     toolbarState: ContextualToolbarState
   ): Option[Int] =
     for
-      viewport <- state.viewportSize
+      viewport <- state.runtime.viewportSize
       rect <-
         val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
         val contract = EditorLayoutContract.from(state, viewport, layout)
@@ -160,11 +162,13 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
   private def dismissToolbar(state: AppState): AppState =
     state.contextualToolbarSurface match
       case Some(surface) =>
-        state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id)).popFocus
+        state
+          .copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
+          .popFocus
       case None =>
         state
 
   private def editorFocus(state: AppState): Focus =
-    state.layout.activeEditorPaneId
+    state.persisted.layout.activeEditorPaneId
       .map(Focus.EditorPane.apply)
       .getOrElse(Focus.EditorPane(PaneId(0)))

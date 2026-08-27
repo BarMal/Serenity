@@ -23,12 +23,14 @@ class StartupPageComponentSpec extends AnyFlatSpec with Matchers:
     )
     val surfaceId = SurfaceId("surface-0")
     AppState.empty.copy(
-      focus = Focus.Surface(surfaceId),
-      uiSurfaces = List(
-        UiSurface(
-          id = surfaceId,
-          content = SurfaceContent.StartPage(startPage),
-          presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.empty.persisted.copy(focus = Focus.Surface(surfaceId)),
+      runtime = AppState.empty.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            id = surfaceId,
+            content = SurfaceContent.StartPage(startPage),
+            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )

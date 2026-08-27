@@ -11,37 +11,42 @@ import com.serenity.state.models.{AppState, Buffer, BufferId, EditorPane, PaneId
 object Focused:
 
   def paneOf(state: AppState): Option[EditorPane] =
-    state.layout.activeEditorPaneId.flatMap(state.layout.editorPanes.get)
+    state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get)
 
   def bufferOf(state: AppState): Option[Buffer] =
-    paneOf(state).flatMap(_.bufferId).flatMap(state.buffers.get)
+    paneOf(state).flatMap(_.bufferId).flatMap(state.persisted.buffers.get)
 
   def bufferOf(state: AppState, paneId: PaneId): Option[Buffer] =
-    state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get)
+    state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.persisted.buffers.get)
 
   def replaceBuffer(state: AppState, buffer: Buffer): AppState =
-    state.copy(buffers = state.buffers + (buffer.id -> buffer))
+    state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> buffer)))
 
   def replacePane(state: AppState, paneId: PaneId, pane: EditorPane): AppState =
-    state.copy(layout = state.layout.copy(editorPanes = state.layout.editorPanes + (paneId -> pane)))
+    state.copy(persisted =
+      state.persisted.copy(layout =
+        state.persisted.layout.copy(editorPanes = state.persisted.layout.editorPanes + (paneId -> pane))
+      )
+    )
 
   val pane: Transition[Option[EditorPane]] = Transition.inspect(paneOf)
 
   val buffer: Transition[Option[Buffer]] = Transition.inspect(bufferOf)
 
-  val paneId: Transition[Option[PaneId]] = Transition.inspect(_.layout.activeEditorPaneId)
+  val paneId: Transition[Option[PaneId]] = Transition.inspect(_.persisted.layout.activeEditorPaneId)
 
   val bufferId: Transition[Option[BufferId]] = Transition.inspect(paneOf(_).flatMap(_.bufferId))
 
-  def bufferWithId(id: BufferId): Transition[Option[Buffer]] = Transition.inspect(_.buffers.get(id))
+  def bufferWithId(id: BufferId): Transition[Option[Buffer]] = Transition.inspect(_.persisted.buffers.get(id))
 
-  def paneWithId(id: PaneId): Transition[Option[EditorPane]] = Transition.inspect(_.layout.editorPanes.get(id))
+  def paneWithId(id: PaneId): Transition[Option[EditorPane]] =
+    Transition.inspect(_.persisted.layout.editorPanes.get(id))
 
   def modifyBuffer(f: Buffer => Buffer): Transition[Unit] =
     Transition.modify(state => bufferOf(state).fold(state)(buffer => replaceBuffer(state, f(buffer))))
 
   def modifyBufferWithId(id: BufferId)(f: Buffer => Buffer): Transition[Unit] =
-    Transition.modify(state => state.buffers.get(id).fold(state)(buffer => replaceBuffer(state, f(buffer))))
+    Transition.modify(state => state.persisted.buffers.get(id).fold(state)(buffer => replaceBuffer(state, f(buffer))))
 
   /** Like [[modifyBufferWithId]], but `f` also reports effects to emit alongside the state change -- for a modification
     * that needs to hand something to the presentation layer (an animation change, `#1001`) computed from the buffer it
@@ -49,7 +54,7 @@ object Focused:
     */
   def modifyBufferWithIdAndEmit(id: BufferId)(f: Buffer => (Buffer, List[AppEffect])): Transition[Unit] =
     Transition.get.flatMap { state =>
-      state.buffers.get(id) match
+      state.persisted.buffers.get(id) match
         case Some(buffer) =>
           val (updated, effects) = f(buffer)
           Transition.set(replaceBuffer(state, updated)) *> Transition.emitAll(effects)
@@ -58,10 +63,12 @@ object Focused:
 
   def modifyPane(f: EditorPane => EditorPane): Transition[Unit] =
     Transition.modify { state =>
-      (state.layout.activeEditorPaneId, paneOf(state)) match
+      (state.persisted.layout.activeEditorPaneId, paneOf(state)) match
         case (Some(id), Some(pane)) => replacePane(state, id, f(pane))
         case _                      => state
     }
 
   def modifyPaneWithId(id: PaneId)(f: EditorPane => EditorPane): Transition[Unit] =
-    Transition.modify(state => state.layout.editorPanes.get(id).fold(state)(pane => replacePane(state, id, f(pane))))
+    Transition.modify(state =>
+      state.persisted.layout.editorPanes.get(id).fold(state)(pane => replacePane(state, id, f(pane)))
+    )

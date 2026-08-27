@@ -24,7 +24,9 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain cursor position per buffer when switching between buffers" in new CursorTrackingFixture:
     // Given: Wide terminal and two buffers with different content
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(wideTerminal))))
+      .unsafeRunSync()
 
     // Type some text in first buffer
     stateManager.applyEvent(InsertChar('A')).unsafeRunSync()
@@ -32,8 +34,8 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('C')).unsafeRunSync()
 
     val stateAfterFirstBuffer = stateManager.getCurrentState.unsafeRunSync()
-    val firstBufferId         = stateAfterFirstBuffer.bufferOrder.head
-    val firstBuffer           = stateAfterFirstBuffer.buffers(firstBufferId)
+    val firstBufferId         = stateAfterFirstBuffer.persisted.bufferOrder.head
+    val firstBuffer           = stateAfterFirstBuffer.persisted.buffers(firstBufferId)
 
     // Should have "ABC" and cursor at position 3
     firstBuffer.document.content.collect() shouldBe "ABC"
@@ -46,8 +48,8 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('Y')).unsafeRunSync()
 
     val stateAfterSecondBuffer = stateManager.getCurrentState.unsafeRunSync()
-    val secondBufferId         = stateAfterSecondBuffer.bufferOrder.last
-    val secondBuffer           = stateAfterSecondBuffer.buffers(secondBufferId)
+    val secondBufferId         = stateAfterSecondBuffer.persisted.bufferOrder.last
+    val secondBuffer           = stateAfterSecondBuffer.persisted.buffers(secondBufferId)
 
     // Should have "XY" and cursor at position 2
     secondBuffer.document.content.collect() shouldBe "XY"
@@ -58,8 +60,8 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(PreviousTab).unsafeRunSync()
     val stateAfterSwitch = stateManager.getCurrentState.unsafeRunSync()
 
-    val firstBufferAfterSwitch  = stateAfterSwitch.buffers(firstBufferId)
-    val secondBufferAfterSwitch = stateAfterSwitch.buffers(secondBufferId)
+    val firstBufferAfterSwitch  = stateAfterSwitch.persisted.buffers(firstBufferId)
+    val secondBufferAfterSwitch = stateAfterSwitch.persisted.buffers(secondBufferId)
 
     // Then: Both buffers should maintain their cursor positions
     firstBufferAfterSwitch.editing.cursors.head.column shouldBe 3 // Still at end of "ABC"
@@ -73,7 +75,9 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
 
   it should "track viewport position per buffer" in new CursorTrackingFixture:
     // Given: Wide terminal and two buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(wideTerminal))))
+      .unsafeRunSync()
 
     // Add many lines to first buffer to trigger scrolling
     (1 to 30).foreach { i =>
@@ -82,19 +86,19 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     }
 
     val stateAfterScrolling = stateManager.getCurrentState.unsafeRunSync()
-    val firstBufferId       = stateAfterScrolling.bufferOrder.head
+    val firstBufferId       = stateAfterScrolling.persisted.bufferOrder.head
 
     // Create second buffer (should have default viewport)
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val stateWithSecondBuffer = stateManager.getCurrentState.unsafeRunSync()
-    val secondBufferId        = stateWithSecondBuffer.bufferOrder.last
+    val secondBufferId        = stateWithSecondBuffer.persisted.bufferOrder.last
 
     // When: Switch back to first buffer
     stateManager.applyEvent(PreviousTab).unsafeRunSync()
     val stateAfterSwitchBack = stateManager.getCurrentState.unsafeRunSync()
 
-    val firstBufferAfterSwitch  = stateAfterSwitchBack.buffers(firstBufferId)
-    val secondBufferAfterSwitch = stateAfterSwitchBack.buffers(secondBufferId)
+    val firstBufferAfterSwitch  = stateAfterSwitchBack.persisted.buffers(firstBufferId)
+    val secondBufferAfterSwitch = stateAfterSwitchBack.persisted.buffers(secondBufferId)
 
     // Then: Each buffer should maintain its viewport
     firstBufferAfterSwitch.viewport.topLine should be > 0 // Should be scrolled
@@ -102,19 +106,21 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
 
   it should "handle cursor position when adding content to different buffers" in new CursorTrackingFixture:
     // Given: Wide terminal and multiple buffers
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(wideTerminal))))
+      .unsafeRunSync()
 
     // Add content to buffer 0
     stateManager.applyEvent(InsertChar('1')).unsafeRunSync()
     val stateBuffer0 = stateManager.getCurrentState.unsafeRunSync()
-    val buffer0Id    = stateBuffer0.bufferOrder.head
+    val buffer0Id    = stateBuffer0.persisted.bufferOrder.head
 
     // Create buffer 1 and add content
     stateManager.applyEvent(NewTab).unsafeRunSync()
     stateManager.applyEvent(InsertChar('2')).unsafeRunSync()
     stateManager.applyEvent(InsertChar('3')).unsafeRunSync()
     val stateBuffer1 = stateManager.getCurrentState.unsafeRunSync()
-    val buffer1Id    = stateBuffer1.bufferOrder.last
+    val buffer1Id    = stateBuffer1.persisted.bufferOrder.last
 
     // Create buffer 2 and add content
     stateManager.applyEvent(NewTab).unsafeRunSync()
@@ -122,12 +128,12 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('5')).unsafeRunSync()
     stateManager.applyEvent(InsertChar('6')).unsafeRunSync()
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer2Id  = finalState.bufferOrder.last
+    val buffer2Id  = finalState.persisted.bufferOrder.last
 
     // Then: Each buffer should have the correct content and cursor position
-    val buffer0 = finalState.buffers(buffer0Id)
-    val buffer1 = finalState.buffers(buffer1Id)
-    val buffer2 = finalState.buffers(buffer2Id)
+    val buffer0 = finalState.persisted.buffers(buffer0Id)
+    val buffer1 = finalState.persisted.buffers(buffer1Id)
+    val buffer2 = finalState.persisted.buffers(buffer2Id)
 
     buffer0.document.content.collect() shouldBe "1"
     buffer0.editing.cursors.head.column shouldBe 1
@@ -148,6 +154,6 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     stateOnBuffer0.focusedBufferId.get shouldBe buffer0Id
 
     // Cursor positions should still be preserved
-    stateOnBuffer0.buffers(buffer0Id).editing.cursors.head.column shouldBe 1
-    stateOnBuffer1.buffers(buffer1Id).editing.cursors.head.column shouldBe 2
-    stateOnBuffer0.buffers(buffer2Id).editing.cursors.head.column shouldBe 3
+    stateOnBuffer0.persisted.buffers(buffer0Id).editing.cursors.head.column shouldBe 1
+    stateOnBuffer1.persisted.buffers(buffer1Id).editing.cursors.head.column shouldBe 2
+    stateOnBuffer0.persisted.buffers(buffer2Id).editing.cursors.head.column shouldBe 3

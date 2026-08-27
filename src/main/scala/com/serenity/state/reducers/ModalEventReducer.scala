@@ -484,7 +484,7 @@ object ModalEventReducer:
         else
           (for
             bufferId <- activeBufferId(clearedState)
-            buffer   <- clearedState.buffers.get(bufferId)
+            buffer   <- clearedState.persisted.buffers.get(bufferId)
           yield ReducerResult.withEffect(
             clearedState,
             AppEffect.RefreshFind(FindSearchRequest(surface.id, bufferId, query, buffer.document.content))
@@ -512,17 +512,18 @@ object ModalEventReducer:
     request: FindSearchRequest,
     results: List[FindResult]
   ): AppState =
-    val modalIsCurrent = state.uiSurfaces.exists {
+    val modalIsCurrent = state.runtime.uiSurfaces.exists {
       case UiSurface(id, SurfaceContent.ModalWorkflow(Modal.Find(query, _, _)), _, _) =>
         id == request.surfaceId && query == request.query
       case _ =>
         false
     }
-    val contentIsCurrent = state.buffers.get(request.bufferId).exists(_.document.content.eq(request.content))
+    val contentIsCurrent =
+      state.persisted.buffers.get(request.bufferId).exists(_.document.content.eq(request.content))
 
     if !modalIsCurrent || !contentIsCurrent || !activeBufferId(state).contains(request.bufferId) then state
     else
-      state.uiSurfaces.find(_.id == request.surfaceId) match
+      state.runtime.uiSurfaces.find(_.id == request.surfaceId) match
         case Some(surface) => updateFindSelection(state, surface, request.query, results, requestedIndex = 0)
         case None          => state
 
@@ -540,7 +541,7 @@ object ModalEventReducer:
   ): AppState =
     activeBufferId(state) match
       case Some(bufferId) =>
-        state.buffers.get(bufferId) match
+        state.persisted.buffers.get(bufferId) match
           case Some(buffer) =>
             val selected = resultSet.results(resultSet.currentIndex)
             val target   = CursorPosition(selected.line, selected.column)
@@ -554,7 +555,9 @@ object ModalEventReducer:
               ),
               findState = Some(FindState.fromResultSet(resultSet))
             )
-            state.copy(buffers = state.buffers + (bufferId -> updatedBuffer))
+            state.copy(persisted =
+              state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
+            )
           case None =>
             state
       case None =>
@@ -564,15 +567,20 @@ object ModalEventReducer:
     activeBufferId(state).map(bufferId => clearFindState(state, bufferId)).getOrElse(state)
 
   private def clearFindState(state: AppState, bufferId: BufferId): AppState =
-    state.buffers.get(bufferId) match
-      case Some(buffer) => state.copy(buffers = state.buffers + (bufferId -> buffer.copy(findState = None)))
-      case None         => state
+    state.persisted.buffers.get(bufferId) match
+      case Some(buffer) =>
+        state.copy(persisted =
+          state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer.copy(findState = None)))
+        )
+      case None => state
 
   private def activeBuffer(state: AppState): Option[Buffer] =
-    activeBufferId(state).flatMap(state.buffers.get)
+    activeBufferId(state).flatMap(state.persisted.buffers.get)
 
   private def activeBufferId(state: AppState): Option[BufferId] =
-    state.layout.activeEditorPaneId.flatMap(paneId => state.layout.editorPanes.get(paneId).flatMap(_.bufferId))
+    state.persisted.layout.activeEditorPaneId.flatMap(paneId =>
+      state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId)
+    )
 
   private def offsetForCursor(content: Rope, cursor: CursorPosition): Int =
     content.lineColumnToOffset(cursor.line, cursor.column)
@@ -582,15 +590,17 @@ object ModalEventReducer:
 
   private def cancelCloseWorkflow(state: AppState): AppState =
     dismissToPane(
-      state.copy(actionStack = state.actionStack.filter { case AppAction.CloseWorkflow(_) => false })
+      state.copy(runtime = state.runtime.copy(actionStack = state.runtime.actionStack.filter {
+        case AppAction.CloseWorkflow(_) => false
+      }))
     )
 
   private def jumpToLine(state: AppState, targetLine: Int): AppState =
-    state.layout.activeEditorPaneId match
+    state.persisted.layout.activeEditorPaneId match
       case Some(paneId) =>
-        state.layout.editorPanes.get(paneId) match
+        state.persisted.layout.editorPanes.get(paneId) match
           case Some(pane) =>
-            pane.bufferId.flatMap(state.buffers.get) match
+            pane.bufferId.flatMap(state.persisted.buffers.get) match
               case Some(buffer) =>
                 val halfVisible = buffer.viewport.visibleLines / 2
                 val newTopLine  = math.max(0, targetLine - halfVisible)
@@ -598,7 +608,11 @@ object ModalEventReducer:
                   editing = buffer.editing.copy(cursors = List(CursorPosition(targetLine, 0))),
                   viewport = buffer.viewport.copy(topLine = newTopLine)
                 )
-                state.dismissTopModal.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+                val dismissed = state.dismissTopModal
+                dismissed.copy(
+                  persisted =
+                    dismissed.persisted.copy(buffers = dismissed.persisted.buffers + (buffer.id -> updatedBuffer))
+                )
               case None =>
                 state.dismissTopModal
           case None =>
@@ -615,4 +629,6 @@ object ModalEventReducer:
 
   private def updateModal(state: AppState, surface: UiSurface, modal: Modal): AppState =
     val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(modal))
-    state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+    )

@@ -28,7 +28,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
       // Given: Empty buffer ready for input
       bufferId     <- stateManager.createBuffer("")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // When: Type a function definition with typical keystrokes
@@ -73,13 +73,13 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
 
       // Then: Should have proper function definition
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
+      buffer = finalState.persisted.buffers(bufferId)
       expected = """def hello(): String =
   "Hello"""".replace("\r\n", "\n")
 
       // Cursor should be at end
-      pane = finalState.layout.editorPanes(paneId)
-      paneBuffer <- finalState.buffers
+      pane = finalState.persisted.layout.editorPanes(paneId)
+      paneBuffer <- finalState.persisted.buffers
         .get(bufferId)
         .fold(IO.raiseError[Buffer](new RuntimeException("Buffer not found")))(IO.pure)
     yield
@@ -100,7 +100,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
       // Given: Buffer with some text
       bufferId     <- stateManager.createBuffer("The quik brown fox")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Position cursor at "quik" to correct spelling
@@ -124,7 +124,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
 
       // Then: Text should be corrected
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
+      buffer = finalState.persisted.buffers(bufferId)
     yield buffer.document.content.collect() shouldBe "The quick brown fox"
 
     program.unsafeRunSync()
@@ -144,7 +144,7 @@ Line 3
 Line 4"""
       bufferId     <- stateManager.createBuffer(initialText)
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Position cursor at end of initial content
@@ -191,7 +191,7 @@ Line 4"""
 
       // Then: Should have edited multiline content
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
+      buffer = finalState.persisted.buffers(bufferId)
       expected = """Line 1
 Line 2!
 * Line 3
@@ -211,7 +211,7 @@ Final line""".replace("\r\n", "\n")
       // Given: Text with multiple words
       bufferId     <- stateManager.createBuffer("Hello world this is a test")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Position at start of "world"
@@ -246,7 +246,7 @@ Final line""".replace("\r\n", "\n")
 
       // Then: Should have modified text
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
+      buffer = finalState.persisted.buffers(bufferId)
     yield buffer.document.content.collect() shouldBe "Hello beautiful this is a test!"
 
     program.unsafeRunSync()
@@ -262,7 +262,7 @@ Final line""".replace("\r\n", "\n")
       // Given: Empty buffer
       bufferId     <- stateManager.createBuffer("")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // When: Rapid typing with corrections
@@ -301,7 +301,7 @@ Final line""".replace("\r\n", "\n")
 
       // Then: Should have final corrected text
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
+      buffer = finalState.persisted.buffers(bufferId)
     yield buffer.document.content.collect() shouldBe "Typing quickly now"
 
     program.unsafeRunSync()
@@ -317,7 +317,7 @@ Final line""".replace("\r\n", "\n")
       // Given: Single line of text
       bufferId     <- stateManager.createBuffer("Single line")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Position at end
@@ -360,7 +360,7 @@ Final line""".replace("\r\n", "\n")
 
       // Then: Should have proper multiline structure
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
+      buffer = finalState.persisted.buffers(bufferId)
       expected = """The Single line
 Second line
 Third""".replace("\r\n", "\n")
@@ -379,7 +379,7 @@ Third""".replace("\r\n", "\n")
       // Given: Small text
       bufferId     <- stateManager.createBuffer("AB\nCD")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // When: Test boundary navigation
@@ -408,9 +408,9 @@ Third""".replace("\r\n", "\n")
 
       // Then: Should handle boundaries gracefully
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
-      pane   = finalState.layout.editorPanes(paneId)
-      paneBuffer <- finalState.buffers
+      buffer = finalState.persisted.buffers(bufferId)
+      pane   = finalState.persisted.layout.editorPanes(paneId)
+      paneBuffer <- finalState.persisted.buffers
         .get(bufferId)
         .fold(IO.raiseError[Buffer](new RuntimeException("Buffer not found")))(IO.pure)
     yield
@@ -432,7 +432,7 @@ Third""".replace("\r\n", "\n")
       // Given: Multiline text
       bufferId     <- stateManager.createBuffer("First\nSecond\nThird")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Position at start of second line
@@ -449,7 +449,7 @@ Third""".replace("\r\n", "\n")
 
       // Then: Lines should be joined
       finalState <- stateManager.getCurrentState
-      buffer = finalState.buffers(bufferId)
+      buffer = finalState.persisted.buffers(bufferId)
     yield buffer.document.content.collect() shouldBe "First & Second\nThird"
 
     program.unsafeRunSync()
@@ -465,7 +465,7 @@ Third""".replace("\r\n", "\n")
       // Given: Buffer with content
       bufferId     <- stateManager.createBuffer("Initial state")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // When: Complex sequence that tests state consistency
@@ -510,7 +510,7 @@ Third""".replace("\r\n", "\n")
       finalState <- stateManager.getCurrentState
       _ = finalState.isValid shouldBe true
 
-      buffer = finalState.buffers(bufferId)
+      buffer = finalState.persisted.buffers(bufferId)
       expected = """* Initial state
 Line 2 (middle)
 Line 3""".replace("\r\n", "\n")
@@ -531,7 +531,7 @@ Line 3""".replace("\r\n", "\n")
     def setupBuffer(content: String): BufferId =
       val bufferId = stateManager.createBuffer(content).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
-      val paneId   = state.layout.editorPanes.keys.head
+      val paneId   = state.persisted.layout.editorPanes.keys.head
 
       // Associate buffer with pane
       stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -546,12 +546,12 @@ Line 3""".replace("\r\n", "\n")
 
     def positionCursor(line: Int, column: Int): Unit =
       val state  = stateManager.getCurrentState.unsafeRunSync()
-      val paneId = state.layout.editorPanes.keys.head
+      val paneId = state.persisted.layout.editorPanes.keys.head
       stateManager.setCursorPosition(paneId, line, column).unsafeRunSync()
 
     def executeKeystrokeSequence(events: List[Event]): Unit =
       events.foreach(event => stateManager.applyEvent(event).unsafeRunSync())
 
     def getCurrentPane(state: AppState): EditorPane =
-      val paneId = state.layout.editorPanes.keys.head
-      state.layout.editorPanes(paneId)
+      val paneId = state.persisted.layout.editorPanes.keys.head
+      state.persisted.layout.editorPanes(paneId)

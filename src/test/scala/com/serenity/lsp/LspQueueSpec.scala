@@ -74,6 +74,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       val bufferId = sm.getCurrentState
         .unsafeRunSync()
+        .persisted
         .buffers
         .values
         .find(_.document.filePath.contains(tempFile))
@@ -158,6 +159,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()
+          .persisted
           .buffers
           .values
           .find(_.document.filePath.contains(tempFile))
@@ -200,6 +202,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()
+          .persisted
           .buffers
           .values
           .find(_.document.filePath.contains(tempFile))
@@ -222,7 +225,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       sm.applyEvent(LoadFile(source)).unsafeRunSync()
       sm.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
       val bufferId =
-        sm.getCurrentState.unsafeRunSync().buffers.values.find(_.document.filePath.contains(source)).map(_.id)
+        sm.getCurrentState.unsafeRunSync().persisted.buffers.values.find(_.document.filePath.contains(source)).map(_.id)
 
       bufferId shouldBe defined
       sm.saveBufferAs(bufferId.get, target.toString).unsafeRunSync()

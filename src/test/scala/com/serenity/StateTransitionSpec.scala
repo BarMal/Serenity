@@ -34,18 +34,18 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
       // Then: Focus should be on second pane
       state1 <- stateManager.getCurrentState
-      _ = state1.focus shouldBe Focus.EditorPane(pane2)
-      _ = state1.layout.activeEditorPaneId shouldBe Some(pane2)
+      _ = state1.persisted.focus shouldBe Focus.EditorPane(pane2)
+      _ = state1.persisted.layout.activeEditorPaneId shouldBe Some(pane2)
 
       // When: Switch back to first pane
-      firstPaneId = state1.layout.editorPanes.keys.find(_ != pane2).get
+      firstPaneId = state1.persisted.layout.editorPanes.keys.find(_ != pane2).get
       _ <- stateManager.switchToPane(firstPaneId)
 
       // Then: Focus should return to first pane
       state2 <- stateManager.getCurrentState
     yield
-      state2.focus shouldBe Focus.EditorPane(firstPaneId)
-      state2.layout.activeEditorPaneId shouldBe Some(firstPaneId)
+      state2.persisted.focus shouldBe Focus.EditorPane(firstPaneId)
+      state2.persisted.layout.activeEditorPaneId shouldBe Some(firstPaneId)
 
     program.unsafeRunSync()
   }
@@ -60,7 +60,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       // Given: Initial state with active pane
       bufferId     <- stateManager.createBuffer("Some content")
       initialState <- stateManager.getCurrentState
-      paneId = initialState.layout.editorPanes.keys.head
+      paneId = initialState.persisted.layout.editorPanes.keys.head
 
       // When: Show modal
       modal = Modal.Custom("test-modal", "test")
@@ -68,9 +68,9 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
       // Then: Focus should be on the modal surface
       modalState <- stateManager.getCurrentState
-      modalSurface = modalState.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(modal))
+      modalSurface = modalState.runtime.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(modal))
       _            = modalSurface shouldBe defined
-      _            = modalState.focus shouldBe Focus.Surface(modalSurface.get.id)
+      _            = modalState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
 
       // When: Dismiss modal
       _ <- stateManager.dismissModal()
@@ -78,8 +78,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       // Then: Focus should return to pane
       finalState <- stateManager.getCurrentState
     yield
-      finalState.focus shouldBe Focus.EditorPane(paneId)
-      finalState.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(modal)) shouldBe false
+      finalState.persisted.focus shouldBe Focus.EditorPane(paneId)
+      finalState.runtime.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(modal)) shouldBe false
 
     program.unsafeRunSync()
   }
@@ -107,7 +107,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
       // Then: Focus should be on the peek surface
       peekState <- stateManager.getCurrentState
-      peekSurface = peekState.uiSurfaces.find(
+      peekSurface = peekState.runtime.uiSurfaces.find(
         _.content == SurfaceContent.DirectoryListing(
           java.nio.file.Paths.get("/test"),
           List(
@@ -118,7 +118,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
         )
       )
       _ = peekSurface shouldBe defined
-      _ = peekState.focus shouldBe Focus.Surface(peekSurface.get.id)
+      _ = peekState.persisted.focus shouldBe Focus.Surface(peekSurface.get.id)
       _ = peekSurface.get.presentation shouldBe SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
 
       // When: Dismiss peek overlay
@@ -126,9 +126,9 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
       // Then: Focus should return to editor pane
       finalState <- stateManager.getCurrentState
-    yield finalState.focus match
+    yield finalState.persisted.focus match
       case Focus.EditorPane(_) =>
-        finalState.uiSurfaces.exists {
+        finalState.runtime.uiSurfaces.exists {
           _.content == SurfaceContent.DirectoryListing(
             java.nio.file.Paths.get("/test"),
             List(
@@ -147,7 +147,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     // Given: Multiple UI components
     stateManager.createBuffer("Buffer 1").unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2").unsafeRunSync()
-    val pane1   = stateManager.getCurrentState.unsafeRunSync().layout.editorPanes.keys.head
+    val pane1   = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
     val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
     val modal = Modal.Custom("search-panel", "*.scala")
@@ -170,9 +170,9 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     // Then: Final state should be valid
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.isValid shouldBe true
-    finalState.focus shouldBe Focus.EditorPane(pane1)
-    finalState.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(modal)) shouldBe false
-    finalState.uiSurfaces.exists {
+    finalState.persisted.focus shouldBe Focus.EditorPane(pane1)
+    finalState.runtime.uiSurfaces.exists(_.content == SurfaceContent.ModalWorkflow(modal)) shouldBe false
+    finalState.runtime.uiSurfaces.exists {
       _.content == SurfaceContent.DirectoryListing(
         java.nio.file.Paths.get("/src"),
         List(
@@ -187,46 +187,46 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     // Given: Create buffer and associate with pane
     val bufferId     = stateManager.createBuffer("Initial content").unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val paneId       = initialState.layout.editorPanes.keys.head
+    val paneId       = initialState.persisted.layout.editorPanes.keys.head
 
     // Associate buffer with pane
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Verify buffer exists and is associated
     val stateWithBuffer = stateManager.getCurrentState.unsafeRunSync()
-    stateWithBuffer.buffers should contain key bufferId
+    stateWithBuffer.persisted.buffers should contain key bufferId
 
     // When: Close buffer
     stateManager.closeBuffer(bufferId).unsafeRunSync()
 
     // Then: Buffer should be removed and pane should have no buffer
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.buffers should not contain key(bufferId)
-    finalState.layout.editorPanes(paneId).bufferId shouldBe None
+    finalState.persisted.buffers should not contain key(bufferId)
+    finalState.persisted.layout.editorPanes(paneId).bufferId shouldBe None
     finalState.isValid shouldBe true
 
   it should "handle pane lifecycle correctly" in new StateFixture:
     // Given: Multiple panes
     stateManager.createBuffer("Buffer 1").unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2").unsafeRunSync()
-    val pane1   = stateManager.getCurrentState.unsafeRunSync().layout.editorPanes.keys.head
+    val pane1   = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
     val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
     val stateWithTwoPanes = stateManager.getCurrentState.unsafeRunSync()
-    stateWithTwoPanes.layout.editorPanes should have size 2
+    stateWithTwoPanes.persisted.layout.editorPanes should have size 2
 
     // When: Close one pane
     stateManager.closePane(pane2).unsafeRunSync()
 
     // Then: Pane should be removed and focus should adjust
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.layout.editorPanes should have size 1
-    finalState.layout.editorPanes should contain key pane1
-    finalState.layout.editorPanes should not contain key(pane2)
+    finalState.persisted.layout.editorPanes should have size 1
+    finalState.persisted.layout.editorPanes should contain key pane1
+    finalState.persisted.layout.editorPanes should not contain key(pane2)
     finalState.isValid shouldBe true
 
     // Focus should be on remaining pane
-    finalState.focus match
+    finalState.persisted.focus match
       case Focus.EditorPane(id) if id == pane1 => succeed
       case other                               => fail(s"Expected focus on pane1 ($pane1), got $other")
 
@@ -234,7 +234,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     // Given: Create a complex state
     stateManager.createBuffer("Buffer 1").unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2").unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().layout.editorPanes.keys.head
+    stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
     val pane2 = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
     // Verify valid state
@@ -279,7 +279,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
         WorkspaceNode.Leaf(WorkspaceNodeId("other"), PaneId(0))
       )
     )
-    val invalid = base.copy(layout = base.layout.copy(workspaceTree = Some(invalidTree)))
+    val invalid =
+      base.copy(persisted = base.persisted.copy(layout = base.persisted.layout.copy(workspaceTree = Some(invalidTree))))
 
     invalid.isValid shouldBe false
     invalid.validationErrors should contain("Workspace tree contains duplicate node IDs: duplicate")
@@ -290,11 +291,13 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val outsideId   = PaneId(99)
     val outsidePane = EditorPane.empty(outsideId)
     val invalid = base.copy(
-      layout = base.layout.copy(
-        editorPanes = base.layout.editorPanes.updated(outsideId, outsidePane),
-        workspaceTree = base.layout.effectiveWorkspaceTree
-      ),
-      focus = Focus.EditorPane(outsideId)
+      persisted = base.persisted.copy(
+        layout = base.persisted.layout.copy(
+          editorPanes = base.persisted.layout.editorPanes.updated(outsideId, outsidePane),
+          workspaceTree = base.persisted.layout.effectiveWorkspaceTree
+        ),
+        focus = Focus.EditorPane(outsideId)
+      )
     )
 
     invalid.isValid shouldBe false

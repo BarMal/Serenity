@@ -18,7 +18,7 @@ class EditorPaneComponent(
       case _                         => None
 
   protected def processTypedEvent(event: TextEntryEvent, currentState: AppState): ComponentResult =
-    currentState.layout.editorPanes.get(paneId) match
+    currentState.persisted.layout.editorPanes.get(paneId) match
       case Some(pane) => processEventForPane(event, pane, currentState)
       case None       => ComponentResult.noChange
 
@@ -26,7 +26,11 @@ class EditorPaneComponent(
     event match
       case ToggleSyntaxHighlighting =>
         ComponentResult.updateState { state =>
-          state.copy(config = state.config.withSyntaxHighlighting(!state.syntaxHighlightingEnabled))
+          state.copy(persisted =
+            state.persisted.copy(config =
+              state.persisted.config.withSyntaxHighlighting(!state.syntaxHighlightingEnabled)
+            )
+          )
         }
       case _ =>
         ComponentResult.noChange

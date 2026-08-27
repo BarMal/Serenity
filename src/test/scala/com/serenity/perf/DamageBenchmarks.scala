@@ -37,12 +37,16 @@ private[perf] object DamageBenchmarks:
   private def scenarios(): DamageScenarios =
     def editedContentPair(text: String, insertAt: Int, insertion: String): (AppState, AppState) =
       val before = editorState(text, Some(LanguageId.Scala))
-      val buffer = before.buffers(BufferId(1))
+      val buffer = before.persisted.buffers(BufferId(1))
       val after =
-        before.copy(buffers =
-          before.buffers.updated(
-            BufferId(1),
-            buffer.copy(document = buffer.document.copy(content = buffer.document.content.insert(insertAt, insertion)))
+        before.copy(persisted =
+          before.persisted.copy(buffers =
+            before.persisted.buffers.updated(
+              BufferId(1),
+              buffer.copy(document =
+                buffer.document.copy(content = buffer.document.content.insert(insertAt, insertion))
+              )
+            )
           )
         )
       (before, after)
@@ -59,14 +63,20 @@ private[perf] object DamageBenchmarks:
     val (markdownBefore, markdownAfter) =
       editedContentPair(markdownDoc, insertAt = markdownDoc.length / 2, insertion = "y")
     def asMarkdown(state: AppState): AppState =
-      state.copy(buffers =
-        state.buffers.view
-          .mapValues(buffer => buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown))))
-          .toMap
+      state.copy(persisted =
+        state.persisted.copy(buffers =
+          state.persisted.buffers.view
+            .mapValues(buffer => buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown))))
+            .toMap
+        )
       )
 
     val scrollBase = editorState(largeMultilineDocument(lines = 20_000), Some(LanguageId.Scala))
-    val scrollDeep = scrollBase.copy(buffers = scrollBase.buffers.view.mapValues(_.copy(viewport = deepViewport)).toMap)
+    val scrollDeep = scrollBase.copy(persisted =
+      scrollBase.persisted.copy(buffers =
+        scrollBase.persisted.buffers.view.mapValues(_.copy(viewport = deepViewport)).toMap
+      )
+    )
     val scrollAfter = EditorEventReducer.reduce(ScrollDown(1), PaneId(0), scrollDeep).state
 
     DamageScenarios(
@@ -85,7 +95,9 @@ private[perf] object DamageBenchmarks:
     verifyCells: Damage => Unit
   ): List[BenchmarkRunner.Benchmark] =
     def withGranularity(state: AppState, granularity: RenderDamageGranularity): AppState =
-      state.copy(config = state.config.withRenderDamageGranularity(granularity))
+      state.copy(persisted =
+        state.persisted.copy(config = state.persisted.config.withRenderDamageGranularity(granularity))
+      )
     val rowsBefore  = withGranularity(before, RenderDamageGranularity.Rows)
     val rowsAfter   = withGranularity(after, RenderDamageGranularity.Rows)
     val cellsBefore = withGranularity(before, RenderDamageGranularity.Cells)

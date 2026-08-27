@@ -20,49 +20,54 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     val pane   = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.EditorPane(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
     )
 
   private def dockedState(panels: List[UiSurface]): AppState =
-    val tree = panels.foldLeft(baseState.layout.effectiveWorkspaceTree.getOrElse(fail("expected editor tree"))) {
-      (workspaceTree, panel) =>
-        val position = panel.presentation match
-          case SurfacePresentation.Pinned(value, _) => value
-          case other                                => fail(s"expected pinned panel, got $other")
-        workspaceTree
-          .dock(
-            panel.id,
-            position,
-            WorkspaceNodeId(s"split-${panel.id.value}"),
-            WorkspaceNodeId(s"dock-${panel.id.value}")
-          )
-          .getOrElse(fail(s"expected ${panel.id.value} to dock"))
-    }
+    val tree =
+      panels.foldLeft(baseState.persisted.layout.effectiveWorkspaceTree.getOrElse(fail("expected editor tree"))) {
+        (workspaceTree, panel) =>
+          val position = panel.presentation match
+            case SurfacePresentation.Pinned(value, _) => value
+            case other                                => fail(s"expected pinned panel, got $other")
+          workspaceTree
+            .dock(
+              panel.id,
+              position,
+              WorkspaceNodeId(s"split-${panel.id.value}"),
+              WorkspaceNodeId(s"dock-${panel.id.value}")
+            )
+            .getOrElse(fail(s"expected ${panel.id.value} to dock"))
+      }
     baseState.copy(
-      uiSurfaces = panels,
-      layout = baseState.layout.copy(workspaceTree = Some(tree))
+      persisted = baseState.persisted.copy(layout = baseState.persisted.layout.copy(workspaceTree = Some(tree))),
+      runtime = baseState.runtime.copy(uiSurfaces = panels)
     )
 
   "LayoutEngine.calculateLayout" should "allocate pinned panel rects and shrink the editor workspace around them" in {
     val state = baseState.copy(
-      uiSurfaces = List(
-        UiSurface.fromPanelContent(
-          SurfaceId("surface-left"),
-          PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
-          PanelPosition.Left,
-          24
-        ),
-        UiSurface.fromPanelContent(
-          SurfaceId("surface-bottom"),
-          PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
-          PanelPosition.Bottom,
-          6
+      runtime = baseState.runtime.copy(uiSurfaces =
+        List(
+          UiSurface.fromPanelContent(
+            SurfaceId("surface-left"),
+            PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
+            PanelPosition.Left,
+            24
+          ),
+          UiSurface.fromPanelContent(
+            SurfaceId("surface-bottom"),
+            PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
+            PanelPosition.Bottom,
+            6
+          )
         )
       )
     )
@@ -86,8 +91,8 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Expanded(PanelPosition.Right, 24)
     )
     val state = baseState.copy(
-      uiSurfaces = List(expandedPanel),
-      focus = Focus.Surface(expandedPanel.id)
+      persisted = baseState.persisted.copy(focus = Focus.Surface(expandedPanel.id)),
+      runtime = baseState.runtime.copy(uiSurfaces = List(expandedPanel))
     )
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(120, 40))
@@ -99,18 +104,20 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "split same-side left and right panels into per-surface rects" in {
     val state = baseState.copy(
-      uiSurfaces = List(
-        UiSurface.fromPanelContent(
-          SurfaceId("left-one"),
-          PanelContent.Outline(Nil),
-          PanelPosition.Left,
-          20
-        ),
-        UiSurface.fromPanelContent(
-          SurfaceId("left-two"),
-          PanelContent.Diagnostics(Nil),
-          PanelPosition.Left,
-          24
+      runtime = baseState.runtime.copy(uiSurfaces =
+        List(
+          UiSurface.fromPanelContent(
+            SurfaceId("left-one"),
+            PanelContent.Outline(Nil),
+            PanelPosition.Left,
+            20
+          ),
+          UiSurface.fromPanelContent(
+            SurfaceId("left-two"),
+            PanelContent.Diagnostics(Nil),
+            PanelPosition.Left,
+            24
+          )
         )
       )
     )
@@ -125,18 +132,20 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "split same-side top and bottom panels into per-surface rects" in {
     val state = baseState.copy(
-      uiSurfaces = List(
-        UiSurface.fromPanelContent(
-          SurfaceId("bottom-one"),
-          PanelContent.Terminal("build", 0),
-          PanelPosition.Bottom,
-          6
-        ),
-        UiSurface.fromPanelContent(
-          SurfaceId("bottom-two"),
-          PanelContent.Diagnostics(Nil),
-          PanelPosition.Bottom,
-          8
+      runtime = baseState.runtime.copy(uiSurfaces =
+        List(
+          UiSurface.fromPanelContent(
+            SurfaceId("bottom-one"),
+            PanelContent.Terminal("build", 0),
+            PanelPosition.Bottom,
+            6
+          ),
+          UiSurface.fromPanelContent(
+            SurfaceId("bottom-two"),
+            PanelContent.Diagnostics(Nil),
+            PanelPosition.Bottom,
+            8
+          )
         )
       )
     )
@@ -153,7 +162,7 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     val first = UiSurface.fromPanelContent(SurfaceId("right-one"), PanelContent.Outline(Nil), PanelPosition.Right, 25)
     val second =
       UiSurface.fromPanelContent(SurfaceId("right-two"), PanelContent.Diagnostics(Nil), PanelPosition.Right, 25)
-    val tree = baseState.layout.effectiveWorkspaceTree
+    val tree = baseState.persisted.layout.effectiveWorkspaceTree
       .flatMap(
         _.dock(first.id, PanelPosition.Right, WorkspaceNodeId("right-split"), WorkspaceNodeId("right-one"))
       )
@@ -162,8 +171,8 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
       )
       .getOrElse(fail("expected docked workspace"))
     val state = baseState.copy(
-      uiSurfaces = List(first, second),
-      layout = baseState.layout.copy(workspaceTree = Some(tree))
+      persisted = baseState.persisted.copy(layout = baseState.persisted.layout.copy(workspaceTree = Some(tree))),
+      runtime = baseState.runtime.copy(uiSurfaces = List(first, second))
     )
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 31))
@@ -193,7 +202,7 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
       position match
         case PanelPosition.Left | PanelPosition.Right =>
-          layout.editorPanelRect.width should be >= baseState.config.minimumPaneWidth
+          layout.editorPanelRect.width should be >= baseState.persisted.config.minimumPaneWidth
         case PanelPosition.Top | PanelPosition.Bottom =>
           layout.editorPanelRect.height should be >= 5
     }
@@ -229,7 +238,7 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(dockedState(panels), ViewportSize(100, 31))
 
-    layout.editorPanelRect.width should be >= baseState.config.minimumPaneWidth
+    layout.editorPanelRect.width should be >= baseState.persisted.config.minimumPaneWidth
     layout.editorPanelRect.height should be >= 5
   }
 end PinnedPanelLayoutSpec

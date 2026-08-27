@@ -31,11 +31,11 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
 
   it should "leave the internal clipboard unchanged when system clipboard is empty" in new ClipboardFixture:
     setupBuffer("world")
-    stateManager.updateState(_.copy(clipboard = Some("existing"))).unsafeRunSync()
+    stateManager.updateState(s => s.copy(runtime = s.runtime.copy(clipboard = Some("existing")))).unsafeRunSync()
 
     ClipboardEventSync.beforeEvent(Paste, stateManager, clipboard).unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().clipboard shouldBe Some("existing")
+    stateManager.getCurrentState.unsafeRunSync().runtime.clipboard shouldBe Some("existing")
 
   "ClipboardEventSync.afterEvent" should "export copied text to the system clipboard" in new ClipboardFixture:
     setupBuffer("copied line")
@@ -64,7 +64,7 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
       stateManager.setCursorPosition(paneId, line, column).unsafeRunSync()
 
     def getContent(bufferId: BufferId): String =
-      stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).document.content.collect()
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect()
 
   final class TestClipboard extends SystemClipboard[IO]:
     private val current = AtomicReference[Option[String]](None)

@@ -56,8 +56,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       val uiPresetStore = UiPresetStore(Path.of("target", "state-manager-capability-spec.json"))
       def updateConfig(update: AppConfig => AppConfig): IO[AppConfig] =
         currentStateRef.modify(state =>
-          val config = update(state.config)
-          (state.copy(config = config), config)
+          val config = update(state.persisted.config)
+          (state.copy(persisted = state.persisted.copy(config = config)), config)
         )
       def resizePinnedPanel(position: com.serenity.ui.layout.PanelPosition, newSize: Int): IO[Unit] = IO.unit
     new StateManagerEventPipeline(statePort, effectPort, workflowPort, uiPort, operations)
@@ -215,7 +215,9 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   it should "skip surface animation hooks when motion is disabled" in {
     val state = AppState.initial.copy(
-      config = AppConfig.default.withMotionAccessibility(com.serenity.config.MotionAccessibility.Off)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withMotionAccessibility(com.serenity.config.MotionAccessibility.Off)
+      )
     )
     val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
     val fiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
@@ -229,7 +231,9 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   it should "coordinate document analysis scheduling with shutdown" in {
     val spellCheckEnabledState = AppState.initial.copy(
-      config = AppState.initial.config.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true))
+      persisted = AppState.initial.persisted.copy(
+        config = AppState.initial.persisted.config.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true))
+      )
     )
     val program = for
       stateRef           <- Ref.of[IO, AppState](spellCheckEnabledState)
@@ -286,26 +290,36 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   it should "schedule document analysis only when spell-check inputs change" in {
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
-      config = AppConfig.default.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true)),
-      buffers =
-        val buffer = AppState.initial.buffers(bufferId)
-        AppState.initial.buffers
-          .updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("hello"))))
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true)),
+        buffers =
+          val buffer = AppState.initial.persisted.buffers(bufferId)
+          AppState.initial.persisted.buffers
+            .updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("hello"))))
+      )
     )
     val movedCursorState = initialState.copy(
-      buffers =
-        val buffer = initialState.buffers(bufferId)
-        initialState.buffers
-          .updated(bufferId, buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 1)))))
+      persisted = initialState.persisted.copy(
+        buffers =
+          val buffer = initialState.persisted.buffers(bufferId)
+          initialState.persisted.buffers
+            .updated(bufferId, buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 1)))))
+      )
     )
     val editedState = movedCursorState.copy(
-      buffers =
-        val buffer = movedCursorState.buffers(bufferId)
-        movedCursorState.buffers
-          .updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("wurld"))))
+      persisted = movedCursorState.persisted.copy(
+        buffers =
+          val buffer = movedCursorState.persisted.buffers(bufferId)
+          movedCursorState.persisted.buffers
+            .updated(bufferId, buffer.copy(document = buffer.document.copy(content = Rope("wurld"))))
+      )
     )
     val configuredState = editedState.copy(
-      config = editedState.config.withSpellCheck(editedState.config.spellCheck.copy(additionalWords = List("wurld")))
+      persisted = editedState.persisted.copy(
+        config = editedState.persisted.config.withSpellCheck(
+          editedState.persisted.config.spellCheck.copy(additionalWords = List("wurld"))
+        )
+      )
     )
 
     val program = for
@@ -336,7 +350,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   it should "commit a reducer state before interpreting its effect" in {
     val initialState   = AppState.initial
-    val committedState = initialState.copy(nextBufferId = BufferId(42))
+    val committedState = initialState.copy(runtime = initialState.runtime.copy(nextBufferId = BufferId(42)))
     val program = for
       stateRef <- Ref.of[IO, AppState](initialState)
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
@@ -349,7 +363,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       pipeline = composedPipeline(
         stateRef,
         operations,
-        _ => stateRef.get.flatMap(state => observed.update(_ :+ state.nextBufferId.value))
+        _ => stateRef.get.flatMap(state => observed.update(_ :+ state.runtime.nextBufferId.value))
       )
       _ <- pipeline.applyReducerResult(
         ReducerResult.withEffect(committedState, AppEffect.CompleteQuit()),
@@ -359,7 +373,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       state          <- stateRef.get
     yield
       observedStates shouldBe List(42)
-      state.nextBufferId shouldBe BufferId(42)
+      state.runtime.nextBufferId shouldBe BufferId(42)
 
     program.unsafeRunSync()
   }
@@ -458,13 +472,15 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       .drain
       .unsafeRunSync()
 
-    stateRef.get.unsafeRunSync().clipboard.shouldBe(Some("pasted"))
+    stateRef.get.unsafeRunSync().runtime.clipboard.shouldBe(Some("pasted"))
     applied.get.unsafeRunSync().shouldBe(List(Paste))
   }
 
   "StateManagerOperationBoundary" should "commit a markdown preview render generation after the debounce settles" in {
-    val bufferId     = BufferId(1)
-    val initialState = AppState.initial.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "# hello")))
+    val bufferId = BufferId(1)
+    val initialState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "# hello")))
+    )
     val program = for
       stateRef <- Ref.of[IO, AppState](initialState)
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
@@ -476,14 +492,16 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       _          <- operations.scheduleMarkdownPreviewCommit(bufferId, 1L)
       _          <- IO.sleep(250.millis)
       afterState <- stateRef.get
-    yield afterState.buffers(bufferId).markdownPreviewCommittedGeneration
+    yield afterState.persisted.buffers(bufferId).markdownPreviewCommittedGeneration
 
     program.unsafeRunSync() shouldBe 1L
   }
 
   it should "cancel a pending markdown preview commit when superseded by a newer edit" in {
-    val bufferId     = BufferId(1)
-    val initialState = AppState.initial.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "# hello")))
+    val bufferId = BufferId(1)
+    val initialState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "# hello")))
+    )
     val program = for
       stateRef <- Ref.of[IO, AppState](initialState)
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
@@ -496,7 +514,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       _          <- operations.scheduleMarkdownPreviewCommit(bufferId, 2L)
       _          <- IO.sleep(250.millis)
       afterState <- stateRef.get
-    yield afterState.buffers(bufferId).markdownPreviewCommittedGeneration
+    yield afterState.persisted.buffers(bufferId).markdownPreviewCommittedGeneration
 
     program.unsafeRunSync() shouldBe 2L
   }
@@ -504,11 +522,13 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   "StateManagerEventPipeline" should "recognize a live markdown preview via a pinned panel surface" in {
     val bufferId = BufferId(1)
     val state = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("markdown-preview"),
-          SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
-          SurfacePresentation.Pinned(com.serenity.ui.layout.PanelPosition.Right, 40)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("markdown-preview"),
+            SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+            SurfacePresentation.Pinned(com.serenity.ui.layout.PanelPosition.Right, 40)
+          )
         )
       )
     )
@@ -525,12 +545,14 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   private def focusedOnBuffer(state: AppState, paneId: PaneId, bufferId: BufferId): AppState =
     state.copy(
-      layout = com.serenity.ui.layout.Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId)
+      persisted = state.persisted.copy(
+        layout = com.serenity.ui.layout.Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
     )
 
   it should "bump markdownPreviewEditGeneration when an edit changes a buffer with a live inline markdown preview" in {
@@ -544,13 +566,15 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val after = before.copy(document = before.document.copy(content = Rope("# After")))
     val prevState = focusedOnBuffer(
       AppState.initial.copy(
-        buffers = Map(bufferId -> before),
-        config = AppConfig.default.withMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)
+        persisted = AppState.initial.persisted.copy(
+          buffers = Map(bufferId -> before),
+          config = AppConfig.default.withMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)
+        )
       ),
       paneId,
       bufferId
     )
-    val currentState = prevState.copy(buffers = Map(bufferId -> after))
+    val currentState = prevState.copy(persisted = prevState.persisted.copy(buffers = Map(bufferId -> after)))
     val program = for
       stateRef <- Ref.of[IO, AppState](currentState)
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
@@ -562,7 +586,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
       _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
       afterState <- stateRef.get
-    yield afterState.buffers(bufferId).markdownPreviewEditGeneration
+    yield afterState.persisted.buffers(bufferId).markdownPreviewEditGeneration
 
     program.unsafeRunSync() shouldBe 1L
   }
@@ -577,8 +601,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       )
     val after = before.copy(document = before.document.copy(content = Rope("# After")))
     // No withMarkdownViewMode(InlineLens) and no MarkdownPreview surface -- markdownViewMode defaults to Source.
-    val prevState    = focusedOnBuffer(AppState.initial.copy(buffers = Map(bufferId -> before)), paneId, bufferId)
-    val currentState = prevState.copy(buffers = Map(bufferId -> after))
+    val prevState = focusedOnBuffer(
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> before))),
+      paneId,
+      bufferId
+    )
+    val currentState = prevState.copy(persisted = prevState.persisted.copy(buffers = Map(bufferId -> after)))
     val program = for
       stateRef <- Ref.of[IO, AppState](currentState)
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
@@ -590,7 +618,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
       _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
       afterState <- stateRef.get
-    yield afterState.buffers(bufferId).markdownPreviewEditGeneration
+    yield afterState.persisted.buffers(bufferId).markdownPreviewEditGeneration
 
     program.unsafeRunSync() shouldBe 0L
   }
@@ -605,8 +633,10 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       )
     val prevState = focusedOnBuffer(
       AppState.initial.copy(
-        buffers = Map(bufferId -> buffer),
-        config = AppConfig.default.withMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)
+        persisted = AppState.initial.persisted.copy(
+          buffers = Map(bufferId -> buffer),
+          config = AppConfig.default.withMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)
+        )
       ),
       paneId,
       bufferId
@@ -622,7 +652,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
       _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
       afterState <- stateRef.get
-    yield afterState.buffers(bufferId).markdownPreviewEditGeneration
+    yield afterState.persisted.buffers(bufferId).markdownPreviewEditGeneration
 
     program.unsafeRunSync() shouldBe 0L
   }

@@ -28,42 +28,42 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     val state = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Exactly one pane and one buffer exist
-    state.layout.editorPanes should have size 1
-    state.buffers should have size 1
+    state.persisted.layout.editorPanes should have size 1
+    state.persisted.buffers should have size 1
 
     // And: The pane is associated with the buffer
-    val pane = state.layout.editorPanes.values.head
+    val pane = state.persisted.layout.editorPanes.values.head
     pane.bufferId shouldBe defined
     val bufferId = pane.bufferId.get
-    state.buffers should contain key bufferId
+    state.persisted.buffers should contain key bufferId
 
     // And: Focus is on the pane/buffer
-    state.focus shouldBe Focus.EditorPane(state.layout.editorPanes.keys.head)
+    state.persisted.focus shouldBe Focus.EditorPane(state.persisted.layout.editorPanes.keys.head)
 
   it should "create new buffer on Ctrl+T and focus switches to new buffer" in new NavigationBehaviorFixture:
     // Given: Initial state with one buffer
     val initialState        = stateManager.getCurrentState.unsafeRunSync()
-    val originalBufferCount = initialState.buffers.size
-    initialState.layout.editorPanes.size
+    val originalBufferCount = initialState.persisted.buffers.size
+    initialState.persisted.layout.editorPanes.size
 
     // When: Press Ctrl+T (NewTab command)
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val stateAfterNewTab = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: A new buffer exists (total = 2)
-    stateAfterNewTab.buffers should have size (originalBufferCount + 1)
+    stateAfterNewTab.persisted.buffers should have size (originalBufferCount + 1)
 
     // And: The new buffer has focus
-    val focusedPaneId = stateAfterNewTab.focus match
+    val focusedPaneId = stateAfterNewTab.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
-    val focusedPane = stateAfterNewTab.layout.editorPanes(focusedPaneId)
+    val focusedPane = stateAfterNewTab.persisted.layout.editorPanes(focusedPaneId)
     focusedPane.bufferId shouldBe defined
     val focusedBufferId = focusedPane.bufferId.get
 
     // The focused buffer should be the newest one (highest ID)
-    val allBufferIds = stateAfterNewTab.buffers.keys.toList.sortBy(_.value)
+    val allBufferIds = stateAfterNewTab.persisted.buffers.keys.toList.sortBy(_.value)
     focusedBufferId shouldBe allBufferIds.last
 
     // And: Number of panes is dictated by layout engine + window size
@@ -75,16 +75,16 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     val stateWith2Buffers = stateManager.getCurrentState.unsafeRunSync()
 
     // Get buffer order (sorted by creation order)
-    val bufferIds      = stateWith2Buffers.buffers.keys.toList.sortBy(_.value)
+    val bufferIds      = stateWith2Buffers.persisted.buffers.keys.toList.sortBy(_.value)
     val firstBufferId  = bufferIds.head
     val secondBufferId = bufferIds.last
 
     // Should start with focus on second (newest) buffer
-    val initialFocusedPaneId = stateWith2Buffers.focus match
+    val initialFocusedPaneId = stateWith2Buffers.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
-    val initialFocusedPane = stateWith2Buffers.layout.editorPanes(initialFocusedPaneId)
+    val initialFocusedPane = stateWith2Buffers.persisted.layout.editorPanes(initialFocusedPaneId)
     initialFocusedPane.bufferId.get shouldBe secondBufferId
 
     // When: Press Ctrl+Shift+Tab (PreviousTab - captured as ReverseTab?)
@@ -92,7 +92,7 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     val stateAfterPrevTab = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Same pane now shows first buffer's content
-    val focusedPaneIdAfter = stateAfterPrevTab.focus match
+    val focusedPaneIdAfter = stateAfterPrevTab.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
@@ -100,29 +100,29 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     focusedPaneIdAfter shouldBe initialFocusedPaneId
 
     // But the pane should now show the first buffer
-    val focusedPaneAfter = stateAfterPrevTab.layout.editorPanes(focusedPaneIdAfter)
+    val focusedPaneAfter = stateAfterPrevTab.persisted.layout.editorPanes(focusedPaneIdAfter)
     focusedPaneAfter.bufferId.get shouldBe firstBufferId
 
   it should "show dual pane behavior: Ctrl+Shift+Tab moves cursor between visible panes" in new NavigationBehaviorFixture:
     // Given: Two buffers, wide terminal (2 panes can be visible)
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(wideTerminal)))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync() // Create second buffer
     val singlePaneState = stateManager.getCurrentState.unsafeRunSync()
-    val initialPaneId   = singlePaneState.layout.activeEditorPaneId.get
-    val firstBufferId   = singlePaneState.bufferOrder.head
+    val initialPaneId   = singlePaneState.persisted.layout.activeEditorPaneId.get
+    val firstBufferId   = singlePaneState.persisted.bufferOrder.head
     stateManager.splitPaneHorizontal(initialPaneId, Some(firstBufferId)).unsafeRunSync()
     stateManager.switchToPane(initialPaneId).unsafeRunSync()
     val stateWith2Buffers = stateManager.getCurrentState.unsafeRunSync()
 
     // Check we have 2 panes visible in wide terminal
     // (This tests the layout engine respects terminal size)
-    stateWith2Buffers.layout.editorPanes should have size 2
+    stateWith2Buffers.persisted.layout.editorPanes should have size 2
 
-    val bufferIds      = stateWith2Buffers.buffers.keys.toList.sortBy(_.value)
+    val bufferIds      = stateWith2Buffers.persisted.buffers.keys.toList.sortBy(_.value)
     val secondBufferId = bufferIds.last
 
     // Should start with focus on second buffer (in second pane)
-    val initialFocusedPaneId = stateWith2Buffers.focus match
+    val initialFocusedPaneId = stateWith2Buffers.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
@@ -131,7 +131,7 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     val stateAfterPrevTab = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Focus moves to different pane showing first buffer
-    val focusedPaneIdAfter = stateAfterPrevTab.focus match
+    val focusedPaneIdAfter = stateAfterPrevTab.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
@@ -139,32 +139,32 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     focusedPaneIdAfter should not be initialFocusedPaneId
 
     // The newly focused pane should show the first buffer
-    val focusedPaneAfter = stateAfterPrevTab.layout.editorPanes(focusedPaneIdAfter)
+    val focusedPaneAfter = stateAfterPrevTab.persisted.layout.editorPanes(focusedPaneIdAfter)
     focusedPaneAfter.bufferId.get shouldBe firstBufferId
 
     // And the original pane should still show the second buffer
-    val originalPane = stateAfterPrevTab.layout.editorPanes(initialFocusedPaneId)
+    val originalPane = stateAfterPrevTab.persisted.layout.editorPanes(initialFocusedPaneId)
     originalPane.bufferId.get shouldBe secondBufferId
 
   it should "switch focus forward with Ctrl+Tab" in new NavigationBehaviorFixture:
     // Given: Two buffers, wide terminal (2 panes visible)
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(wideTerminal)))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
 
     // Move to first buffer using PreviousTab
     stateManager.applyEvent(PreviousTab).unsafeRunSync()
     val stateOnFirstBuffer = stateManager.getCurrentState.unsafeRunSync()
 
-    val bufferIds      = stateOnFirstBuffer.buffers.keys.toList.sortBy(_.value)
+    val bufferIds      = stateOnFirstBuffer.persisted.buffers.keys.toList.sortBy(_.value)
     val firstBufferId  = bufferIds.head
     val secondBufferId = bufferIds.last
 
     // Verify we're on first buffer
-    val initialFocusedPaneId = stateOnFirstBuffer.focus match
+    val initialFocusedPaneId = stateOnFirstBuffer.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
-    val initialFocusedPane = stateOnFirstBuffer.layout.editorPanes(initialFocusedPaneId)
+    val initialFocusedPane = stateOnFirstBuffer.persisted.layout.editorPanes(initialFocusedPaneId)
     initialFocusedPane.bufferId.get shouldBe firstBufferId
 
     // When: Press Ctrl+Tab (NextTab)
@@ -172,11 +172,11 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     val stateAfterNextTab = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Focus moves to second buffer
-    val focusedPaneIdAfter = stateAfterNextTab.focus match
+    val focusedPaneIdAfter = stateAfterNextTab.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
-    val focusedPaneAfter = stateAfterNextTab.layout.editorPanes(focusedPaneIdAfter)
+    val focusedPaneAfter = stateAfterNextTab.persisted.layout.editorPanes(focusedPaneIdAfter)
     focusedPaneAfter.bufferId.get shouldBe secondBufferId
 
   it should "insert new buffer between existing buffers when Ctrl+T is pressed" in new NavigationBehaviorFixture:
@@ -185,16 +185,16 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(PreviousTab).unsafeRunSync() // Switch to first buffer
     val stateOnFirstBuffer = stateManager.getCurrentState.unsafeRunSync()
 
-    val bufferIds      = stateOnFirstBuffer.buffers.keys.toList.sortBy(_.value)
+    val bufferIds      = stateOnFirstBuffer.persisted.buffers.keys.toList.sortBy(_.value)
     val firstBufferId  = bufferIds.head
     val secondBufferId = bufferIds.last
 
     // Verify we're focused on first buffer
-    val focusedPaneId = stateOnFirstBuffer.focus match
+    val focusedPaneId = stateOnFirstBuffer.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
-    val focusedPane = stateOnFirstBuffer.layout.editorPanes(focusedPaneId)
+    val focusedPane = stateOnFirstBuffer.persisted.layout.editorPanes(focusedPaneId)
     focusedPane.bufferId.get shouldBe firstBufferId
 
     // When: Press Ctrl+T (NewTab) while on first buffer
@@ -202,67 +202,67 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     val stateAfterNewTab = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: A third buffer exists
-    stateAfterNewTab.buffers should have size 3
+    stateAfterNewTab.persisted.buffers should have size 3
 
     // And: The new buffer should be inserted between first and second
-    val allBufferIds = stateAfterNewTab.buffers.keys.toList.sortBy(_.value)
+    val allBufferIds = stateAfterNewTab.persisted.buffers.keys.toList.sortBy(_.value)
     val newBufferId  = allBufferIds.filterNot(Set(firstBufferId, secondBufferId).contains).head
 
     // The new buffer should have focus
-    val newFocusedPaneId = stateAfterNewTab.focus match
+    val newFocusedPaneId = stateAfterNewTab.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
-    val newFocusedPane = stateAfterNewTab.layout.editorPanes(newFocusedPaneId)
+    val newFocusedPane = stateAfterNewTab.persisted.layout.editorPanes(newFocusedPaneId)
     newFocusedPane.bufferId.get shouldBe newBufferId
 
     // Test buffer order by navigation
     // From new buffer, PreviousTab should go to first buffer
     stateManager.applyEvent(PreviousTab).unsafeRunSync()
     val stateAfterPrev = stateManager.getCurrentState.unsafeRunSync()
-    val prevFocusedPaneId = stateAfterPrev.focus match
+    val prevFocusedPaneId = stateAfterPrev.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
-    val prevFocusedPane = stateAfterPrev.layout.editorPanes(prevFocusedPaneId)
+    val prevFocusedPane = stateAfterPrev.persisted.layout.editorPanes(prevFocusedPaneId)
     prevFocusedPane.bufferId.get shouldBe firstBufferId
 
     // From first buffer, NextTab should go to new buffer (not second)
     stateManager.applyEvent(NextTab).unsafeRunSync()
     val stateAfterNext = stateManager.getCurrentState.unsafeRunSync()
-    val nextFocusedPaneId = stateAfterNext.focus match
+    val nextFocusedPaneId = stateAfterNext.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
-    val nextFocusedPane = stateAfterNext.layout.editorPanes(nextFocusedPaneId)
+    val nextFocusedPane = stateAfterNext.persisted.layout.editorPanes(nextFocusedPaneId)
     nextFocusedPane.bufferId.get shouldBe newBufferId
 
   it should "show only focused buffer's cursor (cursor visibility follows focus)" in new NavigationBehaviorFixture:
     // Given: Two buffers, wide terminal (2 panes visible)
-    stateManager.updateState(_.copy(viewportSize = Some(wideTerminal))).unsafeRunSync()
+    stateManager.updateState(s => s.copy(runtime = s.runtime.copy(viewportSize = Some(wideTerminal)))).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
     val singlePaneState = stateManager.getCurrentState.unsafeRunSync()
-    val initialPaneId   = singlePaneState.layout.activeEditorPaneId.get
-    stateManager.splitPaneHorizontal(initialPaneId, Some(singlePaneState.bufferOrder.head)).unsafeRunSync()
+    val initialPaneId   = singlePaneState.persisted.layout.activeEditorPaneId.get
+    stateManager.splitPaneHorizontal(initialPaneId, Some(singlePaneState.persisted.bufferOrder.head)).unsafeRunSync()
     stateManager.switchToPane(initialPaneId).unsafeRunSync()
     val stateWith2Buffers = stateManager.getCurrentState.unsafeRunSync()
 
     // Should have 2 panes, each with different buffers
-    stateWith2Buffers.layout.editorPanes should have size 2
-    val paneIds = stateWith2Buffers.layout.editorPanes.keys.toList.sortBy(_.value)
+    stateWith2Buffers.persisted.layout.editorPanes should have size 2
+    val paneIds = stateWith2Buffers.persisted.layout.editorPanes.keys.toList.sortBy(_.value)
     val pane1Id = paneIds.head
     val pane2Id = paneIds.last
 
-    stateWith2Buffers.layout.editorPanes(pane1Id)
-    stateWith2Buffers.layout.editorPanes(pane2Id)
+    stateWith2Buffers.persisted.layout.editorPanes(pane1Id)
+    stateWith2Buffers.persisted.layout.editorPanes(pane2Id)
 
     // Initially, focus should be on one pane
-    val focusedPaneId = stateWith2Buffers.focus match
+    val focusedPaneId = stateWith2Buffers.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
     // The focused pane should have a cursor, non-focused should not
-    val focusedPane      = stateWith2Buffers.layout.editorPanes(focusedPaneId)
+    val focusedPane      = stateWith2Buffers.persisted.layout.editorPanes(focusedPaneId)
     val nonFocusedPaneId = if focusedPaneId == pane1Id then pane2Id else pane1Id
-    stateWith2Buffers.layout.editorPanes(nonFocusedPaneId)
+    stateWith2Buffers.persisted.layout.editorPanes(nonFocusedPaneId)
 
     // Focused pane should have cursors
     focusedPane.cursors should not be empty
@@ -270,16 +270,16 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     // Non-focused pane should have no cursors (or inactive cursors)
     // NOTE: This might need adjustment based on actual cursor model
     // For now, let's check that only the focused pane is marked as active
-    stateWith2Buffers.layout.activeEditorPaneId shouldBe Some(focusedPaneId)
+    stateWith2Buffers.persisted.layout.activeEditorPaneId shouldBe Some(focusedPaneId)
 
     // When: Switch focus to other buffer
     stateManager.applyEvent(PreviousTab).unsafeRunSync()
     val stateAfterSwitch = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: Active pane changes
-    val newFocusedPaneId = stateAfterSwitch.focus match
+    val newFocusedPaneId = stateAfterSwitch.persisted.focus match
       case Focus.EditorPane(paneId) => paneId
       case _                        => fail("Focus should be on an editor pane")
 
     newFocusedPaneId should not be focusedPaneId
-    stateAfterSwitch.layout.activeEditorPaneId shouldBe Some(newFocusedPaneId)
+    stateAfterSwitch.persisted.layout.activeEditorPaneId shouldBe Some(newFocusedPaneId)

@@ -42,34 +42,38 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   it should "keep editor, panel, line-number, and gutter rectangles within their owned viewport regions" in
     List(InterfaceDensity.Compact, InterfaceDensity.Comfortable, InterfaceDensity.Spacious).foreach { density =>
       val state = AppState.initial.copy(
-        config = AppConfig.default
-          .withInterfaceDensity(density)
-          .withLineNumbers(true)
-          .withGutter(true)
-          .copy(
-            textAreaInsets = TextAreaInsets(left = 0.05, right = 0.10)
-          )
-          .withUiElementGap(2),
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("left-panel"),
-            SurfaceContent.Outline(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Left, 14)
-          ),
-          UiSurface(
-            SurfaceId("right-panel"),
-            SurfaceContent.Diagnostics(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Right, 18)
-          ),
-          UiSurface(
-            SurfaceId("top-panel"),
-            SurfaceContent.Terminal("Build", 0),
-            SurfacePresentation.Pinned(PanelPosition.Top, 4)
-          ),
-          UiSurface(
-            SurfaceId("bottom-panel"),
-            SurfaceContent.Diagnostics(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Bottom, 5)
+        persisted = AppState.initial.persisted.copy(
+          config = AppConfig.default
+            .withInterfaceDensity(density)
+            .withLineNumbers(true)
+            .withGutter(true)
+            .copy(
+              textAreaInsets = TextAreaInsets(left = 0.05, right = 0.10)
+            )
+            .withUiElementGap(2)
+        ),
+        runtime = AppState.initial.runtime.copy(
+          uiSurfaces = List(
+            UiSurface(
+              SurfaceId("left-panel"),
+              SurfaceContent.Outline(Nil),
+              SurfacePresentation.Pinned(PanelPosition.Left, 14)
+            ),
+            UiSurface(
+              SurfaceId("right-panel"),
+              SurfaceContent.Diagnostics(Nil),
+              SurfacePresentation.Pinned(PanelPosition.Right, 18)
+            ),
+            UiSurface(
+              SurfaceId("top-panel"),
+              SurfaceContent.Terminal("Build", 0),
+              SurfacePresentation.Pinned(PanelPosition.Top, 4)
+            ),
+            UiSurface(
+              SurfaceId("bottom-panel"),
+              SurfaceContent.Diagnostics(Nil),
+              SurfacePresentation.Pinned(PanelPosition.Bottom, 5)
+            )
           )
         )
       )
@@ -118,19 +122,23 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.Surface(SurfaceId("command-runner"))
       ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -147,19 +155,23 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.Surface(SurfaceId("quick-info"))
       ),
-      focus = Focus.Surface(SurfaceId("quick-info")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("quick-info"),
-          SurfaceContent.QuickInfo("List.map(f)"),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.AboveCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("quick-info"),
+            SurfaceContent.QuickInfo("List.map(f)"),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.AboveCursor)
+          )
         )
       )
     )
@@ -178,29 +190,33 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
-      config = AppConfig.default.copy(
-        showLineNumbers = false,
-        showGutter = false,
-        textAreaInsets = TextAreaInsets()
-      ),
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.copy(
+          showLineNumbers = false,
+          showGutter = false,
+          textAreaInsets = TextAreaInsets()
         ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.Surface(SurfaceId("command-runner-submenu"))
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -221,23 +237,27 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val constrainedViewport = ViewportSize(20, 8)
     val gap                 = 2
     val state = AppState.initial.copy(
-      config = AppConfig.default
-        .copy(
-          showLineNumbers = false,
-          showGutter = false,
-          textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
-        )
-        .withUiElementGap(gap),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("left-panel"),
-          SurfaceContent.Outline(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Left, 15)
-        ),
-        UiSurface(
-          SurfaceId("right-panel"),
-          SurfaceContent.Diagnostics(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Right, 10)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default
+          .copy(
+            showLineNumbers = false,
+            showGutter = false,
+            textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
+          )
+          .withUiElementGap(gap)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("left-panel"),
+            SurfaceContent.Outline(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Left, 15)
+          ),
+          UiSurface(
+            SurfaceId("right-panel"),
+            SurfaceContent.Diagnostics(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Right, 10)
+          )
         )
       )
     )
@@ -258,23 +278,27 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val constrainedViewport = ViewportSize(18, 9)
     val gap                 = 2
     val state = AppState.initial.copy(
-      config = AppConfig.default
-        .copy(
-          showLineNumbers = false,
-          showGutter = false,
-          textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0)
-        )
-        .withUiElementGap(gap),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("top-panel"),
-          SurfaceContent.Terminal("Build", 0),
-          SurfacePresentation.Pinned(PanelPosition.Top, 6)
-        ),
-        UiSurface(
-          SurfaceId("bottom-panel"),
-          SurfaceContent.Diagnostics(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Bottom, 5)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default
+          .copy(
+            showLineNumbers = false,
+            showGutter = false,
+            textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0)
+          )
+          .withUiElementGap(gap)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("top-panel"),
+            SurfaceContent.Terminal("Build", 0),
+            SurfacePresentation.Pinned(PanelPosition.Top, 6)
+          ),
+          UiSurface(
+            SurfaceId("bottom-panel"),
+            SurfaceContent.Diagnostics(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Bottom, 5)
+          )
         )
       )
     )
@@ -293,10 +317,12 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
   it should "apply horizontal spacer overrides consistently to workspace and active pane bounds" in {
     val state = AppState.initial.copy(
-      config = AppConfig.default.copy(
-        showLineNumbers = false,
-        showGutter = false,
-        textAreaInsets = TextAreaInsets()
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.copy(
+          showLineNumbers = false,
+          showGutter = false,
+          textAreaInsets = TextAreaInsets()
+        )
       )
     )
 
@@ -323,29 +349,33 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
-      config = AppConfig.default
-        .withLineNumbers(true)
-        .withGutter(true)
-        .copy(textAreaInsets = TextAreaInsets(left = 0.05, right = 0.05))
-        .withUiElementGap(1),
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("left-panel"),
-          SurfaceContent.Outline(Nil),
-          SurfacePresentation.Pinned(PanelPosition.Left, 16)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default
+          .withLineNumbers(true)
+          .withGutter(true)
+          .copy(textAreaInsets = TextAreaInsets(left = 0.05, right = 0.05))
+          .withUiElementGap(1),
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
         ),
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        focus = Focus.Surface(SurfaceId("command-runner"))
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("left-panel"),
+            SurfaceContent.Outline(Nil),
+            SurfacePresentation.Pinned(PanelPosition.Left, 16)
+          ),
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -384,15 +414,19 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.Surface(commandRunner.id)
       ),
-      focus = Focus.Surface(commandRunner.id),
-      uiSurfaces = List(pinnedPanel, quickInfo, commandRunner)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(pinnedPanel, quickInfo, commandRunner)
+      )
     )
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
@@ -432,7 +466,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.Outline(Nil),
       SurfacePresentation.Pinned(PanelPosition.Left, 16)
     )
-    val state            = AppState.initial.copy(uiSurfaces = List(panel))
+    val state            = AppState.initial.copy(runtime = AppState.initial.runtime.copy(uiSurfaces = List(panel)))
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
     val titleRect        = contract.pinnedSurfaceTitleRects(panel.id)
@@ -453,9 +487,11 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Pinned(PanelPosition.Right, 30)
     )
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      uiSurfaces = List(preview)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id)
+      ),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(preview))
     )
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
@@ -486,7 +522,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Expanded(PanelPosition.Right, 24)
     )
     val state = AppState.initial.copy(
-      uiSurfaces = List(expandedPanel)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(expandedPanel))
     )
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
@@ -534,7 +570,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Expanded(PanelPosition.Right, 24)
     )
     val state = AppState.initial.copy(
-      uiSurfaces = List(pinnedPanel, expandedPanel)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(pinnedPanel, expandedPanel))
     )
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
@@ -583,15 +619,17 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.Surface(commandRunner.id)
       ),
-      focus = Focus.Surface(commandRunner.id),
-      uiSurfaces = List(quickInfo, commandRunner)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(quickInfo, commandRunner))
     )
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
@@ -648,13 +686,15 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(BufferId(1), "alpha\nbeta")
     val paneId = PaneId(0)
     val state = AppState.initial.copy(
-      config = AppConfig.default.withLineNumbers(true).withGutter(true),
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withLineNumbers(true).withGutter(true),
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        )
       )
     )
 
@@ -679,10 +719,12 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
   it should "provide shared spacer lookups" in {
     val state = AppState.initial.copy(
-      config = AppConfig.default.copy(
-        showLineNumbers = false,
-        showGutter = false,
-        textAreaInsets = TextAreaInsets(left = 0.10, right = 0.15)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.copy(
+          showLineNumbers = false,
+          showGutter = false,
+          textAreaInsets = TextAreaInsets(left = 0.10, right = 0.15)
+        )
       )
     )
 
@@ -702,13 +744,15 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 8, visibleColumns = 40))
     val paneId = PaneId(0)
     val state = AppState.initial.copy(
-      config = AppConfig.default.withLineNumbers(true),
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withLineNumbers(true),
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        )
       )
     )
 
@@ -742,15 +786,17 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.Surface(commandRunner.id)
       ),
-      focus = Focus.Surface(commandRunner.id),
-      uiSurfaces = List(pinnedPanel, quickInfo, commandRunner)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(pinnedPanel, quickInfo, commandRunner))
     )
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
@@ -808,16 +854,18 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
     val state = AppState.initial.copy(
-      config = AppConfig.default.withUiElementGap(2),
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withUiElementGap(2),
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.Surface(commandRunner.id)
       ),
-      focus = Focus.Surface(commandRunner.id),
-      uiSurfaces = List(toolbar, commandRunner)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(toolbar, commandRunner))
     )
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
@@ -851,11 +899,13 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val firstPane  = EditorPane.empty(PaneId(0))
     val secondPane = EditorPane.empty(PaneId(1))
     val state = AppState.initial.copy(
-      layout = Layout(
-        editorPanes = Map(PaneId(0) -> firstPane, PaneId(1) -> secondPane),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0), PaneId(1)),
-        splitDirection = PaneSplitDirection.Vertical
+      persisted = AppState.initial.persisted.copy(
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> firstPane, PaneId(1) -> secondPane),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0), PaneId(1)),
+          splitDirection = PaneSplitDirection.Vertical
+        )
       )
     )
     val layout   = LayoutEngine.calculateLayout(state, viewport)
@@ -892,16 +942,18 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
     val state = AppState.initial.copy(
-      config = AppConfig.default.withUiElementGap(2),
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withUiElementGap(2),
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.Surface(commandRunner.id)
       ),
-      focus = Focus.Surface(commandRunner.id),
-      uiSurfaces = List(toolbar, commandRunner)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(toolbar, commandRunner))
     )
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val toolbarRect      = calculatedLayout.belowCursorOverlayStack.head._2

@@ -231,14 +231,14 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
 
     // Initially should not be dirty
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    initialState.buffers.get(bufferId).map(_.document.isDirty) shouldBe Some(false)
+    initialState.persisted.buffers.get(bufferId).map(_.document.isDirty) shouldBe Some(false)
 
     // When: Make edit
     applyEvent(InsertChar('!'))
 
     // Then: Should be marked dirty
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.buffers.get(bufferId).map(_.document.isDirty) shouldBe Some(true)
+    finalState.persisted.buffers.get(bufferId).map(_.document.isDirty) shouldBe Some(true)
 
   it should "maintain state validity throughout complex operations" in new EditorTestFixture:
     // Given: Initial valid state
@@ -303,7 +303,7 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
 
     applyEvent(Copy)
     val stateAfterCopy = stateManager.getCurrentState.unsafeRunSync()
-    stateAfterCopy.clipboard shouldBe Some("Hello World")
+    stateAfterCopy.runtime.clipboard shouldBe Some("Hello World")
 
     applyEvent(Paste)
     getBufferContent(bufferId) shouldBe "Hello WorldHello World"
@@ -319,7 +319,7 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
       try
         val bufferId = stateManager.createBuffer(content).unsafeRunSync()
         val state    = stateManager.getCurrentState.unsafeRunSync()
-        val paneId   = state.layout.editorPanes.keys.head // Get default pane
+        val paneId   = state.persisted.layout.editorPanes.keys.head // Get default pane
         stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
         // Position cursor at the end of the content
@@ -339,4 +339,4 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
 
     def getBufferContent(bufferId: BufferId): String =
       val state = stateManager.getCurrentState.unsafeRunSync()
-      state.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
+      state.persisted.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")

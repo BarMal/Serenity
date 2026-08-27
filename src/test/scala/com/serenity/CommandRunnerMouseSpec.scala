@@ -33,10 +33,12 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager
       .updateState(state =>
-        state.copy(
-          config = state.config
-            .withInterfaceDensity(InterfaceDensity.Compact)
-            .withCommandRunnerItemGapRows(1)
+        state.copy(persisted =
+          state.persisted.copy(config =
+            state.persisted.config
+              .withInterfaceDensity(InterfaceDensity.Compact)
+              .withCommandRunnerItemGapRows(1)
+          )
         )
       )
       .unsafeRunSync()
@@ -56,13 +58,17 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager
-      .updateState(state => state.copy(config = state.config.withCommandRunnerCursorGapRows(Some(0.5))))
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(config = state.persisted.config.withCommandRunnerCursorGapRows(Some(0.5)))
+        )
+      )
       .unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     "toggle-line".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    before.config.showLineNumbers shouldBe true
+    before.persisted.config.showLineNumbers shouldBe true
     val point = shiftedCommandRunnerItemPoint(before, 0)
 
     stateManager
@@ -70,7 +76,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       .unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
-    after.config.showLineNumbers shouldBe false
+    after.persisted.config.showLineNumbers shouldBe false
     after.commandRunnerSurface shouldBe None
   }
 
@@ -80,10 +86,12 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager
       .updateState(state =>
-        state.copy(
-          config = state.config
-            .withCommandRunnerCursorGapRows(Some(0.5))
-            .withCommandRunnerItemGapRows(0.5)
+        state.copy(persisted =
+          state.persisted.copy(config =
+            state.persisted.config
+              .withCommandRunnerCursorGapRows(Some(0.5))
+              .withCommandRunnerItemGapRows(0.5)
+          )
         )
       )
       .unsafeRunSync()
@@ -112,13 +120,13 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     "toggle-line".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    before.config.showLineNumbers shouldBe true
+    before.persisted.config.showLineNumbers shouldBe true
     val point = commandRunnerItemPoint(before, 0)
 
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
-    after.config.showLineNumbers shouldBe false
+    after.persisted.config.showLineNumbers shouldBe false
     after.commandRunnerSurface shouldBe None
   }
 
@@ -160,14 +168,14 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     openLanguageSubmenu(stateManager)
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    before.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
+    before.persisted.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
 
     val point = commandRunnerItemPoint(before, 0)
 
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
-    after.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
+    after.persisted.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
     runnerFrom(after).activeSubmenu.map(_.groupId) shouldBe Some("settings-language")
   }
 
@@ -188,7 +196,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
-    after.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
+    after.persisted.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
     runnerFrom(after).activeSubmenu.map(_.groupId) shouldBe Some("settings-workspace-layout")
     runnerFrom(after).activeSubmenu.map(_.selectedIndex) shouldBe Some(0)
   }
@@ -207,7 +215,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
     val after   = stateManager.getCurrentState.unsafeRunSync()
     val submenu = runnerFrom(after).activeSubmenu.getOrElse(fail("Expected focused submenu"))
-    after.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
+    after.persisted.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
     submenu.groupId shouldBe "settings-panel-pins"
     submenu.parentGroupId shouldBe Some("settings-workspace-layout")
   }
@@ -217,16 +225,18 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
     stateManager
       .updateState { state =>
-        val bufferId = state.layout.activeEditorPaneId
-          .flatMap(state.layout.editorPanes.get)
+        val bufferId = state.persisted.layout.activeEditorPaneId
+          .flatMap(state.persisted.layout.editorPanes.get)
           .flatMap(_.bufferId)
           .getOrElse(fail("Expected focused buffer"))
-        state.copy(buffers =
-          state.buffers.updated(
-            bufferId,
-            state
-              .buffers(bufferId)
-              .copy(document = state.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        state.copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.updated(
+              bufferId,
+              state.persisted
+                .buffers(bufferId)
+                .copy(document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            )
           )
         )
       }
@@ -239,11 +249,11 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
-    val bufferId = after.layout.activeEditorPaneId
-      .flatMap(after.layout.editorPanes.get)
+    val bufferId = after.persisted.layout.activeEditorPaneId
+      .flatMap(after.persisted.layout.editorPanes.get)
       .flatMap(_.bufferId)
       .getOrElse(fail("Expected focused buffer"))
-    after.buffers(bufferId).document.language shouldBe None
+    after.persisted.buffers(bufferId).document.language shouldBe None
     after.commandRunnerSurface shouldBe None
   }
 
@@ -259,7 +269,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
   private def commandRunnerCategoryPoint(state: AppState, categoryIndex: Int): Point =
     val surface  = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contract = EditorLayoutContract.from(state, viewport, layout)
     val contentRect = contract
@@ -271,7 +281,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     Point(contentRect.x + (contentRect.width * categoryIndex) / CommandCategory.values.length + 1, header.y)
 
   private def overlayItemPoint(state: AppState, surfaceId: SurfaceId, displayedItemRow: Int): Point =
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contract = EditorLayoutContract.from(state, viewport, layout)
     val contentRect = contract
@@ -307,7 +317,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
   private def shiftedCommandRunnerGeometry(state: AppState): FloatingSurfaceGeometry =
     val surface  = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contract = EditorLayoutContract.from(state, viewport, layout)
     val contentRect = contract
@@ -323,8 +333,8 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
         itemCount = runner.visibleItems.length,
         hasHeader = true,
         hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-        itemGapRows = state.config.commandRunnerItemGapRows,
-        itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+        itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+        itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
       )
       .translated(
         0.0,
@@ -332,7 +342,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       )
 
   private def floatingMetrics(state: AppState): CellMetrics =
-    CellMetrics.fromFont(FontLoader.previewCodeFont(state.config.fontConfig))
+    CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.fontConfig))
 
   private def openLanguageSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()

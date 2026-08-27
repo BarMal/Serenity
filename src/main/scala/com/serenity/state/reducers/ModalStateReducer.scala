@@ -17,10 +17,11 @@ object ModalStateReducer:
       )
       ReducerResult.noEffects(
         stateWithId
-          .copy(
-            uiSurfaces =
-              if isBlocking(modal) then stateWithId.uiSurfaces :+ surface
-              else stateWithId.uiSurfaces.filterNot(isModelessModalSurface) :+ surface
+          .copy(runtime =
+            stateWithId.runtime.copy(uiSurfaces =
+              if isBlocking(modal) then stateWithId.runtime.uiSurfaces :+ surface
+              else stateWithId.runtime.uiSurfaces.filterNot(isModelessModalSurface) :+ surface
+            )
           )
           .pushFocus(Focus.Surface(surfaceId))
       )

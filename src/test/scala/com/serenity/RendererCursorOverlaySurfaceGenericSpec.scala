@@ -26,15 +26,17 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
     val buffer =
       Buffer.fromString(bufferId, "hello world").copy(editing = EditingState(cursors = List(CursorPosition(0, 3))))
     AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      theme = Theme.light
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        theme = Theme.light
+      )
     )
 
   /** Every string the frame asked the surface to paint, whichever text path it took. */
@@ -47,14 +49,16 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
   private def startPageState: AppState =
     val surfaceId = SurfaceId("start-page")
     AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          id = surfaceId,
-          content = SurfaceContent.StartPage(StartupPage(title = "Serenity", options = Nil, selectedIndex = 0)),
-          presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(surfaceId)),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            id = surfaceId,
+            content = SurfaceContent.StartPage(StartupPage(title = "Serenity", options = Nil, selectedIndex = 0)),
+            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
-      ),
-      focus = Focus.Surface(surfaceId)
+      )
     )
 
   "Renderer.renderCursorOnly (surface-generic)" should "draw the cursor into the given surface and report success" in {

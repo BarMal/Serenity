@@ -57,7 +57,8 @@ object AccessibilitySnapshot:
   private def nodeFor(state: AppState, node: SceneNode): Option[AccessibleNode] =
     node.id match
       case SceneNodeId.EditorPane(paneId) =>
-        val buffer = state.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.buffers.get)
+        val buffer =
+          state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.persisted.buffers.get)
         val name = buffer
           .flatMap(_.document.filePath)
           .flatMap(path => Option(path.getFileName).map(_.toString))
@@ -69,7 +70,7 @@ object AccessibilitySnapshot:
             name,
             buffer.map(_.document.content.toString),
             false,
-            state.focus == Focus.EditorPane(paneId),
+            state.persisted.focus == Focus.EditorPane(paneId),
             node.contentRect
           )
         )
@@ -83,7 +84,7 @@ object AccessibilitySnapshot:
             surfaceName(surface.content),
             surfaceValue(surface.content),
             selected = false,
-            focused = state.focus == Focus.Surface(surfaceId),
+            focused = state.persisted.focus == Focus.Surface(surfaceId),
             node.frameRect
           )
         }
@@ -108,7 +109,7 @@ object AccessibilitySnapshot:
               action.label,
               action.detail,
               selected = index == page.selectedIndex,
-              focused = state.focus == Focus.Surface(surface.id) && index == page.selectedIndex,
+              focused = state.persisted.focus == Focus.Surface(surface.id) && index == page.selectedIndex,
               actionBounds(frameRect, index, page.launchActions.size)
             )
         }
@@ -158,13 +159,13 @@ object AccessibilitySnapshot:
     state: AppState
   ): List[AccessibleNode] =
     val frame      = SurfaceFrameLayout.forContent(frameRect, content)
-    val targetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.config.interfaceDensity)
+    val targetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
     val itemWindow = frame.itemWindow(
       itemCount = items.size,
       selectedIndex = runner.selectedIndex,
       hasHeader = true,
       hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-      itemGapRows = state.config.commandRunnerItemGapRows,
+      itemGapRows = state.persisted.config.commandRunnerItemGapRows,
       itemTargetRows = targetRows
     )
     val visibleItems = itemWindow.slice(items)
@@ -173,7 +174,7 @@ object AccessibilitySnapshot:
         visibleItems.size,
         hasHeader = true,
         hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-        itemGapRows = state.config.commandRunnerItemGapRows,
+        itemGapRows = state.persisted.config.commandRunnerItemGapRows,
         itemTargetRows = targetRows
       )
       .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y }
@@ -191,7 +192,7 @@ object AccessibilitySnapshot:
             itemLabel(item),
             itemValue(item),
             selected,
-            focused = state.focus == Focus.Surface(surfaceId) && selected,
+            focused = state.persisted.focus == Focus.Surface(surfaceId) && selected,
             LayoutRect(
               frame.contentRect.x,
               y,
@@ -210,13 +211,13 @@ object AccessibilitySnapshot:
   ): List[AccessibleNode] =
     val frame = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.ContextMenu(menu))
     val targetRows =
-      SurfaceFrameLayout.itemTargetRowsFor(SurfaceContent.ContextMenu(menu), state.config.interfaceDensity)
+      SurfaceFrameLayout.itemTargetRowsFor(SurfaceContent.ContextMenu(menu), state.persisted.config.interfaceDensity)
     val window = frame.itemWindow(
       menu.items.size,
       menu.selectedIndex,
       hasHeader = true,
       hasFooter = menu.items.nonEmpty,
-      itemGapRows = state.config.commandRunnerItemGapRows,
+      itemGapRows = state.persisted.config.commandRunnerItemGapRows,
       itemTargetRows = targetRows
     )
     val bounds = itemBounds(
@@ -224,7 +225,7 @@ object AccessibilitySnapshot:
       window.rowCount,
       hasHeader = true,
       hasFooter = menu.items.nonEmpty,
-      state.config.commandRunnerItemGapRows,
+      state.persisted.config.commandRunnerItemGapRows,
       targetRows
     )
     window.slice(menu.items).zip(bounds).zipWithIndex.map {
@@ -236,7 +237,7 @@ object AccessibilitySnapshot:
           item.label,
           None,
           selected,
-          state.focus == Focus.Surface(surfaceId) && selected,
+          state.persisted.focus == Focus.Surface(surfaceId) && selected,
           bound
         )
     }
@@ -247,7 +248,7 @@ object AccessibilitySnapshot:
     frameRect: LayoutRect,
     state: AppState
   ): List[AccessibleNode] =
-    val targetRows = SurfaceFrameLayout.minimumTargetRows(state.config.interfaceDensity)
+    val targetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
     ModalSurfaceComposition
       .forModal(modal, frameRect, targetRows)
       .toList
@@ -266,7 +267,7 @@ object AccessibilitySnapshot:
               hit.semanticLabel,
               value,
               box.selected,
-              state.focus == Focus.Surface(surfaceId) && box.selected,
+              state.persisted.focus == Focus.Surface(surfaceId) && box.selected,
               LayoutRect(hit.rect.x.toInt, hit.rect.y.toInt, hit.rect.width.toInt, hit.rect.height.toInt)
             )
           }
@@ -282,7 +283,7 @@ object AccessibilitySnapshot:
     val frame = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.ContextualToolbar(toolbarState))
     val targetRows = SurfaceFrameLayout.itemTargetRowsFor(
       SurfaceContent.ContextualToolbar(toolbarState),
-      state.config.interfaceDensity
+      state.persisted.config.interfaceDensity
     )
     val items      = ContextualToolbar.itemsFor(state)
     val normalized = toolbarState.normalized(items)
@@ -292,7 +293,7 @@ object AccessibilitySnapshot:
         itemCount = rows.size,
         hasHeader = false,
         hasFooter = false,
-        itemGapRows = state.config.uiElementGap,
+        itemGapRows = state.persisted.config.uiElementGap,
         itemTargetRows = targetRows
       )
       .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y }
@@ -322,7 +323,7 @@ object AccessibilitySnapshot:
                 item.label,
                 value,
                 absoluteIndex == normalized.focusedIndex,
-                state.focus == Focus.Surface(surfaceId) && absoluteIndex == normalized.focusedIndex,
+                state.persisted.focus == Focus.Surface(surfaceId) && absoluteIndex == normalized.focusedIndex,
                 LayoutRect(x, y, width, targetRows)
               )
           }
@@ -348,7 +349,7 @@ object AccessibilitySnapshot:
             row.plainText,
             None,
             row.selected,
-            state.focus == Focus.Surface(surfaceId) && row.selected,
+            state.persisted.focus == Focus.Surface(surfaceId) && row.selected,
             bound
           )
       }

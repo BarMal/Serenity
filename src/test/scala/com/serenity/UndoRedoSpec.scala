@@ -234,16 +234,16 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     applyEvent(Undo)
     getContent(bufferId) shouldBe "alpha beta gamma"
     getCursors(bufferId) shouldBe List(CursorPosition(0, 5), CursorPosition(0, 16))
-    getState.buffers(bufferId).allSelections shouldBe List(first, second)
+    getState.persisted.buffers(bufferId).allSelections shouldBe List(first, second)
 
     applyEvent(Redo)
     getContent(bufferId) shouldBe "X beta X"
     getCursors(bufferId) shouldBe List(CursorPosition(0, 1), CursorPosition(0, 8))
-    getState.buffers(bufferId).allSelections shouldBe Nil
+    getState.persisted.buffers(bufferId).allSelections shouldBe Nil
 
   it should "restore viewport, find state, and empty-buffer state from undo snapshots" in new UndoFixture:
     val bufferId      = setupBuffer("alpha\nbeta\nalpha")
-    val initialBuffer = getState.buffers(bufferId)
+    val initialBuffer = getState.persisted.buffers(bufferId)
     val beforeBuffer = initialBuffer
       .copy(
         document = initialBuffer.document.copy(isNewEmpty = true),
@@ -256,7 +256,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     applyEvent(InsertChar('!'))
 
-    val edited = getState.buffers(bufferId)
+    val edited = getState.persisted.buffers(bufferId)
     edited.document.isNewEmpty shouldBe false
     updateBuffer(
       bufferId,
@@ -269,7 +269,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     applyEvent(Undo)
 
-    val undone = getState.buffers(bufferId)
+    val undone = getState.persisted.buffers(bufferId)
     undone.document.content.collect() shouldBe "alpha\nbeta\nalpha"
     undone.editing.cursors shouldBe List(CursorPosition(2, 0))
     undone.editing.preferredColumn shouldBe Some(0)
@@ -308,7 +308,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     applyEvent(Undo)
 
     val state = getState
-    state.focus shouldBe Focus.EditorPane(pane1)
+    state.persisted.focus shouldBe Focus.EditorPane(pane1)
     getContent(bufferId1) shouldBe "pane one"
 
   trait UndoFixture:
@@ -325,7 +325,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     def setupBuffer(content: String): BufferId =
       val bufferId = stateManager.createBuffer(content).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
-      currentPaneId.set(state.layout.editorPanes.keys.head)
+      currentPaneId.set(state.persisted.layout.editorPanes.keys.head)
       stateManager.setBufferForPane(currentPaneId.get(), bufferId).unsafeRunSync()
       if content.nonEmpty then
         stateManager
@@ -353,22 +353,24 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
       stateManager.getCurrentState.unsafeRunSync()
 
     def getContent(bufferId: BufferId): String =
-      getState.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
+      getState.persisted.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
 
     def getCursor: CursorPosition =
       getState.activeCursorPosition.getOrElse(CursorPosition(0, 0))
 
     def getCursors(bufferId: BufferId): List[CursorPosition] =
-      getState.buffers(bufferId).editing.cursors
+      getState.persisted.buffers(bufferId).editing.cursors
 
     def setCursors(bufferId: BufferId, cursors: List[CursorPosition]): Unit =
       stateManager
         .updateState { state =>
-          val buffer = state.buffers(bufferId)
-          state.copy(
-            buffers = state.buffers.updated(
-              bufferId,
-              buffer.copy(editing = buffer.editing.copy(cursors = cursors, selection = None, selections = Nil))
+          val buffer = state.persisted.buffers(bufferId)
+          state.copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers.updated(
+                bufferId,
+                buffer.copy(editing = buffer.editing.copy(cursors = cursors, selection = None, selections = Nil))
+              )
             )
           )
         }
@@ -377,15 +379,17 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     def setSelections(bufferId: BufferId, selections: List[Selection]): Unit =
       stateManager
         .updateState { state =>
-          val buffer = state.buffers(bufferId)
-          state.copy(
-            buffers = state.buffers.updated(
-              bufferId,
-              buffer.copy(editing =
-                buffer.editing.copy(
-                  cursors = selections.map(_.focus),
-                  selection = selections.headOption,
-                  selections = selections
+          val buffer = state.persisted.buffers(bufferId)
+          state.copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers.updated(
+                bufferId,
+                buffer.copy(editing =
+                  buffer.editing.copy(
+                    cursors = selections.map(_.focus),
+                    selection = selections.headOption,
+                    selections = selections
+                  )
                 )
               )
             )
@@ -394,7 +398,13 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
 
     def setClipboard(text: String): Unit =
-      stateManager.updateState(_.copy(clipboard = Some(text))).unsafeRunSync()
+      stateManager
+        .updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some(text))))
+        .unsafeRunSync()
 
     def updateBuffer(bufferId: BufferId, buffer: Buffer): Unit =
-      stateManager.updateState(state => state.copy(buffers = state.buffers.updated(bufferId, buffer))).unsafeRunSync()
+      stateManager
+        .updateState(state =>
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
+        )
+        .unsafeRunSync()

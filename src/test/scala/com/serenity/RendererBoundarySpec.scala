@@ -34,7 +34,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
       // Setup: Create buffer with text longer than panel width
       bufferId <- stateManager.createBuffer("")
       state    <- stateManager.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
+      paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       // Calculate actual panel boundaries
@@ -55,7 +55,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
       viewportSize = ViewportSize(mockScreen.cols, mockScreen.rows)
       layout       = LayoutEngine.calculateLayout(finalState, viewportSize)
       panelRect    = layout.editorPanelRect
-      buffer       = finalState.buffers(bufferId)
+      buffer       = finalState.persisted.buffers(bufferId)
       content      = buffer.document.content.collect()
 
       // Simulate placing characters on screen (basic version of what Renderer does)
@@ -81,11 +81,15 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
   it should "clip long lines at the visible viewport boundary" in new MockRenderFixture:
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Get panel dimensions
-    stateManager.updateState(current => current.copy(config = current.config.withWordWrap(false))).unsafeRunSync()
+    stateManager
+      .updateState(current =>
+        current.copy(persisted = current.persisted.copy(config = current.persisted.config.withWordWrap(false)))
+      )
+      .unsafeRunSync()
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(mockScreen.cols, mockScreen.rows))
     val panelRect    = layout.editorPanelRect
@@ -118,17 +122,19 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
   it should "handle horizontal scrolling while respecting panel boundaries" in new MockRenderFixture:
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          config = current.config.withWordWrap(false),
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        current.copy(persisted =
+          current.persisted.copy(
+            config = current.persisted.config.withWordWrap(false),
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            )
           )
         )
       }
@@ -149,8 +155,8 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
     renderStateToMockScreen(finalState)
 
     // Verify viewport has scrolled (cursor should be beyond initial visible area)
-    finalState.layout.editorPanes(paneId)
-    val buffer   = finalState.buffers(bufferId) // ← Get the correct buffer by ID
+    finalState.persisted.layout.editorPanes(paneId)
+    val buffer   = finalState.persisted.buffers(bufferId) // ← Get the correct buffer by ID
     val viewport = buffer.viewport
     viewport.leftColumn should be > 0
 
@@ -167,7 +173,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
   it should "properly handle multi-line text without extending beyond panel bottom" in new MockRenderFixture:
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     val layout = LayoutEngine.calculateLayout(
@@ -191,15 +197,15 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
       char should (be(' ') or be('\u0000'))
 
     // Verify viewport has scrolled to show the end
-    finalState.layout.editorPanes(paneId)
-    val buffer   = finalState.buffers(bufferId) // ← Get the correct buffer by ID
+    finalState.persisted.layout.editorPanes(paneId)
+    val buffer   = finalState.persisted.buffers(bufferId) // ← Get the correct buffer by ID
     val viewport = buffer.viewport
     viewport.topLine should be > 0
 
   it should "correctly handle cursor rendering at panel edges" in new MockRenderFixture:
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     val layout = LayoutEngine.calculateLayout(
@@ -216,7 +222,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
     renderStateToMockScreen(finalState)
 
     // Check that cursor is rendered within boundaries
-    val finalPane = finalState.layout.editorPanes(paneId)
+    val finalPane = finalState.persisted.layout.editorPanes(paneId)
     val cursor    = finalPane.cursors.head
     val viewport  = finalPane.viewport
 
@@ -280,9 +286,11 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
       val layout       = LayoutEngine.calculateLayout(state, viewportSize)
 
       // Simulate the rendering logic from Renderer.scala
-      state.layout.editorPanes.foreach { (paneId, pane) =>
+      state.persisted.layout.editorPanes.foreach { (paneId, pane) =>
         pane.bufferId.foreach { bufferId =>
-          state.buffers.get(bufferId).foreach(buffer => renderBufferToMock(pane, buffer, layout.editorPanelRect))
+          state.persisted.buffers
+            .get(bufferId)
+            .foreach(buffer => renderBufferToMock(pane, buffer, layout.editorPanelRect))
         }
       }
 

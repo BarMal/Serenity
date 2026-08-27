@@ -35,7 +35,9 @@ class ThemePickerComponent extends TypedFocusedComponent[ModalInputEvent]:
   ): ComponentResult =
     val newPicker  = pickerState.moveSelection(delta)
     val newSurface = surface.copy(content = SurfaceContent.ThemePicker(newPicker))
-    val newState   = state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface)
+    val newState = state.copy(runtime =
+      state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface)
+    )
     newPicker.selectedTheme match
       case Some(name) =>
         ComponentResult.reducerResult(ReducerResult(newState, List(AppEffect.SwitchTheme(name))))
@@ -43,11 +45,13 @@ class ThemePickerComponent extends TypedFocusedComponent[ModalInputEvent]:
         ComponentResult.updateState(_ => newState)
 
   private def dismissToRunner(state: AppState, surface: UiSurface): AppState =
-    val withoutPicker = state.copy(uiSurfaces = state.uiSurfaces.filterNot(_.id == surface.id))
+    val withoutPicker =
+      state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
     withoutPicker.commandRunnerSurface match
       case Some(runnerSurface) =>
-        withoutPicker.copy(focus = Focus.Surface(runnerSurface.id))
+        withoutPicker.copy(persisted = withoutPicker.persisted.copy(focus = Focus.Surface(runnerSurface.id)))
       case None =>
-        withoutPicker.layout.activeEditorPaneId match
-          case Some(paneId) => withoutPicker.copy(focus = Focus.EditorPane(paneId))
-          case None         => withoutPicker
+        withoutPicker.persisted.layout.activeEditorPaneId match
+          case Some(paneId) =>
+            withoutPicker.copy(persisted = withoutPicker.persisted.copy(focus = Focus.EditorPane(paneId)))
+          case None => withoutPicker

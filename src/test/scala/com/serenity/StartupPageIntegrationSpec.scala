@@ -28,7 +28,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
 
       // Verify we start with startup page focused
-      _         = initialState.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
+      _         = initialState.persisted.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
       _         = initialState.startPageSurface should be(defined)
       startPage = initialState.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _         = startPage.selectedIndex shouldBe 0
@@ -75,8 +75,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
 
       // After selecting "new session", startup page should be dismissed and we should have editor
       _ = finalState.startPageSurface shouldBe None
-      _ = finalState.layout.editorPanes.size shouldBe 1
-      _ = finalState.buffers.size shouldBe 1
+      _ = finalState.persisted.layout.editorPanes.size shouldBe 1
+      _ = finalState.persisted.buffers.size shouldBe 1
     yield ()
 
     program.unsafeRunSync()

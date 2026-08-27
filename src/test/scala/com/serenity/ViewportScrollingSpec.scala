@@ -31,17 +31,19 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          config = current.config.withWordWrap(false),
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        current.copy(persisted =
+          current.persisted.copy(
+            config = current.persisted.config.withWordWrap(false),
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            )
           )
         )
       }
@@ -49,7 +51,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     // Get initial viewport settings
     val initialState   = stateManager.getCurrentState.unsafeRunSync()
-    val initialPane    = initialState.layout.editorPanes(paneId)
+    val initialPane    = initialState.persisted.layout.editorPanes(paneId)
     val visibleColumns = initialPane.viewport.visibleColumns
 
     // Insert text longer than visible area
@@ -57,8 +59,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     longText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val finalPane  = finalState.layout.editorPanes(paneId)
-    val buffer     = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val finalPane  = finalState.persisted.layout.editorPanes(paneId)
+    val buffer     = finalPane.bufferId.flatMap(finalState.persisted.buffers.get).get
     val cursor     = buffer.editing.cursors.head
     val viewport   = buffer.viewport
 
@@ -82,16 +84,18 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager
       .updateState { current =>
-        current.copy(
-          buffers = current.buffers.updated(
-            bufferId,
-            current
-              .buffers(bufferId)
-              .copy(document = current.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+        current.copy(persisted =
+          current.persisted.copy(
+            buffers = current.persisted.buffers.updated(
+              bufferId,
+              current.persisted
+                .buffers(bufferId)
+                .copy(document = current.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
+            )
           )
         )
       }
@@ -105,8 +109,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveToStart).unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val finalPane  = finalState.layout.editorPanes(paneId)
-    val buffer     = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val finalPane  = finalState.persisted.layout.editorPanes(paneId)
+    val buffer     = finalPane.bufferId.flatMap(finalState.persisted.buffers.get).get
     val cursor     = buffer.editing.cursors.head
     val viewport   = buffer.viewport
 
@@ -128,12 +132,12 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Get initial viewport settings
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val initialPane  = initialState.layout.editorPanes(paneId)
+    val initialPane  = initialState.persisted.layout.editorPanes(paneId)
     val visibleLines = initialPane.viewport.visibleLines
 
     // Create text with more lines than visible
@@ -143,8 +147,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       stateManager.applyEvent(NewLine).unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val finalPane  = finalState.layout.editorPanes(paneId)
-    val buffer     = finalPane.bufferId.flatMap(finalState.buffers.get).get
+    val finalPane  = finalState.persisted.layout.editorPanes(paneId)
+    val buffer     = finalPane.bufferId.flatMap(finalState.persisted.buffers.get).get
     val cursor     = buffer.editing.cursors.head
     val viewport   = buffer.viewport
 
@@ -168,7 +172,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
 
@@ -176,11 +180,12 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
     val cursor     = buffer.editing.cursors.head
-    val font       = FontLoader.previewTextFont(finalState.config.fontConfig)
-    val wrapPx     = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, finalState.config.fontConfig)
-    val snapshot   = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val font       = FontLoader.previewTextFont(finalState.persisted.config.fontConfig)
+    val wrapPx =
+      TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, finalState.persisted.config.fontConfig)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
     val cursorShown = snapshot.visualLines.exists(line =>
       line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
     )
@@ -202,7 +207,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
     stateManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
 
@@ -212,7 +217,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val buffer     = finalState.buffers(bufferId)
+    val buffer     = finalState.persisted.buffers(bufferId)
 
     buffer.usesTextFont shouldBe true
     buffer.viewport.topVisualLine should be > 0
@@ -230,7 +235,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Create content that will require both horizontal and vertical scrolling
@@ -244,7 +249,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       }
 
     val finalState      = stateManager.getCurrentState.unsafeRunSync()
-    val buffer          = finalState.buffers(bufferId)
+    val buffer          = finalState.persisted.buffers(bufferId)
     val actualContent   = buffer.document.content.collect()
     val expectedContent = testContent * numLines
 
@@ -265,7 +270,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = stateManager.createBuffer("Initial text").unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.layout.editorPanes.keys.head
+    val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     // Perform rapid movements that would trigger viewport changes
@@ -290,7 +295,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     movements.foreach(event => stateManager.applyEvent(event).unsafeRunSync())
 
     val finalState   = stateManager.getCurrentState.unsafeRunSync()
-    val buffer       = finalState.buffers(bufferId)
+    val buffer       = finalState.persisted.buffers(bufferId)
     val finalContent = buffer.document.content.collect()
 
     // Content should contain all our additions

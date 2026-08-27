@@ -41,7 +41,7 @@ object FileEventReducer:
         ReducerResult.withEffect(state, AppEffect.DirectLoadFile(path))
 
   private def focusedBuffer(state: AppState): Option[Buffer] =
-    state.focus match
+    state.persisted.focus match
       case Focus.EditorPane(paneId) =>
         bufferForPane(paneId, state)
       case _ =>
@@ -49,7 +49,7 @@ object FileEventReducer:
 
   private def bufferForPane(paneId: PaneId, state: AppState): Option[Buffer] =
     for
-      pane     <- state.layout.editorPanes.get(paneId)
+      pane     <- state.persisted.layout.editorPanes.get(paneId)
       bufferId <- pane.bufferId
-      buffer   <- state.buffers.get(bufferId)
+      buffer   <- state.persisted.buffers.get(bufferId)
     yield buffer

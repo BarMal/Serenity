@@ -45,9 +45,9 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
 
       _ =
         newSessionState.startPageSurface shouldBe None
-        newSessionState.layout.editorPanes should not be empty
-        newSessionState.buffers should not be empty
-        newSessionState.focus should matchPattern { case Focus.EditorPane(_) => }
+        newSessionState.persisted.layout.editorPanes should not be empty
+        newSessionState.persisted.buffers should not be empty
+        newSessionState.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
 
       // Test Option 2: Open File
       stateManager3 <- createStateManagerIO(
@@ -62,12 +62,12 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       _ =
         openFileState.startPageSurface shouldBe None
         openFileState.modalSurface shouldBe None
-        openFileState.buffers.values
+        openFileState.persisted.buffers.values
           .find(_.document.filePath.contains(selectedFile))
           .map(_.document.content.collect()) shouldBe Some(
           "opened from startup options"
         )
-        openFileState.focus should matchPattern { case Focus.EditorPane(_) => }
+        openFileState.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
     yield succeed
 
     program.unsafeRunSync()

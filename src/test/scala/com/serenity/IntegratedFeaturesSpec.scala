@@ -33,14 +33,16 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     val paneId = PaneId(1)
     val pane   = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),
-      theme = Theme.dark
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),
+        theme = Theme.dark
+      )
     )
 
-    state.theme.name shouldBe "dark"
-    state.theme.syntaxColors should contain key com.serenity.ui.theme.SyntaxElement.Keyword
-    state.theme.syntaxColors should contain key com.serenity.ui.theme.SyntaxElement.String
+    state.persisted.theme.name shouldBe "dark"
+    state.persisted.theme.syntaxColors should contain key com.serenity.ui.theme.SyntaxElement.Keyword
+    state.persisted.theme.syntaxColors should contain key com.serenity.ui.theme.SyntaxElement.String
 
     val surface = new MockRenderSurface(80, 24)
     noException should be thrownBy
@@ -52,14 +54,14 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "allow switching between light and dark themes" in {
-    val state = AppState.empty.copy(theme = Theme.light)
+    val state = AppState.empty.copy(persisted = AppState.empty.persisted.copy(theme = Theme.light))
 
-    state.theme.name shouldBe "light"
-    state.theme.foregroundColor should not be Theme.dark.foregroundColor
-    state.theme.backgroundColor should not be Theme.dark.backgroundColor
+    state.persisted.theme.name shouldBe "light"
+    state.persisted.theme.foregroundColor should not be Theme.dark.foregroundColor
+    state.persisted.theme.backgroundColor should not be Theme.dark.backgroundColor
 
-    val darkState = state.copy(theme = Theme.dark)
-    darkState.theme.name shouldBe "dark"
+    val darkState = state.copy(persisted = state.persisted.copy(theme = Theme.dark))
+    darkState.persisted.theme.name shouldBe "dark"
   }
 
   it should "preserve tab and underscore characters through edit operations" in {
@@ -71,9 +73,11 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(1)
     val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),
-      theme = Theme.dark
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        layout = Layout.empty.copy(editorPanes = Map(paneId -> pane)),
+        theme = Theme.dark
+      )
     )
 
     val component = new EditorPaneComponent(paneId)
@@ -90,6 +94,6 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
       case ComponentResult.ReducerUpdate(reducerResult) => reducerResult.state
       case _                                            => fail("Expected state change")
 
-    val finalBuffer = finalState.buffers(bufferId)
+    val finalBuffer = finalState.persisted.buffers(bufferId)
     finalBuffer.document.content.collect() shouldBe "hello\t_"
   }

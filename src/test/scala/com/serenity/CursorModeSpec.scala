@@ -125,7 +125,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     openSettingsGroup(sm, "cursor")
     sm.applyEvent(MoveRight).unsafeRunSync()
 
-    sm.getCurrentState.unsafeRunSync().config.cursorMode shouldBe CursorMode.Breathe
+    sm.getCurrentState.unsafeRunSync().persisted.config.cursorMode shouldBe CursorMode.Breathe
   }
 
   it should "restore Blink by pressing Right again (wraps around)" in {
@@ -134,7 +134,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MoveRight).unsafeRunSync() // Blink → Breathe
     sm.applyEvent(MoveRight).unsafeRunSync() // Breathe → Blink (wrap)
 
-    sm.getCurrentState.unsafeRunSync().config.cursorMode shouldBe CursorMode.Blink
+    sm.getCurrentState.unsafeRunSync().persisted.config.cursorMode shouldBe CursorMode.Blink
   }
 
   "SetBackgroundStyle" should "update config.backgroundStyle via command runner navigation" in {
@@ -142,7 +142,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     openSettingsGroup(sm, "surface")
     sm.applyEvent(MoveRight).unsafeRunSync()
 
-    sm.getCurrentState.unsafeRunSync().config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    sm.getCurrentState.unsafeRunSync().persisted.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
   }
 
   "SetPostProcessingEffect" should "update the effect via command runner navigation" in {
@@ -150,7 +150,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     openSettingsGroup(sm, "post-processing")
     sm.applyEvent(MoveRight).unsafeRunSync()
 
-    sm.getCurrentState.unsafeRunSync().config.postProcessingEffect shouldBe PostProcessingEffect.Scanlines
+    sm.getCurrentState.unsafeRunSync().persisted.config.postProcessingEffect shouldBe PostProcessingEffect.Scanlines
   }
 
   // ── SessionState JSON round-trip ──────────────────────────────────────────
@@ -166,15 +166,21 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "round-trip CursorMode.Breathe through JSON" in {
-    val appState = AppState.initial.copy(config = AppConfig.default.withCursorMode(CursorMode.Breathe))
-    val decoded  = SessionState.fromAppState(appState).asJson.as[SessionState]
+    val initialState = AppState.initial
+    val appState = initialState.copy(persisted =
+      initialState.persisted.copy(config = AppConfig.default.withCursorMode(CursorMode.Breathe))
+    )
+    val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
     decoded.isRight shouldBe true
     decoded.toOption.get.config.cursorMode shouldBe CursorMode.Breathe
   }
 
   it should "round-trip CursorMode.Blink through JSON" in {
-    val appState = AppState.initial.copy(config = AppConfig.default.withCursorMode(CursorMode.Blink))
-    val decoded  = SessionState.fromAppState(appState).asJson.as[SessionState]
+    val initialState = AppState.initial
+    val appState = initialState.copy(persisted =
+      initialState.persisted.copy(config = AppConfig.default.withCursorMode(CursorMode.Blink))
+    )
+    val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]
     decoded.isRight shouldBe true
     decoded.toOption.get.config.cursorMode shouldBe CursorMode.Blink
   }
@@ -197,8 +203,11 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       0x22,
       0x99
     )
-    val appState = AppState.initial.copy(
-      config = AppConfig.default.withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
+    val initialState = AppState.initial
+    val appState = initialState.copy(persisted =
+      initialState.persisted.copy(config =
+        AppConfig.default.withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
+      )
     )
 
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState]

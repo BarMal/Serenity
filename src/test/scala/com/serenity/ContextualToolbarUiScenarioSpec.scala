@@ -42,11 +42,11 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(BufferId(0))
         val selection = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.persisted
               .buffers(bufferId)
               .editing
               .copy(
@@ -54,7 +54,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
                 cursors = List(selection.focus)
               )
           )
-        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
       .unsafeRunSync()
     driver.dispatch(ToggleContextualToolbar).unsafeRunSync()
@@ -81,11 +81,11 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(BufferId(0))
         val selection = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.persisted
               .buffers(bufferId)
               .editing
               .copy(
@@ -93,7 +93,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
                 cursors = List(selection.focus)
               )
           )
-        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
       .unsafeRunSync()
     driver.dispatch(ToggleContextualToolbar).unsafeRunSync()
@@ -118,7 +118,13 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     moveToToolbarItem(driver, "bold")
     driver.dispatch(Enter).unsafeRunSync()
-    driver.state.unsafeRunSync().buffers.values.flatMap(_.richText.richTextDocument).toList should not be empty
+    driver.state
+      .unsafeRunSync()
+      .persisted
+      .buffers
+      .values
+      .flatMap(_.richText.richTextDocument)
+      .toList should not be empty
 
     val dropdownAfterButton = toolbarItemPoint(driver, "paragraph-role")
     driver.dispatch(MouseClick(dropdownAfterButton._1, dropdownAfterButton._2)).unsafeRunSync()
@@ -126,7 +132,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
       a[ContextualToolbarDetailState.Dropdown]
     driver.dispatch(MoveRight).unsafeRunSync()
     driver.dispatch(Enter).unsafeRunSync()
-    driver.state.unsafeRunSync().focus shouldBe Focus.EditorPane(PaneId(0))
+    driver.state.unsafeRunSync().persisted.focus shouldBe Focus.EditorPane(PaneId(0))
 
     val inputPoint = toolbarItemPoint(driver, "font-size")
     driver.dispatch(MouseClick(inputPoint._1, inputPoint._2)).unsafeRunSync()
@@ -137,7 +143,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(InsertChar('2')).unsafeRunSync()
     driver.dispatch(InsertChar('0')).unsafeRunSync()
     driver.dispatch(Enter).unsafeRunSync()
-    driver.state.unsafeRunSync().focus shouldBe Focus.EditorPane(PaneId(0))
+    driver.state.unsafeRunSync().persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   private def moveToToolbarItem(driver: UiScenarioDriver, itemId: String): Unit =
@@ -167,7 +173,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     )
     val (start, width) = regions.lift(localIndex).getOrElse(fail(s"Expected toolbar cell $itemId"))
     val surface        = state.contextualToolbarSurface.getOrElse(fail("Expected toolbar"))
-    val viewport       = state.viewportSize.getOrElse(fail("Expected viewport"))
+    val viewport       = state.runtime.viewportSize.getOrElse(fail("Expected viewport"))
     val contract       = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
     val y = contract
       .overlayRowSlots(surface.id)
@@ -185,7 +191,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
 
   private def toolbarContentRect(driver: UiScenarioDriver): LayoutRect =
     val state    = driver.state.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected toolbar"))
     val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
     val rect     = contract.overlayRect(surface.id).getOrElse(fail("Expected toolbar rectangle"))

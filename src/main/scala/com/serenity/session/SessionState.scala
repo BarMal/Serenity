@@ -145,20 +145,20 @@ object SessionState:
     SessionState(
       buffers = orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)),
       layout = SessionLayout.fromAppState(appState),
-      focus = SessionFocus.fromFocus(appState.focus),
-      bufferOrder = appState.bufferOrder.map(_.value),
-      config = appState.config,
-      themeName = appState.theme.name,
-      recentFiles = appState.recentFiles.map(_.toString)
+      focus = SessionFocus.fromFocus(appState.persisted.focus),
+      bufferOrder = appState.persisted.bufferOrder.map(_.value),
+      config = appState.persisted.config,
+      themeName = appState.persisted.theme.name,
+      recentFiles = appState.persisted.recentFiles.map(_.toString)
     )
 
   private def orderedBuffers(appState: AppState): List[Buffer] =
-    val orderedIds = appState.bufferOrder.filter(appState.buffers.contains)
-    val missingIds = appState.buffers.keys.toList
+    val orderedIds = appState.persisted.bufferOrder.filter(appState.persisted.buffers.contains)
+    val missingIds = appState.persisted.buffers.keys.toList
       .filterNot(orderedIds.toSet)
       .sortBy(_.value)
 
-    (orderedIds ++ missingIds).flatMap(appState.buffers.get)
+    (orderedIds ++ missingIds).flatMap(appState.persisted.buffers.get)
 
   /** Convert SessionState back to AppState for restoration
     */
@@ -201,19 +201,21 @@ object SessionState:
       requestedBufferOrder ++ bufferMap.keys.toList.filterNot(requestedBufferOrder.contains).sortBy(_.value)
 
     AppState(
-      layout = layout,
-      buffers = bufferMap,
-      bufferOrder = bufferOrder,
-      focus = focus,
-      uiSurfaces = restoredLayout.surfaces,
-      actionStack = Nil,
-      viewportSize = None,
-      theme = theme,
-      config = sessionState.config,
-      recentFiles = sessionState.recentFiles.map(Path.of(_)),
-      nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-      nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
-      nextSurfaceId = restoredLayout.nextSurfaceId
+      persisted = Persisted(
+        layout = layout,
+        buffers = bufferMap,
+        bufferOrder = bufferOrder,
+        focus = focus,
+        theme = theme,
+        config = sessionState.config,
+        recentFiles = sessionState.recentFiles.map(Path.of(_))
+      ),
+      runtime = Runtime(
+        uiSurfaces = restoredLayout.surfaces,
+        nextBufferId = BufferId(bufferMap.keys.map(_.value).maxOption.getOrElse(-1) + 1),
+        nextPaneId = PaneId(layout.editorPanes.keys.map(_.value).maxOption.getOrElse(-1) + 1),
+        nextSurfaceId = restoredLayout.nextSurfaceId
+      )
     )
 
 object SessionBuffer:
@@ -298,13 +300,13 @@ object SessionLayout:
       UiPreset.PinnedPanel.fromSurface(surface).map(SessionDockedPanel(surface.id.value, _))
     }
     val persistedSurfaceIds = dockedPanels.map(panel => SurfaceId(panel.surfaceId)).toSet
-    val workspaceTree = state.layout.workspaceTree
+    val workspaceTree = state.persisted.layout.workspaceTree
       .filter(_.dockedSurfaceIds.toSet.subsetOf(persistedSurfaceIds))
       .map(tree => fromWorkspaceNode(tree.root))
 
-    fromLayout(state.layout).copy(
+    fromLayout(state.persisted.layout).copy(
       workspaceTree = workspaceTree,
-      maximizedWorkspaceNodeId = state.layout.maximizedWorkspaceNodeId
+      maximizedWorkspaceNodeId = state.persisted.layout.maximizedWorkspaceNodeId
         .filter(nodeId => workspaceTree.exists(_ => treeContainsNode(state, nodeId)))
         .map(_.value),
       dockedPanels = dockedPanels
@@ -455,7 +457,7 @@ object SessionLayout:
       .getOrElse(-1) + 1
 
   private def treeContainsNode(state: AppState, nodeId: WorkspaceNodeId): Boolean =
-    state.layout.workspaceTree.exists(_.nodeIds.contains(nodeId))
+    state.persisted.layout.workspaceTree.exists(_.nodeIds.contains(nodeId))
 
 object SessionEditorPane:
 

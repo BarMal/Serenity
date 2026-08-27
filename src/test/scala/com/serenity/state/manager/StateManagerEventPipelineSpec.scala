@@ -17,22 +17,24 @@ class StateManagerEventPipelineSpec extends AnyFlatSpec with Matchers:
   private val bufferC = BufferId(3)
 
   private def stateWith(focusedPane: PaneId): AppState =
-    AppState.initial.copy(
-      buffers = Map(
-        bufferA -> Buffer.fromString(bufferA, "a"),
-        bufferB -> Buffer.fromString(bufferB, "b"),
-        bufferC -> Buffer.fromString(bufferC, "c")
-      ),
-      bufferOrder = List(bufferA, bufferB, bufferC),
-      layout = Layout(
-        editorPanes = Map(
-          paneA -> EditorPane.withBuffer(paneA, bufferA),
-          paneB -> EditorPane.withBuffer(paneB, bufferB)
+    AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        buffers = Map(
+          bufferA -> Buffer.fromString(bufferA, "a"),
+          bufferB -> Buffer.fromString(bufferB, "b"),
+          bufferC -> Buffer.fromString(bufferC, "c")
         ),
-        activeEditorPaneId = Some(focusedPane),
-        paneOrder = List(paneA, paneB)
-      ),
-      focus = Focus.EditorPane(focusedPane)
+        bufferOrder = List(bufferA, bufferB, bufferC),
+        layout = Layout(
+          editorPanes = Map(
+            paneA -> EditorPane.withBuffer(paneA, bufferA),
+            paneB -> EditorPane.withBuffer(paneB, bufferB)
+          ),
+          activeEditorPaneId = Some(focusedPane),
+          paneOrder = List(paneA, paneB)
+        ),
+        focus = Focus.EditorPane(focusedPane)
+      )
     )
 
   "StateManagerEventPipeline.candidateLspBufferIds" should
@@ -58,8 +60,11 @@ class StateManagerEventPipelineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "return an empty set when neither state has editor-pane focus" in {
-    val previous = stateWith(paneA).copy(focus = Focus.Surface(SurfaceId("command-runner")))
-    val current  = previous
+    val previous =
+      stateWith(paneA).copy(persisted =
+        stateWith(paneA).persisted.copy(focus = Focus.Surface(SurfaceId("command-runner")))
+      )
+    val current = previous
 
     StateManagerEventPipeline.candidateLspBufferIds(previous, current) shouldBe empty
   }

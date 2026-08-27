@@ -19,14 +19,18 @@ class ModalComponentSpec extends AnyFlatSpec with Matchers:
 
   private def modalState(modal: Modal): AppState =
     AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("modal"),
-          SurfaceContent.ModalWorkflow(modal),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        )
+      persisted = AppState.initial.persisted.copy(
+        focus = Focus.Surface(SurfaceId("modal"))
       ),
-      focus = Focus.Surface(SurfaceId("modal"))
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("modal"),
+            SurfaceContent.ModalWorkflow(modal),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
     )
 
   "ModalComponent" should "update goto line modals through the reducer path" in {

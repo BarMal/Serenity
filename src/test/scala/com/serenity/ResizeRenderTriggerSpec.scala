@@ -51,7 +51,7 @@ class ResizeRenderTriggerSpec extends AnyFlatSpec with Matchers:
       sm    <- makeStateManager()
       _     <- RenderController.handleResize(Some(newSize), sm, IO.unit)
       state <- sm.getCurrentState
-    yield state.viewportSize
+    yield state.runtime.viewportSize
     result.unsafeRunSync() shouldBe Some(newSize)
   }
 
@@ -60,6 +60,6 @@ class ResizeRenderTriggerSpec extends AnyFlatSpec with Matchers:
       sm    <- makeStateManager()
       _     <- RenderController.handleResize(None, sm, IO.unit)
       state <- sm.getCurrentState
-    yield state.viewportSize
+    yield state.runtime.viewportSize
     result.unsafeRunSync() shouldBe None
   }

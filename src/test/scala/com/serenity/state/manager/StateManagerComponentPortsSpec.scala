@@ -19,7 +19,7 @@ class StateManagerComponentPortsSpec extends AnyFlatSpec with Matchers:
       observed <- Ref.of[IO, List[String]](Nil)
       handler = new ResizeEventHandler(new ResizeEventPort:
         def applyReducerResult(result: ReducerResult, fallbackState: AppState): IO[Unit] =
-          observed.update(_ :+ s"resize:${result.state.viewportSize}")
+          observed.update(_ :+ s"resize:${result.state.runtime.viewportSize}")
         def rebalancePanes(): IO[Unit] =
           observed.update(_ :+ "rebalance"))
       _     <- handler.apply(ResizeEvent(ViewportSize(90, 30)), AppState.initial)

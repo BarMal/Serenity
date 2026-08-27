@@ -11,25 +11,25 @@ import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, Vi
 object EditorGeometryProducer:
 
   def forPane(state: AppState, paneId: PaneId): Option[EditorGeometry] =
-    state.layout.editorPanes
+    state.persisted.layout.editorPanes
       .get(paneId)
       .flatMap(_.bufferId)
-      .flatMap(state.buffers.get)
+      .flatMap(state.persisted.buffers.get)
       .map(buffer => forBuffer(state, buffer))
 
   private def forBuffer(state: AppState, buffer: Buffer): EditorGeometry =
-    val font              = FontLoader.previewFontForRole(state.config.fontConfig, buffer.typographyRole)
+    val font              = FontLoader.previewFontForRole(state.persisted.config.fontConfig, buffer.typographyRole)
     val metrics           = CellMetrics.fromFont(font)
     val panelWidthColumns = effectivePanelWidth(state)
     val snapshot =
       TextLayoutSnapshot.fromBuffer(
         buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
-        TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.config.fontConfig),
+        TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.persisted.config.fontConfig),
         font,
-        wordWrapEnabled = state.config.wordWrapEnabled
+        wordWrapEnabled = state.persisted.config.wordWrapEnabled
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 
   private def effectivePanelWidth(state: AppState): Int =
-    val viewportSize = state.viewportSize.getOrElse(ViewportSize(80, 24))
+    val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
     LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect.width

@@ -97,9 +97,9 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
           selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
         )
       )
-    val state = AppState.initial.copy(buffers = Map(bufferId -> buffer))
+    val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
-    val updatedBuffer = EditorEventReducer.reduce(InsertChar('X'), paneId, state).state.buffers(bufferId)
+    val updatedBuffer = EditorEventReducer.reduce(InsertChar('X'), paneId, state).state.persisted.buffers(bufferId)
 
     updatedBuffer.document.content.collect() shouldBe "cafX!"
     updatedBuffer.editing.cursors shouldBe List(CursorPosition(0, 4))
@@ -129,11 +129,12 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
           selection = Some(Selection(CursorPosition(0, 2), CursorPosition(0, 4)))
         )
       )
-    val state = AppState.initial.copy(buffers = Map(bufferId -> buffer))
+    val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
     EditorEventReducer
       .reduce(InsertChar('X'), paneId, state)
       .state
+      .persisted
       .buffers(bufferId)
       .document
       .content
@@ -142,6 +143,6 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
 
   private def reduceTextEvent(text: String, cursor: CursorPosition, event: TextEntryEvent): Buffer =
     val buffer = Buffer.fromString(bufferId, text).copy(editing = EditingState(cursors = List(cursor)))
-    val state  = AppState.initial.copy(buffers = Map(bufferId -> buffer))
+    val state  = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
-    EditorEventReducer.reduce(event, paneId, state).state.buffers(bufferId)
+    EditorEventReducer.reduce(event, paneId, state).state.persisted.buffers(bufferId)

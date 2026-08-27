@@ -72,24 +72,26 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
 
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    initialState.config.showLineNumbers shouldBe true
+    initialState.persisted.config.showLineNumbers shouldBe true
 
     executeCommandThroughRunner(stateManager, "toggle-line-numbers", "toggle-line-numbers")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.config.showLineNumbers shouldBe false
+    finalState.persisted.config.showLineNumbers shouldBe false
   }
 
   it should "toggle line numbers from disabled to enabled" in {
     val stateManager = createStateManager()
 
-    stateManager.updateState(s => s.copy(config = s.config.copy(showLineNumbers = false))).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().config.showLineNumbers shouldBe false
+    stateManager
+      .updateState(s => s.copy(persisted = s.persisted.copy(config = s.persisted.config.copy(showLineNumbers = false))))
+      .unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.showLineNumbers shouldBe false
 
     executeCommandThroughRunner(stateManager, "toggle-line-numbers", "toggle-line-numbers")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.config.showLineNumbers shouldBe true
+    finalState.persisted.config.showLineNumbers shouldBe true
   }
 
   behavior of "Toggle Gutter Command"
@@ -111,24 +113,26 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
   it should "toggle gutter from enabled to disabled" in {
     val stateManager = createStateManager()
 
-    stateManager.getCurrentState.unsafeRunSync().config.showGutter shouldBe true
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.showGutter shouldBe true
 
     executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.config.showGutter shouldBe false
+    finalState.persisted.config.showGutter shouldBe false
   }
 
   it should "toggle gutter from disabled to enabled" in {
     val stateManager = createStateManager()
 
-    stateManager.updateState(s => s.copy(config = s.config.copy(showGutter = false))).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().config.showGutter shouldBe false
+    stateManager
+      .updateState(s => s.copy(persisted = s.persisted.copy(config = s.persisted.config.copy(showGutter = false))))
+      .unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.showGutter shouldBe false
 
     executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.config.showGutter shouldBe true
+    finalState.persisted.config.showGutter shouldBe true
   }
 
   behavior of "Combined Toggle UI Command Integration"
@@ -137,21 +141,21 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
 
     val initialState = stateManager.getCurrentState.unsafeRunSync()
-    initialState.config.showLineNumbers shouldBe true
-    initialState.config.showGutter shouldBe true
+    initialState.persisted.config.showLineNumbers shouldBe true
+    initialState.persisted.config.showGutter shouldBe true
 
     executeCommandThroughRunner(stateManager, "toggle-line-numbers", "toggle-line-numbers")
 
     val midState = stateManager.getCurrentState.unsafeRunSync()
-    midState.config.showLineNumbers shouldBe false
-    midState.config.showGutter shouldBe true
+    midState.persisted.config.showLineNumbers shouldBe false
+    midState.persisted.config.showGutter shouldBe true
     midState.commandRunnerSurface shouldBe None
 
     executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.config.showLineNumbers shouldBe false
-    finalState.config.showGutter shouldBe false
+    finalState.persisted.config.showLineNumbers shouldBe false
+    finalState.persisted.config.showGutter shouldBe false
   }
 
   it should "have descriptive command names and descriptions" in {
@@ -185,11 +189,11 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
   it should "toggle soft line wrapping through the line wrap command" in {
     val stateManager = createStateManager()
 
-    stateManager.getCurrentState.unsafeRunSync().config.wordWrapEnabled shouldBe true
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.wordWrapEnabled shouldBe true
 
     executeCommandThroughRunner(stateManager, "toggle-line-wrap", "toggle-line-wrap")
 
-    stateManager.getCurrentState.unsafeRunSync().config.wordWrapEnabled shouldBe false
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.wordWrapEnabled shouldBe false
   }
 
   it should "be found in command registry by search terms" in {
@@ -207,22 +211,22 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
   it should "toggle text body focus from disabled to enabled" in {
     val stateManager = createStateManager()
 
-    stateManager.getCurrentState.unsafeRunSync().config.focusedTextBodyEnabled shouldBe false
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.focusedTextBodyEnabled shouldBe false
 
     executeCommandThroughRunner(stateManager, "toggle-text-body-focus", "toggle-text-body-focus")
 
-    stateManager.getCurrentState.unsafeRunSync().config.focusedTextBodyEnabled shouldBe true
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.focusedTextBodyEnabled shouldBe true
   }
 
   it should "open the contextual toolbar without toggling the setting" in {
     val stateManager = createStateManager()
 
-    stateManager.getCurrentState.unsafeRunSync().config.contextualToolbarEnabled shouldBe true
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.contextualToolbarEnabled shouldBe true
 
     executeCommandThroughRunner(stateManager, "toggle-contextual-toolbar", "toggle-contextual-toolbar")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.config.contextualToolbarEnabled shouldBe true
+    finalState.persisted.config.contextualToolbarEnabled shouldBe true
     finalState.contextualToolbarSurface shouldBe defined
     finalState.commandRunnerSurface shouldBe None
   }
@@ -230,11 +234,11 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
   it should "toggle word wrap from enabled to disabled" in {
     val stateManager = createStateManager()
 
-    stateManager.getCurrentState.unsafeRunSync().config.wordWrapEnabled shouldBe true
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.wordWrapEnabled shouldBe true
 
     executeCommandThroughRunner(stateManager, "toggle-word-wrap", "toggle-word-wrap")
 
-    stateManager.getCurrentState.unsafeRunSync().config.wordWrapEnabled shouldBe false
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.wordWrapEnabled shouldBe false
   }
 
   it should "set text display settings explicitly from stateful options" in {
@@ -292,12 +296,12 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     val disabledState = stateManager.getCurrentState.unsafeRunSync()
-    disabledState.config.showLineNumbers shouldBe false
-    disabledState.config.showGutter shouldBe false
-    disabledState.config.wordWrapEnabled shouldBe false
-    disabledState.config.focusedTextBodyEnabled shouldBe true
-    disabledState.config.contextualToolbarEnabled shouldBe false
-    disabledState.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.TextOnly
+    disabledState.persisted.config.showLineNumbers shouldBe false
+    disabledState.persisted.config.showGutter shouldBe false
+    disabledState.persisted.config.wordWrapEnabled shouldBe false
+    disabledState.persisted.config.focusedTextBodyEnabled shouldBe true
+    disabledState.persisted.config.contextualToolbarEnabled shouldBe false
+    disabledState.persisted.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.TextOnly
 
     stateManager
       .executeCommand(
@@ -347,10 +351,10 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     val enabledState = stateManager.getCurrentState.unsafeRunSync()
-    enabledState.config.showLineNumbers shouldBe true
-    enabledState.config.showGutter shouldBe true
-    enabledState.config.wordWrapEnabled shouldBe true
-    enabledState.config.focusedTextBodyEnabled shouldBe false
-    enabledState.config.contextualToolbarEnabled shouldBe true
-    enabledState.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.IconAndText
+    enabledState.persisted.config.showLineNumbers shouldBe true
+    enabledState.persisted.config.showGutter shouldBe true
+    enabledState.persisted.config.wordWrapEnabled shouldBe true
+    enabledState.persisted.config.focusedTextBodyEnabled shouldBe false
+    enabledState.persisted.config.contextualToolbarEnabled shouldBe true
+    enabledState.persisted.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.IconAndText
   }

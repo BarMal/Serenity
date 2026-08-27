@@ -46,17 +46,19 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
     buffer.usesTextFont shouldBe usesTextFont
 
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withTextAreaInsets(insets)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withTextAreaInsets(insets)
+      )
     )
 
     val contentRect =
@@ -150,29 +152,31 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       buffer.usesTextFont shouldBe true
 
       val baseState = AppState.initial.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId)
+        persisted = AppState.initial.persisted.copy(
+          buffers = Map(bufferId -> buffer),
+          bufferOrder = List(bufferId),
+          layout = Layout(
+            editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+            activeEditorPaneId = Some(paneId)
+          ),
+          theme = Theme.light,
+          config = AppConfig.default
+            .withLineNumbers(false)
+            .withGutter(false)
+            .withTextAreaInsets(largeMargin)
         ),
-        theme = Theme.light,
-        config = AppConfig.default
-          .withLineNumbers(false)
-          .withGutter(false)
-          .withTextAreaInsets(largeMargin),
-        viewportSize = Some(viewportSize)
+        runtime = AppState.initial.runtime.copy(viewportSize = Some(viewportSize))
       )
       // Give the buffer the viewport dimensions the layout engine derives (visibleColumns/visibleLines in cells).
       val state        = LayoutEngine.syncViewportDimensions(baseState, viewportSize)
-      val syncedBuffer = state.buffers(bufferId)
+      val syncedBuffer = state.persisted.buffers(bufferId)
       val cursor       = syncedBuffer.editing.cursors.head
 
       // The caret's true wrapped row: measured at the width the renderer wraps at (the code-font grid width), with
       // the buffer's own prose font for glyph advances.
-      val proseFont = FontLoader.previewFontForRole(state.config.fontConfig, syncedBuffer.typographyRole)
+      val proseFont = FontLoader.previewFontForRole(state.persisted.config.fontConfig, syncedBuffer.typographyRole)
       val gridWrapWidthPx =
-        TextLayoutSnapshot.gridWrapWidthPx(syncedBuffer.viewport.visibleColumns, state.config.fontConfig)
+        TextLayoutSnapshot.gridWrapWidthPx(syncedBuffer.viewport.visibleColumns, state.persisted.config.fontConfig)
       val trueVisualRow =
         TextLayoutSnapshot.visualLineIndexForCursor(content, cursor.column, gridWrapWidthPx, proseFont)
 

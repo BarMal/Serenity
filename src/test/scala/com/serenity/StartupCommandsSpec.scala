@@ -50,12 +50,12 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     yield
       finalState.startPageSurface shouldBe None
       finalState.modalSurface shouldBe None
-      finalState.buffers.values
+      finalState.persisted.buffers.values
         .find(_.document.filePath.contains(selectedFile))
         .map(_.document.content.collect()) shouldBe Some(
         "opened from startup"
       )
-      finalState.focus should matchPattern { case Focus.EditorPane(_) => }
+      finalState.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
 
     program.unsafeRunSync()
     java.nio.file.Files.deleteIfExists(selectedFile)
@@ -76,7 +76,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     yield
       finalState.startPageSurface should not be None
       finalState.modalSurface shouldBe None
-      finalState.focus match
+      finalState.persisted.focus match
         case Focus.Surface(_) => succeed
         case other            => fail(s"Expected startup page focus, got $other")
 
@@ -96,7 +96,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       finalState <- stateManager.getCurrentState
     yield
       finalState.startPageSurface shouldBe defined
-      finalState.focus match
+      finalState.persisted.focus match
         case Focus.Surface(_) => succeed
         case other            => fail(s"Expected startup surface focus, got $other")
 
@@ -115,8 +115,10 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       _          <- stateManager.applyEvent(Enter) // Select first option: New Session
       finalState <- stateManager.getCurrentState
     yield
-      finalState.bufferOrder should not be empty
-      finalState.buffers.keys.toList.foreach(bufferId => finalState.bufferOrder should contain(bufferId))
+      finalState.persisted.bufferOrder should not be empty
+      finalState.persisted.buffers.keys.toList.foreach(bufferId =>
+        finalState.persisted.bufferOrder should contain(bufferId)
+      )
 
     program.unsafeRunSync()
   }

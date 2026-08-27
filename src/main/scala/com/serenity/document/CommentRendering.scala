@@ -28,17 +28,19 @@ object CommentRendering:
           presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
         )
         state
-          .copy(uiSurfaces = state.uiSurfaces.filterNot(isCommentLensSurface) :+ surface)
+          .copy(runtime =
+            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isCommentLensSurface) :+ surface)
+          )
           .pushFocus(Focus.Surface(surface.id))
       case None =>
         state
 
   def activeEditorComment(state: AppState): Option[(CursorPosition, CommentLensState)] =
     for
-      paneId   <- state.layout.activeEditorPaneId
-      pane     <- state.layout.editorPanes.get(paneId)
+      paneId   <- state.persisted.layout.activeEditorPaneId
+      pane     <- state.persisted.layout.editorPanes.get(paneId)
       bufferId <- pane.bufferId
-      buffer   <- state.buffers.get(bufferId)
+      buffer   <- state.persisted.buffers.get(bufferId)
       cursor   <- buffer.editing.cursors.headOption
       comment  <- atCursor(buffer)
     yield

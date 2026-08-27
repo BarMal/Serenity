@@ -36,34 +36,42 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
     val result = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, diags), state)
 
-    result.state.diagnostics should contain key uri
-    result.state.diagnostics(uri) should have size 2
+    result.state.runtime.diagnosticsState.diagnostics should contain key uri
+    result.state.runtime.diagnosticsState.diagnostics(uri) should have size 2
     result.effects shouldBe empty
   }
 
   it should "replace diagnostics for the same URI" in {
     given Balance = Balance.default
     val uri       = "file:///foo/Bar.scala"
-    val state = AppState.initial.copy(
-      diagnostics = Map(uri -> List(diag(0, DiagnosticSeverity.Error)))
+    val initial   = AppState.initial
+    val state = initial.copy(
+      runtime = initial.runtime.copy(
+        diagnosticsState =
+          initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> List(diag(0, DiagnosticSeverity.Error))))
+      )
     )
 
     val newDiags = List(diag(3, DiagnosticSeverity.Warning))
     val result   = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, newDiags), state)
 
-    result.state.diagnostics(uri) should have size 1
-    result.state.diagnostics(uri).head.range.start.line shouldBe 3
+    result.state.runtime.diagnosticsState.diagnostics(uri) should have size 1
+    result.state.runtime.diagnosticsState.diagnostics(uri).head.range.start.line shouldBe 3
   }
 
   it should "clear diagnostics when an empty list is received" in {
     given Balance = Balance.default
     val uri       = "file:///foo/Bar.scala"
-    val state = AppState.initial.copy(
-      diagnostics = Map(uri -> List(diag(0, DiagnosticSeverity.Error)))
+    val initial   = AppState.initial
+    val state = initial.copy(
+      runtime = initial.runtime.copy(
+        diagnosticsState =
+          initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> List(diag(0, DiagnosticSeverity.Error))))
+      )
     )
 
     val result = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, Nil), state)
-    result.state.diagnostics(uri) shouldBe empty
+    result.state.runtime.diagnosticsState.diagnostics(uri) shouldBe empty
   }
 
   it should "show LSP hover text as a quick-info peek surface" in {
@@ -73,10 +81,10 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       AppState.initial
     )
 
-    val surface = result.state.uiSurfaces.headOption.getOrElse(fail("Expected hover surface"))
+    val surface = result.state.runtime.uiSurfaces.headOption.getOrElse(fail("Expected hover surface"))
     surface.content shouldBe SurfaceContent.QuickInfo("def map[B](f: A => B): List[B]")
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.AboveCursor)
-    result.state.focus shouldBe Focus.Surface(surface.id)
+    result.state.persisted.focus shouldBe Focus.Surface(surface.id)
   }
 
   it should "show LSP definition locations as symbol-definition peek surfaces" in {
@@ -89,7 +97,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
     val result  = SystemEventReducer.reduce(event, AppState.initial)
-    val surface = result.state.uiSurfaces.headOption.getOrElse(fail("Expected definition surface"))
+    val surface = result.state.runtime.uiSurfaces.headOption.getOrElse(fail("Expected definition surface"))
 
     surface.content shouldBe SurfaceContent.SymbolDefinition("map @ file:///workspace/Foo.scala", Location(9, 2))
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(1, 3)), SurfacePlacement.AboveCursor)
@@ -102,10 +110,10 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       AppState.initial
     )
 
-    val surface = result.state.uiSurfaces.headOption.getOrElse(fail("Expected completion surface"))
+    val surface = result.state.runtime.uiSurfaces.headOption.getOrElse(fail("Expected completion surface"))
     surface.content shouldBe SurfaceContent.QuickInfo("map\nmapValues")
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.AboveCursor)
-    result.state.focus shouldBe Focus.Surface(surface.id)
+    result.state.persisted.focus shouldBe Focus.Surface(surface.id)
   }
 
   it should "show an explicit empty state when LSP completion returns no candidates" in {
@@ -115,7 +123,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       AppState.initial
     )
 
-    result.state.uiSurfaces.headOption.map(_.content) shouldBe Some(
+    result.state.runtime.uiSurfaces.headOption.map(_.content) shouldBe Some(
       SurfaceContent.QuickInfo("No completions available.")
     )
   }
@@ -136,6 +144,6 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(LspEvent.LspDiagnosticsReceived(uri, diags)).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
-    state.diagnostics should contain key uri
-    state.diagnostics(uri).head.severity shouldBe Some(DiagnosticSeverity.Error)
+    state.runtime.diagnosticsState.diagnostics should contain key uri
+    state.runtime.diagnosticsState.diagnostics(uri).head.severity shouldBe Some(DiagnosticSeverity.Error)
   }

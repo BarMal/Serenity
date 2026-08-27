@@ -77,8 +77,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = state.persisted.buffers(bufferId).document.copy(isDirty = true))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -88,7 +90,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
-    updatedState.buffers should not contain key(bufferId)
+    updatedState.persisted.buffers should not contain key(bufferId)
   }
 
   it should "close an untouched empty buffer without prompting" in {
@@ -99,7 +101,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
-    updatedState.buffers should not contain key(bufferId)
+    updatedState.persisted.buffers should not contain key(bufferId)
   }
 
   it should "warn before closing an untitled content buffer that has not been saved" in {
@@ -108,10 +110,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(document =
-            state
+            state.persisted
               .buffers(bufferId)
               .document
               .copy(
@@ -121,14 +123,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 isNewEmpty = false
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
     stateManager.applyEvent(CloseTab).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.buffers should contain key bufferId
+    updatedState.persisted.buffers should contain key bufferId
     currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
   }
 
@@ -138,10 +140,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(document =
-            state
+            state.persisted
               .buffers(bufferId)
               .document
               .copy(
@@ -151,14 +153,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 isNewEmpty = false
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
     stateManager.applyEvent(CloseTab).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.buffers should contain key bufferId
+    updatedState.persisted.buffers should contain key bufferId
     currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
   }
 
@@ -168,10 +170,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(document =
-            state
+            state.persisted
               .buffers(bufferId)
               .document
               .copy(
@@ -181,20 +183,26 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 isNewEmpty = false
               )
           )
-        val (stateWithId, surfaceId) = state.copy(buffers = state.buffers + (bufferId -> buffer)).allocateSurfaceId
+        val (stateWithId, surfaceId) =
+          state
+            .copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+            .allocateSurfaceId
         val surface = UiSurface(
           id = surfaceId,
           content = SurfaceContent.QuickInfo("hint"),
           presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
         )
-        stateWithId.copy(uiSurfaces = stateWithId.uiSurfaces :+ surface, focus = Focus.Surface(surfaceId))
+        stateWithId.copy(
+          persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
+          runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface)
+        )
       }
       .unsafeRunSync()
 
     stateManager.applyEvent(CloseTab).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.buffers should contain key bufferId
+    updatedState.persisted.buffers should contain key bufferId
     currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
   }
 
@@ -204,10 +212,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(document =
-            state
+            state.persisted
               .buffers(bufferId)
               .document
               .copy(
@@ -217,7 +225,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 isNewEmpty = false
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -227,7 +235,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
-    updatedState.buffers should not contain key(bufferId)
+    updatedState.persisted.buffers should not contain key(bufferId)
   }
 
   it should "report untitled content buffers as unsaved changes" in {
@@ -236,10 +244,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(document =
-            state
+            state.persisted
               .buffers(bufferId)
               .document
               .copy(
@@ -249,7 +257,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 isNewEmpty = false
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -263,8 +271,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = state.persisted.buffers(bufferId).document.copy(isDirty = true))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -275,9 +285,9 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
-    updatedState.buffers should contain key bufferId
-    updatedState.buffers(bufferId).document.isDirty shouldBe true
-    updatedState.focus shouldBe Focus.EditorPane(updatedState.layout.activeEditorPaneId.get)
+    updatedState.persisted.buffers should contain key bufferId
+    updatedState.persisted.buffers(bufferId).document.isDirty shouldBe true
+    updatedState.persisted.focus shouldBe Focus.EditorPane(updatedState.persisted.layout.activeEditorPaneId.get)
   }
 
   it should "save and close a dirty path-backed buffer" in {
@@ -289,10 +299,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val stateManager = createStateManager()
       stateManager
         .updateState { state =>
-          val buffer = state
+          val buffer = state.persisted
             .buffers(bufferId)
             .copy(document =
-              state
+              state.persisted
                 .buffers(bufferId)
                 .document
                 .copy(
@@ -301,7 +311,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                   isDirty = true
                 )
             )
-          state.copy(buffers = state.buffers + (bufferId -> buffer))
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
         }
         .unsafeRunSync()
 
@@ -310,7 +320,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
       updatedState.modalSurface shouldBe None
-      updatedState.buffers should not contain key(bufferId)
+      updatedState.persisted.buffers should not contain key(bufferId)
       Files.readString(targetFile) shouldBe "object Notes"
     finally
       Files.deleteIfExists(targetFile)
@@ -327,10 +337,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val stateManager = createStateManager(Some(TestFileDialog(Some(targetFile))))
       stateManager
         .updateState { state =>
-          val buffer = state
+          val buffer = state.persisted
             .buffers(bufferId)
             .copy(document =
-              state
+              state.persisted
                 .buffers(bufferId)
                 .document
                 .copy(
@@ -338,7 +348,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                   isDirty = true
                 )
             )
-          state.copy(buffers = state.buffers + (bufferId -> buffer))
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
         }
         .unsafeRunSync()
 
@@ -347,7 +357,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
       updatedState.modalSurface shouldBe None
-      updatedState.buffers should not contain key(bufferId)
+      updatedState.persisted.buffers should not contain key(bufferId)
       Files.readString(targetFile) shouldBe "object Notes"
     finally
       Files.deleteIfExists(targetFile)
@@ -361,10 +371,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(document =
-            state
+            state.persisted
               .buffers(bufferId)
               .document
               .copy(
@@ -372,7 +382,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 isDirty = true
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -381,8 +391,8 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     currentCloseWorkflow(stateManager).currentBufferId shouldBe bufferId
-    updatedState.buffers should contain key bufferId
-    updatedState.buffers(bufferId).document.isDirty shouldBe true
+    updatedState.persisted.buffers should contain key bufferId
+    updatedState.persisted.buffers(bufferId).document.isDirty shouldBe true
   }
 
   it should "open sequential unsaved-changes prompts for close-all" in {
@@ -391,12 +401,19 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val first = state.buffers(BufferId(0)).copy(document = state.buffers(BufferId(0)).document.copy(isDirty = true))
+        val first =
+          state.persisted
+            .buffers(BufferId(0))
+            .copy(document = state.persisted.buffers(BufferId(0)).document.copy(isDirty = true))
         val second =
-          state.buffers(secondBufferId).copy(document = state.buffers(secondBufferId).document.copy(isDirty = true))
-        state.copy(
-          buffers = state.buffers + (BufferId(0) -> first) + (secondBufferId -> second),
-          bufferOrder = state.bufferOrder :+ secondBufferId
+          state.persisted
+            .buffers(secondBufferId)
+            .copy(document = state.persisted.buffers(secondBufferId).document.copy(isDirty = true))
+        state.copy(persisted =
+          state.persisted.copy(
+            buffers = state.persisted.buffers + (BufferId(0) -> first) + (secondBufferId -> second),
+            bufferOrder = state.persisted.bufferOrder :+ secondBufferId
+          )
         )
       }
       .unsafeRunSync()
@@ -418,8 +435,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = state.persisted.buffers(bufferId).document.copy(isDirty = true))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -434,8 +453,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = state.persisted.buffers(bufferId).document.copy(isDirty = true))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -450,8 +471,10 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state.buffers(bufferId).copy(document = state.buffers(bufferId).document.copy(isDirty = true))
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        val buffer = state.persisted
+          .buffers(bufferId)
+          .copy(document = state.persisted.buffers(bufferId).document.copy(isDirty = true))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -461,7 +484,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
-    updatedState.buffers should not contain key(bufferId)
+    updatedState.persisted.buffers should not contain key(bufferId)
     stateManager.awaitQuit.timeout(1.second).unsafeRunSync()
   }
 end CloseWorkflowStateManagerSpec

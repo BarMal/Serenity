@@ -28,20 +28,26 @@ private[perf] object BenchmarkFixtures:
           Viewport(topLine = 0, leftColumn = 0, visibleColumns = viewportSize.width, visibleLines = viewportSize.height)
       )
     AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout =
-        Layout(editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)), activeEditorPaneId = Some(paneId)),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      )
     )
 
   def editorStateForRichDocument(document: RichTextDocument): AppState =
     val base = editorState(document.plainText, None)
-    base.copy(buffers =
-      base.buffers.view
-        .mapValues(buffer => buffer.copy(richText = buffer.richText.copy(richTextDocument = Some(document))))
-        .toMap
+    base.copy(persisted =
+      base.persisted.copy(buffers =
+        base.persisted.buffers.view
+          .mapValues(buffer => buffer.copy(richText = buffer.richText.copy(richTextDocument = Some(document))))
+          .toMap
+      )
     )
 
   def deepViewport: Viewport =
@@ -86,8 +92,12 @@ private[perf] object BenchmarkFixtures:
 
   def withCursorsOnConsecutiveLines(state: AppState, count: Int, fromLine: Int, column: Int): AppState =
     val cursors = (0 until count).toList.map(row => CursorPosition(fromLine + row, column))
-    state.copy(buffers =
-      state.buffers.view.mapValues(buffer => buffer.copy(editing = buffer.editing.copy(cursors = cursors))).toMap
+    state.copy(persisted =
+      state.persisted.copy(buffers =
+        state.persisted.buffers.view
+          .mapValues(buffer => buffer.copy(editing = buffer.editing.copy(cursors = cursors)))
+          .toMap
+      )
     )
 
 end BenchmarkFixtures

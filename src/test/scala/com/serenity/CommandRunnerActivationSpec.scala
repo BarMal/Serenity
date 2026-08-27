@@ -287,11 +287,16 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val sm                  = com.serenity.state.manager.StateManager.apply(logger).unsafeRunSync()
 
     sm.updateState(s =>
-      s.copy(config = s.config.withFontConfig(s.config.fontConfig.copy(enableLigatures = false, textLigatures = false)))
+      s.copy(persisted =
+        s.persisted.copy(config =
+          s.persisted.config
+            .withFontConfig(s.persisted.config.fontConfig.copy(enableLigatures = false, textLigatures = false))
+        )
+      )
     ).unsafeRunSync()
 
     val stateBefore = sm.getCurrentState.unsafeRunSync()
-    val paneId      = stateBefore.layout.editorPanes.keys.head
+    val paneId      = stateBefore.persisted.layout.editorPanes.keys.head
 
     sm.closePane(paneId).unsafeRunSync()
 

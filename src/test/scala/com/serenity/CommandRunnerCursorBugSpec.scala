@@ -46,12 +46,14 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
 
       // Verify command runner is active and focused
       activeCommandRunner(commandRunnerActiveState) shouldBe defined
-      commandRunnerActiveState.focus shouldBe Focus.Surface(activeCommandRunner(commandRunnerActiveState).get.id)
+      commandRunnerActiveState.persisted.focus shouldBe Focus.Surface(
+        activeCommandRunner(commandRunnerActiveState).get.id
+      )
 
       // The current implementation will still find an activeEditorPaneId and render cursor
       // This is the bug we need to fix
-      val hasActiveEditorPane = commandRunnerActiveState.layout.activeEditorPaneId.isDefined
-      val hasFocusOnEditor    = commandRunnerActiveState.focus.isInstanceOf[Focus.EditorPane]
+      val hasActiveEditorPane = commandRunnerActiveState.persisted.layout.activeEditorPaneId.isDefined
+      val hasFocusOnEditor    = commandRunnerActiveState.persisted.focus.isInstanceOf[Focus.EditorPane]
 
       // This test documents the bug: we have an active editor pane but focus is elsewhere
       hasActiveEditorPane shouldBe true
@@ -95,8 +97,8 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
       state2 <- stateManager.getCurrentState
     yield
       // Verify we have different cursor positions
-      val cursor1 = state1.buffers.values.head.editing.cursors.head
-      val cursor2 = state2.buffers.values.head.editing.cursors.head
+      val cursor1 = state1.persisted.buffers.values.head.editing.cursors.head
+      val cursor2 = state2.persisted.buffers.values.head.editing.cursors.head
 
       cursor1.line shouldBe 0
       cursor1.column shouldBe 6

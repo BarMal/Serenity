@@ -51,17 +51,17 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
                 content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -84,9 +84,9 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
-    updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
-    updatedState.buffers(bufferId).document.content.collect() shouldBe "thread one\nthread two\nkeep"
-    updatedState.buffers(bufferId).document.isDirty shouldBe true
+    updatedState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    updatedState.persisted.buffers(bufferId).document.content.collect() shouldBe "thread one\nthread two\nkeep"
+    updatedState.persisted.buffers(bufferId).document.isDirty shouldBe true
   }
 
   it should "replace the next match and keep the modal open for repeated replacement" in {
@@ -95,17 +95,17 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
                 content = com.serenity.rope.Rope("needle one\nneedle two\nkeep")
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -131,13 +131,13 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    afterFirstReplace.buffers(bufferId).document.content.collect() shouldBe "thread one\nneedle two\nkeep"
+    afterFirstReplace.persisted.buffers(bufferId).document.content.collect() shouldBe "thread one\nneedle two\nkeep"
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val afterSecondReplace = stateManager.getCurrentState.unsafeRunSync()
     afterSecondReplace.modalSurface shouldBe defined
-    afterSecondReplace.buffers(bufferId).document.content.collect() shouldBe "thread one\nthread two\nkeep"
+    afterSecondReplace.persisted.buffers(bufferId).document.content.collect() shouldBe "thread one\nthread two\nkeep"
   }
 
   it should "make replace next undoable while leaving the workflow state available" in {
@@ -147,16 +147,16 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
                 content = com.serenity.rope.Rope(original)
               ),
-            editing = state
+            editing = state.persisted
               .buffers(bufferId)
               .editing
               .copy(
@@ -165,7 +165,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
               ),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -179,22 +179,22 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val replaced = stateManager.getCurrentState.unsafeRunSync()
     replaced.modalSurface shouldBe defined
-    replaced.buffers(bufferId).document.content.collect() shouldBe "thread one\nneedle two\nkeep"
-    replaced.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, "thread".length))
-    replaced.buffers(bufferId).editing.selection shouldBe None
-    replaced.buffers(bufferId).findState shouldBe Some(FindState("needle", List(FindResult(1, 0)), 0))
+    replaced.persisted.buffers(bufferId).document.content.collect() shouldBe "thread one\nneedle two\nkeep"
+    replaced.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, "thread".length))
+    replaced.persisted.buffers(bufferId).editing.selection shouldBe None
+    replaced.persisted.buffers(bufferId).findState shouldBe Some(FindState("needle", List(FindResult(1, 0)), 0))
 
     stateManager.applyEvent(Undo).unsafeRunSync()
 
     val undone = stateManager.getCurrentState.unsafeRunSync()
     undone.modalSurface shouldBe defined
-    undone.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
-    undone.buffers(bufferId).document.content.collect() shouldBe original
-    undone.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
-    undone.buffers(bufferId).editing.selection shouldBe Some(
+    undone.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    undone.persisted.buffers(bufferId).document.content.collect() shouldBe original
+    undone.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
+    undone.persisted.buffers(bufferId).editing.selection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
-    undone.buffers(bufferId).findState shouldBe Some(
+    undone.persisted.buffers(bufferId).findState shouldBe Some(
       FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)
     )
   }
@@ -205,16 +205,16 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
                 content = com.serenity.rope.Rope("e cafe\u0301")
               ),
-            editing = state
+            editing = state.persisted
               .buffers(bufferId)
               .editing
               .copy(
@@ -222,7 +222,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
               ),
             findState = Some(FindState("e", List(FindResult(0, 0)), 0))
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -235,8 +235,8 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.buffers(bufferId).document.content.collect() shouldBe "x cafe\u0301"
-    updatedState.buffers(bufferId).findState shouldBe None
+    updatedState.persisted.buffers(bufferId).document.content.collect() shouldBe "x cafe\u0301"
+    updatedState.persisted.buffers(bufferId).findState shouldBe None
   }
 
   it should "keep the modal open with a status message when find text is empty" in {
@@ -263,16 +263,16 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
                 content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three")
               ),
-            editing = state
+            editing = state.persisted
               .buffers(bufferId)
               .editing
               .copy(
@@ -284,7 +284,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 )
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -299,7 +299,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe defined
-    updatedState.buffers(bufferId).document.content.collect() shouldBe "needle one\nthread two\nneedle three"
+    updatedState.persisted.buffers(bufferId).document.content.collect() shouldBe "needle one\nthread two\nneedle three"
 
     updatedState.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
@@ -323,16 +323,16 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
                 content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three")
               ),
-            editing = state
+            editing = state.persisted
               .buffers(bufferId)
               .editing
               .copy(
@@ -344,7 +344,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 )
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -358,8 +358,8 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
-    updatedState.buffers(bufferId).document.content.collect() shouldBe "needle one\nthread two\nthread three"
-    updatedState.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
+    updatedState.persisted.buffers(bufferId).document.content.collect() shouldBe "needle one\nthread two\nthread three"
+    updatedState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
   }
 
   it should "replace next repeatedly within the original selection scope" in {
@@ -368,16 +368,16 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
                 content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three\noutside needle")
               ),
-            editing = state
+            editing = state.persisted
               .buffers(bufferId)
               .editing
               .copy(
@@ -389,7 +389,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 )
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -402,22 +402,22 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(ModalNavigate(Direction.Down)).unsafeRunSync()
 
     stateManager.applyEvent(Enter).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).document.content.collect() shouldBe
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect() shouldBe
       "thread one\nneedle two\nneedle three\noutside needle"
 
     stateManager.applyEvent(Enter).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().buffers(bufferId).document.content.collect() shouldBe
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect() shouldBe
       "thread one\nthread two\nneedle three\noutside needle"
 
     stateManager.applyEvent(Enter).unsafeRunSync()
     val afterThird = stateManager.getCurrentState.unsafeRunSync()
-    afterThird.buffers(bufferId).document.content.collect() shouldBe
+    afterThird.persisted.buffers(bufferId).document.content.collect() shouldBe
       "thread one\nthread two\nthread three\noutside needle"
     afterThird.modalSurface shouldBe defined
 
     stateManager.applyEvent(Enter).unsafeRunSync()
     val afterExhausted = stateManager.getCurrentState.unsafeRunSync()
-    afterExhausted.buffers(bufferId).document.content.collect() shouldBe
+    afterExhausted.persisted.buffers(bufferId).document.content.collect() shouldBe
       "thread one\nthread two\nthread three\noutside needle"
     afterExhausted.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
@@ -441,16 +441,16 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
                 content = com.serenity.rope.Rope("needle one\nneedle two\noutside needle")
               ),
-            editing = state
+            editing = state.persisted
               .buffers(bufferId)
               .editing
               .copy(
@@ -462,7 +462,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 )
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -477,23 +477,23 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val afterFirst = stateManager.getCurrentState.unsafeRunSync()
-    afterFirst.buffers(bufferId).document.content.collect() shouldBe "n one\nneedle two\noutside needle"
-    afterFirst.buffers(bufferId).editing.selection shouldBe Some(
+    afterFirst.persisted.buffers(bufferId).document.content.collect() shouldBe "n one\nneedle two\noutside needle"
+    afterFirst.persisted.buffers(bufferId).editing.selection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(1, "needle two".length))
     )
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val afterSecond = stateManager.getCurrentState.unsafeRunSync()
-    afterSecond.buffers(bufferId).document.content.collect() shouldBe "n one\nn two\noutside needle"
-    afterSecond.buffers(bufferId).editing.selection shouldBe Some(
+    afterSecond.persisted.buffers(bufferId).document.content.collect() shouldBe "n one\nn two\noutside needle"
+    afterSecond.persisted.buffers(bufferId).editing.selection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(1, "n two".length))
     )
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val afterExhausted = stateManager.getCurrentState.unsafeRunSync()
-    afterExhausted.buffers(bufferId).document.content.collect() shouldBe "n one\nn two\noutside needle"
+    afterExhausted.persisted.buffers(bufferId).document.content.collect() shouldBe "n one\nn two\noutside needle"
     afterExhausted.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.ReplaceWorkflow(
@@ -517,16 +517,16 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
                 content = com.serenity.rope.Rope(original)
               ),
-            editing = state
+            editing = state.persisted
               .buffers(bufferId)
               .editing
               .copy(
@@ -535,7 +535,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
               ),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(2, 0)), 0))
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -548,21 +548,21 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val replaced = stateManager.getCurrentState.unsafeRunSync()
     replaced.modalSurface shouldBe None
-    replaced.buffers(bufferId).document.content.collect() shouldBe "thread one\nmiddle\nthread two"
-    replaced.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(2, "thread".length))
-    replaced.buffers(bufferId).editing.selection shouldBe None
-    replaced.buffers(bufferId).editing.selections shouldBe Nil
-    replaced.buffers(bufferId).findState shouldBe None
+    replaced.persisted.buffers(bufferId).document.content.collect() shouldBe "thread one\nmiddle\nthread two"
+    replaced.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(2, "thread".length))
+    replaced.persisted.buffers(bufferId).editing.selection shouldBe None
+    replaced.persisted.buffers(bufferId).editing.selections shouldBe Nil
+    replaced.persisted.buffers(bufferId).findState shouldBe None
 
     stateManager.applyEvent(Undo).unsafeRunSync()
 
     val undone = stateManager.getCurrentState.unsafeRunSync()
-    undone.buffers(bufferId).document.content.collect() shouldBe original
-    undone.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
-    undone.buffers(bufferId).editing.selection shouldBe Some(
+    undone.persisted.buffers(bufferId).document.content.collect() shouldBe original
+    undone.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
+    undone.persisted.buffers(bufferId).editing.selection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
-    undone.buffers(bufferId).findState shouldBe Some(
+    undone.persisted.buffers(bufferId).findState shouldBe Some(
       FindState("needle", List(FindResult(0, 0), FindResult(2, 0)), 0)
     )
   }
@@ -573,10 +573,10 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
@@ -584,7 +584,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
               ),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -597,8 +597,8 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
-    updatedState.buffers(bufferId).document.content.collect() shouldBe "needle! one\nneedle! two"
-    updatedState.buffers(bufferId).findState shouldBe Some(
+    updatedState.persisted.buffers(bufferId).document.content.collect() shouldBe "needle! one\nneedle! two"
+    updatedState.persisted.buffers(bufferId).findState shouldBe Some(
       FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0)
     )
   }
@@ -609,10 +609,10 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
@@ -620,7 +620,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 isDirty = false
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -632,8 +632,8 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.buffers(bufferId).document.content.collect() shouldBe "plain text"
-    updatedState.buffers(bufferId).document.isDirty shouldBe false
+    updatedState.persisted.buffers(bufferId).document.content.collect() shouldBe "plain text"
+    updatedState.persisted.buffers(bufferId).document.isDirty shouldBe false
     updatedState.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.ReplaceWorkflow(
@@ -657,10 +657,10 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(
@@ -668,7 +668,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 isDirty = false
               )
           )
-        state.copy(buffers = state.buffers + (bufferId -> buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
 
@@ -680,8 +680,8 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.buffers(bufferId).document.content.collect() shouldBe original
-    updatedState.buffers(bufferId).document.isDirty shouldBe false
+    updatedState.persisted.buffers(bufferId).document.content.collect() shouldBe original
+    updatedState.persisted.buffers(bufferId).document.isDirty shouldBe false
     updatedState.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.ReplaceWorkflow(

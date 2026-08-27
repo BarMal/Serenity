@@ -28,16 +28,18 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
   private def stateWith(content: Vector[String], cursor: CursorPosition = CursorPosition(0, 0)): AppState =
     val buffer0 = Buffer.fromString(bufferId, content.mkString("\n"))
     val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(cursor)))
-    AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      theme = Theme.light
+    AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        theme = Theme.light
+      )
     )
 
   /** Every string the frame asked the surface to paint, whichever text path it took. */
@@ -83,12 +85,16 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     // changed range by walking shared tree structure between before/after, which two freshly-built ropes with no
     // shared lineage don't have -- matching how a real keystroke actually mutates the buffer in production.
     val zetaEndOffset = lines.take(6).map(_.length + 1).sum - 1
-    val editedContent = before.buffers(bufferId).document.content.insert(zetaEndOffset, "X")
+    val editedContent = before.persisted.buffers(bufferId).document.content.insert(zetaEndOffset, "X")
     val after =
-      before.copy(buffers =
-        before.buffers.updated(
-          bufferId,
-          before.buffers(bufferId).copy(document = before.buffers(bufferId).document.copy(content = editedContent))
+      before.copy(persisted =
+        before.persisted.copy(buffers =
+          before.persisted.buffers.updated(
+            bufferId,
+            before.persisted
+              .buffers(bufferId)
+              .copy(document = before.persisted.buffers(bufferId).document.copy(content = editedContent))
+          )
         )
       )
 
@@ -104,12 +110,14 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
   it should "draw the rows the caret left and entered again when it moves" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(lines, CursorPosition(0, 0))
-    val after = before.copy(buffers =
-      before.buffers.updated(
-        bufferId,
-        before
-          .buffers(bufferId)
-          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(5, 0))))
+    val after = before.copy(persisted =
+      before.persisted.copy(buffers =
+        before.persisted.buffers.updated(
+          bufferId,
+          before.persisted
+            .buffers(bufferId)
+            .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(5, 0))))
+        )
       )
     )
 
@@ -125,12 +133,15 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
   it should "draw only the rows a new selection covers again" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(lines)
-    val after = before.copy(
-      buffers = before.buffers.view
-        .mapValues(buf =>
-          buf.copy(editing = buf.editing.copy(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4)))))
-        )
-        .toMap
+    val after = before.copy(persisted =
+      before.persisted.copy(
+        buffers = before.persisted.buffers.view
+          .mapValues(buf =>
+            buf
+              .copy(editing = buf.editing.copy(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4)))))
+          )
+          .toMap
+      )
     )
 
     Renderer.render(before, cursorVisible = false, surface, viewport)
@@ -145,7 +156,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
   it should "draw every row again when the theme changes" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(lines)
-    val after   = before.copy(theme = Theme.default)
+    val after   = before.copy(persisted = before.persisted.copy(theme = Theme.default))
 
     Renderer.render(before, cursorVisible = false, surface, viewport)
     surface.clear()
@@ -187,17 +198,19 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     // place via insert (preserving the shared tree structure RopeDiff needs for a narrow diff), so the chrome around
     // the pane is provably unchanged and the repaint can stay bounded.
     val zetaEndOffset = lines.take(6).map(_.length + 1).sum - 1
-    val edited = state.copy(buffers =
-      state.buffers.updated(
-        bufferId,
-        state
-          .buffers(bufferId)
-          .copy(document =
-            state
-              .buffers(bufferId)
-              .document
-              .copy(content = state.buffers(bufferId).document.content.insert(zetaEndOffset, "X"))
-          )
+    val edited = state.copy(persisted =
+      state.persisted.copy(buffers =
+        state.persisted.buffers.updated(
+          bufferId,
+          state.persisted
+            .buffers(bufferId)
+            .copy(document =
+              state.persisted
+                .buffers(bufferId)
+                .document
+                .copy(content = state.persisted.buffers(bufferId).document.content.insert(zetaEndOffset, "X"))
+            )
+        )
       )
     )
 
@@ -211,12 +224,14 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
   it should "cover the whole canvas when the chrome changed too" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(lines, CursorPosition(0, 0))
-    val after = before.copy(buffers =
-      before.buffers.updated(
-        bufferId,
-        before
-          .buffers(bufferId)
-          .copy(editing = before.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 2))))
+    val after = before.copy(persisted =
+      before.persisted.copy(buffers =
+        before.persisted.buffers.updated(
+          bufferId,
+          before.persisted
+            .buffers(bufferId)
+            .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 2))))
+        )
       )
     )
 

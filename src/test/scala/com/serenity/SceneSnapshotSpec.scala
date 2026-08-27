@@ -28,7 +28,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.QuickInfo("map"),
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.AboveCursor)
     )
-    val state = AppState.initial.copy(uiSurfaces = List(panel, floating))
+    val state = AppState.initial.copy(runtime = AppState.initial.runtime.copy(uiSurfaces = List(panel, floating)))
 
     val scene = UiSceneSnapshot.from(state, viewport)
 
@@ -53,32 +53,38 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.Outline(Nil),
       SurfacePresentation.Pinned(PanelPosition.Right, 20)
     )
-    val tree = AppState.initial.layout.effectiveWorkspaceTree
+    val tree = AppState.initial.persisted.layout.effectiveWorkspaceTree
       .flatMap(
         _.dock(panel.id, PanelPosition.Right, WorkspaceNodeId("split"), WorkspaceNodeId("dock-outline"))
       )
       .getOrElse(fail("expected docked workspace"))
     val state = AppState.initial.copy(
-      uiSurfaces = List(panel),
-      layout = AppState.initial.layout.copy(
-        workspaceTree = Some(tree),
-        maximizedWorkspaceNodeId = tree.nodeIdForSurface(panel.id)
+      persisted = AppState.initial.persisted.copy(
+        layout = AppState.initial.persisted.layout.copy(
+          workspaceTree = Some(tree),
+          maximizedWorkspaceNodeId = tree.nodeIdForSurface(panel.id)
+        ),
+        focus = Focus.Surface(panel.id)
       ),
-      focus = Focus.Surface(panel.id)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(panel))
     )
 
     val scene = UiSceneSnapshot.from(state, viewport)
 
     scene.workspace.last.id shouldBe SceneNodeId.Surface(panel.id)
     scene.workspace.last.frameRect shouldBe scene.calculatedLayout.editorPanelRect
-    state.layout.workspaceTree shouldBe Some(tree)
+    state.persisted.layout.workspaceTree shouldBe Some(tree)
   }
 
   it should "own the editor contract and visible text snapshots consumed by clients" in {
     val state  = AppState.initial
     val scene  = UiSceneSnapshot.from(state, viewport)
-    val paneId = state.layout.activeEditorPaneId.getOrElse(fail("expected active pane"))
-    val buffer = state.layout.editorPanes(paneId).bufferId.flatMap(state.buffers.get).getOrElse(fail("expected buffer"))
+    val paneId = state.persisted.layout.activeEditorPaneId.getOrElse(fail("expected active pane"))
+    val buffer = state.persisted.layout
+      .editorPanes(paneId)
+      .bufferId
+      .flatMap(state.persisted.buffers.get)
+      .getOrElse(fail("expected buffer"))
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 640, Font(Font.MONOSPACED, Font.PLAIN, 12))
 
     scene.editorContract.paneLayout(paneId) shouldBe scene.paneLayouts.get(paneId)
@@ -119,14 +125,16 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
     val state = AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-        activeEditorPaneId = Some(PaneId(0)),
-        paneOrder = List(PaneId(0))
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        )
       ),
-      uiSurfaces = List(first, second)
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(first, second))
     )
 
     val scene          = UiSceneSnapshot.from(state, viewport)
@@ -156,7 +164,10 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
     )
 
-    val scene = UiSceneSnapshot.from(AppState.initial.copy(uiSurfaces = List(modal)), viewport)
+    val scene = UiSceneSnapshot.from(
+      AppState.initial.copy(runtime = AppState.initial.runtime.copy(uiSurfaces = List(modal))),
+      viewport
+    )
 
     scene.modalBackdrop shouldBe None
     scene.modal shouldBe Nil
@@ -171,7 +182,10 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       ),
       SurfacePresentation.Modal
     )
-    val state = AppState.initial.copy(uiSurfaces = List(close), focus = Focus.Surface(close.id))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(close.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(close))
+    )
 
     val scene = UiSceneSnapshot.from(state, viewport)
 
@@ -195,7 +209,10 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       ),
       SurfacePresentation.Modal
     )
-    val state = AppState.initial.copy(uiSurfaces = List(floating, close), focus = Focus.Surface(close.id))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(close.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(floating, close))
+    )
 
     val scene = UiSceneSnapshot.from(state, viewport)
 
@@ -211,7 +228,10 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
 
-    val scene = UiSceneSnapshot.from(AppState.initial.copy(uiSurfaces = List(close)), viewport)
+    val scene = UiSceneSnapshot.from(
+      AppState.initial.copy(runtime = AppState.initial.runtime.copy(uiSurfaces = List(close))),
+      viewport
+    )
 
     scene.modal shouldBe Nil
     scene.modalBackdrop shouldBe None
@@ -222,15 +242,17 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     val firstPane  = PaneId(0)
     val secondPane = PaneId(1)
     val state = AppState.initial.copy(
-      layout = Layout(
-        editorPanes = Map(
-          firstPane  -> EditorPane.empty(firstPane),
-          secondPane -> EditorPane.empty(secondPane)
+      persisted = AppState.initial.persisted.copy(
+        layout = Layout(
+          editorPanes = Map(
+            firstPane  -> EditorPane.empty(firstPane),
+            secondPane -> EditorPane.empty(secondPane)
+          ),
+          activeEditorPaneId = Some(secondPane),
+          paneOrder = List(firstPane, secondPane)
         ),
-        activeEditorPaneId = Some(secondPane),
-        paneOrder = List(firstPane, secondPane)
-      ),
-      focus = Focus.EditorPane(secondPane)
+        focus = Focus.EditorPane(secondPane)
+      )
     )
 
     val scene = UiSceneSnapshot.from(state, viewport)
@@ -251,7 +273,10 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.Diagnostics(Nil),
       SurfacePresentation.Expanded(PanelPosition.Right, 22)
     )
-    val state = AppState.initial.copy(uiSurfaces = List(surface), focus = Focus.Surface(surface.id))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
+    )
 
     val scene = UiSceneSnapshot.from(state, viewport)
     val expanded =

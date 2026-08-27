@@ -20,8 +20,10 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(1)
     val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))
+      )
     )
 
     val component       = new EditorPaneComponent(paneId)
@@ -33,7 +35,7 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
     result match
       case ComponentResult.ReducerUpdate(reducerResult) =>
         val newState      = reducerResult.state
-        val updatedBuffer = newState.buffers(bufferId)
+        val updatedBuffer = newState.persisted.buffers(bufferId)
         updatedBuffer.document.content.collect() shouldBe "hello_ world"
         val newCursor = updatedBuffer.editing.cursors.head
         newCursor.column shouldBe 6
@@ -51,8 +53,10 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
     val paneId = PaneId(1)
     val pane   = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))
+      )
     )
 
     val surface = new MockRenderSurface(80, 24)

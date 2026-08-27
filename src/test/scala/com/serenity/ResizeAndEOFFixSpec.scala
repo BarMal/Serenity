@@ -34,8 +34,8 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
       finalState   <- stateManager.getCurrentState
       wasTriggered <- resizeTriggered.get
     yield
-      finalState.viewportSize shouldBe Some(newSize)
-      initialState.viewportSize should not be Some(newSize)
+      finalState.runtime.viewportSize shouldBe Some(newSize)
+      initialState.runtime.viewportSize should not be Some(newSize)
       wasTriggered shouldBe true
 
     program.unsafeRunSync()
@@ -55,7 +55,7 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
       finalState   <- stateManager.getCurrentState
       wasTriggered <- resizeTriggered.get
     yield
-      finalState.viewportSize shouldBe initialState.viewportSize
+      finalState.runtime.viewportSize shouldBe initialState.runtime.viewportSize
       wasTriggered shouldBe false
 
     program.unsafeRunSync()

@@ -30,20 +30,25 @@ class OverlayLayoutKindSpec extends AnyFlatSpec with Matchers:
       DirEntry(Paths.get("/repo/build.sbt"), "build.sbt", false)
     )
 
-    AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+    val initial = AppState.initial
+    initial.copy(
+      persisted = initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("listing"))
       ),
-      focus = Focus.Surface(SurfaceId("listing")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("listing"),
-          SurfaceContent.DirectoryListing(Paths.get("/repo"), entries, None),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.AboveCursor),
-          dismissOnMove = true
+      runtime = initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("listing"),
+            SurfaceContent.DirectoryListing(Paths.get("/repo"), entries, None),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.AboveCursor),
+            dismissOnMove = true
+          )
         )
       )
     )

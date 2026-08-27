@@ -25,20 +25,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       editing = baseBuffer.editing.copy(cursors = List(CursorPosition(2, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
-    val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val state = AppState.empty.copy(persisted =
+      AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -85,20 +87,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       editing = baseBuffer.editing.copy(cursors = List(CursorPosition(10, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
-    val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val state = AppState.empty.copy(persisted =
+      AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -128,7 +132,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val image = surface.drawImageCalls.head.image
     val firstContentRow = (0 until image.getHeight)
       .find(row =>
-        (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.theme.background.getRGB)
+        (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.getRGB)
       )
 
     firstContentRow should not be empty
@@ -144,7 +148,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
 
     val image = surface.drawImageCalls.head.image
     val contentRows = (0 until image.getHeight).filter(row =>
-      (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.theme.background.getRGB)
+      (0 until image.getWidth).exists(column => image.getRGB(column, row) != state.persisted.theme.background.getRGB)
     )
     val contentBands = contentRows.foldLeft(Vector.empty[Vector[Int]]) { (bands, row) =>
       bands.lastOption match
@@ -165,20 +169,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       editing = baseBuffer.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(3, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
-    val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val state = AppState.empty.copy(persisted =
+      AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -212,20 +218,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       editing = baseBuffer.editing.copy(cursors = List(CursorPosition(1, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
-    val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val state = AppState.empty.copy(persisted =
+      AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -255,20 +263,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       editing = baseBuffer.editing.copy(cursors = List(CursorPosition(2, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
-    val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val state = AppState.empty.copy(persisted =
+      AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -314,20 +324,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       editing = baseBuffer.editing.copy(cursors = List(CursorPosition(1, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
-    val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val state = AppState.empty.copy(persisted =
+      AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -370,20 +382,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       editing = baseBuffer.editing.copy(cursors = List(CursorPosition(6, 0))),
       viewport = Viewport.default.copy(topLine = 5, visibleLines = 10)
     )
-    val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val state = AppState.empty.copy(persisted =
+      AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -531,7 +545,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
         title = "Untitled",
         widthPx = actual.getWidth,
         heightPx = actual.getHeight,
-        theme = state.theme,
+        theme = state.persisted.theme,
         font = MarkdownDocumentPreview.inlineLensFont(
           Font(Font.MONOSPACED, Font.PLAIN, 12),
           metrics.lineHeight,
@@ -553,7 +567,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
             title = "Untitled",
             widthPx = actual.getWidth,
             heightPx = actual.getHeight,
-            theme = state.theme,
+            theme = state.persisted.theme,
             font = MarkdownDocumentPreview.inlineLensFont(
               Font(Font.MONOSPACED, Font.PLAIN, 12),
               metrics.lineHeight,
@@ -597,7 +611,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       title = "Untitled",
       widthPx = actual.getWidth,
       heightPx = actual.getHeight,
-      theme = state.theme,
+      theme = state.persisted.theme,
       font = MarkdownDocumentPreview.inlineLensFont(
         Font(Font.MONOSPACED, Font.PLAIN, 12),
         metrics.lineHeight,
@@ -628,7 +642,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       title = "Untitled",
       widthPx = actual.getWidth,
       heightPx = actual.getHeight,
-      theme = state.theme,
+      theme = state.persisted.theme,
       font = MarkdownDocumentPreview.inlineLensFont(
         Font(Font.MONOSPACED, Font.PLAIN, 12),
         metrics.lineHeight,
@@ -656,7 +670,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       title = "Untitled",
       widthPx = actual.getWidth,
       heightPx = actual.getHeight,
-      theme = state.theme,
+      theme = state.persisted.theme,
       font = MarkdownDocumentPreview.inlineLensFont(
         Font(Font.MONOSPACED, Font.PLAIN, 12),
         metrics.lineHeight,
@@ -698,7 +712,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     firstHeadingRow should be >= paneRect.y
     rawSourceRow(surface, "First paragraph.") should be >= paneRect.y
     rawSourceRow(surface, "# Second heading") should be >= paneRect.y
-    surface.getBg(paneRect.x + 1, firstHeadingRow) shouldBe state.theme.highlighted.background
+    surface.getBg(paneRect.x + 1, firstHeadingRow) shouldBe state.persisted.theme.highlighted.background
     panelRows(surface, state, paneRect) should have size 5
   }
 
@@ -724,7 +738,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       title = "Untitled",
       widthPx = actual.getWidth,
       heightPx = actual.getHeight,
-      theme = state.theme,
+      theme = state.persisted.theme,
       font = MarkdownDocumentPreview.inlineLensFont(
         Font(Font.MONOSPACED, Font.PLAIN, 12),
         metrics.lineHeight,
@@ -739,7 +753,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       title = "Untitled",
       widthPx = actual.getWidth,
       heightPx = actual.getHeight,
-      theme = state.theme,
+      theme = state.persisted.theme,
       font = MarkdownDocumentPreview.inlineLensFont(
         Font(Font.MONOSPACED, Font.PLAIN, 12),
         metrics.lineHeight,
@@ -813,20 +827,22 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       editing = baseBuffer.editing.copy(cursors = List(cursor), selection = selection),
       viewport = Viewport.default.copy(topLine = topLine.getOrElse(cursor.line).max(0), visibleLines = 10)
     )
-    val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config
-        .withSyntaxHighlighting(true)
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val state = AppState.empty.copy(persisted =
+      AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config
+          .withSyntaxHighlighting(true)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(80, viewportHeight)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -867,6 +883,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
   private def panelRows(surface: MockRenderSurface, state: AppState, paneRect: LayoutRect): Vector[Int] =
     (paneRect.y until paneRect.bottom)
       .filter(row =>
-        (paneRect.x until paneRect.right).exists(column => surface.getBg(column, row) == state.theme.panel.background)
+        (paneRect.x until paneRect.right)
+          .exists(column => surface.getBg(column, row) == state.persisted.theme.panel.background)
       )
       .toVector

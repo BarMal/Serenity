@@ -51,20 +51,25 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
-    AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+    val initialState = AppState.initial
+    initialState.copy(
+      persisted = initialState.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("command-runner")),
+        theme = theme
       ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      theme = theme,
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = initialState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -83,7 +88,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .getOrElse(paneId, fail("Expected pane layout"))
     val paneContentRect = CursorLayout.contentRectForPane(paneRect)
     val commandContentRect = SurfaceFrameLayout
-      .forContent(overlay, state.uiSurfaces.head.content)
+      .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
     Renderer.render(
@@ -108,9 +113,9 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     overlay.width shouldBe 72
     overlay.x shouldBe paneContentRect.x
 
-    surface.getBg(0, 0) shouldBe state.theme.highlighted.background
-    surface.getBg(overlay.x, overlay.y) shouldBe state.theme.panel.background
-    surface.getBg(commandContentRect.x, commandContentRect.y + 1) shouldBe state.theme.highlighted.background
+    surface.getBg(0, 0) shouldBe state.persisted.theme.highlighted.background
+    surface.getBg(overlay.x, overlay.y) shouldBe state.persisted.theme.panel.background
+    surface.getBg(commandContentRect.x, commandContentRect.y + 1) shouldBe state.persisted.theme.highlighted.background
 
     val uiFont     = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
     val searchText = "search: op"
@@ -124,16 +129,17 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.fillPixelRectCalls.exists(call =>
       call.xPx == searchCursorXPx &&
         call.yPx == searchCursorYPx &&
-        call.color == state.theme.cursor
+        call.color == state.persisted.theme.cursor
     ) shouldBe true
   }
 
   it should "keep written document text and the command runner visible with Writing's text insets" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val writing  = UiPreset.builtIn("Writing").getOrElse(fail("Expected Writing preset"))
-    val state    = stateWithRunner(Theme.light, "op", commands).copy(config = writing.config)
-    val surface  = new MockRenderSurface(100, 30)
-    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val commands  = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val writing   = UiPreset.builtIn("Writing").getOrElse(fail("Expected Writing preset"))
+    val baseState = stateWithRunner(Theme.light, "op", commands)
+    val state     = baseState.copy(persisted = baseState.persisted.copy(config = writing.config))
+    val surface   = new MockRenderSurface(100, 30)
+    val layout    = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val paneLayout = LayoutEngine
       .calculateEditorPaneLayouts(state, layout)
       .getOrElse(paneId, fail("Expected pane layout"))
@@ -159,21 +165,26 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       val buffer = Buffer
         .fromString(bufferId, content)
         .copy(editing = EditingState(cursors = List(cursor)))
-      val pane = EditorPane.withBuffer(paneId, bufferId)
-      val state = AppState.initial.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+      val pane         = EditorPane.withBuffer(paneId, bufferId)
+      val initialState = AppState.initial
+      val state = initialState.copy(
+        persisted = initialState.persisted.copy(
+          buffers = Map(bufferId -> buffer),
+          bufferOrder = List(bufferId),
+          layout = Layout(
+            editorPanes = Map(paneId -> pane),
+            activeEditorPaneId = Some(paneId)
+          ),
+          focus = Focus.Surface(SurfaceId("command-runner")),
+          theme = Theme.light
         ),
-        focus = Focus.Surface(SurfaceId("command-runner")),
-        theme = Theme.light,
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("command-runner"),
-            SurfaceContent.CommandPalette(runner),
-            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+        runtime = initialState.runtime.copy(
+          uiSurfaces = List(
+            UiSurface(
+              SurfaceId("command-runner"),
+              SurfaceContent.CommandPalette(runner),
+              SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+            )
           )
         )
       )
@@ -213,21 +224,26 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .copy(
         editing = EditingState(cursors = List(CursorPosition(1, 2)))
       )
-    val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+    val pane         = EditorPane.withBuffer(paneId, bufferId)
+    val initialState = AppState.initial
+    val state = initialState.copy(
+      persisted = initialState.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("command-runner")),
+        theme = Theme.light
       ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      theme = Theme.light,
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = initialState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -235,7 +251,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
     val commandContentRect = SurfaceFrameLayout
-      .forContent(overlay, state.uiSurfaces.head.content)
+      .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
@@ -266,7 +282,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
         .map(x => surface.getBg(x, commandContentRect.y))
         .distinct
     settingsBackgrounds.size should be > 1
-    surface.fillPixelRectCalls.filter(_.color == state.theme.cursor) should have size 1
+    surface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor) should have size 1
   }
 
   it should "retain nested settings breadcrumbs in a compact command palette row" in {
@@ -275,7 +291,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(55, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
     val contentRect = SurfaceFrameLayout
-      .forContent(overlay, state.uiSurfaces.head.content)
+      .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
     Renderer.render(state, cursorVisible = false, surface, ViewportSize(55, 30))
@@ -301,26 +317,31 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .copy(
         editing = EditingState(cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
-      theme = Theme.light,
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+    val pane         = EditorPane.withBuffer(paneId, bufferId)
+    val initialState = AppState.initial
+    val state = initialState.copy(
+      persisted = initialState.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
         ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+        theme = Theme.light
+      ),
+      runtime = initialState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -330,8 +351,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     Renderer.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
     Renderer.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
 
-    val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
-    val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
+    val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
+    val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
 
     visibleCursors should have size 3
     hiddenCursors should have size 3
@@ -348,26 +369,31 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
-    val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
-      theme = Theme.light,
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+    val pane         = EditorPane.withBuffer(paneId, bufferId)
+    val initialState = AppState.initial
+    val state = initialState.copy(
+      persisted = initialState.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
         ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+        theme = Theme.light
+      ),
+      runtime = initialState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -375,7 +401,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
-    val baseAlpha = SurfaceMaterials.panelAlpha(state.config, state.theme)
+    val baseAlpha = SurfaceMaterials.panelAlpha(state.persisted.config, state.persisted.theme)
     surface.alphaCalls should contain(baseAlpha)
     surface.alphaCalls.filter(_ < baseAlpha) should not be empty
   }
@@ -392,26 +418,31 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .copy(
         editing = EditingState(cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
-      theme = Theme.light,
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+    val pane         = EditorPane.withBuffer(paneId, bufferId)
+    val initialState = AppState.initial
+    val state = initialState.copy(
+      persisted = initialState.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
         ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-language", previewOnly = false),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+        theme = Theme.light
+      ),
+      runtime = initialState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-language", previewOnly = false),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -427,8 +458,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected command-runner submenu overlay"))
     val submenuText = (submenuRect.y until submenuRect.bottom).map(visibleSurface.getRow).mkString("\n")
 
-    val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
-    val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.theme.cursor)
+    val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
+    val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
 
     visibleCursors should have size 4
     hiddenCursors should have size 3
@@ -446,68 +477,73 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val baseState = stateWithRunner(Theme.light, "op", commands)
     val surfaceId = SurfaceId("command-runner")
     val transparentPanelForeground = new java.awt.Color(
-      baseState.theme.panel.foreground.getRed,
-      baseState.theme.panel.foreground.getGreen,
-      baseState.theme.panel.foreground.getBlue,
+      baseState.persisted.theme.panel.foreground.getRed,
+      baseState.persisted.theme.panel.foreground.getGreen,
+      baseState.persisted.theme.panel.foreground.getBlue,
       0
     )
     val transparentPanelBackground = new java.awt.Color(
-      baseState.theme.panel.background.getRed,
-      baseState.theme.panel.background.getGreen,
-      baseState.theme.panel.background.getBlue,
+      baseState.persisted.theme.panel.background.getRed,
+      baseState.persisted.theme.panel.background.getGreen,
+      baseState.persisted.theme.panel.background.getBlue,
       0
     )
     val animationState = AnimationState.empty.mergeAnimations(
       Map(
         CharacterKey(0, 2) -> AnimatedCell.fromThemeTransition(
           transparentPanelForeground,
-          baseState.theme.panel.foreground,
+          baseState.persisted.theme.panel.foreground,
           transparentPanelBackground,
-          baseState.theme.panel.background,
+          baseState.persisted.theme.panel.background,
           steps = 2
         )
       )
     )
     val state = baseState.copy(
-      surfaceAnimations = Map(surfaceId -> SurfaceAnimationState(animationState = animationState))
+      runtime = baseState.runtime.copy(surfaceAnimations =
+        Map(surfaceId -> SurfaceAnimationState(animationState = animationState))
+      )
     )
 
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
     val commandContentRect = SurfaceFrameLayout
-      .forContent(overlay, state.uiSurfaces.head.content)
+      .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     val selectedBackground = surface.getBg(commandContentRect.x, commandContentRect.y + 1)
     val selectedForeground = surface.getFg(commandContentRect.x, commandContentRect.y + 1)
-    selectedBackground.getRGB & 0x00ffffff shouldBe state.theme.highlighted.background.getRGB & 0x00ffffff
-    selectedForeground.getRGB & 0x00ffffff shouldBe state.theme.highlighted.foreground.getRGB & 0x00ffffff
+    selectedBackground.getRGB & 0x00ffffff shouldBe state.persisted.theme.highlighted.background.getRGB & 0x00ffffff
+    selectedForeground.getRGB & 0x00ffffff shouldBe state.persisted.theme.highlighted.foreground.getRGB & 0x00ffffff
     selectedBackground.getAlpha shouldBe 0
     selectedForeground.getAlpha shouldBe 0
   }
 
   it should "draw the floating border with the rounded stroke even while animating" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val baseState = stateWithRunner(Theme.light, "op", commands).copy(
-      config = AppConfig.default.withUiCornerRadiusPx(12)
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val preConfigState = stateWithRunner(Theme.light, "op", commands)
+    val baseState = preConfigState.copy(
+      persisted = preConfigState.persisted.copy(config = AppConfig.default.withUiCornerRadiusPx(12))
     )
     val surfaceId = SurfaceId("command-runner")
     val animationState = AnimationState.empty.mergeAnimations(
       Map(
         CharacterKey(0, 0) -> AnimatedCell.fromThemeTransition(
-          baseState.theme.panel.foreground,
-          baseState.theme.panel.foreground,
-          baseState.theme.panel.background,
-          baseState.theme.panel.background,
+          baseState.persisted.theme.panel.foreground,
+          baseState.persisted.theme.panel.foreground,
+          baseState.persisted.theme.panel.background,
+          baseState.persisted.theme.panel.background,
           steps = 2
         )
       )
     )
     val state = baseState.copy(
-      surfaceAnimations = Map(surfaceId -> SurfaceAnimationState(animationState = animationState))
+      runtime = baseState.runtime.copy(surfaceAnimations =
+        Map(surfaceId -> SurfaceAnimationState(animationState = animationState))
+      )
     )
 
     val surface = new MockRenderSurface(100, 30)
@@ -521,9 +557,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw the floating border with the configured outline thickness" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val state = stateWithRunner(Theme.light, "op", commands).copy(
-      config = AppConfig.default.withUiOutlineThicknessPx(4)
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val preConfigState = stateWithRunner(Theme.light, "op", commands)
+    val state = preConfigState.copy(
+      persisted = preConfigState.persisted.copy(config = AppConfig.default.withUiOutlineThicknessPx(4))
     )
 
     val surface = new MockRenderSurface(100, 30)
@@ -538,7 +575,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val commands     = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
     val enabledState = stateWithRunner(Theme.light, "op", commands)
     val disabledState = enabledState.copy(
-      config = AppConfig.default.withUiShadowsEnabled(false)
+      persisted = enabledState.persisted.copy(config = AppConfig.default.withUiShadowsEnabled(false))
     )
     val enabledSurface  = new MockRenderSurface(100, 30)
     val disabledSurface = new MockRenderSurface(100, 30)
@@ -551,9 +588,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve the rounded command runner after its animation has materialised" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val state = stateWithRunner(Theme.light, "op", commands).copy(
-      config = AppConfig.default.withUiCornerRadiusPx(12)
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val preConfigState = stateWithRunner(Theme.light, "op", commands)
+    val state = preConfigState.copy(
+      persisted = preConfigState.persisted.copy(config = AppConfig.default.withUiCornerRadiusPx(12))
     )
     val surface = new MockRenderSurface(100, 30)
 
@@ -564,11 +602,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the rounded command runner's fully materialised corner unpainted" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val state = stateWithRunner(Theme.light, "op", commands).copy(
-      config = AppConfig.default
-        .withBackgroundStyle(BackgroundStyle.Solid)
-        .withUiCornerRadiusPx(12)
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val preConfigState = stateWithRunner(Theme.light, "op", commands)
+    val state = preConfigState.copy(
+      persisted = preConfigState.persisted.copy(
+        config = AppConfig.default
+          .withBackgroundStyle(BackgroundStyle.Solid)
+          .withUiCornerRadiusPx(12)
+      )
     )
     val viewport = ViewportSize(100, 30)
     val layout   = LayoutEngine.calculateLayout(state, viewport)
@@ -591,10 +632,15 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       )
       image
 
-    val withoutRunner = renderedImage(state.copy(uiSurfaces = Nil, focus = Focus.EditorPane(paneId)))
-    val withRunner    = renderedImage(state)
-    val cornerX       = cellMetrics.toPixelX(overlay.x)
-    val cornerY       = cellMetrics.toPixelY(overlay.y)
+    val withoutRunner = renderedImage(
+      state.copy(
+        persisted = state.persisted.copy(focus = Focus.EditorPane(paneId)),
+        runtime = state.runtime.copy(uiSurfaces = Nil)
+      )
+    )
+    val withRunner = renderedImage(state)
+    val cornerX    = cellMetrics.toPixelX(overlay.x)
+    val cornerY    = cellMetrics.toPixelY(overlay.y)
 
     new Color(withRunner.getRGB(cornerX, cornerY), true) shouldBe new Color(
       withoutRunner.getRGB(cornerX, cornerY),
@@ -603,12 +649,15 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the rounded command runner's frosted corner unblurred" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val state = stateWithRunner(Theme.light, "op", commands).copy(
-      config = AppConfig.default
-        .withBackgroundStyle(BackgroundStyle.GlassLike)
-        .withBlurRadius(0.6f)
-        .withUiCornerRadiusPx(12)
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val preConfigState = stateWithRunner(Theme.light, "op", commands)
+    val state = preConfigState.copy(
+      persisted = preConfigState.persisted.copy(
+        config = AppConfig.default
+          .withBackgroundStyle(BackgroundStyle.GlassLike)
+          .withBlurRadius(0.6f)
+          .withUiCornerRadiusPx(12)
+      )
     )
     val viewport = ViewportSize(100, 30)
     val layout   = LayoutEngine.calculateLayout(state, viewport)
@@ -631,10 +680,15 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       )
       image
 
-    val withoutRunner = renderedImage(state.copy(uiSurfaces = Nil, focus = Focus.EditorPane(paneId)))
-    val withRunner    = renderedImage(state)
-    val cornerX       = cellMetrics.toPixelX(overlay.x)
-    val cornerY       = cellMetrics.toPixelY(overlay.y)
+    val withoutRunner = renderedImage(
+      state.copy(
+        persisted = state.persisted.copy(focus = Focus.EditorPane(paneId)),
+        runtime = state.runtime.copy(uiSurfaces = Nil)
+      )
+    )
+    val withRunner = renderedImage(state)
+    val cornerX    = cellMetrics.toPixelX(overlay.x)
+    val cornerY    = cellMetrics.toPixelY(overlay.y)
 
     new Color(withRunner.getRGB(cornerX, cornerY), true) shouldBe new Color(
       withoutRunner.getRGB(cornerX, cornerY),
@@ -649,14 +703,19 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       targetFocus = Focus.EditorPane(paneId),
       items = List(ContextMenuItem("copy", "Copy", copyCommand))
     )
-    val state = stateWithRunner(Theme.light, "", Nil).copy(
-      config = AppConfig.default.withUiCornerRadiusPx(12),
-      focus = Focus.Surface(SurfaceId("context-menu")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("context-menu"),
-          SurfaceContent.ContextMenu(menu),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+    val preMenuState = stateWithRunner(Theme.light, "", Nil)
+    val state = preMenuState.copy(
+      persisted = preMenuState.persisted.copy(
+        config = AppConfig.default.withUiCornerRadiusPx(12),
+        focus = Focus.Surface(SurfaceId("context-menu"))
+      ),
+      runtime = preMenuState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("context-menu"),
+            SurfaceContent.ContextMenu(menu),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -669,9 +728,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "request backdrop blur for the floating overlay using the configured blur radius" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val state = stateWithRunner(Theme.light, "op", commands).copy(
-      config = AppConfig.default.withBlurRadius(0.6f)
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val preConfigState = stateWithRunner(Theme.light, "op", commands)
+    val state = preConfigState.copy(
+      persisted = preConfigState.persisted.copy(config = AppConfig.default.withBlurRadius(0.6f))
     )
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
@@ -685,11 +745,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "translate backdrop blur with a fractional floating offset" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val state = stateWithRunner(Theme.light, "op", commands).copy(
-      config = AppConfig.default
-        .withBlurRadius(0.6f)
-        .withCommandRunnerCursorGapRows(Some(0.5))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val preConfigState = stateWithRunner(Theme.light, "op", commands)
+    val state = preConfigState.copy(
+      persisted = preConfigState.persisted.copy(
+        config = AppConfig.default
+          .withBlurRadius(0.6f)
+          .withCommandRunnerCursorGapRows(Some(0.5))
+      )
     )
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
@@ -713,11 +776,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip backdrop blur for a solid overlay background style" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val state = stateWithRunner(Theme.light, "op", commands).copy(
-      config = AppConfig.default
-        .withBlurRadius(0.6f)
-        .withBackgroundStyle(BackgroundStyle.Solid)
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val preConfigState = stateWithRunner(Theme.light, "op", commands)
+    val state = preConfigState.copy(
+      persisted = preConfigState.persisted.copy(
+        config = AppConfig.default
+          .withBlurRadius(0.6f)
+          .withBackgroundStyle(BackgroundStyle.Solid)
+      )
     )
     val surface = new MockRenderSurface(100, 30)
 
@@ -727,11 +793,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use a stronger blur radius for the glass-like overlay style" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
-    val state = stateWithRunner(Theme.light, "op", commands).copy(
-      config = AppConfig.default
-        .withBlurRadius(0.2f)
-        .withBackgroundStyle(BackgroundStyle.GlassLike)
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val preConfigState = stateWithRunner(Theme.light, "op", commands)
+    val state = preConfigState.copy(
+      persisted = preConfigState.persisted.copy(
+        config = AppConfig.default
+          .withBlurRadius(0.2f)
+          .withBackgroundStyle(BackgroundStyle.GlassLike)
+      )
     )
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
@@ -755,26 +824,31 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .copy(
         editing = EditingState(cursors = List(CursorPosition(1, 2)))
       )
-    val pane = EditorPane.withBuffer(paneId, bufferId)
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      theme = Theme.light,
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+    val pane         = EditorPane.withBuffer(paneId, bufferId)
+    val initialState = AppState.initial
+    val state = initialState.copy(
+      persisted = initialState.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
         ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = true),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        focus = Focus.Surface(SurfaceId("command-runner")),
+        theme = Theme.light
+      ),
+      runtime = initialState.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = true),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -783,6 +857,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.strokeRoundRectCalls should have size 2
-    surface.alphaCalls.exists(_ < SurfaceMaterials.panelAlpha(state.config, state.theme)) shouldBe true
+    surface.alphaCalls.exists(
+      _ < SurfaceMaterials.panelAlpha(state.persisted.config, state.persisted.theme)
+    ) shouldBe true
   }
 end CommandRunnerFloatingRenderingSpec

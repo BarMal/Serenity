@@ -370,10 +370,10 @@ object EditorLayoutContract:
       case None         => viewportRect
     val workspace = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
     val minimumFloatingOverlayGapRows = math.max(
-      InterfaceDensityMetrics.forDensity(state.config.interfaceDensity).overlayGapRows,
-      math.ceil(math.max(0.0, state.config.uiElementGap)).toInt
+      InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity).overlayGapRows,
+      math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
     )
-    val panelGeometryById = (state.pinnedSurfaces ++ state.uiSurfaces.filter {
+    val panelGeometryById = (state.pinnedSurfaces ++ state.runtime.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
@@ -435,7 +435,7 @@ object EditorLayoutContract:
       topSpacerRect = calculatedLayout.topSpacerRect,
       bottomSpacerRect = calculatedLayout.bottomSpacerRect,
       workspace = workspace,
-      activePaneId = state.layout.activeEditorPaneId,
+      activePaneId = state.persisted.layout.activeEditorPaneId,
       minimumFloatingOverlayGapRows = minimumFloatingOverlayGapRows,
       pinnedPanelRects = calculatedLayout.pinnedPanelRects,
       pinnedSurfaceRects = calculatedLayout.pinnedSurfaceRects,
@@ -457,7 +457,7 @@ object EditorLayoutContract:
   private def pinnedGeometry(surface: UiSurface, frameRect: LayoutRect, state: AppState): SurfaceGeometry =
     val resolved = surface.content match
       case SurfaceContent.MarkdownPreview(bufferId, title) =>
-        val content = state.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
+        val content = state.persisted.buffers.get(bufferId).map(_.document.content.collect()).getOrElse("")
         SurfaceContentResolver.resolveMarkdownPreview(title, content, frameRect, SurfaceRenderMode.Pinned)
       case SurfaceContent.Outline(symbols, activeLocation) =>
         val resolvedOutline = SurfaceContent.Outline(
@@ -569,9 +569,9 @@ object EditorLayoutContract:
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           SurfaceContent.ContextMenu(_) =>
-        state.config.commandRunnerItemGapRows
+        state.persisted.config.commandRunnerItemGapRows
       case SurfaceContent.ContextualToolbar(_) =>
-        state.config.uiElementGap
+        state.persisted.config.uiElementGap
       case SurfaceContent.GhostOverlay(originalContent, _) =>
         itemGapRowsFor(originalContent, state)
       case _ => 0.0
@@ -579,4 +579,4 @@ object EditorLayoutContract:
   private def itemTargetRowsFor(content: SurfaceContent, state: AppState): Int =
     content match
       case SurfaceContent.GhostOverlay(originalContent, _) => itemTargetRowsFor(originalContent, state)
-      case other => SurfaceFrameLayout.itemTargetRowsFor(other, state.config.interfaceDensity)
+      case other => SurfaceFrameLayout.itemTargetRowsFor(other, state.persisted.config.interfaceDensity)

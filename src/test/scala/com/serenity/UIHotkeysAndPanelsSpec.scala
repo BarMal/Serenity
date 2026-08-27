@@ -27,7 +27,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.commandRunnerSurface shouldBe defined
-    state.focus match
+    state.persisted.focus match
       case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
       case _                 => fail("Expected focus on command runner surface")
 
@@ -40,7 +40,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.fileSearchSurface shouldBe None
     state.commandRunnerSurface shouldBe defined
-    state.focus match
+    state.persisted.focus match
       case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
       case _                 => fail("Expected focus on command runner surface")
 
@@ -53,7 +53,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.modalSurface shouldBe None
     state.commandRunnerSurface shouldBe defined
-    state.focus match
+    state.persisted.focus match
       case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
       case _                 => fail("Expected focus on command runner surface")
 
@@ -63,7 +63,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.commandRunnerSurface shouldBe None
-    state.focus shouldBe a[Focus.EditorPane]
+    state.persisted.focus shouldBe a[Focus.EditorPane]
 
   // ── ESC dismissal ─────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.commandRunnerSurface shouldBe None
-    state.focus shouldBe a[Focus.EditorPane]
+    state.persisted.focus shouldBe a[Focus.EditorPane]
 
   it should "dismiss a modal overlay with ESC and restore editor focus" in new UIFixture:
     stateManager.showModal(Modal.GotoLine("")).unsafeRunSync()
@@ -83,7 +83,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.modalSurface shouldBe None
-    state.focus shouldBe a[Focus.EditorPane]
+    state.persisted.focus shouldBe a[Focus.EditorPane]
 
   // ── Multiple pinned panels ────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case SurfaceContent.Diagnostics(_, _) => "diagnostics"
       case other                            => fail(s"Unexpected pinned content: $other")
     } shouldBe List("outline", "diagnostics")
-    state.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(pinned.map(_.id))
+    state.persisted.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(pinned.map(_.id))
 
   it should "address focus, move, resize, and unpin operations by surface ID" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
@@ -128,27 +128,31 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.unpinPanel(outline.id).unsafeRunSync()
 
     val updated = stateManager.getCurrentState.unsafeRunSync()
-    updated.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     updated.pinnedSurfaces.map(_.id) shouldBe List(diagnostics.id)
     updated.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Bottom, 30)
-    updated.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(List(diagnostics.id))
+    updated.persisted.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(List(diagnostics.id))
 
   it should "start an element transition animation when pinning a panel" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
 
     val state     = stateManager.getCurrentState.unsafeRunSync()
     val panel     = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    val animation = state.surfaceAnimations.get(panel.id).getOrElse(fail("Expected panel animation"))
+    val animation = state.runtime.surfaceAnimations.get(panel.id).getOrElse(fail("Expected panel animation"))
 
     animation.animationState.activeAnimationCount should be > 0
     animation.overlayHeight should be > 0
 
   it should "skip panel transition animation when reduced motion is enabled" in new UIFixture:
-    stateManager.updateState(_.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced))).unsafeRunSync()
+    stateManager
+      .updateState(state =>
+        state.copy(persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced)))
+      )
+      .unsafeRunSync()
 
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().surfaceAnimations shouldBe empty
+    stateManager.getCurrentState.unsafeRunSync().runtime.surfaceAnimations shouldBe empty
 
   it should "unpin one same-side panel at a time starting with the focused panel" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
@@ -156,7 +160,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    val focusedSurfaceId = before.focus match
+    val focusedSurfaceId = before.persisted.focus match
       case Focus.Surface(id) => id
       case other             => fail(s"Expected focus on pinned surface, got $other")
 
@@ -179,11 +183,13 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    val ghost = state.uiSurfaces.collectFirst {
+    val ghost = state.runtime.uiSurfaces.collectFirst {
       case surface @ UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _), _, _) => surface
     }
     ghost shouldBe defined
-    ghost.flatMap(surface => state.surfaceAnimations.get(surface.id).map(_.phase)) shouldBe Some(SurfacePhase.Exiting)
+    ghost.flatMap(surface => state.runtime.surfaceAnimations.get(surface.id).map(_.phase)) shouldBe Some(
+      SurfacePhase.Exiting
+    )
 
   it should "remove a panel ghost overlay when its close animation completes" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
@@ -192,21 +198,25 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     advanceAnimations(120)
 
-    stateManager.getCurrentState.unsafeRunSync().uiSurfaces.exists {
+    stateManager.getCurrentState.unsafeRunSync().runtime.uiSurfaces.exists {
       _.content match
         case SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _) => true
         case _                                                            => false
     } shouldBe false
 
   it should "skip panel close ghosts when reduced motion is enabled" in new UIFixture:
-    stateManager.updateState(_.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced))).unsafeRunSync()
+    stateManager
+      .updateState(state =>
+        state.copy(persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced)))
+      )
+      .unsafeRunSync()
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
 
     stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.surfaceAnimations shouldBe empty
-    state.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
+    state.runtime.surfaceAnimations shouldBe empty
+    state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
 
   it should "resize a pinned panel to a new size" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
@@ -230,14 +240,14 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.focus match
+    state.persisted.focus match
       case Focus.Surface(id) => state.pinnedSurfaces.map(_.id) should contain(id)
       case other             => fail(s"Expected focus on pinned surface, got $other")
 
   it should "do nothing on switchToPinnedPanel when no panel is at that position" in new UIFixture:
-    val focusBefore = stateManager.getCurrentState.unsafeRunSync().focus
+    val focusBefore = stateManager.getCurrentState.unsafeRunSync().persisted.focus
     stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().focus shouldBe focusBefore
+    stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe focusBefore
 
   it should "expand and collapse a pinned panel through the panel facade" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
@@ -248,13 +258,13 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Pinned(PanelPosition.Right, 30)
     )
     expanded.pinnedSurfaces should have size 1
-    expanded.layout.maximizedWorkspaceNodeId shouldBe defined
+    expanded.persisted.layout.maximizedWorkspaceNodeId shouldBe defined
 
     stateManager.collapseExpandedPanel().unsafeRunSync()
 
     val collapsed = stateManager.getCurrentState.unsafeRunSync()
     collapsed.expandedPanelSurface shouldBe None
-    collapsed.layout.maximizedWorkspaceNodeId shouldBe None
+    collapsed.persisted.layout.maximizedWorkspaceNodeId shouldBe None
     collapsed.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 30))
 
   it should "expand and collapse a pinned panel through commands" in new UIFixture:
@@ -296,7 +306,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.fileSearchSurface shouldBe defined
-    state.focus match
+    state.persisted.focus match
       case Focus.Surface(id) => state.fileSearchSurface.map(_.id) shouldBe Some(id)
       case _                 => fail("Expected focus on file search surface")
 

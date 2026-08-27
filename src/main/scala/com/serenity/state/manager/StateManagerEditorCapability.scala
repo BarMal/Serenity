@@ -20,10 +20,10 @@ final private[manager] class StateManagerEditorCapability(
 
   def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
 
-  def getCurrentFocus: IO[Focus] = stateRef.get.map(_.focus)
+  def getCurrentFocus: IO[Focus] = stateRef.get.map(_.persisted.focus)
 
   def switchFocus(newFocus: Focus): IO[Unit] =
-    stateRef.update(_.copy(focus = newFocus))
+    stateRef.update(state => state.copy(persisted = state.persisted.copy(focus = newFocus)))
 
   def updateState(update: AppState => AppState): IO[Unit] =
     stateRef.update(update)
@@ -47,32 +47,37 @@ final private[manager] class StateManagerEditorCapability(
     for
       state            <- stateRef.get
       bufferAnimations <- bufferAnimationsRef.get
-      hasBufferAnimations  = state.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations))
-      hasThemeTransition   = state.themeTransition.isDefined
-      hasSurfaceAnimations = state.surfaceAnimations.nonEmpty
-      hasWindowSitter      = state.windowSitter.isActive
+      hasBufferAnimations = state.persisted.buffers.keys.exists(id =>
+        bufferAnimations.get(id).exists(_.hasActiveAnimations)
+      )
+      hasThemeTransition   = state.runtime.themeTransition.isDefined
+      hasSurfaceAnimations = state.runtime.surfaceAnimations.nonEmpty
+      hasWindowSitter      = state.runtime.windowSitter.isActive
       stillActive <-
         if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasWindowSitter then IO.pure(false)
         else
-          val updatedTransition = state.themeTransition.map(_.advance).filterNot(_.isComplete)
+          val updatedTransition = state.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
           val stateWithAdvancedBuffers = state.copy(
-            themeTransition = updatedTransition,
-            windowSitter = state.windowSitter.advance
+            runtime = state.runtime.copy(
+              themeTransition = updatedTransition,
+              windowSitter = state.runtime.windowSitter.advance
+            )
           )
           val newState = advanceSurfaceAnimations(stateWithAdvancedBuffers)
           for
             updatedBufferAnimations <- bufferAnimationsRef.updateAndGet(_.map {
               case (id, animations) =>
-                val advanced = newState.buffers.get(id) match
+                val advanced = newState.persisted.buffers.get(id) match
                   case Some(buffer) => animations.advanceAllAnimations(isWithinViewport(buffer.viewport))
                   case None         => animations
                 id -> advanced
             })
             _ <- stateRef.set(newState)
-          yield newState.buffers.keys.exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-            newState.themeTransition.isDefined ||
-            newState.surfaceAnimations.nonEmpty ||
-            newState.windowSitter.isActive
+          yield newState.persisted.buffers.keys
+            .exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
+            newState.runtime.themeTransition.isDefined ||
+            newState.runtime.surfaceAnimations.nonEmpty ||
+            newState.runtime.windowSitter.isActive
     yield stillActive
 
   /** A cell outside the buffer's currently visible viewport isn't rendered, so there's no need to pay its
@@ -86,24 +91,26 @@ final private[manager] class StateManagerEditorCapability(
     for
       state      <- stateRef.get
       activePane <- getActivePane
-      buffer = activePane.flatMap(pane => pane.bufferId.flatMap(state.buffers.get))
+      buffer = activePane.flatMap(pane => pane.bufferId.flatMap(state.persisted.buffers.get))
     yield buffer
 
   def getActivePane: IO[Option[EditorPane]] =
-    stateRef.get.map(state => state.layout.activeEditorPaneId.flatMap(state.layout.editorPanes.get))
+    stateRef.get.map(state => state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get))
 
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId] =
     stateRef.modify { state =>
-      val bufferId = state.nextBufferId
+      val bufferId = state.runtime.nextBufferId
       val buffer =
         if content.isEmpty && filePath.isEmpty then Buffer.newEmpty(bufferId)(using balance)
         else
           val fresh = Buffer.fromString(bufferId, content)(using balance)
           fresh.copy(document = fresh.document.copy(filePath = filePath))
       val newState = state.copy(
-        buffers = state.buffers + (bufferId -> buffer),
-        bufferOrder = state.bufferOrder :+ bufferId,
-        nextBufferId = BufferId(bufferId.value + 1)
+        persisted = state.persisted.copy(
+          buffers = state.persisted.buffers + (bufferId -> buffer),
+          bufferOrder = state.persisted.bufferOrder :+ bufferId
+        ),
+        runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
       )
       (newState, bufferId)
     }
@@ -114,7 +121,7 @@ final private[manager] class StateManagerEditorCapability(
   def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
     stateRef
       .modify { state =>
-        state.buffers.get(bufferId) match
+        state.persisted.buffers.get(bufferId) match
           case Some(buffer) =>
             val updatedBuffer = buffer.copy(
               document = buffer.document.copy(
@@ -130,7 +137,12 @@ final private[manager] class StateManagerEditorCapability(
                   path       <- updatedBuffer.document.filePath
                   languageId <- updatedBuffer.document.language
                 yield (path.toUri.toString, languageId, content)
-            (state.copy(buffers = state.buffers + (bufferId -> updatedBuffer)), lspTarget)
+            (
+              state.copy(persisted =
+                state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
+              ),
+              lspTarget
+            )
           case None => (state, None)
       }
       .flatMap(_.fold(IO.unit) {
@@ -141,7 +153,7 @@ final private[manager] class StateManagerEditorCapability(
   def closeBuffer(bufferId: BufferId): IO[Unit] =
     stateRef
       .modify { state =>
-        val closingBuffer = state.buffers.get(bufferId)
+        val closingBuffer = state.persisted.buffers.get(bufferId)
         val newState      = EditorState.removeBuffer(state, bufferId)
         (newState, closingBuffer)
       }
@@ -160,7 +172,7 @@ final private[manager] class StateManagerEditorCapability(
     stateRef.modify { state =>
       insertPane(
         state,
-        state.layout.orderedPaneIds.lastOption,
+        state.persisted.layout.orderedPaneIds.lastOption,
         bufferId,
         SplitAxis.Horizontal
       )
@@ -168,10 +180,12 @@ final private[manager] class StateManagerEditorCapability(
 
   def switchToPane(paneId: PaneId): IO[Unit] =
     stateRef.update { state =>
-      if state.layout.editorPanes.contains(paneId) then
+      if state.persisted.layout.editorPanes.contains(paneId) then
         state.copy(
-          layout = state.layout.copy(activeEditorPaneId = Some(paneId)),
-          focus = Focus.EditorPane(paneId)
+          persisted = state.persisted.copy(
+            layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId)),
+            focus = Focus.EditorPane(paneId)
+          )
         )
       else state
     }
@@ -179,33 +193,35 @@ final private[manager] class StateManagerEditorCapability(
   def closePane(paneId: PaneId): IO[Unit] =
     stateRef.update { state =>
       val updated = EditorState.removePane(state, paneId)
-      if state.layout.editorPanes.size == 1 && state.layout.editorPanes.contains(paneId) then
+      if state.persisted.layout.editorPanes.size == 1 && state.persisted.layout.editorPanes.contains(paneId) then
         ensureCommandRunnerSurface(updated)
       else updated
     }
 
   def setBufferForPane(paneId: PaneId, bufferId: BufferId): IO[Unit] =
     stateRef.update { state =>
-      state.layout.editorPanes.get(paneId) match
+      state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
           val updatedPane = pane.copy(bufferId = Some(bufferId))
           val stateWithBuffer = state.copy(
-            layout = state.layout.copy(
-              editorPanes = state.layout.editorPanes + (paneId -> updatedPane)
+            persisted = state.persisted.copy(
+              layout = state.persisted.layout.copy(
+                editorPanes = state.persisted.layout.editorPanes + (paneId -> updatedPane)
+              )
             )
           )
           LayoutEngine.syncViewportDimensions(
             stateWithBuffer,
-            stateWithBuffer.viewportSize.getOrElse(ViewportSize(80, 24))
+            stateWithBuffer.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
           )
         case None => state
     }
 
   def setCursorPosition(paneId: PaneId, line: Int, column: Int): IO[Unit] =
     stateRef.update { state =>
-      state.layout.editorPanes.get(paneId) match
+      state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
-          pane.bufferId.flatMap(state.buffers.get) match
+          pane.bufferId.flatMap(state.persisted.buffers.get) match
             case Some(buffer) =>
               val newCursor = CursorPosition(line, column)
               val updatedBuffer = buffer.copy(
@@ -216,30 +232,36 @@ final private[manager] class StateManagerEditorCapability(
                   multiCursorVerticalStates = Nil
                 )
               )
-              state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+              state.copy(persisted =
+                state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer))
+              )
             case None => state
         case None => state
     }
 
   def setViewport(paneId: PaneId, viewport: Viewport): IO[Unit] =
     stateRef.update { state =>
-      state.layout.editorPanes.get(paneId) match
+      state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
-          pane.bufferId.flatMap(state.buffers.get) match
+          pane.bufferId.flatMap(state.persisted.buffers.get) match
             case Some(buffer) =>
               val updatedBuffer = buffer.copy(viewport = viewport)
-              state.copy(buffers = state.buffers + (buffer.id -> updatedBuffer))
+              state.copy(persisted =
+                state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer))
+              )
             case None => state
         case None => state
     }
 
   def setPaneProperties(paneId: PaneId, update: EditorPane => EditorPane): IO[Unit] =
     stateRef.update { state =>
-      state.layout.editorPanes.get(paneId) match
+      state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
           state.copy(
-            layout = state.layout.copy(
-              editorPanes = state.layout.editorPanes + (paneId -> update(pane))
+            persisted = state.persisted.copy(
+              layout = state.persisted.layout.copy(
+                editorPanes = state.persisted.layout.editorPanes + (paneId -> update(pane))
+              )
             )
           )
         case None => state
@@ -249,7 +271,7 @@ final private[manager] class StateManagerEditorCapability(
     stateRef.modify(state => insertPane(state, Some(afterPaneId), bufferId, SplitAxis.Horizontal))
 
   def getTabOrder(): IO[List[PaneId]] =
-    stateRef.get.map(_.layout.orderedPaneIds)
+    stateRef.get.map(_.persisted.layout.orderedPaneIds)
 
   def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
     splitPane(paneId, bufferId, SplitAxis.Horizontal)
@@ -259,26 +281,33 @@ final private[manager] class StateManagerEditorCapability(
 
   def resizePaneSplit(splitId: WorkspaceNodeId, ratio: Double): IO[Unit] =
     stateRef.update { state =>
-      state.layout.effectiveWorkspaceTree
+      state.persisted.layout.effectiveWorkspaceTree
         .flatMap(_.resize(splitId, ratio))
-        .map(tree => state.copy(layout = state.layout.copy(workspaceTree = Some(tree), paneOrder = tree.paneIds)))
+        .map(tree =>
+          state.copy(persisted =
+            state.persisted
+              .copy(layout = state.persisted.layout.copy(workspaceTree = Some(tree), paneOrder = tree.paneIds))
+          )
+        )
         .getOrElse(state)
     }
 
   def focusPaneInDirection(direction: Direction): IO[Unit] =
     stateRef.update { state =>
       val currentPaneId =
-        state.focus match
+        state.persisted.focus match
           case Focus.EditorPane(paneId) => Some(paneId)
-          case _                        => state.layout.activeEditorPaneId
-      val viewportSize = state.viewportSize.getOrElse(ViewportSize(80, 24))
+          case _                        => state.persisted.layout.activeEditorPaneId
+      val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
       val layout       = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       currentPaneId
         .flatMap(LayoutEngine.directionalPaneNeighbor(state, layout, _, direction))
         .map { paneId =>
           state.copy(
-            layout = state.layout.copy(activeEditorPaneId = Some(paneId)),
-            focus = Focus.EditorPane(paneId)
+            persisted = state.persisted.copy(
+              layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId)),
+              focus = Focus.EditorPane(paneId)
+            )
           )
         }
         .getOrElse(state)
@@ -297,19 +326,19 @@ final private[manager] class StateManagerEditorCapability(
     bufferId: Option[BufferId],
     splitAxis: SplitAxis
   ): (AppState, PaneId) =
-    val paneId = state.nextPaneId
+    val paneId = state.runtime.nextPaneId
     val pane = bufferId match
       case Some(id) => EditorPane.withBuffer(paneId, id)
       case None     => EditorPane.empty(paneId)
     val targetPaneId =
       requestedAfter
-        .filter(state.layout.editorPanes.contains)
-        .orElse(state.layout.orderedPaneIds.lastOption)
+        .filter(state.persisted.layout.editorPanes.contains)
+        .orElse(state.persisted.layout.orderedPaneIds.lastOption)
 
     val updatedTree =
       targetPaneId match
         case Some(target) =>
-          state.layout.effectiveWorkspaceTree.flatMap(
+          state.persisted.layout.effectiveWorkspaceTree.flatMap(
             _.split(
               target,
               paneId,
@@ -324,14 +353,16 @@ final private[manager] class StateManagerEditorCapability(
     updatedTree match
       case Some(tree) =>
         val updatedState = state.copy(
-          layout = state.layout.copy(
-            editorPanes = state.layout.editorPanes.updated(paneId, pane),
-            activeEditorPaneId = Some(paneId),
-            paneOrder = tree.paneIds,
-            workspaceTree = Some(tree)
+          persisted = state.persisted.copy(
+            layout = state.persisted.layout.copy(
+              editorPanes = state.persisted.layout.editorPanes.updated(paneId, pane),
+              activeEditorPaneId = Some(paneId),
+              paneOrder = tree.paneIds,
+              workspaceTree = Some(tree)
+            ),
+            focus = Focus.EditorPane(paneId)
           ),
-          focus = Focus.EditorPane(paneId),
-          nextPaneId = PaneId(paneId.value + 1)
+          runtime = state.runtime.copy(nextPaneId = PaneId(paneId.value + 1))
         )
         (updatedState, paneId)
       case None =>

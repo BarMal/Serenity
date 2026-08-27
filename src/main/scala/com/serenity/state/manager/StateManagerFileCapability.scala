@@ -15,12 +15,14 @@ final private[manager] class StateManagerFileFacade(
 
   def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =
     stateRef.update { state =>
-      state.buffers.get(bufferId) match
+      state.persisted.buffers.get(bufferId) match
         case Some(buffer) =>
-          state.copy(buffers =
-            state.buffers + (bufferId -> buffer.copy(document =
-              buffer.document.copy(filePath = Some(Path.of(filePath)))
-            ))
+          state.copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers + (bufferId -> buffer.copy(document =
+                buffer.document.copy(filePath = Some(Path.of(filePath)))
+              ))
+            )
           )
         case None =>
           state
@@ -37,10 +39,12 @@ final private[manager] class StateManagerFileFacade(
 
   def markBufferSaved(bufferId: BufferId): IO[Unit] =
     stateRef.update { state =>
-      state.buffers.get(bufferId) match
+      state.persisted.buffers.get(bufferId) match
         case Some(buffer) =>
-          state.copy(buffers =
-            state.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(isDirty = false)))
+          state.copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(isDirty = false)))
+            )
           )
         case None =>
           state
@@ -49,15 +53,15 @@ final private[manager] class StateManagerFileFacade(
   def checkUnsavedChanges(bufferId: Option[BufferId]): IO[Boolean] =
     stateRef.get.map { state =>
       bufferId match
-        case Some(id) => state.buffers.get(id).exists(_.hasUnsavedChanges)
-        case None     => state.buffers.values.exists(_.hasUnsavedChanges)
+        case Some(id) => state.persisted.buffers.get(id).exists(_.hasUnsavedChanges)
+        case None     => state.persisted.buffers.values.exists(_.hasUnsavedChanges)
     }
 
   def forceCloseBuffer(bufferId: BufferId): IO[Unit] =
     close(bufferId)
 
   def getRecentFiles: IO[List[Path]] =
-    stateRef.get.map(_.recentFiles)
+    stateRef.get.map(_.persisted.recentFiles)
 
 final private[manager] class StateManagerFileCapability(
     stateRef: Ref[IO, AppState],

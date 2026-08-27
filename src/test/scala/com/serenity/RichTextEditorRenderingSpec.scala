@@ -42,16 +42,19 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
   private def buildState(buffer: Buffer): com.serenity.state.models.AppState =
-    val paneId = com.serenity.state.models.PaneId(0)
-    com.serenity.state.models.AppState.initial.copy(
-      buffers = Map(buffer.id -> buffer),
-      bufferOrder = List(buffer.id),
-      layout = Layout(
-        editorPanes = Map(paneId -> com.serenity.state.models.EditorPane.withBuffer(paneId, buffer.id)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+    val paneId  = com.serenity.state.models.PaneId(0)
+    val initial = com.serenity.state.models.AppState.initial
+    initial.copy(
+      persisted = initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = Layout(
+          editorPanes = Map(paneId -> com.serenity.state.models.EditorPane.withBuffer(paneId, buffer.id)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      )
     )
 
   "RichTextStyling" should "slice rich text runs for a visual line range" in {

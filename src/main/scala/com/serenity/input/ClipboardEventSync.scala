@@ -14,8 +14,9 @@ object ClipboardEventSync:
     event match
       case Paste =>
         systemClipboard.readText.flatMap {
-          case Some(text) => stateManager.updateState(_.copy(clipboard = Some(text)))
-          case None       => IO.unit
+          case Some(text) =>
+            stateManager.updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some(text))))
+          case None => IO.unit
         }
       case _ =>
         IO.unit
@@ -28,7 +29,7 @@ object ClipboardEventSync:
     event match
       case Copy | Cut =>
         stateManager.getCurrentState.flatMap { state =>
-          state.clipboard match
+          state.runtime.clipboard match
             case Some(text) => systemClipboard.writeText(text)
             case None       => IO.unit
         }

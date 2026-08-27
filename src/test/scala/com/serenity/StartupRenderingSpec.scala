@@ -236,15 +236,17 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config.withLineNumbers(false).withGutter(false)
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config.withLineNumbers(false).withGutter(false)
+      )
     )
     val surface     = new MockRenderSurface(80, 24)
     val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -300,15 +302,17 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config.withLineNumbers(false).withGutter(false)
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config.withLineNumbers(false).withGutter(false)
+      )
     )
     val surface     = new MockRenderSurface(80, 24)
     val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -343,15 +347,17 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId),
-        paneOrder = List(paneId)
-      ),
-      focus = Focus.EditorPane(paneId),
-      config = AppState.empty.config.withLineNumbers(false).withGutter(false)
+      persisted = AppState.empty.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        config = AppState.empty.persisted.config.withLineNumbers(false).withGutter(false)
+      )
     )
     val surface     = new MockRenderSurface(80, 24)
     val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -404,7 +410,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    val paneId = state.layout.activeEditorPaneId.getOrElse(fail("expected active pane"))
+    val paneId = state.persisted.layout.activeEditorPaneId.getOrElse(fail("expected active pane"))
     val contentRect = LayoutEngine
       .calculateEditorPaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
       .contentRect
@@ -435,13 +441,13 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("Welcome to Serenity!")
       state        <- stateManager.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
+      paneId = state.persisted.layout.editorPanes.keys.head
       _          <- stateManager.setBufferForPane(paneId, bufferId)
       finalState <- stateManager.getCurrentState
     yield
-      val buffer = finalState.buffers(bufferId)
+      val buffer = finalState.persisted.buffers(bufferId)
       buffer.document.content.collect() shouldBe "Welcome to Serenity!"
-      val pane = finalState.layout.editorPanes(paneId)
+      val pane = finalState.persisted.layout.editorPanes(paneId)
       pane.bufferId shouldBe Some(bufferId)
 
     program.unsafeRunSync()
@@ -455,11 +461,11 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("Hello")
       state        <- stateManager.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
+      paneId = state.persisted.layout.editorPanes.keys.head
       _          <- stateManager.setBufferForPane(paneId, bufferId)
       finalState <- stateManager.getCurrentState
     yield
-      val buffer = finalState.buffers(bufferId)
+      val buffer = finalState.persisted.buffers(bufferId)
       buffer.editing.cursors.size shouldBe 1
       val cursor = buffer.editing.cursors.head
       cursor.line shouldBe 0
@@ -478,13 +484,13 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("")
       state        <- stateManager.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
+      paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
       longText = "x" * 100
       _          <- longText.toList.traverse(char => stateManager.applyEvent(InsertChar(char)))
       finalState <- stateManager.getCurrentState
     yield
-      val buffer = finalState.buffers(bufferId)
+      val buffer = finalState.persisted.buffers(bufferId)
       val cursor = buffer.editing.cursors.head
       cursor.column shouldBe 100
       cursor.line shouldBe 0
@@ -501,14 +507,14 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("")
       state        <- stateManager.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
+      paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
       panelWidth = 50
       longText   = "a" * (panelWidth + 20)
       _          <- longText.toList.traverse(char => stateManager.applyEvent(InsertChar(char)))
       finalState <- stateManager.getCurrentState
     yield
-      val buffer   = finalState.buffers(bufferId)
+      val buffer   = finalState.persisted.buffers(bufferId)
       val cursor   = buffer.editing.cursors.head
       val viewport = buffer.viewport
       cursor.column shouldBe longText.length
@@ -527,14 +533,14 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       bufferId     <- stateManager.createBuffer("")
       state        <- stateManager.getCurrentState
-      paneId = state.layout.editorPanes.keys.head
+      paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
       testText =
         "The quick brown fox jumps over the lazy dog. This is a long sentence that extends beyond normal panel boundaries."
       _          <- testText.toList.traverse(char => stateManager.applyEvent(InsertChar(char)))
       finalState <- stateManager.getCurrentState
     yield
-      val buffer = finalState.buffers(bufferId)
+      val buffer = finalState.persisted.buffers(bufferId)
       buffer.document.content.collect() shouldBe testText
 
     program.unsafeRunSync()

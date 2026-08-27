@@ -24,7 +24,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val opened         = stateManager.getCurrentState.unsafeRunSync()
     val toolbarSurface = opened.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar"))
-    opened.focus shouldBe Focus.EditorPane(PaneId(0))
+    opened.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     toolbarSurface.presentation shouldBe SurfacePresentation.Floating(
       opened.activeCursorPosition,
       SurfacePlacement.BelowCursor
@@ -35,7 +35,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val withRunner = stateManager.getCurrentState.unsafeRunSync()
     val layout = LayoutEngine
-      .calculateLayoutWithUI(withRunner, withRunner.viewportSize.getOrElse(fail("Expected viewport size")))
+      .calculateLayoutWithUI(withRunner, withRunner.runtime.viewportSize.getOrElse(fail("Expected viewport size")))
     layout.aboveCursorOverlayStack.map(_._1) shouldBe Nil
     layout.belowCursorOverlayStack.map(_._1) shouldBe List(
       toolbarSurface.id,
@@ -45,7 +45,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val afterClose = stateManager.getCurrentState.unsafeRunSync()
-    afterClose.focus shouldBe Focus.EditorPane(PaneId(0))
+    afterClose.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "leave editor typing active while the toolbar is open" in {
@@ -55,13 +55,13 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager
       .updateState { state =>
         val bufferId = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha")),
-            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5)))
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha")),
+            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5)))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
       .unsafeRunSync()
 
@@ -70,8 +70,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(state)
-    state.buffers(bufferId).document.content.toString shouldBe "alpha!"
-    state.focus shouldBe Focus.EditorPane(PaneId(0))
+    state.persisted.buffers(bufferId).document.content.toString shouldBe "alpha!"
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "follow the active cursor while it remains open" in {
@@ -79,17 +79,20 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager
       .updateState(state =>
-        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+        state.copy(persisted =
+          state.persisted
+            .copy(config = state.persisted.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+        )
       )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager
       .updateState { state =>
         val bufferId = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(content =
@@ -98,7 +101,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
                 )
               )
           )
-        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
       .unsafeRunSync()
 
@@ -126,7 +129,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val state        = stateManager.getCurrentState.unsafeRunSync()
     val toolbarState = toolbarStateFrom(state)
     val items        = ContextualToolbar.itemsFor(state)
-    val viewport     = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport     = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout       = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val toolbar      = toolbarRect(state)
     val editorWidth = LayoutEngine
@@ -198,7 +201,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val editorWidth = LayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
@@ -221,7 +224,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val editorWidth = LayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
@@ -242,7 +245,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val editorWidth = LayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
@@ -317,14 +320,16 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
             "#336699"
           )
           .normalized
-        val nextBuffer = state
+        val nextBuffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
-            editing = state.buffers(bufferId).editing.copy(selection = None, cursors = List(CursorPosition(0, 10))),
-            richText = state.buffers(bufferId).richText.copy(richTextDocument = Some(document))
+            document =
+              state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
+            editing =
+              state.persisted.buffers(bufferId).editing.copy(selection = None, cursors = List(CursorPosition(0, 10))),
+            richText = state.persisted.buffers(bufferId).richText.copy(richTextDocument = Some(document))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()
 
@@ -345,13 +350,16 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
         val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
-        val nextBuffer = state
+        val nextBuffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()
 
@@ -361,13 +369,13 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(state)
-    val buffer   = state.buffers(bufferId)
+    val buffer   = state.persisted.buffers(bufferId)
     buffer.richText.richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .map(_.style.marks)
       .shouldBe(Some(Set(InlineMark.Bold)))
-    state.focus shouldBe Focus.EditorPane(PaneId(0))
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "dismiss on Escape and restore editor focus" in {
@@ -380,7 +388,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.contextualToolbarSurface shouldBe None
-    state.focus shouldBe Focus.EditorPane(PaneId(0))
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "move below the cursor line when there is no room above the selection" in {
@@ -391,7 +399,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contentRect = LayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
@@ -413,22 +421,23 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager
       .updateState { state =>
         val bufferId = activeBufferId(state)
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(12)("toolbar target").mkString("\n"))),
-            editing = state.buffers(bufferId).editing.copy(selection = None, cursors = List(CursorPosition(8, 4)))
+            editing =
+              state.persisted.buffers(bufferId).editing.copy(selection = None, cursors = List(CursorPosition(8, 4)))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
       .unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contentRect = LayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
@@ -449,22 +458,25 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .updateState { state =>
         val bufferId  = activeBufferId(state)
         val selection = Selection(CursorPosition(12, 1), CursorPosition(16, 4))
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(20)("toolbar selection target").mkString("\n"))),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
       .unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contentRect = LayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
@@ -482,22 +494,25 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .updateState { state =>
         val bufferId  = activeBufferId(state)
         val selection = Selection(CursorPosition(12, 60), CursorPosition(12, 100))
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(20)("x" * 140).mkString("\n"))),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
       .unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contentRect = LayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
@@ -515,22 +530,25 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .updateState { state =>
         val bufferId  = activeBufferId(state)
         val selection = Selection(CursorPosition(0, 1), CursorPosition(5, 4))
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(12)("toolbar selection target").mkString("\n"))),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
       .unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val contentRect = LayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
@@ -547,23 +565,23 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager
       .updateState { state =>
         val bufferId = activeBufferId(state)
-        val buffer = state
+        val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state
+            document = state.persisted
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(40)("toolbar target").mkString("\n"))),
-            editing = state.buffers(bufferId).editing.copy(cursors = List(CursorPosition(30, 4))),
+            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(30, 4))),
             viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 120)
           )
-        state.copy(buffers = state.buffers.updated(bufferId, buffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
       .unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
     val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
 
@@ -591,13 +609,13 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(state)
-    val buffer   = state.buffers(bufferId)
+    val buffer   = state.persisted.buffers(bufferId)
     buffer.richText.richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .flatMap(_.style.fontSize)
       .shouldBe(Some(20.0f))
-    state.focus shouldBe Focus.EditorPane(PaneId(0))
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "retain its intrinsic compact width when a font-family detail opens" in {
@@ -636,13 +654,13 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(state)
-    val buffer   = state.buffers(bufferId)
+    val buffer   = state.persisted.buffers(bufferId)
     buffer.richText.richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .flatMap(_.style.fontFamily)
       .shouldBe(Some("Serif"))
-    state.focus shouldBe Focus.EditorPane(PaneId(0))
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "open a focused color field with the current value prefilled, accept hex edits, and apply them on Enter" in {
@@ -664,13 +682,13 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(state)
-    val buffer   = state.buffers(bufferId)
+    val buffer   = state.persisted.buffers(bufferId)
     buffer.richText.richTextDocument
       .flatMap(_.paragraphs.headOption)
       .flatMap(_.runs.find(_.text == "beta"))
       .flatMap(_.style.color)
       .shouldBe(Some("#ff6600"))
-    state.focus shouldBe Focus.EditorPane(PaneId(0))
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "close an open toolbar control on Escape before dismissing the toolbar" in {
@@ -686,7 +704,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val afterFirstEscape = stateManager.getCurrentState.unsafeRunSync()
     afterFirstEscape.contextualToolbarSurface should not be empty
-    afterFirstEscape.focus shouldBe Focus.Surface(
+    afterFirstEscape.persisted.focus shouldBe Focus.Surface(
       afterFirstEscape.contextualToolbarSurface.getOrElse(fail("Expected toolbar surface")).id
     )
 
@@ -694,7 +712,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val afterSecondEscape = stateManager.getCurrentState.unsafeRunSync()
     afterSecondEscape.contextualToolbarSurface shouldBe None
-    afterSecondEscape.focus shouldBe Focus.EditorPane(PaneId(0))
+    afterSecondEscape.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "select and execute toolbar items on click without stealing editor focus" in {
@@ -705,13 +723,16 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
         val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
-        val nextBuffer = state
+        val nextBuffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()
 
@@ -724,19 +745,19 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val afterPress = stateManager.getCurrentState.unsafeRunSync()
     toolbarStateFrom(afterPress).focusedIndex shouldBe toolbarStateFrom(before).focusedIndex
-    afterPress.focus shouldBe before.focus
+    afterPress.persisted.focus shouldBe before.persisted.focus
 
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
     val afterHover = stateManager.getCurrentState.unsafeRunSync()
     toolbarStateFrom(afterHover).focusedIndex shouldBe toolbarStateFrom(before).focusedIndex
-    afterHover.focus shouldBe before.focus
+    afterHover.persisted.focus shouldBe before.persisted.focus
 
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
 
     val after    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(after)
-    after
+    after.persisted
       .buffers(bufferId)
       .richText
       .richTextDocument
@@ -744,7 +765,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .flatMap(_.runs.find(_.text == "beta"))
       .map(_.style.marks)
       .shouldBe(Some(Set(InlineMark.Italic)))
-    after.focus shouldBe Focus.EditorPane(PaneId(0))
+    after.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "select toolbar items at their fractional code-metric pixel offset when UI fonts differ" in {
@@ -753,17 +774,19 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     stateManager
       .updateState(state =>
-        state.copy(
-          config = state.config
-            .withUiElementGap(0.5)
-            .withFontConfig(
-              state.config.fontConfig.copy(
-                codeFontFamily = Font.MONOSPACED,
-                fontSize = 24.0f,
-                uiFontFamily = Font.SANS_SERIF,
-                uiFontSize = 8.0f
+        state.copy(persisted =
+          state.persisted.copy(config =
+            state.persisted.config
+              .withUiElementGap(0.5)
+              .withFontConfig(
+                state.persisted.config.fontConfig.copy(
+                  codeFontFamily = Font.MONOSPACED,
+                  fontSize = 24.0f,
+                  uiFontFamily = Font.SANS_SERIF,
+                  uiFontSize = 8.0f
+                )
               )
-            )
+          )
         )
       )
       .unsafeRunSync()
@@ -779,7 +802,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val after    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(after)
-    after
+    after.persisted
       .buffers(bufferId)
       .richText
       .richTextDocument
@@ -800,14 +823,14 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(MouseClick(inputPoint.x, inputPoint.y)).unsafeRunSync()
 
     val editing = stateManager.getCurrentState.unsafeRunSync()
-    editing.focus shouldBe Focus.Surface(
+    editing.persisted.focus shouldBe Focus.Surface(
       editing.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar")).id
     )
     toolbarStateFrom(editing).detailState shouldBe Some(ContextualToolbarDetailState.Input("font-size", "18"))
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().focus shouldBe Focus.EditorPane(PaneId(0))
+    stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "restore editor focus when a button is clicked while a toolbar detail is open" in {
@@ -818,13 +841,16 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
         val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
-        val nextBuffer = state
+        val nextBuffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()
 
@@ -833,7 +859,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(MouseClick(dropdownPoint.x, dropdownPoint.y)).unsafeRunSync()
 
     val withOpenDetail = stateManager.getCurrentState.unsafeRunSync()
-    withOpenDetail.focus shouldBe Focus.Surface(
+    withOpenDetail.persisted.focus shouldBe Focus.Surface(
       withOpenDetail.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar")).id
     )
 
@@ -841,7 +867,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(MouseClick(buttonPoint.x, buttonPoint.y)).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.focus shouldBe Focus.EditorPane(PaneId(0))
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "open a paragraph role dropdown and apply the clicked option" in {
@@ -852,13 +878,16 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
         val selection = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
-        val nextBuffer = state
+        val nextBuffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()
 
@@ -868,7 +897,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     stateManager.applyEvent(MouseClick(triggerPoint.x, triggerPoint.y)).unsafeRunSync()
 
     val openedDropdown = stateManager.getCurrentState.unsafeRunSync()
-    openedDropdown.focus shouldBe Focus.Surface(
+    openedDropdown.persisted.focus shouldBe Focus.Surface(
       openedDropdown.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar")).id
     )
 
@@ -881,14 +910,14 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(state)
-    state
+    state.persisted
       .buffers(bufferId)
       .richText
       .richTextDocument
       .flatMap(_.paragraphs.headOption)
       .map(_.role)
       .shouldBe(Some(ParagraphRole.Heading(1)))
-    state.focus shouldBe Focus.EditorPane(PaneId(0))
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "open a paragraph role dropdown and apply heading level 4" in {
@@ -899,13 +928,16 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
         val selection = Selection(CursorPosition(0, 0), CursorPosition(0, 5))
-        val nextBuffer = state
+        val nextBuffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()
 
@@ -923,7 +955,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(state)
-    state
+    state.persisted
       .buffers(bufferId)
       .richText
       .richTextDocument
@@ -940,13 +972,16 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
         val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
-        val nextBuffer = state
+        val nextBuffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus))
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()
 
@@ -964,7 +999,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val bufferId = activeBufferId(state)
-    state
+    state.persisted
       .buffers(bufferId)
       .richText
       .richTextDocument
@@ -979,7 +1014,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager
       .updateState(state =>
-        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
+        state.copy(persisted =
+          state.persisted
+            .copy(config = state.persisted.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
+        )
       )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
@@ -999,7 +1037,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.IconOnly
+    state.persisted.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.IconOnly
     toolbarStateFrom(state).displayMode shouldBe ToolbarDisplayMode.IconOnly
   }
 
@@ -1077,7 +1115,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val viewport     = ViewportSize(120, 30)
     stateManager
       .updateState(state =>
-        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+        state.copy(persisted =
+          state.persisted
+            .copy(config = state.persisted.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+        )
       )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
@@ -1179,10 +1220,12 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager
       .updateState(state =>
-        state.copy(
-          config = state.config
-            .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
-            .withUiElementGap(0.5)
+        state.copy(persisted =
+          state.persisted.copy(config =
+            state.persisted.config
+              .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
+              .withUiElementGap(0.5)
+          )
         )
       )
       .unsafeRunSync()
@@ -1227,10 +1270,12 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager
       .updateState(state =>
-        state.copy(
-          config = state.config
-            .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
-            .withUiElementGap(0.5)
+        state.copy(persisted =
+          state.persisted.copy(config =
+            state.persisted.config
+              .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
+              .withUiElementGap(0.5)
+          )
         )
       )
       .unsafeRunSync()
@@ -1254,7 +1299,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.activeCursorPosition shouldBe before.activeCursorPosition
-    after.buffers(activeBufferId(after)).primarySelection shouldBe before
+    after.persisted.buffers(activeBufferId(after)).primarySelection shouldBe before.persisted
       .buffers(activeBufferId(before))
       .primarySelection
   }
@@ -1264,10 +1309,12 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager
       .updateState(state =>
-        state.copy(
-          config = state.config
-            .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
-            .withUiElementGap(0.5)
+        state.copy(persisted =
+          state.persisted.copy(config =
+            state.persisted.config
+              .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
+              .withUiElementGap(0.5)
+          )
         )
       )
       .unsafeRunSync()
@@ -1300,7 +1347,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val viewport     = ViewportSize(120, 30)
     stateManager
       .updateState(state =>
-        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText))
+        state.copy(persisted =
+          state.persisted
+            .copy(config = state.persisted.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText))
+        )
       )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
@@ -1391,7 +1441,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
 
     stateManager
       .updateState(state =>
-        state.copy(config = state.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+        state.copy(persisted =
+          state.persisted
+            .copy(config = state.persisted.config.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+        )
       )
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
@@ -1420,8 +1473,8 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     val separatorX = row.indexOf('│')
     hexStart should be >= 0
     separatorX should be >= 0
-    surface.getBg(hexStart, toolbarRowY(state, 0)) shouldBe state.theme.highlighted.background
-    surface.getBg(separatorX, toolbarRowY(state, 0)) shouldBe state.theme.panel.background
+    surface.getBg(hexStart, toolbarRowY(state, 0)) shouldBe state.persisted.theme.highlighted.background
+    surface.getBg(separatorX, toolbarRowY(state, 0)) shouldBe state.persisted.theme.panel.background
   }
 
   it should "move focus vertically between wrapped toolbar rows" in {
@@ -1497,15 +1550,17 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
           .setParagraphRole(range, ParagraphRole.Body)
           .setParagraphAlignment(range, ParagraphAlignment.Left)
           .normalized
-        val nextBuffer = state
+        val nextBuffer = state.persisted
           .buffers(bufferId)
           .copy(
-            document = state.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing =
-              state.buffers(bufferId).editing.copy(selection = Some(selection), cursors = List(selection.focus)),
-            richText = state.buffers(bufferId).richText.copy(richTextDocument = Some(document))
+            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
+            editing = state.persisted
+              .buffers(bufferId)
+              .editing
+              .copy(selection = Some(selection), cursors = List(selection.focus)),
+            richText = state.persisted.buffers(bufferId).richText.copy(richTextDocument = Some(document))
           )
-        state.copy(buffers = state.buffers.updated(bufferId, nextBuffer))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()
 
@@ -1574,7 +1629,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
 
   private def toolbarRowY(state: AppState, displayedRowIndex: Int): Int =
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
     val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
     contract.floatingOverlayRowSlots
@@ -1583,10 +1638,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       .getOrElse(fail(s"Expected toolbar content row $displayedRowIndex"))
 
   private def fractionalToolbarPoint(state: AppState, point: Point): Point =
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val metrics  = CellMetrics.fromFont(FontLoader.previewCodeFont(state.config.fontConfig))
+    val metrics  = CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.fontConfig))
     val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(
       layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
       metrics
@@ -1599,7 +1654,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
     )
 
   private def toolbarRect(state: AppState) =
-    val viewport = state.viewportSize.getOrElse(fail("Expected viewport size"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
     val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
     contract
@@ -1737,7 +1792,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with StateManagerT
       case index => index
 
   private def activeBufferId(state: AppState): BufferId =
-    state.layout.activeEditorPaneId
-      .flatMap(state.layout.editorPanes.get)
+    state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
       .flatMap(_.bufferId)
       .getOrElse(fail("Expected active buffer"))

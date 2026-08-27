@@ -129,15 +129,18 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val buffer =
       Buffer.fromString(bufferId, content).copy(editing = EditingState(cursors = List(CursorPosition(0, cursorCol))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
-    AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false)
+    val base = AppState.initial
+    base.copy(persisted =
+      base.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+      )
     )
 
   "Renderer" should "use consistent pixel coordinates for text and cursor on a monospaced buffer" in {
@@ -153,7 +156,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val paneRect     = paneLayouts(PaneId(0))
     val panelWidthPx = paneRect.width * cellMetrics.charWidth
     val snapshot = TextLayoutSnapshot.fromBuffer(
-      state.buffers(BufferId(1)),
+      state.persisted.buffers(BufferId(1)),
       panelWidthPx,
       monoFont,
       surface.fontRenderContext.getOrElse(fail("missing frc"))
@@ -188,7 +191,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       Buffer
         .fromString(bufferId, "content")
         .copy(annotations = Annotations(documentComments = List.fill(10000)(comment)))
-    val state = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
+    val base  = buildState("content", 0)
+    val state = base.copy(persisted = base.persisted.copy(buffers = Map(bufferId -> buffer)))
 
     val index = state.annotationIndexByBuffer(bufferId)()
 
@@ -205,7 +209,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       Buffer
         .fromString(bufferId, "content")
         .copy(annotations = Annotations(documentComments = (unrelated :+ visible).toList))
-    val state = buildState("content", 0).copy(buffers = Map(bufferId -> buffer))
+    val base  = buildState("content", 0)
+    val state = base.copy(persisted = base.persisted.copy(buffers = Map(bufferId -> buffer)))
 
     val result = state.annotationIndexByBuffer(bufferId)().commentsByLine(Set(100000))
 
@@ -220,15 +225,18 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       .copy(
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 20)
       )
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -252,15 +260,18 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer(bufferId, Document(content)).copy(
       viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 5)
     )
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(true).withGutter(false).withWordWrap(false)
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(true).withGutter(false).withWordWrap(false)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val layout  = LayoutEngine.calculateLayout(state, viewportSize)
@@ -282,15 +293,18 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       richText = RichTextState(richTextDocument = Some(document)),
       viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -309,15 +323,18 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       richText = RichTextState(richTextDocument = Some(document)),
       viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -337,19 +354,22 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       editing = EditingState(cursors = List(CursorPosition(0, 0))),
       viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withWordWrap(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withWordWrap(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val layout  = LayoutEngine.calculateLayout(state, viewportSize)
@@ -376,19 +396,22 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       editing = EditingState(cursors = List(CursorPosition(5_500, 0))),
       viewport = Viewport(topLine = 5_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withWordWrap(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withWordWrap(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -419,19 +442,22 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       editing = EditingState(cursors = List(CursorPosition(500, 0))),
       viewport = Viewport(topLine = 500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withWordWrap(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withWordWrap(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -460,19 +486,22 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       editing = EditingState(cursors = List(CursorPosition(5_500, 0))),
       viewport = Viewport(topLine = 5_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withWordWrap(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withWordWrap(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
@@ -496,19 +525,22 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       editing = EditingState(cursors = List(CursorPosition(1_500, 0))),
       viewport = Viewport(topLine = 1_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
-    val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      theme = Theme.light,
-      config = AppConfig.default
-        .withLineNumbers(false)
-        .withGutter(false)
-        .withWordWrap(false)
-        .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+    val initial = AppState.initial
+    val state = initial.copy(persisted =
+      initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        theme = Theme.light,
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withWordWrap(false)
+          .withMarkdownViewMode(MarkdownViewMode.InlineLens)
+      )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 

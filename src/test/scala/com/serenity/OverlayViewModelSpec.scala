@@ -23,19 +23,23 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("peek"))
       ),
-      focus = Focus.Surface(SurfaceId("peek")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("peek"),
-          SurfaceContent.QuickInfo(text),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.AboveCursor),
-          dismissOnMove = true
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("peek"),
+            SurfaceContent.QuickInfo(text),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.AboveCursor),
+            dismissOnMove = true
+          )
         )
       )
     )
@@ -53,7 +57,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlay.rows.map(_.plainText) shouldBe List("List.map(f)")
     overlay.rect shouldBe layout.aboveCursorOverlayRect.get
     overlay.contentRect shouldBe Some(
-      SurfaceFrameLayout.forContent(overlay.rect, state.uiSurfaces.head.content).contentRect
+      SurfaceFrameLayout.forContent(overlay.rect, state.runtime.uiSurfaces.head.content).contentRect
     )
   }
 
@@ -63,18 +67,22 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("modal"))
       ),
-      focus = Focus.Surface(SurfaceId("modal")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("modal"),
-          SurfaceContent.ModalWorkflow(Modal.Custom("replace", "needle")),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("modal"),
+            SurfaceContent.ModalWorkflow(Modal.Custom("replace", "needle")),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -95,16 +103,20 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val pane   = EditorPane.withBuffer(paneId, bufferId)
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
-      config = AppConfig.default.withCommandRunnerItemGapRows(1),
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(editorPanes = Map(paneId -> pane), activeEditorPaneId = Some(paneId)),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withCommandRunnerItemGapRows(1),
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(editorPanes = Map(paneId -> pane), activeEditorPaneId = Some(paneId)),
+        focus = Focus.Surface(SurfaceId("command-runner"))
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -127,18 +139,22 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("find"))
       ),
-      focus = Focus.Surface(SurfaceId("find")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("find"),
-          SurfaceContent.ModalWorkflow(Modal.Find("two", List(FindResult(1, 0)), 0)),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("find"),
+            SurfaceContent.ModalWorkflow(Modal.Find("two", List(FindResult(1, 0)), 0)),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -174,21 +190,25 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      config = AppConfig.default
-        .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
-        .withCommandRunnerItemGapRows(1),
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default
+          .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
+          .withCommandRunnerItemGapRows(1),
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("context-menu"))
       ),
-      focus = Focus.Surface(SurfaceId("context-menu")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("context-menu"),
-          SurfaceContent.ContextMenu(menu),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("context-menu"),
+            SurfaceContent.ContextMenu(menu),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -225,18 +245,22 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.Surface(SurfaceId("command-runner"))
       ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -258,18 +282,22 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
+        ),
+        focus = Focus.EditorPane(paneId)
       ),
-      focus = Focus.EditorPane(paneId),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(CommandRunner.empty),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(CommandRunner.empty),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -293,31 +321,35 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.Surface(SurfaceId("file-modal")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
         ),
-        UiSurface(
-          SurfaceId("file-modal"),
-          SurfaceContent.ModalWorkflow(
-            Modal.FileWorkflow(
-              FileWorkflowState(
-                mode = FileWorkflowMode.Open,
-                filename = "notes.scala",
-                path = "/tmp/project"
-              )
-            )
+        focus = Focus.Surface(SurfaceId("file-modal"))
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
           ),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          UiSurface(
+            SurfaceId("file-modal"),
+            SurfaceContent.ModalWorkflow(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.Open,
+                  filename = "notes.scala",
+                  path = "/tmp/project"
+                )
+              )
+            ),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -335,14 +367,18 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val surfaceId = SurfaceId("close-modal")
     val workflow  = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
     val state = AppState.initial.copy(
-      uiSurfaces = List(
-        UiSurface(
-          surfaceId,
-          SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
-          SurfacePresentation.Modal
-        )
+      persisted = AppState.initial.persisted.copy(
+        focus = Focus.Surface(surfaceId)
       ),
-      focus = Focus.Surface(surfaceId)
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            surfaceId,
+            SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
+            SurfacePresentation.Modal
+          )
+        )
+      )
     )
     val scene   = UiSceneSnapshot.from(state, ViewportSize(80, 24))
     val overlay = OverlayViewModel.fromState(state, scene).modal.lastOption.getOrElse(fail("Expected modal overlay"))
@@ -367,23 +403,27 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
         ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = true),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        focus = Focus.Surface(SurfaceId("command-runner"))
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = true),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -408,23 +448,27 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(2, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner-submenu")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(2, 2)), SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
         ),
-        UiSurface(
-          SurfaceId("command-runner-submenu"),
-          SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
-          SurfacePresentation.Floating(Some(CursorPosition(2, 2)), SurfacePlacement.BelowCursor)
+        focus = Focus.Surface(SurfaceId("command-runner-submenu"))
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(2, 2)), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner-submenu"),
+            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
+            SurfacePresentation.Floating(Some(CursorPosition(2, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )
@@ -449,24 +493,28 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
-      buffers = Map(bufferId -> buffer),
-      bufferOrder = List(bufferId),
-      layout = Layout(
-        editorPanes = Map(paneId -> pane),
-        activeEditorPaneId = Some(paneId)
-      ),
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      config = AppConfig.default.withUiElementGap(0.25),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("contextual-toolbar"),
-          SurfaceContent.ContextualToolbar(ContextualToolbarState()),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId)
         ),
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+        focus = Focus.Surface(SurfaceId("command-runner")),
+        config = AppConfig.default.withUiElementGap(0.25)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("contextual-toolbar"),
+            SurfaceContent.ContextualToolbar(ContextualToolbarState()),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
         )
       )
     )

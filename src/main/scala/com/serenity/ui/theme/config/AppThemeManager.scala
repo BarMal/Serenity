@@ -28,14 +28,14 @@ class AppThemeManager:
   def switchTheme(themeName: String): IO[(Theme, AppState => AppState)] =
     for
       newTheme <- themeManager.loadAndSetTheme(themeName)
-      stateUpdate = (state: AppState) => state.copy(theme = newTheme)
+      stateUpdate = (state: AppState) => state.copy(persisted = state.persisted.copy(theme = newTheme))
     yield (newTheme, stateUpdate)
 
   /** Reload the current theme (useful for config file changes) */
   def reloadCurrentTheme: IO[Option[(Theme, AppState => AppState)]] =
     for reloadedTheme <- themeManager.reloadCurrentTheme
     yield reloadedTheme.map { theme =>
-      val stateUpdate = (state: AppState) => state.copy(theme = theme)
+      val stateUpdate = (state: AppState) => state.copy(persisted = state.persisted.copy(theme = theme))
       (theme, stateUpdate)
     }
 
@@ -49,7 +49,7 @@ class AppThemeManager:
 
   /** Create an AppState update function for a given theme */
   def createThemeUpdate(theme: Theme): AppState => AppState =
-    state => state.copy(theme = theme)
+    state => state.copy(persisted = state.persisted.copy(theme = theme))
 
 object AppThemeManager:
   /** Create a new instance with default configuration */

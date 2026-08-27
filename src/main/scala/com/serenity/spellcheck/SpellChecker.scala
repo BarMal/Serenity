@@ -133,43 +133,52 @@ object SpellChecker:
           .toList
 
   def refreshDiagnostics(state: AppState): AppState =
-    val preserved = state.diagnostics.view
+    val preserved = state.runtime.diagnosticsState.diagnostics.view
       .mapValues(_.filterNot(isSpellCheckDiagnostic))
       .filter(_._2.nonEmpty)
       .toMap
 
-    val (refreshed, cache) = state.buffers.values.foldLeft((preserved, Map.empty[String, SpellCheckCacheEntry])) {
-      case ((diagnostics, cache), buffer) =>
-        val uri = diagnosticsUri(buffer)
-        if shouldCheck(buffer, state.config.spellCheck) then
-          val fingerprint = SpellCheckFingerprint.from(buffer, state.config.spellCheck)
-          val entry = state.spellCheckCache
-            .get(uri)
-            .filter(_.fingerprint == fingerprint)
-            .getOrElse {
-              val spellDiagnostics = check(buffer.document.content.collect(), state.config.spellCheck)
-              SpellCheckCacheEntry(fingerprint, spellDiagnostics)
-            }
-          val nextDiagnostics =
-            if entry.diagnostics.isEmpty then diagnostics
-            else diagnostics + (uri -> entry.diagnostics)
-          nextDiagnostics -> (cache + (uri -> entry))
-        else diagnostics -> cache
-    }
+    val (refreshed, cache) =
+      state.persisted.buffers.values.foldLeft((preserved, Map.empty[String, SpellCheckCacheEntry])) {
+        case ((diagnostics, cache), buffer) =>
+          val uri = diagnosticsUri(buffer)
+          if shouldCheck(buffer, state.persisted.config.spellCheck) then
+            val fingerprint = SpellCheckFingerprint.from(buffer, state.persisted.config.spellCheck)
+            val entry = state.runtime.diagnosticsState.spellCheckCache
+              .get(uri)
+              .filter(_.fingerprint == fingerprint)
+              .getOrElse {
+                val spellDiagnostics = check(buffer.document.content.collect(), state.persisted.config.spellCheck)
+                SpellCheckCacheEntry(fingerprint, spellDiagnostics)
+              }
+            val nextDiagnostics =
+              if entry.diagnostics.isEmpty then diagnostics
+              else diagnostics + (uri -> entry.diagnostics)
+            nextDiagnostics -> (cache + (uri -> entry))
+          else diagnostics -> cache
+      }
 
-    state.copy(diagnostics = refreshed, spellCheckCache = cache)
+    state.copy(runtime =
+      state.runtime.copy(diagnosticsState =
+        state.runtime.diagnosticsState.copy(diagnostics = refreshed, spellCheckCache = cache)
+      )
+    )
 
   def analysisFingerprints(state: AppState): Map[String, SpellCheckFingerprint] =
-    state.buffers.values
-      .filter(buffer => shouldCheck(buffer, state.config.spellCheck))
-      .map(buffer => diagnosticsUri(buffer) -> SpellCheckFingerprint.from(buffer, state.config.spellCheck))
+    state.persisted.buffers.values
+      .filter(buffer => shouldCheck(buffer, state.persisted.config.spellCheck))
+      .map(buffer => diagnosticsUri(buffer) -> SpellCheckFingerprint.from(buffer, state.persisted.config.spellCheck))
       .toMap
 
   def applyIfCurrent(current: AppState, analyzed: AppState, expected: Map[String, SpellCheckFingerprint]): AppState =
     if analysisFingerprints(current) == expected then
-      current.copy(
-        diagnostics = analyzed.diagnostics,
-        spellCheckCache = analyzed.spellCheckCache
+      current.copy(runtime =
+        current.runtime.copy(diagnosticsState =
+          current.runtime.diagnosticsState.copy(
+            diagnostics = analyzed.runtime.diagnosticsState.diagnostics,
+            spellCheckCache = analyzed.runtime.diagnosticsState.spellCheckCache
+          )
+        )
       )
     else current
 

@@ -16,12 +16,14 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   private def stateWithRunner(runner: CommandRunner): AppState =
     AppState.empty.copy(
-      focus = Focus.Surface(SurfaceId("command-runner")),
-      uiSurfaces = List(
-        UiSurface(
-          SurfaceId("command-runner"),
-          SurfaceContent.CommandPalette(runner),
-          SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      persisted = AppState.empty.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
+      runtime = AppState.empty.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
         )
       )
     )

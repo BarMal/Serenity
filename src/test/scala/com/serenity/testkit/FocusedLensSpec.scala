@@ -20,15 +20,19 @@ class FocusedLensSpec extends AnyFlatSpec with Matchers:
   private val focusedState: AppState =
     val buffer = Buffer.empty(bufferId)
     AppState.initial.copy(
-      layout = AppState.initial.layout.copy(
-        editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-        activeEditorPaneId = Some(paneId)
-      ),
-      buffers = Map(bufferId -> buffer)
+      persisted = AppState.initial.persisted.copy(
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+          activeEditorPaneId = Some(paneId)
+        ),
+        buffers = Map(bufferId -> buffer)
+      )
     )
 
   private val unfocusedState: AppState =
-    focusedState.copy(layout = focusedState.layout.copy(activeEditorPaneId = None))
+    focusedState.copy(persisted =
+      focusedState.persisted.copy(layout = focusedState.persisted.layout.copy(activeEditorPaneId = None))
+    )
 
   private def run(state: AppState)(transition: Transition[Unit]): AppState =
     ReducerResult.fromTransition(state, transition).state
@@ -67,12 +71,14 @@ class FocusedLensSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave other buffers untouched" in {
-    val otherId    = BufferId(2)
-    val withSecond = focusedState.copy(buffers = focusedState.buffers + (otherId -> Buffer.empty(otherId)))
+    val otherId = BufferId(2)
+    val withSecond = focusedState.copy(persisted =
+      focusedState.persisted.copy(buffers = focusedState.persisted.buffers + (otherId -> Buffer.empty(otherId)))
+    )
 
     val updated = run(withSecond)(Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = true))))
 
-    updated.buffers(otherId).document.isDirty shouldBe false
+    updated.persisted.buffers(otherId).document.isDirty shouldBe false
   }
 
   "Focused.bufferWithId" should "satisfy the same laws for an addressed buffer" in {
@@ -80,7 +86,7 @@ class FocusedLensSpec extends AnyFlatSpec with Matchers:
 
     val marked =
       run(focusedState)(Focused.modifyBufferWithId(bufferId)(b => b.copy(document = b.document.copy(isDirty = true))))
-    marked.buffers(bufferId).document.isDirty shouldBe true
+    marked.persisted.buffers(bufferId).document.isDirty shouldBe true
 
     run(focusedState)(
       Focused.modifyBufferWithId(BufferId(99))(b => b.copy(document = b.document.copy(isDirty = true)))
@@ -116,6 +122,6 @@ class FocusedLensSpec extends AnyFlatSpec with Matchers:
         _           <- Focused.modifyBuffer(b => b.copy(document = b.document.copy(isDirty = maybeBuffer.isDefined)))
       yield ()
 
-    run(focusedState)(transition).buffers(bufferId).document.isDirty shouldBe true
+    run(focusedState)(transition).persisted.buffers(bufferId).document.isDirty shouldBe true
     run(unfocusedState)(transition) shouldBe unfocusedState
   }
