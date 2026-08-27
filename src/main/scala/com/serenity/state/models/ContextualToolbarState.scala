@@ -60,23 +60,16 @@ final case class ContextualToolbarState(
         detailState = None
       )
 
-  def moveFocusVertical(
-    deltaRows: Int,
-    items: List[ContextualToolbarItem],
-    contentWidth: Int
-  ): ContextualToolbarState =
-    if items.isEmpty || contentWidth <= 0 then this
-    else
-      val nextIndex =
-        ContextualToolbar.moveVerticalIndex(
-          rowGroups = ContextualToolbar.rowGroups(items, contentWidth, displayMode),
-          currentIndex = normalizedFocusedIndex(items),
-          deltaRows = deltaRows
-        )
-      copy(focusedIndex = nextIndex, detailState = None)
-
   def withFocusedIndex(index: Int, items: List[ContextualToolbarItem]): ContextualToolbarState =
     copy(focusedIndex = clampIndex(index, items))
+
+  /** Sets the focused item to a geometry-derived index (e.g. from a vertical row move) and closes any open detail. */
+  def withFocusedIndexClearingDetail(index: Int, items: List[ContextualToolbarItem]): ContextualToolbarState =
+    copy(focusedIndex = clampIndex(index, items), detailState = None)
+
+  /** Sets the selected option of an already-open dropdown detail to a geometry-derived index. */
+  def withDetailSelectionIndex(itemId: String, index: Int): ContextualToolbarState =
+    copy(detailState = Some(ContextualToolbarDetailState.Dropdown(itemId, index)))
 
   def openFocusedDetail(items: List[ContextualToolbarItem]): ContextualToolbarState =
     focusedItem(items) match
@@ -106,25 +99,6 @@ final case class ContextualToolbarState(
             )
           case _ =>
             this
-      case _ =>
-        this
-
-  def moveDetailSelectionVertical(
-    deltaRows: Int,
-    items: List[ContextualToolbarItem],
-    contentWidth: Int
-  ): ContextualToolbarState =
-    normalized(items).detailState match
-      case Some(ContextualToolbarDetailState.Dropdown(itemId, selectedIndex)) if contentWidth > 0 =>
-        val rowGroups = ContextualToolbar.detailRowGroups(this, items, contentWidth)
-        copy(
-          detailState = Some(
-            ContextualToolbarDetailState.Dropdown(
-              itemId,
-              ContextualToolbar.moveVerticalIndex(rowGroups, selectedIndex, deltaRows)
-            )
-          )
-        )
       case _ =>
         this
 
@@ -169,10 +143,6 @@ final case class ContextualToolbarState(
     if items.isEmpty then 0 else index.max(0).min(items.length - 1)
 
 object ContextualToolbar:
-
-  private val maxDisplayTextWidth         = 18
-  private val compactPaneWidthNumerator   = 2L
-  private val compactPaneWidthDenominator = 3L
 
   private val colorPresets = List(
     "Ink"  -> "#202020",
@@ -276,100 +246,24 @@ object ContextualToolbar:
           case ToolbarDisplayMode.TextOnly    => text
           case ToolbarDisplayMode.IconAndText => s"$icon $text"
 
+  /** The semantic formatting-control group an item belongs to, or `None` if it does not participate in grouping. */
+  def formattingGroupId(item: ContextualToolbarItem): Option[Int] =
+    proseGroupIds.get(item.id)
+
   /** Whether adjacent formatting controls belong to different visual groups. */
   def hasTrailingGroupSeparator(
     item: ContextualToolbarItem,
     nextItem: Option[ContextualToolbarItem]
   ): Boolean =
-    (proseGroupIds.get(item.id), nextItem.flatMap(next => proseGroupIds.get(next.id))) match
+    (formattingGroupId(item), nextItem.flatMap(formattingGroupId)) match
       case (Some(group), Some(nextGroup)) => group != nextGroup
       case _                              => false
 
-  /** Cell widths for a toolbar row, excluding inter-item and group-separator gutters. */
-  def itemCellWidths(
-    items: List[ContextualToolbarItem],
-    contentWidth: Int,
-    mode: ToolbarDisplayMode
-  ): List[Int] =
-    val preferredWidths = items.map(item => displayTextWidth(displayText(item, mode)) + 2)
-    val gutters         = rowGutterWidth(items)
-    val availableWidth  = (contentWidth - gutters).max(0)
-    if preferredWidths.sum <= availableWidth then preferredWidths
-    else distributeProportionally(preferredWidths, availableWidth)
+  def dropdownItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Dropdown] =
+    items.collectFirst { case item: ContextualToolbarItem.Dropdown if item.id == itemId => item }
 
-  /** Leading blank cells that center a compact toolbar row within its frame. */
-  def rowLeadingPadding(
-    items: List[ContextualToolbarItem],
-    contentWidth: Int,
-    mode: ToolbarDisplayMode
-  ): Int =
-    val occupiedWidth = itemCellWidths(items, contentWidth, mode).sum + rowGutterWidth(items)
-    ((contentWidth - occupiedWidth).max(0)) / 2
-
-  def rowGroups(
-    items: List[ContextualToolbarItem],
-    contentWidth: Int,
-    mode: ToolbarDisplayMode
-  ): List[List[ContextualToolbarItem]] =
-    if items.isEmpty || contentWidth <= 0 then Nil
-    else if estimatedRowWidth(items, mode) <= contentWidth then List(items)
-    else if proseItemSegments(items).exists(_.length > 1) then
-      packSegments(proseItemSegments(items), contentWidth, mode)
-    else packItems(items, contentWidth, mode)
-
-  def compactContentWidth(toolbarState: ContextualToolbarState, state: AppState, maxWidth: Int): Int =
-    val items          = itemsFor(state)
-    val intrinsicWidth = estimatedRowWidth(items, toolbarState.displayMode)
-    val largestGroupWidth = proseItemSegments(items)
-      .map(estimatedRowWidth(_, toolbarState.displayMode))
-      .maxOption
-      .getOrElse(1)
-    val compactRowLimit =
-      toolbarState.displayMode match
-        case ToolbarDisplayMode.IconOnly => maxWidth.max(1)
-        case _ =>
-          ((maxWidth.max(1).toLong * compactPaneWidthNumerator) / compactPaneWidthDenominator).toInt.max(1)
-    val balancedWidth =
-      if intrinsicWidth <= compactRowLimit then intrinsicWidth
-      else
-        balancedTwoRowWidth(proseItemSegments(items), toolbarState.displayMode)
-          .getOrElse((intrinsicWidth + 1) / 2)
-          .max(largestGroupWidth)
-    balancedWidth
-      .max(1)
-      .min(compactRowLimit)
-      .min(maxWidth.max(1))
-
-  def rowCount(
-    toolbarState: ContextualToolbarState,
-    state: AppState,
-    contentWidth: Int
-  ): Int =
-    val items    = itemsFor(state)
-    val topLevel = rowGroups(items, contentWidth, toolbarState.displayMode).length
-    val detailCount =
-      toolbarState.normalized(items).detailState match
-        case Some(_: ContextualToolbarDetailState.Dropdown) =>
-          detailRowGroups(toolbarState, items, contentWidth).length
-        case Some(_: ContextualToolbarDetailState.Input) =>
-          1
-        case None =>
-          0
-    (topLevel + detailCount).max(1)
-
-  def detailRowGroups(
-    toolbarState: ContextualToolbarState,
-    items: List[ContextualToolbarItem],
-    contentWidth: Int
-  ): List[List[CommandOption]] =
-    toolbarState.normalized(items).detailState match
-      case Some(ContextualToolbarDetailState.Dropdown(itemId, _)) =>
-        dropdownItem(itemId, items)
-          .map(_.optionItem.options)
-          .map(options => optionRowGroups(options, contentWidth))
-          .getOrElse(Nil)
-      case _ =>
-        Nil
+  def inputItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Input] =
+    items.collectFirst { case item: ContextualToolbarItem.Input if item.id == itemId => item }
 
   def detailInputItem(
     toolbarState: ContextualToolbarState,
@@ -380,234 +274,6 @@ object ContextualToolbar:
         inputItem(itemId, items).map(_ -> text)
       case _ =>
         None
-
-  def hitAt(
-    rowIndex: Int,
-    columnOffset: Int,
-    contentWidth: Int,
-    toolbarState: ContextualToolbarState,
-    state: AppState
-  ): Option[ContextualToolbarHit] =
-    val items        = itemsFor(state)
-    val topLevelRows = rowGroups(items, contentWidth, toolbarState.displayMode)
-    topLevelRows.lift(rowIndex) match
-      case Some(rowItems) =>
-        topLevelItemIndexAt(rowItems, columnOffset, contentWidth, toolbarState.displayMode).map { localIndex =>
-          val offset = topLevelRows.take(rowIndex).map(_.length).sum
-          ContextualToolbarHit.TopLevelItem(offset + localIndex)
-        }
-      case None =>
-        val detailRowIndex = rowIndex - topLevelRows.length
-        toolbarState.normalized(items).detailState match
-          case Some(ContextualToolbarDetailState.Dropdown(itemId, _)) =>
-            val optionGroups = detailRowGroups(toolbarState, items, contentWidth)
-            optionGroups.lift(detailRowIndex).flatMap { rowOptions =>
-              Option.when(rowOptions.nonEmpty) {
-                val offset = optionGroups.take(detailRowIndex).map(_.length).sum
-                val localIndex =
-                  ((columnOffset.max(0) * rowOptions.length) / contentWidth.max(1))
-                    .max(0)
-                    .min(rowOptions.length - 1)
-                ContextualToolbarHit.DropdownOption(itemId, offset + localIndex)
-              }
-            }
-          case Some(ContextualToolbarDetailState.Input(itemId, _)) if detailRowIndex == 0 =>
-            Some(ContextualToolbarHit.InputDetail(itemId))
-          case _ =>
-            None
-
-  private def topLevelItemIndexAt(
-    items: List[ContextualToolbarItem],
-    columnOffset: Int,
-    contentWidth: Int,
-    mode: ToolbarDisplayMode
-  ): Option[Int] =
-    val widths      = itemCellWidths(items, contentWidth, mode)
-    val localColumn = columnOffset - rowLeadingPadding(items, contentWidth, mode)
-    items
-      .zip(widths)
-      .zipWithIndex
-      .foldLeft((0, Option.empty[Int])) {
-        case ((cursor, found), ((item, width), index)) =>
-          val cellEnd        = cursor + width
-          val hit            = Option.when(localColumn >= cursor && localColumn < cellEnd)(index)
-          val separatorWidth = Option.when(hasTrailingGroupSeparator(item, items.lift(index + 1)))(1).getOrElse(0)
-          val gapWidth       = Option.when(index < items.length - 1)(1).getOrElse(0)
-          (cellEnd + separatorWidth + gapWidth, found.orElse(hit))
-      }
-      ._2
-
-  private def rowGutterWidth(items: List[ContextualToolbarItem]): Int =
-    items.drop(1).length + items.zip(items.drop(1)).count {
-      case (item, nextItem) =>
-        hasTrailingGroupSeparator(item, Some(nextItem))
-    }
-
-  def dropdownItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Dropdown] =
-    items.collectFirst { case item: ContextualToolbarItem.Dropdown if item.id == itemId => item }
-
-  def inputItem(itemId: String, items: List[ContextualToolbarItem]): Option[ContextualToolbarItem.Input] =
-    items.collectFirst { case item: ContextualToolbarItem.Input if item.id == itemId => item }
-
-  private def proseItemSegments(items: List[ContextualToolbarItem]): List[List[ContextualToolbarItem]] =
-    items.foldLeft(List.empty[List[ContextualToolbarItem]]) { (segments, item) =>
-      val nextGroupId = proseGroupIds.get(item.id)
-      segments match
-        case init :+ last
-            if last.nonEmpty &&
-              proseGroupIds.get(last.head.id) == nextGroupId &&
-              nextGroupId.nonEmpty =>
-          init :+ (last :+ item)
-        case _ =>
-          segments :+ List(item)
-    }
-
-  private def packSegments(
-    segments: List[List[ContextualToolbarItem]],
-    contentWidth: Int,
-    mode: ToolbarDisplayMode
-  ): List[List[ContextualToolbarItem]] =
-    val packableSegments = segments.flatMap { segment =>
-      if estimatedRowWidth(segment, mode) > contentWidth then packItems(segment, contentWidth, mode)
-      else List(segment)
-    }
-    val (currentRow, rows) =
-      packableSegments.foldLeft((List.empty[ContextualToolbarItem], List.empty[List[ContextualToolbarItem]])) {
-        case ((currentRow, acc), segment) =>
-          val nextRow = currentRow ++ segment
-          if currentRow.nonEmpty && estimatedRowWidth(nextRow, mode) > contentWidth then (segment, acc :+ currentRow)
-          else (nextRow, acc)
-      }
-    if currentRow.nonEmpty then rows :+ currentRow else rows
-
-  private def balancedTwoRowWidth(
-    segments: List[List[ContextualToolbarItem]],
-    mode: ToolbarDisplayMode
-  ): Option[Int] =
-    (1 until segments.length).iterator.map { splitIndex =>
-      estimatedRowWidth(segments.take(splitIndex).flatten, mode)
-        .max(estimatedRowWidth(segments.drop(splitIndex).flatten, mode))
-    }.minOption
-
-  private def packItems(
-    items: List[ContextualToolbarItem],
-    contentWidth: Int,
-    mode: ToolbarDisplayMode
-  ): List[List[ContextualToolbarItem]] =
-    val (currentRow, rows) =
-      items.foldLeft((List.empty[ContextualToolbarItem], List.empty[List[ContextualToolbarItem]])) {
-        case ((currentRow, acc), item) =>
-          val nextWidth = estimatedRowWidth(currentRow :+ item, mode)
-          if currentRow.nonEmpty && nextWidth > contentWidth then (List(item), acc :+ currentRow)
-          else (currentRow :+ item, acc)
-      }
-    rows :+ currentRow
-
-  private def estimatedRowWidth(items: List[ContextualToolbarItem], mode: ToolbarDisplayMode): Int =
-    items.map(item => displayTextWidth(displayText(item, mode)) + 2).sum +
-      items.drop(1).length +
-      items.zip(items.drop(1)).count {
-        case (item, nextItem) =>
-          hasTrailingGroupSeparator(item, Some(nextItem))
-      }
-
-  private def distributeEvenly(itemCount: Int, availableWidth: Int): List[Int] =
-    if itemCount == 0 then Nil
-    else
-      List.tabulate(itemCount) { index =>
-        (availableWidth / itemCount) + Option.when(index < availableWidth % itemCount)(1).getOrElse(0)
-      }
-
-  private def distributeProportionally(preferredWidths: List[Int], availableWidth: Int): List[Int] =
-    if preferredWidths.isEmpty then Nil
-    else if availableWidth < preferredWidths.length then distributeEvenly(preferredWidths.length, availableWidth)
-    else
-      val remainingWidth = availableWidth - preferredWidths.length
-      val weights        = preferredWidths.map(_ - 1)
-      val totalWeight    = weights.sum.toLong
-      val weightedShares = weights.map(weight => remainingWidth.toLong * weight)
-      val allocated      = weightedShares.map(_ / totalWeight)
-      val remainingCells = remainingWidth - allocated.sum.toInt
-      val extraCells = weightedShares.zipWithIndex
-        .sortBy { case (share, index) => (-(share % totalWeight), index) }
-        .take(remainingCells)
-        .map(_._2)
-        .toSet
-      List.tabulate(preferredWidths.length) { index =>
-        1 + allocated(index).toInt + Option.when(extraCells.contains(index))(1).getOrElse(0)
-      }
-
-  private def displayTextWidth(text: String): Int =
-    text
-      .codePoints()
-      .toArray
-      .count { codePoint =>
-        val category = Character.getType(codePoint)
-        category != Character.NON_SPACING_MARK &&
-        category != Character.COMBINING_SPACING_MARK &&
-        category != Character.ENCLOSING_MARK
-      }
-      .min(maxDisplayTextWidth)
-
-  private def optionRowGroups(options: List[CommandOption], contentWidth: Int): List[List[CommandOption]] =
-    if options.isEmpty || contentWidth <= 0 then Nil
-    else
-      val (currentRow, rows) =
-        options.foldLeft((List.empty[CommandOption], List.empty[List[CommandOption]])) {
-          case ((currentRow, acc), option) =>
-            val nextWidth = currentRow.map(_.label.length + 2).sum + option.label.length + 2 + currentRow.length
-            if currentRow.nonEmpty && nextWidth > contentWidth then (List(option), acc :+ currentRow)
-            else (currentRow :+ option, acc)
-        }
-      rows :+ currentRow
-
-  private[models] def moveVerticalIndex[A](
-    rowGroups: List[List[A]],
-    currentIndex: Int,
-    deltaRows: Int
-  ): Int =
-    if rowGroups.isEmpty || deltaRows == 0 then currentIndex
-    else
-      val rowLengths = rowGroups.map(_.length)
-      val totalItems = rowLengths.sum
-      if totalItems == 0 then currentIndex
-      else
-        val step = deltaRows.sign
-        Iterator
-          .fill(deltaRows.abs)(step)
-          .foldLeft(currentIndex.max(0).min(totalItems - 1)) { (index, rowDelta) =>
-            val (rowIndex, localIndex) = rowAndLocalIndex(rowLengths, index)
-            val targetRowIndex         = (rowIndex + rowDelta).max(0).min(rowLengths.length - 1)
-            if targetRowIndex == rowIndex then index
-            else
-              val targetLength = rowLengths(targetRowIndex)
-              rowLengths.take(targetRowIndex).sum +
-                proportionalIndex(localIndex, rowLengths(rowIndex), targetLength)
-          }
-
-  private def rowAndLocalIndex(rowLengths: List[Int], globalIndex: Int): (Int, Int) =
-    rowLengths
-      .foldLeft((0, 0, Option.empty[(Int, Int)])) {
-        case ((offset, rowIndex, found), rowLength) =>
-          found match
-            case some @ Some(_) =>
-              (offset + rowLength, rowIndex + 1, some)
-            case None if globalIndex < offset + rowLength =>
-              (offset + rowLength, rowIndex + 1, Some((rowIndex, globalIndex - offset)))
-            case None =>
-              (offset + rowLength, rowIndex + 1, None)
-      }
-      ._3
-      .getOrElse {
-        val lastRowIndex  = (rowLengths.length - 1).max(0)
-        val lastRowLength = rowLengths.lift(lastRowIndex).getOrElse(1).max(1)
-        (lastRowIndex, lastRowLength - 1)
-      }
-
-  private def proportionalIndex(currentIndex: Int, currentRowLength: Int, targetRowLength: Int): Int =
-    (((currentIndex + 0.5d) * targetRowLength) / currentRowLength.max(1)).toInt
-      .max(0)
-      .min(targetRowLength - 1)
 
   private def applyMarkdownSelections(
     items: List[ContextualToolbarItem],

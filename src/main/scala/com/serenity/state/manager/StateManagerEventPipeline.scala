@@ -1808,7 +1808,7 @@ final private[manager] class StateManagerEventPipeline(
           )
         )
     rowIndex.flatMap { rowIndex =>
-      ContextualToolbar.hitAt(
+      ContextualToolbarLayout.hitAt(
         rowIndex = rowIndex,
         columnOffset = event.col - contentRect.x,
         contentWidth = contentRect.width.max(1),

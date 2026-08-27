@@ -3,7 +3,7 @@ package com.serenity.state.components
 import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{EditorLayoutContract, LayoutEngine, SurfaceFrameLayout}
+import com.serenity.ui.layout.{ContextualToolbarLayout, EditorLayoutContract, LayoutEngine, SurfaceFrameLayout}
 
 class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocusedComponent[ModalInputEvent]:
 
@@ -127,9 +127,13 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
     items: List[ContextualToolbarItem],
     deltaRows: Int
   ): ContextualToolbarState =
-    toolbarContentWidth(state, surface, toolbarState)
-      .map(width => toolbarState.moveFocusVertical(deltaRows, items, width))
-      .getOrElse(toolbarState.moveFocus(deltaRows, items))
+    toolbarContentWidth(state, surface, toolbarState) match
+      case Some(width) =>
+        ContextualToolbarLayout.focusedIndexAfterVerticalMove(toolbarState, items, width, deltaRows) match
+          case Some(index) => toolbarState.withFocusedIndexClearingDetail(index, items)
+          case None        => toolbarState
+      case None =>
+        toolbarState.moveFocus(deltaRows, items)
 
   private def moveDropdownVertical(
     state: AppState,
@@ -138,9 +142,13 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
     items: List[ContextualToolbarItem],
     deltaRows: Int
   ): ContextualToolbarState =
-    toolbarContentWidth(state, surface, toolbarState)
-      .map(width => toolbarState.moveDetailSelectionVertical(deltaRows, items, width))
-      .getOrElse(toolbarState.moveDetailSelection(deltaRows, items))
+    toolbarContentWidth(state, surface, toolbarState) match
+      case Some(width) =>
+        ContextualToolbarLayout.detailSelectionAfterVerticalMove(toolbarState, items, width, deltaRows) match
+          case Some((itemId, index)) => toolbarState.withDetailSelectionIndex(itemId, index)
+          case None                  => toolbarState
+      case None =>
+        toolbarState.moveDetailSelection(deltaRows, items)
 
   private def toolbarContentWidth(
     state: AppState,
