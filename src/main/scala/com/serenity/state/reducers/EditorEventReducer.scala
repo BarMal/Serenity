@@ -374,260 +374,336 @@ object EditorEventReducer:
         // becomes genuinely multi-cursor again doesn't inherit vertical state pinned to stale cursor positions.
         val buffer = if !hasSelection && !isMulti then clearInFlightMultiCursorVerticalState(rawBuffer) else rawBuffer
         val currentState = Focused.replaceBuffer(incomingState, buffer)
-
-        def applyBuffer(f: Buffer => Buffer): ReducerResult =
-          ReducerResult.noEffects(Focused.replaceBuffer(currentState, f(buffer)))
-
-        /** Like `applyBuffer`, but `f` also reports the edits it made, so their animations can be remapped in the
-          * presentation layer (`#1001`) instead of inside `Buffer` itself.
-          */
-        def applyEditedBuffer(f: Buffer => (Buffer, List[MultiCursorEdit])): ReducerResult =
-          val (updated, edits) = f(buffer)
-          ReducerResult(
-            Focused.replaceBuffer(currentState, updated),
-            animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
-          )
-
-        def navigate(moveFn: CursorPosition => CursorPosition): ReducerResult =
-          applyBuffer(target =>
-            applyMultiCursorNavigation(if hasSelection then collapseSelectionsToFocus(target) else target)(moveFn)
-          )
+        val ctx          = CursorEventContext(buffer, head, hasSelection, isMulti, currentState)
 
         event match
-          case InsertChar(char) =>
-            if hasSelection then applyEditedBuffer(applyMultiSelectionReplacement(_, char.toString))
-            else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, char.toString))
-            else insertAtCursor(buffer, head, char.toString, currentState)
+          case InsertChar(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |
+              DeleteWordBackward | DeleteWordForward =>
+            reduceCursorsEditEvent(event, ctx)
 
-          case TabKey =>
-            if hasSelection then
-              val (updated, edits, delta) = applyLineIndent(buffer, currentState, selectionLines(buffer))
-              val effects =
-                animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-                  animationMergeEffects(buffer.id, delta)
-              ReducerResult(Focused.replaceBuffer(currentState, updated), effects)
-            else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, TabInsertion))
-            else insertAtCursor(buffer, head, TabInsertion, currentState)
+          case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveToStart | MoveToEnd | MoveToStartOfFile |
+              PageUp | PageDown | MoveToEndOfFile | SelectAll =>
+            reduceCursorsNavigationEvent(event, ctx)
 
-          case NewLine | Enter =>
-            if hasSelection then applyEditedBuffer(applyMultiSelectionReplacement(_, "\n"))
-            else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, "\n"))
-            else insertAtCursor(buffer, head, "\n", currentState)
+          case OpenGotoLine | OpenFind | OpenReplace | FindNext =>
+            reduceCursorsFindEvent(event, ctx)
 
-          case ReverseTabKey =>
-            val targetLines =
-              if hasSelection then selectionLines(buffer)
-              else if isMulti then distinctCursorLines(buffer)
-              else List(head.line)
-            applyEditedBuffer(applyLineUnindent(_, targetLines))
-
-          case DeleteBackward =>
-            if hasSelection then applyEditedBuffer(deleteSelectedRanges)
-            else if isMulti then applyEditedBuffer(applyMultiCursorDeletion(_, backward = true))
-            else reduceDeletion(buffer, currentState, graphemeBackwardDeletion(_, head))
-
-          case DeleteForward =>
-            if hasSelection then applyEditedBuffer(deleteSelectedRanges)
-            else if isMulti then applyEditedBuffer(applyMultiCursorDeletion(_, backward = false))
-            else reduceDeletion(buffer, currentState, graphemeForwardDeletion(_, head))
-
-          case DeleteWordBackward =>
-            if hasSelection then applyEditedBuffer(deleteSelectedRanges)
-            else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = true))
-            else reduceDeletion(buffer, currentState, wordBackwardDeletion(_, head))
-
-          case DeleteWordForward =>
-            if hasSelection then applyEditedBuffer(deleteSelectedRanges)
-            else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = false))
-            else reduceDeletion(buffer, currentState, wordForwardDeletion(_, head))
-
-          case MoveLeft      => navigate(cursor => moveCursorLeft(cursor, buffer.document.content))
-          case MoveRight     => navigate(cursor => moveCursorRight(cursor, buffer.document.content))
-          case MoveWordLeft  => navigate(cursor => wordBoundaryFrom(buffer, cursor, previousWordBoundary))
-          case MoveWordRight => navigate(cursor => wordBoundaryFrom(buffer, cursor, nextWordBoundary))
-          case MoveToStart   => navigate(_.copy(column = 0))
-          case MoveToEnd => navigate(cursor => cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
-          case MoveToStartOfFile => navigate(_ => OriginCursor)
-
-          case PageUp =>
-            applyBuffer(target =>
-              applyMultiCursorPageNavigation(
-                if hasSelection then collapseSelectionsToFocus(target) else target,
-                direction = -1
-              )
-            )
-          case PageDown =>
-            applyBuffer(target =>
-              applyMultiCursorPageNavigation(
-                if hasSelection then collapseSelectionsToFocus(target) else target,
-                direction = 1
-              )
-            )
-
-          case MoveToEndOfFile if !hasSelection && !isMulti =>
-            val totalLines  = countLines(buffer.document.content)
-            val lastLine    = totalLines - 1
-            val lastLineEnd = findLineEnd(buffer.document.content, lastLine)
-            val newCursor   = CursorPosition(lastLine, lastLineEnd)
-            val newTopLine  = math.max(0, lastLine - buffer.viewport.visibleLines + 1)
-            val newViewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
-            applyBuffer(
-              _.copy(
-                editing = buffer.editing.copy(
-                  cursors = List(newCursor),
-                  preferredColumn = Some(newCursor.column),
-                  preferredXPx = None
-                ),
-                viewport = newViewport
-              )
-            )
-
-          case MoveToEndOfFile =>
-            val totalLines = countLines(buffer.document.content)
-            val lastLine   = totalLines - 1
-            val target     = CursorPosition(lastLine, findLineEnd(buffer.document.content, lastLine))
-            navigate(_ => target)
-
-          case SelectAll =>
-            ReducerResult.fromTransition(
-              currentState,
-              Focused.modifyBufferWithId(buffer.id) { current =>
-                val lastLine  = math.max(0, countLines(current.document.content) - 1)
-                val endCursor = CursorPosition(lastLine, findLineEnd(current.document.content, lastLine))
-                current.copy(
-                  editing = current.editing.copy(
-                    cursors = List(endCursor),
-                    selection = Some(Selection(CursorPosition(0, 0), endCursor)),
-                    selections = Nil,
-                    preferredColumn = Some(endCursor.column),
-                    preferredXPx = None
-                  )
-                )
-              }
-            )
-
-          case OpenGotoLine =>
-            ModalStateReducer.show(Modal.GotoLine(""), currentState)
-
-          case OpenFind =>
-            ModalStateReducer.show(findModalForBuffer(buffer), currentState)
-
-          case OpenReplace =>
-            ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), currentState)
-
-          case FindNext =>
-            buffer.findState match
-              case Some(FindState(query, storedResults, currentIndex)) if storedResults.nonEmpty =>
-                val validResults = storedResults.filter { result =>
-                  isWholeGraphemeMatch(
-                    buffer.document.content,
-                    lineColumnToOffset(buffer.document.content, result.line, result.column),
-                    query.length
-                  )
-                }
-                val resultSet = FindResultSet.normalized(query, validResults, currentIndex + 1)
-                if resultSet.results.isEmpty then applyBuffer(_.copy(findState = None))
-                else
-                  val selected = resultSet.results(resultSet.currentIndex)
-                  val target   = CursorPosition(selected.line, selected.column)
-                  applyBuffer(
-                    _.copy(
-                      editing = buffer.editing.copy(
-                        cursors = List(target),
-                        selection = None,
-                        selections = Nil,
-                        preferredColumn = Some(target.column),
-                        preferredXPx = None
-                      ),
-                      findState = Some(FindState.fromResultSet(resultSet))
-                    )
-                  )
-              case _ =>
-                ReducerResult.noEffects(currentState)
-
-          case Copy =>
-            if hasSelection then
-              ReducerResult.noEffects(
-                currentState.copy(runtime =
-                  currentState.runtime.copy(clipboard = Some(selectedTexts(buffer).mkString("\n")))
-                )
-              )
-            else
-              val clipboardText =
-                distinctCursorLines(buffer)
-                  .map(line => buffer.document.content.getLine(line).getOrElse(""))
-                  .mkString("\n")
-              ReducerResult.noEffects(
-                currentState.copy(runtime = currentState.runtime.copy(clipboard = Some(clipboardText)))
-              )
-
-          case Cut =>
-            if hasSelection then
-              val (updated, edits) = deleteSelectedRanges(buffer)
-              ReducerResult(
-                currentState.copy(
-                  persisted =
-                    currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
-                  runtime = currentState.runtime.copy(clipboard = Some(selectedTexts(buffer).mkString("\n")))
-                ),
-                animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
-              )
-            else
-              val targetLines = distinctCursorLines(buffer)
-              val clipboardText =
-                targetLines.map(line => buffer.document.content.getLine(line).getOrElse("")).mkString("\n")
-              val (updated, edits) = applyMultiCursorLineCut(buffer, targetLines)
-              ReducerResult(
-                currentState.copy(
-                  persisted =
-                    currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
-                  runtime = currentState.runtime.copy(clipboard = Some(clipboardText))
-                ),
-                animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
-              )
-
-          case Paste =>
-            currentState.runtime.clipboard.filter(_.nonEmpty) match
-              case None => ReducerResult.noEffects(currentState)
-              case Some(text) if hasSelection =>
-                applyEditedBuffer(applyMultiSelectionReplacement(_, text))
-              case Some(text) if isMulti =>
-                applyEditedBuffer(applyMultiCursorInsertion(_, text))
-              case Some(text) =>
-                val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, head, text)
-                val newCursor                         = replacedBuffer.editing.cursors.headOption.getOrElse(head)
-                val withoutAnimations = buffer.copy(
-                  document = buffer.document.copy(
-                    content = replacedBuffer.document.content,
-                    isDirty = replacedBuffer.document.isDirty,
-                    isNewEmpty = replacedBuffer.document.isNewEmpty
-                  ),
-                  editing = buffer.editing.copy(
-                    cursors = replacedBuffer.editing.cursors,
-                    selection = replacedBuffer.editing.selection,
-                    preferredColumn = Some(newCursor.column),
-                    preferredXPx = None
-                  )
-                )
-                val (updatedBuffer, delta) =
-                  addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
-                val effects =
-                  animationRemapEffects(
-                    buffer.id,
-                    buffer.document.content,
-                    updatedBuffer.document.content,
-                    List(replacementEdit)
-                  ) ++
-                    animationMergeEffects(buffer.id, delta)
-                ReducerResult(
-                  currentState.copy(persisted =
-                    currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
-                  ),
-                  effects
-                )
+          case Copy | Cut | Paste =>
+            reduceCursorsClipboardEvent(event, ctx)
 
           case _ =>
             ReducerResult.noEffects(currentState)
+
+  /** Bundles the per-event state `reduceCursorsTextEvent` computes once (the seeded buffer/state and the cardinality
+    * flags every family below branches on) so each family function takes one parameter instead of five.
+    */
+  final private case class CursorEventContext(
+      buffer: Buffer,
+      head: CursorPosition,
+      hasSelection: Boolean,
+      isMulti: Boolean,
+      currentState: AppState
+  )
+
+  /** Character/newline/tab insertion, indent/unindent and the four deletions -- the families that mutate document
+    * content directly at the cursor(s).
+    */
+  private def reduceCursorsEditEvent(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
+    import ctx.*
+
+    /** Like a plain buffer update, but `f` also reports the edits it made, so their animations can be remapped in the
+      * presentation layer (`#1001`) instead of inside `Buffer` itself.
+      */
+    def applyEditedBuffer(f: Buffer => (Buffer, List[MultiCursorEdit])): ReducerResult =
+      val (updated, edits) = f(buffer)
+      ReducerResult(
+        Focused.replaceBuffer(currentState, updated),
+        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
+      )
+
+    event match
+      case InsertChar(char) =>
+        if hasSelection then applyEditedBuffer(applyMultiSelectionReplacement(_, char.toString))
+        else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, char.toString))
+        else insertAtCursor(buffer, head, char.toString, currentState)
+
+      case TabKey =>
+        if hasSelection then
+          val (updated, edits, delta) = applyLineIndent(buffer, currentState, selectionLines(buffer))
+          val effects =
+            animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
+              animationMergeEffects(buffer.id, delta)
+          ReducerResult(Focused.replaceBuffer(currentState, updated), effects)
+        else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, TabInsertion))
+        else insertAtCursor(buffer, head, TabInsertion, currentState)
+
+      case NewLine | Enter =>
+        if hasSelection then applyEditedBuffer(applyMultiSelectionReplacement(_, "\n"))
+        else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, "\n"))
+        else insertAtCursor(buffer, head, "\n", currentState)
+
+      case ReverseTabKey =>
+        val targetLines =
+          if hasSelection then selectionLines(buffer)
+          else if isMulti then distinctCursorLines(buffer)
+          else List(head.line)
+        applyEditedBuffer(applyLineUnindent(_, targetLines))
+
+      case DeleteBackward =>
+        if hasSelection then applyEditedBuffer(deleteSelectedRanges)
+        else if isMulti then applyEditedBuffer(applyMultiCursorDeletion(_, backward = true))
+        else reduceDeletion(buffer, currentState, graphemeBackwardDeletion(_, head))
+
+      case DeleteForward =>
+        if hasSelection then applyEditedBuffer(deleteSelectedRanges)
+        else if isMulti then applyEditedBuffer(applyMultiCursorDeletion(_, backward = false))
+        else reduceDeletion(buffer, currentState, graphemeForwardDeletion(_, head))
+
+      case DeleteWordBackward =>
+        if hasSelection then applyEditedBuffer(deleteSelectedRanges)
+        else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = true))
+        else reduceDeletion(buffer, currentState, wordBackwardDeletion(_, head))
+
+      case DeleteWordForward =>
+        if hasSelection then applyEditedBuffer(deleteSelectedRanges)
+        else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = false))
+        else reduceDeletion(buffer, currentState, wordForwardDeletion(_, head))
+
+      case _ =>
+        ReducerResult.noEffects(currentState)
+
+  /** Caret movement, paging, select-all -- the family that repositions cursors/selection without touching document
+    * content.
+    */
+  private def reduceCursorsNavigationEvent(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
+    import ctx.*
+
+    def applyBuffer(f: Buffer => Buffer): ReducerResult =
+      ReducerResult.noEffects(Focused.replaceBuffer(currentState, f(buffer)))
+
+    def navigate(moveFn: CursorPosition => CursorPosition): ReducerResult =
+      applyBuffer(target =>
+        applyMultiCursorNavigation(if hasSelection then collapseSelectionsToFocus(target) else target)(moveFn)
+      )
+
+    event match
+      case MoveLeft      => navigate(cursor => moveCursorLeft(cursor, buffer.document.content))
+      case MoveRight     => navigate(cursor => moveCursorRight(cursor, buffer.document.content))
+      case MoveWordLeft  => navigate(cursor => wordBoundaryFrom(buffer, cursor, previousWordBoundary))
+      case MoveWordRight => navigate(cursor => wordBoundaryFrom(buffer, cursor, nextWordBoundary))
+      case MoveToStart   => navigate(_.copy(column = 0))
+      case MoveToEnd     => navigate(cursor => cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
+      case MoveToStartOfFile => navigate(_ => OriginCursor)
+
+      case PageUp =>
+        applyBuffer(target =>
+          applyMultiCursorPageNavigation(
+            if hasSelection then collapseSelectionsToFocus(target) else target,
+            direction = -1
+          )
+        )
+      case PageDown =>
+        applyBuffer(target =>
+          applyMultiCursorPageNavigation(
+            if hasSelection then collapseSelectionsToFocus(target) else target,
+            direction = 1
+          )
+        )
+
+      case MoveToEndOfFile if !hasSelection && !isMulti =>
+        val totalLines  = countLines(buffer.document.content)
+        val lastLine    = totalLines - 1
+        val lastLineEnd = findLineEnd(buffer.document.content, lastLine)
+        val newCursor   = CursorPosition(lastLine, lastLineEnd)
+        val newTopLine  = math.max(0, lastLine - buffer.viewport.visibleLines + 1)
+        val newViewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+        applyBuffer(
+          _.copy(
+            editing = buffer.editing.copy(
+              cursors = List(newCursor),
+              preferredColumn = Some(newCursor.column),
+              preferredXPx = None
+            ),
+            viewport = newViewport
+          )
+        )
+
+      case MoveToEndOfFile =>
+        val totalLines = countLines(buffer.document.content)
+        val lastLine   = totalLines - 1
+        val target     = CursorPosition(lastLine, findLineEnd(buffer.document.content, lastLine))
+        navigate(_ => target)
+
+      case SelectAll =>
+        ReducerResult.fromTransition(
+          currentState,
+          Focused.modifyBufferWithId(buffer.id) { current =>
+            val lastLine  = math.max(0, countLines(current.document.content) - 1)
+            val endCursor = CursorPosition(lastLine, findLineEnd(current.document.content, lastLine))
+            current.copy(
+              editing = current.editing.copy(
+                cursors = List(endCursor),
+                selection = Some(Selection(CursorPosition(0, 0), endCursor)),
+                selections = Nil,
+                preferredColumn = Some(endCursor.column),
+                preferredXPx = None
+              )
+            )
+          }
+        )
+
+      case _ =>
+        ReducerResult.noEffects(currentState)
+
+  /** Goto-line/find/replace modal opening and find-next -- the family that reads or advances find state rather than
+    * editing the document.
+    */
+  private def reduceCursorsFindEvent(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
+    import ctx.*
+
+    def applyBuffer(f: Buffer => Buffer): ReducerResult =
+      ReducerResult.noEffects(Focused.replaceBuffer(currentState, f(buffer)))
+
+    event match
+      case OpenGotoLine =>
+        ModalStateReducer.show(Modal.GotoLine(""), currentState)
+
+      case OpenFind =>
+        ModalStateReducer.show(findModalForBuffer(buffer), currentState)
+
+      case OpenReplace =>
+        ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), currentState)
+
+      case FindNext =>
+        buffer.findState match
+          case Some(FindState(query, storedResults, currentIndex)) if storedResults.nonEmpty =>
+            val validResults = storedResults.filter { result =>
+              isWholeGraphemeMatch(
+                buffer.document.content,
+                lineColumnToOffset(buffer.document.content, result.line, result.column),
+                query.length
+              )
+            }
+            val resultSet = FindResultSet.normalized(query, validResults, currentIndex + 1)
+            if resultSet.results.isEmpty then applyBuffer(_.copy(findState = None))
+            else
+              val selected = resultSet.results(resultSet.currentIndex)
+              val target   = CursorPosition(selected.line, selected.column)
+              applyBuffer(
+                _.copy(
+                  editing = buffer.editing.copy(
+                    cursors = List(target),
+                    selection = None,
+                    selections = Nil,
+                    preferredColumn = Some(target.column),
+                    preferredXPx = None
+                  ),
+                  findState = Some(FindState.fromResultSet(resultSet))
+                )
+              )
+          case _ =>
+            ReducerResult.noEffects(currentState)
+
+      case _ =>
+        ReducerResult.noEffects(currentState)
+
+  /** Copy/Cut/Paste -- the family that reads or writes the clipboard alongside the buffer. Each event gets its own
+    * helper (rather than one large match) since all three independently compute a clipboard string alongside their
+    * buffer update.
+    */
+  private def reduceCursorsClipboardEvent(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
+    event match
+      case Copy  => reduceCopy(ctx)
+      case Cut   => reduceCut(ctx)
+      case Paste => reducePaste(ctx)
+      case _     => ReducerResult.noEffects(ctx.currentState)
+
+  private def reduceCopy(ctx: CursorEventContext): ReducerResult =
+    import ctx.*
+    if hasSelection then
+      ReducerResult.noEffects(
+        currentState.copy(runtime = currentState.runtime.copy(clipboard = Some(selectedTexts(buffer).mkString("\n"))))
+      )
+    else
+      val clipboardText =
+        distinctCursorLines(buffer)
+          .map(line => buffer.document.content.getLine(line).getOrElse(""))
+          .mkString("\n")
+      ReducerResult.noEffects(
+        currentState.copy(runtime = currentState.runtime.copy(clipboard = Some(clipboardText)))
+      )
+
+  private def reduceCut(ctx: CursorEventContext): ReducerResult =
+    import ctx.*
+    if hasSelection then
+      val (updated, edits) = deleteSelectedRanges(buffer)
+      ReducerResult(
+        currentState.copy(
+          persisted = currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
+          runtime = currentState.runtime.copy(clipboard = Some(selectedTexts(buffer).mkString("\n")))
+        ),
+        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
+      )
+    else
+      val targetLines = distinctCursorLines(buffer)
+      val clipboardText =
+        targetLines.map(line => buffer.document.content.getLine(line).getOrElse("")).mkString("\n")
+      val (updated, edits) = applyMultiCursorLineCut(buffer, targetLines)
+      ReducerResult(
+        currentState.copy(
+          persisted = currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
+          runtime = currentState.runtime.copy(clipboard = Some(clipboardText))
+        ),
+        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
+      )
+
+  private def reducePaste(ctx: CursorEventContext): ReducerResult =
+    import ctx.*
+
+    def applyEditedBuffer(f: Buffer => (Buffer, List[MultiCursorEdit])): ReducerResult =
+      val (updated, edits) = f(buffer)
+      ReducerResult(
+        Focused.replaceBuffer(currentState, updated),
+        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
+      )
+
+    currentState.runtime.clipboard.filter(_.nonEmpty) match
+      case None => ReducerResult.noEffects(currentState)
+      case Some(text) if hasSelection =>
+        applyEditedBuffer(applyMultiSelectionReplacement(_, text))
+      case Some(text) if isMulti =>
+        applyEditedBuffer(applyMultiCursorInsertion(_, text))
+      case Some(text) =>
+        val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, head, text)
+        val newCursor                         = replacedBuffer.editing.cursors.headOption.getOrElse(head)
+        val withoutAnimations = buffer.copy(
+          document = buffer.document.copy(
+            content = replacedBuffer.document.content,
+            isDirty = replacedBuffer.document.isDirty,
+            isNewEmpty = replacedBuffer.document.isNewEmpty
+          ),
+          editing = buffer.editing.copy(
+            cursors = replacedBuffer.editing.cursors,
+            selection = replacedBuffer.editing.selection,
+            preferredColumn = Some(newCursor.column),
+            preferredXPx = None
+          )
+        )
+        val (updatedBuffer, delta) = addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
+        val effects =
+          animationRemapEffects(
+            buffer.id,
+            buffer.document.content,
+            updatedBuffer.document.content,
+            List(replacementEdit)
+          ) ++
+            animationMergeEffects(buffer.id, delta)
+        ReducerResult(
+          currentState.copy(persisted =
+            currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
+          ),
+          effects
+        )
 
   private def handleEventWithoutBuffer(
     event: TextEntryEvent,
