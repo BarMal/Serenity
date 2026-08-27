@@ -30,7 +30,13 @@ object BenchmarkRunner:
       "damage.markdown.rows",
       "damage.markdown.cells",
       "damage.scroll.rows",
-      "damage.scroll.cells"
+      "damage.scroll.cells",
+      "equals.appstate.same_reference",
+      "equals.appstate.shared_fields_different_instance",
+      "equals.appstate.independent_equal_content",
+      "equals.buffer.same_reference",
+      "equals.buffer.shared_fields_different_instance",
+      "equals.buffer.independent_equal_content"
     )
 
   final private[perf] case class Benchmark(
