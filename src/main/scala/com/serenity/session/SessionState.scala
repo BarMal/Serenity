@@ -562,6 +562,23 @@ given Decoder[FiniteDuration] = Decoder.decodeLong.map(scala.concurrent.duration
 given Encoder[AnimationConfig] = deriveEncoder
 given Decoder[AnimationConfig] = deriveDecoder
 
+/** Builds the codec for an enum that carries a `configKey` -- the same spelling `ConfigManager` already writes to the
+  * config file. The encoder always writes `configKey`, so a value looks identical whether it came from a session file
+  * or the config file. The decoder accepts both `configKey` and the enum's `toString` name, because earlier releases of
+  * `SessionState` wrote `toString`: this keeps every session file written by the current release loading unchanged.
+  * There is no plan to stop accepting the legacy spelling -- it costs nothing to keep reading, and dropping it would
+  * risk breaking someone's saved session for no benefit.
+  */
+private def configKeyEncoder[A](configKey: A => String): Encoder[A] =
+  Encoder.encodeString.contramap(configKey)
+
+private def configKeyDecoder[A](typeName: String, values: Array[A], configKey: A => String): Decoder[A] =
+  Decoder.decodeString.emap { value =>
+    values
+      .find(a => configKey(a) == value || a.toString == value)
+      .toRight(s"Unknown $typeName: $value")
+  }
+
 given Encoder[TextScaleMode] = Encoder.encodeString.contramap(_.configKey)
 
 given Decoder[TextScaleMode] = Decoder.decodeString.emap { value =>
@@ -604,58 +621,26 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
   )
 }
 
-given Encoder[CursorMode] = Encoder.encodeString.contramap(_.toString)
+given Encoder[CursorMode] = configKeyEncoder(_.configKey)
+given Decoder[CursorMode] = configKeyDecoder("CursorMode", CursorMode.values, _.configKey)
 
-given Decoder[CursorMode] = Decoder.decodeString.emap {
-  case "Blink"   => Right(CursorMode.Blink)
-  case "Breathe" => Right(CursorMode.Breathe)
-  case other     => Left(s"Unknown CursorMode: $other")
-}
+given Encoder[CursorInfoBarMode] = configKeyEncoder(_.configKey)
+given Decoder[CursorInfoBarMode] = configKeyDecoder("CursorInfoBarMode", CursorInfoBarMode.values, _.configKey)
 
-given Encoder[CursorInfoBarMode] = Encoder.encodeString.contramap(_.toString)
+given Encoder[CursorInfoBarPlacement] = configKeyEncoder(_.configKey)
 
-given Decoder[CursorInfoBarMode] = Decoder.decodeString.emap {
-  case "Off"      => Right(CursorInfoBarMode.Off)
-  case "Position" => Right(CursorInfoBarMode.Position)
-  case "Detailed" => Right(CursorInfoBarMode.Detailed)
-  case other      => Left(s"Unknown CursorInfoBarMode: $other")
-}
+given Decoder[CursorInfoBarPlacement] =
+  configKeyDecoder("CursorInfoBarPlacement", CursorInfoBarPlacement.values, _.configKey)
 
-given Encoder[CursorInfoBarPlacement] = Encoder.encodeString.contramap(_.toString)
+given Encoder[WindowChromeMode] = configKeyEncoder(_.configKey)
+given Decoder[WindowChromeMode] = configKeyDecoder("WindowChromeMode", WindowChromeMode.values, _.configKey)
 
-given Decoder[CursorInfoBarPlacement] = Decoder.decodeString.emap {
-  case "Floating"     => Right(CursorInfoBarPlacement.Floating)
-  case "PinnedBottom" => Right(CursorInfoBarPlacement.PinnedBottom)
-  case other          => Left(s"Unknown CursorInfoBarPlacement: $other")
-}
+given Encoder[MarkdownViewMode] = configKeyEncoder(_.configKey)
+given Decoder[MarkdownViewMode] = configKeyDecoder("MarkdownViewMode", MarkdownViewMode.values, _.configKey)
 
-given Encoder[WindowChromeMode] = Encoder.encodeString.contramap(_.toString)
+given Encoder[DefaultDocumentMode] = configKeyEncoder(_.configKey)
 
-given Decoder[WindowChromeMode] = Decoder.decodeString.emap {
-  case "Auto"         => Right(WindowChromeMode.Auto)
-  case "Native"       => Right(WindowChromeMode.Native)
-  case "NativeThemed" => Right(WindowChromeMode.NativeThemed)
-  case "Custom"       => Right(WindowChromeMode.Custom)
-  case other          => Left(s"Unknown WindowChromeMode: $other")
-}
-
-given Encoder[MarkdownViewMode] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[MarkdownViewMode] = Decoder.decodeString.emap {
-  case "Source"       => Right(MarkdownViewMode.Source)
-  case "SplitPreview" => Right(MarkdownViewMode.SplitPreview)
-  case "InlineLens"   => Right(MarkdownViewMode.InlineLens)
-  case other          => Left(s"Unknown MarkdownViewMode: $other")
-}
-
-given Encoder[DefaultDocumentMode] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[DefaultDocumentMode] = Decoder.decodeString.emap {
-  case "PlainText" => Right(DefaultDocumentMode.PlainText)
-  case "Markdown"  => Right(DefaultDocumentMode.Markdown)
-  case "RichText"  => Right(DefaultDocumentMode.RichText)
-  case other       => Left(s"Unknown DefaultDocumentMode: $other")
-}
+given Decoder[DefaultDocumentMode] = configKeyDecoder("DefaultDocumentMode", DefaultDocumentMode.values, _.configKey)
 
 given Encoder[RenderFpsTarget] = Encoder.encodeString.contramap(_.configKey)
 
@@ -669,14 +654,8 @@ given Decoder[RenderDamageGranularity] =
     RenderDamageGranularity.fromConfigKey(value).toRight(s"Unknown RenderDamageGranularity: $value")
   )
 
-given Encoder[InterfaceDensity] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[InterfaceDensity] = Decoder.decodeString.emap {
-  case "Compact"     => Right(InterfaceDensity.Compact)
-  case "Comfortable" => Right(InterfaceDensity.Comfortable)
-  case "Spacious"    => Right(InterfaceDensity.Spacious)
-  case other         => Left(s"Unknown InterfaceDensity: $other")
-}
+given Encoder[InterfaceDensity] = configKeyEncoder(_.configKey)
+given Decoder[InterfaceDensity] = configKeyDecoder("InterfaceDensity", InterfaceDensity.values, _.configKey)
 
 given Encoder[PreferredWindowSize] = deriveEncoder
 given Decoder[PreferredWindowSize] = deriveDecoder
@@ -692,6 +671,8 @@ given Decoder[InterfaceConfig]     = deriveDecoder
 given Encoder[TextAreaInsets] = deriveEncoder
 given Decoder[TextAreaInsets] = deriveDecoder
 
+// BackgroundStyle has no configKey: it is never written to the config file on its own (ConfigManager derives it
+// from MaterialPreset), so there is no config-file spelling to converge on. Left on toString deliberately.
 given Encoder[BackgroundStyle] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
@@ -702,40 +683,21 @@ given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
   case other         => Left(s"Unknown BackgroundStyle: $other")
 }
 
-given Encoder[MaterialPreset] = Encoder.encodeString.contramap(_.toString)
+given Encoder[MaterialPreset] = configKeyEncoder(_.configKey)
+given Decoder[MaterialPreset] = configKeyDecoder("MaterialPreset", MaterialPreset.values, _.configKey)
 
-given Decoder[MaterialPreset] = Decoder.decodeString.emap {
-  case "Solid"   => Right(MaterialPreset.Solid)
-  case "Clear"   => Right(MaterialPreset.Clear)
-  case "Frosted" => Right(MaterialPreset.Frosted)
-  case "Crystal" => Right(MaterialPreset.Crystal)
-  case "Custom"  => Right(MaterialPreset.Custom)
-  case other     => Left(s"Unknown MaterialPreset: $other")
-}
+given Encoder[MotionPreset] = configKeyEncoder(_.configKey)
+given Decoder[MotionPreset] = configKeyDecoder("MotionPreset", MotionPreset.values, _.configKey)
 
-given Encoder[MotionPreset] = Encoder.encodeString.contramap(_.toString)
+given Encoder[MotionAccessibility] = configKeyEncoder(_.configKey)
+given Decoder[MotionAccessibility] = configKeyDecoder("MotionAccessibility", MotionAccessibility.values, _.configKey)
 
-given Decoder[MotionPreset] = Decoder.decodeString.emap {
-  case "Reduced"    => Right(MotionPreset.Reduced)
-  case "Subtle"     => Right(MotionPreset.Subtle)
-  case "Smooth"     => Right(MotionPreset.Smooth)
-  case "Expressive" => Right(MotionPreset.Expressive)
-  case "Custom"     => Right(MotionPreset.Custom)
-  case other        => Left(s"Unknown MotionPreset: $other")
-}
+given Encoder[MotionFamily] = configKeyEncoder(_.configKey)
+given Decoder[MotionFamily] = configKeyDecoder("MotionFamily", MotionFamily.values, _.configKey)
 
-given Encoder[MotionAccessibility] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[MotionAccessibility] = Decoder.decodeString.emap(value =>
-  MotionAccessibility.fromConfigKey(value).toRight(s"Unknown MotionAccessibility: $value")
-)
-
-given Encoder[MotionFamily] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[MotionFamily] = Decoder.decodeString.emap(value =>
-  MotionFamily.values.find(_.toString == value).toRight(s"Unknown MotionFamily: $value")
-)
-
+// TransitionKind has no configKey of its own -- ConfigManager keeps a separate ad hoc string mapping
+// (`transitionKindConfigKey`) rather than a field on the enum, so there is nothing here to generalize onto. Left
+// on toString deliberately.
 given Encoder[TransitionKind] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[TransitionKind] = Decoder.decodeString.emap {
@@ -750,10 +712,12 @@ given Decoder[TransitionKind] = Decoder.decodeString.emap {
 
 given Encoder[MotionFamilyConfig] = Encoder.instance { config =>
   Json.obj(
-    "enabled"             -> config.enabled.asJson,
-    "transitionKind"      -> config.transitionKind.asJson,
-    "animation"           -> config.animation.asJson,
-    "speedScale"          -> config.speedScale.asJson,
+    "enabled"        -> config.enabled.asJson,
+    "transitionKind" -> config.transitionKind.asJson,
+    "animation"      -> config.animation.asJson,
+    "speedScale"     -> config.speedScale.asJson,
+    // TransitionScope has no configKey (see the TransitionKind note above), so its toString spelling is the only
+    // one that has ever existed here -- no format divergence to fix for this map's keys.
     "transitionOverrides" -> config.transitionOverrides.map { case (scope, kind) => scope.toString -> kind }.asJson
   )
 }
@@ -779,7 +743,7 @@ given Encoder[MotionConfig] = Encoder.instance { config =>
   Json.obj(
     "accessibility" -> config.accessibility.asJson,
     "baseline"      -> config.baseline.asJson,
-    "families"      -> config.families.map { case (family, settings) => family.toString -> settings }.asJson
+    "families"      -> config.families.map { case (family, settings) => family.configKey -> settings }.asJson
   )
 }
 
@@ -791,7 +755,7 @@ given Decoder[MotionConfig] = Decoder.instance { cursor =>
     families <- encoded.toList.traverse {
       case (name, settings) =>
         MotionFamily.values
-          .find(_.toString == name)
+          .find(family => family.configKey == name || family.toString == name)
           .toRight(DecodingFailure(s"Unknown MotionFamily: $name", cursor.history))
           .map(_ -> settings)
     }
@@ -834,6 +798,9 @@ given Decoder[SpellCheckConfig] = Decoder.instance { cursor =>
   ).normalized
 }
 
+// InlineMark and ParagraphAlignment describe rich-text document content, not app configuration -- they have no
+// configKey and are never written to the config file, so there is no spelling to converge on here. Left on
+// toString deliberately.
 given Encoder[InlineMark] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[InlineMark] = Decoder.decodeString.emap {
