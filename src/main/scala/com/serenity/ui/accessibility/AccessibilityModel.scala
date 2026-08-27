@@ -287,7 +287,7 @@ object AccessibilitySnapshot:
     )
     val items      = ContextualToolbar.itemsFor(state)
     val normalized = toolbarState.normalized(items)
-    val rows       = ContextualToolbar.rowGroups(items, frame.contentRect.width.max(1), normalized.displayMode)
+    val rows       = ContextualToolbarLayout.rowGroups(items, frame.contentRect.width.max(1), normalized.displayMode)
     val rowSlots = frame
       .contentRowSlots(
         itemCount = rows.size,
@@ -300,8 +300,8 @@ object AccessibilitySnapshot:
       .toMap
     rows.zipWithIndex.flatMap {
       case (row, rowIndex) =>
-        val widths = ContextualToolbar.itemCellWidths(row, frame.contentRect.width.max(1), normalized.displayMode)
-        val start = frame.contentRect.x + ContextualToolbar.rowLeadingPadding(
+        val widths = ContextualToolbarLayout.itemCellWidths(row, frame.contentRect.width.max(1), normalized.displayMode)
+        val start = frame.contentRect.x + ContextualToolbarLayout.rowLeadingPadding(
           row,
           frame.contentRect.width.max(1),
           normalized.displayMode

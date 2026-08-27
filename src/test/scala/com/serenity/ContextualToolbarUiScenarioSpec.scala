@@ -183,7 +183,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
 
   private def toolbarRows(driver: UiScenarioDriver): List[List[ContextualToolbarItem]] =
     val state = driver.state.unsafeRunSync()
-    ContextualToolbar.rowGroups(
+    ContextualToolbarLayout.rowGroups(
       ContextualToolbar.itemsFor(state),
       toolbarContentRect(driver).width.max(1),
       toolbarState(driver).displayMode
@@ -210,8 +210,8 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     contentWidth: Int,
     mode: com.serenity.config.ToolbarDisplayMode
   ): List[(Int, Int)] =
-    val widths         = ContextualToolbar.itemCellWidths(items, contentWidth, mode)
-    val leadingPadding = ContextualToolbar.rowLeadingPadding(items, contentWidth, mode)
+    val widths         = ContextualToolbarLayout.itemCellWidths(items, contentWidth, mode)
+    val leadingPadding = ContextualToolbarLayout.rowLeadingPadding(items, contentWidth, mode)
     items
       .zip(widths)
       .zipWithIndex

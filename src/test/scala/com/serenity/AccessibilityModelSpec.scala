@@ -351,7 +351,8 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       .find(_.id == s"surface:${surfaceId.value}")
       .map(_.bounds)
       .getOrElse(fail("Expected toolbar surface"))
-    val rows = ContextualToolbar.rowGroups(ContextualToolbar.itemsFor(state), frame.width - 2, toolbarState.displayMode)
+    val rows =
+      ContextualToolbarLayout.rowGroups(ContextualToolbar.itemsFor(state), frame.width - 2, toolbarState.displayMode)
     val expectedRows = SurfaceFrameLayout
       .forContent(frame, SurfaceContent.ContextualToolbar(toolbarState))
       .contentRowSlots(rows.size, hasHeader = false, hasFooter = false, itemGapRows = 1, itemTargetRows = 2)
