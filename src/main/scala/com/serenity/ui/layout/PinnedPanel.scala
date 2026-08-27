@@ -2,7 +2,7 @@ package com.serenity.ui.layout
 
 import java.nio.file.Path
 
-import com.serenity.state.models.{BufferId, SurfaceId}
+import com.serenity.state.models.{BufferId, SurfaceContent, SurfaceId}
 
 enum PanelPosition:
   case Left, Right, Bottom, Top
@@ -20,13 +20,36 @@ final case class PinnedPanel(
     size: Int
 )
 
-enum PanelContent:
-  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path])
-  case Terminal(buffer: String, cursor: Int)
+/** The [[SurfaceContent]] cases that can be pinned to a panel position. `SurfaceContent` is the single authoritative
+  * content model; each case here wraps the exact `SurfaceContent` value it stands for, so a panel and its underlying
+  * surface can never carry different payloads for the same content -- there is no second enum to keep in sync by hand
+  * (issue #1009).
+  */
+enum PanelContent(val asSurfaceContent: SurfaceContent):
+  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None)
+      extends PanelContent(SurfaceContent.DirectoryTree(tree, selectedPath))
+  case Terminal(buffer: String, cursor: Int) extends PanelContent(SurfaceContent.Terminal(buffer, cursor))
   case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None)
+      extends PanelContent(SurfaceContent.Outline(symbols, activeLocation))
   case Comments(symbols: List[Symbol], activeLocation: Option[Location] = None)
-  case Diagnostics(issues: List[Diagnostic])
+      extends PanelContent(SurfaceContent.Comments(symbols, activeLocation))
+  case Diagnostics(issues: List[Diagnostic], activeLocation: Option[Location] = None)
+      extends PanelContent(SurfaceContent.Diagnostics(issues, activeLocation))
   case MarkdownPreview(bufferId: BufferId, title: String)
+      extends PanelContent(SurfaceContent.MarkdownPreview(bufferId, title))
+
+object PanelContent:
+
+  /** The pinnable subset of `SurfaceContent` -- `None` for any case that is not a panel content kind. */
+  def fromSurfaceContent(content: SurfaceContent): Option[PanelContent] =
+    content match
+      case SurfaceContent.DirectoryTree(tree, selectedPath)   => Some(DirectoryTree(tree, selectedPath))
+      case SurfaceContent.Terminal(buffer, cursor)            => Some(Terminal(buffer, cursor))
+      case SurfaceContent.Outline(symbols, activeLocation)    => Some(Outline(symbols, activeLocation))
+      case SurfaceContent.Comments(symbols, activeLocation)   => Some(Comments(symbols, activeLocation))
+      case SurfaceContent.Diagnostics(issues, activeLocation) => Some(Diagnostics(issues, activeLocation))
+      case SurfaceContent.MarkdownPreview(bufferId, title)    => Some(MarkdownPreview(bufferId, title))
+      case _                                                  => None
 
 final case class DirectoryTreeData(
     rootPath: Path,
