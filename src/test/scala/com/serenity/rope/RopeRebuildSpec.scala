@@ -18,7 +18,6 @@ class RopeRebuildSpec extends AnyFlatSpec with Matchers:
       case Nil                 => acc.reverse
       case Node(l, r) :: rest  => go(l :: r :: rest, acc)
       case Leaf(value) :: rest => go(rest, value :: acc)
-      case other :: rest       => go(rest, other.collect() :: acc)
     go(List(rope), Nil)
 
   private def leftSpine(values: List[String]): Rope =

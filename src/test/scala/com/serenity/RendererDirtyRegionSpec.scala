@@ -85,7 +85,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     // changed range by walking shared tree structure between before/after, which two freshly-built ropes with no
     // shared lineage don't have -- matching how a real keystroke actually mutates the buffer in production.
     val zetaEndOffset = lines.take(6).map(_.length + 1).sum - 1
-    val editedContent = before.persisted.buffers(bufferId).document.content.insert(zetaEndOffset, "X")
+    val editedContent =
+      before.persisted
+        .buffers(bufferId)
+        .document
+        .content
+        .insert(zetaEndOffset, "X")
+        .getOrElse(fail("expected insert to succeed"))
     val after =
       before.copy(persisted =
         before.persisted.copy(buffers =
@@ -208,7 +214,14 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
               state.persisted
                 .buffers(bufferId)
                 .document
-                .copy(content = state.persisted.buffers(bufferId).document.content.insert(zetaEndOffset, "X"))
+                .copy(content =
+                  state.persisted
+                    .buffers(bufferId)
+                    .document
+                    .content
+                    .insert(zetaEndOffset, "X")
+                    .getOrElse(fail("expected insert to succeed"))
+                )
             )
         )
       )

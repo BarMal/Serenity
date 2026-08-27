@@ -47,7 +47,13 @@ object FindSearch:
   final private case class RopeCharacterSource(content: Rope) extends TextEditing.CharacterSource:
     override def length: Int = content.weight
 
-    override def charAt(index: Int): Char = content.index(index).getOrElse('\u0000')
+    // Mirrors TextEditing.StringCharacterSource, which delegates to String.charAt and throws on an out-of-range
+    // index. TextEditing's scanners only ever call charAt within [0, length), so an out-of-range call here signals
+    // a genuine bug upstream, not a legitimate edge case -- surfacing it loudly beats silently reading NUL.
+    override def charAt(index: Int): Char =
+      content
+        .index(index)
+        .getOrElse(throw IndexOutOfBoundsException(s"charAt($index): out of range for length $length"))
 
 final case class FindResultSet private (
     query: String,

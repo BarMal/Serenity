@@ -78,20 +78,25 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
     // When: Compose multiple pure operations
     val operation1: AppState => AppState = state =>
-      val buffer        = state.persisted.buffers(bufferId)
-      val newContent    = buffer.document.content.insert(buffer.document.content.weight, " this")
+      val buffer = state.persisted.buffers(bufferId)
+      val newContent =
+        buffer.document.content
+          .insert(buffer.document.content.weight, " this")
+          .getOrElse(fail("expected insert to succeed"))
       val updatedBuffer = buffer.copy(document = buffer.document.copy(content = newContent))
       state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer)))
 
     val operation2: AppState => AppState = state =>
       val buffer        = state.persisted.buffers(bufferId)
-      val newContent    = buffer.document.content.insert(0, "Let's ")
+      val newContent    = buffer.document.content.insert(0, "Let's ").getOrElse(fail("expected insert to succeed"))
       val updatedBuffer = buffer.copy(document = buffer.document.copy(content = newContent))
       state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer)))
 
     val operation3: AppState => AppState = state =>
-      val buffer        = state.persisted.buffers(bufferId)
-      val newContent    = buffer.document.content.insert(buffer.document.content.weight, " functionally!")
+      val buffer = state.persisted.buffers(bufferId)
+      val newContent = buffer.document.content
+        .insert(buffer.document.content.weight, " functionally!")
+        .getOrElse(fail("expected insert to succeed"))
       val updatedBuffer = buffer.copy(document = buffer.document.copy(content = newContent))
       state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer)))
 
@@ -245,8 +250,10 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     // When: Create multiple derived states (simulating undo/redo or multiple views)
     val state1 = baseState // Original
     val state2 =
-      val buffer        = state1.persisted.buffers(bufferId)
-      val newContent    = buffer.document.content.insert(buffer.document.content.weight, " - modified")
+      val buffer = state1.persisted.buffers(bufferId)
+      val newContent = buffer.document.content
+        .insert(buffer.document.content.weight, " - modified")
+        .getOrElse(fail("expected insert to succeed"))
       val updatedBuffer = buffer.copy(document = buffer.document.copy(content = newContent))
       state1.copy(persisted = state1.persisted.copy(buffers = state1.persisted.buffers + (bufferId -> updatedBuffer)))
     val state3 =

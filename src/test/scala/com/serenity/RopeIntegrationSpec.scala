@@ -24,7 +24,7 @@ class RopeIntegrationSpec extends AnyFlatSpec with Matchers:
 
     val currentBuffer = insertions.foldLeft(buffer) {
       case (buf, (position, text)) =>
-        val newContent = buf.document.content.insert(position, text)
+        val newContent = buf.document.content.insert(position, text).getOrElse(fail("expected insert to succeed"))
         buf.copy(document = buf.document.copy(content = newContent))
     }
 
@@ -159,11 +159,11 @@ function processText(input) {
   it should "return non-overlapping matches for searchAll" in new RopeIntegrationFixture:
     Rope("aaaa").searchAll("aa") shouldBe List(0, 2)
 
-  it should "ignore out-of-bounds leaf insertions" in new RopeIntegrationFixture:
+  it should "name out-of-bounds leaf insertions as a failure instead of silently ignoring them" in new RopeIntegrationFixture:
     val rope = Rope("abc")
 
-    rope.insert(-1, "x").collect() shouldBe "abc"
-    rope.insert(4, "x").collect() shouldBe "abc"
+    rope.insert(-1, "x") shouldBe None
+    rope.insert(4, "x") shouldBe None
 
   it should "handle rope replace operations for find-and-replace functionality" in new RopeIntegrationFixture:
     // Given: Code with variables to rename
@@ -253,7 +253,7 @@ let anotherOldName = oldName * 2;"""
     val boundaryPosition = 30 // Exactly at chunk boundary
 
     // Insert at boundary
-    val insertedRope = rope.insert(boundaryPosition, "BOUNDARY")
+    val insertedRope = rope.insert(boundaryPosition, "BOUNDARY").getOrElse(fail("expected insert to succeed"))
     insertedRope.collect() shouldBe (chunk1 + "BOUNDARY" + chunk2)
 
     // Search across boundary

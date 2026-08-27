@@ -31,7 +31,7 @@ class RopeDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
     forAll(Generators.ropeWithText, Generators.genText) {
       case ((before, beforeText), inserted) =>
         forAll(Gen.chooseNum(0, beforeText.length)) { at =>
-          val after     = before.insert(at, inserted)
+          val after     = before.insert(at, inserted).getOrElse(fail("expected insert to succeed"))
           val afterText = beforeText.take(at) + inserted + beforeText.drop(at)
           assertNeverUnderReports(before, beforeText, after, afterText)
         }
@@ -43,7 +43,7 @@ class RopeDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
       case (before, beforeText) =>
         forAll(Gen.chooseNum(0, beforeText.length)) { start =>
           forAll(Gen.chooseNum(start, beforeText.length)) { end =>
-            val after     = before.delete(start, end)
+            val after     = before.delete(start, end).getOrElse(fail("expected delete to succeed"))
             val afterText = beforeText.take(start) + beforeText.drop(end)
             assertNeverUnderReports(before, beforeText, after, afterText)
           }
@@ -66,11 +66,11 @@ class RopeDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
           val at              = step % (rope.weight + 1)
           val insertion       = if step % 3 == 0 then "" else s"edit-$step"
           val deleted         = math.min(2, rope.weight - at)
-          val afterDelete     = rope.deleteRight(at, deleted)
+          val afterDelete     = rope.deleteRight(at, deleted).getOrElse(fail("expected deleteRight to succeed"))
           val afterDeleteText = text.take(at) + text.drop(at + deleted)
           assertNeverUnderReports(rope, text, afterDelete, afterDeleteText)
 
-          val after     = afterDelete.insert(at, insertion)
+          val after     = afterDelete.insert(at, insertion).getOrElse(fail("expected insert to succeed"))
           val afterText = afterDeleteText.take(at) + insertion + afterDeleteText.drop(at)
           assertNeverUnderReports(afterDelete, afterDeleteText, after, afterText)
 

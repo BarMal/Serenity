@@ -25,7 +25,7 @@ class UnderscoreStorageSpec extends AnyFlatSpec with Matchers:
     val originalText = "test"
     val rope         = Rope(originalText)
 
-    val updatedRope = rope.insert(4, "_added")
+    val updatedRope = rope.insert(4, "_added").getOrElse(fail("expected insert to succeed"))
     updatedRope.collect() shouldBe "test_added"
     updatedRope.index(4) shouldBe Some('_')
   }

@@ -84,8 +84,13 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
   property("a long run of edits never leaves the rope depth-unbalanced") {
     forAll(Generators.genText) { inserted =>
       val edited = (1 to 200).foldLeft(Rope("")) { (rope, step) =>
-        val grown   = rope.insert(rope.weight, if inserted.isEmpty then "x" else inserted)
-        val trimmed = if grown.weight > 4 then grown.deleteRight(step % (grown.weight - 3), 1) else grown
+        val grown = rope
+          .insert(rope.weight, if inserted.isEmpty then "x" else inserted)
+          .getOrElse(fail("expected insert to succeed"))
+        val trimmed =
+          if grown.weight > 4 then
+            grown.deleteRight(step % (grown.weight - 3), 1).getOrElse(fail("expected deleteRight to succeed"))
+          else grown
 
         withClue(s"after $step edits, weight ${trimmed.weight} at height ${trimmed.height}: ") {
           trimmed.isDepthBalanced shouldBe true
@@ -98,7 +103,9 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
   }
 
   property("appending in place keeps depth logarithmic in the text length") {
-    val appended = (1 to 2_000).foldLeft(Rope(""))((rope, step) => rope.insert(rope.weight, s"line $step "))
+    val appended = (1 to 2_000).foldLeft(Rope(""))((rope, step) =>
+      rope.insert(rope.weight, s"line $step ").getOrElse(fail("expected insert to succeed"))
+    )
 
     appended.isDepthBalanced shouldBe true
     appended.height should be <= 4 * (31 - Integer.numberOfLeadingZeros(appended.weight))
@@ -129,7 +136,8 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
     forAll(Generators.ropeWithText, Generators.genText) {
       case ((rope, text), inserted) =>
         (0 to text.length).foreach { at =>
-          rope.insert(at, inserted).collect() shouldBe (text.take(at) + inserted + text.drop(at))
+          rope.insert(at, inserted).getOrElse(fail("expected insert to succeed")).collect() shouldBe
+            (text.take(at) + inserted + text.drop(at))
         }
     }
   }
@@ -138,7 +146,8 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
     forAll(Generators.ropeWithText) { (rope, text) =>
       (0 to text.length).foreach { start =>
         (start to text.length).foreach { end =>
-          rope.delete(start, end).collect() shouldBe (text.take(start) + text.drop(end))
+          rope.delete(start, end).getOrElse(fail("expected delete to succeed")).collect() shouldBe
+            (text.take(start) + text.drop(end))
         }
       }
     }
