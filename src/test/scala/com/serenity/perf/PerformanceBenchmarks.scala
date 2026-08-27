@@ -514,18 +514,18 @@ object PerformanceBenchmarks:
       )
     )
 
-  /** Measures `Buffer.equals`/`AppState.equals` under the three shapes of comparison the reducers actually perform:
-    * the same instance (the hand-rolled `eq` fast path), a `.copy()` of it (a different instance whose fields --
-    * including the `Rope` content -- are still the same shared references), and an independently built value with
-    * equal content but no shared references anywhere in the tree. Only the last case forces a full structural walk
-    * of the `Rope`, which has no custom `equals` of its own -- this is #1002's deferred "removed, or their retention
-    * is justified by measurement" acceptance criterion.
+  /** Measures `Buffer.equals`/`AppState.equals` under the three shapes of comparison the reducers actually perform: the
+    * same instance (the hand-rolled `eq` fast path), a `.copy()` of it (a different instance whose fields -- including
+    * the `Rope` content -- are still the same shared references), and an independently built value with equal content
+    * but no shared references anywhere in the tree. Only the last case forces a full structural walk of the `Rope`,
+    * which has no custom `equals` of its own -- this is #1002's deferred "removed, or their retention is justified by
+    * measurement" acceptance criterion.
     */
   private def equalsBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    val content = largeMultilineDocument(lines = 15_000)
-    val stateA     = editorState(content, None)
-    val stateB     = editorState(content, None)
-    val stateACopy = stateA.copy()
+    val content     = largeMultilineDocument(lines = 15_000)
+    val stateA      = editorState(content, None)
+    val stateB      = editorState(content, None)
+    val stateACopy  = stateA.copy()
     val bufferA     = stateA.persisted.buffers(BufferId(1))
     val bufferB     = stateB.persisted.buffers(BufferId(1))
     val bufferACopy = bufferA.copy()
