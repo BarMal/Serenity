@@ -98,7 +98,7 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "respect configured editor-local keymap overrides" in {
-    val customConfig = AppConfig.default.withEditorKeyOverride(
+    val customConfig = AppConfig.default.withKeymapBinding(KeymapGroup.Editor)(
       EditorKeyAction.PageDown,
       "ctrl+j"
     )

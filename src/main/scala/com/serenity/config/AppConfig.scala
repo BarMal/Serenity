@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.util.control.NonFatal
 
 import com.serenity.animation.*
+import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
@@ -1784,67 +1785,20 @@ final case class AppConfig(
   def withFocusedKeymapConfig(config: FocusedKeymapConfig): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = config))
 
-  def withEditorKeyOverride(action: EditorKeyAction, binding: String): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withEditorBinding(action, binding)))
+  def withKeymapBinding[A <: KeymapEventAction[E], E <: Event](
+    group: KeymapGroup[A, E]
+  )(action: A, binding: String): AppConfig =
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withBinding(group)(action, binding)))
 
-  def withEditorKeyOverrideUnbindingConflicts(action: EditorKeyAction, binding: String): AppConfig =
+  def withKeymapBindingUnbindingConflicts[A <: KeymapEventAction[E], E <: Event](
+    group: KeymapGroup[A, E]
+  )(action: A, binding: String): AppConfig =
     withInputConfig(
-      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withEditorBindingUnbindingConflicts(action, binding))
+      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withBindingUnbindingConflicts(group)(action, binding))
     )
 
-  def resetEditorKeyOverride(action: EditorKeyAction): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetEditorBinding(action)))
-
-  def withCommandRunnerKeyOverride(action: CommandRunnerKeyAction, binding: String): AppConfig =
-    withInputConfig(
-      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withCommandRunnerBinding(action, binding))
-    )
-
-  def withCommandRunnerKeyOverrideUnbindingConflicts(
-    action: CommandRunnerKeyAction,
-    binding: String
-  ): AppConfig =
-    withInputConfig(
-      inputConfig.copy(
-        focusedKeymapConfig = focusedKeymapConfig.withCommandRunnerBindingUnbindingConflicts(action, binding)
-      )
-    )
-
-  def resetCommandRunnerKeyOverride(action: CommandRunnerKeyAction): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetCommandRunnerBinding(action)))
-
-  def withModalKeyOverride(action: ModalKeyAction, binding: String): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withModalBinding(action, binding)))
-
-  def withModalKeyOverrideUnbindingConflicts(action: ModalKeyAction, binding: String): AppConfig =
-    withInputConfig(
-      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withModalBindingUnbindingConflicts(action, binding))
-    )
-
-  def resetModalKeyOverride(action: ModalKeyAction): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetModalBinding(action)))
-
-  def withPanelKeyOverride(action: PanelKeyAction, binding: String): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPanelBinding(action, binding)))
-
-  def withPanelKeyOverrideUnbindingConflicts(action: PanelKeyAction, binding: String): AppConfig =
-    withInputConfig(
-      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPanelBindingUnbindingConflicts(action, binding))
-    )
-
-  def resetPanelKeyOverride(action: PanelKeyAction): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetPanelBinding(action)))
-
-  def withPeekKeyOverride(action: PeekKeyAction, binding: String): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPeekBinding(action, binding)))
-
-  def withPeekKeyOverrideUnbindingConflicts(action: PeekKeyAction, binding: String): AppConfig =
-    withInputConfig(
-      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withPeekBindingUnbindingConflicts(action, binding))
-    )
-
-  def resetPeekKeyOverride(action: PeekKeyAction): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetPeekBinding(action)))
+  def resetKeymapBinding[A <: KeymapEventAction[E], E <: Event](group: KeymapGroup[A, E])(action: A): AppConfig =
+    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetBinding(group)(action)))
 
   /** Create a new config with font configuration */
   def withFontConfig(config: FontConfig): AppConfig =

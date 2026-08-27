@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.config.*
+import com.serenity.keystroke.events.EditorEvent
 import com.serenity.keystroke.{InputKey, Modifier}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -30,7 +31,8 @@ class InputConfigSpec extends AnyFlatSpec with Matchers:
           modifiers = Set(Modifier.Ctrl)
         )
       )
-    val keymaps = FocusedKeymapConfig().withCommandRunnerBinding(CommandRunnerKeyAction.Submit, "meta+enter")
+    val keymaps =
+      FocusedKeymapConfig().withBinding(KeymapGroup.CommandRunner)(CommandRunnerKeyAction.Submit, "meta+enter")
 
     val config = AppConfig.default
       .withHotkeyConfig(hotkeys)
@@ -48,7 +50,8 @@ class InputConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reject a focused keymap binding already assigned to another action" in {
-    val config = EditorKeymapConfig().withBinding(EditorKeyAction.PageDown, "pageup")
+    val config =
+      KeymapGroupConfig.defaults[EditorKeyAction, EditorEvent].withBinding(EditorKeyAction.PageDown, "pageup")
 
     config.bindingsFor(EditorKeyAction.PageDown).head.render.shouldBe("pagedown")
     config.bindingsFor(EditorKeyAction.PageUp).head.render.shouldBe("pageup")
