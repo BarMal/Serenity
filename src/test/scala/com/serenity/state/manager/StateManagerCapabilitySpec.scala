@@ -59,7 +59,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
           val config = update(state.persisted.config)
           (state.copy(persisted = state.persisted.copy(config = config)), config)
         )
-      def resizePinnedPanel(position: com.serenity.ui.layout.PanelPosition, newSize: Int): IO[Unit] = IO.unit
+      def resizePinnedPanel(target: com.serenity.ui.layout.PanelTarget, newSize: Int): IO[Unit] = IO.unit
     new StateManagerEventPipeline(statePort, effectPort, workflowPort, uiPort, operations)
 
   "StateManager" should "compose focused façade capabilities" in {

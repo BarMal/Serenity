@@ -8,7 +8,7 @@ import com.serenity.keystroke.events.Enter
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{PanelContent, PanelPosition}
+import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -31,7 +31,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
   // ── loadDirectoryTree ─────────────────────────────────────────────────────
 
   it should "pin a directory listing panel at the Left position" in new ExplorerFixture:
-    sm.loadDirectoryTree("/repo", List("src", "build.sbt")).unsafeRunSync()
+    sm.loadDirectoryTree(Paths.get("/repo"), List("src", "build.sbt")).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
     state.pinnedSurfaces should have size 1
@@ -40,7 +40,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
       case other                                             => fail(s"Expected Pinned(Left, _), got $other")
 
   it should "populate the listing with the provided file names" in new ExplorerFixture:
-    sm.loadDirectoryTree("/repo", List("src", "test", "build.sbt")).unsafeRunSync()
+    sm.loadDirectoryTree(Paths.get("/repo"), List("src", "test", "build.sbt")).unsafeRunSync()
 
     val state   = sm.getCurrentState.unsafeRunSync()
     val content = state.pinnedSurfaces.head.content
@@ -51,7 +51,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
       case other => fail(s"Expected DirectoryTree, got $other")
 
   it should "mark entries ending with '/' as directories" in new ExplorerFixture:
-    sm.loadDirectoryTree("/repo", List("src/", "build.sbt")).unsafeRunSync()
+    sm.loadDirectoryTree(Paths.get("/repo"), List("src/", "build.sbt")).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
     val entries = state.pinnedSurfaces.head.content match
@@ -62,8 +62,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     entries.find(_.name == "build.sbt").map(_.isDirectory) shouldBe Some(false)
 
   it should "replace an existing Left panel when called again" in new ExplorerFixture:
-    sm.loadDirectoryTree("/old", List("a.txt")).unsafeRunSync()
-    sm.loadDirectoryTree("/new", List("b.txt", "c.txt")).unsafeRunSync()
+    sm.loadDirectoryTree(Paths.get("/old"), List("a.txt")).unsafeRunSync()
+    sm.loadDirectoryTree(Paths.get("/new"), List("b.txt", "c.txt")).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
     state.pinnedSurfaces should have size 1
@@ -75,7 +75,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve non-explorer left panels when loading a directory tree" in new ExplorerFixture:
     sm.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 20).unsafeRunSync()
-    sm.loadDirectoryTree("/repo", List("src")).unsafeRunSync()
+    sm.loadDirectoryTree(Paths.get("/repo"), List("src")).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
     state.pinnedSurfaces should have size 2
@@ -91,8 +91,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
   // ── selectFileInExplorer ──────────────────────────────────────────────────
 
   it should "set selectedPath in the directory listing to the given file" in new ExplorerFixture:
-    sm.loadDirectoryTree("/repo", List("src", "build.sbt")).unsafeRunSync()
-    sm.selectFileInExplorer("/repo/build.sbt").unsafeRunSync()
+    sm.loadDirectoryTree(Paths.get("/repo"), List("src", "build.sbt")).unsafeRunSync()
+    sm.selectFileInExplorer(Paths.get("/repo/build.sbt")).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
     state.pinnedSurfaces.head.content match
@@ -101,7 +101,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
       case other => fail(s"Expected DirectoryTree, got $other")
 
   it should "do nothing when no directory panel is pinned" in new ExplorerFixture:
-    sm.selectFileInExplorer("/repo/build.sbt").unsafeRunSync()
+    sm.selectFileInExplorer(Paths.get("/repo/build.sbt")).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces shouldBe Nil
 
   it should "navigate into a selected directory when activated from the pinned explorer" in new ExplorerFixture:
@@ -109,9 +109,9 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     val childDir  = Files.createDirectory(rootDir.resolve("child"))
     val childFile = Files.createFile(childDir.resolve("nested.txt"))
     try
-      sm.loadDirectoryTree(rootDir.toString, List("child/")).unsafeRunSync()
-      sm.selectFileInExplorer(childDir.toString).unsafeRunSync()
-      sm.switchToPinnedPanel(PanelPosition.Left).unsafeRunSync()
+      sm.loadDirectoryTree(rootDir, List("child/")).unsafeRunSync()
+      sm.selectFileInExplorer(childDir).unsafeRunSync()
+      sm.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Left)).unsafeRunSync()
 
       sm.applyEvent(Enter).unsafeRunSync()
 
@@ -136,7 +136,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     val srcFile = Files.createFile(srcDir.resolve("hello.txt"))
     Files.writeString(srcFile, "content")
     try
-      sm.dragFileToDirectory(srcFile.toString, dstDir.toString).unsafeRunSync()
+      sm.dragFileToDirectory(srcFile, dstDir).unsafeRunSync()
 
       Files.exists(srcFile) shouldBe false
       Files.exists(dstDir.resolve("hello.txt")) shouldBe true
@@ -152,8 +152,8 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     val dstDir  = Files.createTempDirectory("drag-dst2")
     val srcFile = Files.createFile(srcDir.resolve("mover.txt"))
     try
-      sm.loadDirectoryTree(srcDir.toString, List("mover.txt", "keeper.txt")).unsafeRunSync()
-      sm.dragFileToDirectory(srcFile.toString, dstDir.toString).unsafeRunSync()
+      sm.loadDirectoryTree(srcDir, List("mover.txt", "keeper.txt")).unsafeRunSync()
+      sm.dragFileToDirectory(srcFile, dstDir).unsafeRunSync()
 
       val state = sm.getCurrentState.unsafeRunSync()
       state.pinnedSurfaces.head.content match

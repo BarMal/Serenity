@@ -8,7 +8,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{PanelContent, PanelPosition}
+import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -120,12 +120,12 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val outline     = before.pinnedSurfaces.head
     val diagnostics = before.pinnedSurfaces.last
 
-    stateManager.switchToPinnedPanel(outline.id).unsafeRunSync()
-    stateManager.resizePinnedPanel(outline.id, 20).unsafeRunSync()
+    stateManager.switchToPinnedPanel(PanelTarget.ById(outline.id)).unsafeRunSync()
+    stateManager.resizePinnedPanel(PanelTarget.ById(outline.id), 20).unsafeRunSync()
     stateManager.movePinnedPanel(outline.id, PanelPosition.Right).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.map(_.id) shouldBe List(diagnostics.id, outline.id)
     stateManager.movePinnedPanel(diagnostics.id, PanelPosition.Bottom).unsafeRunSync()
-    stateManager.unpinPanel(outline.id).unsafeRunSync()
+    stateManager.unpinPanel(PanelTarget.ById(outline.id)).unsafeRunSync()
 
     val updated = stateManager.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
@@ -157,14 +157,14 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
   it should "unpin one same-side panel at a time starting with the focused panel" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
+    stateManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
 
     val before = stateManager.getCurrentState.unsafeRunSync()
     val focusedSurfaceId = before.persisted.focus match
       case Focus.Surface(id) => id
       case other             => fail(s"Expected focus on pinned surface, got $other")
 
-    stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
+    stateManager.unpinPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.pinnedSurfaces should have size 1
@@ -174,13 +174,35 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case other                        => fail(s"Unexpected pinned content: $other")
     }
 
+  it should "do nothing when unpinning a surface ID that isn't a pinned panel" in new UIFixture:
+    val before = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.unpinPanel(PanelTarget.ById(SurfaceId("no-such-surface"))).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync() shouldBe before
+
+  it should "do nothing when unpinning a surface that exists but isn't pinned" in new UIFixture:
+    stateManager.applyEvent(FileSearch).unsafeRunSync()
+    val floatingSurfaceId = stateManager.getCurrentState
+      .unsafeRunSync()
+      .fileSearchSurface
+      .getOrElse(fail("Expected a floating file-search surface"))
+      .id
+    val before = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.unpinPanel(PanelTarget.ById(floatingSurfaceId)).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after shouldBe before
+    after.fileSearchSurface.map(_.id) shouldBe Some(floatingSurfaceId)
+
   // ── Panel resize ─────────────────────────────────────────────────────────
 
   it should "create an exiting ghost overlay when unpinning a panel" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     advanceAnimations(80)
 
-    stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
+    stateManager.unpinPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     val ghost = state.runtime.uiSurfaces.collectFirst {
@@ -194,7 +216,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
   it should "remove a panel ghost overlay when its close animation completes" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     advanceAnimations(80)
-    stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
+    stateManager.unpinPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
 
     advanceAnimations(120)
 
@@ -212,7 +234,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
 
-    stateManager.unpinPanel(PanelPosition.Right).unsafeRunSync()
+    stateManager.unpinPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.runtime.surfaceAnimations shouldBe empty
@@ -220,7 +242,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   it should "resize a pinned panel to a new size" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    stateManager.resizePinnedPanel(PanelPosition.Right, 50).unsafeRunSync()
+    stateManager.resizePinnedPanel(PanelTarget.ByPosition(PanelPosition.Right), 50).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val pinned = state.pinnedSurfaces
@@ -230,14 +252,21 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case other                                                 => fail(s"Expected Pinned(Right, 50), got $other")
 
   it should "do nothing when resizing a position with no panel" in new UIFixture:
-    stateManager.resizePinnedPanel(PanelPosition.Left, 40).unsafeRunSync()
+    stateManager.resizePinnedPanel(PanelTarget.ByPosition(PanelPosition.Left), 40).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces shouldBe Nil
+
+  it should "do nothing when resizing a surface ID that isn't a pinned panel" in new UIFixture:
+    val before = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.resizePinnedPanel(PanelTarget.ById(SurfaceId("no-such-surface")), 40).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync() shouldBe before
 
   // ── switchToPinnedPanel ───────────────────────────────────────────────────
 
   it should "move focus to a pinned panel on switchToPinnedPanel" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
+    stateManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.persisted.focus match
@@ -246,12 +275,32 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   it should "do nothing on switchToPinnedPanel when no panel is at that position" in new UIFixture:
     val focusBefore = stateManager.getCurrentState.unsafeRunSync().persisted.focus
-    stateManager.switchToPinnedPanel(PanelPosition.Right).unsafeRunSync()
+    stateManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe focusBefore
+
+  it should "do nothing on switchToPinnedPanel when the surface ID isn't a pinned panel" in new UIFixture:
+    val before = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.switchToPinnedPanel(PanelTarget.ById(SurfaceId("no-such-surface"))).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync() shouldBe before
+
+  it should "do nothing on switchToPinnedPanel when addressing a surface that exists but isn't pinned" in new UIFixture:
+    stateManager.applyEvent(FileSearch).unsafeRunSync()
+    val floatingSurfaceId = stateManager.getCurrentState
+      .unsafeRunSync()
+      .fileSearchSurface
+      .getOrElse(fail("Expected a floating file-search surface"))
+      .id
+    val before = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.switchToPinnedPanel(PanelTarget.ById(floatingSurfaceId)).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync() shouldBe before
 
   it should "expand and collapse a pinned panel through the panel facade" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    stateManager.expandPinnedPanel(PanelPosition.Right).unsafeRunSync()
+    stateManager.expandPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
 
     val expanded = stateManager.getCurrentState.unsafeRunSync()
     expanded.expandedPanelSurface.map(_.presentation) shouldBe Some(
@@ -266,6 +315,26 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     collapsed.expandedPanelSurface shouldBe None
     collapsed.persisted.layout.maximizedWorkspaceNodeId shouldBe None
     collapsed.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 30))
+
+  it should "do nothing when expanding a surface ID that isn't a pinned panel" in new UIFixture:
+    val before = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.expandPinnedPanel(PanelTarget.ById(SurfaceId("no-such-surface"))).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync() shouldBe before
+
+  it should "do nothing when expanding a surface that exists but isn't pinned" in new UIFixture:
+    stateManager.applyEvent(FileSearch).unsafeRunSync()
+    val floatingSurfaceId = stateManager.getCurrentState
+      .unsafeRunSync()
+      .fileSearchSurface
+      .getOrElse(fail("Expected a floating file-search surface"))
+      .id
+    val before = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.expandPinnedPanel(PanelTarget.ById(floatingSurfaceId)).unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync() shouldBe before
 
   it should "expand and collapse a pinned panel through commands" in new UIFixture:
     stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10).unsafeRunSync()

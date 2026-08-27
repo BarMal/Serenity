@@ -13,14 +13,14 @@ final private[manager] class StateManagerFileFacade(
     close: BufferId => IO[Unit]
 ):
 
-  def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =
+  def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =
     stateRef.update { state =>
       state.persisted.buffers.get(bufferId) match
         case Some(buffer) =>
           state.copy(persisted =
             state.persisted.copy(buffers =
               state.persisted.buffers + (bufferId -> buffer.copy(document =
-                buffer.document.copy(filePath = Some(Path.of(filePath)))
+                buffer.document.copy(filePath = Some(filePath))
               ))
             )
           )
@@ -78,7 +78,7 @@ final private[manager] class StateManagerFileCapability(
     closeBuffer
   )
 
-  def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit] =
+  def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =
     fileFacade.setBufferFilePath(bufferId, filePath)
 
   def openFile(filePath: Path): IO[Unit] =
@@ -87,8 +87,8 @@ final private[manager] class StateManagerFileCapability(
   def saveBuffer(bufferId: BufferId): IO[Unit] =
     fileFacade.saveBuffer(bufferId)
 
-  def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit] =
-    fileFacade.saveBufferAs(bufferId, Path.of(filePath))
+  def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit] =
+    fileFacade.saveBufferAs(bufferId, filePath)
 
   def markBufferSaved(bufferId: BufferId): IO[Unit] =
     fileFacade.markBufferSaved(bufferId)

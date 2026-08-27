@@ -109,19 +109,15 @@ trait SessionService:
 /** Manages pinned panels and the file explorer. */
 trait PanelManager:
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
-  def unpinPanel(surfaceId: SurfaceId): IO[Unit]
-  def unpinPanel(position: PanelPosition): IO[Unit]
+  def unpinPanel(target: PanelTarget): IO[Unit]
   def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit]
-  def expandPinnedPanel(surfaceId: SurfaceId): IO[Unit]
-  def expandPinnedPanel(position: PanelPosition): IO[Unit]
+  def expandPinnedPanel(target: PanelTarget): IO[Unit]
   def collapseExpandedPanel(): IO[Unit]
-  def switchToPinnedPanel(surfaceId: SurfaceId): IO[Unit]
-  def switchToPinnedPanel(position: PanelPosition): IO[Unit]
-  def loadDirectoryTree(path: String, files: List[String]): IO[Unit]
-  def selectFileInExplorer(filePath: String): IO[Unit]
-  def resizePinnedPanel(surfaceId: SurfaceId, newSize: Int): IO[Unit]
-  def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
-  def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit]
+  def switchToPinnedPanel(target: PanelTarget): IO[Unit]
+  def loadDirectoryTree(path: Path, files: List[String]): IO[Unit]
+  def selectFileInExplorer(filePath: Path): IO[Unit]
+  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit]
+  def dragFileToDirectory(sourceFile: Path, targetDir: Path): IO[Unit]
 
 /** Manages modal surfaces. */
 trait ModalService:
@@ -130,9 +126,9 @@ trait ModalService:
 
 /** Manages buffer file paths and persistence. */
 trait FileService:
-  def setBufferFilePath(bufferId: BufferId, filePath: String): IO[Unit]
+  def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit]
   def saveBuffer(bufferId: BufferId): IO[Unit]
-  def saveBufferAs(bufferId: BufferId, filePath: String): IO[Unit]
+  def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit]
   def markBufferSaved(bufferId: BufferId): IO[Unit]
   def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean]
   def forceCloseBuffer(bufferId: BufferId): IO[Unit]

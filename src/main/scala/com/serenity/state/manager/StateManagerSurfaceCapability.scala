@@ -32,15 +32,17 @@ final private[manager] class StateManagerSurfaceCapability(
         .flatMap(_ => applyAnimationHooks(state))
     }
 
-  def unpinPanel(position: PanelPosition): IO[Unit] =
+  // A target that resolves to no panel (a `ByPosition` side holding nothing pinned, or an `ById` surface that isn't
+  // a pinned panel) is a deliberate no-op: the reducer returns the unchanged state we handed it, so callers asking
+  // to unpin/expand/focus/resize a panel that isn't there just see nothing happen, the same explicit policy as
+  // "target doesn't apply, ignore the request" used elsewhere in this façade (e.g. `checkUnsavedChanges` and
+  // `saveBufferAs` no-op when the bufferId doesn't resolve to a buffer).
+  def unpinPanel(target: PanelTarget): IO[Unit] =
     stateRef.get.flatMap { state =>
-      validateAndUpdateState(PanelStateReducer.unpin(position, state).state, state)
-        .flatMap(_ => applyAnimationHooks(state))
-    }
-
-  def unpinPanel(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      validateAndUpdateState(PanelStateReducer.unpin(surfaceId, state).state, state)
+      val result = target match
+        case PanelTarget.ById(surfaceId)      => PanelStateReducer.unpin(surfaceId, state)
+        case PanelTarget.ByPosition(position) => PanelStateReducer.unpin(position, state)
+      validateAndUpdateState(result.state, state)
         .flatMap(_ => applyAnimationHooks(state))
     }
 
@@ -50,15 +52,12 @@ final private[manager] class StateManagerSurfaceCapability(
         .flatMap(_ => applyAnimationHooks(state))
     }
 
-  def expandPinnedPanel(surfaceId: SurfaceId): IO[Unit] =
+  def expandPinnedPanel(target: PanelTarget): IO[Unit] =
     stateRef.get.flatMap { state =>
-      validateAndUpdateState(PanelStateReducer.expand(surfaceId, state).state, state)
-        .flatMap(_ => applyAnimationHooks(state))
-    }
-
-  def expandPinnedPanel(position: PanelPosition): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      validateAndUpdateState(PanelStateReducer.expand(position, state).state, state)
+      val result = target match
+        case PanelTarget.ById(surfaceId)      => PanelStateReducer.expand(surfaceId, state)
+        case PanelTarget.ByPosition(position) => PanelStateReducer.expand(position, state)
+      validateAndUpdateState(result.state, state)
         .flatMap(_ => applyAnimationHooks(state))
     }
 
@@ -74,14 +73,15 @@ final private[manager] class StateManagerSurfaceCapability(
   def dismissModal(): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(ModalStateReducer.dismiss(state).state, state))
 
-  def switchToPinnedPanel(position: PanelPosition): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.focus(position, state).state, state))
+  def switchToPinnedPanel(target: PanelTarget): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      val result = target match
+        case PanelTarget.ById(surfaceId)      => PanelStateReducer.focus(surfaceId, state)
+        case PanelTarget.ByPosition(position) => PanelStateReducer.focus(position, state)
+      validateAndUpdateState(result.state, state)
+    }
 
-  def switchToPinnedPanel(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(PanelStateReducer.focus(surfaceId, state).state, state))
-
-  def loadDirectoryTree(path: String, files: List[String]): IO[Unit] =
-    val rootPath = Path.of(path)
+  def loadDirectoryTree(rootPath: Path, files: List[String]): IO[Unit] =
     val entries = files.map { name =>
       val isDir = name.endsWith("/")
       DirEntry(rootPath.resolve(name), name, isDirectory = isDir)
@@ -115,8 +115,7 @@ final private[manager] class StateManagerSurfaceCapability(
       validateAndUpdateState(updated, state).flatMap(_ => applyAnimationHooks(state))
     }
 
-  def selectFileInExplorer(filePath: String): IO[Unit] =
-    val targetPath = Path.of(filePath)
+  def selectFileInExplorer(targetPath: Path): IO[Unit] =
     stateRef.get.flatMap { state =>
       val updated = state.pinnedSurfaces.reverse
         .find { surface =>
@@ -144,19 +143,16 @@ final private[manager] class StateManagerSurfaceCapability(
       validateAndUpdateState(updated, state)
     }
 
-  def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
-    stateRef.get.flatMap(state =>
-      validateAndUpdateState(PanelStateReducer.resize(position, newSize, state).state, state)
-    )
+  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      val result = target match
+        case PanelTarget.ById(surfaceId)      => PanelStateReducer.resize(surfaceId, newSize, state)
+        case PanelTarget.ByPosition(position) => PanelStateReducer.resize(position, newSize, state)
+      validateAndUpdateState(result.state, state)
+    }
 
-  def resizePinnedPanel(surfaceId: SurfaceId, newSize: Int): IO[Unit] =
-    stateRef.get.flatMap(state =>
-      validateAndUpdateState(PanelStateReducer.resize(surfaceId, newSize, state).state, state)
-    )
-
-  def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =
-    val src    = Path.of(sourceFile)
-    val dst    = Path.of(targetDir).resolve(src.getFileName)
+  def dragFileToDirectory(src: Path, targetDir: Path): IO[Unit] =
+    val dst    = targetDir.resolve(src.getFileName)
     val srcDir = src.getParent
     IO.blocking(Files.move(src, dst))
       .flatMap { _ =>
@@ -180,4 +176,4 @@ final private[manager] class StateManagerSurfaceCapability(
           }
         }
       }
-      .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $sourceFile to $targetDir"))
+      .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $src to $targetDir"))

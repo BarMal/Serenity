@@ -28,7 +28,7 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
   it should "track a file path after saveBufferAs" in new RecentFilesFixture:
     val path = tmpFile("hello.scala")
     try
-      sm.saveBufferAs(initialBufferId, path.toString).unsafeRunSync()
+      sm.saveBufferAs(initialBufferId, path).unsafeRunSync()
       sm.getRecentFiles.unsafeRunSync() shouldBe List(path)
     finally
       Files.deleteIfExists(path)
@@ -38,8 +38,8 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
     val pathA = tmpFile("a.scala")
     val pathB = tmpFile("b.scala")
     try
-      sm.saveBufferAs(initialBufferId, pathA.toString).unsafeRunSync()
-      sm.saveBufferAs(initialBufferId, pathB.toString).unsafeRunSync()
+      sm.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
+      sm.saveBufferAs(initialBufferId, pathB).unsafeRunSync()
       sm.getRecentFiles.unsafeRunSync() shouldBe List(pathB, pathA)
     finally
       Files.deleteIfExists(pathA)
@@ -50,9 +50,9 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
     val pathA = tmpFile("a.scala")
     val pathB = tmpFile("b.scala")
     try
-      sm.saveBufferAs(initialBufferId, pathA.toString).unsafeRunSync()
-      sm.saveBufferAs(initialBufferId, pathB.toString).unsafeRunSync()
-      sm.saveBufferAs(initialBufferId, pathA.toString).unsafeRunSync()
+      sm.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
+      sm.saveBufferAs(initialBufferId, pathB).unsafeRunSync()
+      sm.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
       sm.getRecentFiles.unsafeRunSync() shouldBe List(pathA, pathB)
     finally
       Files.deleteIfExists(pathA)
