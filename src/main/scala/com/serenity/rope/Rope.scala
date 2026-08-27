@@ -2,7 +2,7 @@ package com.serenity.rope
 
 import scala.annotation.tailrec
 
-trait Rope(using balance: Balance):
+sealed trait Rope(using balance: Balance):
   def weight: Int
   def height: Int
   def newlineCount: Int
@@ -52,50 +52,71 @@ trait Rope(using balance: Balance):
 
   def splitAt(index: Int): Option[(Rope, Rope)]
 
-  def insert(index: Int, str: String): Rope =
-    splitAt(index) match
-      case Some(pre, post) =>
-        pre.concat(Leaf(str)).concat(post).rebalance
-      case None => this
+  /** `None` when `index` is outside `[0, weight]` -- the range in which every character position and the
+    * one-past-the-end append position are both meaningful. Callers decide the out-of-range policy explicitly; this
+    * method never silently no-ops.
+    */
+  def insert(index: Int, str: String): Option[Rope] =
+    splitAt(index).map((pre, post) => pre.concat(Leaf(str)).concat(post).rebalance)
 
-  def delete(startIndex: Int, endIndex: Int): Rope =
+  /** `None` when the underlying `deleteRight` call fails -- see its doc for the exact range. */
+  def delete(startIndex: Int, endIndex: Int): Option[Rope] =
     deleteRight(startIndex, endIndex - startIndex)
 
+  /** Total: unlike `deleteRight`, a `start` beyond the rope is a legitimate (if unusual) position to delete backwards
+    * from -- it is clamped to `weight` rather than rejected, since callers such as `dropRight` pass `weight` itself and
+    * callers tracking a cursor may briefly overshoot during a multi-step edit.
+    */
   def deleteLeft(start: Int, count: Int): Rope =
     if count == 0 then this
-    else if count < 0 then deleteRight(start, Math.abs(count))
+    else if count < 0 then deleteRight(start, Math.abs(count)).getOrElse(this) // see deleteRight's own doc
     else if start <= 0 then this
     else
-      val actualCount = Math.min(count, start)
-      deleteRight(start - actualCount, actualCount)
+      val clampedStart = Math.min(start, weight)
+      val actualCount  = Math.min(count, clampedStart)
+      // clampedStart - actualCount is always in [0, weight], so deleteRight cannot fail here.
+      deleteRight(clampedStart - actualCount, actualCount).getOrElse(this)
 
-  def deleteRight(start: Int, count: Int): Rope =
-    if count == 0 then this
-    else if count < 0 then deleteLeft(start, Math.abs(count))
+  /** `None` when `start` is outside `[0, weight]`. A `count` that overruns the end of the rope is clamped rather than
+    * rejected -- "delete to the end" is a legitimate, well-defined request, unlike a genuinely invalid start. A
+    * negative `count` redirects to `deleteLeft`, which is total.
+    */
+  def deleteRight(start: Int, count: Int): Option[Rope] =
+    if count == 0 then Some(this)
+    else if count < 0 then Some(deleteLeft(start, Math.abs(count)))
+    else if start < 0 || start > weight then None
     else if start + count > weight then deleteRight(start, weight - start)
     else
-      (for
-        startAndRest <- splitAt(Math.max(0, start))
-        (start, rest) = startAndRest
+      for
+        startAndRest <- splitAt(start)
+        (pre, rest) = startAndRest
         restAndEnd <- rest.splitAt(count)
         (_, end) = restAndEnd
-      yield Node(start, end).rebalance).getOrElse(this)
+      yield Node(pre, end).rebalance
 
-  def dropLeft(n: Int): Rope = deleteRight(0, n)
+  def dropLeft(n: Int): Rope =
+    // start = 0 is always in [0, weight], so this can only fail if a splitAt implementation violates its own
+    // contract; treated as unreachable rather than threaded through dropLeft's own signature.
+    deleteRight(0, n).getOrElse(this)
 
   def dropRight(n: Int): Rope = deleteLeft(weight, n)
 
-  def replace(index: Int, char: Char): Rope =
-    if index < 0 || index >= weight then this
-    else
-      splitAt(index) match
-        case Some((l, r)) =>
-          l.concat(Leaf(char.toString).concat(r.dropLeft(1)))
-        case None => this
+  /** `None` when `index` is outside `[0, weight)` -- unlike `insert`, there is no character to replace at
+    * `index == weight`.
+    */
+  def replace(index: Int, char: Char): Option[Rope] =
+    if index < 0 || index >= weight then None
+    else splitAt(index).map((l, r) => l.concat(Leaf(char.toString).concat(r.dropLeft(1))))
 
   def replaceAll(term: String, replacement: String): Rope =
     searchAll(term).sorted.reverse.foldLeft(this)((rope, index) =>
-      rope.delete(index, index + term.length).insert(index, replacement)
+      rope
+        .delete(index, index + term.length)
+        .flatMap(_.insert(index, replacement))
+        // `index` comes from `searchAll` on `rope` itself and matches are applied highest-offset-first, so every
+        // index stays valid for the rope it is applied to; failure here would mean that invariant broke, and
+        // skipping the one replacement is safer than corrupting the whole rope.
+        .getOrElse(rope)
     )
 
   def collect(): String =
@@ -439,6 +460,146 @@ trait Rope(using balance: Balance):
           case None       => (line, column)
 
     loop(0, baseLine, baseColumn)
+
+/** Deliberately not `final`, unlike every other case class in the codebase.
+  *
+  * `RopeSpec` subclasses this to override `collect()` and `index()` with assertion-throwing versions, proving that
+  * search and sequential traversal never materialise the whole rope or walk it character by character. That is the
+  * representation-invariance coverage `docs/coding-standards.md` requires, and it needs a real subclass -- a stub
+  * cannot observe which methods the rope chose to call.
+  *
+  * Kept in this file (rather than its own `Leaf.scala`, as before `Rope` was sealed) because `sealed` in Scala requires
+  * every direct subtype to be defined in the same source file as the sealed type itself.
+  */
+@SuppressWarnings(Array("org.wartremover.warts.FinalCaseClass"))
+case class Leaf(value: String)(using balance: Balance) extends Rope:
+  override def weight: Int               = value.length
+  override def height: Int               = 1
+  override val newlineCount: Int         = value.count(_ == '\n')
+  override val lastLineLength: Int       = value.length - value.lastIndexOf('\n') - 1
+  override val endsWithNewline: Boolean  = value.endsWith("\n")
+  override def isWeightBalanced: Boolean = true
+  override def isHeightBalanced: Boolean = true
+  override def rebalance: Rope =
+    if value.length > balance.leafChunkSize then Rope(value) else this
+
+  override def splitAt(index: Int): Option[(Rope, Rope)] =
+    if index < 0 || index > value.length then None
+    else Some(Leaf(value.take(index)), Leaf(value.drop(index)))
+
+  override def index(i: Int): Option[Char] =
+    Option.when(i >= 0 && i < value.length)(value.charAt(i))
+
+  override def insert(index: Int, str: String): Option[Rope] =
+    if index < 0 || index > value.length then None
+    else
+      val (pre, post) = value.splitAt(index)
+      Some(Rope((pre + str) + post))
+
+  override def deleteLeft(start: Int, count: Int): Rope =
+    val (pre, post) = value.splitAt(start)
+    Leaf(pre.dropRight(count) + post)
+
+  override def deleteRight(start: Int, count: Int): Option[Rope] =
+    if count == 0 then Some(this)
+    else if count < 0 then Some(deleteLeft(start, Math.abs(count)))
+    else if start < 0 || start > value.length then None
+    else
+      val (pre, post) = value.splitAt(start)
+      Some(Leaf(pre + post.drop(count)))
+
+  override def collect(): String = value
+
+  override def equals(obj: Any): Boolean =
+    obj match
+      case that: AnyRef if (this: AnyRef).eq(that) => true
+      case that: Leaf                              => value == that.value
+      case _                                       => false
+
+// Kept in this file (rather than its own `Node.scala`, as before `Rope` was sealed) -- see `Leaf`'s doc above.
+final case class Node(left: Rope, right: Rope)(using balance: Balance) extends Rope:
+
+  override val weight: Int       = left.weight + right.weight
+  override val height: Int       = Math.max(left.height, right.height) + 1
+  override val newlineCount: Int = left.newlineCount + right.newlineCount
+
+  override val lastLineLength: Int =
+    if right.weight == 0 then left.lastLineLength
+    else if right.newlineCount == 0 && !left.endsWithNewline then left.lastLineLength + right.lastLineLength
+    else right.lastLineLength
+
+  override val endsWithNewline: Boolean =
+    if right.weight == 0 then left.endsWithNewline else right.endsWithNewline
+
+  override def isWeightBalanced: Boolean =
+    Math.abs(left.weight - right.weight) <= balance.weightBalance
+
+  override def isHeightBalanced: Boolean =
+    Math.abs(left.height - right.height) <= balance.heightBalance
+
+  /** Rebuilding is O(leaves), so the criterion decides how often an edit costs that. Weight symmetry between the two
+    * children cannot survive an edit without a rebuild, and says nothing about the depth `index` and `splitAt` descend;
+    * the Fibonacci bound is what those actually pay for.
+    */
+  override def rebalance: Rope =
+    if isDepthBalanced && isHeightBalanced then this else rebuild
+
+  /** Splices the text into the leaf that holds `index`, rebuilding only the path down to it.
+    *
+    * The inherited `splitAt` + `concat` + `concat` route rebuilt the whole rope for a single character, because
+    * concatenating a one-character leaf onto a large rope fails any symmetry criterion. Descending instead is the
+    * short-leaf case from Boehm, Atkinson and Plass, and what a b-tree rope does when it edits a chunk in place.
+    */
+  override def insert(index: Int, str: String): Option[Rope] =
+    if index < 0 || index > weight then None
+    else if index <= left.weight then left.insert(index, str).map(newLeft => Node(newLeft, right).rebalance)
+    else right.insert(index - left.weight, str).map(newRight => Node(left, newRight).rebalance)
+
+  override def deleteRight(start: Int, count: Int): Option[Rope] =
+    if count == 0 then Some(this)
+    else if count < 0 then Some(deleteLeft(start, Math.abs(count)))
+    else if start < 0 || start > weight then None
+    else if start + count > weight then deleteRight(start, weight - start)
+    else if start >= left.weight then
+      right.deleteRight(start - left.weight, count).map(newRight => Node(left, newRight).rebalance)
+    else if start + count <= left.weight then
+      left.deleteRight(start, count).map(newLeft => Node(newLeft, right).rebalance)
+    else
+      val fromLeft = left.weight - start
+      for
+        newLeft  <- left.deleteRight(start, fromLeft)
+        newRight <- right.deleteRight(0, count - fromLeft)
+      yield Node(newLeft, newRight).rebalance
+
+  override def splitAt(index: Int): Option[(Rope, Rope)] =
+    if index < 0 || index > weight then None
+    else if index == 0 then Some(Leaf(""), this)
+    else if weight == index then Some(this, Leaf(""))
+    else if left.weight == index then Some(left, right)
+    else if index < left.weight then
+      left.splitAt(index).map {
+        case (first, second) =>
+          (first.rebalance, Node(second, right).rebalance)
+      }
+    else
+      right.splitAt(index - left.weight).map {
+        case (first, second) =>
+          (Node(left, first).rebalance, second.rebalance)
+      }
+
+  override def index(i: Int): Option[Char] =
+    if i < left.weight then left.index(i) else right.index(i - left.weight)
+
+  // The compiler-generated equals recurses through left == that.left && right == that.right with no fast path,
+  // so comparing two large ropes -- even the very same object to itself -- walks the entire tree and can stack
+  // overflow on deeply skewed trees. Short-circuiting on reference identity and on a cheap weight mismatch avoids
+  // that descent for the two most common comparisons: "is this literally the same content" and "clearly different
+  // length".
+  override def equals(obj: Any): Boolean =
+    obj match
+      case that: AnyRef if (this: AnyRef).eq(that) => true
+      case that: Node                              => weight == that.weight && left == that.left && right == that.right
+      case _                                       => false
 
 object Rope:
 

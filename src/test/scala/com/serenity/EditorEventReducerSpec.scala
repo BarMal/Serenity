@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
@@ -42,20 +42,23 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
 
     (paneId, bufferId, state)
 
-  final case class NonCollectingRope(delegate: Rope) extends Rope:
+  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
+  // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
+  // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
+  final class NonCollectingRope(delegate: Rope) extends Leaf(delegate.collect()):
     override def weight: Int =
       delegate.weight
 
     override def height: Int =
       delegate.height
 
-    override def newlineCount: Int =
+    override val newlineCount: Int =
       delegate.newlineCount
 
-    override def lastLineLength: Int =
+    override val lastLineLength: Int =
       delegate.lastLineLength
 
-    override def endsWithNewline: Boolean =
+    override val endsWithNewline: Boolean =
       delegate.endsWithNewline
 
     override def isWeightBalanced: Boolean =
@@ -84,6 +87,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
 
     override def collect(): String =
       throw AssertionError("navigation should not materialise the whole buffer")
+
+  object NonCollectingRope:
+    def apply(delegate: Rope): NonCollectingRope = new NonCollectingRope(delegate)
 
   "EditorEventReducer" should "insert characters into the focused pane buffer" in {
     val initialState = AppState.initial

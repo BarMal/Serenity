@@ -327,9 +327,12 @@ final private[manager] class StateManagerWorkflowCapability(
                 else
                   val startOffset = nextReplaceMatchOffset(buffer, matches)
                   val endOffset   = startOffset + workflow.findText.length
+                  // startOffset/endOffset come from a match found against this same content, so this is expected to
+                  // always succeed; no-op back to the unedited content rather than crash if that invariant ever breaks.
                   val updatedContent = buffer.document.content
                     .delete(startOffset, endOffset)
-                    .insert(startOffset, workflow.replacementText)
+                    .flatMap(_.insert(startOffset, workflow.replacementText))
+                    .getOrElse(buffer.document.content)
                   val cursorOffset = startOffset + workflow.replacementText.length
                   val newCursor    = cursorPositionForOffset(updatedContent, cursorOffset)
                   val updatedFindState =
@@ -724,7 +727,13 @@ final private[manager] class StateManagerWorkflowCapability(
     replacementText: String
   ): com.serenity.rope.Rope =
     matchOffsets.sorted.reverse.foldLeft(rope) { (current, offset) =>
-      current.delete(offset, offset + findText.length).insert(offset, replacementText)
+      // `offset` comes from a match found against `current` (offsets are processed highest-first, so earlier
+      // replacements never shift a not-yet-processed one), so this is expected to always succeed; no-op that one
+      // replacement rather than corrupt the rope if that invariant ever breaks.
+      current
+        .delete(offset, offset + findText.length)
+        .flatMap(_.insert(offset, replacementText))
+        .getOrElse(current)
     }
 
   private def finalCursorOffsetAfterReplacements(

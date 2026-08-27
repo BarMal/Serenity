@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextParagraph}
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.Renderer
@@ -21,20 +21,23 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  final case class NonCollectingRope(delegate: Rope) extends Rope:
+  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
+  // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
+  // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
+  final class NonCollectingRope(delegate: Rope) extends Leaf(delegate.collect()):
     override def weight: Int =
       delegate.weight
 
     override def height: Int =
       delegate.height
 
-    override def newlineCount: Int =
+    override val newlineCount: Int =
       delegate.newlineCount
 
-    override def lastLineLength: Int =
+    override val lastLineLength: Int =
       delegate.lastLineLength
 
-    override def endsWithNewline: Boolean =
+    override val endsWithNewline: Boolean =
       delegate.endsWithNewline
 
     override def isWeightBalanced: Boolean =
@@ -64,24 +67,28 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     override def collect(): String =
       throw AssertionError("plain rendering should not materialise the whole buffer")
 
-  final case class CountingAccessRope(
+  object NonCollectingRope:
+    def apply(delegate: Rope): NonCollectingRope = new NonCollectingRope(delegate)
+
+  // See `NonCollectingRope` above for why this extends `Leaf` rather than `Rope`.
+  final class CountingAccessRope(
       delegate: Rope,
       lineReads: AtomicInteger = AtomicInteger(0),
       collects: AtomicInteger = AtomicInteger(0)
-  ) extends Rope:
+  ) extends Leaf(delegate.collect()):
     override def weight: Int =
       delegate.weight
 
     override def height: Int =
       delegate.height
 
-    override def newlineCount: Int =
+    override val newlineCount: Int =
       delegate.newlineCount
 
-    override def lastLineLength: Int =
+    override val lastLineLength: Int =
       delegate.lastLineLength
 
-    override def endsWithNewline: Boolean =
+    override val endsWithNewline: Boolean =
       delegate.endsWithNewline
 
     override def isWeightBalanced: Boolean =
@@ -118,6 +125,14 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     override def collect(): String =
       collects.incrementAndGet()
       delegate.collect()
+
+  object CountingAccessRope:
+
+    def apply(
+      delegate: Rope,
+      lineReads: AtomicInteger = AtomicInteger(0),
+      collects: AtomicInteger = AtomicInteger(0)
+    ): CountingAccessRope = new CountingAccessRope(delegate, lineReads, collects)
 
   private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val cellMetrics  = CellMetrics.fromFont(monoFont)

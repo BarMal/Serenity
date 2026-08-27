@@ -473,7 +473,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before.persisted
           .buffers(bufferId)
           .document
-          .copy(content = before.persisted.buffers(bufferId).document.content.insert(1, "X"))
+          .copy(content =
+            before.persisted
+              .buffers(bufferId)
+              .document
+              .content
+              .insert(1, "X")
+              .getOrElse(fail("expected insert to succeed"))
+          )
       )
     val after =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, editedBuffer)))
@@ -489,7 +496,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before.persisted
           .buffers(bufferId)
           .document
-          .copy(content = before.persisted.buffers(bufferId).document.content.insert(7, "X\nY"))
+          .copy(content =
+            before.persisted
+              .buffers(bufferId)
+              .document
+              .content
+              .insert(7, "X\nY")
+              .getOrElse(fail("expected insert to succeed"))
+          )
       )
     val after =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, editedBuffer)))
@@ -506,7 +520,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before.persisted
           .buffers(bufferId)
           .document
-          .copy(content = before.persisted.buffers(bufferId).document.content.delete(5, 6))
+          .copy(content =
+            before.persisted
+              .buffers(bufferId)
+              .document
+              .content
+              .delete(5, 6)
+              .getOrElse(fail("expected delete to succeed"))
+          )
       )
     val after =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, editedBuffer)))
@@ -549,7 +570,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before.persisted
           .buffers(bufferId)
           .document
-          .copy(content = before.persisted.buffers(bufferId).document.content.insert(0, "X"))
+          .copy(content =
+            before.persisted
+              .buffers(bufferId)
+              .document
+              .content
+              .insert(0, "X")
+              .getOrElse(fail("expected insert to succeed"))
+          )
       )
     val edited =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, editedBuffer)))
@@ -568,7 +596,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before.persisted
           .buffers(bufferId)
           .document
-          .copy(content = before.persisted.buffers(bufferId).document.content.insert(1, "X"))
+          .copy(content =
+            before.persisted
+              .buffers(bufferId)
+              .document
+              .content
+              .insert(1, "X")
+              .getOrElse(fail("expected insert to succeed"))
+          )
       )
     val after =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, editedBuffer)))
@@ -585,7 +620,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before.persisted
           .buffers(bufferId)
           .document
-          .copy(content = before.persisted.buffers(bufferId).document.content.insert(7, "X\nY"))
+          .copy(content =
+            before.persisted
+              .buffers(bufferId)
+              .document
+              .content
+              .insert(7, "X\nY")
+              .getOrElse(fail("expected insert to succeed"))
+          )
       )
     val after =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, editedBuffer)))
@@ -606,7 +648,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before.persisted
           .buffers(bufferId)
           .document
-          .copy(content = before.persisted.buffers(bufferId).document.content.insert(1, "X"))
+          .copy(content =
+            before.persisted
+              .buffers(bufferId)
+              .document
+              .content
+              .insert(1, "X")
+              .getOrElse(fail("expected insert to succeed"))
+          )
       )
     val after =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, editedBuffer)))
@@ -633,7 +682,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         before.persisted
           .buffers(bufferId)
           .document
-          .copy(content = before.persisted.buffers(bufferId).document.content.insert(1, "X"))
+          .copy(content =
+            before.persisted
+              .buffers(bufferId)
+              .document
+              .content
+              .insert(1, "X")
+              .getOrElse(fail("expected insert to succeed"))
+          )
       )
     val after =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, editedBuffer)))
@@ -645,7 +701,11 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
   "DamageProducer's reported rows" should "cover what DirtyLineDiff independently finds dirty for the same edit" in {
     val before = stateWithContent("first line\nsecond line\nthird line\nfourth line")
     val buffer = before.persisted.buffers(bufferId)
-    val edited = buffer.copy(document = buffer.document.copy(content = buffer.document.content.insert(18, "-EDIT-")))
+    val edited = buffer.copy(document =
+      buffer.document.copy(content =
+        buffer.document.content.insert(18, "-EDIT-").getOrElse(fail("expected insert to succeed"))
+      )
+    )
     val after =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, edited)))
 

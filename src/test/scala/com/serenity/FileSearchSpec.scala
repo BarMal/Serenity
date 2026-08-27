@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.keystroke.events.*
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.components.{ComponentResult, FileSearchComponent}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer}
@@ -331,20 +331,23 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
       case other => fail(s"Expected StateChange, got $other")
   }
 
-  final case class GuardedGetLineRope(delegate: Rope, allowedLines: Set[Int]) extends Rope:
+  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
+  // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
+  // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
+  final class GuardedGetLineRope(delegate: Rope, allowedLines: Set[Int]) extends Leaf(delegate.collect()):
     override def weight: Int =
       delegate.weight
 
     override def height: Int =
       delegate.height
 
-    override def newlineCount: Int =
+    override val newlineCount: Int =
       delegate.newlineCount
 
-    override def lastLineLength: Int =
+    override val lastLineLength: Int =
       delegate.lastLineLength
 
-    override def endsWithNewline: Boolean =
+    override val endsWithNewline: Boolean =
       delegate.endsWithNewline
 
     override def isWeightBalanced: Boolean =
@@ -368,3 +371,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
 
     override def collect(): String =
       throw AssertionError("file search should not materialise the whole buffer")
+
+  object GuardedGetLineRope:
+    def apply(delegate: Rope, allowedLines: Set[Int]): GuardedGetLineRope =
+      new GuardedGetLineRope(delegate, allowedLines)

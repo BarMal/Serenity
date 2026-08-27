@@ -44,7 +44,12 @@ private[perf] object DamageBenchmarks:
             before.persisted.buffers.updated(
               BufferId(1),
               buffer.copy(document =
-                buffer.document.copy(content = buffer.document.content.insert(insertAt, insertion))
+                buffer.document.copy(content =
+                  // `insertAt` is a fixed, known-in-range benchmark offset, so this is expected to always succeed.
+                  buffer.document.content
+                    .insert(insertAt, insertion)
+                    .getOrElse(throw new NoSuchElementException(s"expected insert at $insertAt to succeed"))
+                )
               )
             )
           )

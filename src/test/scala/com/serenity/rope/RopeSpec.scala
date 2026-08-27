@@ -6,6 +6,12 @@ import org.scalatest.matchers.should.Matchers
 
 class RopeSpec extends AnyFlatSpec with Matchers:
 
+  extension (result: Option[Rope])
+    // For test call sites where the operation is expected to succeed; failing loudly here (rather than defaulting
+    // to some rope) keeps a regression that makes insert/delete/replace start failing from being masked as a
+    // silently-wrong result.
+    private def orFail: Rope = result.getOrElse(fail("expected the rope operation to succeed"))
+
   "Rope" should "weight" in new RopeSpecScope:
     val c: Node = Node(Leaf("Hello "), Leaf("my "))
     c.weight shouldBe 9
@@ -71,19 +77,37 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     }
 
   it should "insert" in new RopeSpecScope:
-    Rope("Hello world!").insert(5, ",").collect() shouldBe "Hello, world!"
+    Rope("Hello world!").insert(5, ",").orFail.collect() shouldBe "Hello, world!"
+
+  it should "name out-of-range insert as a failure instead of silently no-op'ing" in new RopeSpecScope:
+    val rope = Rope("abc")
+    rope.insert(-1, "x") shouldBe None
+    rope.insert(4, "x") shouldBe None
+    rope.insert(0, "x") shouldBe defined
+    rope.insert(3, "x") shouldBe defined // one past the last character is a valid append position
 
   it should "delete" in new RopeSpecScope:
     Rope("Hello, world!").deleteLeft(3, 2).collect() shouldBe "Hlo, world!"
     Rope("Hello, world!").deleteLeft(3, 12).collect() shouldBe "lo, world!"
-    Rope("Hello, world!").deleteRight(13, 1).collect() shouldBe "Hello, world!"
-    Rope("Hello, world!").deleteRight(13, -13).collect() shouldBe ""
+    Rope("Hello, world!").deleteRight(13, 1).orFail.collect() shouldBe "Hello, world!"
+    Rope("Hello, world!").deleteRight(13, -13).orFail.collect() shouldBe ""
     Rope("Hello, world!").deleteLeft(0, -13).collect() shouldBe ""
+
+  it should "name an out-of-range deleteRight/delete start as a failure instead of silently no-op'ing" in new RopeSpecScope:
+    val rope = Rope("hello")
+    rope.deleteRight(-1, 1) shouldBe None
+    rope.deleteRight(6, 1) shouldBe None
+    rope.deleteRight(5, 1) shouldBe defined // count is clamped to "delete to the end", not rejected
+    rope.delete(-1, 1) shouldBe None
+    rope.delete(6, 7) shouldBe None
+    rope.delete(1, 3).orFail.collect() shouldBe "hlo"
 
   it should "replace" in new RopeSpecScope:
     Rope("Hello, world!")
       .replace(5, '!')
+      .orFail
       .replace(7, 'W')
+      .orFail
       .collect() shouldBe "Hello! World!"
 
   it should "search for first occurrence" in new ChunkedRopeSpecScope:
@@ -282,7 +306,7 @@ class RopeSpec extends AnyFlatSpec with Matchers:
   it should "maintain rope balance during many small insertions" in new ChunkedRopeSpecScope:
     // Simulate typing session with many small insertions
     val finalRope = (1 to 1000).foldLeft(Rope("")) { (rope, i) =>
-      val newRope = rope.insert(rope.weight, s"char$i ")
+      val newRope = rope.insert(rope.weight, s"char$i ").orFail
       if i % 100 == 0 then
         // Periodically check balance
         newRope.isHeightBalanced shouldBe true
@@ -317,7 +341,7 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
   it should "handle insertions that cause rebalancing" in new ChunkedRopeSpecScope:
     // Create long chain by inserting at end repeatedly
-    val rope = (1 to 100).foldLeft(Rope(""))((acc, i) => acc.insert(acc.weight, s"Line $i content "))
+    val rope = (1 to 100).foldLeft(Rope(""))((acc, i) => acc.insert(acc.weight, s"Line $i content ").orFail)
 
     // Should trigger rebalancing to maintain performance
     rope.isHeightBalanced shouldBe true
@@ -337,9 +361,9 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     empty.search("test") shouldBe None
     empty.searchAll("test") shouldBe List.empty
     empty.splitAt(0) shouldBe Some((Leaf(""), Leaf("")))
-    empty.insert(0, "hello").collect() shouldBe "hello"
+    empty.insert(0, "hello").orFail.collect() shouldBe "hello"
     empty.deleteLeft(0, 5).collect() shouldBe ""
-    empty.deleteRight(0, 5).collect() shouldBe ""
+    empty.deleteRight(0, 5).orFail.collect() shouldBe ""
 
   it should "handle single character operations" in new RopeSpecScope:
     val single = Rope("a")
@@ -351,9 +375,9 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     single.search("b") shouldBe None
     single.splitAt(0) shouldBe Some((Leaf(""), single))
     single.splitAt(1) shouldBe Some((single, Leaf("")))
-    single.replace(0, 'b').collect() shouldBe "b"
+    single.replace(0, 'b').orFail.collect() shouldBe "b"
     single.deleteLeft(1, 1).collect() shouldBe ""
-    single.deleteRight(0, 1).collect() shouldBe ""
+    single.deleteRight(0, 1).orFail.collect() shouldBe ""
 
   it should "handle boundary index operations" in new RopeSpecScope:
     val rope = Rope("hello")
@@ -366,11 +390,12 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     rope.splitAt(-1) shouldBe None
     rope.splitAt(6) shouldBe None
 
-    rope.replace(-1, 'x').collect() shouldBe "hello"
-    rope.replace(5, 'x').collect() shouldBe "hello"
+    // Out-of-range replace/deleteRight now name their failure instead of silently no-op'ing.
+    rope.replace(-1, 'x') shouldBe None
+    rope.replace(5, 'x') shouldBe None
 
     rope.deleteLeft(-1, 2).collect() shouldBe "hello"
-    rope.deleteRight(10, 2).collect() shouldBe "hello"
+    rope.deleteRight(10, 2) shouldBe None
 
   it should "handle unicode and special characters" in new RopeSpecScope:
     val unicode = Rope("café 🚀 naïve")
@@ -379,7 +404,7 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     unicode.index(0) shouldBe Some('c')
     unicode.search("🚀") shouldBe defined
     unicode.searchAll("a") should have length 2
-    unicode.replace(5, '⭐').collect() should include("⭐")
+    unicode.replace(5, '⭐').orFail.collect() should include("⭐")
 
   it should "handle very long strings without stack overflow" in new ChunkedRopeSpecScope:
     // Test with string longer than leafChunkSize to force tree structure
@@ -393,19 +418,22 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     rope.slice(100, 200).weight shouldBe 100
 
     // Test operations on long rope
-    val inserted = rope.insert(500, "TEST")
+    val inserted = rope.insert(500, "TEST").orFail
     inserted.weight shouldBe 1004
     inserted.search("TEST") shouldBe Some(500)
 
-    val deleted = rope.deleteRight(100, 100)
+    val deleted = rope.deleteRight(100, 100).orFail
     deleted.weight shouldBe 900
 
   it should "maintain structural integrity after complex operations" in new ChunkedRopeSpecScope:
     // Perform a mix of operations using function composition
     val rope = Rope("initial")
       .insert(0, "prefix ")
+      .orFail
       .insert(14, " suffix") // 14 = "prefix initial".length
+      .orFail
       .replace(7, 'X')
+      .orFail
       .deleteLeft(15, 3)
       .concat(Rope(" more"))
 
@@ -422,9 +450,9 @@ class RopeSpec extends AnyFlatSpec with Matchers:
   it should "handle rapid alternating insertions and deletions" in new ChunkedRopeSpecScope:
     // Simulate editing session with insertions and deletions
     val finalRope = (1 to 100).foldLeft(Rope("base")) { (rope, i) =>
-      val step1 = rope.insert(rope.weight / 2, s"$i")
-      val step2 = step1.deleteRight(0, 1)
-      val step3 = step2.insert(0, "x")
+      val step1 = rope.insert(rope.weight / 2, s"$i").orFail
+      val step2 = step1.deleteRight(0, 1).orFail
+      val step3 = step2.insert(0, "x").orFail
       val step4 = step3.deleteLeft(step3.weight, 1)
 
       // Verify consistency every few operations
@@ -453,7 +481,7 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     // Test deletion with zero count
     rope.deleteLeft(5, 0).collect() shouldBe "hello world"
-    rope.deleteRight(5, 0).collect() shouldBe "hello world"
+    rope.deleteRight(5, 0).orFail.collect() shouldBe "hello world"
 
   it should "preserve correctness after rebalancing operations" in new ChunkedRopeSpecScope:
     // Create unbalanced rope manually
@@ -518,14 +546,14 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     concatenated.endsWithNewline.shouldBe(false)
     concatenated.lineCount.shouldBe(3)
 
-    val inserted = Rope("alphagamma").insert("alpha".length, "\nbeta\n")
+    val inserted = Rope("alphagamma").insert("alpha".length, "\nbeta\n").orFail
     inserted.collect() shouldBe "alpha\nbeta\ngamma"
     inserted.newlineCount.shouldBe(2)
     inserted.lastLineLength.shouldBe("gamma".length)
     inserted.endsWithNewline.shouldBe(false)
     inserted.lineCount.shouldBe(3)
 
-    val deleted = inserted.deleteRight("alpha".length, "\nbeta\n".length)
+    val deleted = inserted.deleteRight("alpha".length, "\nbeta\n".length).orFail
     deleted.collect() shouldBe "alphagamma"
     deleted.newlineCount.shouldBe(0)
     deleted.lastLineLength.shouldBe("alphagamma".length)
@@ -651,20 +679,35 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     given balance: Balance =
       Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
 
-  final case class ExplodingIndexRope(delegate: Rope)(using Balance) extends Rope:
+  // `Rope` is sealed, so this can no longer extend it directly; it extends the still-open `Leaf` purely to satisfy
+  // the type system when embedded as a `Node` child, seeded with the delegate's own text so a stray `case
+  // Leaf(value)` match elsewhere at least reads the right characters. Every metadata accessor still forwards to
+  // `delegate` rather than using anything inherited from `Leaf`, so callers that go through the `Rope` interface
+  // (not a `Leaf`/`Node` pattern match) see this as an opaque, non-Leaf, non-Node rope exactly as before sealing.
+  //
+  // One guarantee this test double could make before sealing is now narrower: sealing means we can no longer
+  // construct a *genuine* third `Rope` implementation, so production helpers that pattern-match `case Leaf(v)`
+  // directly on a rope value (rather than calling its virtual methods) -- `Rope.leafValues`, `appendLine`,
+  // `lineColumnToOffsetIn`, `offsetToLineColumnIn` -- would now match this double structurally and silently take the
+  // Leaf fast path instead of hitting the guarded `index`/`collect` override. `getLine`/`lineColumnToOffset` (used by
+  // the "skip preceding rope branches" test below) are unaffected here because the traversal never recurses into
+  // this delegate's branch for that test's inputs -- the enclosing `Node` dispatches purely on `weight`/`newlineCount`
+  // /`endsWithNewline`, all ordinary virtual calls. No currently-exercised path in this file reaches the weakened
+  // case, but a future test that pattern-matches into this specific node would no longer be caught by the guard.
+  final class ExplodingIndexRope(delegate: Rope)(using Balance) extends Leaf(delegate.collect()):
     override def weight: Int =
       delegate.weight
 
     override def height: Int =
       delegate.height
 
-    override def newlineCount: Int =
+    override val newlineCount: Int =
       delegate.newlineCount
 
-    override def lastLineLength: Int =
+    override val lastLineLength: Int =
       delegate.lastLineLength
 
-    override def endsWithNewline: Boolean =
+    override val endsWithNewline: Boolean =
       delegate.endsWithNewline
 
     override def isWeightBalanced: Boolean =
@@ -685,20 +728,29 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     override def collect(): String =
       throw AssertionError("line traversal should not materialise this branch")
 
-  final case class NonCollectingIndexedRope(delegate: Rope)(using Balance) extends Rope:
+  object ExplodingIndexRope:
+    def apply(delegate: Rope)(using Balance): ExplodingIndexRope = new ExplodingIndexRope(delegate)
+
+  // See `ExplodingIndexRope` above for why this extends `Leaf` rather than `Rope`, and for the guarantee that
+  // narrows as a result. `search` still genuinely exercises indexed access below (it calls the virtual `index`
+  // override one character at a time, which pattern matching cannot bypass), but `searchAll`/`linesFrom`/
+  // `linesIteratorFrom` route through `Rope`'s private `chunksInRange`, which pattern-matches `case Leaf(value)`
+  // directly -- unavoidable once this must satisfy `Leaf` -- so those three are overridden here to forward straight
+  // to `delegate` rather than silently falling through the Leaf fast path with a materialised value.
+  final class NonCollectingIndexedRope(delegate: Rope)(using Balance) extends Leaf(delegate.collect()):
     override def weight: Int =
       delegate.weight
 
     override def height: Int =
       delegate.height
 
-    override def newlineCount: Int =
+    override val newlineCount: Int =
       delegate.newlineCount
 
-    override def lastLineLength: Int =
+    override val lastLineLength: Int =
       delegate.lastLineLength
 
-    override def endsWithNewline: Boolean =
+    override val endsWithNewline: Boolean =
       delegate.endsWithNewline
 
     override def isWeightBalanced: Boolean =
@@ -716,8 +768,20 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     override def index(i: Int): Option[Char] =
       delegate.index(i)
 
+    override def searchAll(term: String): List[Int] =
+      delegate.searchAll(term)
+
+    override def linesFrom(lineIndex: Int, maxLines: Int): Vector[String] =
+      delegate.linesFrom(lineIndex, maxLines)
+
+    override def linesIteratorFrom(lineIndex: Int): Iterator[(Int, String)] =
+      delegate.linesIteratorFrom(lineIndex)
+
     override def collect(): String =
       throw AssertionError("search should not materialise the whole rope")
+
+  object NonCollectingIndexedRope:
+    def apply(delegate: Rope)(using Balance): NonCollectingIndexedRope = new NonCollectingIndexedRope(delegate)
 
   final class IndexForbiddenLeaf(value: String)(using Balance) extends Leaf(value):
     override def index(i: Int): Option[Char] =

@@ -23,25 +23,25 @@ class RopeDiffSpec extends AnyFlatSpec with Matchers:
 
   it should "report the exact single-character range for a mid-document insert" in {
     val before = Rope("helloworld")
-    val after  = before.insert(5, "X")
+    val after  = before.insert(5, "X").getOrElse(fail("expected insert to succeed"))
     RopeDiff.changedOffsetRange(before, after) shouldBe Some((5, 6))
   }
 
   it should "report only the appended range when text is added at the end" in {
     val before = Rope("hello")
-    val after  = before.insert(before.weight, " world")
+    val after  = before.insert(before.weight, " world").getOrElse(fail("expected insert to succeed"))
     RopeDiff.changedOffsetRange(before, after) shouldBe Some((5, 11))
   }
 
   it should "report only the prepended range when text is added at the start" in {
     val before = Rope("world")
-    val after  = before.insert(0, "hello ")
+    val after  = before.insert(0, "hello ").getOrElse(fail("expected insert to succeed"))
     RopeDiff.changedOffsetRange(before, after) shouldBe Some((0, 6))
   }
 
   it should "report an empty range at the deletion point for a mid-document delete" in {
     val before = Rope("helloXworld")
-    val after  = before.delete(5, 6)
+    val after  = before.delete(5, 6).getOrElse(fail("expected delete to succeed"))
     RopeDiff.changedOffsetRange(before, after) shouldBe Some((5, 5))
   }
 
@@ -67,7 +67,7 @@ class RopeDiffSpec extends AnyFlatSpec with Matchers:
     // Balance.default.leafChunkSize is 1000: growing a leaf past that forces Leaf.rebalance to rebuild via Rope.apply,
     // constructing fresh Leaf objects for the whole subtree even though only one character actually changed.
     val before = Rope("a" * 999)
-    val after  = before.insert(500, "X")
+    val after  = before.insert(500, "X").getOrElse(fail("expected insert to succeed"))
 
     after.weight shouldBe 1000
     val range = RopeDiff.changedOffsetRange(before, after)
@@ -81,9 +81,11 @@ class RopeDiffSpec extends AnyFlatSpec with Matchers:
 
   it should "cover a delete that spans a rebalance-triggering edit" in {
     val beforeText = "x" * 1250
-    val before     = (1 to 50).foldLeft(Rope(""))((rope, _) => rope.insert(rope.weight, "x" * 25))
-    val after      = before.delete(100, 900)
-    val afterText  = beforeText.take(100) + beforeText.drop(900)
+    val before = (1 to 50).foldLeft(Rope(""))((rope, _) =>
+      rope.insert(rope.weight, "x" * 25).getOrElse(fail("expected insert to succeed"))
+    )
+    val after     = before.delete(100, 900).getOrElse(fail("expected delete to succeed"))
+    val afterText = beforeText.take(100) + beforeText.drop(900)
 
     val range = RopeDiff.changedOffsetRange(before, after)
     range shouldBe defined

@@ -11,6 +11,19 @@ object EditorEventReducer:
   private val TabInsertion = "    "
   private val OriginCursor = CursorPosition(0, 0)
 
+  /** Every call site in this file computes `start`/`end`/`index` from `content` itself (a cursor offset, a selection
+    * boundary, a grapheme boundary, an LSP/tracked edit range) immediately before calling `insert`/`delete`, so an
+    * out-of-range result would mean that coordinate computation is already broken, not that this particular edit was
+    * unusual. No-op'ing back to the unedited content is the deliberate policy here: it keeps a latent coordinate bug
+    * from crashing the editor on every keystroke, at the cost of that one edit silently not applying if the invariant
+    * is ever violated.
+    */
+  private def insertOrUnchanged(content: Rope, index: Int, text: String): Rope =
+    content.insert(index, text).getOrElse(content)
+
+  private def deleteOrUnchanged(content: Rope, start: Int, end: Int): Rope =
+    content.delete(start, end).getOrElse(content)
+
   def reducer(paneId: PaneId)(using balance: com.serenity.rope.Balance): Reducer[TextEntryEvent] =
     Reducer.instance((event, state) => reduce(event, paneId, state))
 
@@ -215,7 +228,7 @@ object EditorEventReducer:
     val offset = lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
     backwardGraphemeDeletionRange(buffer.document.content, offset).map {
       case (start, end) =>
-        val newContent = buffer.document.content.delete(start, end)
+        val newContent = deleteOrUnchanged(buffer.document.content, start, end)
         val newCursor  = offsetToCursorPosition(newContent, start)
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
@@ -243,7 +256,7 @@ object EditorEventReducer:
     val offset = lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
     forwardGraphemeDeletionRange(buffer.document.content, offset).map {
       case (start, end) =>
-        val newContent = buffer.document.content.delete(start, end)
+        val newContent = deleteOrUnchanged(buffer.document.content, start, end)
         val newCursor  = offsetToCursorPosition(newContent, start)
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
@@ -821,7 +834,7 @@ object EditorEventReducer:
       }
       val updatedContent = edits
         .sortBy(edit => (-edit.start, -edit.end))
-        .foldLeft(buffer.document.content)((content, edit) => content.insert(edit.start, edit.insertedText))
+        .foldLeft(buffer.document.content)((content, edit) => insertOrUnchanged(content, edit.start, edit.insertedText))
       val finalCursors = buffer.editing.cursors.map { cursor =>
         if targetSet.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
         else cursor
@@ -864,7 +877,7 @@ object EditorEventReducer:
       }
       val updatedContent = edits
         .sortBy(edit => (-edit.start, -edit.end))
-        .foldLeft(buffer.document.content)((content, edit) => content.delete(edit.start, edit.end))
+        .foldLeft(buffer.document.content)((content, edit) => deleteOrUnchanged(content, edit.start, edit.end))
       val finalCursors = buffer.editing.cursors
         .map(cursor => cursor.copy(column = math.max(0, cursor.column - removals.getOrElse(cursor.line, 0))))
         .distinct
@@ -914,7 +927,7 @@ object EditorEventReducer:
         .sortBy { case (_, start, end) => (-start, -end) }
         .foldLeft(buffer.document.content) {
           case (content, (_, start, end)) =>
-            content.delete(start, end)
+            deleteOrUnchanged(content, start, end)
         }
       val edits = lineEdits.zipWithIndex.map {
         case ((_, start, end), index) =>
@@ -960,8 +973,8 @@ object EditorEventReducer:
       val (updatedContent, updatedRichTextDocument) =
         sortedEdits.foldLeft((buffer.document.content, buffer.richText.richTextDocument)) {
           case ((content, document), edit) =>
-            val deleted     = content.delete(edit.start, edit.end)
-            val nextContent = deleted.insert(edit.start, edit.insertedText)
+            val deleted     = deleteOrUnchanged(content, edit.start, edit.end)
+            val nextContent = insertOrUnchanged(deleted, edit.start, edit.insertedText)
             val nextDocument = richTextDocumentAfterEdit(
               buffer.copy(
                 document = buffer.document.copy(content = content),
@@ -1019,7 +1032,7 @@ object EditorEventReducer:
         .sortBy { case (start, end) => (-start, -end) }
         .foldLeft(buffer.document.content) {
           case (content, (start, end)) =>
-            content.delete(start, end)
+            deleteOrUnchanged(content, start, end)
         }
       val mergedEdits = mergedRanges.zipWithIndex.map {
         case ((start, end), index) =>
@@ -1268,7 +1281,7 @@ object EditorEventReducer:
     endOffset: Int,
     cursorOffset: Int
   ): (Buffer, MultiCursorEdit) =
-    val newContent = buffer.document.content.delete(startOffset, endOffset)
+    val newContent = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
     val newCursor  = offsetToCursorPosition(newContent, cursorOffset)
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
@@ -1696,7 +1709,7 @@ object EditorEventReducer:
         val startOffset = selectionStartOffset(selection, buffer.document.content)
         val endOffset   = selectionEndOffset(selection, buffer.document.content)
         (
-          buffer.document.content.delete(startOffset, endOffset),
+          deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
           offsetToCursorPosition(buffer.document.content, startOffset),
           startOffset,
           endOffset
@@ -1714,7 +1727,7 @@ object EditorEventReducer:
           startOffset
         )
 
-    val newContent      = baseContent.insert(startOffset, insertedText)
+    val newContent      = insertOrUnchanged(baseContent, startOffset, insertedText)
     val newCursor       = cursorAfterInsertion(insertionStart, insertedText)
     val replacementEdit = MultiCursorEdit(0, startOffset, endOffset, insertedText)
 
@@ -1749,7 +1762,7 @@ object EditorEventReducer:
   ): (Buffer, MultiCursorEdit) =
     val startOffset = selectionStartOffset(selection, buffer.document.content)
     val endOffset   = selectionEndOffset(selection, buffer.document.content)
-    val newContent  = buffer.document.content.delete(startOffset, endOffset)
+    val newContent  = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
     val newCursor   = offsetToCursorPosition(newContent, startOffset)
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
@@ -1833,7 +1846,11 @@ object EditorEventReducer:
           .filter(_ => insertedText.nonEmpty)
           .map { style =>
             val updatedContent =
-              buffer.document.content.delete(startOffset, endOffset).insert(startOffset, insertedText)
+              insertOrUnchanged(
+                deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
+                startOffset,
+                insertedText
+              )
             updatedDocument
               .updateInlineStyle(
                 RichTextRange(
