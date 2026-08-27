@@ -41,8 +41,6 @@ sealed trait Rope(using balance: Balance):
           case Node(left, right)            => go(left :: right :: rest, acc)
           case Leaf(value) if value.isEmpty => go(rest, acc)
           case Leaf(value)                  => go(rest, value :: acc)
-          case other if other.weight == 0   => go(rest, acc)
-          case other                        => go(rest, other.collect() :: acc)
 
     go(List(this), Nil).reverse.toVector
 
@@ -152,19 +150,6 @@ sealed trait Rope(using balance: Balance):
               val chunkStart = math.max(0, start - baseOffset)
               val chunkEnd   = math.min(value.length, end - baseOffset)
               Some((baseOffset + chunkStart, value.substring(chunkStart, chunkEnd)) -> tail)
-            case (other, baseOffset) :: tail =>
-              val chunkStart = math.max(0, start - baseOffset)
-              val chunkEnd   = math.min(other.weight, end - baseOffset)
-              val value      = new StringBuilder(chunkEnd - chunkStart)
-
-              @tailrec
-              def appendIndexed(index: Int): Unit =
-                if index < chunkEnd then
-                  other.index(index).foreach(value.append)
-                  appendIndexed(index + 1)
-
-              appendIndexed(chunkStart)
-              Some((baseOffset + chunkStart, value.toString) -> tail)
 
         nextChunk(stack)
       }
@@ -264,8 +249,6 @@ sealed trait Rope(using balance: Balance):
         else
           if node.left.weight > 0 && !node.left.endsWithNewline then appendLine(node.left, lineIndex, value)
           appendLine(node.right, 0, value)
-      case other =>
-        appendIndexedLine(other, lineIndex, value)
 
   private def appendLeafLine(leafValue: String, lineIndex: Int, value: StringBuilder): Unit =
     @tailrec
@@ -278,21 +261,6 @@ sealed trait Rope(using balance: Balance):
             loop(offset + 1, currentLine)
         else if char == '\n' then loop(offset + 1, currentLine + 1)
         else loop(offset + 1, currentLine)
-
-    loop(0, 0)
-
-  private def appendIndexedLine(rope: Rope, lineIndex: Int, value: StringBuilder): Unit =
-    @tailrec
-    def loop(offset: Int, currentLine: Int): Unit =
-      if offset < rope.weight then
-        rope.index(offset) match
-          case Some('\n') if currentLine == lineIndex => ()
-          case Some('\n')                             => loop(offset + 1, currentLine + 1)
-          case Some(char) if currentLine == lineIndex =>
-            value.append(char)
-            loop(offset + 1, currentLine)
-          case Some(_) => loop(offset + 1, currentLine)
-          case None    => ()
 
     loop(0, 0)
 
@@ -373,8 +341,6 @@ sealed trait Rope(using balance: Balance):
           lineColumnToOffsetIn(node.right, 0, column, baseOffset + node.left.weight)
         else if column <= node.left.lastLineLength then lineColumnToOffsetIn(node.left, line, column, baseOffset)
         else lineColumnToOffsetIn(node.right, 0, column - node.left.lastLineLength, baseOffset + node.left.weight)
-      case other =>
-        indexedLineColumnToOffset(other, line, column, baseOffset)
 
   private def leafLineColumnToOffset(value: String, line: Int, column: Int, baseOffset: Int): Int =
     @tailrec
@@ -387,22 +353,6 @@ sealed trait Rope(using balance: Balance):
         else if char == '\n' then loop(offset + 1, currentLine + 1, 0)
         else if currentLine == line then loop(offset + 1, currentLine, currentColumn + 1)
         else loop(offset + 1, currentLine, currentColumn)
-
-    loop(0, 0, 0)
-
-  private def indexedLineColumnToOffset(rope: Rope, line: Int, column: Int, baseOffset: Int): Int =
-    @tailrec
-    def loop(offset: Int, currentLine: Int, currentColumn: Int): Int =
-      if offset >= rope.weight then baseOffset + rope.weight
-      else
-        rope.index(offset) match
-          case None => baseOffset + rope.weight
-          case Some(char) =>
-            if currentLine == line && currentColumn >= column then baseOffset + offset
-            else if currentLine == line && char == '\n' then baseOffset + offset
-            else if char == '\n' then loop(offset + 1, currentLine + 1, 0)
-            else if currentLine == line then loop(offset + 1, currentLine, currentColumn + 1)
-            else loop(offset + 1, currentLine, currentColumn)
 
     loop(0, 0, 0)
 
@@ -422,8 +372,6 @@ sealed trait Rope(using balance: Balance):
           else
             val (rightBaseLine, rightBaseColumn) = advancePosition(node.left, baseLine, baseColumn)
             offsetToLineColumnIn(node.right, offset - node.left.weight, rightBaseLine, rightBaseColumn)
-        case other =>
-          indexedOffsetToLineColumn(other, offset, baseLine, baseColumn)
 
   private def advancePosition(rope: Rope, baseLine: Int, baseColumn: Int): (Int, Int) =
     if rope.weight == 0 then (baseLine, baseColumn)
@@ -441,23 +389,6 @@ sealed trait Rope(using balance: Balance):
       if index >= offset || index >= value.length then (line, column)
       else if value.charAt(index) == '\n' then loop(index + 1, line + 1, 0)
       else loop(index + 1, line, column + 1)
-
-    loop(0, baseLine, baseColumn)
-
-  private def indexedOffsetToLineColumn(
-    rope: Rope,
-    offset: Int,
-    baseLine: Int,
-    baseColumn: Int
-  ): (Int, Int) =
-    @tailrec
-    def loop(index: Int, line: Int, column: Int): (Int, Int) =
-      if index >= offset || index >= rope.weight then (line, column)
-      else
-        rope.index(index) match
-          case Some('\n') => loop(index + 1, line + 1, 0)
-          case Some(_)    => loop(index + 1, line, column + 1)
-          case None       => (line, column)
 
     loop(0, baseLine, baseColumn)
 
