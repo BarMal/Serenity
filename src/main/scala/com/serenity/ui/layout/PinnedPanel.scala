@@ -2,10 +2,17 @@ package com.serenity.ui.layout
 
 import java.nio.file.Path
 
-import com.serenity.state.models.BufferId
+import com.serenity.state.models.{BufferId, SurfaceId}
 
 enum PanelPosition:
   case Left, Right, Bottom, Top
+
+/** Identifies which pinned panel a panel operation addresses -- either a specific surface, or "whichever panel is
+  * pinned at this position" (see `PanelStateReducer`'s per-operation resolution for what "whichever" means there).
+  */
+enum PanelTarget:
+  case ById(surfaceId: SurfaceId)
+  case ByPosition(position: PanelPosition)
 
 final case class PinnedPanel(
     position: PanelPosition,

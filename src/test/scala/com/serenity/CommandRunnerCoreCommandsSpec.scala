@@ -1834,7 +1834,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "focus the left panel from the command runner" in {
     val stateManager = createStateManager()
-    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync().toString, List("src")).unsafeRunSync()
+    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "focus-left-panel", "focus-left-panel")
 
@@ -1848,7 +1848,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "unpin the left panel from the command runner" in {
     val stateManager = createStateManager()
-    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync().toString, List("src")).unsafeRunSync()
+    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "unpin-left-panel", "unpin-left-panel")
 

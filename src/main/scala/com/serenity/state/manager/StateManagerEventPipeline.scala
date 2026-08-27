@@ -1947,7 +1947,7 @@ final private[manager] class StateManagerEventPipeline(
       LayoutEngine.pinnedPanelResizeFromDrag(state, viewportSize, drag.col, drag.row)
     ) match
       case Some(LayoutEngine.PinnedPanelDragResize(position, size)) =>
-        resizePinnedPanel(position, size).as(true)
+        resizePinnedPanel(PanelTarget.ByPosition(position), size).as(true)
       case None =>
         cats.effect.IO.pure(false)
 

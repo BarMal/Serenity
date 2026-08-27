@@ -588,7 +588,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // When: Open a file (mocked file system operation)
     val fileContent = "This is file content\nWith multiple lines\nAnd some text"
     val bufferId    = stateManager.createBuffer(fileContent).unsafeRunSync()
-    stateManager.setBufferFilePath(bufferId, "/path/to/file.txt").unsafeRunSync()
+    stateManager.setBufferFilePath(bufferId, java.nio.file.Path.of("/path/to/file.txt")).unsafeRunSync()
 
     // Then: Buffer should contain file content and not be dirty (stub doesn't set filePath yet)
     val state  = stateManager.getCurrentState.unsafeRunSync()
@@ -601,7 +601,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     // TODO: Implement file save operations - stubs will log but not actually work
     // Given: Modified buffer
     val bufferId = stateManager.createBuffer("Original content").unsafeRunSync()
-    stateManager.setBufferFilePath(bufferId, "/path/to/save.txt").unsafeRunSync()
+    stateManager.setBufferFilePath(bufferId, java.nio.file.Path.of("/path/to/save.txt")).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val paneId = state.persisted.layout.editorPanes.keys.head

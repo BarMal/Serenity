@@ -20,7 +20,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, ModalEventReducer}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{PanelContent, PanelPosition, PeekContent, WorkspaceNodeId}
+import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent, WorkspaceNodeId}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
@@ -327,11 +327,11 @@ final private[manager] class StateManagerFilePersistence(
 private[manager] trait EffectSurfacePort:
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
-  def unpinPanel(position: PanelPosition): IO[Unit]
-  def expandPinnedPanel(position: PanelPosition): IO[Unit]
+  def unpinPanel(target: PanelTarget): IO[Unit]
+  def expandPinnedPanel(target: PanelTarget): IO[Unit]
   def collapseExpandedPanel(): IO[Unit]
-  def switchToPinnedPanel(position: PanelPosition): IO[Unit]
-  def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
+  def switchToPinnedPanel(target: PanelTarget): IO[Unit]
+  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit]
 
 /** File infrastructure used by command effects. */
 private[manager] trait EffectFilePort:
@@ -430,7 +430,7 @@ private[manager] trait EventUiPort:
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig]
 
-  def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit]
+  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit]
 
 /** Explicit composition boundary for the StateManager capabilities. */
 private[manager] class StateManagerComposition(
@@ -517,12 +517,12 @@ private[manager] class StateManagerComposition(
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = surfaces.showPeek(content, at)
     def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
       surfaces.pinPanel(content, position, size)
-    def unpinPanel(position: PanelPosition): IO[Unit]          = surfaces.unpinPanel(position)
-    def expandPinnedPanel(position: PanelPosition): IO[Unit]   = surfaces.expandPinnedPanel(position)
-    def collapseExpandedPanel(): IO[Unit]                      = surfaces.collapseExpandedPanel()
-    def switchToPinnedPanel(position: PanelPosition): IO[Unit] = surfaces.switchToPinnedPanel(position)
-    def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
-      surfaces.resizePinnedPanel(position, newSize)
+    def unpinPanel(target: PanelTarget): IO[Unit]          = surfaces.unpinPanel(target)
+    def expandPinnedPanel(target: PanelTarget): IO[Unit]   = surfaces.expandPinnedPanel(target)
+    def collapseExpandedPanel(): IO[Unit]                  = surfaces.collapseExpandedPanel()
+    def switchToPinnedPanel(target: PanelTarget): IO[Unit] = surfaces.switchToPinnedPanel(target)
+    def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
+      surfaces.resizePinnedPanel(target, newSize)
 
   private val effectFilePort: EffectFilePort = new EffectFilePort:
     val fileDialog                                             = runtimeFileDialog
@@ -654,8 +654,8 @@ private[manager] class StateManagerComposition(
         update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
       ): IO[com.serenity.config.AppConfig] =
         effects.updateConfig(update)
-      def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
-        surfaces.resizePinnedPanel(position, newSize)
+      def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
+        surfaces.resizePinnedPanel(target, newSize)
 
   private val workflow = new StateManagerWorkflowCapability(workflowPort)
 
@@ -713,28 +713,21 @@ private[manager] class StateManagerComposition(
   def peekToPin(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.peekToPin(position))
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
     runSurfaceOperation(surfaces.pinPanel(content, position, size))
-  def unpinPanel(surfaceId: SurfaceId): IO[Unit]    = runSurfaceOperation(surfaces.unpinPanel(surfaceId))
-  def unpinPanel(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.unpinPanel(position))
+  def unpinPanel(target: PanelTarget): IO[Unit] = runSurfaceOperation(surfaces.unpinPanel(target))
   def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit] =
     runSurfaceOperation(surfaces.movePinnedPanel(surfaceId, position))
-  def expandPinnedPanel(surfaceId: SurfaceId): IO[Unit] =
-    runSurfaceOperation(surfaces.expandPinnedPanel(surfaceId))
-  def expandPinnedPanel(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.expandPinnedPanel(position))
-  def collapseExpandedPanel(): IO[Unit]                    = runSurfaceOperation(surfaces.collapseExpandedPanel())
-  def showModal(modal: Modal): IO[Unit]                    = runSurfaceOperation(surfaces.showModal(modal))
-  def dismissModal(): IO[Unit]                             = runSurfaceOperation(surfaces.dismissModal())
-  def switchToPinnedPanel(position: PanelPosition): IO[Unit] =
-    runSurfaceOperation(surfaces.switchToPinnedPanel(position))
-  def switchToPinnedPanel(surfaceId: SurfaceId): IO[Unit] =
-    runSurfaceOperation(surfaces.switchToPinnedPanel(surfaceId))
-  def loadDirectoryTree(path: String, files: List[String]): IO[Unit] =
+  def expandPinnedPanel(target: PanelTarget): IO[Unit] = runSurfaceOperation(surfaces.expandPinnedPanel(target))
+  def collapseExpandedPanel(): IO[Unit]                = runSurfaceOperation(surfaces.collapseExpandedPanel())
+  def showModal(modal: Modal): IO[Unit]                = runSurfaceOperation(surfaces.showModal(modal))
+  def dismissModal(): IO[Unit]                         = runSurfaceOperation(surfaces.dismissModal())
+  def switchToPinnedPanel(target: PanelTarget): IO[Unit] =
+    runSurfaceOperation(surfaces.switchToPinnedPanel(target))
+  def loadDirectoryTree(path: Path, files: List[String]): IO[Unit] =
     runSurfaceOperation(surfaces.loadDirectoryTree(path, files))
-  def selectFileInExplorer(filePath: String): IO[Unit] = runSurfaceOperation(surfaces.selectFileInExplorer(filePath))
-  def resizePinnedPanel(position: PanelPosition, newSize: Int): IO[Unit] =
-    runSurfaceOperation(surfaces.resizePinnedPanel(position, newSize))
-  def resizePinnedPanel(surfaceId: SurfaceId, newSize: Int): IO[Unit] =
-    runSurfaceOperation(surfaces.resizePinnedPanel(surfaceId, newSize))
-  def dragFileToDirectory(sourceFile: String, targetDir: String): IO[Unit] =
+  def selectFileInExplorer(filePath: Path): IO[Unit] = runSurfaceOperation(surfaces.selectFileInExplorer(filePath))
+  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
+    runSurfaceOperation(surfaces.resizePinnedPanel(target, newSize))
+  def dragFileToDirectory(sourceFile: Path, targetDir: Path): IO[Unit] =
     runSurfaceOperation(surfaces.dragFileToDirectory(sourceFile, targetDir))
 
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =

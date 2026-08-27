@@ -638,11 +638,11 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
         updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
       case CommandIntent.FocusPanel(position) =>
-        switchToPinnedPanel(position)
+        switchToPinnedPanel(PanelTarget.ByPosition(position))
       case CommandIntent.UnpinPanel(position) =>
-        unpinPanel(position)
+        unpinPanel(PanelTarget.ByPosition(position))
       case CommandIntent.ExpandPanel(position) =>
-        expandPinnedPanel(position)
+        expandPinnedPanel(PanelTarget.ByPosition(position))
       case CommandIntent.CollapseExpandedPanel =>
         collapseExpandedPanel()
       case CommandIntent.FormatCurrentFile =>
