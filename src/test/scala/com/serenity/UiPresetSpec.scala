@@ -196,6 +196,20 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       "plain text default; dark; smooth motion; fade text reveal; frosted material; frosted background; comfortable density; SansSerif 12pt prose; 2 editor panes"
   }
 
+  it should "name every pinnable panel content kind in its preview summary" in {
+    val panel = UiPreset.PinnedPanel
+      .fromPanelContent(PanelContent.Comments(Nil), PanelPosition.Left, 28)
+      .getOrElse(fail("comments should be capturable"))
+    val preset = UiPreset(
+      name = "Review",
+      config = AppConfig.default,
+      themeName = Theme.dark.name,
+      pinnedPanels = List(panel)
+    )
+
+    UiPreset.Preview.fromPreset(preset).hint should include("Left comments 28")
+  }
+
   it should "patch appearance fields without replacing preset layout snapshots" in {
     val panel = UiPreset.PinnedPanel
       .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)

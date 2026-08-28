@@ -278,6 +278,7 @@ object UiPreset:
       case PanelContentSnapshot.DirectoryTree(_, _, _) => "files"
       case PanelContentSnapshot.Terminal(_, _)         => "terminal"
       case PanelContentSnapshot.Outline(_)             => "outline"
+      case PanelContentSnapshot.Comments(_)            => "comments"
       case PanelContentSnapshot.Diagnostics(_)         => "diagnostics"
       case PanelContentSnapshot.MarkdownPreview(_, _)  => "markdown preview"
 
