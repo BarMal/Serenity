@@ -185,7 +185,9 @@ object StateManager:
     uiPresetStore: UiPresetStore = UiPresetStore.default,
     windowSizeProvider: IO[Option[PreferredWindowSize]] = IO.pure(None),
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit,
-    fileDialog: Option[FileDialog] = None
+    fileDialog: Option[FileDialog] = None,
+    markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability =
+      com.serenity.ui.tui.MarkdownPreviewWindowAvailability.Unavailable
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     for
@@ -223,7 +225,8 @@ object StateManager:
         uiPresetStore = uiPresetStore,
         windowSizeProvider = windowSizeProvider,
         onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
-        fileDialog = fileDialog
+        fileDialog = fileDialog,
+        markdownPreviewWindow = markdownPreviewWindow
       )
       operations <- StateManagerOperationBoundary.create(
         stateRef,
@@ -289,6 +292,7 @@ object StateManager:
       runtime.uiPresetStore,
       runtime.windowSizeProvider,
       runtime.fileDialog,
+      runtime.markdownPreviewWindow,
       runtime.fileManager,
       runtime.sessionManager,
       runtime.sessionPersistence,
