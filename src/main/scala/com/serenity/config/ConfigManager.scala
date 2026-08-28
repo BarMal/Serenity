@@ -507,18 +507,6 @@ object ConfigManager:
   def saveConfigIO(config: AppConfig, configPath: String): IO[Either[ConfigError, Unit]] =
     saveConfigIO(config, Paths.get(configPath))
 
-  /** Get configuration preset by name */
-  def getPreset(name: String): Option[AppConfig] =
-    name.toLowerCase match
-      case "none"   => Some(Presets.none)
-      case "quick"  => Some(Presets.quick)
-      case "smooth" => Some(Presets.smooth)
-      case "subtle" => Some(Presets.subtle)
-      case _        => None
-
-  /** List available preset names */
-  def availablePresets: List[String] = List("none", "quick", "smooth", "subtle")
-
   private def inspectConfig(source: Config): ConfigMigrationReport =
     val entries = hoconEntries(source)
     val deprecatedEntries = entries
@@ -828,85 +816,3 @@ object ConfigManager:
           ).flatten
       }
       .mkString("\n")
-
-  /** Create a sample configuration file */
-  def createSampleConfig(path: String): Boolean =
-    try
-      val sampleConfig = """# Serenity Editor Configuration
-                          |# This is a sample configuration file
-                          |config.version = 1
-                          |
-                          |
-                          |# Character animation style: none, quick, smooth, subtle
-                          |# - none: No character animations (best performance)
-                          |# - quick: Fast 3-step fade-in over 150ms
-                          |# - smooth: Smooth 5-step fade-in over 200ms  
-                          |# - subtle: Minimal 2-step fade-in over 100ms
-                          |character.animation = none
-                          |
-                          |# Syntax highlighting: true, false
-                          |syntax.highlighting = false
-                          |
-                          |# Font configuration
-                           |font.code.family = Monaspace Neon (Bundled)
-                           |font.text.family = SansSerif
-                           |font.ui.family = SansSerif
-                           |font.code.size = 12.0
-                           |font.text.size = 12.0
-                           |font.ui.size = 12.0
-                           |font.scale.mode = auto
-                           |font.text_scale = 1.0
-                           |font.code.ligatures = true
-                           |font.text.ligatures = true
-                           |font.ui.ligatures = false
-                          |
-                          |# Cursor colour overrides. Leave empty to use the active theme cursor.
-                          |cursor.active.color =
-                          |cursor.inactive.color =
-                          |cursor.info_bar = off
-                          |
-                          |# Interface density: compact, comfortable, spacious
-                          |interface.density = comfortable
-                          |render.fps = 60
-                          |render.damage_granularity = rows
-                          |
-                          |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
-                          |ui.material = frosted
-                          |ui.motion = smooth
-                          |ui.motion.speed_scale = 1.0
-                          |ui.motion.editor_text.speed_scale = 1.0
-                          |ui.motion.command_runner.speed_scale = 1.0
-                          |ui.motion.ui.speed_scale = 1.0
-                          |ui.motion.command_runner = smooth
-                          |ui.motion.ui = smooth
-                          |ui.motion.editor_text = fade
-                          |ui.motion.panel_open = outline
-                          |ui.motion.panel_close = fade
-                          |
-                          |# Preferred desktop window size. Leave empty to use the default.
-                          |window.preferred.width =
-                          |window.preferred.height =
-                          |
-                          |# Spell-checking for prose buffers
-                          |spellcheck.enabled = false
-                          |spellcheck.languages = en
-                          |spellcheck.dictionary_paths =
-                          |spellcheck.words =
-                          |
-                          |# Hotkey overrides
-                          |hotkey.command_palette = ctrl+p
-                          |hotkey.file_search = ctrl+shift+f
-                          |
-                          |# Focused keymap overrides
-                          |keymap.editor.page_down = pagedown
-                          |keymap.editor.extend_selection_left = shift+left
-                          |keymap.editor.extend_selection_right = shift+right
-                          |keymap.editor.extend_selection_up = shift+up
-                          |keymap.editor.extend_selection_down = shift+down
-                          |keymap.command_runner.submit = enter
-                          |keymap.modal.dismiss = escape
-                          |""".stripMargin
-
-      AtomicFileWriter.writeBytesBlocking(Paths.get(path), sampleConfig.getBytes(StandardCharsets.UTF_8))
-      true
-    catch case _: Exception => false

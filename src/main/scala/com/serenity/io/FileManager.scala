@@ -62,35 +62,8 @@ class FileManager(using balance: Balance):
       case Some(path) => saveBuffer(buffer, path)
       case None       => IO.raiseError(new RuntimeException("Buffer has no file path - use Save As"))
 
-  /** Check if buffer has unsaved changes */
-  def hasUnsavedChanges(buffer: Buffer): Boolean =
-    buffer.document.isDirty
-
   /** List files and directories in `directory`. */
   def listDirectory(directory: Path): IO[List[FileEntry]] = FileBrowser.listDirectory(directory)
-
-  /** Create a new empty buffer */
-  def createNewBuffer(bufferId: BufferId): IO[Buffer] =
-    IO.pure(
-      Buffer(
-        id = bufferId,
-        document = com.serenity.state.models.Document(content = com.serenity.rope.Rope.empty)
-      )
-    )
-
-  /** Check if file exists */
-  def fileExists(path: Path): IO[Boolean] =
-    IO.blocking(FileUtils.isReadableFile(path))
-
-  /** Get file info */
-  def getFileInfo(path: Path): IO[Option[FileInfo]] =
-    if FileUtils.isReadableFile(path) then
-      for
-        size         <- FileUtils.getFileSize(path)
-        lastModified <- FileUtils.getLastModified(path)
-        fileType = FileUtils.detectFileType(path)
-      yield Some(FileInfo(path, size, lastModified, fileType))
-    else IO.pure(None)
 
   private def bufferFromContent(bufferId: BufferId, path: Path, content: String): Buffer =
     Buffer(
@@ -191,10 +164,3 @@ class FileManager(using balance: Balance):
     IO.unlessA(operationSupported(capabilities))(
       IO.raiseError(new RuntimeException(s"Unsupported document format for $operationName: ${fileType.displayName}"))
     )
-
-final case class FileInfo(
-    path: Path,
-    size: Long,
-    lastModified: Long,
-    fileType: FileType
-)
