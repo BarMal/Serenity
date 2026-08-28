@@ -621,7 +621,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
             state.persisted.config
               .withUiElementGap(0.5)
               .withFontConfig(
-                state.persisted.config.fontConfig.copy(
+                state.persisted.config.editorConfig.fontConfig.copy(
                   codeFontFamily = Font.MONOSPACED,
                   fontSize = 24.0f,
                   uiFontFamily = Font.SANS_SERIF,

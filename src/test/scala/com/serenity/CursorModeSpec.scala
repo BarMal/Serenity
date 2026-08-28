@@ -69,11 +69,11 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   it should "leave other fields unchanged when changing cursorMode" in {
     val config = AppConfig(
-      characterAnimation = AnimationConfig.quick,
+      editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
       showLineNumbers = false,
       blurRadius = 0.5f
     ).withCursorMode(CursorMode.Breathe)
-    config.characterAnimation shouldBe AnimationConfig.quick
+    config.editorConfig.characterAnimation shouldBe AnimationConfig.quick
     config.showLineNumbers shouldBe false
     config.blurRadius shouldBe 0.5f
   }

@@ -1953,9 +1953,12 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
     val cursor       = buffer.editing.cursors.head
-    val font         = FontLoader.previewTextFont(updatedState.persisted.config.fontConfig)
+    val font         = FontLoader.previewTextFont(updatedState.persisted.config.editorConfig.fontConfig)
     val wrapPx =
-      TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, updatedState.persisted.config.fontConfig)
+      TextLayoutSnapshot.gridWrapWidthPx(
+        buffer.viewport.visibleColumns,
+        updatedState.persisted.config.editorConfig.fontConfig
+      )
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
 
     cursor shouldBe CursorPosition(0, needleColumn)

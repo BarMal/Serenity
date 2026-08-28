@@ -1804,7 +1804,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    updatedState.persisted.config.fontConfig.textFontFamily shouldBe Font.SERIF
+    updatedState.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
     updatedState.persisted.config.showLineNumbers shouldBe false
     updatedState.persisted.config.showGutter shouldBe false
     updatedState.persisted.config.showPaneHeaders shouldBe false

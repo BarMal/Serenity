@@ -91,7 +91,9 @@ object ConfigManager:
             case "subtle" =>
               config.withCharacterAnimation(AnimationConfig.subtle.get)
             case "custom" =>
-              config.withCharacterAnimation(config.characterAnimation.getOrElse(AnimationConfig.smooth.get))
+              config.withCharacterAnimation(
+                config.editorConfig.characterAnimation.getOrElse(AnimationConfig.smooth.get)
+              )
             case _ =>
               config // Unknown value, keep current config
         case "character.animation.duration_ms" | "character.animation.duration.ms" |
@@ -100,7 +102,7 @@ object ConfigManager:
             .filter(_ > 0)
             .map(ms =>
               config.withCharacterAnimation(
-                config.characterAnimation
+                config.editorConfig.characterAnimation
                   .getOrElse(AnimationConfig.smooth.get)
                   .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
               )
@@ -111,7 +113,7 @@ object ConfigManager:
             .filter(_ > 0)
             .map(steps =>
               config.withCharacterAnimation(
-                config.characterAnimation
+                config.editorConfig.characterAnimation
                   .getOrElse(AnimationConfig.smooth.get)
                   .copy(steps = steps)
               )
@@ -120,43 +122,47 @@ object ConfigManager:
         case key if LanguageToolsConfig.Schema.handles(key) =>
           LanguageToolsConfig.Schema.parse(config, key, value).getOrElse(config)
         case "font.code.family" | "font_code_family" =>
-          config.withFontConfig(config.fontConfig.copy(codeFontFamily = value.trim))
+          config.withFontConfig(config.editorConfig.fontConfig.copy(codeFontFamily = value.trim))
         case "font.text.family" | "font_text_family" =>
-          config.withFontConfig(config.fontConfig.copy(textFontFamily = value.trim))
+          config.withFontConfig(config.editorConfig.fontConfig.copy(textFontFamily = value.trim))
         case "font.ui.family" | "font_ui_family" =>
-          val family = if value.trim == "${font.text.family}" then config.fontConfig.textFontFamily else value.trim
-          config.withFontConfig(config.fontConfig.copy(uiFontFamily = family))
+          val family =
+            if value.trim == "${font.text.family}" then config.editorConfig.fontConfig.textFontFamily else value.trim
+          config.withFontConfig(config.editorConfig.fontConfig.copy(uiFontFamily = family))
         case "font.code.size" | "font_code_size" =>
           value.trim.toFloatOption
-            .map(size => config.withFontConfig(config.fontConfig.copy(fontSize = clampFontSize(size))))
+            .map(size => config.withFontConfig(config.editorConfig.fontConfig.copy(fontSize = clampFontSize(size))))
             .getOrElse(config)
         case "font.text.size" | "font.prose.size" | "font_text_size" | "font_prose_size" =>
           value.trim.toFloatOption
-            .map(size => config.withFontConfig(config.fontConfig.copy(textFontSize = clampFontSize(size))))
+            .map(size => config.withFontConfig(config.editorConfig.fontConfig.copy(textFontSize = clampFontSize(size))))
             .getOrElse(config)
         case "font.size" | "font_size" =>
           value.trim.toFloatOption
             .map(size =>
               config.withFontConfig(
-                config.fontConfig.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size))
+                config.editorConfig.fontConfig.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size))
               )
             )
             .getOrElse(config)
         case "font.ui.size" | "font_ui_size" =>
           value.trim.toFloatOption
-            .map(size => config.withFontConfig(config.fontConfig.copy(uiFontSize = clampFontSize(size))))
+            .map(size => config.withFontConfig(config.editorConfig.fontConfig.copy(uiFontSize = clampFontSize(size))))
             .getOrElse(config)
         case "font.scale.mode" | "font_scale_mode" =>
           parseTextScaleMode(value.trim)
-            .map(mode => config.withFontConfig(config.fontConfig.copy(textScaleMode = mode).resolveAutoTextScale(1.0)))
+            .map(mode =>
+              config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMode = mode).resolveAutoTextScale(1.0))
+            )
             .getOrElse(config)
         case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
           parseTextScaleMultiplier(value.trim)
             .map(scale =>
               config.withFontConfig(
-                config.fontConfig.copy(
+                config.editorConfig.fontConfig.copy(
                   textScaleMultiplier = scale,
-                  textScaleMode = if scale == 1.0 then config.fontConfig.textScaleMode else TextScaleMode.Manual
+                  textScaleMode =
+                    if scale == 1.0 then config.editorConfig.fontConfig.textScaleMode else TextScaleMode.Manual
                 )
               )
             )
@@ -164,33 +170,33 @@ object ConfigManager:
         case "font.code.ligatures" | "font_code_ligatures" =>
           value.trim.toLowerCase match
             case "true" | "on" | "enabled" =>
-              config.withFontConfig(config.fontConfig.copy(enableLigatures = true))
+              config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = true))
             case "false" | "off" | "disabled" =>
-              config.withFontConfig(config.fontConfig.copy(enableLigatures = false))
+              config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = false))
             case _ =>
               config
         case "font.text.ligatures" | "font.prose.ligatures" | "font_text_ligatures" | "font_prose_ligatures" =>
           value.trim.toLowerCase match
             case "true" | "on" | "enabled" =>
-              config.withFontConfig(config.fontConfig.copy(textLigatures = true))
+              config.withFontConfig(config.editorConfig.fontConfig.copy(textLigatures = true))
             case "false" | "off" | "disabled" =>
-              config.withFontConfig(config.fontConfig.copy(textLigatures = false))
+              config.withFontConfig(config.editorConfig.fontConfig.copy(textLigatures = false))
             case _ =>
               config
         case "font.ui.ligatures" | "font_ui_ligatures" =>
           value.trim.toLowerCase match
             case "true" | "on" | "enabled" =>
-              config.withFontConfig(config.fontConfig.copy(uiLigatures = true))
+              config.withFontConfig(config.editorConfig.fontConfig.copy(uiLigatures = true))
             case "false" | "off" | "disabled" =>
-              config.withFontConfig(config.fontConfig.copy(uiLigatures = false))
+              config.withFontConfig(config.editorConfig.fontConfig.copy(uiLigatures = false))
             case _ =>
               config
         case "font.ligatures" | "font_ligatures" =>
           value.trim.toLowerCase match
             case "true" | "on" | "enabled" =>
-              config.withFontConfig(config.fontConfig.copy(enableLigatures = true, textLigatures = true))
+              config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = true, textLigatures = true))
             case "false" | "off" | "disabled" =>
-              config.withFontConfig(config.fontConfig.copy(enableLigatures = false, textLigatures = false))
+              config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = false, textLigatures = false))
             case _ =>
               config
         case key if CursorConfig.Schema.handles(key) =>
@@ -294,14 +300,14 @@ object ConfigManager:
 
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String =
-    val animationSetting = config.characterAnimation match
+    val animationSetting = config.editorConfig.characterAnimation match
       case None                                             => "none"
       case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
       case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
       case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
       case Some(_)                                          => "custom" // For custom configurations
     val characterAnimationDetails =
-      if animationSetting == "custom" then config.characterAnimation.fold("")(anim => s"""
+      if animationSetting == "custom" then config.editorConfig.characterAnimation.fold("")(anim => s"""
              |character.animation.duration_ms = ${anim.durationMs}
              |character.animation.steps = ${anim.steps}""".stripMargin)
       else ""
@@ -368,17 +374,17 @@ object ConfigManager:
        |syntax.highlighting = ${config.languageToolsConfig.syntaxHighlightingEnabled}
        |
        |# Font configuration
-        |font.code.family = ${hoconString(config.fontConfig.codeFontFamily)}
-        |font.text.family = ${hoconString(config.fontConfig.textFontFamily)}
-        |font.ui.family = ${hoconString(config.fontConfig.uiFontFamily)}
-        |font.code.size = ${config.fontConfig.codeFontSize}
-        |font.text.size = ${config.fontConfig.textFontSize}
-        |font.ui.size = ${config.fontConfig.uiFontSize}
-        |font.scale.mode = ${config.fontConfig.textScaleMode.configKey}
-        |font.text_scale = ${config.fontConfig.textScaleMultiplier}
-        |font.code.ligatures = ${config.fontConfig.codeLigatures}
-        |font.text.ligatures = ${config.fontConfig.textLigatures}
-        |font.ui.ligatures = ${config.fontConfig.uiLigatures}
+        |font.code.family = ${hoconString(config.editorConfig.fontConfig.codeFontFamily)}
+        |font.text.family = ${hoconString(config.editorConfig.fontConfig.textFontFamily)}
+        |font.ui.family = ${hoconString(config.editorConfig.fontConfig.uiFontFamily)}
+        |font.code.size = ${config.editorConfig.fontConfig.codeFontSize}
+        |font.text.size = ${config.editorConfig.fontConfig.textFontSize}
+        |font.ui.size = ${config.editorConfig.fontConfig.uiFontSize}
+        |font.scale.mode = ${config.editorConfig.fontConfig.textScaleMode.configKey}
+        |font.text_scale = ${config.editorConfig.fontConfig.textScaleMultiplier}
+        |font.code.ligatures = ${config.editorConfig.fontConfig.codeLigatures}
+        |font.text.ligatures = ${config.editorConfig.fontConfig.textLigatures}
+        |font.ui.ligatures = ${config.editorConfig.fontConfig.uiLigatures}
        |
        |# Cursor colour overrides. Leave empty to use the active theme cursor.
        |cursor.mode = ${config.cursorMode.configKey}

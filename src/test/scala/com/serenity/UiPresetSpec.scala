@@ -25,10 +25,9 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
   "UiPreset" should "capture config, theme, preferred window size, and pinned panels from app state" in {
     val root = Files.createTempDirectory("ui-preset-root")
-    val config = AppConfig.default.copy(
-      fontConfig = FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f),
-      backgroundStyle = BackgroundStyle.GlassLike
-    )
+    val config = AppConfig.default
+      .withFontConfig(FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f))
+      .copy(backgroundStyle = BackgroundStyle.GlassLike)
     val panel = UiSurface.fromPanelContent(
       SurfaceId("panel-1"),
       PanelContent.DirectoryTree(DirectoryTreeData(root), selectedPath = Some(root)),
@@ -43,8 +42,8 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset.capture("Writing", state, Some(PreferredWindowSize(1440, 960)))
 
     preset.name shouldBe "Writing"
-    preset.config.fontConfig.codeFontFamily shouldBe "Monospaced"
-    preset.config.fontConfig.codeFontSize shouldBe 18.0f
+    preset.config.editorConfig.fontConfig.codeFontFamily shouldBe "Monospaced"
+    preset.config.editorConfig.fontConfig.codeFontSize shouldBe 18.0f
     preset.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
     preset.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1440, 960))
     preset.themeName shouldBe Theme.light.name
@@ -68,7 +67,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Review",
       config = AppConfig.default
-        .copy(fontConfig = FontConfig(textFontFamily = "Serif", textFontSize = 17.0f))
+        .withFontConfig(FontConfig(textFontFamily = "Serif", textFontSize = 17.0f))
         .withPreferredWindowSize(PreferredWindowSize(1280, 800)),
       themeName = Theme.dark.name,
       pinnedPanels = List(
@@ -85,8 +84,8 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val restored = UiPreset.applyToState(preset, initial, Theme.dark)
 
     restored.persisted.theme.name shouldBe Theme.dark.name
-    restored.persisted.config.fontConfig.textFontFamily shouldBe "Serif"
-    restored.persisted.config.fontConfig.textFontSize shouldBe 17.0f
+    restored.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe "Serif"
+    restored.persisted.config.editorConfig.fontConfig.textFontSize shouldBe 17.0f
     restored.persisted.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 800))
     restored.pinnedSurfaces should have size 1
     restored.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Right, 44)
@@ -124,8 +123,8 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val compact = UiPreset.builtIn("Compact").getOrElse(fail("missing Compact preset"))
     val review  = UiPreset.builtIn("Review").getOrElse(fail("missing Review preset"))
 
-    writing.config.fontConfig.textFontFamily shouldBe Font.SERIF
-    writing.config.fontConfig.textFontSize should be > AppConfig.default.fontConfig.textFontSize
+    writing.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
+    writing.config.editorConfig.fontConfig.textFontSize should be > AppConfig.default.editorConfig.fontConfig.textFontSize
     writing.config.showLineNumbers shouldBe false
     writing.config.showGutter shouldBe false
     writing.config.motionPreset shouldBe MotionPreset.Subtle
@@ -262,7 +261,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val patched = UiPreset.Patch.Motion(sourceConfig).applyTo(preset)
 
     patched.config.motionPreset shouldBe MotionPreset.Subtle
-    patched.config.characterAnimation shouldBe MotionPreset.Subtle.animationConfig
+    patched.config.editorConfig.characterAnimation shouldBe MotionPreset.Subtle.animationConfig
     patched.config.elementTransitionSpeedScale shouldBe 2.25
     patched.config.cursorTransitionSpeedScale shouldBe Some(0.75)
     patched.config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
@@ -279,13 +278,13 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
       name = "Drafting",
-      config = AppConfig.default.copy(fontConfig = FontConfig(textFontFamily = Font.SANS_SERIF, textFontSize = 12.0f)),
+      config = AppConfig.default.withFontConfig(FontConfig(textFontFamily = Font.SANS_SERIF, textFontSize = 12.0f)),
       themeName = Theme.dark.name,
       pinnedPanels = List(panel),
       targetEditorPaneCount = Some(1)
     )
-    val sourceConfig = AppConfig.default.copy(
-      fontConfig = FontConfig(
+    val sourceConfig = AppConfig.default.withFontConfig(
+      FontConfig(
         codeFontFamily = Font.MONOSPACED,
         textFontFamily = Font.SERIF,
         uiFontFamily = Font.DIALOG,
@@ -300,7 +299,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     val patched = UiPreset.Patch.Typography(sourceConfig).applyTo(preset)
 
-    patched.config.fontConfig shouldBe sourceConfig.fontConfig
+    patched.config.editorConfig.fontConfig shouldBe sourceConfig.editorConfig.fontConfig
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }

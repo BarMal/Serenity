@@ -37,9 +37,9 @@ object CursorViewport:
     val wordWrapEnabled  = currentState.persisted.config.wordWrapEnabled
     val viewport         = buffer.viewport
     val halfVisibleLines = viewport.visibleLines / 2
-    val font             = previewFontForBuffer(buffer, currentState.persisted.config.fontConfig)
+    val font             = previewFontForBuffer(buffer, currentState.persisted.config.editorConfig.fontConfig)
     val visibleWidthPx =
-      TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, currentState.persisted.config.fontConfig)
+      TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, currentState.persisted.config.editorConfig.fontConfig)
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
     val measuredCursorVisualLine =
       if buffer.usesTextFont then

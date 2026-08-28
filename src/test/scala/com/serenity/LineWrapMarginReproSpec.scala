@@ -127,7 +127,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
     }
 
   "TextLayoutSnapshot.gridWrapWidthPx" should "size the wrap width from the code font, not the buffer font" in {
-    val config    = AppConfig.default.fontConfig
+    val config    = AppConfig.default.editorConfig.fontConfig
     val columns   = 40
     val codeWidth = CellMetrics.fromFont(FontLoader.previewFontForRole(config, TypographyRole.Code)).charWidth
     TextLayoutSnapshot.gridWrapWidthPx(columns, config) shouldBe columns * codeWidth
@@ -174,9 +174,13 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
 
       // The caret's true wrapped row: measured at the width the renderer wraps at (the code-font grid width), with
       // the buffer's own prose font for glyph advances.
-      val proseFont = FontLoader.previewFontForRole(state.persisted.config.fontConfig, syncedBuffer.typographyRole)
+      val proseFont =
+        FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, syncedBuffer.typographyRole)
       val gridWrapWidthPx =
-        TextLayoutSnapshot.gridWrapWidthPx(syncedBuffer.viewport.visibleColumns, state.persisted.config.fontConfig)
+        TextLayoutSnapshot.gridWrapWidthPx(
+          syncedBuffer.viewport.visibleColumns,
+          state.persisted.config.editorConfig.fontConfig
+        )
       val trueVisualRow =
         TextLayoutSnapshot.visualLineIndexForCursor(content, cursor.column, gridWrapWidthPx, proseFont)
 

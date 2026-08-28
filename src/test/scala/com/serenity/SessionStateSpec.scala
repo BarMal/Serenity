@@ -385,17 +385,19 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val appState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig(
-          characterAnimation = AnimationConfig.quick,
-          fontConfig = com.serenity.ui.fonts.FontLoader.FontConfig(
-            codeFontFamily = "Monospaced",
-            textFontFamily = "SansSerif",
-            uiFontFamily = "Dialog",
-            fontSize = 15.0f,
-            textFontSize = 16.0f,
-            uiFontSize = 13.0f,
-            enableLigatures = false,
-            textLigatures = true,
-            uiLigatures = true
+          editorConfig = EditorConfig(
+            characterAnimation = AnimationConfig.quick,
+            fontConfig = com.serenity.ui.fonts.FontLoader.FontConfig(
+              codeFontFamily = "Monospaced",
+              textFontFamily = "SansSerif",
+              uiFontFamily = "Dialog",
+              fontSize = 15.0f,
+              textFontSize = 16.0f,
+              uiFontSize = 13.0f,
+              enableLigatures = false,
+              textLigatures = true,
+              uiLigatures = true
+            )
           ),
           blurRadius = 0.42f,
           backgroundStyle = BackgroundStyle.GlassLike,
@@ -529,15 +531,15 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       cornerRadiusPx = 12,
       outlineThicknessPx = 4
     )
-    decoded.config.fontConfig.codeFontFamily shouldBe "Monospaced"
-    decoded.config.fontConfig.textFontFamily shouldBe "SansSerif"
-    decoded.config.fontConfig.uiFontFamily shouldBe "Dialog"
-    decoded.config.fontConfig.codeFontSize shouldBe 15.0f
-    decoded.config.fontConfig.textFontSize shouldBe 16.0f
-    decoded.config.fontConfig.uiFontSize shouldBe 13.0f
-    decoded.config.fontConfig.codeLigatures shouldBe false
-    decoded.config.fontConfig.textLigatures shouldBe true
-    decoded.config.fontConfig.uiLigatures shouldBe true
+    decoded.config.editorConfig.fontConfig.codeFontFamily shouldBe "Monospaced"
+    decoded.config.editorConfig.fontConfig.textFontFamily shouldBe "SansSerif"
+    decoded.config.editorConfig.fontConfig.uiFontFamily shouldBe "Dialog"
+    decoded.config.editorConfig.fontConfig.codeFontSize shouldBe 15.0f
+    decoded.config.editorConfig.fontConfig.textFontSize shouldBe 16.0f
+    decoded.config.editorConfig.fontConfig.uiFontSize shouldBe 13.0f
+    decoded.config.editorConfig.fontConfig.codeLigatures shouldBe false
+    decoded.config.editorConfig.fontConfig.textLigatures shouldBe true
+    decoded.config.editorConfig.fontConfig.uiLigatures shouldBe true
     decoded.config.showLineNumbers shouldBe false
     decoded.config.showGutter shouldBe false
     decoded.config.languageToolsConfig.lspUserConfig.servers.map(_(LanguageId.Scala.id)) shouldBe Some(
@@ -553,7 +555,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
       additionalWords = List("serenity")
     )
-    decoded.config.characterAnimation.map(_.steps) shouldBe
+    decoded.config.editorConfig.characterAnimation.map(_.steps) shouldBe
       AnimationConfig.quick.map(_.steps)
   }
 
@@ -935,7 +937,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutUiFontFamily.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.fontConfig.uiFontFamily shouldBe Font.SANS_SERIF
+    decoded.toOption.get.config.editorConfig.fontConfig.uiFontFamily shouldBe Font.SANS_SERIF
   }
 
   it should "survive a multi-pane multi-buffer layout round trip" in {

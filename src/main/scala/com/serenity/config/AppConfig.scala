@@ -1558,10 +1558,8 @@ object SurfaceConfig:
 
 /** Global application configuration */
 final case class AppConfig(
-    characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
+    editorConfig: EditorConfig = EditorConfig(),
     inputConfig: InputConfig = InputConfig(),
-    fontConfig: FontConfig = FontConfig(),
-    minimumPaneWidth: Int = 50,
     showLineNumbers: Boolean = true,
     showGutter: Boolean = true,
     /** Whether each editor pane reserves a visible identity header. */
@@ -1603,20 +1601,8 @@ final case class AppConfig(
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig()
 ):
 
-  def editorConfig: EditorConfig =
-    EditorConfig(
-      characterAnimation = characterAnimation,
-      fontConfig = fontConfig,
-      minimumPaneWidth = minimumPaneWidth
-    )
-
   def withEditorConfig(config: EditorConfig): AppConfig =
-    val normalized = config.normalized
-    copy(
-      characterAnimation = normalized.characterAnimation,
-      fontConfig = normalized.fontConfig,
-      minimumPaneWidth = normalized.minimumPaneWidth
-    )
+    copy(editorConfig = config.normalized)
 
   def withLanguageToolsConfig(config: LanguageToolsConfig): AppConfig =
     copy(languageToolsConfig = config.normalized)
@@ -1858,7 +1844,7 @@ final case class AppConfig(
         val accessibility = surfaceConfig.motionConfiguration
           .map(_.accessibility)
           .getOrElse(MotionAccessibility.Standard)
-        copy(characterAnimation = preset.animationConfig).withSurfaceConfig(
+        withEditorConfig(editorConfig.copy(characterAnimation = preset.animationConfig)).withSurfaceConfig(
           surfaceConfig.copy(
             motionPreset = preset,
             motionConfiguration = Some(MotionConfig.forPreset(preset).copy(accessibility = accessibility)),
@@ -1875,7 +1861,7 @@ final case class AppConfig(
       .withFallback(fallback)
     val editorText = surfaceConfig.motionConfiguration
       .flatMap(_.families.get(MotionFamily.EditorText))
-      .getOrElse(current.families(MotionFamily.EditorText).copy(animation = characterAnimation))
+      .getOrElse(current.families(MotionFamily.EditorText).copy(animation = editorConfig.characterAnimation))
     withSurfaceConfig(
       surfaceConfig.copy(
         motionPreset = MotionPreset.Custom,
@@ -1999,7 +1985,7 @@ final case class AppConfig(
       case Some(_) =>
         val motion = surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.EditorText)
         Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
-      case None => AppConfig.scaledAnimation(characterAnimation, effectiveEditorTextTransitionSpeedScale)
+      case None => AppConfig.scaledAnimation(editorConfig.characterAnimation, effectiveEditorTextTransitionSpeedScale)
 
   /** Command runner animation after applying the effective command runner motion speed. */
   def scaledCommandRunnerAnimation: Option[AnimationConfig] =
@@ -2226,7 +2212,7 @@ object AppConfig:
 
   /** Default configuration keeps text entry immediate and uses restrained frosted surfaces. */
   val default: AppConfig = AppConfig(
-    characterAnimation = AnimationConfig.none,
+    editorConfig = EditorConfig(characterAnimation = AnimationConfig.none),
     uiAnimation = AnimationConfig.smooth,
     blurRadius = 0.18f,
     backgroundStyle = BackgroundStyle.Frosted,
@@ -2235,28 +2221,28 @@ object AppConfig:
 
   /** Test configuration with visible animations enabled */
   val withTestAnimations: AppConfig = AppConfig(
-    characterAnimation = AnimationConfig.quick,
+    editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
     uiAnimation = AnimationConfig.quick,
     motionPreset = MotionPreset.Expressive
   )
 
   /** Quick fade-in animation configuration */
   val withQuickAnimation: AppConfig = AppConfig(
-    characterAnimation = AnimationConfig.quick,
+    editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
     uiAnimation = AnimationConfig.quick,
     motionPreset = MotionPreset.Expressive
   )
 
   /** Smooth fade-in animation configuration */
   val withSmoothAnimation: AppConfig = AppConfig(
-    characterAnimation = AnimationConfig.smooth,
+    editorConfig = EditorConfig(characterAnimation = AnimationConfig.smooth),
     uiAnimation = AnimationConfig.smooth,
     motionPreset = MotionPreset.Smooth
   )
 
   /** Subtle fade-in animation configuration */
   val withSubtleAnimation: AppConfig = AppConfig(
-    characterAnimation = AnimationConfig.subtle,
+    editorConfig = EditorConfig(characterAnimation = AnimationConfig.subtle),
     uiAnimation = AnimationConfig.subtle,
     motionPreset = MotionPreset.Subtle
   )

@@ -17,7 +17,7 @@ class MotionLanguageSpec extends AnyFlatSpec with Matchers:
   it should "make typing immediate while retaining the configurable reduced-motion policy" in {
     val config = AppConfig.default
 
-    config.characterAnimation shouldBe AnimationConfig.none
+    config.editorConfig.characterAnimation shouldBe AnimationConfig.none
     config.scaledCharacterAnimation shouldBe AnimationConfig.none
   }
 end MotionLanguageSpec
