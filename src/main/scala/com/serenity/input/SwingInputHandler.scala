@@ -60,9 +60,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private val latestMovement     = new AtomicReference[Option[MovementSlot]](None)
   private val enqueuesInFlight   = new AtomicInteger(0)
   private val shutdownFlag       = new AtomicBoolean(false)
-  private val pendingModifierTap = new AtomicReference[Option[(Int, Long, Boolean)]](None)
-
-  private val doubleTapWindowMillis = 200L
+  private val pendingModifierTap = new AtomicReference[ModifierTapState](ModifierTapState.empty)
 
   private def enqueueInput(info: KeyStrokeInfo): Unit =
     enqueue(QueuedKey(info))
@@ -238,7 +236,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       case Some(info)               => Some(info)
       case None if isModifierKey(e) => None
       case None =>
-        pendingModifierTap.set(None)
+        pendingModifierTap.set(ModifierTapDetector.otherKeyPressed(pendingModifierTap.get))
         val m = mods(e)
         e.getKeyCode match
           case VK_UP         => Some(KeyStrokeInfo(InputKey.ArrowUp, None, m))
@@ -285,33 +283,27 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       case VK_CONTROL | VK_ALT | VK_SHIFT | VK_META => true
       case _                                        => false
 
-  private def translateModifierPressed(e: KeyEvent): Option[KeyStrokeInfo] =
+  private def modifierOf(e: KeyEvent): Option[(InputKey, Modifier)] =
     import KeyEvent.*
-    val keyType = e.getKeyCode match
-      case VK_CONTROL => Some(InputKey.Ctrl)
-      case VK_ALT     => Some(InputKey.Alt)
-      case VK_SHIFT   => Some(InputKey.Shift)
-      case VK_META    => Some(InputKey.Meta)
+    e.getKeyCode match
+      case VK_CONTROL => Some((InputKey.Ctrl, Modifier.Ctrl))
+      case VK_ALT     => Some((InputKey.Alt, Modifier.Alt))
+      case VK_SHIFT   => Some((InputKey.Shift, Modifier.Shift))
+      case VK_META    => Some((InputKey.Meta, Modifier.Meta))
       case _          => None
 
-    keyType.flatMap { inputKey =>
-      val timestamp = e.getWhen
-      pendingModifierTap.get match
-        case Some((keyCode, previousTimestamp, released))
-            if keyCode == e.getKeyCode && released && timestamp >= previousTimestamp &&
-              timestamp - previousTimestamp <= doubleTapWindowMillis =>
-          pendingModifierTap.set(None)
+  private def translateModifierPressed(e: KeyEvent): Option[KeyStrokeInfo] =
+    modifierOf(e).flatMap { (inputKey, modifier) =>
+      ModifierTapDetector.modifierPressed(pendingModifierTap.get, modifier, e.getWhen) match
+        case ModifierTapDetector.Outcome.Emit(state) =>
+          pendingModifierTap.set(state)
           Some(KeyStrokeInfo(inputKey, None, Set.empty))
-        case Some((keyCode, _, false)) if keyCode == e.getKeyCode =>
-          None
-        case _ =>
-          pendingModifierTap.set(Some((e.getKeyCode, timestamp, false)))
+        case ModifierTapDetector.Outcome.Pending(state) =>
+          pendingModifierTap.set(state)
           None
     }
 
   private def translateModifierReleased(e: KeyEvent): Unit =
-    if isModifierKey(e) then
-      pendingModifierTap.get match
-        case Some((keyCode, timestamp, false)) if keyCode == e.getKeyCode =>
-          pendingModifierTap.set(Some((keyCode, timestamp, true)))
-        case _ => ()
+    modifierOf(e).foreach { (_, modifier) =>
+      pendingModifierTap.set(ModifierTapDetector.modifierReleased(pendingModifierTap.get, modifier, e.getWhen))
+    }
