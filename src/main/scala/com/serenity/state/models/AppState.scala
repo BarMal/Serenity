@@ -278,7 +278,7 @@ final case class AppState(
     }.toMap
 
   /** Convenience accessor for syntax highlighting setting */
-  def syntaxHighlightingEnabled: Boolean = persisted.config.syntaxHighlightingEnabled
+  def syntaxHighlightingEnabled: Boolean = persisted.config.languageToolsConfig.syntaxHighlightingEnabled
   def isValid: Boolean                   = validationErrors.isEmpty
 
   /** Cursor position for the currently active editor pane, if any. */

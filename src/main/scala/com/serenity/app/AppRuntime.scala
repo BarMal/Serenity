@@ -206,7 +206,12 @@ object AppRuntime:
         shutdownInputAfterQuit(stateManager.awaitQuit, inputHandler.shutdown)
       ),
       superviseLoop("LSP loop", stateManager.forceQuit())(
-        LspManager.run(stateManager.lspEffectStream, stateManager.applyEvent, logger, appConfig.lspUserConfig)
+        LspManager.run(
+          stateManager.lspEffectStream,
+          stateManager.applyEvent,
+          logger,
+          appConfig.languageToolsConfig.lspUserConfig
+        )
       )
     ).parMapN((_, _, _, _, _, _, _) => ())
 

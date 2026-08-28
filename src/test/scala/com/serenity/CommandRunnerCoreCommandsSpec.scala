@@ -413,7 +413,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
 
-    updatedState.persisted.config.spellCheck.enabled shouldBe true
+    updatedState.persisted.config.languageToolsConfig.spellCheck.enabled shouldBe true
 
     awaitDiagnosticMessages(
       stateManager,

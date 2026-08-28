@@ -78,12 +78,12 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail("spellcheck words parse"))
 
     syntaxConfig.languageToolsConfig.syntaxHighlightingEnabled.shouldBe(true)
-    spellEnabledConfig.spellCheck.enabled.shouldBe(true)
-    languageConfig.spellCheck.languages.shouldBe(List("en", "fr"))
-    dictionaryConfig.spellCheck.dictionaryPaths.shouldBe(
+    spellEnabledConfig.languageToolsConfig.spellCheck.enabled.shouldBe(true)
+    languageConfig.languageToolsConfig.spellCheck.languages.shouldBe(List("en", "fr"))
+    dictionaryConfig.languageToolsConfig.spellCheck.dictionaryPaths.shouldBe(
       List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
     )
-    wordsConfig.spellCheck.additionalWords.shouldBe(List("serenity", "io"))
+    wordsConfig.languageToolsConfig.spellCheck.additionalWords.shouldBe(List("serenity", "io"))
     LanguageToolsConfig.Schema.parse(AppConfig.default, "syntax.highlighting", "maybe").shouldBe(None)
   }
 

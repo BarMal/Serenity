@@ -343,7 +343,7 @@ object ConfigManager:
          |ui.motion.family.${family.configKey}.speed_scale = $speedScale$scopedTransitions""".stripMargin
       }
       .mkString("\n")
-    val lspSettings = lspConfigToString(config.lspUserConfig)
+    val lspSettings = lspConfigToString(config.languageToolsConfig.lspUserConfig)
     def bindingValue(bindings: List[HotkeyTrigger], defaults: List[HotkeyTrigger]): String =
       hoconString(bindings.headOption.orElse(defaults.headOption).fold("")(_.render))
     def editorBinding(action: EditorKeyAction): String =
@@ -365,7 +365,7 @@ object ConfigManager:
        |"character.animation" = $animationSetting$characterAnimationDetails
        |
        |# Syntax highlighting: true, false
-       |syntax.highlighting = ${config.syntaxHighlightingEnabled}
+       |syntax.highlighting = ${config.languageToolsConfig.syntaxHighlightingEnabled}
        |
        |# Font configuration
         |font.code.family = ${hoconString(config.fontConfig.codeFontFamily)}
@@ -451,10 +451,10 @@ object ConfigManager:
        |$lspSettings
        |
        |# Spell-checking for prose buffers
-       |spellcheck.enabled = ${config.spellCheck.enabled}
-       |spellcheck.languages = ${hoconList(config.spellCheck.normalized.languages)}
-       |spellcheck.dictionary_paths = ${hoconList(config.spellCheck.normalized.dictionaryPaths)}
-       |spellcheck.words = ${hoconList(config.spellCheck.normalized.additionalWords)}
+       |spellcheck.enabled = ${config.languageToolsConfig.spellCheck.enabled}
+       |spellcheck.languages = ${hoconList(config.languageToolsConfig.spellCheck.normalized.languages)}
+       |spellcheck.dictionary_paths = ${hoconList(config.languageToolsConfig.spellCheck.normalized.dictionaryPaths)}
+       |spellcheck.words = ${hoconList(config.languageToolsConfig.spellCheck.normalized.additionalWords)}
        |
        |# Hotkey overrides
        |$hotkeySettings
@@ -620,7 +620,7 @@ object ConfigManager:
           else None
         }
 
-    val spellCheck = config.spellCheck
+    val spellCheck = config.languageToolsConfig.spellCheck
     val updatedSpellCheck = spellCheck.copy(
       languages = strings("spellcheck.languages").getOrElse(spellCheck.languages),
       dictionaryPaths = strings("spellcheck.dictionary_paths").getOrElse(spellCheck.dictionaryPaths),
@@ -792,7 +792,7 @@ object ConfigManager:
     config: AppConfig,
     languageId: LanguageId
   )(update: LspServerOverride => LspServerOverride): AppConfig =
-    val servers  = config.lspUserConfig.servers.getOrElse(Map.empty)
+    val servers  = config.languageToolsConfig.lspUserConfig.servers.getOrElse(Map.empty)
     val existing = servers.getOrElse(languageId.id, LspServerOverride(command = None, args = None))
     config.withLspUserConfig(
       LspUserConfig(

@@ -265,8 +265,8 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     config.inputConfig.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.MoveLeft).map(_.render) shouldBe List(
       "alt+h"
     )
-    config.lspUserConfig shouldBe lspConfig
-    config.spellCheck shouldBe spellCheck
+    config.languageToolsConfig.lspUserConfig shouldBe lspConfig
+    config.languageToolsConfig.spellCheck shouldBe spellCheck
     config.windowConfig shouldBe windowConfig
     config.showLineNumbers shouldBe false
     config.showPaneHeaders shouldBe false

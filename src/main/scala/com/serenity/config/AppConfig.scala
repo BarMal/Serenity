@@ -439,13 +439,21 @@ object LanguageToolsConfig:
       if syntaxHighlightingKeys.contains(key) then parseBoolean(trimmed).map(config.withSyntaxHighlighting)
       else if spellCheckEnabledKeys.contains(key) then
         parseBoolean(trimmed)
-          .map(enabled => config.withSpellCheck(config.spellCheck.copy(enabled = enabled)))
+          .map(enabled => config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(enabled = enabled)))
       else if spellCheckLanguageKeys.contains(key) then
-        Some(config.withSpellCheck(config.spellCheck.copy(languages = parseCommaList(trimmed))))
+        Some(
+          config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(languages = parseCommaList(trimmed)))
+        )
       else if spellCheckDictionaryPathKeys.contains(key) then
-        Some(config.withSpellCheck(config.spellCheck.copy(dictionaryPaths = parseCommaListPreserveCase(trimmed))))
+        Some(
+          config.withSpellCheck(
+            config.languageToolsConfig.spellCheck.copy(dictionaryPaths = parseCommaListPreserveCase(trimmed))
+          )
+        )
       else if spellCheckWordKeys.contains(key) then
-        Some(config.withSpellCheck(config.spellCheck.copy(additionalWords = parseCommaList(trimmed))))
+        Some(
+          config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(additionalWords = parseCommaList(trimmed)))
+        )
       else None
 
     def invalidValue(key: String, value: String): Boolean =
@@ -1551,7 +1559,6 @@ object SurfaceConfig:
 /** Global application configuration */
 final case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
-    syntaxHighlightingEnabled: Boolean = false,
     inputConfig: InputConfig = InputConfig(),
     fontConfig: FontConfig = FontConfig(),
     minimumPaneWidth: Int = 50,
@@ -1593,8 +1600,7 @@ final case class AppConfig(
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     viewportSizing: ViewportSizing = ViewportSizing(),
-    lspUserConfig: LspUserConfig = LspUserConfig.empty,
-    spellCheck: SpellCheckConfig = SpellCheckConfig()
+    languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig()
 ):
 
   def editorConfig: EditorConfig =
@@ -1612,20 +1618,8 @@ final case class AppConfig(
       minimumPaneWidth = normalized.minimumPaneWidth
     )
 
-  def languageToolsConfig: LanguageToolsConfig =
-    LanguageToolsConfig(
-      syntaxHighlightingEnabled = syntaxHighlightingEnabled,
-      lspUserConfig = lspUserConfig,
-      spellCheck = spellCheck
-    )
-
   def withLanguageToolsConfig(config: LanguageToolsConfig): AppConfig =
-    val normalized = config.normalized
-    copy(
-      syntaxHighlightingEnabled = normalized.syntaxHighlightingEnabled,
-      lspUserConfig = normalized.lspUserConfig,
-      spellCheck = normalized.spellCheck
-    )
+    copy(languageToolsConfig = config.normalized)
 
   def withInputConfig(config: InputConfig): AppConfig =
     copy(inputConfig = config)
@@ -2234,7 +2228,6 @@ object AppConfig:
   val default: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.none,
     uiAnimation = AnimationConfig.smooth,
-    syntaxHighlightingEnabled = false,
     blurRadius = 0.18f,
     backgroundStyle = BackgroundStyle.Frosted,
     motionPreset = MotionPreset.Smooth
@@ -2244,7 +2237,6 @@ object AppConfig:
   val withTestAnimations: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.quick,
     uiAnimation = AnimationConfig.quick,
-    syntaxHighlightingEnabled = false,
     motionPreset = MotionPreset.Expressive
   )
 
@@ -2252,7 +2244,6 @@ object AppConfig:
   val withQuickAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.quick,
     uiAnimation = AnimationConfig.quick,
-    syntaxHighlightingEnabled = false,
     motionPreset = MotionPreset.Expressive
   )
 
@@ -2260,7 +2251,6 @@ object AppConfig:
   val withSmoothAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.smooth,
     uiAnimation = AnimationConfig.smooth,
-    syntaxHighlightingEnabled = false,
     motionPreset = MotionPreset.Smooth
   )
 
@@ -2268,6 +2258,5 @@ object AppConfig:
   val withSubtleAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.subtle,
     uiAnimation = AnimationConfig.subtle,
-    syntaxHighlightingEnabled = false,
     motionPreset = MotionPreset.Subtle
   )
