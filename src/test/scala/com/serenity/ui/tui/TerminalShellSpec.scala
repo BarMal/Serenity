@@ -32,8 +32,10 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers:
   final private class Harness(val terminal: Terminal, private val out: ByteArrayOutputStream):
     def written: String = out.toString(StandardCharsets.UTF_8)
 
-  private def dumbTerminal(): Harness =
-    val in  = new ByteArrayInputStream(Array.emptyByteArray)
+  private def dumbTerminal(): Harness = dumbTerminal(Array.emptyByteArray)
+
+  private def dumbTerminal(input: Array[Byte]): Harness =
+    val in  = new ByteArrayInputStream(input)
     val out = new ByteArrayOutputStream()
     val terminal =
       new DumbTerminal("test", "xterm-256color", in, out, StandardCharsets.UTF_8)
@@ -152,3 +154,87 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers:
 
   private def attributesSnapshot(terminal: Terminal): String =
     terminal.getAttributes.toString
+
+  // ===#1109's CSI-u negotiation ladder: query kitty support, push its enhancement flags if it answered, otherwise
+  // fall back to xterm's modifyOtherKeys/formatOtherKeys=1; pop/disable unconditionally on every exit path.===
+
+  private val kittyQuery             = s"$esc[?u"
+  private val kittyPushFlags         = s"$esc[>3u"
+  private val kittyPop               = s"$esc[<u"
+  private val modifyOtherKeysEnable  = s"$esc[>4;2m"
+  private val modifyOtherKeysDisable = s"$esc[>4;0m"
+  private val formatOtherKeysEnable  = s"$esc[>4;1f"
+  private val formatOtherKeysDisable = s"$esc[>4;0f"
+
+  "acquiring the shell against a terminal that answers the kitty query" should
+    "push kitty's enhancement flags and report the Kitty tier" in {
+      val harness = dumbTerminal(bytes(s"$esc[?1u"))
+
+      val tier =
+        TerminalShell.forTerminal(harness.terminal).use(shell => IO(shell.keyboardProtocolTier)).unsafeRunSync()
+
+      tier shouldBe TerminalShell.KeyboardProtocolTier.Kitty
+      val written = harness.written
+      written should include(kittyQuery)
+      written should include(kittyPushFlags)
+      written should not include modifyOtherKeysEnable
+    }
+
+  "acquiring the shell against a terminal that never answers the kitty query" should
+    "fall back to modifyOtherKeys and report the ModifyOtherKeys tier" in {
+      val harness = dumbTerminal()
+
+      val tier =
+        TerminalShell.forTerminal(harness.terminal).use(shell => IO(shell.keyboardProtocolTier)).unsafeRunSync()
+
+      tier shouldBe TerminalShell.KeyboardProtocolTier.ModifyOtherKeys
+      val written = harness.written
+      written should include(kittyQuery)
+      written should include(modifyOtherKeysEnable)
+      written should include(formatOtherKeysEnable)
+      written should not include kittyPushFlags
+    }
+
+  "releasing a Kitty-tier shell on clean quit" should "pop the kitty enhancement flags" in {
+    val harness = dumbTerminal(bytes(s"$esc[?1u"))
+
+    TerminalShell.forTerminal(harness.terminal).use(_ => IO.unit).unsafeRunSync()
+
+    harness.written should include(kittyPop)
+  }
+
+  "releasing a ModifyOtherKeys-tier shell on clean quit" should "disable modifyOtherKeys and formatOtherKeys" in {
+    val harness = dumbTerminal()
+
+    TerminalShell.forTerminal(harness.terminal).use(_ => IO.unit).unsafeRunSync()
+
+    val written = harness.written
+    written should include(modifyOtherKeysDisable)
+    written should include(formatOtherKeysDisable)
+  }
+
+  "releasing a ModifyOtherKeys-tier shell after an escaping IO.raiseError" should
+    "still disable the negotiated keyboard protocol" in {
+      val harness = dumbTerminal()
+      val boom    = new RuntimeException("boom")
+
+      TerminalShell.forTerminal(harness.terminal).use(_ => IO.raiseError[Unit](boom)).attempt.unsafeRunSync()
+
+      val written = harness.written
+      written should include(modifyOtherKeysDisable)
+      written should include(formatOtherKeysDisable)
+    }
+
+  "releasing a ModifyOtherKeys-tier shell after fiber cancellation" should
+    "still disable the negotiated keyboard protocol" in {
+      val harness = dumbTerminal()
+
+      val program = TerminalShell.forTerminal(harness.terminal).use(_ => IO.never)
+      program.start.flatMap(fiber => IO.sleep(50.millis) >> fiber.cancel).unsafeRunSync()
+
+      val written = harness.written
+      written should include(modifyOtherKeysDisable)
+      written should include(formatOtherKeysDisable)
+    }
+
+  private def bytes(s: String): Array[Byte] = s.getBytes(StandardCharsets.UTF_8)

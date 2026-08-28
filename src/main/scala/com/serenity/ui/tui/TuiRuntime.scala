@@ -55,7 +55,13 @@ object TuiRuntime:
         systemClipboard <- buildClipboard(terminalShell, hasDisplay)
         _ <- AppRuntime.run(
           initialViewportSize = initialViewportSize,
-          makeInputHandler = router => TerminalInputHandler.create(terminalShell.terminal, router, systemClipboard),
+          makeInputHandler = router =>
+            TerminalInputHandler.create(
+              terminalShell.terminal,
+              router,
+              systemClipboard,
+              terminalShell.pendingInputPrefix
+            ),
           checkResize = terminalShell.checkResize,
           renderFull = renderFullFn(surfaceHolder, terminalShell),
           renderCursorOnly = renderCursorOnlyFn(surfaceHolder, terminalShell),

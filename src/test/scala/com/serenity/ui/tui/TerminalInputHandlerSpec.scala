@@ -112,6 +112,32 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     pasted shouldBe Some(pasteText)
   }
 
+  "a kitty-protocol bare Ctrl press, release, press" should "double-tap-emit InputKey.Ctrl via the shared detector" in {
+    val input = csi("57442u") ++ csi("57442;1:3u") ++ csi("57442u")
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler   <- TerminalInputHandler.create(dumbTerminal(input), router, clipboard)
+      strokes   <- handler.keyStrokeInfoStream.take(1).compile.toList
+    yield strokes
+
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe
+      List(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty))
+  }
+
+  "a kitty-protocol Ctrl press with no release before the second press" should "not fire the double-tap" in {
+    val input = csi("57442u") ++ csi("57442u") ++ bytes("a")
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler   <- TerminalInputHandler.create(dumbTerminal(input), router, clipboard)
+      strokes   <- handler.keyStrokeInfoStream.take(1).compile.toList
+    yield strokes
+
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe
+      List(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty))
+  }
+
   "EOF on stdin" should "translate to the same graceful-shutdown Quit event Ctrl+Q produces, and complete the stream" in {
     val program = handlerFor(Array.emptyByteArray).flatMap((handler, _) => handler.eventStream.compile.toList)
     program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(com.serenity.keystroke.events.Quit)

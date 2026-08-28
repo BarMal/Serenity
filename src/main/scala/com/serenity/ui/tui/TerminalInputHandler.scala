@@ -7,9 +7,9 @@ import scala.concurrent.duration.*
 import cats.effect.std.Queue
 import cats.effect.{FiberIO, IO, Ref}
 import cats.syntax.all.*
-import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
+import com.serenity.input.{InputHandler, InputRouter, ModifierTapDetector, ModifierTapState, SystemClipboard}
 import com.serenity.keystroke.events.*
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import fs2.Stream
 import org.jline.terminal.Terminal
 import org.jline.utils.NonBlockingReader
@@ -110,17 +110,34 @@ object TerminalInputHandler:
       w.flush()
     }
 
+  /** @param seedBytes
+    *   bytes to treat as already-read input, decoded before anything the JLine reader delivers. [[TerminalShell]]'s
+    *   startup keyboard-protocol negotiation (#1109) reads directly off the same underlying reader ahead of this
+    *   handler's own loop; any bytes it read that turned out not to be part of the negotiation response -- a real
+    *   keystroke that raced the negotiation, most likely -- are handed back here rather than silently dropped, so
+    *   they're decoded exactly as if this loop had read them itself.
+    */
   def create(
     terminal: Terminal,
     inputRouter: InputRouter[IO, Event],
-    systemClipboard: SystemClipboard[IO]
+    systemClipboard: SystemClipboard[IO],
+    seedBytes: Array[Byte] = Array.emptyByteArray
   ): IO[TerminalInputHandler] =
     for
-      queue          <- Queue.unbounded[IO, Option[QueuedInput]]
-      latestMovement <- Ref.of[IO, Option[MovementSlot]](None)
-      remainder      <- Ref.of[IO, Array[Byte]](Array.emptyByteArray)
-      _              <- enableModes(terminal)
-      fiber          <- readLoop(terminal.reader(), queue, latestMovement, remainder, systemClipboard).start
+      queue            <- Queue.unbounded[IO, Option[QueuedInput]]
+      latestMovement   <- Ref.of[IO, Option[MovementSlot]](None)
+      remainder        <- Ref.of[IO, Array[Byte]](Array.emptyByteArray)
+      modifierTapState <- Ref.of[IO, ModifierTapState](ModifierTapState.empty)
+      _                <- enableModes(terminal)
+      fiber <- readLoop(
+        terminal.reader(),
+        queue,
+        latestMovement,
+        remainder,
+        modifierTapState,
+        systemClipboard,
+        seedBytes
+      ).start
     yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal))
 
   private enum ReadOutcome:
@@ -143,8 +160,11 @@ object TerminalInputHandler:
     * bytes (so it stays testable with plain byte arrays, and so the same decoder could serve a raw byte stream too). A
     * char above ASCII is re-encoded to its full UTF-8 byte sequence here before joining the byte buffer, so a
     * multi-byte character never gets split across separate reads on our side.
+    *
+    * Also used by [[TerminalShell]]'s startup keyboard-protocol negotiation to re-encode any stray bytes it reads off
+    * the same reader ahead of this handler's own loop (see `create`'s `seedBytes`).
     */
-  private def toUtf8Bytes(ch: Int): Array[Byte] =
+  private[tui] def toUtf8Bytes(ch: Int): Array[Byte] =
     if ch < 0x80 then Array(ch.toByte) else String.valueOf(ch.toChar).getBytes(StandardCharsets.UTF_8)
 
   private def readLoop(
@@ -152,20 +172,48 @@ object TerminalInputHandler:
     queue: Queue[IO, Option[QueuedInput]],
     latestMovement: Ref[IO, Option[MovementSlot]],
     remainder: Ref[IO, Array[Byte]],
-    systemClipboard: SystemClipboard[IO]
+    modifierTapState: Ref[IO, ModifierTapState],
+    systemClipboard: SystemClipboard[IO],
+    seedBytes: Array[Byte]
   ): IO[Unit] =
 
     def processTokens(tokens: List[DecodedToken]): IO[Unit] =
       tokens.traverse_(processToken)
 
     def processToken(token: DecodedToken): IO[Unit] = token match
-      case DecodedToken.Key(info)    => latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info)))
+      case DecodedToken.Key(info) =>
+        modifierTapState.update(ModifierTapDetector.otherKeyPressed) >>
+          latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info)))
       case DecodedToken.Mouse(event) => enqueueMouse(event)
       case DecodedToken.Pasted(text) =>
         // The "paste event path": write the pasted text where a Ctrl+V paste would have left it, then emit the
         // same `Paste` event a hotkey would -- so multi-line pastes are inserted as one paste, not replayed as
         // individual keystrokes (which would fire hotkeys on embedded control characters).
         systemClipboard.writeText(text) >> latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(Paste)))
+      case DecodedToken.ModifierEdge(modifier, pressed) => processModifierEdge(modifier, pressed)
+
+    // Drives ModifierTapDetector exactly as SwingInputHandler drives it over AWT modifier press/release events, so
+    // `ctrl+ctrl`-style bindings behave identically in both input modes -- only reachable when the terminal answered
+    // the kitty protocol's capability query (see TerminalInputDecoder.DecodedToken.ModifierEdge).
+    def processModifierEdge(modifier: Modifier, pressed: Boolean): IO[Unit] =
+      val now = IO.realTime.map(_.toMillis)
+      if pressed then
+        now.flatMap { atMillis =>
+          modifierTapState.get.flatMap { state =>
+            ModifierTapDetector.modifierPressed(state, modifier, atMillis) match
+              case ModifierTapDetector.Outcome.Emit(next) =>
+                modifierTapState.set(next) >> latestMovement.set(None) >>
+                  queue.offer(Some(QueuedInput.Key(KeyStrokeInfo(bareModifierKey(modifier), None, Set.empty))))
+              case ModifierTapDetector.Outcome.Pending(next) => modifierTapState.set(next)
+          }
+        }
+      else now.flatMap(atMillis => modifierTapState.update(ModifierTapDetector.modifierReleased(_, modifier, atMillis)))
+
+    def bareModifierKey(modifier: Modifier): InputKey = modifier match
+      case Modifier.Ctrl  => InputKey.Ctrl
+      case Modifier.Alt   => InputKey.Alt
+      case Modifier.Shift => InputKey.Shift
+      case Modifier.Meta  => InputKey.Meta
 
     def enqueueMouse(event: MouseInputEvent): IO[Unit] = event match
       case m: MouseMove => enqueueMovement(MovementKind.Move, m)
@@ -212,4 +260,7 @@ object TerminalInputHandler:
           }
       }
 
-    loop
+    // Decode any bytes TerminalShell's startup negotiation read off this same reader but couldn't attribute to its
+    // own response (see TerminalInputHandler.create's `seedBytes` doc) before starting the ordinary read loop, so
+    // they're never silently lost.
+    appendAndDecode(seedBytes) >> loop
