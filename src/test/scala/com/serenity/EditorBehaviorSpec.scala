@@ -549,83 +549,52 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val finalBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     finalBuffer.editing.cursors shouldBe List(CursorPosition(2, 1))
 
-  it should "handle undo/redo operations correctly" in new EditorFixture:
-    // TODO: Implement Undo/Redo events and state management
-    // Given: Buffer with initial content
-    val bufferId = stateManager.createBuffer("Initial").unsafeRunSync()
-    val state    = stateManager.getCurrentState.unsafeRunSync()
-    val paneId   = state.persisted.layout.editorPanes.keys.head
-
-    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.setCursorPosition(paneId, 0, 7).unsafeRunSync()
-
-    // When: Make edits
-    stateManager.applyEvent(InsertChar(' ')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('T')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('e')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('t')).unsafeRunSync()
-
-    val afterEditsState = stateManager.getCurrentState.unsafeRunSync()
-    afterEditsState.persisted.buffers(bufferId).document.content.collect() shouldBe "Initial Text"
-
-    // When: Try undo operations (will fail until Undo event is implemented)
-    // stateManager.applyEvent(Undo).unsafeRunSync()
-
-    // Then: Should revert changes (assertion will fail until implemented)
-    // val afterUndoState = stateManager.getCurrentState.unsafeRunSync()
-    // afterUndoState.persisted.buffers(bufferId).content.collect() shouldBe "Initial"
-
-    // When: Try redo operations (will fail until Redo event is implemented)
-    // stateManager.applyEvent(Redo).unsafeRunSync()
-
-    // Then: Should restore changes (assertion will fail until implemented)
-    // val afterRedoState = stateManager.getCurrentState.unsafeRunSync()
-    // afterRedoState.persisted.buffers(bufferId).content.collect() shouldBe "Initial Text"
-
   it should "handle opening an existing file" in new EditorFixture:
-    // TODO: Implement file system operations - stubs will log but not actually work
-    // When: Open a file (mocked file system operation)
+    // Given: A buffer loaded from disk and tagged with its source path
     val fileContent = "This is file content\nWith multiple lines\nAnd some text"
+    val filePath    = java.nio.file.Path.of("/path/to/file.txt")
     val bufferId    = stateManager.createBuffer(fileContent).unsafeRunSync()
-    stateManager.setBufferFilePath(bufferId, java.nio.file.Path.of("/path/to/file.txt")).unsafeRunSync()
+    stateManager.setBufferFilePath(bufferId, filePath).unsafeRunSync()
 
-    // Then: Buffer should contain file content and not be dirty (stub doesn't set filePath yet)
+    // Then: Buffer should contain the file content, be tagged with the path, and not be dirty
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val buffer = state.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe fileContent
     buffer.document.isDirty shouldBe false
-    // buffer.filePath shouldBe Some("/path/to/file.txt") // Will fail until setBufferFilePath is implemented
+    buffer.document.filePath shouldBe Some(filePath)
 
   it should "handle saving a file" in new EditorFixture:
-    // TODO: Implement file save operations - stubs will log but not actually work
-    // Given: Modified buffer
-    val bufferId = stateManager.createBuffer("Original content").unsafeRunSync()
-    stateManager.setBufferFilePath(bufferId, java.nio.file.Path.of("/path/to/save.txt")).unsafeRunSync()
+    // Given: A buffer associated with a real file on disk
+    val savePath = java.nio.file.Files.createTempFile("editor-behavior-save", ".txt")
+    try
+      val bufferId = stateManager.createBuffer("Original content").unsafeRunSync()
+      stateManager.setBufferFilePath(bufferId, savePath).unsafeRunSync()
 
-    val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.persisted.layout.editorPanes.keys.head
-    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.setCursorPosition(paneId, 0, 16).unsafeRunSync()
+      val state  = stateManager.getCurrentState.unsafeRunSync()
+      val paneId = state.persisted.layout.editorPanes.keys.head
+      stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+      stateManager.setCursorPosition(paneId, 0, 16).unsafeRunSync()
 
-    stateManager.applyEvent(InsertChar(' ')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('+')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar(' ')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('m')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('o')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('d')).unsafeRunSync()
-    stateManager.applyEvent(InsertChar('s')).unsafeRunSync()
+      stateManager.applyEvent(InsertChar(' ')).unsafeRunSync()
+      stateManager.applyEvent(InsertChar('+')).unsafeRunSync()
+      stateManager.applyEvent(InsertChar(' ')).unsafeRunSync()
+      stateManager.applyEvent(InsertChar('m')).unsafeRunSync()
+      stateManager.applyEvent(InsertChar('o')).unsafeRunSync()
+      stateManager.applyEvent(InsertChar('d')).unsafeRunSync()
+      stateManager.applyEvent(InsertChar('s')).unsafeRunSync()
 
-    val beforeSaveState = stateManager.getCurrentState.unsafeRunSync()
-    beforeSaveState.persisted.buffers(bufferId).document.isDirty shouldBe true
+      val beforeSaveState = stateManager.getCurrentState.unsafeRunSync()
+      beforeSaveState.persisted.buffers(bufferId).document.isDirty shouldBe true
 
-    // When: Save file (stub will log but not actually save)
-    stateManager.saveBuffer(bufferId).unsafeRunSync()
+      // When: Save the file
+      stateManager.saveBuffer(bufferId).unsafeRunSync()
 
-    // Then: Buffer should no longer be dirty (will fail until saveBuffer is implemented)
-    val afterSaveState = stateManager.getCurrentState.unsafeRunSync()
-    // afterSaveState.persisted.buffers(bufferId).isDirty shouldBe false // Will fail until saveBuffer is implemented
-    afterSaveState.persisted.buffers(bufferId).document.content.collect() shouldBe "Original content + mods"
+      // Then: Buffer should no longer be dirty and the file on disk should hold the new content
+      val afterSaveState = stateManager.getCurrentState.unsafeRunSync()
+      afterSaveState.persisted.buffers(bufferId).document.isDirty shouldBe false
+      afterSaveState.persisted.buffers(bufferId).document.content.collect() shouldBe "Original content + mods"
+      java.nio.file.Files.readString(savePath) shouldBe "Original content + mods"
+    finally java.nio.file.Files.deleteIfExists(savePath)
 
   trait EditorFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
