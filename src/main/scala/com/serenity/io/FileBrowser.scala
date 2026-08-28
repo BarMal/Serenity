@@ -1,6 +1,6 @@
 package com.serenity.io
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 
 import cats.effect.IO
 import cats.syntax.traverse.*
@@ -13,48 +13,15 @@ final case class FileEntry(
     size: Long
 )
 
-final case class FileBrowser(currentDirectory: Path = Paths.get(System.getProperty("user.dir"))):
+/** Stateless directory listing -- the only file-browsing workflow production code uses. */
+object FileBrowser:
 
-  /** Get current directory */
-  def getCurrentDirectory: IO[Path] = IO.pure(currentDirectory)
-
-  /** Change to specified directory */
-  def changeDirectory(path: Path): IO[FileBrowser] =
-    for
-      exists <- IO.blocking(java.nio.file.Files.exists(path) && java.nio.file.Files.isDirectory(path))
-      _      <- IO.unlessA(exists)(IO.raiseError(new RuntimeException(s"Directory does not exist: $path")))
-    yield FileBrowser(path.normalize())
-
-  /** List files and directories in current directory */
-  def listCurrentDirectory: IO[List[FileEntry]] =
-    listDirectory(currentDirectory)
-
-  /** List files and directories in specified directory */
+  /** List files and directories in `directory`, directories first, then alphabetically by name. */
   def listDirectory(directory: Path): IO[List[FileEntry]] =
     for
       files   <- FileUtils.listFiles(directory)
       entries <- files.traverse(createFileEntry)
     yield entries.sortBy(entry => (!entry.isDirectory, entry.name.toLowerCase))
-
-  /** Go up one directory level */
-  def goUp: IO[FileBrowser] =
-    IO.pure {
-      val parent = Option(currentDirectory.getParent)
-      parent match
-        case Some(parentPath) => FileBrowser(parentPath)
-        case None             => this // Already at root, return unchanged
-    }
-
-  /** Go to home directory */
-  def goHome: IO[FileBrowser] =
-    changeDirectory(Paths.get(System.getProperty("user.home")))
-
-  /** Search for files matching pattern in current directory */
-  def searchFiles(pattern: String): IO[List[FileEntry]] =
-    for
-      entries <- listCurrentDirectory
-      filtered = entries.filter(_.name.toLowerCase.contains(pattern.toLowerCase))
-    yield filtered
 
   private def createFileEntry(path: Path): IO[FileEntry] =
     for
@@ -68,14 +35,3 @@ final case class FileBrowser(currentDirectory: Path = Paths.get(System.getProper
       fileType = fileType,
       size = size
     )
-
-extension (files: List[FileEntry])
-  /** Filter to show only files (no directories) */
-  def filesOnly: List[FileEntry] = files.filterNot(_.isDirectory)
-
-  /** Filter to show only directories */
-  def directoriesOnly: List[FileEntry] = files.filter(_.isDirectory)
-
-  /** Filter by file type */
-  def byFileType(fileType: FileType): List[FileEntry] =
-    files.filter(_.fileType.contains(fileType))

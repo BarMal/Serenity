@@ -2303,7 +2303,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   protected def pinExplorerPanelEffect(position: PanelPosition, path: Path, size: Int): IO[Unit] =
     for
-      fileEntries <- fileManager.getFileBrowser.listDirectory(path)
+      fileEntries <- fileManager.listDirectory(path)
       dirEntries = toDirEntries(fileEntries)
       _ <- enqueueEvent(
         ExplorerEvent.RootDirectoryLoaded(
@@ -2318,7 +2318,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   protected def loadPinnedDirectoryEffect(position: PanelPosition, path: Path): IO[Unit] =
     (for
-      fileEntries <- fileManager.getFileBrowser.listDirectory(path)
+      fileEntries <- fileManager.listDirectory(path)
       dirEntries = toDirEntries(fileEntries)
       _ <- enqueueEvent(ExplorerEvent.DirectoryLoaded(position, path, dirEntries))
     yield ()).handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load directory $path"))
