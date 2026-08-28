@@ -34,7 +34,7 @@ object CursorViewport:
     currentState: AppState,
     cursor: CursorPosition
   ): Viewport =
-    val wordWrapEnabled  = currentState.persisted.config.wordWrapEnabled
+    val wordWrapEnabled  = currentState.persisted.config.surfaceConfig.wordWrapEnabled
     val viewport         = buffer.viewport
     val halfVisibleLines = viewport.visibleLines / 2
     val font             = previewFontForBuffer(buffer, currentState.persisted.config.fontConfig)

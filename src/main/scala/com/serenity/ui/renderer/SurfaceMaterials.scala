@@ -8,22 +8,23 @@ import com.serenity.ui.theme.Theme
 object SurfaceMaterials:
 
   def panelAlpha(config: AppConfig, theme: Theme): Float =
-    config.materialPreset match
+    config.surfaceConfig.materialPreset match
       case MaterialPreset.Solid   => 1.0f
       case MaterialPreset.Clear   => 0.28f
       case MaterialPreset.Frosted => theme.panel.alpha.toFloat
       case MaterialPreset.Crystal => 0.78f
-      case MaterialPreset.Custom  => alphaForBackground(config.backgroundStyle, theme)
+      case MaterialPreset.Custom  => alphaForBackground(config.surfaceConfig.backgroundStyle, theme)
 
   def effectiveBlurRadius(config: AppConfig): Float =
-    config.materialPreset match
+    config.surfaceConfig.materialPreset match
       case MaterialPreset.Solid | MaterialPreset.Clear => 0.0f
-      case MaterialPreset.Frosted                      => config.blurRadius
-      case MaterialPreset.Crystal                      => math.max(config.blurRadius, 0.42f)
-      case MaterialPreset.Custom                       => blurForBackground(config.backgroundStyle, config.blurRadius)
+      case MaterialPreset.Frosted                      => config.surfaceConfig.blurRadius
+      case MaterialPreset.Crystal                      => math.max(config.surfaceConfig.blurRadius, 0.42f)
+      case MaterialPreset.Custom =>
+        blurForBackground(config.surfaceConfig.backgroundStyle, config.surfaceConfig.blurRadius)
 
   def glassSheenBackground(config: AppConfig, theme: Theme): Option[Color] =
-    Option.when(config.materialPreset == MaterialPreset.Crystal || isCustomGlass(config)) {
+    Option.when(config.surfaceConfig.materialPreset == MaterialPreset.Crystal || isCustomGlass(config)) {
       blend(theme.panel.background, theme.panel.foreground, 0.10)
     }
 
@@ -42,7 +43,7 @@ object SurfaceMaterials:
       case BackgroundStyle.GlassLike   => math.max(blurRadius, 0.42f)
 
   private def isCustomGlass(config: AppConfig): Boolean =
-    config.materialPreset == MaterialPreset.Custom && config.backgroundStyle == BackgroundStyle.GlassLike
+    config.surfaceConfig.materialPreset == MaterialPreset.Custom && config.surfaceConfig.backgroundStyle == BackgroundStyle.GlassLike
 
   private def blend(from: Color, to: Color, factor: Double): Color =
     val t = factor.max(0.0).min(1.0)

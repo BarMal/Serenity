@@ -70,8 +70,8 @@ class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
 
     config.windowChromeMode shouldBe WindowChromeMode.Custom
     config.windowConfig shouldBe WindowConfig(chromeMode = WindowChromeMode.Custom)
-    config.blurRadius shouldBe 0.55f
-    config.backgroundStyle shouldBe AppConfig.default.backgroundStyle
+    config.surfaceConfig.blurRadius shouldBe 0.55f
+    config.surfaceConfig.backgroundStyle shouldBe AppConfig.default.surfaceConfig.backgroundStyle
     config.cursorMode shouldBe AppConfig.default.cursorMode
   }
 

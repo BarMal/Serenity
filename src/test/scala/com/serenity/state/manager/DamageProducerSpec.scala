@@ -735,7 +735,7 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
         )
       )
 
-      before.persisted.config.focusedTextBodyEnabled shouldBe false
+      before.persisted.config.surfaceConfig.focusedTextBodyEnabled shouldBe false
       DamageProducer.forTransition(before, after) shouldBe
         Damage.Combined(Set(Damage.BufferRows(bufferId, Set(0, 3)), Damage.Chrome))
     }

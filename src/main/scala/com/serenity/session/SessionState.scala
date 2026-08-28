@@ -894,6 +894,35 @@ private def encodeInterfaceConfig(config: AppConfig): List[(String, Json)] =
     "uiOutlineThicknessPx" -> config.interfaceConfig.outlineThicknessPx.asJson
   )
 
+private def encodeSurfaceConfig(config: AppConfig): List[(String, Json)] =
+  List(
+    "showLineNumbers"                   -> config.surfaceConfig.showLineNumbers.asJson,
+    "showGutter"                        -> config.surfaceConfig.showGutter.asJson,
+    "wordWrapEnabled"                   -> config.surfaceConfig.wordWrapEnabled.asJson,
+    "blurRadius"                        -> config.surfaceConfig.blurRadius.asJson,
+    "backgroundStyle"                   -> config.surfaceConfig.backgroundStyle.asJson,
+    "materialPreset"                    -> config.surfaceConfig.materialPreset.asJson,
+    "motionPreset"                      -> config.surfaceConfig.motionPreset.asJson,
+    "elementTransitionSpeedScale"       -> config.surfaceConfig.elementTransitionSpeedScale.asJson,
+    "editorTextTransitionSpeedScale"    -> config.surfaceConfig.editorTextTransitionSpeedScale.asJson,
+    "commandRunnerTransitionSpeedScale" -> config.surfaceConfig.commandRunnerTransitionSpeedScale.asJson,
+    "uiTransitionSpeedScale"            -> config.surfaceConfig.uiTransitionSpeedScale.asJson,
+    "cursorTransitionSpeedScale"        -> config.surfaceConfig.cursorTransitionSpeedScale.asJson,
+    "commandRunnerAnimation"            -> config.surfaceConfig.commandRunnerAnimation.asJson,
+    "uiAnimation"                       -> config.surfaceConfig.uiAnimation.asJson,
+    "commandRunnerVisibleRows"          -> config.surfaceConfig.commandRunnerVisibleRows.asJson,
+    "commandRunnerItemGapRows"          -> config.surfaceConfig.commandRunnerItemGapRows.asJson,
+    "commandRunnerCursorGapRows"        -> config.surfaceConfig.commandRunnerCursorGapRows.asJson,
+    "renderFpsTarget"                   -> config.surfaceConfig.renderFpsTarget.asJson,
+    "renderDamageGranularity"           -> config.surfaceConfig.renderDamageGranularity.asJson,
+    "editorInsertionTransitionKind"     -> config.surfaceConfig.editorInsertionTransitionKind.asJson,
+    "commandRunnerTransitionKind"       -> config.surfaceConfig.commandRunnerTransitionKind.asJson,
+    "panelOpenTransitionKind"           -> config.surfaceConfig.panelOpenTransitionKind.asJson,
+    "panelCloseTransitionKind"          -> config.surfaceConfig.panelCloseTransitionKind.asJson,
+    "motionConfiguration"               -> config.surfaceConfig.motionConfiguration.asJson,
+    "textAreaInsets"                    -> config.surfaceConfig.textAreaInsets.asJson
+  )
+
 private def decodeInputConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[InputConfig] =
   for
     hotkeyConfig <- cursor.getOrElse[HotkeyConfig]("hotkeyConfig")(defaultConfig.inputConfig.hotkeyConfig)
@@ -974,69 +1003,15 @@ private def decodeInterfaceConfig(cursor: HCursor, defaultConfig: AppConfig): De
     outlineThicknessPx = outlineThicknessPx
   )
 
-given Encoder[AppConfig] = Encoder.instance { config =>
-  Json.obj(
-    (
-      List(
-        "characterAnimation"                -> config.characterAnimation.asJson,
-        "fontConfig"                        -> config.fontConfig.asJson,
-        "minimumPaneWidth"                  -> config.minimumPaneWidth.asJson,
-        "showLineNumbers"                   -> config.showLineNumbers.asJson,
-        "showGutter"                        -> config.showGutter.asJson,
-        "wordWrapEnabled"                   -> config.wordWrapEnabled.asJson,
-        "blurRadius"                        -> config.blurRadius.asJson,
-        "backgroundStyle"                   -> config.backgroundStyle.asJson,
-        "materialPreset"                    -> config.materialPreset.asJson,
-        "motionPreset"                      -> config.motionPreset.asJson,
-        "elementTransitionSpeedScale"       -> config.elementTransitionSpeedScale.asJson,
-        "editorTextTransitionSpeedScale"    -> config.editorTextTransitionSpeedScale.asJson,
-        "commandRunnerTransitionSpeedScale" -> config.commandRunnerTransitionSpeedScale.asJson,
-        "uiTransitionSpeedScale"            -> config.uiTransitionSpeedScale.asJson,
-        "cursorTransitionSpeedScale"        -> config.cursorTransitionSpeedScale.asJson,
-        "commandRunnerAnimation"            -> config.commandRunnerAnimation.asJson,
-        "uiAnimation"                       -> config.uiAnimation.asJson,
-        "commandRunnerVisibleRows"          -> config.commandRunnerVisibleRows.asJson,
-        "commandRunnerItemGapRows"          -> config.commandRunnerItemGapRows.asJson,
-        "commandRunnerCursorGapRows"        -> config.commandRunnerCursorGapRows.asJson,
-        "renderFpsTarget"                   -> config.renderFpsTarget.asJson,
-        "renderDamageGranularity"           -> config.renderDamageGranularity.asJson,
-        "editorInsertionTransitionKind"     -> config.editorInsertionTransitionKind.asJson,
-        "commandRunnerTransitionKind"       -> config.commandRunnerTransitionKind.asJson,
-        "panelOpenTransitionKind"           -> config.panelOpenTransitionKind.asJson,
-        "panelCloseTransitionKind"          -> config.panelCloseTransitionKind.asJson,
-        "motionConfiguration"               -> config.motionConfiguration.asJson
-      ) ++
-        encodeInputConfig(config) ++
-        encodeLanguageToolsConfig(config) ++
-        encodeCursorConfig(config) ++
-        encodeWindowConfig(config) ++
-        encodeDocumentConfig(config) ++
-        encodeInterfaceConfig(config) ++
-        List(
-          "textAreaInsets" -> config.textAreaInsets.asJson
-        )
-    )*
-  )
-}
-
-given Decoder[AppConfig] = Decoder.instance { cursor =>
-  val defaultConfig = AppConfig.default
-
+private def decodeSurfaceConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[SurfaceConfig] =
   for
-    characterAnimation <- cursor.getOrElse[Option[AnimationConfig]]("characterAnimation")(
-      defaultConfig.characterAnimation
-    )
-    inputConfig         <- decodeInputConfig(cursor, defaultConfig)
-    languageToolsConfig <- decodeLanguageToolsConfig(cursor, defaultConfig)
-    fontConfig          <- cursor.getOrElse[FontConfig]("fontConfig")(defaultConfig.fontConfig)
-    minimumPaneWidth    <- cursor.getOrElse[Int]("minimumPaneWidth")(defaultConfig.minimumPaneWidth)
-    showLineNumbers     <- cursor.getOrElse[Boolean]("showLineNumbers")(defaultConfig.showLineNumbers)
-    showGutter          <- cursor.getOrElse[Boolean]("showGutter")(defaultConfig.showGutter)
-    wordWrapEnabled     <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
-    blurRadius          <- cursor.getOrElse[Float]("blurRadius")(0.0f)
-    backgroundStyle     <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
-    materialPreset      <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
-    motionPreset        <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
+    showLineNumbers <- cursor.getOrElse[Boolean]("showLineNumbers")(defaultConfig.surfaceConfig.showLineNumbers)
+    showGutter      <- cursor.getOrElse[Boolean]("showGutter")(defaultConfig.surfaceConfig.showGutter)
+    wordWrapEnabled <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
+    blurRadius      <- cursor.getOrElse[Float]("blurRadius")(0.0f)
+    backgroundStyle <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
+    materialPreset  <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
+    motionPreset    <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
     elementTransitionSpeedScale <- cursor
       .getOrElse[Double]("elementTransitionSpeedScale")(1.0)
       .map(AppConfig.clampElementTransitionSpeedScale)
@@ -1055,15 +1030,15 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     commandRunnerAnimation <- cursor.getOrElse[Option[AnimationConfig]]("commandRunnerAnimation")(
       AnimationConfig.smooth
     )
-    uiAnimation <- cursor.getOrElse[Option[AnimationConfig]]("uiAnimation")(defaultConfig.uiAnimation)
+    uiAnimation <- cursor.getOrElse[Option[AnimationConfig]]("uiAnimation")(defaultConfig.surfaceConfig.uiAnimation)
     commandRunnerVisibleRows <- cursor
       .getOrElse[Option[Int]]("commandRunnerVisibleRows")(None)
       .map(_.map(AppConfig.clampCommandRunnerVisibleRows))
     commandRunnerItemGapRows <- cursor
-      .getOrElse[Double]("commandRunnerItemGapRows")(defaultConfig.commandRunnerItemGapRows)
+      .getOrElse[Double]("commandRunnerItemGapRows")(defaultConfig.surfaceConfig.commandRunnerItemGapRows)
       .map(AppConfig.clampCommandRunnerItemGapRows)
     commandRunnerCursorGapRows <- cursor
-      .getOrElse[Option[Double]]("commandRunnerCursorGapRows")(defaultConfig.commandRunnerCursorGapRows)
+      .getOrElse[Option[Double]]("commandRunnerCursorGapRows")(defaultConfig.surfaceConfig.commandRunnerCursorGapRows)
       .map(_.map(AppConfig.clampCommandRunnerCursorGapRows))
     renderFpsTarget <- cursor.getOrElse[RenderFpsTarget]("renderFpsTarget")(RenderFpsTarget.Fps60)
     renderDamageGranularity <- cursor
@@ -1075,16 +1050,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     panelOpenTransitionKind     <- cursor.getOrElse[Option[TransitionKind]]("panelOpenTransitionKind")(None)
     panelCloseTransitionKind    <- cursor.getOrElse[Option[TransitionKind]]("panelCloseTransitionKind")(None)
     motionConfiguration         <- cursor.getOrElse[Option[MotionConfig]]("motionConfiguration")(None)
-    cursorConfig                <- decodeCursorConfig(cursor, defaultConfig)
-    windowConfig                <- decodeWindowConfig(cursor, defaultConfig)
-    documentConfig              <- decodeDocumentConfig(cursor, defaultConfig)
-    interfaceConfig             <- decodeInterfaceConfig(cursor, defaultConfig)
     textAreaInsets              <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
-  yield AppConfig(
-    characterAnimation = characterAnimation,
-    inputConfig = inputConfig,
-    fontConfig = fontConfig,
-    minimumPaneWidth = minimumPaneWidth,
+  yield SurfaceConfig(
     showLineNumbers = showLineNumbers,
     showGutter = showGutter,
     wordWrapEnabled = wordWrapEnabled,
@@ -1109,11 +1076,54 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     panelOpenTransitionKind = panelOpenTransitionKind,
     panelCloseTransitionKind = panelCloseTransitionKind,
     motionConfiguration = motionConfiguration,
+    textAreaInsets = textAreaInsets
+  )
+
+given Encoder[AppConfig] = Encoder.instance { config =>
+  Json.obj(
+    (
+      List(
+        "characterAnimation" -> config.characterAnimation.asJson,
+        "fontConfig"         -> config.fontConfig.asJson,
+        "minimumPaneWidth"   -> config.minimumPaneWidth.asJson
+      ) ++
+        encodeInputConfig(config) ++
+        encodeLanguageToolsConfig(config) ++
+        encodeCursorConfig(config) ++
+        encodeWindowConfig(config) ++
+        encodeDocumentConfig(config) ++
+        encodeInterfaceConfig(config) ++
+        encodeSurfaceConfig(config)
+    )*
+  )
+}
+
+given Decoder[AppConfig] = Decoder.instance { cursor =>
+  val defaultConfig = AppConfig.default
+
+  for
+    characterAnimation <- cursor.getOrElse[Option[AnimationConfig]]("characterAnimation")(
+      defaultConfig.characterAnimation
+    )
+    inputConfig         <- decodeInputConfig(cursor, defaultConfig)
+    languageToolsConfig <- decodeLanguageToolsConfig(cursor, defaultConfig)
+    fontConfig          <- cursor.getOrElse[FontConfig]("fontConfig")(defaultConfig.fontConfig)
+    minimumPaneWidth    <- cursor.getOrElse[Int]("minimumPaneWidth")(defaultConfig.minimumPaneWidth)
+    surfaceConfig       <- decodeSurfaceConfig(cursor, defaultConfig)
+    cursorConfig        <- decodeCursorConfig(cursor, defaultConfig)
+    windowConfig        <- decodeWindowConfig(cursor, defaultConfig)
+    documentConfig      <- decodeDocumentConfig(cursor, defaultConfig)
+    interfaceConfig     <- decodeInterfaceConfig(cursor, defaultConfig)
+  yield AppConfig(
+    characterAnimation = characterAnimation,
+    inputConfig = inputConfig,
+    fontConfig = fontConfig,
+    minimumPaneWidth = minimumPaneWidth,
+    surfaceConfig = surfaceConfig,
     cursorConfig = cursorConfig,
     windowConfig = windowConfig,
     documentConfig = documentConfig,
     interfaceConfig = interfaceConfig,
-    textAreaInsets = textAreaInsets,
     languageToolsConfig = languageToolsConfig
   )
 }

@@ -165,7 +165,7 @@ object AccessibilitySnapshot:
       selectedIndex = runner.selectedIndex,
       hasHeader = true,
       hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-      itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+      itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
       itemTargetRows = targetRows
     )
     val visibleItems = itemWindow.slice(items)
@@ -174,7 +174,7 @@ object AccessibilitySnapshot:
         visibleItems.size,
         hasHeader = true,
         hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-        itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+        itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
         itemTargetRows = targetRows
       )
       .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y }
@@ -217,7 +217,7 @@ object AccessibilitySnapshot:
       menu.selectedIndex,
       hasHeader = true,
       hasFooter = menu.items.nonEmpty,
-      itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+      itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
       itemTargetRows = targetRows
     )
     val bounds = itemBounds(
@@ -225,7 +225,7 @@ object AccessibilitySnapshot:
       window.rowCount,
       hasHeader = true,
       hasFooter = menu.items.nonEmpty,
-      state.persisted.config.commandRunnerItemGapRows,
+      state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
       targetRows
     )
     window.slice(menu.items).zip(bounds).zipWithIndex.map {

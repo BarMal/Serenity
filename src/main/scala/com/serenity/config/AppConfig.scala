@@ -1401,16 +1401,24 @@ object SurfaceConfig:
         parseInsetPercent(trimmed).map(config.withTextAreaBottomInset)
       else if viewportWidthPercentKeys.contains(key) then
         parseViewportPercent(trimmed)
-          .map(percent => config.withViewportWidthSizing(config.viewportSizing.width.copy(percent = percent)))
+          .map(percent =>
+            config.withViewportWidthSizing(config.surfaceConfig.viewportSizing.width.copy(percent = percent))
+          )
       else if viewportWidthMaxKeys.contains(key) then
         parseViewportMaxCells(trimmed)
-          .map(maxCells => config.withViewportWidthSizing(config.viewportSizing.width.copy(maxCells = maxCells)))
+          .map(maxCells =>
+            config.withViewportWidthSizing(config.surfaceConfig.viewportSizing.width.copy(maxCells = maxCells))
+          )
       else if viewportHeightPercentKeys.contains(key) then
         parseViewportPercent(trimmed)
-          .map(percent => config.withViewportHeightSizing(config.viewportSizing.height.copy(percent = percent)))
+          .map(percent =>
+            config.withViewportHeightSizing(config.surfaceConfig.viewportSizing.height.copy(percent = percent))
+          )
       else if viewportHeightMaxKeys.contains(key) then
         parseViewportMaxCells(trimmed)
-          .map(maxCells => config.withViewportHeightSizing(config.viewportSizing.height.copy(maxCells = maxCells)))
+          .map(maxCells =>
+            config.withViewportHeightSizing(config.surfaceConfig.viewportSizing.height.copy(maxCells = maxCells))
+          )
       else None
 
     def invalidValue(key: String, value: String): Boolean =
@@ -1562,44 +1570,12 @@ final case class AppConfig(
     inputConfig: InputConfig = InputConfig(),
     fontConfig: FontConfig = FontConfig(),
     minimumPaneWidth: Int = 50,
-    showLineNumbers: Boolean = true,
-    showGutter: Boolean = true,
-    /** Whether each editor pane reserves a visible identity header. */
-    showPaneHeaders: Boolean = true,
-    wordWrapEnabled: Boolean = true,
-    focusedTextBodyEnabled: Boolean = false,
-    contextualToolbarEnabled: Boolean = true,
-    contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
-    blurRadius: Float = 0.18f,
-    backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
-    materialPreset: MaterialPreset = MaterialPreset.Frosted,
-    postProcessingEffect: PostProcessingEffect = PostProcessingEffect.Off,
-    uiShadowsEnabled: Boolean = true,
-    motionPreset: MotionPreset = MotionPreset.Reduced,
-    elementTransitionSpeedScale: Double = 1.0,
-    editorTextTransitionSpeedScale: Option[Double] = None,
-    commandRunnerTransitionSpeedScale: Option[Double] = None,
-    uiTransitionSpeedScale: Option[Double] = None,
-    cursorTransitionSpeedScale: Option[Double] = None,
-    commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
-    uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
-    commandRunnerVisibleRows: Option[Int] = None,
-    commandRunnerItemGapRows: Double = 0.0,
-    commandRunnerCursorGapRows: Option[Double] = None,
-    renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
-    renderDamageGranularity: RenderDamageGranularity = RenderDamageGranularity.Rows,
-    editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
-    commandRunnerTransitionKind: Option[TransitionKind] = None,
-    panelOpenTransitionKind: Option[TransitionKind] = None,
-    panelCloseTransitionKind: Option[TransitionKind] = None,
-    motionConfiguration: Option[MotionConfig] = None,
+    surfaceConfig: SurfaceConfig = SurfaceConfig(),
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
     windowSitterConfig: WindowSitterConfig = WindowSitterConfig.default,
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
-    textAreaInsets: TextAreaInsets = TextAreaInsets(),
-    viewportSizing: ViewportSizing = ViewportSizing(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig()
 ):
 
@@ -1624,78 +1600,8 @@ final case class AppConfig(
   def withInputConfig(config: InputConfig): AppConfig =
     copy(inputConfig = config)
 
-  def surfaceConfig: SurfaceConfig =
-    SurfaceConfig(
-      showLineNumbers = showLineNumbers,
-      showGutter = showGutter,
-      showPaneHeaders = showPaneHeaders,
-      wordWrapEnabled = wordWrapEnabled,
-      focusedTextBodyEnabled = focusedTextBodyEnabled,
-      contextualToolbarEnabled = contextualToolbarEnabled,
-      contextualToolbarDisplayMode = contextualToolbarDisplayMode,
-      blurRadius = blurRadius,
-      backgroundStyle = backgroundStyle,
-      materialPreset = materialPreset,
-      postProcessingEffect = postProcessingEffect,
-      uiShadowsEnabled = uiShadowsEnabled,
-      motionPreset = motionPreset,
-      elementTransitionSpeedScale = elementTransitionSpeedScale,
-      editorTextTransitionSpeedScale = editorTextTransitionSpeedScale,
-      commandRunnerTransitionSpeedScale = commandRunnerTransitionSpeedScale,
-      uiTransitionSpeedScale = uiTransitionSpeedScale,
-      cursorTransitionSpeedScale = cursorTransitionSpeedScale,
-      commandRunnerAnimation = commandRunnerAnimation,
-      uiAnimation = uiAnimation,
-      commandRunnerVisibleRows = commandRunnerVisibleRows,
-      commandRunnerItemGapRows = commandRunnerItemGapRows,
-      commandRunnerCursorGapRows = commandRunnerCursorGapRows,
-      renderFpsTarget = renderFpsTarget,
-      renderDamageGranularity = renderDamageGranularity,
-      editorInsertionTransitionKind = editorInsertionTransitionKind,
-      commandRunnerTransitionKind = commandRunnerTransitionKind,
-      panelOpenTransitionKind = panelOpenTransitionKind,
-      panelCloseTransitionKind = panelCloseTransitionKind,
-      motionConfiguration = motionConfiguration,
-      textAreaInsets = textAreaInsets,
-      viewportSizing = viewportSizing
-    )
-
   def withSurfaceConfig(config: SurfaceConfig): AppConfig =
-    val normalized = config.normalized
-    copy(
-      showLineNumbers = normalized.showLineNumbers,
-      showGutter = normalized.showGutter,
-      showPaneHeaders = normalized.showPaneHeaders,
-      wordWrapEnabled = normalized.wordWrapEnabled,
-      focusedTextBodyEnabled = normalized.focusedTextBodyEnabled,
-      contextualToolbarEnabled = normalized.contextualToolbarEnabled,
-      contextualToolbarDisplayMode = normalized.contextualToolbarDisplayMode,
-      blurRadius = normalized.blurRadius,
-      backgroundStyle = normalized.backgroundStyle,
-      materialPreset = normalized.materialPreset,
-      postProcessingEffect = normalized.postProcessingEffect,
-      uiShadowsEnabled = normalized.uiShadowsEnabled,
-      motionPreset = normalized.motionPreset,
-      elementTransitionSpeedScale = normalized.elementTransitionSpeedScale,
-      editorTextTransitionSpeedScale = normalized.editorTextTransitionSpeedScale,
-      commandRunnerTransitionSpeedScale = normalized.commandRunnerTransitionSpeedScale,
-      uiTransitionSpeedScale = normalized.uiTransitionSpeedScale,
-      cursorTransitionSpeedScale = normalized.cursorTransitionSpeedScale,
-      commandRunnerAnimation = normalized.commandRunnerAnimation,
-      uiAnimation = normalized.uiAnimation,
-      commandRunnerVisibleRows = normalized.commandRunnerVisibleRows,
-      commandRunnerItemGapRows = normalized.commandRunnerItemGapRows,
-      commandRunnerCursorGapRows = normalized.commandRunnerCursorGapRows,
-      renderFpsTarget = normalized.renderFpsTarget,
-      renderDamageGranularity = normalized.renderDamageGranularity,
-      editorInsertionTransitionKind = normalized.editorInsertionTransitionKind,
-      commandRunnerTransitionKind = normalized.commandRunnerTransitionKind,
-      panelOpenTransitionKind = normalized.panelOpenTransitionKind,
-      panelCloseTransitionKind = normalized.panelCloseTransitionKind,
-      motionConfiguration = normalized.motionConfiguration,
-      textAreaInsets = normalized.textAreaInsets,
-      viewportSizing = normalized.viewportSizing
-    )
+    copy(surfaceConfig = config.normalized)
 
   def windowChromeMode: WindowChromeMode =
     windowConfig.chromeMode
@@ -2149,25 +2055,25 @@ final case class AppConfig(
     withSurfaceConfig(surfaceConfig.copy(textAreaInsets = insets))
 
   def withTextAreaLeftInset(value: Double): AppConfig =
-    withTextAreaInsets(textAreaInsets.copy(left = value))
+    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(left = value))
 
   def withTextAreaRightInset(value: Double): AppConfig =
-    withTextAreaInsets(textAreaInsets.copy(right = value))
+    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(right = value))
 
   def withTextAreaTopInset(value: Double): AppConfig =
-    withTextAreaInsets(textAreaInsets.copy(top = value))
+    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(top = value))
 
   def withTextAreaBottomInset(value: Double): AppConfig =
-    withTextAreaInsets(textAreaInsets.copy(bottom = value))
+    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(bottom = value))
 
   def withViewportSizing(sizing: ViewportSizing): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(viewportSizing = sizing))
 
   def withViewportWidthSizing(sizing: ViewportAxisSizing): AppConfig =
-    withViewportSizing(viewportSizing.copy(width = sizing))
+    withViewportSizing(surfaceConfig.viewportSizing.copy(width = sizing))
 
   def withViewportHeightSizing(sizing: ViewportAxisSizing): AppConfig =
-    withViewportSizing(viewportSizing.copy(height = sizing))
+    withViewportSizing(surfaceConfig.viewportSizing.copy(height = sizing))
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))
@@ -2227,36 +2133,46 @@ object AppConfig:
   /** Default configuration keeps text entry immediate and uses restrained frosted surfaces. */
   val default: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.none,
-    uiAnimation = AnimationConfig.smooth,
-    blurRadius = 0.18f,
-    backgroundStyle = BackgroundStyle.Frosted,
-    motionPreset = MotionPreset.Smooth
+    surfaceConfig = SurfaceConfig(
+      uiAnimation = AnimationConfig.smooth,
+      blurRadius = 0.18f,
+      backgroundStyle = BackgroundStyle.Frosted,
+      motionPreset = MotionPreset.Smooth
+    )
   )
 
   /** Test configuration with visible animations enabled */
   val withTestAnimations: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.quick,
-    uiAnimation = AnimationConfig.quick,
-    motionPreset = MotionPreset.Expressive
+    surfaceConfig = SurfaceConfig(
+      uiAnimation = AnimationConfig.quick,
+      motionPreset = MotionPreset.Expressive
+    )
   )
 
   /** Quick fade-in animation configuration */
   val withQuickAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.quick,
-    uiAnimation = AnimationConfig.quick,
-    motionPreset = MotionPreset.Expressive
+    surfaceConfig = SurfaceConfig(
+      uiAnimation = AnimationConfig.quick,
+      motionPreset = MotionPreset.Expressive
+    )
   )
 
   /** Smooth fade-in animation configuration */
   val withSmoothAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.smooth,
-    uiAnimation = AnimationConfig.smooth,
-    motionPreset = MotionPreset.Smooth
+    surfaceConfig = SurfaceConfig(
+      uiAnimation = AnimationConfig.smooth,
+      motionPreset = MotionPreset.Smooth
+    )
   )
 
   /** Subtle fade-in animation configuration */
   val withSubtleAnimation: AppConfig = AppConfig(
     characterAnimation = AnimationConfig.subtle,
-    uiAnimation = AnimationConfig.subtle,
-    motionPreset = MotionPreset.Subtle
+    surfaceConfig = SurfaceConfig(
+      uiAnimation = AnimationConfig.subtle,
+      motionPreset = MotionPreset.Subtle
+    )
   )

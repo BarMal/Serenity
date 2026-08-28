@@ -48,7 +48,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.elementTransitionSpeedScale shouldBe 2.25
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .elementTransitionSpeedScale shouldBe 2.25
   }
 
   it should "update the global motion accessibility override without changing the baseline" in {
@@ -188,7 +193,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.motionPreset shouldBe MotionPreset.Custom
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .motionPreset shouldBe MotionPreset.Custom
   }
 
   it should "persist custom as the authoritative baseline after a manual motion edit" in {
@@ -299,11 +309,13 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
   it should "preserve legacy surface family animations when custom editor timing is promoted" in {
     val configured = AppConfig(
       characterAnimation = AnimationConfig.smooth,
-      motionPreset = MotionPreset.Custom,
-      commandRunnerAnimation = AnimationConfig.subtle,
-      uiAnimation = AnimationConfig.quick,
-      panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
-      panelCloseTransitionKind = Some(TransitionKind.Fade)
+      surfaceConfig = SurfaceConfig(
+        motionPreset = MotionPreset.Custom,
+        commandRunnerAnimation = AnimationConfig.subtle,
+        uiAnimation = AnimationConfig.quick,
+        panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
+        panelCloseTransitionKind = Some(TransitionKind.Fade)
+      )
     )
     val families = configured
       .withEditorTextAnimation(
@@ -355,7 +367,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
           .unsafeRunSync()
 
         val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
-        config.motionPreset shouldBe MotionPreset.Custom
+        config.surfaceConfig.motionPreset shouldBe MotionPreset.Custom
         config.surfaceConfig.motionConfiguration.map(_.accessibility) shouldBe Some(accessibility)
         config.surfaceConfig.effectiveMotionConfiguration.families.values.foreach(_.enabled shouldBe false)
     }
@@ -405,7 +417,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.editorTextTransitionSpeedScale shouldBe Some(0.5)
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .editorTextTransitionSpeedScale shouldBe Some(0.5)
   }
 
   it should "retain editor text animations while starting a pane UI transition" in {
@@ -456,7 +473,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .commandRunnerTransitionSpeedScale shouldBe Some(2.25)
   }
 
   it should "update the UI transition speed scale config" in {
@@ -473,7 +495,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiTransitionSpeedScale shouldBe Some(1.25)
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.uiTransitionSpeedScale shouldBe Some(
+      1.25
+    )
   }
 
   it should "update the cursor transition speed scale config" in {
@@ -490,7 +514,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.cursorTransitionSpeedScale shouldBe Some(0.75)
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .cursorTransitionSpeedScale shouldBe Some(0.75)
   }
 
   it should "update the editor text transition kind config" in {
@@ -513,6 +542,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
       .persisted
       .config
+      .surfaceConfig
       .editorInsertionTransitionKind shouldBe TransitionKind.TypedText
   }
 
@@ -538,7 +568,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.motionPreset shouldBe MotionPreset.Custom
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .motionPreset shouldBe MotionPreset.Custom
   }
 
   it should "update the panel open transition kind config" in {
@@ -557,7 +592,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.panelOpenTransitionKind shouldBe Some(
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.panelOpenTransitionKind shouldBe Some(
       TransitionKind.OutlineThenContent
     )
   }
@@ -578,7 +613,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.panelCloseTransitionKind shouldBe Some(
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.panelCloseTransitionKind shouldBe Some(
       TransitionKind.Disabled
     )
   }
@@ -599,7 +634,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.commandRunnerTransitionKind shouldBe Some(
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .commandRunnerTransitionKind shouldBe Some(
       TransitionKind.OutlineThenContent
     )
   }
@@ -627,8 +667,8 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
-    config.commandRunnerTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
-    config.motionPreset shouldBe MotionPreset.Custom
+    config.surfaceConfig.commandRunnerTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
+    config.surfaceConfig.motionPreset shouldBe MotionPreset.Custom
   }
 
   it should "update the command runner fade animation config" in {
@@ -645,7 +685,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.commandRunnerAnimation shouldBe AnimationConfig.subtle
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .commandRunnerAnimation shouldBe AnimationConfig.subtle
   }
 
   it should "mark the motion preset custom when command runner fade is edited" in {
@@ -669,8 +714,8 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
-    config.commandRunnerAnimation shouldBe None
-    config.motionPreset shouldBe MotionPreset.Custom
+    config.surfaceConfig.commandRunnerAnimation shouldBe None
+    config.surfaceConfig.motionPreset shouldBe MotionPreset.Custom
   }
 
   it should "update the UI animation config" in {
@@ -687,7 +732,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiAnimation shouldBe AnimationConfig.subtle
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .uiAnimation shouldBe AnimationConfig.subtle
   }
 
   it should "update the render FPS target config" in {
@@ -706,7 +756,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .renderFpsTarget shouldBe RenderFpsTarget.Fps120
   }
 
   it should "update the UI element gap config" in {

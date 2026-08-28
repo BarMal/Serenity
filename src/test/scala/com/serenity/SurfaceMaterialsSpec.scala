@@ -23,7 +23,7 @@ class SurfaceMaterialsSpec extends AnyFlatSpec with Matchers:
       .withMaterialPreset(MaterialPreset.Crystal)
       .withBackgroundStyle(BackgroundStyle.Transparent)
 
-    config.materialPreset shouldBe MaterialPreset.Custom
+    config.surfaceConfig.materialPreset shouldBe MaterialPreset.Custom
     SurfaceMaterials.panelAlpha(config, Theme.default) shouldBe 0.28f
     SurfaceMaterials.effectiveBlurRadius(config) shouldBe 0.0f
     SurfaceMaterials.glassSheenBackground(config, Theme.default) shouldBe None

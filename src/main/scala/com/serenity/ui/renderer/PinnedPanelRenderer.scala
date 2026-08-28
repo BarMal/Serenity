@@ -19,7 +19,7 @@ object PinnedPanelRenderer:
   ): Unit =
     val rect = panel.rect
 
-    if config.uiShadowsEnabled then
+    if config.surfaceConfig.uiShadowsEnabled then
       surface.roundedRects.foreach(
         _.drawRoundRectShadow(
           rect.x,

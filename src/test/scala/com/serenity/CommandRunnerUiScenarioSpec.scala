@@ -33,9 +33,9 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
       case com.serenity.state.models.SurfaceContent.CommandPalette(runner) => runner.selectedIndex
       case _                                                               => fail("Expected command palette")
     selectedIndex shouldBe 0
-    val beforeClick = driver.state.unsafeRunSync().persisted.config.showLineNumbers
+    val beforeClick = driver.state.unsafeRunSync().persisted.config.surfaceConfig.showLineNumbers
     driver.dispatch(MouseClick(target.x + 1, target.y)).unsafeRunSync()
-    driver.state.unsafeRunSync().persisted.config.showLineNumbers shouldBe !beforeClick
+    driver.state.unsafeRunSync().persisted.config.surfaceConfig.showLineNumbers shouldBe !beforeClick
     searched.evidence.layoutViolations shouldBe empty
     driver.dispatch(Escape).unsafeRunSync()
     driver.advanceToSettled().unsafeRunSync() shouldBe true
@@ -68,7 +68,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     }
     frame.evidence.visibleText.mkString(" ") should not include "/home/"
     driver.dispatch(Enter).unsafeRunSync()
-    driver.state.unsafeRunSync().persisted.config.blurRadius shouldBe 0.5f
+    driver.state.unsafeRunSync().persisted.config.surfaceConfig.blurRadius shouldBe 0.5f
   }
 
   it should "render two-row command targets in comfortable and spacious density" in
@@ -105,7 +105,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     "0.5".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
     driver.dispatch(Enter).unsafeRunSync()
 
-    driver.state.unsafeRunSync().persisted.config.blurRadius shouldBe 0.5f
+    driver.state.unsafeRunSync().persisted.config.surfaceConfig.blurRadius shouldBe 0.5f
     driver.dispatch(Escape).unsafeRunSync()
     driver.advanceToSettled().unsafeRunSync() shouldBe true
     driver.state.unsafeRunSync().commandRunnerSurface shouldBe None

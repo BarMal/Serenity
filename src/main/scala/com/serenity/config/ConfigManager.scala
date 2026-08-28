@@ -320,11 +320,13 @@ object ConfigManager:
       .map { family =>
         val settings = motionConfiguration.families(family)
         val speedScale = family match
-          case MotionFamily.EditorText      => config.editorTextTransitionSpeedScale.getOrElse(settings.speedScale)
-          case MotionFamily.CommandSurfaces => config.commandRunnerTransitionSpeedScale.getOrElse(settings.speedScale)
-          case MotionFamily.UiTransitions   => config.uiTransitionSpeedScale.getOrElse(settings.speedScale)
-          case MotionFamily.Cursor          => config.cursorTransitionSpeedScale.getOrElse(settings.speedScale)
-          case MotionFamily.PinnedPanels    => settings.speedScale
+          case MotionFamily.EditorText =>
+            config.surfaceConfig.editorTextTransitionSpeedScale.getOrElse(settings.speedScale)
+          case MotionFamily.CommandSurfaces =>
+            config.surfaceConfig.commandRunnerTransitionSpeedScale.getOrElse(settings.speedScale)
+          case MotionFamily.UiTransitions => config.surfaceConfig.uiTransitionSpeedScale.getOrElse(settings.speedScale)
+          case MotionFamily.Cursor => config.surfaceConfig.cursorTransitionSpeedScale.getOrElse(settings.speedScale)
+          case MotionFamily.PinnedPanels => settings.speedScale
         val animationSetting = motionAnimationSetting(settings.animation)
         val customAnimationDetails =
           if animationSetting == "custom" then settings.animation.fold("")(animation => s"""
@@ -400,31 +402,31 @@ object ConfigManager:
        |ui.element_gap = ${config.uiElementGap}
        |ui.corner_radius = ${config.uiCornerRadiusPx}
        |ui.outline_thickness = ${config.uiOutlineThicknessPx}
-       |command_runner.visible_rows = ${config.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")}
-       |command_runner.item_gap_rows = ${config.commandRunnerItemGapRows}
-       |command_runner.cursor_gap_rows = ${config.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")}
-       |render.fps = ${config.renderFpsTarget.configKey}
+       |command_runner.visible_rows = ${config.surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")}
+       |command_runner.item_gap_rows = ${config.surfaceConfig.commandRunnerItemGapRows}
+       |command_runner.cursor_gap_rows = ${config.surfaceConfig.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")}
+       |render.fps = ${config.surfaceConfig.renderFpsTarget.configKey}
        |# Damage granularity the renderer honours: rows redraws whole visible lines; cells honours column ranges on
        |# monospaced buffers only, falling back to rows for proportional or ligature-shaped text
-       |render.damage_granularity = ${config.renderDamageGranularity.configKey}
-       |display.word_wrap = ${config.wordWrapEnabled}
-       |display.pane_headers = ${config.showPaneHeaders}
-       |display.focused_text_body = ${config.focusedTextBodyEnabled}
-       |display.contextual_toolbar = ${config.contextualToolbarEnabled}
-       |display.contextual_toolbar_mode = ${config.contextualToolbarDisplayMode.configKey}
+       |render.damage_granularity = ${config.surfaceConfig.renderDamageGranularity.configKey}
+       |display.word_wrap = ${config.surfaceConfig.wordWrapEnabled}
+       |display.pane_headers = ${config.surfaceConfig.showPaneHeaders}
+       |display.focused_text_body = ${config.surfaceConfig.focusedTextBodyEnabled}
+       |display.contextual_toolbar = ${config.surfaceConfig.contextualToolbarEnabled}
+       |display.contextual_toolbar_mode = ${config.surfaceConfig.contextualToolbarDisplayMode.configKey}
        |
        |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
-       |ui.material = ${config.materialPreset.configKey}
+       |ui.material = ${config.surfaceConfig.materialPreset.configKey}
        |# Post-processing: off, scanlines, glow, scanlines-glow
-       |ui.post_processing = ${config.postProcessingEffect.configKey}
+       |ui.post_processing = ${config.surfaceConfig.postProcessingEffect.configKey}
        |# Draw soft shadows behind menus and panels
-       |ui.shadows = ${config.uiShadowsEnabled}
+       |ui.shadows = ${config.surfaceConfig.uiShadowsEnabled}
        |"ui.motion" = ${motionConfiguration.baseline.configKey}
        |ui.motion.accessibility = ${motionConfiguration.accessibility.configKey}
-       |${config.editorTextTransitionSpeedScale.map(value => s"ui.motion.editor_text.speed_scale = $value").getOrElse("")}
-       |${config.commandRunnerTransitionSpeedScale.map(value => s"ui.motion.command_runner.speed_scale = $value").getOrElse("")}
-       |${config.uiTransitionSpeedScale.map(value => s"ui.motion.ui.speed_scale = $value").getOrElse("")}
-       |${config.cursorTransitionSpeedScale.map(value => s"ui.motion.cursor.speed_scale = $value").getOrElse("")}
+       |${config.surfaceConfig.editorTextTransitionSpeedScale.map(value => s"ui.motion.editor_text.speed_scale = $value").getOrElse("")}
+       |${config.surfaceConfig.commandRunnerTransitionSpeedScale.map(value => s"ui.motion.command_runner.speed_scale = $value").getOrElse("")}
+       |${config.surfaceConfig.uiTransitionSpeedScale.map(value => s"ui.motion.ui.speed_scale = $value").getOrElse("")}
+       |${config.surfaceConfig.cursorTransitionSpeedScale.map(value => s"ui.motion.cursor.speed_scale = $value").getOrElse("")}
        |$motionFamilySettings
        |
        |# Markdown rendering mode: source, split-preview, inline-lens
@@ -438,14 +440,14 @@ object ConfigManager:
        |window.preferred.height = ${hoconString(config.preferredWindowSize.map(_.height).fold("")(_.toString))}
        |
         |# Text area insets as percentages of the central workspace.
-        |text_area.left.percent = ${config.textAreaInsets.leftPercent}
-        |text_area.right.percent = ${config.textAreaInsets.rightPercent}
-        |text_area.top.percent = ${config.textAreaInsets.topPercent}
-        |text_area.bottom.percent = ${config.textAreaInsets.bottomPercent}
-        |viewport.width.percent = ${config.viewportSizing.width.percentValue}
-       |viewport.width.max = ${hoconString(config.viewportSizing.width.maxCells.fold("")(_.toString))}
-       |viewport.height.percent = ${config.viewportSizing.height.percentValue}
-       |viewport.height.max = ${hoconString(config.viewportSizing.height.maxCells.fold("")(_.toString))}
+        |text_area.left.percent = ${config.surfaceConfig.textAreaInsets.leftPercent}
+        |text_area.right.percent = ${config.surfaceConfig.textAreaInsets.rightPercent}
+        |text_area.top.percent = ${config.surfaceConfig.textAreaInsets.topPercent}
+        |text_area.bottom.percent = ${config.surfaceConfig.textAreaInsets.bottomPercent}
+        |viewport.width.percent = ${config.surfaceConfig.viewportSizing.width.percentValue}
+       |viewport.width.max = ${hoconString(config.surfaceConfig.viewportSizing.width.maxCells.fold("")(_.toString))}
+       |viewport.height.percent = ${config.surfaceConfig.viewportSizing.height.percentValue}
+       |viewport.height.max = ${hoconString(config.surfaceConfig.viewportSizing.height.maxCells.fold("")(_.toString))}
        |
        |# LSP server overrides
        |$lspSettings

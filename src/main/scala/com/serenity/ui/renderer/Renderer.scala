@@ -318,7 +318,7 @@ object Renderer:
     surface.clearViewport(state.persisted.theme.background)
     forgetPreservedContent(surface, output)
     renderStartPage(page, surface, viewportSize, state.persisted.theme, uiFont, cellMetrics, uiMetrics)
-    surface.effects.foreach(_.applyPostProcessing(state.persisted.config.postProcessingEffect))
+    surface.effects.foreach(_.applyPostProcessing(state.persisted.config.surfaceConfig.postProcessingEffect))
     surface.flush()
 
   private[serenity] def withSceneIfNeeded[A](
@@ -1043,7 +1043,7 @@ object Renderer:
         commitFramePlan(framePlan, output)
         Some(editorRenderPlan)
 
-    surface.effects.foreach(_.applyPostProcessing(state.persisted.config.postProcessingEffect))
+    surface.effects.foreach(_.applyPostProcessing(state.persisted.config.surfaceConfig.postProcessingEffect))
     surface.flush()
     editorRenderPlan
 
@@ -1097,7 +1097,7 @@ object Renderer:
     accumulateScreenDamage(output, damage)
 
     val plan = context.surface.persistentContentKey
-      .filter(_ => state.persisted.config.postProcessingEffect == PostProcessingEffect.Off)
+      .filter(_ => state.persisted.config.surfaceConfig.postProcessingEffect == PostProcessingEffect.Off)
       .map { persistenceKey =>
         val panes   = paneRecordsFor(state, context, renderPlan)
         val paneIds = panes.keySet
@@ -1340,7 +1340,11 @@ object Renderer:
     val panelHeightPx = contentRect.height * context.cellMetrics.lineHeight
     val bufferMetrics = CellMetrics.fromFont(bufferFont)
     val baseViewport =
-      LayoutEngine.updateBufferViewportDimensions(buffer, contentRect, state.persisted.config.wordWrapEnabled)
+      LayoutEngine.updateBufferViewportDimensions(
+        buffer,
+        contentRect,
+        state.persisted.config.surfaceConfig.wordWrapEnabled
+      )
     val fontRenderContext =
       context.surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     val visibleColumns =
@@ -1358,7 +1362,7 @@ object Renderer:
     )
     val leftColumn =
       if visibleColumns == baseViewport.visibleColumns then baseViewport.leftColumn
-      else renderedLeftColumn(buffer, scrollViewport, state.persisted.config.wordWrapEnabled)
+      else renderedLeftColumn(buffer, scrollViewport, state.persisted.config.surfaceConfig.wordWrapEnabled)
     val renderedViewport = sizedViewport.copy(
       leftColumn = leftColumn
     )
@@ -1371,7 +1375,7 @@ object Renderer:
       panelWidthPx,
       bufferFont,
       fontRenderContext,
-      wordWrapEnabled = state.persisted.config.wordWrapEnabled
+      wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
     )
 
   private def visibleColumnsFor(
@@ -1798,7 +1802,7 @@ object Renderer:
       Some(baseSegments.map(segment => segment.copy(foregroundColor = theme.muted, backgroundColor = theme.background)))
 
   private def focusedTextBodyLines(buffer: Buffer, state: AppState): Int => Boolean =
-    if !state.persisted.config.focusedTextBodyEnabled then _ => true
+    if !state.persisted.config.surfaceConfig.focusedTextBodyEnabled then _ => true
     else
       val activeLine = buffer.editing.cursors.headOption.map(_.line)
       FocusedTextBody
@@ -2860,7 +2864,7 @@ object Renderer:
       )
 
   private def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
-    if state.persisted.config.showLineNumbers then
+    if state.persisted.config.surfaceConfig.showLineNumbers then
       context.surface.text.setFont(context.uiFont)
       renderPlan.layoutContract.lineNumberRect foreach { lineRect =>
         val surface = context.surface
@@ -2889,7 +2893,10 @@ object Renderer:
                   snapshot.visualLines.lift(index).foreach { visualLine =>
                     val lineTopPx = visualLineTopPx(lineRect, index, context, snapshot)
                     val rendersLineNumber =
-                      shouldRenderLineNumberForVisualLine(visualLine, state.persisted.config.wordWrapEnabled)
+                      shouldRenderLineNumberForVisualLine(
+                        visualLine,
+                        state.persisted.config.surfaceConfig.wordWrapEnabled
+                      )
                     val lineNumberText =
                       if rendersLineNumber then
                         val numberWidth = math.max(1, lineRect.width - 1)

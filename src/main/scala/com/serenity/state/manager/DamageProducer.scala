@@ -219,7 +219,7 @@ object DamageProducer:
     beforeBuffer: Buffer,
     afterBuffer: Buffer
   ): Damage =
-    if !after.persisted.config.focusedTextBodyEnabled then Damage.Nothing
+    if !after.persisted.config.surfaceConfig.focusedTextBodyEnabled then Damage.Nothing
     else
       val beforeRange = FocusedTextBody.activeRange(beforeBuffer, beforeBuffer.editing.cursors.headOption.map(_.line))
       val afterRange  = FocusedTextBody.activeRange(afterBuffer, afterBuffer.editing.cursors.headOption.map(_.line))

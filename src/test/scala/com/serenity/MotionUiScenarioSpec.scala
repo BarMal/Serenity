@@ -38,7 +38,7 @@ class MotionUiScenarioSpec extends AnyFlatSpec with Matchers:
     execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCursorTransitionSpeedScale(0.75))))
     val overridden = driver.state.unsafeRunSync().persisted.config
 
-    overridden.motionPreset shouldBe MotionPreset.Custom
+    overridden.surfaceConfig.motionPreset shouldBe MotionPreset.Custom
     overridden.effectiveEditorTextTransitionSpeedScale shouldBe 0.5
     overridden.effectiveCommandRunnerTransitionSpeedScale shouldBe 1.5
     overridden.effectiveUiTransitionSpeedScale shouldBe 2.0

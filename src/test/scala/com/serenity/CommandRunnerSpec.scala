@@ -557,12 +557,14 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val config = AppConfig.default
-      .copy(
-        showLineNumbers = false,
-        showGutter = false,
-        wordWrapEnabled = false,
-        contextualToolbarEnabled = false,
-        contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly
+      .copy(surfaceConfig =
+        AppConfig.default.surfaceConfig.copy(
+          showLineNumbers = false,
+          showGutter = false,
+          wordWrapEnabled = false,
+          contextualToolbarEnabled = false,
+          contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly
+        )
       )
     val runner = CommandRunner.empty
       .activate(registry, config)

@@ -83,7 +83,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withLineNumbers(true)
           .withGutter(true)
-          .copy(textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20))
+          .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20))
       )
     )
     val viewportSize     = ViewportSize(100, 30)
@@ -177,9 +177,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
-        config = AppConfig.default.copy(
-          textAreaInsets = TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15)
-        )
+        config =
+          AppConfig.default.withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15))
       ),
       runtime = AppState.initial.runtime.copy(
         uiSurfaces = List(
@@ -221,10 +220,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
-          .copy(
-            showLineNumbers = false,
-            textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
-          )
+          .withLineNumbers(false)
+          .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
           .withUiElementGap(2)
       ),
       runtime = AppState.initial.runtime.copy(

@@ -445,7 +445,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     )
     sm.updateState(state =>
       state.copy(
-        persisted = state.persisted.copy(config = AppConfig.default.copy(showLineNumbers = false, showGutter = false)),
+        persisted = state.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)),
         runtime = state.runtime.copy(uiSurfaces = List(surface))
       )
     ).unsafeRunSync()

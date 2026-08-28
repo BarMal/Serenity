@@ -533,7 +533,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.commandRunnerVisibleRows shouldBe Some(9)
+    config.surfaceConfig.commandRunnerVisibleRows shouldBe Some(9)
     ConfigManager.configToString(config) should include("command_runner.visible_rows = 9")
   }
 
@@ -548,8 +548,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.commandRunnerItemGapRows shouldBe 1
-    config.commandRunnerCursorGapRows shouldBe Some(3)
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe 1
+    config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
     ConfigManager.configToString(config) should include("command_runner.item_gap_rows = 1")
     ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = 3")
   }
@@ -566,8 +566,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.commandRunnerItemGapRows shouldBe 0.25
-    config.commandRunnerCursorGapRows shouldBe Some(0.5)
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe 0.25
+    config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(0.5)
     config.uiElementGap shouldBe 0.75
     ConfigManager.configToString(config) should include("command_runner.item_gap_rows = 0.25")
     ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = 0.5")
@@ -584,7 +584,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
+    config.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Fps120
     ConfigManager.configToString(config) should include("render.fps = 120")
   }
 
@@ -598,7 +598,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.renderFpsTarget shouldBe RenderFpsTarget.Uncapped
+    config.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Uncapped
     ConfigManager.configToString(config) should include("render.fps = uncapped")
   }
 
@@ -688,10 +688,10 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.textAreaInsets.left shouldBe 0.125 +- 0.0001
-    config.textAreaInsets.right shouldBe 0.20 +- 0.0001
-    config.textAreaInsets.top shouldBe 0.075 +- 0.0001
-    config.textAreaInsets.bottom shouldBe 0.10 +- 0.0001
+    config.surfaceConfig.textAreaInsets.left shouldBe 0.125 +- 0.0001
+    config.surfaceConfig.textAreaInsets.right shouldBe 0.20 +- 0.0001
+    config.surfaceConfig.textAreaInsets.top shouldBe 0.075 +- 0.0001
+    config.surfaceConfig.textAreaInsets.bottom shouldBe 0.10 +- 0.0001
     ConfigManager.configToString(config) should include("text_area.left.percent = 12.5")
     ConfigManager.configToString(config) should include("text_area.right.percent = 20.0")
     ConfigManager.configToString(config) should include("text_area.top.percent = 7.5")
@@ -765,7 +765,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.wordWrapEnabled shouldBe false
+    config.surfaceConfig.wordWrapEnabled shouldBe false
     ConfigManager.configToString(config) should include("display.word_wrap = false")
   }
 
@@ -775,7 +775,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.showPaneHeaders shouldBe false
+    config.surfaceConfig.showPaneHeaders shouldBe false
     ConfigManager.configToString(config) should include("display.pane_headers = false")
   }
 
@@ -789,7 +789,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.focusedTextBodyEnabled shouldBe true
+    config.surfaceConfig.focusedTextBodyEnabled shouldBe true
     ConfigManager.configToString(config) should include("display.focused_text_body = true")
   }
 
@@ -803,7 +803,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.TextOnly
+    config.surfaceConfig.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.TextOnly
     ConfigManager.configToString(config) should include("display.contextual_toolbar_mode = text-only")
   }
 
@@ -968,10 +968,10 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.viewportSizing.width.percent shouldBe 0.8
-    config.viewportSizing.width.maxCells shouldBe None
-    config.viewportSizing.height.percent shouldBe 1.0
-    config.viewportSizing.height.maxCells shouldBe Some(50)
+    config.surfaceConfig.viewportSizing.width.percent shouldBe 0.8
+    config.surfaceConfig.viewportSizing.width.maxCells shouldBe None
+    config.surfaceConfig.viewportSizing.height.percent shouldBe 1.0
+    config.surfaceConfig.viewportSizing.height.maxCells shouldBe Some(50)
     ConfigManager.configToString(config) should include("viewport.width.percent = 80.0")
     ConfigManager.configToString(config) should include("viewport.width.max = ")
     ConfigManager.configToString(config) should include("viewport.height.percent = 100.0")
@@ -1000,21 +1000,21 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.materialPreset shouldBe MaterialPreset.Crystal
-    config.backgroundStyle shouldBe BackgroundStyle.GlassLike
-    config.blurRadius shouldBe 0.42f
-    config.motionPreset shouldBe MotionPreset.Reduced
-    config.elementTransitionSpeedScale shouldBe 1.75
-    config.editorTextTransitionSpeedScale shouldBe Some(0.5)
-    config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
-    config.uiTransitionSpeedScale shouldBe Some(1.25)
-    config.cursorTransitionSpeedScale shouldBe Some(0.75)
-    config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
-    config.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
-    config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
-    config.commandRunnerTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
-    config.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.subtle
-    config.uiAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
+    config.surfaceConfig.materialPreset shouldBe MaterialPreset.Crystal
+    config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    config.surfaceConfig.blurRadius shouldBe 0.42f
+    config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
+    config.surfaceConfig.elementTransitionSpeedScale shouldBe 1.75
+    config.surfaceConfig.editorTextTransitionSpeedScale shouldBe Some(0.5)
+    config.surfaceConfig.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
+    config.surfaceConfig.uiTransitionSpeedScale shouldBe Some(1.25)
+    config.surfaceConfig.cursorTransitionSpeedScale shouldBe Some(0.75)
+    config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
+    config.surfaceConfig.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
+    config.surfaceConfig.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
+    config.surfaceConfig.commandRunnerTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
+    config.surfaceConfig.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.subtle
+    config.surfaceConfig.uiAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
     config.characterAnimation shouldBe None
     val serialized = ConfigManager.configToString(config)
     serialized should include("ui.material = crystal")
@@ -1037,8 +1037,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.postProcessingEffect shouldBe PostProcessingEffect.ScanlinesAndGlow
-    config.uiShadowsEnabled shouldBe false
+    config.surfaceConfig.postProcessingEffect shouldBe PostProcessingEffect.ScanlinesAndGlow
+    config.surfaceConfig.uiShadowsEnabled shouldBe false
     ConfigManager.configToString(config) should include("ui.post_processing = scanlines-glow")
     ConfigManager.configToString(config) should include("ui.shadows = false")
   }
@@ -1059,7 +1059,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
-    loaded.motionPreset shouldBe MotionPreset.Custom
+    loaded.surfaceConfig.motionPreset shouldBe MotionPreset.Custom
     loaded.characterAnimation.value.durationMs shouldBe 320
     loaded.characterAnimation.value.steps shouldBe 7
   }
@@ -1247,7 +1247,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
       case Right(result) =>
         result.config.fontConfig.textFontFamily shouldBe "Legacy Serif"
         result.config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
-        result.config.viewportSizing.width.maxCells shouldBe None
+        result.config.surfaceConfig.viewportSizing.width.maxCells shouldBe None
       case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
   }
 

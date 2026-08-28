@@ -70,7 +70,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     sm.updateState(state =>
       state.copy(
         persisted = state.persisted.copy(
-          config = state.persisted.config.copy(backgroundStyle = BackgroundStyle.GlassLike),
+          config = state.persisted.config.withBackgroundStyle(BackgroundStyle.GlassLike),
           theme = Theme.light
         )
       )
@@ -88,7 +88,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val saved = store.find("Workbench").unsafeRunSync()
 
     saved.map(_.themeName) shouldBe Some(Theme.light.name)
-    saved.map(_.config.backgroundStyle) shouldBe Some(BackgroundStyle.GlassLike)
+    saved.map(_.config.surfaceConfig.backgroundStyle) shouldBe Some(BackgroundStyle.GlassLike)
     saved.flatMap(_.config.preferredWindowSize) shouldBe Some(size)
     saved.map(_.pinnedPanels.map(panel => panel.position -> panel.size)) shouldBe Some(List(PanelPosition.Bottom -> 12))
   }
@@ -131,7 +131,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.persisted.config.backgroundStyle shouldBe BackgroundStyle.Solid
+    state.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Solid
     state.persisted.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 720))
     state.runtime.viewportSize shouldBe Some(ViewportSize(90, 28))
     state.persisted.theme.name shouldBe Theme.dark.name
@@ -182,13 +182,13 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.persisted.config.fontConfig.textFontFamily shouldBe Font.SERIF
-    state.persisted.config.showLineNumbers shouldBe false
-    state.persisted.config.showGutter shouldBe false
+    state.persisted.config.surfaceConfig.showLineNumbers shouldBe false
+    state.persisted.config.surfaceConfig.showGutter shouldBe false
     state.persisted.layout.editorPanes should have size 1
     state.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(1))
     state.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(1))
     state.persisted.buffers(BufferId(1)).richText.richTextDocument should not be empty
-    state.persisted.config.showPaneHeaders shouldBe false
+    state.persisted.config.surfaceConfig.showPaneHeaders shouldBe false
     state.pinnedSurfaces shouldBe Nil
   }
 
@@ -268,8 +268,8 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     config.languageToolsConfig.lspUserConfig shouldBe lspConfig
     config.languageToolsConfig.spellCheck shouldBe spellCheck
     config.windowConfig shouldBe windowConfig
-    config.showLineNumbers shouldBe false
-    config.showPaneHeaders shouldBe false
+    config.surfaceConfig.showLineNumbers shouldBe false
+    config.surfaceConfig.showPaneHeaders shouldBe false
   }
 
   it should "apply the built-in documentation preset to the active empty buffer" in {
@@ -859,8 +859,8 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.persisted.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    state.persisted.config.motionPreset shouldBe MotionPreset.Subtle
-    state.persisted.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    state.persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
+    state.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
     state.persisted.config.fontConfig.textFontSize shouldBe 18.0f
     store.find("Drafting").unsafeRunSync() shouldBe Some(savedBefore)
   }

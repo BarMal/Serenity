@@ -25,10 +25,9 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
   "UiPreset" should "capture config, theme, preferred window size, and pinned panels from app state" in {
     val root = Files.createTempDirectory("ui-preset-root")
-    val config = AppConfig.default.copy(
-      fontConfig = FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f),
-      backgroundStyle = BackgroundStyle.GlassLike
-    )
+    val config = AppConfig.default
+      .copy(fontConfig = FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f))
+      .withBackgroundStyle(BackgroundStyle.GlassLike)
     val panel = UiSurface.fromPanelContent(
       SurfaceId("panel-1"),
       PanelContent.DirectoryTree(DirectoryTreeData(root), selectedPath = Some(root)),
@@ -45,7 +44,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     preset.name shouldBe "Writing"
     preset.config.fontConfig.codeFontFamily shouldBe "Monospaced"
     preset.config.fontConfig.codeFontSize shouldBe 18.0f
-    preset.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    preset.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
     preset.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1440, 960))
     preset.themeName shouldBe Theme.light.name
     preset.pinnedPanels.map(panel => panel.position -> panel.size) shouldBe List(PanelPosition.Left -> 32)
@@ -126,35 +125,35 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     writing.config.fontConfig.textFontFamily shouldBe Font.SERIF
     writing.config.fontConfig.textFontSize should be > AppConfig.default.fontConfig.textFontSize
-    writing.config.showLineNumbers shouldBe false
-    writing.config.showGutter shouldBe false
-    writing.config.motionPreset shouldBe MotionPreset.Subtle
-    writing.config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
+    writing.config.surfaceConfig.showLineNumbers shouldBe false
+    writing.config.surfaceConfig.showGutter shouldBe false
+    writing.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
+    writing.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     writing.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
     writing.targetEditorPaneCount shouldBe Some(1)
-    writing.config.showPaneHeaders shouldBe false
+    writing.config.surfaceConfig.showPaneHeaders shouldBe false
     writing.pinnedPanels shouldBe Nil
 
     docs.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
     docs.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    docs.config.editorInsertionTransitionKind shouldBe TransitionKind.LineAndCharacterTandem
+    docs.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.LineAndCharacterTandem
     docs.targetEditorPaneCount shouldBe Some(1)
-    docs.config.showPaneHeaders shouldBe false
+    docs.config.surfaceConfig.showPaneHeaders shouldBe false
     docs.pinnedPanels shouldBe Nil
 
     code.config.defaultDocumentMode shouldBe DefaultDocumentMode.PlainText
-    code.config.motionPreset shouldBe MotionPreset.Reduced
-    code.config.editorInsertionTransitionKind shouldBe TransitionKind.Disabled
-    code.config.showLineNumbers shouldBe true
-    code.config.showPaneHeaders shouldBe true
+    code.config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
+    code.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.Disabled
+    code.config.surfaceConfig.showLineNumbers shouldBe true
+    code.config.surfaceConfig.showPaneHeaders shouldBe true
     code.pinnedPanels.map(_.position) should contain(PanelPosition.Left)
 
-    compact.config.showLineNumbers shouldBe true
-    compact.config.showGutter shouldBe true
-    compact.config.showPaneHeaders shouldBe true
+    compact.config.surfaceConfig.showLineNumbers shouldBe true
+    compact.config.surfaceConfig.showGutter shouldBe true
+    compact.config.surfaceConfig.showPaneHeaders shouldBe true
     compact.config.interfaceDensity shouldBe InterfaceDensity.Compact
-    compact.config.wordWrapEnabled shouldBe false
-    compact.config.contextualToolbarEnabled shouldBe false
+    compact.config.surfaceConfig.wordWrapEnabled shouldBe false
+    compact.config.surfaceConfig.contextualToolbarEnabled shouldBe false
     compact.pinnedPanels shouldBe Nil
 
     review.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Diagnostics(Nil))
@@ -230,7 +229,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     val patched = UiPreset.Patch.Appearance(sourceConfig, themeName = Some(Theme.light.name)).applyTo(preset)
 
-    patched.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    patched.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
     patched.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     patched.config.uiElementGap shouldBe 4
     patched.config.uiOutlineThicknessPx shouldBe 5
@@ -261,14 +260,14 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     val patched = UiPreset.Patch.Motion(sourceConfig).applyTo(preset)
 
-    patched.config.motionPreset shouldBe MotionPreset.Subtle
+    patched.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
     patched.config.characterAnimation shouldBe MotionPreset.Subtle.animationConfig
-    patched.config.elementTransitionSpeedScale shouldBe 2.25
-    patched.config.cursorTransitionSpeedScale shouldBe Some(0.75)
-    patched.config.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
-    patched.config.commandRunnerTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
-    patched.config.panelOpenTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
-    patched.config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
+    patched.config.surfaceConfig.elementTransitionSpeedScale shouldBe 2.25
+    patched.config.surfaceConfig.cursorTransitionSpeedScale shouldBe Some(0.75)
+    patched.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
+    patched.config.surfaceConfig.commandRunnerTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
+    patched.config.surfaceConfig.panelOpenTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
+    patched.config.surfaceConfig.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }
@@ -358,11 +357,11 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     val patched = UiPreset.Patch.TextDisplay(sourceConfig).applyTo(preset)
 
-    patched.config.showLineNumbers shouldBe false
-    patched.config.showGutter shouldBe false
-    patched.config.wordWrapEnabled shouldBe false
-    patched.config.textAreaInsets shouldBe TextAreaInsets.fromPercent(20.0, 10.0)
-    patched.config.viewportSizing shouldBe sourceConfig.viewportSizing
+    patched.config.surfaceConfig.showLineNumbers shouldBe false
+    patched.config.surfaceConfig.showGutter shouldBe false
+    patched.config.surfaceConfig.wordWrapEnabled shouldBe false
+    patched.config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets.fromPercent(20.0, 10.0)
+    patched.config.surfaceConfig.viewportSizing shouldBe sourceConfig.surfaceConfig.viewportSizing
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }
@@ -639,7 +638,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     store.upsert(replacement).unsafeRunSync()
 
     val saved = store.find("Focus").unsafeRunSync().getOrElse(fail("replacement should be saved"))
-    saved.config.showLineNumbers shouldBe false
+    saved.config.surfaceConfig.showLineNumbers shouldBe false
     saved.unknownFields("futurePresetField") shouldBe Some(Json.fromString("keep"))
     saved.configUnknownFields("futureConfigField") shouldBe Some(Json.fromString("keep"))
   }

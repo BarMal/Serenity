@@ -354,8 +354,8 @@ object AppRuntime:
           case (stateAtFrameStart, frameIndex) =>
             for
               isInitialFrame <- IO.pure(frameIndex == 0L)
-              interval       <- IO.pure(fastFrameInterval(stateAtFrameStart.persisted.config.renderFpsTarget))
-              _              <- sleep(fastFrameDelay(interval, isInitialFrame))
+              interval <- IO.pure(fastFrameInterval(stateAtFrameStart.persisted.config.surfaceConfig.renderFpsTarget))
+              _        <- sleep(fastFrameDelay(interval, isInitialFrame))
               _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
                 checkResizeAndHandle
               )

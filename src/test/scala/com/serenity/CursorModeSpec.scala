@@ -70,12 +70,11 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   it should "leave other fields unchanged when changing cursorMode" in {
     val config = AppConfig(
       characterAnimation = AnimationConfig.quick,
-      showLineNumbers = false,
-      blurRadius = 0.5f
+      surfaceConfig = SurfaceConfig(showLineNumbers = false, blurRadius = 0.5f)
     ).withCursorMode(CursorMode.Breathe)
     config.characterAnimation shouldBe AnimationConfig.quick
-    config.showLineNumbers shouldBe false
-    config.blurRadius shouldBe 0.5f
+    config.surfaceConfig.showLineNumbers shouldBe false
+    config.surfaceConfig.blurRadius shouldBe 0.5f
   }
 
   // ── CommandRunner settings ───────────────────────────────────────────────
@@ -141,12 +140,12 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().persisted.config.cursorMode shouldBe CursorMode.Blink
   }
 
-  "SetBackgroundStyle" should "update config.backgroundStyle via command runner navigation" in {
+  "SetBackgroundStyle" should "update config.surfaceConfig.backgroundStyle via command runner navigation" in {
     val sm = makeStateManager()
     openSettingsGroup(sm, "surface")
     sm.applyEvent(MoveRight).unsafeRunSync()
 
-    sm.getCurrentState.unsafeRunSync().persisted.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    sm.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
   }
 
   "SetPostProcessingEffect" should "update the effect via command runner navigation" in {
@@ -154,7 +153,12 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     openSettingsGroup(sm, "post-processing")
     sm.applyEvent(MoveRight).unsafeRunSync()
 
-    sm.getCurrentState.unsafeRunSync().persisted.config.postProcessingEffect shouldBe PostProcessingEffect.Scanlines
+    sm.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .postProcessingEffect shouldBe PostProcessingEffect.Scanlines
   }
 
   // ── SessionState JSON round-trip ──────────────────────────────────────────

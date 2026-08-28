@@ -138,13 +138,16 @@ object UiPreset:
   ): AppConfig =
     base.withSurfaceConfig(
       base.surfaceConfig.copy(
-        showLineNumbers = source.showLineNumbers,
-        showGutter = source.showGutter,
-        showPaneHeaders = source.showPaneHeaders,
-        wordWrapEnabled = if includeWordWrap then source.wordWrapEnabled else base.wordWrapEnabled,
+        showLineNumbers = source.surfaceConfig.showLineNumbers,
+        showGutter = source.surfaceConfig.showGutter,
+        showPaneHeaders = source.surfaceConfig.showPaneHeaders,
+        wordWrapEnabled =
+          if includeWordWrap then source.surfaceConfig.wordWrapEnabled else base.surfaceConfig.wordWrapEnabled,
         contextualToolbarEnabled =
-          if includeContextualToolbar then source.contextualToolbarEnabled else base.contextualToolbarEnabled,
-        textAreaInsets = if includeTextAreaInsets then source.textAreaInsets else base.textAreaInsets
+          if includeContextualToolbar then source.surfaceConfig.contextualToolbarEnabled
+          else base.surfaceConfig.contextualToolbarEnabled,
+        textAreaInsets =
+          if includeTextAreaInsets then source.surfaceConfig.textAreaInsets else base.surfaceConfig.textAreaInsets
       )
     )
 
@@ -159,9 +162,9 @@ object UiPreset:
         withChrome
           .withSurfaceConfig(
             withChrome.surfaceConfig.copy(
-              blurRadius = source.blurRadius,
-              backgroundStyle = source.backgroundStyle,
-              materialPreset = source.materialPreset
+              blurRadius = source.surfaceConfig.blurRadius,
+              backgroundStyle = source.surfaceConfig.backgroundStyle,
+              materialPreset = source.surfaceConfig.materialPreset
             )
           )
           .withDocumentConfig(source.documentConfig)
@@ -218,10 +221,10 @@ object UiPreset:
     List(
       Some(documentModeSummary(preset.config)),
       Option(preset.themeName).filter(_.nonEmpty),
-      Some(s"${preset.config.motionPreset.configKey} motion"),
-      Some(s"${textRevealSummary(preset.config.editorInsertionTransitionKind)} text reveal"),
-      Some(s"${preset.config.materialPreset.configKey} material"),
-      Some(s"${backgroundStyleSummary(preset.config.backgroundStyle)} background"),
+      Some(s"${preset.config.surfaceConfig.motionPreset.configKey} motion"),
+      Some(s"${textRevealSummary(preset.config.surfaceConfig.editorInsertionTransitionKind)} text reveal"),
+      Some(s"${preset.config.surfaceConfig.materialPreset.configKey} material"),
+      Some(s"${backgroundStyleSummary(preset.config.surfaceConfig.backgroundStyle)} background"),
       Some(s"${preset.config.interfaceDensity.configKey} density"),
       Some(proseFontSummary(preset.config)),
       paneCountSummary(preset.targetEditorPaneCount),
