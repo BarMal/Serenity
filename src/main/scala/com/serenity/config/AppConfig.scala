@@ -334,14 +334,22 @@ final case class SpellCheckConfig(
       additionalWords = additionalWords.map(_.trim.toLowerCase).filter(_.nonEmpty).distinct
     )
 
-  def dictionarySourcePaths: List[Path] =
-    val config = normalized
-    config.dictionaryPaths.flatMap(path => SpellCheckConfig.expandDictionaryPath(path, config.languages)).distinct
-
-  def dictionaryFingerprints: List[SpellCheckDictionaryFingerprint] =
-    SpellCheckConfig.dictionaryDependencyPaths(dictionarySourcePaths).map(SpellCheckDictionaryFingerprint.fromPath)
-
 object SpellCheckConfig:
+
+  /** Resolves the on-disk dictionary paths implied by `config`, expanding directories into per-language candidates.
+    * This walks the filesystem (`Files.isDirectory`/`Files.exists`) and must only be called from an explicit
+    * `IO.blocking` boundary -- never from a method that otherwise looks pure.
+    */
+  def discoverDictionarySourcePaths(config: SpellCheckConfig): List[Path] =
+    val normalized = config.normalized
+    normalized.dictionaryPaths.flatMap(path => expandDictionaryPath(path, normalized.languages)).distinct
+
+  /** Discovers dictionary source paths and fingerprints their current on-disk state. Filesystem IO throughout -- call
+    * only from `IO.blocking`. The resulting immutable list is what pure analysis and state-commit comparisons must be
+    * given, rather than recomputing this themselves.
+    */
+  def discoverDictionaryFingerprints(config: SpellCheckConfig): List[SpellCheckDictionaryFingerprint] =
+    dictionaryDependencyPaths(discoverDictionarySourcePaths(config)).map(SpellCheckDictionaryFingerprint.fromPath)
 
   def dictionaryDependencyPaths(dictionarySourcePaths: List[Path]): List[Path] =
     dictionarySourcePaths.flatMap(path => path :: affixPathForDictionary(path).toList).distinct
