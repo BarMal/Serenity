@@ -197,3 +197,13 @@ libraryDependencies ++= Seq(
   "org.commonmark"   % "commonmark-ext-task-list-items" % commonMarkVersion,
   "org.xhtmlrenderer" % "flying-saucer-core"          % "10.2.2"
 )
+
+val jlineVersion = "3.30.16"
+
+// TUI shell (#1107): raw mode, alternate screen, resize signals, terminal size. jline-terminal-jni is the modern
+// pure-JNI native provider (no external jna/jansi native libs to manage) -- jline-reader is deliberately not a
+// dependency, since this codebase does its own raw terminal I/O rather than JLine's line-editing/completion stack.
+libraryDependencies ++= Seq(
+  "org.jline" % "jline-terminal"     % jlineVersion,
+  "org.jline" % "jline-terminal-jni" % jlineVersion
+)
