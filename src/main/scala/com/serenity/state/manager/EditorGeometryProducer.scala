@@ -18,13 +18,13 @@ object EditorGeometryProducer:
       .map(buffer => forBuffer(state, buffer))
 
   private def forBuffer(state: AppState, buffer: Buffer): EditorGeometry =
-    val font              = FontLoader.previewFontForRole(state.persisted.config.fontConfig, buffer.typographyRole)
-    val metrics           = CellMetrics.fromFont(font)
+    val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)
+    val metrics = CellMetrics.fromFont(font)
     val panelWidthColumns = effectivePanelWidth(state)
     val snapshot =
       TextLayoutSnapshot.fromBuffer(
         buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
-        TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.persisted.config.fontConfig),
+        TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.persisted.config.editorConfig.fontConfig),
         font,
         wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
       )

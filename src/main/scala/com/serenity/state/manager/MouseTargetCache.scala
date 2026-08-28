@@ -141,11 +141,11 @@ private[manager] object MouseTargetLayoutKey:
   private def compute(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     MouseTargetLayoutKey(
       viewportSize = viewportSize,
-      fontConfig = state.persisted.config.fontConfig,
+      fontConfig = state.persisted.config.editorConfig.fontConfig,
       showGutter = state.persisted.config.surfaceConfig.showGutter,
       showLineNumbers = state.persisted.config.surfaceConfig.showLineNumbers,
       wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
-      minimumPaneWidth = state.persisted.config.minimumPaneWidth,
+      minimumPaneWidth = state.persisted.config.editorConfig.minimumPaneWidth,
       textAreaInsets = state.persisted.config.surfaceConfig.textAreaInsets,
       interfaceDensity = state.persisted.config.interfaceDensity,
       uiElementGap = state.persisted.config.uiElementGap,
@@ -290,8 +290,8 @@ private[serenity] object AuthoritativeUiScene:
     forState(
       state,
       viewportSize,
-      FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Code),
-      FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Prose)
+      FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code),
+      FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     )
 
 final private[manager] case class MouseTargetCache(

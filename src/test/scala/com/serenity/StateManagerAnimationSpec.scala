@@ -157,6 +157,7 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
       .min
     shortestFadeLength shouldBe AppConfig.default
       .withMotionPreset(MotionPreset.Smooth)
+      .editorConfig
       .characterAnimation
       .get
       .steps * 2

@@ -308,7 +308,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
 
   it should "preserve legacy surface family animations when custom editor timing is promoted" in {
     val configured = AppConfig(
-      characterAnimation = AnimationConfig.smooth,
+      editorConfig = EditorConfig(characterAnimation = AnimationConfig.smooth),
       surfaceConfig = SurfaceConfig(
         motionPreset = MotionPreset.Custom,
         commandRunnerAnimation = AnimationConfig.subtle,

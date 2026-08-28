@@ -12,7 +12,7 @@ import com.serenity.ui.layout.*
 private[manager] object MouseHitTestGeometry:
 
   def floatingCellMetrics(state: AppState): CellMetrics =
-    CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.fontConfig))
+    CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
 
   def isInsideFloatingSurface(event: MouseInputEvent, state: AppState): Boolean =
     state.runtime.viewportSize.exists { viewportSize =>

@@ -111,7 +111,7 @@ final private[manager] class StateManagerViewportCapability(
   private def refreshAutoTextScale: IO[Unit] =
     deviceTextScaleProvider.flatMap { deviceScale =>
       stateRef.get.flatMap { state =>
-        val fontConfig = state.persisted.config.fontConfig
+        val fontConfig = state.persisted.config.editorConfig.fontConfig
         if fontConfig.resolveAutoTextScale(deviceScale) == fontConfig then IO.unit
         else updateFontConfig(identity)
       }

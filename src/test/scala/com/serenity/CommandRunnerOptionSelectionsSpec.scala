@@ -23,7 +23,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     val textFont = FontLoader.availableTextFamilies.drop(1).headOption.getOrElse("missing-text-font")
     val uiFont   = FontLoader.availableUiFamilies.drop(1).headOption.getOrElse("missing-ui-font")
     val config = AppConfig.default.copy(
-      characterAnimation = AnimationConfig.subtle,
       surfaceConfig = AppConfig.default.surfaceConfig.copy(
         materialPreset = MaterialPreset.Crystal,
         postProcessingEffect = PostProcessingEffect.ScanlinesAndGlow,
@@ -54,14 +53,17 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       interfaceConfig = InterfaceConfig(density = InterfaceDensity.Compact),
       windowConfig = WindowConfig(chromeMode = WindowChromeMode.NativeThemed),
       languageToolsConfig = LanguageToolsConfig(spellCheck = SpellCheckConfig(enabled = true)),
-      fontConfig = AppConfig.default.fontConfig.copy(
-        codeFontFamily = codeFont,
-        textFontFamily = textFont,
-        uiFontFamily = uiFont,
-        textScaleMode = TextScaleMode.Off,
-        enableLigatures = false,
-        textLigatures = false,
-        uiLigatures = true
+      editorConfig = EditorConfig(
+        characterAnimation = AnimationConfig.subtle,
+        fontConfig = AppConfig.default.editorConfig.fontConfig.copy(
+          codeFontFamily = codeFont,
+          textFontFamily = textFont,
+          uiFontFamily = uiFont,
+          textScaleMode = TextScaleMode.Off,
+          enableLigatures = false,
+          textLigatures = false,
+          uiLigatures = true
+        )
       )
     )
 
@@ -102,8 +104,8 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back to the first font option when a configured family is unavailable" in {
-    val config = AppConfig.default.copy(
-      fontConfig = AppConfig.default.fontConfig.copy(
+    val config = AppConfig.default.withFontConfig(
+      AppConfig.default.editorConfig.fontConfig.copy(
         codeFontFamily = "Unavailable Code",
         textFontFamily = "Unavailable Text",
         uiFontFamily = "Unavailable UI"

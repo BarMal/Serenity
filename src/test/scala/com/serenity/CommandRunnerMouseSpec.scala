@@ -342,7 +342,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       )
 
   private def floatingMetrics(state: AppState): CellMetrics =
-    CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.fontConfig))
+    CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
 
   private def openLanguageSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()

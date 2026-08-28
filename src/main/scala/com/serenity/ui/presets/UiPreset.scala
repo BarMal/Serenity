@@ -244,7 +244,7 @@ object UiPreset:
         "plain text default"
 
   private def proseFontSummary(config: AppConfig): String =
-    s"${config.fontConfig.textFontFamily} ${formatPointSize(config.fontConfig.textFontSize)} prose"
+    s"${config.editorConfig.fontConfig.textFontFamily} ${formatPointSize(config.editorConfig.fontConfig.textFontSize)} prose"
 
   private def paneCountSummary(targetEditorPaneCount: Option[Int]): Option[String] =
     targetEditorPaneCount.collect {
@@ -298,8 +298,8 @@ object UiPreset:
         .withDefaultDocumentMode(DefaultDocumentMode.RichText)
         .withInterfaceDensity(InterfaceDensity.Spacious)
         .withTextAreaInsets(TextAreaInsets.fromPercent(22.0, 22.0))
-        .copy(
-          fontConfig = AppConfig.default.fontConfig.copy(
+        .withFontConfig(
+          AppConfig.default.editorConfig.fontConfig.copy(
             textFontFamily = Font.SERIF,
             textFontSize = 18.0f,
             uiFontSize = 13.0f
@@ -322,8 +322,8 @@ object UiPreset:
         .withEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem)
         .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
         .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
-        .copy(
-          fontConfig = AppConfig.default.fontConfig.copy(
+        .withFontConfig(
+          AppConfig.default.editorConfig.fontConfig.copy(
             textFontFamily = Font.SANS_SERIF,
             textFontSize = 14.0f,
             fontSize = 13.0f
@@ -344,7 +344,7 @@ object UiPreset:
         .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Compact)
         .withSyntaxHighlighting(true)
-        .copy(fontConfig = FontConfig()),
+        .withFontConfig(FontConfig()),
       themeName = Theme.dark.name,
       pinnedPanels = List(
         PinnedPanel(
@@ -368,7 +368,7 @@ object UiPreset:
         .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Compact)
         .withSyntaxHighlighting(true)
-        .copy(fontConfig = FontConfig()),
+        .withFontConfig(FontConfig()),
       themeName = Theme.dark.name,
       pinnedPanels = Nil,
       targetEditorPaneCount = Some(1)

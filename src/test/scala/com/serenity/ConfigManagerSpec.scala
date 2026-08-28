@@ -127,7 +127,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val config = ConfigManager.loadConfigIO(Some(configFile.toString)).unsafeRunSync()
 
     config.languageToolsConfig.syntaxHighlightingEnabled shouldBe true
-    config.fontConfig.fontSize shouldBe 18.0f
+    config.editorConfig.fontConfig.fontSize shouldBe 18.0f
   }
 
   it should "load configuration with a structured migration report" in {
@@ -142,8 +142,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val result = ConfigManager.loadConfigResult(Some(configFile.toString))
 
-    result.config.fontConfig.codeFontSize shouldBe 18.0f
-    result.config.fontConfig.textFontSize shouldBe 18.0f
+    result.config.editorConfig.fontConfig.codeFontSize shouldBe 18.0f
+    result.config.editorConfig.fontConfig.textFontSize shouldBe 18.0f
     result.report.deprecatedEntries.map(_.key) should contain("font_size")
     result.report.deprecatedEntries.map(_.replacement) should contain("font.code.size and font.text.size")
     result.report.unknownKeys should contain("unknown.setting")
@@ -304,17 +304,17 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.fontConfig.codeFontFamily shouldBe "Monospaced"
-    config.fontConfig.textFontFamily shouldBe "Serif"
-    config.fontConfig.uiFontFamily shouldBe "Dialog"
-    config.fontConfig.codeFontSize shouldBe 15.0f
-    config.fontConfig.textFontSize shouldBe 16.0f
-    config.fontConfig.uiFontSize shouldBe 13.0f
-    config.fontConfig.textScaleMode shouldBe TextScaleMode.Manual
-    config.fontConfig.textScaleMultiplier shouldBe 1.5
-    config.fontConfig.codeLigatures shouldBe false
-    config.fontConfig.textLigatures shouldBe true
-    config.fontConfig.uiLigatures shouldBe true
+    config.editorConfig.fontConfig.codeFontFamily shouldBe "Monospaced"
+    config.editorConfig.fontConfig.textFontFamily shouldBe "Serif"
+    config.editorConfig.fontConfig.uiFontFamily shouldBe "Dialog"
+    config.editorConfig.fontConfig.codeFontSize shouldBe 15.0f
+    config.editorConfig.fontConfig.textFontSize shouldBe 16.0f
+    config.editorConfig.fontConfig.uiFontSize shouldBe 13.0f
+    config.editorConfig.fontConfig.textScaleMode shouldBe TextScaleMode.Manual
+    config.editorConfig.fontConfig.textScaleMultiplier shouldBe 1.5
+    config.editorConfig.fontConfig.codeLigatures shouldBe false
+    config.editorConfig.fontConfig.textLigatures shouldBe true
+    config.editorConfig.fontConfig.uiLigatures shouldBe true
 
     ConfigManager.configToString(config) should include("font.ui.family = Dialog")
     ConfigManager.configToString(config) should include("font.code.size = 15.0")
@@ -355,11 +355,11 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.fontConfig.codeFontSize shouldBe 17.0f
-    config.fontConfig.textFontSize shouldBe 17.0f
-    config.fontConfig.codeLigatures shouldBe false
-    config.fontConfig.textLigatures shouldBe false
-    config.fontConfig.uiLigatures shouldBe false
+    config.editorConfig.fontConfig.codeFontSize shouldBe 17.0f
+    config.editorConfig.fontConfig.textFontSize shouldBe 17.0f
+    config.editorConfig.fontConfig.codeLigatures shouldBe false
+    config.editorConfig.fontConfig.textLigatures shouldBe false
+    config.editorConfig.fontConfig.uiLigatures shouldBe false
   }
 
   it should "load and write active and inactive cursor colour overrides" in {
@@ -1015,7 +1015,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.surfaceConfig.commandRunnerTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
     config.surfaceConfig.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.subtle
     config.surfaceConfig.uiAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
-    config.characterAnimation shouldBe None
+    config.editorConfig.characterAnimation shouldBe None
     val serialized = ConfigManager.configToString(config)
     serialized should include("ui.material = crystal")
     serialized should include("\"ui.motion\" = reduced")
@@ -1060,8 +1060,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
     loaded.surfaceConfig.motionPreset shouldBe MotionPreset.Custom
-    loaded.characterAnimation.value.durationMs shouldBe 320
-    loaded.characterAnimation.value.steps shouldBe 7
+    loaded.editorConfig.characterAnimation.value.durationMs shouldBe 320
+    loaded.editorConfig.characterAnimation.value.steps shouldBe 7
   }
 
   it should "load and write the default document mode" in {
@@ -1147,7 +1147,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     )
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
-    config.fontConfig.textFontFamily shouldBe "Sérif"
+    config.editorConfig.fontConfig.textFontFamily shouldBe "Sérif"
 
     Files.delete(configFile)
 
@@ -1169,8 +1169,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
-    loaded.fontConfig.textFontFamily shouldBe "Text Font #1"
-    loaded.fontConfig.uiFontFamily shouldBe "Text Font #1"
+    loaded.editorConfig.fontConfig.textFontFamily shouldBe "Text Font #1"
+    loaded.editorConfig.fontConfig.uiFontFamily shouldBe "Text Font #1"
     loaded.languageToolsConfig.spellCheck.languages shouldBe List("en", "fr")
     loaded.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List(
       "C:\\Dictionaries\\en_US.dic",
@@ -1180,7 +1180,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     ConfigManager.saveConfig(loaded, configFile) shouldBe true
     val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
-    reloaded.fontConfig shouldBe loaded.fontConfig
+    reloaded.editorConfig.fontConfig shouldBe loaded.editorConfig.fontConfig
     reloaded.languageToolsConfig.spellCheck shouldBe loaded.languageToolsConfig.spellCheck
   }
 
@@ -1195,8 +1195,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
-    loaded.fontConfig.textFontFamily shouldBe "SansSerif"
-    loaded.fontConfig.uiFontFamily shouldBe "SansSerif"
+    loaded.editorConfig.fontConfig.textFontFamily shouldBe "SansSerif"
+    loaded.editorConfig.fontConfig.uiFontFamily shouldBe "SansSerif"
   }
 
   it should "resolve substitutions inside brace-nested HOCON objects" in {
@@ -1212,8 +1212,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
-    loaded.fontConfig.textFontFamily shouldBe "Nested Serif"
-    loaded.fontConfig.uiFontFamily shouldBe "Nested Serif"
+    loaded.editorConfig.fontConfig.textFontFamily shouldBe "Nested Serif"
+    loaded.editorConfig.fontConfig.uiFontFamily shouldBe "Nested Serif"
   }
 
   it should "load supported settings from inline HOCON objects" in {
@@ -1227,8 +1227,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
-    loaded.fontConfig.textFontFamily shouldBe "Inline Serif"
-    loaded.fontConfig.uiFontFamily shouldBe "Inline Serif"
+    loaded.editorConfig.fontConfig.textFontFamily shouldBe "Inline Serif"
+    loaded.editorConfig.fontConfig.uiFontFamily shouldBe "Inline Serif"
     loaded.languageToolsConfig.spellCheck.enabled shouldBe true
     loaded.languageToolsConfig.spellCheck.languages shouldBe List("en", "fr")
   }
@@ -1245,7 +1245,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
       case Right(result) =>
-        result.config.fontConfig.textFontFamily shouldBe "Legacy Serif"
+        result.config.editorConfig.fontConfig.textFontFamily shouldBe "Legacy Serif"
         result.config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
         result.config.surfaceConfig.viewportSizing.width.maxCells shouldBe None
       case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
@@ -1264,9 +1264,9 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
       case Right(result) =>
-        result.config.fontConfig.textFontFamily shouldBe "Text Font"
-        result.config.fontConfig.uiFontFamily shouldBe "Text Font"
-        result.config.fontConfig.codeFontFamily shouldBe AppConfig.default.fontConfig.codeFontFamily
+        result.config.editorConfig.fontConfig.textFontFamily shouldBe "Text Font"
+        result.config.editorConfig.fontConfig.uiFontFamily shouldBe "Text Font"
+        result.config.editorConfig.fontConfig.codeFontFamily shouldBe AppConfig.default.editorConfig.fontConfig.codeFontFamily
         result.config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
       case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
   }
@@ -1322,8 +1322,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val loaded = ConfigManager.loadConfig(Some(root.toString))
 
-    loaded.fontConfig.textFontFamily shouldBe "Included Serif"
-    loaded.fontConfig.uiFontFamily shouldBe "Included Serif"
+    loaded.editorConfig.fontConfig.textFontFamily shouldBe "Included Serif"
+    loaded.editorConfig.fontConfig.uiFontFamily shouldBe "Included Serif"
     loaded.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
   }
 

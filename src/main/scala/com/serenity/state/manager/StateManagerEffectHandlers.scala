@@ -406,9 +406,9 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[Unit] =
     deviceTextScaleProvider.flatMap { deviceTextScale =>
       applyConfigUpdate(config =>
-        config.withFontConfig(update(config.fontConfig).resolveAutoTextScale(deviceTextScale))
+        config.withFontConfig(update(config.editorConfig.fontConfig).resolveAutoTextScale(deviceTextScale))
       )
-        .flatMap(config => onFontConfigChanged(config.fontConfig))
+        .flatMap(config => onFontConfigChanged(config.editorConfig.fontConfig))
     }
 
   protected def updateSpellCheckConfig(
@@ -920,7 +920,7 @@ final private[manager] class StateManagerEffectHandlers(
       if ms <= 0 then None
       else
         Some(
-          config.characterAnimation.fold(
+          config.editorConfig.characterAnimation.fold(
             AnimationConfig(steps = 12, totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
           )(existing => existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L)))
         )
@@ -934,7 +934,7 @@ final private[manager] class StateManagerEffectHandlers(
       if n <= 0 then None
       else
         Some(
-          config.characterAnimation.fold(
+          config.editorConfig.characterAnimation.fold(
             AnimationConfig(steps = n, totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000L))
           )(existing => existing.copy(steps = n))
         )
@@ -1293,7 +1293,7 @@ final private[manager] class StateManagerEffectHandlers(
                       (restored, restored.persisted.config)
                     }
                     _ <- persistConfigFile(appliedConfig)
-                    _ <- onFontConfigChanged(appliedConfig.fontConfig)
+                    _ <- onFontConfigChanged(appliedConfig.editorConfig.fontConfig)
                       .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config"))
                     _ <- reloadPresetDirectories(preset)
                     _ <- openPresetMarkdownPreviewIfNeeded(preset)
@@ -1451,7 +1451,7 @@ final private[manager] class StateManagerEffectHandlers(
         state
 
   private def loadUiPresetResources(preset: UiPreset): IO[Either[String, Theme]] =
-    FontLoader.missingFamilies(preset.config.fontConfig) match
+    FontLoader.missingFamilies(preset.config.editorConfig.fontConfig) match
       case missing :: _ => IO.pure(Left(s"Preset requires unavailable $missing."))
       case Nil =>
         themeManager.loadTheme(preset.themeName).attempt.map {

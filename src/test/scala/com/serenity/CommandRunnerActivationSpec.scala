@@ -337,7 +337,9 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       s.copy(persisted =
         s.persisted.copy(config =
           s.persisted.config
-            .withFontConfig(s.persisted.config.fontConfig.copy(enableLigatures = false, textLigatures = false))
+            .withFontConfig(
+              s.persisted.config.editorConfig.fontConfig.copy(enableLigatures = false, textLigatures = false)
+            )
         )
       )
     ).unsafeRunSync()

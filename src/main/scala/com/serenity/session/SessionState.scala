@@ -853,6 +853,13 @@ given Decoder[RichTextParagraph] = deriveDecoder
 given Encoder[RichTextDocument] = deriveEncoder
 given Decoder[RichTextDocument] = deriveDecoder
 
+private def encodeEditorConfig(config: AppConfig): List[(String, Json)] =
+  List(
+    "characterAnimation" -> config.editorConfig.characterAnimation.asJson,
+    "fontConfig"         -> config.editorConfig.fontConfig.asJson,
+    "minimumPaneWidth"   -> config.editorConfig.minimumPaneWidth.asJson
+  )
+
 private def encodeInputConfig(config: AppConfig): List[(String, Json)] =
   List(
     "hotkeyConfig"        -> config.inputConfig.hotkeyConfig.asJson,
@@ -922,6 +929,19 @@ private def encodeSurfaceConfig(config: AppConfig): List[(String, Json)] =
     "motionConfiguration"               -> config.surfaceConfig.motionConfiguration.asJson,
     "textAreaInsets"                    -> config.surfaceConfig.textAreaInsets.asJson
   )
+
+private def decodeEditorConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[EditorConfig] =
+  for
+    characterAnimation <- cursor.getOrElse[Option[AnimationConfig]]("characterAnimation")(
+      defaultConfig.editorConfig.characterAnimation
+    )
+    fontConfig       <- cursor.getOrElse[FontConfig]("fontConfig")(defaultConfig.editorConfig.fontConfig)
+    minimumPaneWidth <- cursor.getOrElse[Int]("minimumPaneWidth")(defaultConfig.editorConfig.minimumPaneWidth)
+  yield EditorConfig(
+    characterAnimation = characterAnimation,
+    fontConfig = fontConfig,
+    minimumPaneWidth = minimumPaneWidth
+  ).normalized
 
 private def decodeInputConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[InputConfig] =
   for
@@ -1082,11 +1102,7 @@ private def decodeSurfaceConfig(cursor: HCursor, defaultConfig: AppConfig): Deco
 given Encoder[AppConfig] = Encoder.instance { config =>
   Json.obj(
     (
-      List(
-        "characterAnimation" -> config.characterAnimation.asJson,
-        "fontConfig"         -> config.fontConfig.asJson,
-        "minimumPaneWidth"   -> config.minimumPaneWidth.asJson
-      ) ++
+      encodeEditorConfig(config) ++
         encodeInputConfig(config) ++
         encodeLanguageToolsConfig(config) ++
         encodeCursorConfig(config) ++
@@ -1102,23 +1118,17 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
   val defaultConfig = AppConfig.default
 
   for
-    characterAnimation <- cursor.getOrElse[Option[AnimationConfig]]("characterAnimation")(
-      defaultConfig.characterAnimation
-    )
+    editorConfig        <- decodeEditorConfig(cursor, defaultConfig)
     inputConfig         <- decodeInputConfig(cursor, defaultConfig)
     languageToolsConfig <- decodeLanguageToolsConfig(cursor, defaultConfig)
-    fontConfig          <- cursor.getOrElse[FontConfig]("fontConfig")(defaultConfig.fontConfig)
-    minimumPaneWidth    <- cursor.getOrElse[Int]("minimumPaneWidth")(defaultConfig.minimumPaneWidth)
     surfaceConfig       <- decodeSurfaceConfig(cursor, defaultConfig)
     cursorConfig        <- decodeCursorConfig(cursor, defaultConfig)
     windowConfig        <- decodeWindowConfig(cursor, defaultConfig)
     documentConfig      <- decodeDocumentConfig(cursor, defaultConfig)
     interfaceConfig     <- decodeInterfaceConfig(cursor, defaultConfig)
   yield AppConfig(
-    characterAnimation = characterAnimation,
+    editorConfig = editorConfig,
     inputConfig = inputConfig,
-    fontConfig = fontConfig,
-    minimumPaneWidth = minimumPaneWidth,
     surfaceConfig = surfaceConfig,
     cursorConfig = cursorConfig,
     windowConfig = windowConfig,

@@ -112,7 +112,9 @@ object LayoutEngine:
       else 0
     val horizontalTextFraction = (1.0 - textAreaInsets.left - textAreaInsets.right).max(0.01)
     val minimumEditorWorkspaceWidth =
-      math.ceil((state.persisted.config.minimumPaneWidth.max(1) + lineNumberWidth) / horizontalTextFraction).toInt
+      math
+        .ceil((state.persisted.config.editorConfig.minimumPaneWidth.max(1) + lineNumberWidth) / horizontalTextFraction)
+        .toInt
     val pinnedPanelLayout =
       state.persisted.layout.workspaceTree
         .filter(_.dockedSurfaceIds.nonEmpty)
@@ -1231,7 +1233,11 @@ object LayoutEngine:
     calculateEditorPaneLayoutsWithMinWidth(state, calculatedLayout, minWidth).view.mapValues(_.paneRect).toMap
 
   def calculateEditorPaneLayouts(state: AppState, calculatedLayout: CalculatedLayout): Map[PaneId, EditorPaneLayout] =
-    calculateEditorPaneLayoutsWithMinWidth(state, calculatedLayout, state.persisted.config.minimumPaneWidth)
+    calculateEditorPaneLayoutsWithMinWidth(
+      state,
+      calculatedLayout,
+      state.persisted.config.editorConfig.minimumPaneWidth
+    )
 
   /** Finds the nearest usable pane in a cardinal direction using authoritative pane rectangles. */
   def directionalPaneNeighbor(

@@ -443,9 +443,12 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val updatedState = initialState
     val buffer       = updatedState.persisted.buffers(bufferId)
     val cursor       = buffer.editing.cursors.head
-    val font         = FontLoader.previewTextFont(updatedState.persisted.config.fontConfig)
+    val font         = FontLoader.previewTextFont(updatedState.persisted.config.editorConfig.fontConfig)
     val wrapPx =
-      TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, updatedState.persisted.config.fontConfig)
+      TextLayoutSnapshot.gridWrapWidthPx(
+        buffer.viewport.visibleColumns,
+        updatedState.persisted.config.editorConfig.fontConfig
+      )
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
 
     buffer.viewport.topLine shouldBe 0
