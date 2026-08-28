@@ -35,7 +35,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     rs.flush()
 
     writer.toString should include("hi")
-    writer.toString should startWith(s"$esc[2J$esc[H") // first flush has no previous frame: full repaint
+    // first flush has no previous frame (full repaint), wrapped in #1172's DEC 2026 synchronized-update brackets
+    writer.toString should startWith(s"$esc[?2026h$esc[2J$esc[H")
   }
 
   "flush" should "emit only the cells that changed since the previous flush" in {
@@ -129,7 +130,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     Renderer.render(state, cursorVisible = false, rs, viewport)
 
     val output = writer.toString
-    output should startWith(s"$esc[2J$esc[H") // first frame: full clear-and-repaint
+    // first frame: full clear-and-repaint, wrapped in #1172's DEC 2026 synchronized-update brackets
+    output should startWith(s"$esc[?2026h$esc[2J$esc[H")
     // The gutter's line number reaches the screen through `putString` (a real cell-addressed draw this surface
     // performs), confirming the frame actually painted through to the terminal rather than producing an empty diff.
     output should include("1")
@@ -250,6 +252,44 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     Renderer.renderWithCursorOverlay(state, rs, ViewportSize(80, 24), font, font, font, cellMetrics, cellMetrics, None)
 
     writer.toString should include(s"$esc[?25l")
+  }
+
+  // -- #1172: DEC 2026 synchronized updates bracketing a flush's whole emission ---------------------------------------
+
+  "flush" should "bracket a content-changing flush's whole emission in DEC 2026 synchronized-update begin/end" in {
+    val (rs, writer) = surface()
+    rs.putString(0, 0, "hi")
+    rs.flush()
+
+    val out = writer.toString
+    out should startWith(s"$esc[?2026h")
+    out should endWith(s"$esc[?2026l")
+  }
+
+  it should "bracket a caret-only flush (no content damage) in the same synchronized-update begin/end" in {
+    val (rs, writer) = surface()
+    rs.hardwareCursor.get.present(1, 1, HardwareCursorStyle(HardwareCursorShape.Block, blinking = true))
+    rs.flush()
+    writer.getBuffer.setLength(0)
+
+    rs.hardwareCursor.get.present(5, 1, HardwareCursorStyle(HardwareCursorShape.Block, blinking = true))
+    rs.flush()
+
+    val out = writer.toString
+    out should startWith(s"$esc[?2026h")
+    out should endWith(s"$esc[?2026l")
+  }
+
+  it should "emit no synchronized-update brackets on a flush with no content damage and no caret movement" in {
+    val (rs, writer) = surface()
+    rs.hardwareCursor.get.present(1, 1, HardwareCursorStyle(HardwareCursorShape.Block, blinking = true))
+    rs.flush()
+    writer.getBuffer.setLength(0)
+
+    rs.flush() // nothing changed
+
+    writer.toString should not include s"$esc[?2026h"
+    writer.toString shouldBe ""
   }
 
   private def editorState(cursorMode: CursorMode): AppState =

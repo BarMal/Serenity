@@ -91,11 +91,27 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
 
   def hide(): Unit = caretRef.set(None)
 
+  /** Bracketing a flush's whole emission (content diff + caret escape) in DEC private mode 2026 tells a synchronized-
+    * output-aware terminal (kitty, foot, wezterm) to buffer every write until `?2026l` and paint the result as one
+    * atomic frame, instead of possibly sampling -- and the compositor possibly compositing -- mid-write on a large
+    * diff. Emitted unconditionally rather than behind a capability probe: `CSI ? Pm h`/`l` with an unrecognized private
+    * mode number is a documented no-op on every DEC-derived terminal (xterm's ctlseqs.txt: an unsupported
+    * `DECSET`/`DECRST` parameter is simply ignored), so there is nothing to negotiate and no probe round-trip to wait
+    * on -- this codebase has no existing machinery for reading a terminal's response to a query (`TerminalShell` never
+    * reads from the terminal, only writes to it), so a DECRQM probe would add a new, unproven capability rather than
+    * reuse an established one for what the issue itself frames as a small, self-contained change. Skipped on a flush
+    * that writes nothing (`ansi` and the caret escape both empty) so an unchanged frame still costs zero bytes,
+    * preserving #1170's zero-idle-wakeup contract.
+    */
   def flush(): Unit =
-    val next = screenBuffer.snapshot
-    val ansi = TerminalAnsiDiff.emit(previousFrameRef.getAndSet(Some(next)), next)
-    writer.write(ansi)
-    writer.write(caretEscape())
+    val next  = screenBuffer.snapshot
+    val ansi  = TerminalAnsiDiff.emit(previousFrameRef.getAndSet(Some(next)), next)
+    val caret = caretEscape()
+    if ansi.nonEmpty || caret.nonEmpty then
+      writer.write(TerminalRenderSurface.BeginSyncUpdate)
+      writer.write(ansi)
+      writer.write(caret)
+      writer.write(TerminalRenderSurface.EndSyncUpdate)
     writer.flush()
 
   /** The caret escape for this flush, or `""` when the caret's presented/hidden state hasn't changed since the last
@@ -182,3 +198,7 @@ object TerminalRenderSurface:
   final private case class Caret(cellX: Int, cellY: Int, style: HardwareCursorStyle)
 
   private val Esc: Char = 0x1b.toChar
+
+  // -- #1172: DEC 2026 synchronized updates -------------------------------------------------------------------------
+  private val BeginSyncUpdate: String = s"$Esc[?2026h"
+  private val EndSyncUpdate: String   = s"$Esc[?2026l"
