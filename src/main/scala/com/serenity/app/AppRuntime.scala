@@ -40,15 +40,27 @@ object AppRuntime:
   ): FiniteDuration =
     if isInitialFrame then Duration.Zero else frameInterval
 
-  private[serenity] def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
-    val cursorMotion = config.surfaceConfig.effectiveMotionConfiguration.family(com.serenity.config.MotionFamily.Cursor)
-    val scale        = AppConfig.clampElementTransitionSpeedScale(cursorMotion.speedScale)
-    Option.when(cursorMotion.enabled && scale > 0.0)(
-      FiniteDuration(
-        math.max(1L, math.round(DefaultCursorIdleInterval.toNanos.toDouble * scale)),
-        NANOSECONDS
+  /** The idle phase's per-tick cadence, or `None` when it has nothing to tick for and should sleep indefinitely instead
+    * (see [[awaitFocusedIdleTick]]).
+    *
+    * `isTuiMode` adds a second, TUI-specific reason to return `None` on top of the existing motion-disabled one
+    * (#1170): in TUI blink mode the caret is delegated to the terminal's own cursor (`Renderer.presentHardwareCursor`),
+    * which owns blink timing entirely, so the app has no idle work left to do. Breathe mode is the documented exception
+    * -- it animates color/opacity over time, which a terminal cursor style can't represent -- so it keeps the normal
+    * cadence.
+    */
+  private[serenity] def cursorIdleInterval(config: AppConfig, isTuiMode: Boolean = false): Option[FiniteDuration] =
+    if isTuiMode && config.cursorMode == CursorMode.Blink then None
+    else
+      val cursorMotion =
+        config.surfaceConfig.effectiveMotionConfiguration.family(com.serenity.config.MotionFamily.Cursor)
+      val scale = AppConfig.clampElementTransitionSpeedScale(cursorMotion.speedScale)
+      Option.when(cursorMotion.enabled && scale > 0.0)(
+        FiniteDuration(
+          math.max(1L, math.round(DefaultCursorIdleInterval.toNanos.toDouble * scale)),
+          NANOSECONDS
+        )
       )
-    )
 
   private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean], breathIndex: Ref[IO, Int]): IO[Unit] =
     cursorVisible.set(true) >> breathIndex.set(0)
@@ -69,8 +81,11 @@ object AppRuntime:
     else windowFocused.set(false) >> resetCursorActivity(cursorVisible, breathIndex) >> requestFastRender
 
   /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
-    * wakeup-free wait for focus to return otherwise -- the mechanism that actually stops the ~2Hz idle wakeups while
-    * the window is unfocused, rather than merely skipping the render they'd otherwise trigger.
+    * wakeup-free wait otherwise -- the mechanism that actually stops idle wakeups, rather than merely skipping the
+    * render they'd otherwise trigger. Two things can make focused waiting indefinite instead of cadenced:
+    * [[cursorIdleInterval]] returning `None` (motion disabled, or #1170's TUI-blink caret delegation), racing here
+    * against [[Stream.interruptWhen]]'s `fastModeSignal` in [[idleRenderPhase]] so a real input event still wakes it
+    * immediately -- and losing focus entirely, which waits on `windowFocused` turning true again instead.
     */
   private[serenity] def awaitFocusedIdleTick(
     loadState: IO[AppState],
@@ -78,9 +93,11 @@ object AppRuntime:
   ): IO[Unit] =
     windowFocused.get.flatMap {
       case true =>
-        loadState
-          .map(state => cursorIdleInterval(state.persisted.config).getOrElse(DefaultCursorIdleInterval))
-          .flatMap(IO.sleep)
+        loadState.flatMap { state =>
+          cursorIdleInterval(state.persisted.config, state.runtime.isTuiMode) match
+            case Some(interval) => IO.sleep(interval)
+            case None           => IO.never
+        }
       case false =>
         windowFocused.discrete.find(identity).compile.drain
     }
@@ -125,6 +142,7 @@ object AppRuntime:
     awaitExternalQuit: IO[Unit] = IO.never,
     registerResizeCallback: (() => Unit) => Unit = _ => (),
     registerFocusCallback: (Boolean => Unit) => Unit = _ => (),
+    registerMarkdownPreviewCloseCallback: (() => Unit) => Unit = _ => (),
     openPath: Option[Path] = None,
     systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
     isTuiMode: Boolean = false
@@ -168,6 +186,11 @@ object AppRuntime:
         _ <- IO(
           registerFocusCallback(
             focusCallbackBridge(windowFocused, cursorVisible, breathIndex, requestFastRender, resizeCallbackDispatcher)
+          )
+        )
+        _ <- IO(
+          registerMarkdownPreviewCloseCallback(
+            markdownPreviewCloseCallbackBridge(stateManager, resizeCallbackDispatcher)
           )
         )
         animationTickCadence <- Ref.of[IO, AnimationTickCadence](
@@ -529,7 +552,7 @@ object AppRuntime:
       state <- withRuntimeDiagnostics("render loop", "idle.state", currentStateForDiagnostics)(
         loadState
       )
-      _ <- cursorIdleInterval(state.persisted.config) match
+      _ <- cursorIdleInterval(state.persisted.config, state.runtime.isTuiMode) match
         case Some(_) =>
           for
             (visible, cursor) <- withRuntimeDiagnostics(
@@ -571,6 +594,24 @@ object AppRuntime:
         onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )
+
+  /** Bridges the TUI's spawned Markdown preview window (issue #1113) closing via its own native close control back into
+    * application state: the window only hides itself (see `MarkdownPreviewWindow.resource`), so this callback's sole
+    * job is toggling `markdownPreviewWindowBuffer` back off rather than orphaning a dead window reference.
+    */
+  private[serenity] def markdownPreviewCloseCallbackBridge(
+    stateManager: StateUpdater,
+    dispatcher: Dispatcher[IO]
+  )(using logger: Logger[IO]): () => Unit =
+    () =>
+      dispatcher.unsafeRunAndForget(
+        stateManager
+          .updateState(closeMarkdownPreviewWindowInState)
+          .handleErrorWith(error => logger.error(error)("[RUNTIME] markdown preview close callback failed"))
+      )
+
+  private[serenity] def closeMarkdownPreviewWindowInState(state: AppState): AppState =
+    state.copy(runtime = state.runtime.copy(markdownPreviewWindowBuffer = None))
 
   private def advanceAnimationsForCadence(
     ticks: Int,

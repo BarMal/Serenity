@@ -152,6 +152,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.uiPresetStore,
         runtime.windowSizeProvider,
         runtime.fileDialog,
+        runtime.markdownPreviewWindow,
         runtime.fileManager,
         runtime.sessionManager,
         runtime.sessionPersistence,

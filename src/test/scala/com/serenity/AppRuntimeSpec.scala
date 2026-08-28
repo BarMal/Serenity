@@ -19,7 +19,7 @@ import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
-import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.{StateManager, StateUpdater}
 import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage}
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
@@ -336,6 +336,24 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     AppRuntime.cursorIdleInterval(
       AppConfig.default.withMotionAccessibility(MotionAccessibility.Off)
     ) shouldBe None
+  }
+
+  it should "delegate the caret to the terminal's own cursor in TUI blink mode, eliding the idle cadence entirely" in {
+    // #1170: the terminal owns blink timing for the normal (non-breathe) caret in TUI mode, so the idle phase has
+    // nothing left to tick for -- outside TUI mode the same config still ticks, since a GUI caret is always
+    // app-painted.
+    AppRuntime.cursorIdleInterval(AppConfig.default, isTuiMode = true) shouldBe None
+    AppRuntime.cursorIdleInterval(AppConfig.default, isTuiMode = false) shouldBe Some(500.millis)
+    AppRuntime.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Blink), isTuiMode = true) shouldBe None
+  }
+
+  it should "keep the cursor idle cadence in TUI breathe mode, since breathe genuinely needs app ticks" in {
+    // Breathe animates color/opacity over time -- a terminal cursor style can't represent that -- so it stays the
+    // documented, explicit exception to #1170's terminal-delegated caret.
+    AppRuntime.cursorIdleInterval(
+      AppConfig.default.withCursorMode(CursorMode.Breathe),
+      isTuiMode = true
+    ) shouldBe Some(500.millis)
   }
 
   it should "reset the cursor activity phase to visible after user input" in {
@@ -1066,6 +1084,39 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
 
+  it should "never wake the idle tick in TUI blink mode -- the caret is delegated to the terminal, zero wakeups" in {
+    val tuiBlinkState =
+      AppState.initial.copy(runtime = AppState.initial.runtime.copy(isTuiMode = true))
+
+    val program = for
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      // If awaitFocusedIdleTick ever produced a finite sleep here, the race would resolve Left before the 2s
+      // sleep on the right; genuinely sleeping forever is the only way this resolves Right.
+      result <- IO.race(
+        AppRuntime.awaitFocusedIdleTick(IO.pure(tuiBlinkState), windowFocused),
+        IO.sleep(2.seconds)
+      )
+    yield result shouldBe Right(())
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "still wake the idle tick in TUI breathe mode -- breathe stays the documented app-painted exception" in {
+    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02).withCursorMode(CursorMode.Breathe)
+    val tuiBreatheState =
+      AppState.initial(fastConfig).copy(runtime = AppState.initial(fastConfig).runtime.copy(isTuiMode = true))
+
+    val program = for
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      result <- IO.race(
+        AppRuntime.awaitFocusedIdleTick(IO.pure(tuiBreatheState), windowFocused),
+        IO.sleep(500.millis)
+      )
+    yield result shouldBe Left(())
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   it should "skip idle cursor rendering entirely while unfocused, then resume once focus returns" in {
     val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
     val state      = AppState.initial(fastConfig)
@@ -1110,6 +1161,92 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     yield
       callsWhileUnfocused shouldBe 0
       callsAfterFocus should be > 0
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "never render an idle cursor frame in TUI blink mode -- zero idle wakeups, terminal owns the caret" in {
+    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val state = AppState.initial(fastConfig).copy(runtime = AppState.initial(fastConfig).runtime.copy(isTuiMode = true))
+
+    val program = for
+      fastModeSignal     <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      windowFocused      <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
+      cursorVisible      <- Ref.of[IO, Boolean](true)
+      breathIndex        <- Ref.of[IO, Int](0)
+      renderCalls        <- Ref.of[IO, Int](0)
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      fiber <- AppRuntime
+        .idleRenderPhase(
+          loadState = IO.pure(state),
+          loadBufferAnimations = IO.pure(Map.empty),
+          fastModeSignal = fastModeSignal,
+          windowFocused = windowFocused,
+          pendingPaintDamage = pendingPaintDamage,
+          currentStateForDiagnostics = IO.pure(Some(state)),
+          checkResizeAndHandle = IO.unit,
+          cursorVisible = cursorVisible,
+          breathIndex = breathIndex,
+          renderCursorOnly = (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => renderCalls.update(_ + 1),
+          requestFastRender = IO.unit
+        )
+        .compile
+        .drain
+        .start
+      _     <- IO.sleep(300.millis) // several multiples of what would have been a 500ms*0.02=10ms idle cadence
+      calls <- renderCalls.get
+      _     <- fiber.cancel
+    yield calls shouldBe 0
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "keep rendering idle breathe frames in TUI mode -- breathe is app-painted, not delegated to the terminal" in {
+    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02).withCursorMode(CursorMode.Breathe)
+    val state = AppState.initial(fastConfig).copy(runtime = AppState.initial(fastConfig).runtime.copy(isTuiMode = true))
+
+    val program = for
+      fastModeSignal     <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      windowFocused      <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
+      cursorVisible      <- Ref.of[IO, Boolean](true)
+      breathIndex        <- Ref.of[IO, Int](0)
+      renderCalls        <- Ref.of[IO, Int](0)
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      fiber <- AppRuntime
+        .idleRenderPhase(
+          loadState = IO.pure(state),
+          loadBufferAnimations = IO.pure(Map.empty),
+          fastModeSignal = fastModeSignal,
+          windowFocused = windowFocused,
+          pendingPaintDamage = pendingPaintDamage,
+          currentStateForDiagnostics = IO.pure(Some(state)),
+          checkResizeAndHandle = IO.unit,
+          cursorVisible = cursorVisible,
+          breathIndex = breathIndex,
+          renderCursorOnly = (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => renderCalls.update(_ + 1),
+          requestFastRender = IO.unit
+        )
+        .compile
+        .drain
+        .start
+      _     <- IO.sleep(150.millis)
+      calls <- renderCalls.get
+      _     <- fiber.cancel
+    yield calls should be > 0
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
@@ -1244,6 +1381,81 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       yield
         failure.map(_.message) shouldBe defined
         failure.flatMap(_.error).map(_.getMessage) should contain("resize signal failed")
+    }
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  "closeMarkdownPreviewWindowInState" should "clear the preview window's buffer without touching anything else" in {
+    val bufferId = BufferId(7)
+    val state = AppState.initial.copy(runtime =
+      AppState.initial.runtime.copy(isTuiMode = true, markdownPreviewWindowBuffer = Some(bufferId))
+    )
+
+    val cleared = AppRuntime.closeMarkdownPreviewWindowInState(state)
+
+    cleared.runtime.markdownPreviewWindowBuffer shouldBe None
+    cleared.runtime.isTuiMode shouldBe true
+    cleared.persisted shouldBe state.persisted
+  }
+
+  it should "be idempotent when the window is already closed" in {
+    val state = AppState.initial
+
+    AppRuntime.closeMarkdownPreviewWindowInState(state) shouldBe state
+  }
+
+  "markdownPreviewCloseCallbackBridge" should "sync the window-closed toggle back into application state" in {
+    val program = Dispatcher.parallel[IO].use { dispatcher =>
+      for
+        logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
+        given Logger[IO] = new RecordingLogger(logs)
+        stateManager <- StateManager.apply(
+          summon[Logger[IO]],
+          policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+        )
+        bufferId = BufferId(3)
+        _ <- stateManager
+          .updateState(s => s.copy(runtime = s.runtime.copy(markdownPreviewWindowBuffer = Some(bufferId))))
+        callback = AppRuntime.markdownPreviewCloseCallbackBridge(stateManager, dispatcher)
+        _ <- IO(callback())
+        cleared <-
+          def loop(remaining: Int): IO[Boolean] =
+            stateManager.getCurrentState.flatMap { state =>
+              if state.runtime.markdownPreviewWindowBuffer.isEmpty then IO.pure(true)
+              else if remaining <= 0 then IO.pure(false)
+              else IO.sleep(25.millis) >> loop(remaining - 1)
+            }
+          loop(40)
+      yield cleared shouldBe true
+    }
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "log failures from the runtime bridge" in {
+    val program = Dispatcher.parallel[IO].use { dispatcher =>
+      for
+        logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
+        given Logger[IO] = new RecordingLogger(logs)
+        failingStateManager = new StateUpdater:
+          def updateState(update: AppState => AppState): IO[Unit] =
+            IO.raiseError(new RuntimeException("markdown preview close signal failed"))
+          def updateBufferAnimations(
+            update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+              BufferId,
+              com.serenity.animation.AnimationState
+            ]
+          ): IO[Unit] = IO.unit
+        callback = AppRuntime.markdownPreviewCloseCallbackBridge(failingStateManager, dispatcher)
+        _ <- IO(callback())
+        failure <- awaitLogEntry(
+          logs,
+          _.message.contains("[RUNTIME] markdown preview close callback failed")
+        )
+      yield
+        failure.map(_.message) shouldBe defined
+        failure.flatMap(_.error).map(_.getMessage) should contain("markdown preview close signal failed")
     }
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
