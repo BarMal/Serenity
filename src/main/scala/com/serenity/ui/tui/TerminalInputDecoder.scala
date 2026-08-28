@@ -33,6 +33,15 @@ object TerminalInputDecoder:
     final case class Mouse(event: MouseInputEvent) extends DecodedToken
     final case class Pasted(text: String)          extends DecodedToken
 
+    /** A bare modifier key's own press or release, decoded from a kitty-protocol CSI-u sequence reporting one of its
+      * private-use-area modifier codepoints (`57441`-`57452`; see [[BareModifierCodepoints]]). xterm's
+      * `modifyOtherKeys`/`formatOtherKeys=1` has no equivalent -- it never emits these codepoints -- so this token only
+      * ever arises on a terminal that answered the kitty `CSI ? u` capability query. Consumed by
+      * [[TerminalInputHandler]] to drive [[com.serenity.input.ModifierTapDetector]], the same double-tap state machine
+      * `SwingInputHandler` runs over AWT modifier press/release events.
+      */
+    final case class ModifierEdge(modifier: Modifier, pressed: Boolean) extends DecodedToken
+
   /** @param tokens
     *   tokens fully decoded from the front of `bytes`, in order.
     * @param remainder
@@ -47,6 +56,7 @@ object TerminalInputDecoder:
   private val Csi: Byte   = '['.toByte
   private val Ss3: Byte   = 'O'.toByte
   private val Tilde: Byte = '~'.toByte
+  private val CsiU: Byte  = 'u'.toByte
 
   private val PasteStartParams              = "200"
   private val PasteStartMarker: Array[Byte] = Array(Esc, Csi, '2'.toByte, '0'.toByte, '0'.toByte, Tilde)
@@ -121,6 +131,7 @@ object TerminalInputDecoder:
         if params == PasteStartParams && finalByte == Tilde then decodePaste(bytes, j + 1)
         else if params.headOption.contains('<') && (finalByte == 'M'.toByte || finalByte == 'm'.toByte) then
           decodeSgrMouse(params.tail, finalByte == 'm'.toByte, j + 1)
+        else if finalByte == CsiU then Step.Complete(decodeCsiU(params), j + 1)
         else Step.Complete(List(decodeCsiKey(params, finalByte)), j + 1)
 
   @annotation.tailrec
@@ -211,6 +222,81 @@ object TerminalInputDecoder:
           case _         => InputKey.Unknown
       case _ => InputKey.Unknown
     DecodedToken.Key(KeyStrokeInfo(key, None, Set.empty))
+
+  /** kitty-protocol private-use-area codepoints for a bare modifier key's own press/release, keyed by the [[Modifier]]
+    * it double-taps as. `Super`/`Hyper`/`CapsLock`/`NumLock` have codepoints too (per the kitty spec) but no
+    * corresponding [[Modifier]] case in this codebase, so they are deliberately left unmapped and fall through to
+    * [[decodeCsiU]]'s ordinary-key path, where their non-printable codepoint drops them.
+    */
+  private val BareModifierCodepoints: Map[Int, Modifier] = Map(
+    57441 -> Modifier.Shift,
+    57447 -> Modifier.Shift,
+    57442 -> Modifier.Ctrl,
+    57448 -> Modifier.Ctrl,
+    57443 -> Modifier.Alt,
+    57449 -> Modifier.Alt,
+    57446 -> Modifier.Meta,
+    57452 -> Modifier.Meta
+  )
+
+  /** Decodes a CSI-u (fixterms) sequence: `keycode[:shifted[:base]] ; modifiers[:event][;text] u`. Shared wire shape
+    * for both the kitty keyboard protocol (full form, including bare-modifier and release events) and xterm's
+    * `modifyOtherKeys` mode 2 with `formatOtherKeys=1` (always a bare `keycode ; modifiers u`, event type always
+    * implicitly "press") -- one decoding path serves both tiers, since a modifyOtherKeys-shaped sequence is simply a
+    * kitty-shaped one with the optional subfields omitted.
+    */
+  private def decodeCsiU(params: String): List[DecodedToken] =
+    val fields    = params.split(";", -1)
+    val keycode   = fields.headOption.flatMap(_.split(":", -1).headOption).flatMap(_.toIntOption)
+    val modFields = fields.drop(1).headOption.getOrElse("").split(":", -1)
+    val modsValue = modFields.headOption.flatMap(_.toIntOption).filter(_ > 0).getOrElse(1)
+    val eventType = modFields.drop(1).headOption.flatMap(_.toIntOption).getOrElse(1)
+    val modifiers = csiUModifiers(modsValue)
+
+    keycode match
+      case None => Nil
+      case Some(code) =>
+        BareModifierCodepoints.get(code) match
+          case Some(modifier)         => List(DecodedToken.ModifierEdge(modifier, pressed = eventType != 3))
+          case None if eventType == 3 => Nil // Release of an ordinary key: not a keystroke of its own.
+          case None =>
+            namedCsiUKey(code, modifiers)
+              .orElse(csiUChar(code).map(ch => (InputKey.Character, Some(ch), modifiers)))
+              .map { case (key, ch, mods) => DecodedToken.Key(KeyStrokeInfo(key, ch, mods)) }
+              .toList
+
+  /** modifier value is `1 + bitmask`; `super`(0b1000)/`hyper`(0b10000)/`caps_lock`(0b1000000)/`num_lock`(0b10000000)
+    * have no [[Modifier]] case in this codebase and are dropped, same as [[BareModifierCodepoints]].
+    */
+  private def csiUModifiers(modsValue: Int): Set[Modifier] =
+    val bits = modsValue - 1
+    Set(
+      Option.when((bits & 0x01) != 0)(Modifier.Shift),
+      Option.when((bits & 0x02) != 0)(Modifier.Alt),
+      Option.when((bits & 0x04) != 0)(Modifier.Ctrl),
+      Option.when((bits & 0x20) != 0)(Modifier.Meta)
+    ).flatten
+
+  /** The four keys CSI-u's "disambiguate escape codes" flag exists to promote out of ambiguous C0 control bytes --
+    * matching the same collisions [[decodePlain]] documents as unresolvable in the legacy path (Ctrl+I/Tab,
+    * Ctrl+M/Enter), only now with a modifier that survives. Shift+Tab collapses into [[InputKey.ReverseTab]] with Shift
+    * stripped from its modifiers, mirroring `SwingInputHandler`'s `tabMods` handling of `VK_TAB`.
+    */
+  private def namedCsiUKey(code: Int, modifiers: Set[Modifier]): Option[(InputKey, Option[Char], Set[Modifier])] =
+    code match
+      case 13                                      => Some((InputKey.Enter, None, modifiers))
+      case 9 if modifiers.contains(Modifier.Shift) => Some((InputKey.ReverseTab, None, modifiers - Modifier.Shift))
+      case 9                                       => Some((InputKey.Tab, None, modifiers))
+      case 127                                     => Some((InputKey.Backspace, None, modifiers))
+      case 27                                      => Some((InputKey.Escape, None, modifiers))
+      case _                                       => None
+
+  /** A codepoint outside the BMP can't be represented as one UTF-16 `Char` (same constraint [[decodeUtf8Char]]
+    * documents for the legacy path); other non-printable codepoints (C0/C1 controls not covered by [[namedCsiUKey]])
+    * have no keystroke to report either.
+    */
+  private def csiUChar(code: Int): Option[Char] =
+    Option.when(code >= 0x20 && code < 0x110000 && Character.charCount(code) == 1)(code.toChar)
 
   private def decodePlain(bytes: Array[Byte], i: Int): Step =
     val b        = bytes(i)
