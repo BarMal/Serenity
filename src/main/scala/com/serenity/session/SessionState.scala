@@ -853,6 +853,12 @@ given Decoder[RichTextParagraph] = deriveDecoder
 given Encoder[RichTextDocument] = deriveEncoder
 given Decoder[RichTextDocument] = deriveDecoder
 
+private def encodeInputConfig(config: AppConfig): List[(String, Json)] =
+  List(
+    "hotkeyConfig"        -> config.inputConfig.hotkeyConfig.asJson,
+    "focusedKeymapConfig" -> config.inputConfig.focusedKeymapConfig.asJson
+  )
+
 private def encodeCursorConfig(config: AppConfig): List[(String, Json)] =
   List(
     "cursorMode"             -> config.cursorConfig.mode.asJson,
@@ -879,6 +885,17 @@ private def encodeInterfaceConfig(config: AppConfig): List[(String, Json)] =
     "uiElementGap"         -> config.interfaceConfig.elementGap.asJson,
     "uiCornerRadiusPx"     -> config.interfaceConfig.cornerRadiusPx.asJson,
     "uiOutlineThicknessPx" -> config.interfaceConfig.outlineThicknessPx.asJson
+  )
+
+private def decodeInputConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[InputConfig] =
+  for
+    hotkeyConfig <- cursor.getOrElse[HotkeyConfig]("hotkeyConfig")(defaultConfig.inputConfig.hotkeyConfig)
+    focusedKeymapConfig <- cursor.getOrElse[FocusedKeymapConfig]("focusedKeymapConfig")(
+      defaultConfig.inputConfig.focusedKeymapConfig
+    )
+  yield InputConfig(
+    hotkeyConfig = hotkeyConfig,
+    focusedKeymapConfig = focusedKeymapConfig
   )
 
 private def decodeCursorConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[CursorConfig] =
@@ -941,8 +958,6 @@ given Encoder[AppConfig] = Encoder.instance { config =>
       List(
         "characterAnimation"                -> config.characterAnimation.asJson,
         "syntaxHighlightingEnabled"         -> config.syntaxHighlightingEnabled.asJson,
-        "hotkeyConfig"                      -> config.hotkeyConfig.asJson,
-        "focusedKeymapConfig"               -> config.focusedKeymapConfig.asJson,
         "fontConfig"                        -> config.fontConfig.asJson,
         "minimumPaneWidth"                  -> config.minimumPaneWidth.asJson,
         "showLineNumbers"                   -> config.showLineNumbers.asJson,
@@ -970,6 +985,7 @@ given Encoder[AppConfig] = Encoder.instance { config =>
         "panelCloseTransitionKind"          -> config.panelCloseTransitionKind.asJson,
         "motionConfiguration"               -> config.motionConfiguration.asJson
       ) ++
+        encodeInputConfig(config) ++
         encodeCursorConfig(config) ++
         encodeWindowConfig(config) ++
         encodeDocumentConfig(config) ++
@@ -993,17 +1009,16 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     syntaxHighlightingEnabled <- cursor.getOrElse[Boolean]("syntaxHighlightingEnabled")(
       defaultConfig.syntaxHighlightingEnabled
     )
-    hotkeyConfig        <- cursor.getOrElse[HotkeyConfig]("hotkeyConfig")(HotkeyConfig())
-    focusedKeymapConfig <- cursor.getOrElse[FocusedKeymapConfig]("focusedKeymapConfig")(FocusedKeymapConfig())
-    fontConfig          <- cursor.getOrElse[FontConfig]("fontConfig")(defaultConfig.fontConfig)
-    minimumPaneWidth    <- cursor.getOrElse[Int]("minimumPaneWidth")(defaultConfig.minimumPaneWidth)
-    showLineNumbers     <- cursor.getOrElse[Boolean]("showLineNumbers")(defaultConfig.showLineNumbers)
-    showGutter          <- cursor.getOrElse[Boolean]("showGutter")(defaultConfig.showGutter)
-    wordWrapEnabled     <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
-    blurRadius          <- cursor.getOrElse[Float]("blurRadius")(0.0f)
-    backgroundStyle     <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
-    materialPreset      <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
-    motionPreset        <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
+    inputConfig      <- decodeInputConfig(cursor, defaultConfig)
+    fontConfig       <- cursor.getOrElse[FontConfig]("fontConfig")(defaultConfig.fontConfig)
+    minimumPaneWidth <- cursor.getOrElse[Int]("minimumPaneWidth")(defaultConfig.minimumPaneWidth)
+    showLineNumbers  <- cursor.getOrElse[Boolean]("showLineNumbers")(defaultConfig.showLineNumbers)
+    showGutter       <- cursor.getOrElse[Boolean]("showGutter")(defaultConfig.showGutter)
+    wordWrapEnabled  <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
+    blurRadius       <- cursor.getOrElse[Float]("blurRadius")(0.0f)
+    backgroundStyle  <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
+    materialPreset   <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
+    motionPreset     <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
     elementTransitionSpeedScale <- cursor
       .getOrElse[Double]("elementTransitionSpeedScale")(1.0)
       .map(AppConfig.clampElementTransitionSpeedScale)
@@ -1052,8 +1067,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
   yield AppConfig(
     characterAnimation = characterAnimation,
     syntaxHighlightingEnabled = syntaxHighlightingEnabled,
-    hotkeyConfig = hotkeyConfig,
-    focusedKeymapConfig = focusedKeymapConfig,
+    inputConfig = inputConfig,
     fontConfig = fontConfig,
     minimumPaneWidth = minimumPaneWidth,
     showLineNumbers = showLineNumbers,

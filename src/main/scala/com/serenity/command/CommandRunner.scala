@@ -787,7 +787,7 @@ object CommandRunner:
       "goto-line"    -> HotkeyAction.GoToLine
     ).flatMap {
       case (commandName, action) =>
-        config.hotkeyConfig.bindingsFor(action).headOption.map(trigger => commandName -> trigger.render)
+        config.inputConfig.hotkeyConfig.bindingsFor(action).headOption.map(trigger => commandName -> trigger.render)
     }
 
   /** Empty/inactive command runner */

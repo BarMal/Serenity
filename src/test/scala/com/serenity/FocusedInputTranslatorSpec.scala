@@ -191,7 +191,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val duplicate = HotkeyTrigger(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
     val invalidConfig = AppConfig.default.withHotkeyConfig(
       HotkeyConfig(
-        AppConfig.default.hotkeyConfig.bindings ++ Map(
+        AppConfig.default.inputConfig.hotkeyConfig.bindings ++ Map(
           HotkeyAction.ToggleCommandRunner -> List(duplicate),
           HotkeyAction.Find                -> List(duplicate)
         )

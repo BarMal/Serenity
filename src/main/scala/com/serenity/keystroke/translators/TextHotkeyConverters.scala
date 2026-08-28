@@ -32,12 +32,12 @@ object TextHotkeyConverters:
 
   def hotkeyConverter(config: AppConfig = AppConfig.default): PartialFunction[KeyStrokeInfo, Event] =
     HotkeyConfig
-      .validate(config.hotkeyConfig.bindings)
+      .validate(config.inputConfig.hotkeyConfig.bindings)
       .fold(
         _ => PartialFunction.empty[KeyStrokeInfo, Event],
         _ =>
           val bindings =
-            actionEvents.flatMap((action, event) => config.hotkeyConfig.bindingsFor(action).map(_ -> event))
+            actionEvents.flatMap((action, event) => config.inputConfig.hotkeyConfig.bindingsFor(action).map(_ -> event))
 
           Function.unlift(info => bindings.collectFirst { case (trigger, event) if trigger.matches(info) => event })
       )
