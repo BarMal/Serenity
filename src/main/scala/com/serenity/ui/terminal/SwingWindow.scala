@@ -63,6 +63,7 @@ class SwingWindow(
   private val titleLabelRef          = new AtomicReference[Option[SwingWindow.DecorativeTitleLabel]](None)
   private val titleSpacerRef         = new AtomicReference[Option[JPanel]](None)
   private val onResizeCallbackRef    = new AtomicReference[Option[() => Unit]](None)
+  private val onFocusCallbackRef     = new AtomicReference[Option[Boolean => Unit]](None)
   private val resizeGlassPaneRef     = new AtomicReference[Option[JComponent]](None)
   private val roundedCornerMaskRef   = new AtomicReference[Option[Int]](None)
   private val roundedContentBuffers  = new SwingWindow.RoundedCornerMaskBufferCache
@@ -71,6 +72,9 @@ class SwingWindow(
   private val shapeUpdateCoalescer = new SwingWindow.CoalescedEdtUpdate(() => updateShape())
 
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
+
+  /** Register a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
+  def setOnFocusChange(cb: Boolean => Unit): Unit = onFocusCallbackRef.set(Some(cb))
 
   val canvas: JPanel = new JPanel:
     setBackground(Color.BLACK)
@@ -461,6 +465,11 @@ class SwingWindow(
     f.addWindowListener(
       new WindowAdapter:
         override def windowClosing(e: WindowEvent): Unit = closeLatch.countDown()
+    )
+    f.addWindowFocusListener(
+      new WindowFocusListener:
+        override def windowGainedFocus(e: WindowEvent): Unit = onFocusCallbackRef.get().foreach(_.apply(true))
+        override def windowLostFocus(e: WindowEvent): Unit   = onFocusCallbackRef.get().foreach(_.apply(false))
     )
     f.addWindowStateListener((e: WindowEvent) =>
       val isMax = (e.getNewState & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH

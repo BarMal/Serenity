@@ -53,6 +53,38 @@ object AppRuntime:
   private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean], breathIndex: Ref[IO, Int]): IO[Unit] =
     cursorVisible.set(true) >> breathIndex.set(0)
 
+  /** React to a Swing window focus transition. Losing focus parks the cursor visible-and-steady (reset to the start of
+    * its blink/breathe cycle) and forces one fast render so the steady caret paints immediately, regardless of where
+    * the idle loop was in its own cadence. Regaining focus only flips the signal the idle loop is waiting on --
+    * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own.
+    */
+  private[serenity] def onWindowFocusChanged(
+    focused: Boolean,
+    windowFocused: SignallingRef[IO, Boolean],
+    cursorVisible: Ref[IO, Boolean],
+    breathIndex: Ref[IO, Int],
+    requestFastRender: IO[Unit]
+  ): IO[Unit] =
+    if focused then windowFocused.set(true)
+    else windowFocused.set(false) >> resetCursorActivity(cursorVisible, breathIndex) >> requestFastRender
+
+  /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
+    * wakeup-free wait for focus to return otherwise -- the mechanism that actually stops the ~2Hz idle wakeups while
+    * the window is unfocused, rather than merely skipping the render they'd otherwise trigger.
+    */
+  private[serenity] def awaitFocusedIdleTick(
+    loadState: IO[AppState],
+    windowFocused: SignallingRef[IO, Boolean]
+  ): IO[Unit] =
+    windowFocused.get.flatMap {
+      case true =>
+        loadState
+          .map(state => cursorIdleInterval(state.persisted.config).getOrElse(DefaultCursorIdleInterval))
+          .flatMap(IO.sleep)
+      case false =>
+        windowFocused.discrete.find(identity).compile.drain
+    }
+
   /** The fast phase may stand down once nothing is animating and no fresh damage arrived while it was running --
     * `pendingDamage` is drained to `Damage.Nothing` when the phase starts, so any non-`Nothing` value here means
     * `emitDamage` was called again since, and the phase should carry straight on rather than idle even one tick.
@@ -92,6 +124,7 @@ object AppRuntime:
     makeStateManager: Option[Logger[IO] => IO[StateManager]] = None,
     awaitExternalQuit: IO[Unit] = IO.never,
     registerResizeCallback: (() => Unit) => Unit = _ => (),
+    registerFocusCallback: (Boolean => Unit) => Unit = _ => (),
     openPath: Option[Path] = None
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
@@ -123,6 +156,12 @@ object AppRuntime:
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
         cursorVisible <- Ref.of[IO, Boolean](true)
         breathIndex   <- Ref.of[IO, Int](0)
+        windowFocused <- SignallingRef.of[IO, Boolean](true)
+        _ <- IO(
+          registerFocusCallback(
+            focusCallbackBridge(windowFocused, cursorVisible, breathIndex, requestFastRender, resizeCallbackDispatcher)
+          )
+        )
         animationTickCadence <- Ref.of[IO, AnimationTickCadence](
           AnimationTickCadence.empty
         )
@@ -147,6 +186,7 @@ object AppRuntime:
                   loadState = stateManager.getCurrentState,
                   loadBufferAnimations = stateManager.getBufferAnimations,
                   fastModeSignal = fastModeSignal,
+                  windowFocused = windowFocused,
                   pendingPaintDamage = pendingPaintDamage,
                   currentStateForDiagnostics = currentStateForDiagnostics,
                   checkResizeAndHandle = checkResizeAndHandle,
@@ -246,6 +286,7 @@ object AppRuntime:
     loadState: IO[AppState],
     loadBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]],
     fastModeSignal: SignallingRef[IO, Boolean],
+    windowFocused: SignallingRef[IO, Boolean],
     pendingPaintDamage: Ref[IO, Damage],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
@@ -255,11 +296,7 @@ object AppRuntime:
     requestFastRender: IO[Unit]
   )(using Logger[IO]): Stream[IO, Unit] =
     Stream
-      .repeatEval(
-        loadState
-          .map(state => cursorIdleInterval(state.persisted.config).getOrElse(DefaultCursorIdleInterval))
-          .flatMap(IO.sleep)
-      )
+      .repeatEval(awaitFocusedIdleTick(loadState, windowFocused))
       .interruptWhen(fastModeSignal.discrete)
       .evalMap(_ =>
         runIdleRenderStep(
@@ -512,6 +549,19 @@ object AppRuntime:
     () =>
       dispatcher.unsafeRunAndForget(
         signalResize.handleErrorWith(error => logger.error(error)("[RUNTIME] resize callback failed"))
+      )
+
+  private[serenity] def focusCallbackBridge(
+    windowFocused: SignallingRef[IO, Boolean],
+    cursorVisible: Ref[IO, Boolean],
+    breathIndex: Ref[IO, Int],
+    requestFastRender: IO[Unit],
+    dispatcher: Dispatcher[IO]
+  )(using logger: Logger[IO]): Boolean => Unit =
+    focused =>
+      dispatcher.unsafeRunAndForget(
+        onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender)
+          .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )
 
   private def advanceAnimationsForCadence(
