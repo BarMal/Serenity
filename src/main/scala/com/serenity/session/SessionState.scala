@@ -859,6 +859,13 @@ private def encodeInputConfig(config: AppConfig): List[(String, Json)] =
     "focusedKeymapConfig" -> config.inputConfig.focusedKeymapConfig.asJson
   )
 
+private def encodeLanguageToolsConfig(config: AppConfig): List[(String, Json)] =
+  List(
+    "syntaxHighlightingEnabled" -> config.languageToolsConfig.syntaxHighlightingEnabled.asJson,
+    "lspUserConfig"             -> config.languageToolsConfig.lspUserConfig.asJson,
+    "spellCheck"                -> config.languageToolsConfig.spellCheck.asJson
+  )
+
 private def encodeCursorConfig(config: AppConfig): List[(String, Json)] =
   List(
     "cursorMode"             -> config.cursorConfig.mode.asJson,
@@ -897,6 +904,21 @@ private def decodeInputConfig(cursor: HCursor, defaultConfig: AppConfig): Decode
     hotkeyConfig = hotkeyConfig,
     focusedKeymapConfig = focusedKeymapConfig
   )
+
+private def decodeLanguageToolsConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[LanguageToolsConfig] =
+  for
+    syntaxHighlightingEnabled <- cursor.getOrElse[Boolean]("syntaxHighlightingEnabled")(
+      defaultConfig.languageToolsConfig.syntaxHighlightingEnabled
+    )
+    lspUserConfig <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(
+      defaultConfig.languageToolsConfig.lspUserConfig
+    )
+    spellCheck <- cursor.getOrElse[SpellCheckConfig]("spellCheck")(defaultConfig.languageToolsConfig.spellCheck)
+  yield LanguageToolsConfig(
+    syntaxHighlightingEnabled = syntaxHighlightingEnabled,
+    lspUserConfig = lspUserConfig,
+    spellCheck = spellCheck
+  ).normalized
 
 private def decodeCursorConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[CursorConfig] =
   for
@@ -957,7 +979,6 @@ given Encoder[AppConfig] = Encoder.instance { config =>
     (
       List(
         "characterAnimation"                -> config.characterAnimation.asJson,
-        "syntaxHighlightingEnabled"         -> config.syntaxHighlightingEnabled.asJson,
         "fontConfig"                        -> config.fontConfig.asJson,
         "minimumPaneWidth"                  -> config.minimumPaneWidth.asJson,
         "showLineNumbers"                   -> config.showLineNumbers.asJson,
@@ -986,14 +1007,13 @@ given Encoder[AppConfig] = Encoder.instance { config =>
         "motionConfiguration"               -> config.motionConfiguration.asJson
       ) ++
         encodeInputConfig(config) ++
+        encodeLanguageToolsConfig(config) ++
         encodeCursorConfig(config) ++
         encodeWindowConfig(config) ++
         encodeDocumentConfig(config) ++
         encodeInterfaceConfig(config) ++
         List(
-          "textAreaInsets" -> config.textAreaInsets.asJson,
-          "lspUserConfig"  -> config.lspUserConfig.asJson,
-          "spellCheck"     -> config.spellCheck.asJson
+          "textAreaInsets" -> config.textAreaInsets.asJson
         )
     )*
   )
@@ -1006,19 +1026,17 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     characterAnimation <- cursor.getOrElse[Option[AnimationConfig]]("characterAnimation")(
       defaultConfig.characterAnimation
     )
-    syntaxHighlightingEnabled <- cursor.getOrElse[Boolean]("syntaxHighlightingEnabled")(
-      defaultConfig.syntaxHighlightingEnabled
-    )
-    inputConfig      <- decodeInputConfig(cursor, defaultConfig)
-    fontConfig       <- cursor.getOrElse[FontConfig]("fontConfig")(defaultConfig.fontConfig)
-    minimumPaneWidth <- cursor.getOrElse[Int]("minimumPaneWidth")(defaultConfig.minimumPaneWidth)
-    showLineNumbers  <- cursor.getOrElse[Boolean]("showLineNumbers")(defaultConfig.showLineNumbers)
-    showGutter       <- cursor.getOrElse[Boolean]("showGutter")(defaultConfig.showGutter)
-    wordWrapEnabled  <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
-    blurRadius       <- cursor.getOrElse[Float]("blurRadius")(0.0f)
-    backgroundStyle  <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
-    materialPreset   <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
-    motionPreset     <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
+    inputConfig          <- decodeInputConfig(cursor, defaultConfig)
+    languageToolsConfig  <- decodeLanguageToolsConfig(cursor, defaultConfig)
+    fontConfig           <- cursor.getOrElse[FontConfig]("fontConfig")(defaultConfig.fontConfig)
+    minimumPaneWidth     <- cursor.getOrElse[Int]("minimumPaneWidth")(defaultConfig.minimumPaneWidth)
+    showLineNumbers      <- cursor.getOrElse[Boolean]("showLineNumbers")(defaultConfig.showLineNumbers)
+    showGutter           <- cursor.getOrElse[Boolean]("showGutter")(defaultConfig.showGutter)
+    wordWrapEnabled      <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
+    blurRadius           <- cursor.getOrElse[Float]("blurRadius")(0.0f)
+    backgroundStyle      <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
+    materialPreset       <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
+    motionPreset         <- cursor.getOrElse[MotionPreset]("motionPreset")(MotionPreset.Smooth)
     elementTransitionSpeedScale <- cursor
       .getOrElse[Double]("elementTransitionSpeedScale")(1.0)
       .map(AppConfig.clampElementTransitionSpeedScale)
@@ -1062,11 +1080,8 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     documentConfig              <- decodeDocumentConfig(cursor, defaultConfig)
     interfaceConfig             <- decodeInterfaceConfig(cursor, defaultConfig)
     textAreaInsets              <- cursor.getOrElse[TextAreaInsets]("textAreaInsets")(TextAreaInsets())
-    lspUserConfig               <- cursor.getOrElse[LspUserConfig]("lspUserConfig")(LspUserConfig.empty)
-    spellCheck                  <- cursor.getOrElse[SpellCheckConfig]("spellCheck")(SpellCheckConfig())
   yield AppConfig(
     characterAnimation = characterAnimation,
-    syntaxHighlightingEnabled = syntaxHighlightingEnabled,
     inputConfig = inputConfig,
     fontConfig = fontConfig,
     minimumPaneWidth = minimumPaneWidth,
@@ -1099,8 +1114,7 @@ given Decoder[AppConfig] = Decoder.instance { cursor =>
     documentConfig = documentConfig,
     interfaceConfig = interfaceConfig,
     textAreaInsets = textAreaInsets,
-    lspUserConfig = lspUserConfig,
-    spellCheck = spellCheck.normalized
+    languageToolsConfig = languageToolsConfig
   )
 }
 

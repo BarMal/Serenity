@@ -417,7 +417,7 @@ final private[manager] class StateManagerEffectHandlers(
   protected def updateSpellCheckConfig(
     update: com.serenity.config.SpellCheckConfig => com.serenity.config.SpellCheckConfig
   ): IO[Unit] =
-    applyConfigUpdate(config => config.withSpellCheck(update(config.spellCheck))).void >>
+    applyConfigUpdate(config => config.withSpellCheck(update(config.languageToolsConfig.spellCheck))).void >>
       scheduleDocumentAnalysis()
 
   protected def clampFontSize(size: Float): Float =

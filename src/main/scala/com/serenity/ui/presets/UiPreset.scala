@@ -173,7 +173,7 @@ object UiPreset:
       case "code" =>
         patchWorkflowChrome(withTypography, source)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
-          .withSyntaxHighlighting(source.syntaxHighlightingEnabled)
+          .withSyntaxHighlighting(source.languageToolsConfig.syntaxHighlightingEnabled)
       case "compact" =>
         patchWorkflowChrome(
           withTypography,
@@ -182,7 +182,7 @@ object UiPreset:
           includeContextualToolbar = true
         )
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
-          .withSyntaxHighlighting(source.syntaxHighlightingEnabled)
+          .withSyntaxHighlighting(source.languageToolsConfig.syntaxHighlightingEnabled)
       case "review" =>
         patchWorkflowChrome(withTypography, source)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))

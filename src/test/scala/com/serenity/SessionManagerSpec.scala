@@ -246,8 +246,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     yield
       loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("legacy config")
       loaded.map(_.persisted.config.characterAnimation) shouldBe Some(AppConfig.default.characterAnimation)
-      loaded.map(_.persisted.config.syntaxHighlightingEnabled) shouldBe Some(
-        AppConfig.default.syntaxHighlightingEnabled
+      loaded.map(_.persisted.config.languageToolsConfig.syntaxHighlightingEnabled) shouldBe Some(
+        AppConfig.default.languageToolsConfig.syntaxHighlightingEnabled
       )
       loaded.map(_.persisted.config.fontConfig) shouldBe Some(AppConfig.default.fontConfig)
       loaded.map(_.persisted.config.minimumPaneWidth) shouldBe Some(AppConfig.default.minimumPaneWidth)

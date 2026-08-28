@@ -205,7 +205,7 @@ final private[manager] class StateManagerOperationBoundary private (
     )
 
   private def requiresDocumentAnalysis(state: AppState): Boolean =
-    state.persisted.config.spellCheck.enabled || state.runtime.diagnosticsState.spellCheckCache.nonEmpty
+    state.persisted.config.languageToolsConfig.spellCheck.enabled || state.runtime.diagnosticsState.spellCheckCache.nonEmpty
 
   private def normalizeCommandRunnerFocus(state: AppState): AppState =
     if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then

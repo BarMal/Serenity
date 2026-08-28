@@ -463,22 +463,24 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
           ),
           showLineNumbers = false,
           showGutter = false,
-          lspUserConfig = LspUserConfig(
-            servers = Some(
-              Map(
-                LanguageId.Scala.id -> LspServerOverride(
-                  command = Some("custom-metals"),
-                  args = Some(List("--stdio")),
-                  enabled = Some(true)
+          languageToolsConfig = LanguageToolsConfig(
+            lspUserConfig = LspUserConfig(
+              servers = Some(
+                Map(
+                  LanguageId.Scala.id -> LspServerOverride(
+                    command = Some("custom-metals"),
+                    args = Some(List("--stdio")),
+                    enabled = Some(true)
+                  )
                 )
               )
+            ),
+            spellCheck = SpellCheckConfig(
+              enabled = true,
+              languages = List("en", "fr"),
+              dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
+              additionalWords = List("serenity")
             )
-          ),
-          spellCheck = SpellCheckConfig(
-            enabled = true,
-            languages = List("en", "fr"),
-            dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
-            additionalWords = List("serenity")
           )
         )
       )
@@ -538,14 +540,14 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.fontConfig.uiLigatures shouldBe true
     decoded.config.showLineNumbers shouldBe false
     decoded.config.showGutter shouldBe false
-    decoded.config.lspUserConfig.servers.map(_(LanguageId.Scala.id)) shouldBe Some(
+    decoded.config.languageToolsConfig.lspUserConfig.servers.map(_(LanguageId.Scala.id)) shouldBe Some(
       LspServerOverride(
         command = Some("custom-metals"),
         args = Some(List("--stdio")),
         enabled = Some(true)
       )
     )
-    decoded.config.spellCheck shouldBe SpellCheckConfig(
+    decoded.config.languageToolsConfig.spellCheck shouldBe SpellCheckConfig(
       enabled = true,
       languages = List("en", "fr"),
       dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
@@ -587,7 +589,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutDictionaryPaths.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.spellCheck.dictionaryPaths shouldBe Nil
+    decoded.toOption.get.config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe Nil
   }
 
   it should "default backgroundStyle to Frosted when loading older JSON without the field" in {

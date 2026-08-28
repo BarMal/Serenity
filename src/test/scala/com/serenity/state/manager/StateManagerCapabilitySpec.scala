@@ -232,7 +232,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   it should "coordinate document analysis scheduling with shutdown" in {
     val spellCheckEnabledState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true))
+        config = AppState.initial.persisted.config
+          .withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true))
       )
     )
     val program = for
@@ -291,7 +292,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withSpellCheck(AppConfig.default.spellCheck.copy(enabled = true)),
+        config =
+          AppConfig.default.withSpellCheck(AppConfig.default.languageToolsConfig.spellCheck.copy(enabled = true)),
         buffers =
           val buffer = AppState.initial.persisted.buffers(bufferId)
           AppState.initial.persisted.buffers
@@ -317,7 +319,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val configuredState = editedState.copy(
       persisted = editedState.persisted.copy(
         config = editedState.persisted.config.withSpellCheck(
-          editedState.persisted.config.spellCheck.copy(additionalWords = List("wurld"))
+          editedState.persisted.config.languageToolsConfig.spellCheck.copy(additionalWords = List("wurld"))
         )
       )
     )

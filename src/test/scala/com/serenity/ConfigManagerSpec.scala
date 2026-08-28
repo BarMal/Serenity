@@ -126,7 +126,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfigIO(Some(configFile.toString)).unsafeRunSync()
 
-    config.syntaxHighlightingEnabled shouldBe true
+    config.languageToolsConfig.syntaxHighlightingEnabled shouldBe true
     config.fontConfig.fontSize shouldBe 18.0f
   }
 
@@ -614,12 +614,12 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.lspUserConfig.servers.value(LanguageId.Scala.id) shouldBe LspServerOverride(
+    config.languageToolsConfig.lspUserConfig.servers.value(LanguageId.Scala.id) shouldBe LspServerOverride(
       command = None,
       args = None,
       enabled = Some(false)
     )
-    config.lspUserConfig.servers.value(LanguageId.Python.id) shouldBe LspServerOverride(
+    config.languageToolsConfig.lspUserConfig.servers.value(LanguageId.Python.id) shouldBe LspServerOverride(
       command = Some("pylsp"),
       args = Some(List("--stdio", "--log-file", "/tmp/pylsp.log")),
       enabled = None
@@ -637,13 +637,14 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.lspUserConfig.servers.value(LanguageId.Python.id).args shouldBe Some(
+    config.languageToolsConfig.lspUserConfig.servers.value(LanguageId.Python.id).args shouldBe Some(
       List("--define=A,B", "--stdio")
     )
     val written = ConfigManager.configToString(config)
     Files.writeString(configFile, written)
     ConfigManager
       .loadConfig(Some(configFile.toString))
+      .languageToolsConfig
       .lspUserConfig
       .servers
       .value(LanguageId.Python.id)
@@ -670,7 +671,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
       case Right(result) =>
-        result.config.lspUserConfig.servers.value(LanguageId.Python.id).args shouldBe Some(Nil)
+        result.config.languageToolsConfig.lspUserConfig.servers.value(LanguageId.Python.id).args shouldBe Some(Nil)
       case Left(error) => fail(s"expected structured round-trip success, received $error")
   }
 
@@ -1119,10 +1120,13 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.spellCheck.enabled shouldBe true
-    config.spellCheck.languages shouldBe List("en", "fr")
-    config.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
-    config.spellCheck.additionalWords shouldBe List("serenity", "κόσμος", "café")
+    config.languageToolsConfig.spellCheck.enabled shouldBe true
+    config.languageToolsConfig.spellCheck.languages shouldBe List("en", "fr")
+    config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List(
+      "C:\\Dictionaries\\en_US.dic",
+      "/usr/share/hunspell/fr.dic"
+    )
+    config.languageToolsConfig.spellCheck.additionalWords shouldBe List("serenity", "κόσμος", "café")
 
     val written = ConfigManager.configToString(config)
     written should include("spellcheck.enabled = true")
@@ -1167,14 +1171,17 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     loaded.fontConfig.textFontFamily shouldBe "Text Font #1"
     loaded.fontConfig.uiFontFamily shouldBe "Text Font #1"
-    loaded.spellCheck.languages shouldBe List("en", "fr")
-    loaded.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
-    loaded.spellCheck.additionalWords shouldBe List("hello, world", "café")
+    loaded.languageToolsConfig.spellCheck.languages shouldBe List("en", "fr")
+    loaded.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List(
+      "C:\\Dictionaries\\en_US.dic",
+      "/usr/share/hunspell/fr.dic"
+    )
+    loaded.languageToolsConfig.spellCheck.additionalWords shouldBe List("hello, world", "café")
 
     ConfigManager.saveConfig(loaded, configFile) shouldBe true
     val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
     reloaded.fontConfig shouldBe loaded.fontConfig
-    reloaded.spellCheck shouldBe loaded.spellCheck
+    reloaded.languageToolsConfig.spellCheck shouldBe loaded.languageToolsConfig.spellCheck
   }
 
   it should "preserve inline slash comments without including them in unquoted values" in {
@@ -1222,8 +1229,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     loaded.fontConfig.textFontFamily shouldBe "Inline Serif"
     loaded.fontConfig.uiFontFamily shouldBe "Inline Serif"
-    loaded.spellCheck.enabled shouldBe true
-    loaded.spellCheck.languages shouldBe List("en", "fr")
+    loaded.languageToolsConfig.spellCheck.enabled shouldBe true
+    loaded.languageToolsConfig.spellCheck.languages shouldBe List("en", "fr")
   }
 
   it should "load legacy values through parser fallback without changing valid HOCON" in {
@@ -1239,7 +1246,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.loadConfigResultIO(Some(configFile.toString)).unsafeRunSync() match
       case Right(result) =>
         result.config.fontConfig.textFontFamily shouldBe "Legacy Serif"
-        result.config.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
+        result.config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
         result.config.viewportSizing.width.maxCells shouldBe None
       case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
   }
@@ -1260,7 +1267,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         result.config.fontConfig.textFontFamily shouldBe "Text Font"
         result.config.fontConfig.uiFontFamily shouldBe "Text Font"
         result.config.fontConfig.codeFontFamily shouldBe AppConfig.default.fontConfig.codeFontFamily
-        result.config.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
+        result.config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
       case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
   }
 
@@ -1317,7 +1324,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     loaded.fontConfig.textFontFamily shouldBe "Included Serif"
     loaded.fontConfig.uiFontFamily shouldBe "Included Serif"
-    loaded.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
+    loaded.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
   }
 
   it should "serialize empty and custom key binding collections without crashing" in {

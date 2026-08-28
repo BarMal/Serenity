@@ -386,9 +386,9 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     val patched = UiPreset.Patch.LanguageTools(sourceConfig).applyTo(preset)
 
-    patched.config.spellCheck.enabled shouldBe true
-    patched.config.spellCheck.languages shouldBe List("en", "fr")
-    patched.config.spellCheck.additionalWords shouldBe List("cats", "io")
+    patched.config.languageToolsConfig.spellCheck.enabled shouldBe true
+    patched.config.languageToolsConfig.spellCheck.languages shouldBe List("en", "fr")
+    patched.config.languageToolsConfig.spellCheck.additionalWords shouldBe List("cats", "io")
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }

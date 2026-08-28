@@ -235,7 +235,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
       val before = stateWithContent("alpha")
       val after = before.copy(persisted =
         before.persisted.copy(config =
-          before.persisted.config.withSyntaxHighlighting(!before.persisted.config.syntaxHighlightingEnabled)
+          before.persisted.config.withSyntaxHighlighting(
+            !before.persisted.config.languageToolsConfig.syntaxHighlightingEnabled
+          )
         )
       )
 

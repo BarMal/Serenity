@@ -142,13 +142,14 @@ object SpellChecker:
       state.persisted.buffers.values.foldLeft((preserved, Map.empty[String, SpellCheckCacheEntry])) {
         case ((diagnostics, cache), buffer) =>
           val uri = diagnosticsUri(buffer)
-          if shouldCheck(buffer, state.persisted.config.spellCheck) then
-            val fingerprint = SpellCheckFingerprint.from(buffer, state.persisted.config.spellCheck)
+          if shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck) then
+            val fingerprint = SpellCheckFingerprint.from(buffer, state.persisted.config.languageToolsConfig.spellCheck)
             val entry = state.runtime.diagnosticsState.spellCheckCache
               .get(uri)
               .filter(_.fingerprint == fingerprint)
               .getOrElse {
-                val spellDiagnostics = check(buffer.document.content.collect(), state.persisted.config.spellCheck)
+                val spellDiagnostics =
+                  check(buffer.document.content.collect(), state.persisted.config.languageToolsConfig.spellCheck)
                 SpellCheckCacheEntry(fingerprint, spellDiagnostics)
               }
             val nextDiagnostics =
@@ -166,8 +167,11 @@ object SpellChecker:
 
   def analysisFingerprints(state: AppState): Map[String, SpellCheckFingerprint] =
     state.persisted.buffers.values
-      .filter(buffer => shouldCheck(buffer, state.persisted.config.spellCheck))
-      .map(buffer => diagnosticsUri(buffer) -> SpellCheckFingerprint.from(buffer, state.persisted.config.spellCheck))
+      .filter(buffer => shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck))
+      .map(buffer =>
+        diagnosticsUri(buffer) -> SpellCheckFingerprint
+          .from(buffer, state.persisted.config.languageToolsConfig.spellCheck)
+      )
       .toMap
 
   def applyIfCurrent(current: AppState, analyzed: AppState, expected: Map[String, SpellCheckFingerprint]): AppState =

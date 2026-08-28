@@ -47,7 +47,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       interfaceConfig = InterfaceConfig(density = InterfaceDensity.Compact),
       windowConfig = WindowConfig(chromeMode = WindowChromeMode.NativeThemed),
       contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly,
-      spellCheck = SpellCheckConfig(enabled = true),
+      languageToolsConfig = LanguageToolsConfig(spellCheck = SpellCheckConfig(enabled = true)),
       showLineNumbers = false,
       showGutter = false,
       wordWrapEnabled = false,
