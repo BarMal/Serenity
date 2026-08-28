@@ -11,7 +11,7 @@ main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	file lengt
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	method build	650
 main/scala/com/serenity/command/CommandRunnerSettingsItems.scala	file length	1266
 main/scala/com/serenity/config/AppConfig.scala	file length	2174
-main/scala/com/serenity/config/ConfigManager.scala	file length	912
+main/scala/com/serenity/config/ConfigManager.scala	file length	818
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	224
 main/scala/com/serenity/config/ConfigManager.scala	method configToString	184
 main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	983
@@ -33,7 +33,7 @@ main/scala/com/serenity/ui/layout/LayoutEngine.scala	file length	1564
 main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1177
 main/scala/com/serenity/ui/presets/UiPreset.scala	file length	877
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	method applyGlow	89
-main/scala/com/serenity/ui/renderer/Renderer.scala	file length	3037
+main/scala/com/serenity/ui/renderer/Renderer.scala	file length	3057
 main/scala/com/serenity/ui/renderer/TextOverlayRenderer.scala	file length	1027
 main/scala/com/serenity/ui/terminal/SwingWindow.scala	file length	1143
 main/scala/com/serenity/ui/theme/ThemeManager.scala	method highlightMarkdownLine	89
@@ -47,7 +47,7 @@ test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1252
 test/scala/com/serenity/CursorOverlayLayoutSpec.scala	file length	615
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	634
 test/scala/com/serenity/EditorEventReducerSpec.scala	file length	2255
-test/scala/com/serenity/FileHandlingSpec.scala	file length	635
+test/scala/com/serenity/FileHandlingSpec.scala	file length	625
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	640
 test/scala/com/serenity/LayoutContractSpec.scala	file length	965
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	637

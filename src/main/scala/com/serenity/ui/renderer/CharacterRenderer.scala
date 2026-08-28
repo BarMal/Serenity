@@ -7,7 +7,7 @@ import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.TextVisualLine
 import com.serenity.text.TextEditing
-import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
+import com.serenity.ui.theme.{LexState, StyledText, TextStyle, Theme}
 
 object CharacterRenderer:
 
@@ -131,7 +131,8 @@ object CharacterRenderer:
     language: Option[LanguageId] = None,
     bufferLine: Int = 0,
     bufferStartColumn: Int = 0,
-    styledSegments: Option[List[StyledText]] = None
+    styledSegments: Option[List[StyledText]] = None,
+    lexStartState: LexState = LexState.Default
   ): Unit =
     styledSegments match
       case Some(styledTexts) =>
@@ -146,7 +147,7 @@ object CharacterRenderer:
           bufferStartColumn
         )
       case None if syntaxHighlightingEnabled =>
-        val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language)
+        val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language, lexStartState)
         renderStyledLineWithAnimation(
           surface,
           x,
@@ -205,14 +206,16 @@ object CharacterRenderer:
     syntaxHighlightingEnabled: Boolean = false,
     language: Option[LanguageId] = None,
     styledSegments: Option[List[StyledText]] = None,
-    clipRightXPx: Option[Float] = None
+    clipRightXPx: Option[Float] = None,
+    lexStartState: LexState = LexState.Default
   ): Unit =
     val text = visualLine.text
     if text.nonEmpty then
       val stops = visualLine.caretStops
       val styledSegments0 =
         styledSegments.getOrElse {
-          if syntaxHighlightingEnabled then com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language)
+          if syntaxHighlightingEnabled then
+            com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language, lexStartState)
           else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
         }
 
