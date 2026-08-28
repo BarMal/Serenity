@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind}
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, MotionIntent, SettingsIntent}
 import com.serenity.config.{AppConfig, MotionAccessibility, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
@@ -87,10 +87,10 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel all active animation state when a motion policy disables animation" in
     List(
-      CommandIntent.SetMotionAccessibility(MotionAccessibility.Reduced),
-      CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
-      CommandIntent.SetMotionPreset(MotionPreset.Reduced),
-      CommandIntent.SetElementTransitionSpeedScale(0.0)
+      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Reduced))),
+      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off))),
+      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Reduced))),
+      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(0.0)))
     ).foreach { intent =>
       val sm = createStateManager()
       sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
@@ -144,7 +144,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "editor-text-speed-scale",
         "Set editor text speed scale",
-        CommandIntent.SetEditorTextTransitionSpeedScale(0.0),
+        CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(0.0))),
         CommandCategory.Settings
       )
     ).unsafeRunSync()

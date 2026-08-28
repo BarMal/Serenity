@@ -6,10 +6,14 @@ import com.serenity.ui.fonts.FontLoader
 object CommandRunnerSettingsInputItems:
 
   def parseRichTextFontFamily(text: String): Option[CommandIntent] =
-    nonEmptyText(text).map(CommandIntent.SetRichTextFontFamily(_))
+    nonEmptyText(text).map(commandIntentArg =>
+      CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily(commandIntentArg))
+    )
 
   def parseRichTextColor(text: String): Option[CommandIntent] =
-    normalizeHexColor(text).map(CommandIntent.SetRichTextColor(_))
+    normalizeHexColor(text).map(commandIntentArg =>
+      CommandIntent.RichText(RichTextIntent.SetRichTextColor(commandIntentArg))
+    )
 
   def build(config: AppConfig): List[CommandSurfaceItem.InputItem] =
     val editorConfig        = config.editorConfig
@@ -52,7 +56,10 @@ object CommandRunnerSettingsInputItems:
         hint = "Comment text",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.AddDocumentComment(_)),
+        parse = text =>
+          nonEmptyText(text).map(commandIntentArg =>
+            CommandIntent.Comments(CommentsIntent.AddDocumentComment(commandIntentArg))
+          ),
         category = CommandCategory.Edit,
         acceptsFreeText = true
       )
@@ -78,7 +85,7 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toFloatOption
             .filter(v => v >= 1.0f && v <= 144.0f)
-            .map(CommandIntent.SetRichTextFontSize(_)),
+            .map(commandIntentArg => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(commandIntentArg))),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -100,7 +107,10 @@ object CommandRunnerSettingsInputItems:
         hint = "New preset name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.SaveUiPresetAsNew(_)),
+        parse = text =>
+          nonEmptyText(text).map(commandIntentArg =>
+            CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew(commandIntentArg))
+          ),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -110,7 +120,10 @@ object CommandRunnerSettingsInputItems:
         hint = "Preset name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.ApplyUiPreset(_)),
+        parse = text =>
+          nonEmptyText(text).map(commandIntentArg =>
+            CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(commandIntentArg))
+          ),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -120,7 +133,10 @@ object CommandRunnerSettingsInputItems:
         hint = "Existing custom preset name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.OverwriteUiPreset(_)),
+        parse = text =>
+          nonEmptyText(text).map(commandIntentArg =>
+            CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset(commandIntentArg))
+          ),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -130,7 +146,11 @@ object CommandRunnerSettingsInputItems:
         hint = "Source -> Copy",
         currentValue = "",
         isDecimal = false,
-        parse = text => namedPair(text).map(CommandIntent.DuplicateUiPreset.apply),
+        parse = text =>
+          namedPair(text).map {
+            case (sourceName, targetName) =>
+              CommandIntent.UiPresets(UiPresetsIntent.DuplicateUiPreset(sourceName, targetName))
+          },
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -140,7 +160,11 @@ object CommandRunnerSettingsInputItems:
         hint = "Current -> New",
         currentValue = "",
         isDecimal = false,
-        parse = text => namedPair(text).map(CommandIntent.RenameUiPreset.apply),
+        parse = text =>
+          namedPair(text).map {
+            case (sourceName, targetName) =>
+              CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset(sourceName, targetName))
+          },
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -150,7 +174,10 @@ object CommandRunnerSettingsInputItems:
         hint = "Preset name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.DeleteUiPreset(_)),
+        parse = text =>
+          nonEmptyText(text).map(commandIntentArg =>
+            CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset(commandIntentArg))
+          ),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -160,7 +187,10 @@ object CommandRunnerSettingsInputItems:
         hint = "Built-in preset name",
         currentValue = "",
         isDecimal = false,
-        parse = text => nonEmptyText(text).map(CommandIntent.ResetUiPreset(_)),
+        parse = text =>
+          nonEmptyText(text).map(commandIntentArg =>
+            CommandIntent.UiPresets(UiPresetsIntent.ResetUiPreset(commandIntentArg))
+          ),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       )
@@ -176,7 +206,9 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toDoubleOption
             .filter(value => value >= 0.0 && value <= 45.0)
-            .map(value => CommandIntent.SetTextAreaLeftInset(value / 100.0)),
+            .map(value =>
+              CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaLeftInset(value / 100.0)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -188,7 +220,9 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toDoubleOption
             .filter(value => value >= 0.0 && value <= 45.0)
-            .map(value => CommandIntent.SetTextAreaRightInset(value / 100.0)),
+            .map(value =>
+              CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaRightInset(value / 100.0)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -200,7 +234,9 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toDoubleOption
             .filter(value => value >= 0.0 && value <= 45.0)
-            .map(value => CommandIntent.SetTextAreaTopInset(value / 100.0)),
+            .map(value =>
+              CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaTopInset(value / 100.0)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -212,7 +248,10 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toDoubleOption
             .filter(value => value >= 0.0 && value <= 45.0)
-            .map(value => CommandIntent.SetTextAreaBottomInset(value / 100.0)),
+            .map(value =>
+              CommandIntent
+                .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaBottomInset(value / 100.0)))
+            ),
         category = CommandCategory.Settings
       )
     )
@@ -224,7 +263,10 @@ object CommandRunnerSettingsInputItems:
         hint = "Comma-separated codes",
         currentValue = spellCheck.languages.mkString(","),
         isDecimal = false,
-        parse = text => nonEmptyCommaList(text).map(CommandIntent.SetSpellCheckLanguages(_)),
+        parse = text =>
+          nonEmptyCommaList(text).map(commandIntentArg =>
+            CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckLanguages(commandIntentArg)))
+          ),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -234,7 +276,12 @@ object CommandRunnerSettingsInputItems:
         hint = "Comma-separated .dic paths",
         currentValue = spellCheck.dictionaryPaths.mkString(","),
         isDecimal = false,
-        parse = text => Some(CommandIntent.SetSpellCheckDictionaryPaths(commaListPreserveCase(text))),
+        parse = text =>
+          Some(
+            CommandIntent.Settings(
+              SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckDictionaryPaths(commaListPreserveCase(text)))
+            )
+          ),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -244,7 +291,8 @@ object CommandRunnerSettingsInputItems:
         hint = "Comma-separated words",
         currentValue = spellCheck.additionalWords.mkString(","),
         isDecimal = false,
-        parse = text => Some(CommandIntent.SetSpellCheckWords(commaList(text))),
+        parse = text =>
+          Some(CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckWords(commaList(text))))),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       )
@@ -260,7 +308,10 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toIntOption
             .filter(v => v >= 0 && v <= 10000)
-            .map(CommandIntent.SetAnimationDuration(_)),
+            .map(commandIntentArg =>
+              CommandIntent
+                .Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationDuration(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -272,7 +323,9 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toIntOption
             .filter(v => v >= 0 && v <= 100)
-            .map(CommandIntent.SetAnimationSteps(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -287,7 +340,10 @@ object CommandRunnerSettingsInputItems:
               value >= AppConfig.MinElementTransitionSpeedScale &&
                 value <= AppConfig.MaxElementTransitionSpeedScale
             )
-            .map(CommandIntent.SetElementTransitionSpeedScale(_)),
+            .map(commandIntentArg =>
+              CommandIntent
+                .Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -302,7 +358,10 @@ object CommandRunnerSettingsInputItems:
               value >= AppConfig.MinElementTransitionSpeedScale &&
                 value <= AppConfig.MaxElementTransitionSpeedScale
             )
-            .map(CommandIntent.SetEditorTextTransitionSpeedScale(_)),
+            .map(commandIntentArg =>
+              CommandIntent
+                .Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -317,7 +376,10 @@ object CommandRunnerSettingsInputItems:
               value >= AppConfig.MinElementTransitionSpeedScale &&
                 value <= AppConfig.MaxElementTransitionSpeedScale
             )
-            .map(CommandIntent.SetCommandRunnerTransitionSpeedScale(_)),
+            .map(commandIntentArg =>
+              CommandIntent
+                .Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionSpeedScale(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -332,7 +394,9 @@ object CommandRunnerSettingsInputItems:
               value >= AppConfig.MinElementTransitionSpeedScale &&
                 value <= AppConfig.MaxElementTransitionSpeedScale
             )
-            .map(CommandIntent.SetUiTransitionSpeedScale(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiTransitionSpeedScale(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -347,7 +411,10 @@ object CommandRunnerSettingsInputItems:
               value >= AppConfig.MinElementTransitionSpeedScale &&
                 value <= AppConfig.MaxElementTransitionSpeedScale
             )
-            .map(CommandIntent.SetCursorTransitionSpeedScale(_)),
+            .map(commandIntentArg =>
+              CommandIntent
+                .Settings(SettingsIntent.Motion(MotionIntent.SetCursorTransitionSpeedScale(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -359,7 +426,9 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toFloatOption
             .filter(v => v >= 0.0f && v <= 1.0f)
-            .map(CommandIntent.SetBlurRadius(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetBlurRadius(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -371,7 +440,9 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toDoubleOption
             .filter(value => value >= AppConfig.MinUiElementGap && value <= AppConfig.MaxUiElementGap)
-            .map(CommandIntent.SetUiElementGap(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -383,7 +454,10 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toIntOption
             .filter(value => value >= AppConfig.MinUiCornerRadiusPx && value <= AppConfig.MaxUiCornerRadiusPx)
-            .map(CommandIntent.SetUiCornerRadiusPx(_)),
+            .map(commandIntentArg =>
+              CommandIntent
+                .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiCornerRadiusPx(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -395,7 +469,10 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toIntOption
             .filter(value => value >= AppConfig.MinUiOutlineThicknessPx && value <= AppConfig.MaxUiOutlineThicknessPx)
-            .map(CommandIntent.SetUiOutlineThicknessPx(_)),
+            .map(commandIntentArg =>
+              CommandIntent
+                .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -407,14 +484,17 @@ object CommandRunnerSettingsInputItems:
         isDecimal = false,
         parse = text =>
           val normalized = text.trim.toLowerCase
-          if normalized == "auto" then Some(CommandIntent.SetCommandRunnerVisibleRows(None))
+          if normalized == "auto" then
+            Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(None))))
           else
             normalized.toIntOption
               .filter(value =>
                 value >= AppConfig.MinCommandRunnerVisibleRows &&
                   value <= AppConfig.MaxCommandRunnerVisibleRows
               )
-              .map(value => CommandIntent.SetCommandRunnerVisibleRows(Some(value)))
+              .map(value =>
+                CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(Some(value))))
+              )
         ,
         category = CommandCategory.Settings,
         acceptsFreeText = true
@@ -432,7 +512,9 @@ object CommandRunnerSettingsInputItems:
               value >= AppConfig.MinCommandRunnerItemGapRows &&
                 value <= AppConfig.MaxCommandRunnerItemGapRows
             )
-            .map(CommandIntent.SetCommandRunnerItemGapRows(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerItemGapRows(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -444,14 +526,17 @@ object CommandRunnerSettingsInputItems:
         isDecimal = true,
         parse = text =>
           val normalized = text.trim.toLowerCase
-          if normalized == "auto" then Some(CommandIntent.SetCommandRunnerCursorGapRows(None))
+          if normalized == "auto" then
+            Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerCursorGapRows(None))))
           else
             normalized.toDoubleOption
               .filter(value =>
                 value >= AppConfig.MinCommandRunnerCursorGapRows &&
                   value <= AppConfig.MaxCommandRunnerCursorGapRows
               )
-              .map(value => CommandIntent.SetCommandRunnerCursorGapRows(Some(value)))
+              .map(value =>
+                CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerCursorGapRows(Some(value))))
+              )
         ,
         category = CommandCategory.Settings,
         acceptsFreeText = true
@@ -462,7 +547,10 @@ object CommandRunnerSettingsInputItems:
         hint = "Comma-separated glyphs",
         currentValue = sitterConfig.frames.mkString(","),
         isDecimal = false,
-        parse = text => nonEmptyCommaList(text).map(values => CommandIntent.SetWindowSitterFrames(values.toVector)),
+        parse = text =>
+          nonEmptyCommaList(text).map(values =>
+            CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFrames(values.toVector)))
+          ),
         category = CommandCategory.Settings,
         acceptsFreeText = true
       ),
@@ -473,7 +561,12 @@ object CommandRunnerSettingsInputItems:
         currentValue = sitterConfig.activeTicks.toString,
         isDecimal = false,
         parse = text =>
-          text.toIntOption.filter(value => value >= 1 && value <= 120).map(CommandIntent.SetWindowSitterActiveTicks(_)),
+          text.toIntOption
+            .filter(value => value >= 1 && value <= 120)
+            .map(commandIntentArg =>
+              CommandIntent
+                .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterActiveTicks(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -485,7 +578,11 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toIntOption
             .filter(value => value >= 1 && value <= 240)
-            .map(CommandIntent.SetWindowSitterFastActiveTicks(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(
+                SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastActiveTicks(commandIntentArg))
+              )
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -497,7 +594,11 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toIntOption
             .filter(value => value >= 1 && value <= 5000)
-            .map(CommandIntent.SetWindowSitterFastTypingThresholdMs(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(
+                SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastTypingThresholdMs(commandIntentArg))
+              )
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -509,7 +610,9 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toFloatOption
             .filter(v => v >= 8.0f && v <= 48.0f)
-            .map(CommandIntent.SetCodeFontSize(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetCodeFontSize(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -521,7 +624,9 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toFloatOption
             .filter(v => v >= 8.0f && v <= 48.0f)
-            .map(CommandIntent.SetTextFontSize(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontSize(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -533,7 +638,9 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           text.toFloatOption
             .filter(v => v >= 8.0f && v <= 48.0f)
-            .map(CommandIntent.SetUiFontSize(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiFontSize(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
@@ -548,7 +655,9 @@ object CommandRunnerSettingsInputItems:
               value >= FontLoader.FontConfig.MinTextScale &&
                 value <= FontLoader.FontConfig.MaxTextScale
             )
-            .map(CommandIntent.SetTextScaleMultiplier(_)),
+            .map(commandIntentArg =>
+              CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextScaleMultiplier(commandIntentArg)))
+            ),
         category = CommandCategory.Settings
       )
     )
@@ -608,48 +717,48 @@ object CommandRunnerSettingsInputItems:
         s"keymap-global-${action.configKey}",
         if action == HotkeyAction.OpenFile then "Open Document" else keymapLabel(action.configKey),
         config.hotkeyConfig.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
-        binding => CommandIntent.SetGlobalHotkey(action, binding),
-        CommandIntent.ResetGlobalHotkey(action)
+        binding => CommandIntent.Keybindings(KeybindingsIntent.SetGlobalHotkey(action, binding)),
+        CommandIntent.Keybindings(KeybindingsIntent.ResetGlobalHotkey(action))
       )
     ) ++ EditorKeyAction.values.toList.map(action =>
       bindingInputItem(
         s"keymap-editor-${action.configKey}",
         keymapLabel(action.configKey),
         config.focusedKeymapConfig.editor.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
-        binding => CommandIntent.SetEditorKeyBinding(action, binding),
-        CommandIntent.ResetEditorKeyBinding(action)
+        binding => CommandIntent.Keybindings(KeybindingsIntent.SetEditorKeyBinding(action, binding)),
+        CommandIntent.Keybindings(KeybindingsIntent.ResetEditorKeyBinding(action))
       )
     ) ++ CommandRunnerKeyAction.values.toList.map(action =>
       bindingInputItem(
         s"keymap-command-runner-${action.configKey}",
         keymapLabel(action.configKey),
         config.focusedKeymapConfig.commandRunner.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
-        binding => CommandIntent.SetCommandRunnerKeyBinding(action, binding),
-        CommandIntent.ResetCommandRunnerKeyBinding(action)
+        binding => CommandIntent.Keybindings(KeybindingsIntent.SetCommandRunnerKeyBinding(action, binding)),
+        CommandIntent.Keybindings(KeybindingsIntent.ResetCommandRunnerKeyBinding(action))
       )
     ) ++ ModalKeyAction.values.toList.map(action =>
       bindingInputItem(
         s"keymap-modal-${action.configKey}",
         keymapLabel(action.configKey),
         config.focusedKeymapConfig.modal.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
-        binding => CommandIntent.SetModalKeyBinding(action, binding),
-        CommandIntent.ResetModalKeyBinding(action)
+        binding => CommandIntent.Keybindings(KeybindingsIntent.SetModalKeyBinding(action, binding)),
+        CommandIntent.Keybindings(KeybindingsIntent.ResetModalKeyBinding(action))
       )
     ) ++ PanelKeyAction.values.toList.map(action =>
       bindingInputItem(
         s"keymap-panel-${action.configKey}",
         keymapLabel(action.configKey),
         config.focusedKeymapConfig.panel.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
-        binding => CommandIntent.SetPanelKeyBinding(action, binding),
-        CommandIntent.ResetPanelKeyBinding(action)
+        binding => CommandIntent.Keybindings(KeybindingsIntent.SetPanelKeyBinding(action, binding)),
+        CommandIntent.Keybindings(KeybindingsIntent.ResetPanelKeyBinding(action))
       )
     ) ++ PeekKeyAction.values.toList.map(action =>
       bindingInputItem(
         s"keymap-peek-${action.configKey}",
         keymapLabel(action.configKey),
         config.focusedKeymapConfig.peek.bindingsFor(action).map(_.render).reduceOption(_ + ", " + _),
-        binding => CommandIntent.SetPeekKeyBinding(action, binding),
-        CommandIntent.ResetPeekKeyBinding(action)
+        binding => CommandIntent.Keybindings(KeybindingsIntent.SetPeekKeyBinding(action, binding)),
+        CommandIntent.Keybindings(KeybindingsIntent.ResetPeekKeyBinding(action))
       )
     )
     val primaryIds = List(

@@ -3,7 +3,7 @@ package com.serenity.app
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
-import com.serenity.command.{Command, CommandIntent}
+import com.serenity.command.{Command, CommandIntent, FileIntent, SessionIntent, UiPresetsIntent}
 import com.serenity.config.AppConfig
 import com.serenity.state.manager.*
 import com.serenity.state.models.*
@@ -22,14 +22,19 @@ object AppStartup:
       StartupAction(
         "new-session",
         "New document",
-        Command.typed("startup.new-session", "Start a new session", CommandIntent.StartupNewSession),
+        Command
+          .typed("startup.new-session", "Start a new session", CommandIntent.Session(SessionIntent.StartupNewSession)),
         Some('1'),
         Some("Enter")
       ),
       StartupAction(
         "open-file",
         "Open file or folder",
-        Command.typed("startup.open-file", "Open an existing file or directory", CommandIntent.StartupOpenFile),
+        Command.typed(
+          "startup.open-file",
+          "Open an existing file or directory",
+          CommandIntent.Session(SessionIntent.StartupOpenFile)
+        ),
         Some('2'),
         Some("Enter")
       )
@@ -38,7 +43,11 @@ object AppStartup:
       StartupAction(
         "restore-session",
         "Restore previous session",
-        Command.typed("startup.restore-session", "Restore an existing session", CommandIntent.StartupRestoreSession),
+        Command.typed(
+          "startup.restore-session",
+          "Restore an existing session",
+          CommandIntent.Session(SessionIntent.StartupRestoreSession)
+        ),
         detail = Some("Enter")
       )
     )
@@ -54,7 +63,7 @@ object AppStartup:
           Command.typed(
             s"startup.open-recent.${path.getFileName}",
             s"Open recent file $path",
-            CommandIntent.OpenRecentFile(path)
+            CommandIntent.File(FileIntent.OpenRecentFile(path))
           ),
           detail = Some("Recent")
         )
@@ -64,7 +73,11 @@ object AppStartup:
         s"workflow-${name.toLowerCase}",
         s"Use $name workflow",
         Command
-          .typed(s"startup.workflow.${name.toLowerCase}", s"Use the $name workflow", CommandIntent.ApplyUiPreset(name)),
+          .typed(
+            s"startup.workflow.${name.toLowerCase}",
+            s"Use the $name workflow",
+            CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(name))
+          ),
         detail = Some("Enter"),
         section = StartupActionSection.Workflow
       )

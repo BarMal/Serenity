@@ -195,7 +195,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "markdown-view-source",
           "Switch Markdown rendering back to source mode.",
-          CommandIntent.SetMarkdownViewMode(MarkdownViewMode.Source),
+          CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.Source)),
           CommandCategory.View
         )
       )

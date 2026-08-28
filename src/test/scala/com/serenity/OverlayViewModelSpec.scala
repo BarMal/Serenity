@@ -174,8 +174,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "allocate spaced framed rows for a context menu at compact density" in {
-    val save = Command.typed("save", "Save file", CommandIntent.SaveCurrentFile, label = "Save")
-    val find = Command.typed("find", "Find text", CommandIntent.FindInCurrentFile, label = "Find")
+    val save = Command.typed("save", "Save file", CommandIntent.File(FileIntent.SaveCurrentFile), label = "Save")
+    val find = Command.typed("find", "Find text", CommandIntent.Edit(EditIntent.FindInCurrentFile), label = "Find")
     val menu = ContextMenu(
       title = "editor",
       targetFocus = Focus.EditorPane(paneId),
@@ -233,8 +233,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "derive an interactive command palette view with cursor and selected row metadata" in {
     val commands = List(
-      Command.typed("open", "Open file", CommandIntent.OpenFile),
-      Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile)
+      Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),
+      Command.typed("close", "Close current file", CommandIntent.File(FileIntent.CloseCurrentFile))
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
@@ -310,7 +310,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "prefer the focused modal surface over earlier below-cursor floating surfaces" in {
     val commands = List(
-      Command.typed("open", "Open file", CommandIntent.OpenFile)
+      Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile))
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
@@ -482,7 +482,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
   it should "stack the contextual toolbar above the command runner beneath the cursor" in {
     val commands = List(
-      Command.typed("open", "Open file", CommandIntent.OpenFile)
+      Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile))
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty

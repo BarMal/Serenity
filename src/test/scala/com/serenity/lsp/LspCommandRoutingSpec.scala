@@ -53,7 +53,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
           Command.typed(
             "lsp-hover",
             "Show LSP hover information.",
-            CommandIntent.RequestLspHover,
+            CommandIntent.Lsp(LspIntent.RequestLspHover),
             CommandCategory.Edit
           )
         )
@@ -94,7 +94,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
           Command.typed(
             "lsp-definition",
             "Go to the symbol definition.",
-            CommandIntent.RequestLspDefinition,
+            CommandIntent.Lsp(LspIntent.RequestLspDefinition),
             CommandCategory.Edit
           )
         )
@@ -132,7 +132,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
           Command.typed(
             "lsp-completion",
             "Request LSP completion candidates.",
-            CommandIntent.RequestLspCompletion,
+            CommandIntent.Lsp(LspIntent.RequestLspCompletion),
             CommandCategory.Edit
           )
         )

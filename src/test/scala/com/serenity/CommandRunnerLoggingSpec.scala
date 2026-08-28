@@ -41,24 +41,24 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     val command = Command.typed(
       "toggle-line-numbers",
       "Toggle line numbers display on/off",
-      CommandIntent.ToggleLineNumbers,
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)),
       CommandCategory.View
     )
 
     StateManager
       .describeCommandExecution(command)
       .shouldBe(
-        "command=toggle-line-numbers category=View intent=ToggleLineNumbers"
+        "command=toggle-line-numbers category=View intent=Settings(PanelChrome(ToggleLineNumbers))"
       )
   }
 
   it should "describe typed command intents without special casing" in {
-    val command = Command.typed("custom", "Run custom action", CommandIntent.OpenFile)
+    val command = Command.typed("custom", "Run custom action", CommandIntent.File(FileIntent.OpenFile))
 
     StateManager
       .describeCommandExecution(command)
       .shouldBe(
-        "command=custom category=Edit intent=OpenFile"
+        "command=custom category=Edit intent=File(OpenFile)"
       )
   }
 end CommandRunnerLoggingSpec

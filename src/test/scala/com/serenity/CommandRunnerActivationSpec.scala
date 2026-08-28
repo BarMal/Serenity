@@ -129,21 +129,42 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
           case item: CommandSurfaceItem.InputItem if item.id == "ui-element-gap" =>
             (item.currentValue, item.hint, item.parse("3"), item.parse("9"))
         }
-      ) shouldBe Some(("2", "Cells, decimals supported (0.0-8.0)", Some(CommandIntent.SetUiElementGap(3)), None))
+      ) shouldBe Some(
+      (
+        "2",
+        "Cells, decimals supported (0.0-8.0)",
+        Some(CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(3)))),
+        None
+      )
+    )
     settingsGroup(runner, "settings-interface-layout")
       .flatMap(
         _.children.collectFirst {
           case item: CommandSurfaceItem.InputItem if item.id == "ui-corner-radius" =>
             (item.currentValue, item.hint, item.parse("14"), item.parse("33"))
         }
-      ) shouldBe Some(("6", "Pixels (0-32)", Some(CommandIntent.SetUiCornerRadiusPx(14)), None))
+      ) shouldBe Some(
+      (
+        "6",
+        "Pixels (0-32)",
+        Some(CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiCornerRadiusPx(14)))),
+        None
+      )
+    )
     settingsGroup(runner, "settings-interface-layout")
       .flatMap(
         _.children.collectFirst {
           case item: CommandSurfaceItem.InputItem if item.id == "ui-outline-thickness" =>
             (item.currentValue, item.hint, item.parse("4"), item.parse("9"))
         }
-      ) shouldBe Some(("3", "Pixels (1-8)", Some(CommandIntent.SetUiOutlineThicknessPx(4)), None))
+      ) shouldBe Some(
+      (
+        "3",
+        "Pixels (1-8)",
+        Some(CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(4)))),
+        None
+      )
+    )
   }
 
   it should "expose focused text body and contextual toolbar in the text display settings group" in {
@@ -238,23 +259,43 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "element-transition-speed-scale" =>
         (item.currentValue, item.hint, item.parse("2.25"))
-    } shouldBe Some(("1.50", "Scale (0.0-4.0)", Some(CommandIntent.SetElementTransitionSpeedScale(2.25))))
+    } shouldBe Some(
+      (
+        "1.50",
+        "Scale (0.0-4.0)",
+        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(2.25))))
+      )
+    )
     motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "editor-text-speed-scale" =>
         (item.currentValue, item.hint, item.parse("0.75"))
     } shouldBe Some(
-      ("0.50", "Editor text scale (0.0-4.0)", Some(CommandIntent.SetEditorTextTransitionSpeedScale(0.75)))
+      (
+        "0.50",
+        "Editor text scale (0.0-4.0)",
+        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(0.75))))
+      )
     )
     motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "command-runner-speed-scale" =>
         (item.currentValue, item.hint, item.parse("1.75"))
     } shouldBe Some(
-      ("2.25", "Command runner scale (0.0-4.0)", Some(CommandIntent.SetCommandRunnerTransitionSpeedScale(1.75)))
+      (
+        "2.25",
+        "Command runner scale (0.0-4.0)",
+        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionSpeedScale(1.75))))
+      )
     )
     motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "ui-speed-scale" =>
         (item.currentValue, item.hint, item.parse("1.00"))
-    } shouldBe Some(("1.25", "Panel/UI scale (0.0-4.0)", Some(CommandIntent.SetUiTransitionSpeedScale(1.0))))
+    } shouldBe Some(
+      (
+        "1.25",
+        "Panel/UI scale (0.0-4.0)",
+        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiTransitionSpeedScale(1.0))))
+      )
+    )
     motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "editor-text-transition" =>
         (item.selectedOption, item.options.map(_.label))
@@ -278,7 +319,13 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "cursor-speed-scale" =>
         (item.currentValue, item.hint, item.parse("0.25"))
-    } shouldBe Some(("0.75", "Cursor scale (0.0-4.0)", Some(CommandIntent.SetCursorTransitionSpeedScale(0.25))))
+    } shouldBe Some(
+      (
+        "0.75",
+        "Cursor scale (0.0-4.0)",
+        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCursorTransitionSpeedScale(0.25))))
+      )
+    )
   }
 
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {

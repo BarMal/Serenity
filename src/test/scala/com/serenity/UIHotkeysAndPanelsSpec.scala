@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
@@ -343,7 +343,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "expand-bottom-panel",
           "Expand bottom panel",
-          CommandIntent.ExpandPanel(PanelPosition.Bottom),
+          CommandIntent.View(ViewIntent.ExpandPanel(PanelPosition.Bottom)),
           CommandCategory.View
         )
       )
@@ -358,7 +358,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "collapse-expanded-panel",
           "Collapse expanded panel",
-          CommandIntent.CollapseExpandedPanel,
+          CommandIntent.View(ViewIntent.CollapseExpandedPanel),
           CommandCategory.View
         )
       )

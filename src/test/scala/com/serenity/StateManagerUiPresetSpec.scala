@@ -80,7 +80,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "save-workbench-preset",
         "Save workbench preset",
-        CommandIntent.SaveUiPresetAsNew("Workbench"),
+        CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Workbench")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -124,7 +124,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-review-preset",
         "Apply review preset",
-        CommandIntent.ApplyUiPreset("Review Custom"),
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Review Custom")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -174,7 +174,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-writing-preset",
         "Apply writing preset",
-        CommandIntent.ApplyUiPreset("Writing"),
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Writing")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -201,7 +201,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-writing-preset",
         "Apply writing preset",
-        CommandIntent.ApplyUiPreset("Writing"),
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Writing")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -209,7 +209,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "startup-new-session",
         "Start a new session",
-        CommandIntent.StartupNewSession
+        CommandIntent.Session(SessionIntent.StartupNewSession)
       )
     ).unsafeRunSync()
 
@@ -254,7 +254,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-writing-preset",
         "Apply writing preset",
-        CommandIntent.ApplyUiPreset("Writing"),
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Writing")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -281,7 +281,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-documentation-preset",
         "Apply documentation preset",
-        CommandIntent.ApplyUiPreset("Documentation"),
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Documentation")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -325,7 +325,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-documentation-preset",
         "Apply documentation preset",
-        CommandIntent.ApplyUiPreset("Documentation"),
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Documentation")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -376,7 +376,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-documentation-preset",
         "Apply documentation preset",
-        CommandIntent.ApplyUiPreset("Documentation"),
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Documentation")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -417,7 +417,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-review-preset",
         "Apply review preset",
-        CommandIntent.ApplyUiPreset("Review"),
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Review")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -446,7 +446,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "duplicate-writing-preset",
         "Duplicate writing preset",
-        CommandIntent.DuplicateUiPreset("Writing", "Personal Writing"),
+        CommandIntent.UiPresets(UiPresetsIntent.DuplicateUiPreset("Writing", "Personal Writing")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -456,7 +456,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "rename-writing-preset",
         "Rename writing preset",
-        CommandIntent.RenameUiPreset("Personal Writing", "Drafting"),
+        CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset("Personal Writing", "Drafting")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -467,7 +467,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "delete-writing-preset",
         "Delete writing preset",
-        CommandIntent.DeleteUiPreset("Drafting"),
+        CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset("Drafting")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -485,7 +485,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     sm.executeCommand(
-      Command.typed("save-as-new", "Save as new", CommandIntent.SaveUiPresetAsNew("Drafting"), CommandCategory.Settings)
+      Command.typed(
+        "save-as-new",
+        "Save as new",
+        CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Drafting")),
+        CommandCategory.Settings
+      )
     ).unsafeRunSync()
     store.find("Drafting").unsafeRunSync() shouldBe Some(existing)
     commandRunnerState(sm).statusMessage.getOrElse(fail("save failure should be visible")) should include(
@@ -496,7 +501,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "duplicate",
         "Duplicate",
-        CommandIntent.DuplicateUiPreset("Writing", "Drafting"),
+        CommandIntent.UiPresets(UiPresetsIntent.DuplicateUiPreset("Writing", "Drafting")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -516,7 +521,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "rename-writing-preset",
         "Rename writing preset",
-        CommandIntent.RenameUiPreset("Writing", "Personal Writing"),
+        CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset("Writing", "Personal Writing")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -539,12 +544,17 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "set-markdown-default",
         "Set document default",
-        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+        CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
     sm.executeCommand(
-      Command.typed("overwrite", "Overwrite", CommandIntent.OverwriteUiPreset("Drafting"), CommandCategory.Settings)
+      Command.typed(
+        "overwrite",
+        "Overwrite",
+        CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Drafting")),
+        CommandCategory.Settings
+      )
     ).unsafeRunSync()
 
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
@@ -555,7 +565,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "overwrite-built-in",
         "Overwrite",
-        CommandIntent.OverwriteUiPreset("Writing"),
+        CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Writing")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -568,7 +578,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "overwrite-missing",
         "Overwrite",
-        CommandIntent.OverwriteUiPreset("Absent"),
+        CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Absent")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -599,7 +609,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     sm.executeCommand(
-      Command.typed("apply", "Apply", CommandIntent.ApplyUiPreset("Missing Theme"), CommandCategory.Settings)
+      Command.typed(
+        "apply",
+        "Apply",
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Missing Theme")),
+        CommandCategory.Settings
+      )
     ).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().persisted.config shouldBe initial.persisted.config
     commandRunnerState(sm).statusMessage.getOrElse(fail("missing preset error")) should include(
@@ -607,7 +622,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     )
 
     sm.executeCommand(
-      Command.typed("apply-font", "Apply", CommandIntent.ApplyUiPreset("Missing Font"), CommandCategory.Settings)
+      Command.typed(
+        "apply-font",
+        "Apply",
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Missing Font")),
+        CommandCategory.Settings
+      )
     ).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().persisted.config shouldBe initial.persisted.config
     commandRunnerState(sm).statusMessage.getOrElse(fail("missing preset error")) should include(
@@ -624,7 +644,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "delete-writing-preset",
         "Delete writing preset",
-        CommandIntent.DeleteUiPreset("Writing"),
+        CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset("Writing")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -675,7 +695,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     presetPicker.options.map(_.label) should contain("Drafting")
     presetPicker.options.find(_.label == "Drafting").map(_.intent) shouldBe Some(
-      CommandIntent.ApplyUiPreset("Drafting")
+      CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Drafting"))
     )
     presetPicker.options.find(_.label == "Drafting").flatMap(_.hint) shouldBe Some(
       "plain text default; dark; reduced motion; fade text reveal; solid material; solid background; comfortable density; SansSerif 12pt prose; Right outline 34"
@@ -692,7 +712,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "save-drafting-preset",
         "Save drafting preset",
-        CommandIntent.SaveUiPresetAsNew("Drafting"),
+        CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Drafting")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -716,7 +736,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     presetPicker.options.map(_.label) should contain("Drafting")
     presetPicker.options.find(_.label == "Drafting").map(_.intent) shouldBe Some(
-      CommandIntent.ApplyUiPreset("Drafting")
+      CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Drafting"))
     )
   }
 
@@ -737,7 +757,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "duplicate-drafting-preset",
         "Duplicate drafting preset",
-        CommandIntent.DuplicateUiPreset("Drafting", "Drafting Copy"),
+        CommandIntent.UiPresets(UiPresetsIntent.DuplicateUiPreset("Drafting", "Drafting Copy")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -750,7 +770,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "rename-drafting-copy-preset",
         "Rename drafting copy preset",
-        CommandIntent.RenameUiPreset("Drafting Copy", "Final Draft"),
+        CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset("Drafting Copy", "Final Draft")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -762,7 +782,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "delete-final-draft-preset",
         "Delete final draft preset",
-        CommandIntent.DeleteUiPreset("Final Draft"),
+        CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset("Final Draft")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -781,7 +801,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "ui-preset-save-as-new",
         "Save preset as new",
-        CommandIntent.SaveUiPresetAsNew("Drafting"),
+        CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Drafting")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -817,18 +837,20 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "ui-preset-save-as-new",
         "Save preset as new",
-        CommandIntent.SaveUiPresetAsNew("Drafting"),
+        CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Drafting")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
     val savedBefore = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
 
     List(
-      CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
-      CommandIntent.SetMotionPreset(MotionPreset.Subtle),
-      CommandIntent.SetBackgroundStyle(BackgroundStyle.GlassLike),
-      CommandIntent.SetTextFontSize(18.0f),
-      CommandIntent.PinOutlinePanel
+      CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
+      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))),
+      CommandIntent.Settings(
+        SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
+      ),
+      CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontSize(18.0f))),
+      CommandIntent.View(ViewIntent.PinOutlinePanel)
     ).zipWithIndex.foreach { (intent, index) =>
       sm.executeCommand(Command.typed(s"change-$index", "Change setting", intent, CommandCategory.Settings))
         .unsafeRunSync()
@@ -853,7 +875,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "ui-preset-save-as-new",
         "Save preset as new",
-        CommandIntent.SaveUiPresetAsNew("Drafting"),
+        CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Drafting")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -861,7 +883,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "change-document-default",
         "Change document default",
-        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+        CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -869,13 +891,18 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "pin-outline",
         "Pin outline",
-        CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
+        CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
     sm.updateState(state => state.copy(persisted = state.persisted.copy(theme = Theme.light))).unsafeRunSync()
     sm.executeCommand(
-      Command.typed("overwrite", "Overwrite", CommandIntent.OverwriteUiPreset("Drafting"), CommandCategory.Settings)
+      Command.typed(
+        "overwrite",
+        "Overwrite",
+        CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Drafting")),
+        CommandCategory.Settings
+      )
     ).unsafeRunSync()
 
     val saved = store.find("Drafting").unsafeRunSync().getOrElse(fail("Drafting preset should exist"))
@@ -895,7 +922,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "ui-preset-save-as-new",
         "Save preset as new",
-        CommandIntent.SaveUiPresetAsNew("Drafting"),
+        CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Drafting")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -903,7 +930,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "pin-drafting-outline-right",
         "Pin drafting outline right",
-        CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
+        CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -911,7 +938,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "pin-drafting-diagnostics-right",
         "Pin drafting diagnostics right",
-        CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Right)),
+        CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Right))),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -928,10 +955,16 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         item.command.label -> item.command.intent
     }
 
-    commands should contain("Move Outline Earlier" -> CommandIntent.MovePanelEarlier(PanelKind.Outline))
-    commands should contain("Move Outline Later" -> CommandIntent.MovePanelLater(PanelKind.Outline))
-    commands should contain("Move Diagnostics Earlier" -> CommandIntent.MovePanelEarlier(PanelKind.Diagnostics))
-    commands should contain("Move Diagnostics Later" -> CommandIntent.MovePanelLater(PanelKind.Diagnostics))
+    commands should contain(
+      "Move Outline Earlier" -> CommandIntent.View(ViewIntent.MovePanelEarlier(PanelKind.Outline))
+    )
+    commands should contain("Move Outline Later" -> CommandIntent.View(ViewIntent.MovePanelLater(PanelKind.Outline)))
+    commands should contain(
+      "Move Diagnostics Earlier" -> CommandIntent.View(ViewIntent.MovePanelEarlier(PanelKind.Diagnostics))
+    )
+    commands should contain(
+      "Move Diagnostics Later" -> CommandIntent.View(ViewIntent.MovePanelLater(PanelKind.Diagnostics))
+    )
   }
 
   it should "save the live workspace under a second name without touching the first preset" in {
@@ -944,7 +977,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "ui-preset-save-as-new",
         "Save preset as new",
-        CommandIntent.SaveUiPresetAsNew("Drafting"),
+        CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Drafting")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -954,7 +987,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "set-drafting-rich-text-default",
         "Set drafting document default",
-        CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText),
+        CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText)),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -962,7 +995,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "save-drafting-copy",
         "Save drafting copy",
-        CommandIntent.SaveUiPresetAsNew("Drafting Edited"),
+        CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Drafting Edited")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -985,7 +1018,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "reset-writing-preset",
         "Reset writing preset",
-        CommandIntent.ResetUiPreset("Writing"),
+        CommandIntent.UiPresets(UiPresetsIntent.ResetUiPreset("Writing")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -993,7 +1026,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "apply-writing-preset",
         "Apply writing preset",
-        CommandIntent.ApplyUiPreset("Writing"),
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Writing")),
         CommandCategory.Settings
       )
     ).unsafeRunSync()

@@ -6,7 +6,7 @@ import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.AnimationState
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, ProjectIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
@@ -170,7 +170,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "project-cancel",
           "Cancel the running project task.",
-          CommandIntent.CancelProjectTask,
+          CommandIntent.Project(ProjectIntent.CancelProjectTask),
           CommandCategory.Project
         ),
         AppState.initial

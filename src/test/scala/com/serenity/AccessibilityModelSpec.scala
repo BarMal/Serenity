@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.CommandRunner
+import com.serenity.command.{CommandRunner, FileIntent}
 import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -25,7 +25,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
           com.serenity.command.Command.typed(
             "new-document",
             "New document",
-            com.serenity.command.CommandIntent.NewFile,
+            com.serenity.command.CommandIntent.File(FileIntent.NewFile),
             com.serenity.command.CommandCategory.File
           )
         )
@@ -82,7 +82,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val command = com.serenity.command.Command.typed(
       "save",
       "Save",
-      com.serenity.command.CommandIntent.SaveCurrentFile,
+      com.serenity.command.CommandIntent.File(FileIntent.SaveCurrentFile),
       com.serenity.command.CommandCategory.File
     )
     val menu = ContextMenu(

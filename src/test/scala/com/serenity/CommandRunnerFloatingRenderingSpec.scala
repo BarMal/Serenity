@@ -76,8 +76,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   "Renderer.render" should "paint a themed command runner with descriptions, selection highlight, and visible search cursor" in {
     val commands = List(
-      Command.typed("open", "Open file", CommandIntent.OpenFile),
-      Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile)
+      Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),
+      Command.typed("close", "Close current file", CommandIntent.File(FileIntent.CloseCurrentFile))
     )
     val state   = stateWithRunner(Theme.light, "op", commands)
     val surface = new MockRenderSurface(100, 30)
@@ -134,7 +134,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep written document text and the command runner visible with Writing's text insets" in {
-    val commands  = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands  = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val writing   = UiPreset.builtIn("Writing").getOrElse(fail("Expected Writing preset"))
     val baseState = stateWithRunner(Theme.light, "op", commands)
     val state     = baseState.copy(persisted = baseState.persisted.copy(config = writing.config))
@@ -154,7 +154,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "place the command runner below the editor cursor when there is room" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
@@ -207,11 +207,11 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "render category tabs in browse mode and show grouped settings rows" in {
     val commands = List(
-      Command.typed("open", "Open file", com.serenity.command.CommandIntent.OpenFile),
+      Command.typed("open", "Open file", com.serenity.command.CommandIntent.File(FileIntent.OpenFile)),
       Command.typed(
         "toggle-theme",
         "Switch between light and dark theme",
-        com.serenity.command.CommandIntent.ToggleTheme
+        com.serenity.command.CommandIntent.Theme(ThemeIntent.ToggleTheme)
       )
     )
     val registry          = CommandRegistry(commands)
@@ -471,8 +471,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   it should "fade the selected command highlight with the overlay row animation" in {
     val commands = List(
-      Command.typed("open", "Open file", CommandIntent.OpenFile),
-      Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile)
+      Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),
+      Command.typed("close", "Close current file", CommandIntent.File(FileIntent.CloseCurrentFile))
     )
     val baseState = stateWithRunner(Theme.light, "op", commands)
     val surfaceId = SurfaceId("command-runner")
@@ -523,7 +523,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw the floating border with the rounded stroke even while animating" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
     val baseState = preConfigState.copy(
       persisted = preConfigState.persisted.copy(config = AppConfig.default.withUiCornerRadiusPx(12))
@@ -557,7 +557,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw the floating border with the configured outline thickness" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
     val state = preConfigState.copy(
       persisted = preConfigState.persisted.copy(config = AppConfig.default.withUiOutlineThicknessPx(4))
@@ -572,7 +572,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw a shadow behind the command runner only when UI shadows are enabled" in {
-    val commands     = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands     = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val enabledState = stateWithRunner(Theme.light, "op", commands)
     val disabledState = enabledState.copy(
       persisted = enabledState.persisted.copy(config = AppConfig.default.withUiShadowsEnabled(false))
@@ -588,7 +588,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve the rounded command runner after its animation has materialised" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
     val state = preConfigState.copy(
       persisted = preConfigState.persisted.copy(config = AppConfig.default.withUiCornerRadiusPx(12))
@@ -602,7 +602,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the rounded command runner's fully materialised corner unpainted" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
     val state = preConfigState.copy(
       persisted = preConfigState.persisted.copy(
@@ -649,7 +649,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the rounded command runner's frosted corner unblurred" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
     val state = preConfigState.copy(
       persisted = preConfigState.persisted.copy(
@@ -697,7 +697,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve rounded context menus after their animation has materialised" in {
-    val copyCommand = Command.typed("copy", "Copy", CommandIntent.Copy, label = "Copy")
+    val copyCommand = Command.typed("copy", "Copy", CommandIntent.Edit(EditIntent.Copy), label = "Copy")
     val menu = ContextMenu(
       title = "editor",
       targetFocus = Focus.EditorPane(paneId),
@@ -728,7 +728,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "request backdrop blur for the floating overlay using the configured blur radius" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
     val state = preConfigState.copy(
       persisted = preConfigState.persisted.copy(config = AppConfig.default.withBlurRadius(0.6f))
@@ -745,7 +745,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "translate backdrop blur with a fractional floating offset" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
     val state = preConfigState.copy(
       persisted = preConfigState.persisted.copy(
@@ -776,7 +776,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip backdrop blur for a solid overlay background style" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
     val state = preConfigState.copy(
       persisted = preConfigState.persisted.copy(
@@ -793,7 +793,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use a stronger blur radius for the glass-like overlay style" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
     val state = preConfigState.copy(
       persisted = preConfigState.persisted.copy(

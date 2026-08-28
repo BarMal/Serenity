@@ -102,9 +102,17 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
     it("should navigate up and down through command list"):
       val commands = List(
-        Command.typed("first", "First command", CommandIntent.ToggleTheme),
-        Command.typed("second", "Second command", CommandIntent.ToggleLineNumbers),
-        Command.typed("third", "Third command", CommandIntent.ToggleGutter)
+        Command.typed("first", "First command", CommandIntent.Theme(ThemeIntent.ToggleTheme)),
+        Command.typed(
+          "second",
+          "Second command",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+        ),
+        Command.typed(
+          "third",
+          "Third command",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleGutter))
+        )
       )
       val registry  = CommandRegistry(commands)
       val component = CommandRunnerComponent(registry)
@@ -135,8 +143,12 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
     it("should wrap navigation at boundaries"):
       val commands = List(
-        Command.typed("first", "First command", CommandIntent.ToggleTheme),
-        Command.typed("second", "Second command", CommandIntent.ToggleLineNumbers)
+        Command.typed("first", "First command", CommandIntent.Theme(ThemeIntent.ToggleTheme)),
+        Command.typed(
+          "second",
+          "Second command",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+        )
       )
       val registry  = CommandRegistry(commands)
       val component = CommandRunnerComponent(registry)
@@ -156,9 +168,9 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
     it("should filter commands when typing"):
       val commands = List(
-        Command.typed("save", "Save file", CommandIntent.SaveCurrentFile),
-        Command.typed("search", "Search text", CommandIntent.FindInCurrentFile),
-        Command.typed("open", "Open file", CommandIntent.OpenFile)
+        Command.typed("save", "Save file", CommandIntent.File(FileIntent.SaveCurrentFile)),
+        Command.typed("search", "Search text", CommandIntent.Edit(EditIntent.FindInCurrentFile)),
+        Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile))
       )
       val registry  = CommandRegistry(commands)
       val component = CommandRunnerComponent(registry)
@@ -182,7 +194,11 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
     it("should execute selected command when enter is pressed"):
       val commands = List(
-        Command.typed("test", "Test command", CommandIntent.ToggleLineNumbers)
+        Command.typed(
+          "test",
+          "Test command",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+        )
       )
       val registry         = CommandRegistry(commands)
       val component        = CommandRunnerComponent(registry)
@@ -198,7 +214,9 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
             ) =>
           val newState = update(initialState)
 
-          command.intent shouldEqual CommandIntent.ToggleLineNumbers
+          command.intent shouldEqual CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)
+          )
           newState.commandRunnerSurface shouldBe None
           newState.persisted.focus shouldEqual Focus.EditorPane(PaneId(1))
         case _ =>

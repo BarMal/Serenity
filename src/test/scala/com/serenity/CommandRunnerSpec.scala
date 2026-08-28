@@ -84,10 +84,10 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   "CommandSearcher" should "filter commands based on search term" in {
     val commands = List(
-      Command.typed("save", "Save current file", CommandIntent.SaveCurrentFile),
-      Command.typed("save-as", "Save file with new name", CommandIntent.SaveCurrentFileAs),
-      Command.typed("open", "Open file", CommandIntent.OpenFile),
-      Command.typed("quit", "Quit application", CommandIntent.QuitApp)
+      Command.typed("save", "Save current file", CommandIntent.File(FileIntent.SaveCurrentFile)),
+      Command.typed("save-as", "Save file with new name", CommandIntent.File(FileIntent.SaveCurrentFileAs)),
+      Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),
+      Command.typed("quit", "Quit application", CommandIntent.Lifecycle(LifecycleIntent.QuitApp))
     )
 
     val searcher = new CommandSearcher(commands)
@@ -103,9 +103,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "return commands in relevance order" in {
     val commands = List(
-      Command.typed("save", "Save current file", CommandIntent.SaveCurrentFile),
-      Command.typed("save-as", "Save file with new name", CommandIntent.SaveCurrentFileAs),
-      Command.typed("auto-save", "Enable auto save", CommandIntent.ToggleLineNumbers)
+      Command.typed("save", "Save current file", CommandIntent.File(FileIntent.SaveCurrentFile)),
+      Command.typed("save-as", "Save file with new name", CommandIntent.File(FileIntent.SaveCurrentFileAs)),
+      Command.typed(
+        "auto-save",
+        "Enable auto save",
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+      )
     )
 
     val searcher = new CommandSearcher(commands)
@@ -117,9 +121,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "rank commands deterministically when every search token matches" in {
     val commands = List(
-      Command.typed("open-file", "Open a file from disk", CommandIntent.OpenFile),
-      Command.typed("open-recent", "Open a recent workspace file", CommandIntent.OpenFileSearch),
-      Command.typed("close-file", "Close the current file", CommandIntent.CloseCurrentFile)
+      Command.typed("open-file", "Open a file from disk", CommandIntent.File(FileIntent.OpenFile)),
+      Command.typed("open-recent", "Open a recent workspace file", CommandIntent.File(FileIntent.OpenFileSearch)),
+      Command.typed("close-file", "Close the current file", CommandIntent.File(FileIntent.CloseCurrentFile))
     )
 
     val results = new CommandSearcher(commands).search("open file")
@@ -128,7 +132,8 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "limit results to specified count" in {
-    val commands = (1 to 10).map(i => Command.typed(s"cmd$i", s"Command $i", CommandIntent.ToggleTheme)).toList
+    val commands =
+      (1 to 10).map(i => Command.typed(s"cmd$i", s"Command $i", CommandIntent.Theme(ThemeIntent.ToggleTheme))).toList
     val searcher = new CommandSearcher(commands)
 
     val results = searcher.search("cmd", maxResults = 5)
@@ -169,9 +174,11 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val fileCommandNames = registry.commandsForCategory(CommandCategory.File).map(_.name)
 
     fileCommandNames should contain allOf ("save-session", "restore-session", "clear-session")
-    registry.findCommand("save-session").map(_.intent) shouldBe Some(CommandIntent.SaveSession)
-    registry.findCommand("restore-session").map(_.intent) shouldBe Some(CommandIntent.RestoreSession)
-    registry.findCommand("clear-session").map(_.intent) shouldBe Some(CommandIntent.ClearSession)
+    registry.findCommand("save-session").map(_.intent) shouldBe Some(CommandIntent.Session(SessionIntent.SaveSession))
+    registry.findCommand("restore-session").map(_.intent) shouldBe Some(
+      CommandIntent.Session(SessionIntent.RestoreSession)
+    )
+    registry.findCommand("clear-session").map(_.intent) shouldBe Some(CommandIntent.Session(SessionIntent.ClearSession))
   }
 
   "CommandRunner state" should "initialize with empty search and no selection" in {
@@ -302,7 +309,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val prefixCommand = Command.typed(
       name = "quoted-animation-duration",
       description = "A command whose label begins with the raw query.",
-      intent = CommandIntent.ToggleLineNumbers,
+      intent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)),
       label = "\"ANIMATION-duration\" options"
     )
     val registry          = CommandRegistry(List(prefixCommand))
@@ -541,9 +548,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     pinOptions.foreach(_.options.map(_.label) shouldBe List("Off", "Top", "Right", "Bottom", "Left"))
     pinOptions.find(_.id == "panel-outline-pin").map(_.selectedOption) shouldBe Some("Right")
     pinOptions.find(_.id == "panel-outline-pin").flatMap(_.selectedIntent) shouldBe
-      Some(CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)))
+      Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))))
     pinOptions.find(_.id == "panel-diagnostics-pin").flatMap(_.selectedIntent) shouldBe
-      Some(CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Left)))
+      Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Left))))
   }
 
   it should "show current text display states as settings options" in {
@@ -573,12 +580,14 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "contextual-toolbar-display" -> "Text Only"
     )
     options.flatMap(_.selectedIntent) shouldBe List(
-      CommandIntent.SetLineNumbers(false),
-      CommandIntent.SetGutter(false),
-      CommandIntent.SetWordWrap(false),
-      CommandIntent.SetFocusedTextBody(false),
-      CommandIntent.SetContextualToolbarEnabled(false),
-      CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(false))),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(false))),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(false))),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(false))),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(false))),
+      CommandIntent.Settings(
+        SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
+      )
     )
   }
 
@@ -595,8 +604,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("missing command runner visible rows input"))
 
     input.currentValue shouldBe "9"
-    input.parse("12") shouldBe Some(CommandIntent.SetCommandRunnerVisibleRows(Some(12)))
-    input.parse("auto") shouldBe Some(CommandIntent.SetCommandRunnerVisibleRows(None))
+    input.parse("12") shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(Some(12))))
+    )
+    input.parse("auto") shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(None)))
+    )
     input.parse("0") shouldBe None
   }
 
@@ -614,7 +627,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     option.selectedOption shouldBe "120 FPS"
     option.options.map(_.label) shouldBe List("30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped")
-    option.selectedIntent shouldBe Some(CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps120))
+    option.selectedIntent shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetRenderFpsTarget(RenderFpsTarget.Fps120)))
+    )
   }
 
   it should "reuse derived settings groups within a command runner state" in {
@@ -657,9 +672,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     documentMode.selectedOption shouldBe "Rich Text"
     documentMode.options.map(_.label) shouldBe List("Plain Text", "Markdown", "Rich Text")
     documentMode.options.map(_.intent) shouldBe List(
-      CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText),
-      CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
-      CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText)
+      CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText)),
+      CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
+      CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText))
     )
   }
 
@@ -674,9 +689,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val inputs        = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
 
     inputs.map(_.id) shouldBe List("rich-text-font-family", "rich-text-font-size", "rich-text-color")
-    inputs.head.parse("Serif") shouldBe Some(CommandIntent.SetRichTextFontFamily("Serif"))
-    inputs(1).parse("18") shouldBe Some(CommandIntent.SetRichTextFontSize(18.0f))
-    inputs(2).parse("#336699") shouldBe Some(CommandIntent.SetRichTextColor("#336699"))
+    inputs.head.parse("Serif") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily("Serif")))
+    inputs(1).parse("18") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(18.0f)))
+    inputs(2).parse("#336699") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextColor("#336699")))
     inputs(2).parse("not-a-colour") shouldBe None
   }
 
@@ -709,16 +724,30 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val inputs = spellGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
 
     enabledOption.selectedOption shouldBe "On"
-    enabledOption.selectedIntent shouldBe Some(CommandIntent.SetSpellCheckEnabled(true))
+    enabledOption.selectedIntent shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true)))
+    )
     inputs.map(_.id) shouldBe List("spellcheck-languages", "spellcheck-dictionaries", "spellcheck-words")
     inputs.head.currentValue shouldBe "en,fr"
-    inputs.head.parse("fr,en") shouldBe Some(CommandIntent.SetSpellCheckLanguages(List("fr", "en")))
+    inputs.head.parse("fr,en") shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckLanguages(List("fr", "en"))))
+    )
     inputs(1).currentValue shouldBe "C:\\Dictionaries\\en_US.dic"
     inputs(1).parse("C:\\Dictionaries\\en_US.dic,/usr/share/hunspell/fr.dic") shouldBe Some(
-      CommandIntent.SetSpellCheckDictionaryPaths(List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic"))
+      CommandIntent.Settings(
+        SettingsIntent.SpellCheck(
+          SpellCheckIntent.SetSpellCheckDictionaryPaths(
+            List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
+          )
+        )
+      )
     )
     inputs(2).currentValue shouldBe "serenity"
-    inputs(2).parse("Serenity,caf\u00e9") shouldBe Some(CommandIntent.SetSpellCheckWords(List("serenity", "caf\u00e9")))
+    inputs(2).parse("Serenity,caf\u00e9") shouldBe Some(
+      CommandIntent.Settings(
+        SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckWords(List("serenity", "caf\u00e9")))
+      )
+    )
   }
 
   it should "surface UI preset save and apply inputs in settings" in {
@@ -749,8 +778,10 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     presetPicker.options
       .map(_.label) shouldBe List("Writing", "Documentation", "Code", "Compact", "Review", "Drafting", "Research Notes")
-    presetPicker.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Writing"))
-    presetPicker.options.map(_.intent) should contain(CommandIntent.ApplyUiPreset("Research Notes"))
+    presetPicker.options.map(_.intent) should contain(CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Writing")))
+    presetPicker.options.map(_.intent) should contain(
+      CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Research Notes"))
+    )
     presetPicker.options.headOption.flatMap(_.hint) shouldBe Some(
       "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane"
     )
@@ -827,10 +858,10 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     workspaceItems.collect {
       case option: CommandSurfaceItem.OptionItem => option.options.map(_.intent)
     }.flatten should contain allOf (
-      CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
-      CommandIntent.SetPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right)),
-      CommandIntent.SetPanelPin(PanelKind.Explorer, Some(PanelPosition.Left)),
-      CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right))),
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))),
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom)))
     )
     workspaceItems.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } shouldBe Nil
     val animations = groupByIdRecursive(List(editPreset), "settings-preset-animations")
@@ -865,9 +896,9 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     theme.children.map(_.id) shouldBe List("settings-preset-theme-selection", "settings-preset-surface-material")
     descendants(theme).map(_.id) should contain allOf ("background-style", "material-preset", "blur-radius")
     descendants(theme).collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should contain allOf (
-      CommandIntent.OpenThemeChooser,
-      CommandIntent.ToggleTheme,
-      CommandIntent.ReloadTheme
+      CommandIntent.Theme(ThemeIntent.OpenThemeChooser),
+      CommandIntent.Theme(ThemeIntent.ToggleTheme),
+      CommandIntent.Theme(ThemeIntent.ReloadTheme)
     )
 
     val inputs = descendants(presetGroup).collect {
@@ -898,12 +929,18 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     renameInput.currentValue shouldBe "Writing -> "
     deleteInput.currentValue shouldBe "Writing"
     resetInput.currentValue shouldBe "Writing"
-    saveAsNewInput.parse("Longform Writing") shouldBe Some(CommandIntent.SaveUiPresetAsNew("Longform Writing"))
-    overwriteInput.parse("Writing") shouldBe Some(CommandIntent.OverwriteUiPreset("Writing"))
-    dupeInput.parse("Writing -> My Writing") shouldBe Some(CommandIntent.DuplicateUiPreset("Writing", "My Writing"))
-    renameInput.parse("Draft -> Final") shouldBe Some(CommandIntent.RenameUiPreset("Draft", "Final"))
-    deleteInput.parse("Old Preset") shouldBe Some(CommandIntent.DeleteUiPreset("Old Preset"))
-    resetInput.parse("Writing") shouldBe Some(CommandIntent.ResetUiPreset("Writing"))
+    saveAsNewInput.parse("Longform Writing") shouldBe Some(
+      CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Longform Writing"))
+    )
+    overwriteInput.parse("Writing") shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Writing")))
+    dupeInput.parse("Writing -> My Writing") shouldBe Some(
+      CommandIntent.UiPresets(UiPresetsIntent.DuplicateUiPreset("Writing", "My Writing"))
+    )
+    renameInput.parse("Draft -> Final") shouldBe Some(
+      CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset("Draft", "Final"))
+    )
+    deleteInput.parse("Old Preset") shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset("Old Preset")))
+    resetInput.parse("Writing") shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.ResetUiPreset("Writing")))
     inputs.foreach { item =>
       item.accepts("", 'W') shouldBe true
       item.accepts("Work", ' ') shouldBe true
@@ -986,9 +1023,17 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "handle selection navigation" in {
     val commands = List(
-      Command.typed("cmd1", "Command 1", CommandIntent.ToggleTheme),
-      Command.typed("cmd2", "Command 2", CommandIntent.ToggleLineNumbers),
-      Command.typed("cmd3", "Command 3", CommandIntent.ToggleGutter)
+      Command.typed("cmd1", "Command 1", CommandIntent.Theme(ThemeIntent.ToggleTheme)),
+      Command.typed(
+        "cmd2",
+        "Command 2",
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+      ),
+      Command.typed(
+        "cmd3",
+        "Command 3",
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleGutter))
+      )
     )
     val runner = CommandRunner.withCommands(commands).activate(CommandRegistry(commands), AppConfig.default)
 
@@ -1033,7 +1078,11 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "handle enter to execute selected command" in {
-    val testCommand = Command.typed("test", "Test command", CommandIntent.ToggleLineNumbers)
+    val testCommand = Command.typed(
+      "test",
+      "Test command",
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+    )
 
     val component         = new CommandRunnerComponent()
     val registry          = CommandRegistry.default
@@ -1050,7 +1099,11 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   "Command model" should "carry typed intents without a custom execution escape hatch" in {
-    val testCommand = Command.typed("test", "Test command", CommandIntent.ToggleLineNumbers)
+    val testCommand = Command.typed(
+      "test",
+      "Test command",
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+    )
 
-    testCommand.intent shouldBe CommandIntent.ToggleLineNumbers
+    testCommand.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
   }

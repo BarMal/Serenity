@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.config.DefaultDocumentMode
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -38,7 +38,7 @@ class StateManagerDefaultDocumentModeSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "default-document-mode-markdown",
           "Set default document mode",
-          CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown),
+          CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
           CommandCategory.Settings
         )
       )

@@ -390,7 +390,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "apply configured gaps below the cursor and between stacked overlays" in {
-    val commands = List(Command.typed("open", "Open file", CommandIntent.OpenFile))
+    val commands = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)

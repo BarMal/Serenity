@@ -872,7 +872,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
         Command.typed(
           "contextual-toolbar-icon-only",
           "Set contextual toolbar display to icon only",
-          CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly),
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+          ),
           CommandCategory.Settings
         )
       )
@@ -891,7 +893,10 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
       optionItem = CommandSurfaceItem.OptionItem(
         id = "font-family",
         label = "Font",
-        options = List(com.serenity.command.CommandOption("Serif", CommandIntent.SetRichTextFontFamily("Serif"))),
+        options = List(
+          com.serenity.command
+            .CommandOption("Serif", CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily("Serif")))
+        ),
         selectedIndex = 0,
         category = CommandCategory.Edit
       )
@@ -906,7 +911,9 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
         hint = "Points",
         currentValue = "18",
         isDecimal = true,
-        parse = _.toFloatOption.map(CommandIntent.SetRichTextFontSize(_)),
+        parse = _.toFloatOption.map(commandIntentArg =>
+          CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(commandIntentArg))
+        ),
         category = CommandCategory.Edit
       )
     )

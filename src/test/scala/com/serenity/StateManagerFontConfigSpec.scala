@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, FontIntent, SettingsIntent}
 import com.serenity.config.ConfigManager
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
@@ -112,7 +112,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
         Command.typed(
           "text-scale-auto",
           "Set text scale to auto",
-          CommandIntent.SetTextScaleMode(TextScaleMode.Auto),
+          CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextScaleMode(TextScaleMode.Auto))),
           CommandCategory.View
         )
       )

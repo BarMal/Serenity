@@ -3,7 +3,7 @@ package com.serenity
 import java.nio.file.Paths
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.config.MarkdownViewMode
 import com.serenity.keystroke.events.{MoveDown, ScrollDown}
 import com.serenity.rope.Balance
@@ -24,7 +24,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "inline-lens",
           "Inline Lens",
-          CommandIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens),
+          CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens)),
           CommandCategory.Settings
         )
       )
@@ -124,7 +124,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "inline-lens",
           "Inline Lens",
-          CommandIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens),
+          CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens)),
           CommandCategory.Settings
         )
       )
