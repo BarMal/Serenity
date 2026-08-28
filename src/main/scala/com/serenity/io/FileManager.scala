@@ -15,7 +15,6 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 
 class FileManager(using balance: Balance):
-  private val fileBrowser = new FileBrowser()
 
   /** Load file into a new buffer */
   def loadFile(path: Path, bufferId: BufferId): IO[Buffer] =
@@ -63,8 +62,8 @@ class FileManager(using balance: Balance):
       case Some(path) => saveBuffer(buffer, path)
       case None       => IO.raiseError(new RuntimeException("Buffer has no file path - use Save As"))
 
-  /** Get file browser */
-  def getFileBrowser: FileBrowser = fileBrowser
+  /** List files and directories in `directory`. */
+  def listDirectory(directory: Path): IO[List[FileEntry]] = FileBrowser.listDirectory(directory)
 
   private def bufferFromContent(bufferId: BufferId, path: Path, content: String): Buffer =
     Buffer(

@@ -235,7 +235,7 @@ object StateManager:
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     val modePart =
       if runner.searchTerm.isEmpty then s"mode=browse category=${runner.activeCategory}"
-      else s"mode=search query=${runner.searchTerm} category=${runner.activeCategory}"
+      else s"mode=search category=${runner.activeCategory}"
     val selectedPart =
       runner.selectedItem match
         case Some(CommandSurfaceItem.CommandItem(command))    => s"selected=command:${command.name}"
@@ -245,10 +245,26 @@ object StateManager:
         case Some(group: CommandSurfaceItem.GroupItem)        => s"selected=group:${group.id}"
         case None                                             => "selected=none"
 
-    s"event=$event $modePart $selectedPart"
+    s"event=${structuralName(event)} $modePart $selectedPart"
 
   def describeCommandExecution(command: Command): String =
-    s"command=${command.name} category=${command.category} intent=${command.intent}"
+    s"command=${command.name} category=${command.category} intent=${structuralName(command.intent)}"
+
+  /** Structural, non-sensitive name for a domain event or command intent: the chain of case names down to (but never
+    * including) any leaf payload. Recursion is restricted to our own sealed hierarchies (`com.serenity` types) so it
+    * can never descend into a `String`, `Path`, `List`, or other free-form user-supplied value - those always stop the
+    * walk at their enclosing case name. This keeps rolling logs identifying *what* happened without ever capturing
+    * typed characters, search text, comments, dictionary words/paths, preset names, or key bindings.
+    */
+  private def structuralName(value: Any): String =
+    value match
+      case p: Product if p.productArity == 1 =>
+        p.productElement(0) match
+          case nested: Product if nested.getClass.getName.startsWith("com.serenity") =>
+            s"${p.productPrefix}(${structuralName(nested)})"
+          case _ => p.productPrefix
+      case p: Product => p.productPrefix
+      case other      => other.getClass.getSimpleName
 
   private class StateManagerImpl(runtime: StateManagerRuntime, operations: StateManagerOperationBoundary)(using Balance)
       extends StateManager:

@@ -141,14 +141,22 @@ final case class SpellCheckFingerprint(
 
 object SpellCheckFingerprint:
 
-  def from(buffer: Buffer, config: SpellCheckConfig): SpellCheckFingerprint =
+  /** Pure -- takes the dictionaries' on-disk fingerprints as an immutable value rather than reading the filesystem
+    * itself. Callers discover `dictionaryFingerprints` once via `SpellCheckConfig.discoverDictionaryFingerprints`
+    * inside an explicit `IO.blocking`, then pass the same value into every fingerprint built from that discovery.
+    */
+  def from(
+    buffer: Buffer,
+    config: SpellCheckConfig,
+    dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
+  ): SpellCheckFingerprint =
     SpellCheckFingerprint(
       contentIdentity = System.identityHashCode(buffer.document.content),
       contentWeight = buffer.document.content.weight,
       contentNewlineCount = buffer.document.content.newlineCount,
       contentLastLineLength = buffer.document.content.lastLineLength,
       usesTextFont = buffer.usesTextFont,
-      dictionaryFingerprints = config.dictionaryFingerprints,
+      dictionaryFingerprints = dictionaryFingerprints,
       config = config.normalized
     )
 
