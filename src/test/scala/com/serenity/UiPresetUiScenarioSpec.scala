@@ -3,7 +3,16 @@ package com.serenity
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent, GeneralSettingsIntent, MotionIntent, SessionIntent, SettingsIntent, UiPresetsIntent}
+import com.serenity.command.{
+  Command,
+  CommandCategory,
+  CommandIntent,
+  GeneralSettingsIntent,
+  MotionIntent,
+  SessionIntent,
+  SettingsIntent,
+  UiPresetsIntent
+}
 import com.serenity.config.{BackgroundStyle, MaterialPreset, MotionPreset}
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance

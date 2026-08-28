@@ -6,7 +6,15 @@ import java.nio.file.Files
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, AnimationOwner, TransitionKind, WindowSitter, WindowSitterConfig}
-import com.serenity.command.{Command, CommandCategory, CommandIntent, GeneralSettingsIntent, MotionIntent, PanelChromeIntent, SettingsIntent}
+import com.serenity.command.{
+  Command,
+  CommandCategory,
+  CommandIntent,
+  GeneralSettingsIntent,
+  MotionIntent,
+  PanelChromeIntent,
+  SettingsIntent
+}
 import com.serenity.config.*
 import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance
