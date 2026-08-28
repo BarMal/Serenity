@@ -130,9 +130,9 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   }
 
   /** Never yields a byte and never reaches EOF on its own -- unlike the empty `ByteArrayInputStream` the other specs
-    * use, which EOFs immediately and would otherwise race `shutdown`'s cancellation against the read loop's own
-    * natural EOF-driven completion. This is what a real, still-open terminal's stdin looks like between keystrokes:
-    * the read loop is genuinely blocked in `reader.read()`, so only cancellation can end it.
+    * use, which EOFs immediately and would otherwise race `shutdown`'s cancellation against the read loop's own natural
+    * EOF-driven completion. This is what a real, still-open terminal's stdin looks like between keystrokes: the read
+    * loop is genuinely blocked in `reader.read()`, so only cancellation can end it.
     */
   private def blockingForever(): java.io.InputStream = new java.io.InputStream:
     override def read(): Int =
@@ -140,7 +140,8 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       -1
 
   private def blockingDumbTerminal(): DumbTerminal =
-    val terminal = new DumbTerminal("test", "xterm-256color", blockingForever(), new ByteArrayOutputStream(), StandardCharsets.UTF_8)
+    val terminal =
+      new DumbTerminal("test", "xterm-256color", blockingForever(), new ByteArrayOutputStream(), StandardCharsets.UTF_8)
     terminal.setSize(new Size(80, 24))
     terminal
 
