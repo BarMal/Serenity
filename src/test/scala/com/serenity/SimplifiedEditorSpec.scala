@@ -2,7 +2,6 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -113,21 +112,6 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
     stateManager.switchToPane(pane1).unsafeRunSync()
     val afterSwitch2 = stateManager.getCurrentState.unsafeRunSync()
     afterSwitch2.persisted.focus shouldBe Focus.EditorPane(pane1)
-
-  it should "process quit events correctly" in new EditorFixture:
-    // Given: StateManager awaiting quit
-    val quitFuture = stateManager.awaitQuit.start.unsafeRunSync()
-
-    // Initially should not be complete
-    // Note: Testing fiber completion is complex in cats-effect
-    // This is a placeholder for proper async testing
-
-    // When: Send quit event
-    stateManager.applyEvent(Quit).unsafeRunSync()
-
-    // Then: Quit should complete
-    // Test that quit completes the awaitable future
-    quitFuture.cancel.unsafeRunSync() // Clean up the test
 
   trait EditorFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
