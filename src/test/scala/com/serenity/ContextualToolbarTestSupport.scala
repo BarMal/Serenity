@@ -128,7 +128,7 @@ trait ContextualToolbarTestSupport extends Matchers with StateManagerTestSupport
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val metrics  = CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.fontConfig))
+    val metrics  = CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
     val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(
       layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
       metrics

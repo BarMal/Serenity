@@ -182,9 +182,12 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val buffer     = finalState.persisted.buffers(bufferId)
     val cursor     = buffer.editing.cursors.head
-    val font       = FontLoader.previewTextFont(finalState.persisted.config.fontConfig)
+    val font       = FontLoader.previewTextFont(finalState.persisted.config.editorConfig.fontConfig)
     val wrapPx =
-      TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, finalState.persisted.config.fontConfig)
+      TextLayoutSnapshot.gridWrapWidthPx(
+        buffer.viewport.visibleColumns,
+        finalState.persisted.config.editorConfig.fontConfig
+      )
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
     val cursorShown = snapshot.visualLines.exists(line =>
       line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn

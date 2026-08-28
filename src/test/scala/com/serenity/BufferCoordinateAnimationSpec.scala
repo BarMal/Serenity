@@ -114,6 +114,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
       cell.foregroundAnimation.map(_.steps) shouldBe Some(
         AppConfig.default
           .withMotionPreset(MotionPreset.Smooth)
+          .editorConfig
           .characterAnimation
           .get
           .steps * 2

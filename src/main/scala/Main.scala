@@ -40,7 +40,7 @@ object Main extends IOApp:
         .message(ConfigManager.defaultConfigPath, configLoad.report)
         .fold(IO.unit)(message => logger.warn(message))
       appConfig = resolveAutoTextScale(configLoad.config, DisplayScale.defaultDeviceScale.textScale)
-      displayState <- RuntimeDisplayState.create(appConfig.fontConfig)
+      displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
       initialDisplay = displayState.snapshot
       _ <- (
         SwingWindow.resource(
@@ -58,8 +58,8 @@ object Main extends IOApp:
           val actualAppConfig =
             resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
           val initialScaleSync =
-            if actualAppConfig.fontConfig != appConfig.fontConfig then
-              displayState.update(actualAppConfig.fontConfig) >>
+            if actualAppConfig.editorConfig.fontConfig != appConfig.editorConfig.fontConfig then
+              displayState.update(actualAppConfig.editorConfig.fontConfig) >>
                 IO.blocking {
                   val display = displayState.snapshot
                   swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
@@ -142,7 +142,7 @@ object Main extends IOApp:
     yield ExitCode.Success
 
   private def resolveAutoTextScale(config: AppConfig, detectedTextScale: Double): AppConfig =
-    config.withFontConfig(config.fontConfig.resolveAutoTextScale(detectedTextScale))
+    config.withFontConfig(config.editorConfig.fontConfig.resolveAutoTextScale(detectedTextScale))
 
   /** Paint a whole frame.
     *

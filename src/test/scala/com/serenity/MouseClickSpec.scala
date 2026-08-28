@@ -710,10 +710,12 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
     val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
-    val font        = FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Prose)
+    val font = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     // Mouse pixels arrive in the screen grid's coordinates, and that grid is the code font's even for prose.
     val gridMetrics =
-      CellMetrics.fromFont(FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Code))
+      CellMetrics.fromFont(
+        FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
+      )
     val panelWidthPx = contentRect.width * gridMetrics.charWidth
     val snapshot     = TextLayoutSnapshot.fromBuffer(state.persisted.buffers(bufferId), panelWidthPx, font)
     val line         = snapshot.visualLines.head

@@ -400,7 +400,10 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     info(s"Before navigation: line=${beforeCursor.line}, column=${beforeCursor.column}")
     info(s"After move up: line=${afterUpCursor.line}, column=${afterUpCursor.column}")
 
-    val font = FontLoader.previewFontForRole(beforeNavState.persisted.config.fontConfig, beforeBuffer.typographyRole)
+    val font = FontLoader.previewFontForRole(
+      beforeNavState.persisted.config.editorConfig.fontConfig,
+      beforeBuffer.typographyRole
+    )
     val snapshot = TextLayoutSnapshot.fromBuffer(
       beforeBuffer.copy(viewport = beforeBuffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
       panelWidth * CellMetrics.fromFont(font).charWidth,

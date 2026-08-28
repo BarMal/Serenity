@@ -107,7 +107,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val size  = ViewportSize(80, 24)
     val mono  = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val text =
-      com.serenity.ui.fonts.FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Prose)
+      com.serenity.ui.fonts.FontLoader
+        .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     val surface = new com.serenity.MockRenderSurface(size.width, size.height)
 
     Renderer.render(state, cursorVisible = true, surface, size, mono, text, CellMetrics.fromFont(mono), None)
@@ -126,9 +127,11 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val size  = ViewportSize(80, 24)
     val cache = MouseTargetCache.fromState(state, size)
     val codeFont =
-      com.serenity.ui.fonts.FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Code)
+      com.serenity.ui.fonts.FontLoader
+        .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
     val textFont =
-      com.serenity.ui.fonts.FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Prose)
+      com.serenity.ui.fonts.FontLoader
+        .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     val snapshot    = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
     val contentRect = cache.scene.paneLayouts(paneId).contentRect
 
@@ -142,9 +145,11 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val size  = ViewportSize(80, 24)
     val scene = MouseTargetCache.fromState(state, size).scene
     val codeFont =
-      com.serenity.ui.fonts.FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Code)
+      com.serenity.ui.fonts.FontLoader
+        .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
     val textFont =
-      com.serenity.ui.fonts.FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Prose)
+      com.serenity.ui.fonts.FontLoader
+        .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     val surface = new com.serenity.MockRenderSurface(size.width, size.height)
 
     Renderer.render(
@@ -170,9 +175,11 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     )
     val size = ViewportSize(80, 24)
     val codeFont =
-      com.serenity.ui.fonts.FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Code)
+      com.serenity.ui.fonts.FontLoader
+        .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
     val textFont =
-      com.serenity.ui.fonts.FontLoader.previewFontForRole(state.persisted.config.fontConfig, TypographyRole.Prose)
+      com.serenity.ui.fonts.FontLoader
+        .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     val surface = new com.serenity.MockRenderSurface(size.width, size.height)
 
     Renderer.render(
@@ -212,7 +219,10 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val key         = MouseTargetLayoutKey.from(state, size)
 
     val fontChanged =
-      stateWith(buffer, state.persisted.config.withFontConfig(state.persisted.config.fontConfig.copy(fontSize = 14.0f)))
+      stateWith(
+        buffer,
+        state.persisted.config.withFontConfig(state.persisted.config.editorConfig.fontConfig.copy(fontSize = 14.0f))
+      )
     val languageChanged = stateWith(buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown))))
     val languageRemoved = stateWith(buffer.copy(document = buffer.document.copy(language = None)))
     val viewportChanged = stateWith(buffer.copy(viewport = buffer.viewport.copy(topVisualLine = 1)))

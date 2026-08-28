@@ -293,11 +293,12 @@ object ContextualToolbar:
     }
 
   private def proseItems(state: AppState, buffer: Buffer): List[ContextualToolbarItem] =
-    val document         = richTextDocumentFor(buffer)
-    val style            = activeStyle(buffer, document)
-    val paragraph        = activeParagraph(buffer, document)
-    val currentFamily    = style.fontFamily.orElse(Some(state.persisted.config.fontConfig.textFontFamily)).getOrElse("")
-    val currentFontSize  = style.fontSize.getOrElse(state.persisted.config.fontConfig.textFontSize)
+    val document  = richTextDocumentFor(buffer)
+    val style     = activeStyle(buffer, document)
+    val paragraph = activeParagraph(buffer, document)
+    val currentFamily =
+      style.fontFamily.orElse(Some(state.persisted.config.editorConfig.fontConfig.textFontFamily)).getOrElse("")
+    val currentFontSize  = style.fontSize.getOrElse(state.persisted.config.editorConfig.fontConfig.textFontSize)
     val currentColor     = normalizedColor(style.color)
     val currentColorText = currentColor.getOrElse("#202020")
     val familyOptions = normalizedFontFamilies(currentFamily).map(family =>

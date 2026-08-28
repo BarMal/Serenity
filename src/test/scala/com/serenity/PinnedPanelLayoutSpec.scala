@@ -202,7 +202,7 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
       position match
         case PanelPosition.Left | PanelPosition.Right =>
-          layout.editorPanelRect.width should be >= baseState.persisted.config.minimumPaneWidth
+          layout.editorPanelRect.width should be >= baseState.persisted.config.editorConfig.minimumPaneWidth
         case PanelPosition.Top | PanelPosition.Bottom =>
           layout.editorPanelRect.height should be >= 5
     }
@@ -238,7 +238,7 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(dockedState(panels), ViewportSize(100, 31))
 
-    layout.editorPanelRect.width should be >= baseState.persisted.config.minimumPaneWidth
+    layout.editorPanelRect.width should be >= baseState.persisted.config.editorConfig.minimumPaneWidth
     layout.editorPanelRect.height should be >= 5
   }
 end PinnedPanelLayoutSpec

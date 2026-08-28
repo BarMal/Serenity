@@ -181,7 +181,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.persisted.config.fontConfig.textFontFamily shouldBe Font.SERIF
+    state.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
     state.persisted.config.showLineNumbers shouldBe false
     state.persisted.config.showGutter shouldBe false
     state.persisted.layout.editorPanes should have size 1
@@ -600,7 +600,9 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       .upsert(
         UiPreset(
           "Missing Font",
-          AppConfig.default.copy(fontConfig = AppConfig.default.fontConfig.copy(textFontFamily = "not-installed")),
+          AppConfig.default.withFontConfig(
+            AppConfig.default.editorConfig.fontConfig.copy(textFontFamily = "not-installed")
+          ),
           Theme.dark.name,
           Nil
         )
@@ -861,7 +863,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.persisted.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
     state.persisted.config.motionPreset shouldBe MotionPreset.Subtle
     state.persisted.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
-    state.persisted.config.fontConfig.textFontSize shouldBe 18.0f
+    state.persisted.config.editorConfig.fontConfig.textFontSize shouldBe 18.0f
     store.find("Drafting").unsafeRunSync() shouldBe Some(savedBefore)
   }
 
@@ -1034,6 +1036,6 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     store.find("Writing").unsafeRunSync() shouldBe None
-    state.persisted.config.fontConfig.textFontFamily shouldBe Font.SERIF
+    state.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
     state.pinnedSurfaces shouldBe Nil
   }

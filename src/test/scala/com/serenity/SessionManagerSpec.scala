@@ -245,12 +245,16 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       loaded <- sessionManager.loadSession()
     yield
       loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("legacy config")
-      loaded.map(_.persisted.config.characterAnimation) shouldBe Some(AppConfig.default.characterAnimation)
+      loaded.map(_.persisted.config.editorConfig.characterAnimation) shouldBe Some(
+        AppConfig.default.editorConfig.characterAnimation
+      )
       loaded.map(_.persisted.config.languageToolsConfig.syntaxHighlightingEnabled) shouldBe Some(
         AppConfig.default.languageToolsConfig.syntaxHighlightingEnabled
       )
-      loaded.map(_.persisted.config.fontConfig) shouldBe Some(AppConfig.default.fontConfig)
-      loaded.map(_.persisted.config.minimumPaneWidth) shouldBe Some(AppConfig.default.minimumPaneWidth)
+      loaded.map(_.persisted.config.editorConfig.fontConfig) shouldBe Some(AppConfig.default.editorConfig.fontConfig)
+      loaded.map(_.persisted.config.editorConfig.minimumPaneWidth) shouldBe Some(
+        AppConfig.default.editorConfig.minimumPaneWidth
+      )
       loaded.map(_.persisted.config.showLineNumbers) shouldBe Some(AppConfig.default.showLineNumbers)
       loaded.map(_.persisted.config.showGutter) shouldBe Some(AppConfig.default.showGutter)
 

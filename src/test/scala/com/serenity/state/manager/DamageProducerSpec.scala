@@ -711,8 +711,9 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after =
       before.copy(persisted = before.persisted.copy(buffers = before.persisted.buffers.updated(bufferId, edited)))
 
-    val font   = com.serenity.ui.fonts.FontLoader.previewTextFont(after.persisted.config.fontConfig)
-    val wrapPx = com.serenity.ui.layout.TextLayoutSnapshot.gridWrapWidthPx(80, after.persisted.config.fontConfig)
+    val font = com.serenity.ui.fonts.FontLoader.previewTextFont(after.persisted.config.editorConfig.fontConfig)
+    val wrapPx =
+      com.serenity.ui.layout.TextLayoutSnapshot.gridWrapWidthPx(80, after.persisted.config.editorConfig.fontConfig)
     val beforeSnapshot = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
     val afterSnapshot  = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(edited, wrapPx, font)
     val dirty          = DirtyLineDiff.dirtyRows(Some(beforeSnapshot), afterSnapshot)

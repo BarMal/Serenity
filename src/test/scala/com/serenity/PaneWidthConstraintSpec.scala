@@ -113,7 +113,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 
     // Then: Should respect custom minimum width in layout
     finalState.persisted.buffers should have size 5
-    finalState.persisted.config.minimumPaneWidth shouldBe customMinWidth
+    finalState.persisted.config.editorConfig.minimumPaneWidth shouldBe customMinWidth
 
     // More panes should fit with smaller minimum width
     finalState.persisted.layout.editorPanes.size should be >= 2
