@@ -135,6 +135,7 @@ object Main extends IOApp:
               ),
               awaitExternalQuit = swingWin.awaitClose,
               registerResizeCallback = cb => swingWin.setOnResize(cb),
+              registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
               openPath = launchOptions.openPath
             )
           }
