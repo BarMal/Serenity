@@ -56,7 +56,7 @@ object AppEventReducer:
           .popFocus
       case _ =>
         val activatedRunner = CommandRunner.empty
-          .activate(registry, state.persisted.config)
+          .activate(registry, state.persisted.config, state.runtime.isTuiMode)
         val runnerWithPanelSelections = activatedRunner.copy(
           optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
         )

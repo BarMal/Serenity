@@ -98,7 +98,7 @@ final private[manager] class StateManagerOperationBoundary private (
 
   def ensureCommandRunnerSurface(state: AppState): AppState =
     val registry        = CommandRegistry.default
-    val activatedRunner = CommandRunner.empty.activate(registry, state.persisted.config)
+    val activatedRunner = CommandRunner.empty.activate(registry, state.persisted.config, state.runtime.isTuiMode)
     val runner = activatedRunner.copy(
       optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
     )

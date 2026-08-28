@@ -116,7 +116,7 @@ object AppRuntime:
 
   def run(
     initialViewportSize: ViewportSize,
-    makeInputHandler: InputRouter[IO, Event] => InputHandler[IO],
+    makeInputHandler: InputRouter[IO, Event] => IO[InputHandler[IO]],
     checkResize: IO[Option[ViewportSize]],
     renderFull: RenderFn,
     renderCursorOnly: RenderFn,
@@ -125,7 +125,9 @@ object AppRuntime:
     awaitExternalQuit: IO[Unit] = IO.never,
     registerResizeCallback: (() => Unit) => Unit = _ => (),
     registerFocusCallback: (Boolean => Unit) => Unit = _ => (),
-    openPath: Option[Path] = None
+    openPath: Option[Path] = None,
+    systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
+    isTuiMode: Boolean = false
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
       for
@@ -135,10 +137,16 @@ object AppRuntime:
           logger
         )
         startupTheme <- AppStartup.startupTheme(stateManager, themeManager)
-        initialState <- AppStartup.initializeState(stateManager, startupTheme, initialViewportSize, appConfig, openPath)
-        inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
-        systemClipboard = SystemClipboard.awt[IO]
-        inputHandler    = makeInputHandler(inputRouter)
+        initialState <- AppStartup.initializeState(
+          stateManager,
+          startupTheme,
+          initialViewportSize,
+          appConfig,
+          openPath,
+          isTuiMode
+        )
+        inputRouter    <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
+        inputHandler   <- makeInputHandler(inputRouter)
         _              <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
         fastModeSignal <- SignallingRef.of[IO, Boolean](false)
         pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)

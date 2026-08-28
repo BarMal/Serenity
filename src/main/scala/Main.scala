@@ -11,8 +11,9 @@ import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.{PaintExecutionContext, Renderer}
 import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
+import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 given Balance = Balance.default
 
@@ -40,6 +41,35 @@ object Main extends IOApp:
         .message(ConfigManager.defaultConfigPath, configLoad.report)
         .fold(IO.unit)(message => logger.warn(message))
       appConfig = resolveAppConfig(configLoad.config, launchOptions)
+      _ <-
+        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions)
+        else runGui(appConfig, launchOptions)
+    yield ExitCode.Success
+
+  /** The TUI launch path (issue #1112): a real system terminal via [[TerminalShell.resource]], restored on every exit
+    * path by that `Resource`'s release. This branch never references `SwingWindow` -- the terminal capability bundle
+    * lives entirely in [[TuiRuntime]], which owns no such reference either.
+    */
+  private def runTui(appConfig: AppConfig, launchOptions: LaunchOptions)(using
+    logger: Logger[IO],
+    loggerFactory: LoggerFactory[IO]
+  ): IO[Unit] =
+    TuiRuntime.run(
+      shell = TerminalShell.resource,
+      appConfig = appConfig,
+      openPath = launchOptions.openPath,
+      configPersistencePath = Some(ConfigManager.defaultConfigPath),
+      hasDisplay = LaunchOptions.isDisplayReachable(sys.env)
+    )
+
+  /** The GUI launch path: unchanged from before #1112 beyond being extracted into its own method. Constructs a
+    * [[SwingWindow]] and closes `AppRuntime.run`'s capabilities over it; never touches [[TerminalShell]].
+    */
+  private def runGui(appConfig: AppConfig, launchOptions: LaunchOptions)(using
+    logger: Logger[IO],
+    loggerFactory: LoggerFactory[IO]
+  ): IO[Unit] =
+    for
       displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
       initialDisplay = displayState.snapshot
       _ <- (
@@ -99,11 +129,13 @@ object Main extends IOApp:
             initialScaleSync >> AppRuntime.run(
               initialViewportSize = swingWin.viewportSize,
               makeInputHandler = router =>
-                new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
-                  swingWin.canvas,
-                  router,
-                  () => swingWin.metrics,
-                  () => displayState.uiMetrics
+                IO.pure(
+                  new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
+                    swingWin.canvas,
+                    router,
+                    () => swingWin.metrics,
+                    () => displayState.uiMetrics
+                  )
                 ),
               checkResize = IO(swingWin.doResizeIfNecessary()),
               renderFull = (state, vis, cc, damage, bufferAnimations) =>
@@ -140,7 +172,7 @@ object Main extends IOApp:
             )
           }
         }
-    yield ExitCode.Success
+    yield ()
 
   private def resolveAutoTextScale(config: AppConfig, detectedTextScale: Double): AppConfig =
     config.withFontConfig(config.editorConfig.fontConfig.resolveAutoTextScale(detectedTextScale))

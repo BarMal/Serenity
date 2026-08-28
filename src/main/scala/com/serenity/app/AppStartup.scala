@@ -94,7 +94,8 @@ object AppStartup:
     stateManager: SessionStartupInfo & SessionService,
     theme: Theme,
     initialViewportSize: ViewportSize,
-    appConfig: AppConfig = AppConfig.default
+    appConfig: AppConfig = AppConfig.default,
+    isTuiMode: Boolean = false
   ): IO[AppState] =
     for
       sessionExists <- stateManager.sessionExists
@@ -117,7 +118,8 @@ object AppStartup:
             )
           ),
           viewportSize = Some(initialViewportSize),
-          nextSurfaceId = 1
+          nextSurfaceId = 1,
+          isTuiMode = isTuiMode
         )
       )
 
@@ -138,7 +140,8 @@ object AppStartup:
     theme: Theme,
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default,
-    openPath: Option[Path] = None
+    openPath: Option[Path] = None,
+    isTuiMode: Boolean = false
   ): IO[AppState] =
     openPath match
       case Some(path) =>
@@ -149,7 +152,8 @@ object AppStartup:
               persisted = base.persisted.copy(theme = theme),
               runtime = base.runtime.copy(
                 uiSurfaces = List.empty,
-                viewportSize = Some(initialViewportSize)
+                viewportSize = Some(initialViewportSize),
+                isTuiMode = isTuiMode
               )
             )
           }
@@ -158,7 +162,7 @@ object AppStartup:
         yield state
       case None =>
         for
-          startState <- startPageState(stateManager, theme, initialViewportSize, appConfig)
+          startState <- startPageState(stateManager, theme, initialViewportSize, appConfig, isTuiMode)
           _          <- stateManager.updateState(_ => startState)
           state      <- stateManager.getCurrentState
         yield state

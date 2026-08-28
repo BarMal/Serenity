@@ -358,3 +358,15 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     runner.get.optionSelections.get("code-ligatures") shouldBe Some(1)
     runner.get.optionSelections.get("text-ligatures") shouldBe Some(1)
   }
+
+  "CommandRunner.activate with isTuiMode" should "default to false and carry the flag into settingsGroups (issue #1112)" in {
+    val defaultRunner = CommandRunner.empty.activate(registry, AppConfig.default)
+    defaultRunner.isTuiMode shouldBe false
+    settingsGroup(defaultRunner, "settings-typography").flatMap(_.hint) shouldBe
+      Some("Typefaces for prose, code, and interface")
+
+    val tuiRunner = CommandRunner.empty.activate(registry, AppConfig.default, isTuiMode = true)
+    tuiRunner.isTuiMode shouldBe true
+    settingsGroup(tuiRunner, "settings-typography").flatMap(_.hint) shouldBe
+      Some("Typefaces for prose, code, and interface -- inert in TUI mode")
+  }
