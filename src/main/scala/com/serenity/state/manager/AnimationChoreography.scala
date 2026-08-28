@@ -1,12 +1,11 @@
 package com.serenity.state.manager
 
-import java.awt.Color
-
 import cats.effect.{IO, Ref}
 import cats.syntax.foldable.*
 import com.serenity.animation.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.theme.config.ColorParser.transparent
 
 /** State the event pipeline exposes for surface and panel animation choreography. */
 private[manager] trait AnimationChoreographyPort:
@@ -226,8 +225,8 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
           val overlayFadeOutAnims = (0 until overlayHeight).map { rowOffset =>
             val panelBg  = s.persisted.theme.panel.background
             val panelFg  = s.persisted.theme.panel.foreground
-            val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
-            val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+            val transpBg = transparent(panelBg)
+            val transpFg = transparent(panelFg)
             val previousCell = prevState.runtime.surfaceAnimations
               .get(closedSurface.id)
               .flatMap(_.animationState.getCell(0, rowOffset))
@@ -306,9 +305,6 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
   private def applyPinnedPanelCloseAnimation(closedSurface: UiSurface, prevState: AppState): IO[Unit] =
     stateRef.update(state => PinnedPanelAnimations.close(closedSurface, prevState, state))
 
-  private def transparent(color: Color): Color =
-    new Color(color.getRed, color.getGreen, color.getBlue, 0)
-
   private def completedFadeSteps(totalFadeFrames: Int, remainingFrames: Int): Int =
     (totalFadeFrames - remainingFrames + 1).max(1)
 
@@ -325,8 +321,8 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
                     val delay    = rowOffset
                     val panelBg  = s.persisted.theme.panel.background
                     val panelFg  = s.persisted.theme.panel.foreground
-                    val transpBg = new Color(panelBg.getRed, panelBg.getGreen, panelBg.getBlue, 0)
-                    val transpFg = new Color(panelFg.getRed, panelFg.getGreen, panelFg.getBlue, 0)
+                    val transpBg = transparent(panelBg)
+                    val transpFg = transparent(panelFg)
                     val bgSteps = List.fill(delay)(transpBg) ++
                       RgbInterpolator.interpolateRgba(transpBg, panelBg, config.steps)
                     val fgSteps = List.fill(delay)(transpFg) ++

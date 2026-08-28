@@ -81,7 +81,7 @@ private[manager] object FocusHandlerRouting:
       case SurfaceContent.ContextualToolbar(_) => contextualToolbar
       case SurfaceContent.CommentLens(_)       => commentLens
       case SurfaceContent.StartPage(_)         => startupPage
-      case SurfaceContent.ModalWorkflow(modal) => forModalType(StateManagerEventPipeline.modalType(modal))
+      case SurfaceContent.ModalWorkflow(modal) => forModalType(ModalMouseHitTesting.modalType(modal))
 
       case SurfaceContent.QuickInfo(_)              => peekOverlay
       case SurfaceContent.FilePreview(_, _)         => peekOverlay

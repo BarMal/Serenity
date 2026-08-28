@@ -1,10 +1,9 @@
 package com.serenity.state.manager
 
-import java.awt.Color
-
 import com.serenity.animation.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.theme.config.ColorParser.transparent
 
 /** Pure computation of the open/close transition for a pinned or expanded panel surface: lays out transition cells
   * against the panel's on-screen rect and lowers them via the existing `ElementTransitionPlanner`/
@@ -138,6 +137,3 @@ private[manager] object PinnedPanelAnimations:
       case SurfacePresentation.Pinned(position, _)   => Some(position)
       case SurfacePresentation.Expanded(position, _) => Some(position)
       case _                                         => None
-
-  private def transparent(color: Color): Color =
-    new Color(color.getRed, color.getGreen, color.getBlue, 0)
