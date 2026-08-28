@@ -54,6 +54,7 @@ private[manager] trait EffectRuntimePort:
   def uiPresetStore: UiPresetStore
   def windowSizeProvider: IO[Option[PreferredWindowSize]]
   def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]]
+  def markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
@@ -461,6 +462,7 @@ private[manager] class StateManagerComposition(
     val uiPresetStore: UiPresetStore,
     val windowSizeProvider: IO[Option[PreferredWindowSize]],
     val fileDialog: Option[com.serenity.io.FileDialog],
+    val markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability,
     val fileManager: FileManager,
     val sessionManager: SessionManager,
     val sessionPersistence: SessionPersistence,
@@ -485,6 +487,7 @@ private[manager] class StateManagerComposition(
   private val runtimeUiPresetStore            = uiPresetStore
   private val runtimeWindowSizeProvider       = windowSizeProvider
   private val runtimeFileDialog               = fileDialog
+  private val runtimeMarkdownPreviewWindow    = markdownPreviewWindow
   private val runtimeFileManager              = fileManager
   private val runtimeSessionPersistence       = sessionPersistence
 
@@ -512,6 +515,7 @@ private[manager] class StateManagerComposition(
     val uiPresetStore           = runtimeUiPresetStore
     val windowSizeProvider      = runtimeWindowSizeProvider
     val bufferAnimationsRef     = runtimeBufferAnimationsRef
+    val markdownPreviewWindow   = runtimeMarkdownPreviewWindow
 
   private val effectEditorPort: EffectEditorPort = new EffectEditorPort:
     def updateState(update: AppState => AppState): IO[Unit] = runtimeStateRef.update(update)

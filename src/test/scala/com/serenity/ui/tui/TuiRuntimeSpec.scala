@@ -9,6 +9,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
+import com.serenity.state.models.{Buffer, BufferId, CursorPosition, Viewport}
 import org.jline.terminal.Terminal
 import org.jline.terminal.impl.DumbTerminal
 import org.scalatest.concurrent.Eventually
@@ -137,4 +138,39 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     program.attempt.unsafeRunTimed(15.seconds) shouldBe defined
     harness.written should include(exitCaMode)
     harness.written should include(cursorShown)
+  }
+
+  "TuiRuntime.markdownPreviewSourceWindow" should "return an empty window for an empty buffer" in {
+    val buffer = Buffer.fromString(BufferId(1), "")
+
+    TuiRuntime.markdownPreviewSourceWindow(buffer, heightPx = 800) shouldBe
+      com.serenity.markdown.MarkdownDocumentPreview.PreviewWindow(0, 0, "")
+  }
+
+  it should "follow the editor viewport's top line when the cursor is inside the visible window" in {
+    val lines = (0 until 100).map(i => s"line $i").mkString("\n")
+    val baseBuffer = Buffer
+      .fromString(BufferId(1), lines)
+      .copy(viewport = Viewport.default.copy(topLine = 20))
+    // A cursor within the window the viewport already implies: firstSourceLine should follow the viewport's top
+    // line rather than the cursor recentering it.
+    val buffer = baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(25, 0))))
+
+    val window = TuiRuntime.markdownPreviewSourceWindow(buffer, heightPx = 320)
+
+    window.firstSourceLine shouldBe 20
+    window.source should startWith("line 20")
+  }
+
+  it should "recenter on the cursor line when it has scrolled past the current window" in {
+    val lines = (0 until 200).map(i => s"line $i").mkString("\n")
+    val baseBuffer = Buffer
+      .fromString(BufferId(1), lines)
+      .copy(viewport = Viewport.default.copy(topLine = 0))
+    val buffer = baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(150, 0))))
+
+    val window = TuiRuntime.markdownPreviewSourceWindow(buffer, heightPx = 320)
+
+    window.firstSourceLine should (be > 0 and be <= 150)
+    window.source should include("line 150")
   }

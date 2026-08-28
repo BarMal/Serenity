@@ -142,6 +142,7 @@ object AppRuntime:
     awaitExternalQuit: IO[Unit] = IO.never,
     registerResizeCallback: (() => Unit) => Unit = _ => (),
     registerFocusCallback: (Boolean => Unit) => Unit = _ => (),
+    registerMarkdownPreviewCloseCallback: (() => Unit) => Unit = _ => (),
     openPath: Option[Path] = None,
     systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
     isTuiMode: Boolean = false
@@ -185,6 +186,11 @@ object AppRuntime:
         _ <- IO(
           registerFocusCallback(
             focusCallbackBridge(windowFocused, cursorVisible, breathIndex, requestFastRender, resizeCallbackDispatcher)
+          )
+        )
+        _ <- IO(
+          registerMarkdownPreviewCloseCallback(
+            markdownPreviewCloseCallbackBridge(stateManager, resizeCallbackDispatcher)
           )
         )
         animationTickCadence <- Ref.of[IO, AnimationTickCadence](
@@ -588,6 +594,24 @@ object AppRuntime:
         onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )
+
+  /** Bridges the TUI's spawned Markdown preview window (issue #1113) closing via its own native close control back into
+    * application state: the window only hides itself (see `MarkdownPreviewWindow.resource`), so this callback's sole
+    * job is toggling `markdownPreviewWindowBuffer` back off rather than orphaning a dead window reference.
+    */
+  private[serenity] def markdownPreviewCloseCallbackBridge(
+    stateManager: StateUpdater,
+    dispatcher: Dispatcher[IO]
+  )(using logger: Logger[IO]): () => Unit =
+    () =>
+      dispatcher.unsafeRunAndForget(
+        stateManager
+          .updateState(closeMarkdownPreviewWindowInState)
+          .handleErrorWith(error => logger.error(error)("[RUNTIME] markdown preview close callback failed"))
+      )
+
+  private[serenity] def closeMarkdownPreviewWindowInState(state: AppState): AppState =
+    state.copy(runtime = state.runtime.copy(markdownPreviewWindowBuffer = None))
 
   private def advanceAnimationsForCadence(
     ticks: Int,

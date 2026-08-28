@@ -19,7 +19,7 @@ import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
-import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.{StateManager, StateUpdater}
 import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage}
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
@@ -1381,6 +1381,81 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       yield
         failure.map(_.message) shouldBe defined
         failure.flatMap(_.error).map(_.getMessage) should contain("resize signal failed")
+    }
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  "closeMarkdownPreviewWindowInState" should "clear the preview window's buffer without touching anything else" in {
+    val bufferId = BufferId(7)
+    val state = AppState.initial.copy(runtime =
+      AppState.initial.runtime.copy(isTuiMode = true, markdownPreviewWindowBuffer = Some(bufferId))
+    )
+
+    val cleared = AppRuntime.closeMarkdownPreviewWindowInState(state)
+
+    cleared.runtime.markdownPreviewWindowBuffer shouldBe None
+    cleared.runtime.isTuiMode shouldBe true
+    cleared.persisted shouldBe state.persisted
+  }
+
+  it should "be idempotent when the window is already closed" in {
+    val state = AppState.initial
+
+    AppRuntime.closeMarkdownPreviewWindowInState(state) shouldBe state
+  }
+
+  "markdownPreviewCloseCallbackBridge" should "sync the window-closed toggle back into application state" in {
+    val program = Dispatcher.parallel[IO].use { dispatcher =>
+      for
+        logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
+        given Logger[IO] = new RecordingLogger(logs)
+        stateManager <- StateManager.apply(
+          summon[Logger[IO]],
+          policy = SessionManager.SessionPolicy(saveOnAppClose = false)
+        )
+        bufferId = BufferId(3)
+        _ <- stateManager
+          .updateState(s => s.copy(runtime = s.runtime.copy(markdownPreviewWindowBuffer = Some(bufferId))))
+        callback = AppRuntime.markdownPreviewCloseCallbackBridge(stateManager, dispatcher)
+        _ <- IO(callback())
+        cleared <-
+          def loop(remaining: Int): IO[Boolean] =
+            stateManager.getCurrentState.flatMap { state =>
+              if state.runtime.markdownPreviewWindowBuffer.isEmpty then IO.pure(true)
+              else if remaining <= 0 then IO.pure(false)
+              else IO.sleep(25.millis) >> loop(remaining - 1)
+            }
+          loop(40)
+      yield cleared shouldBe true
+    }
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "log failures from the runtime bridge" in {
+    val program = Dispatcher.parallel[IO].use { dispatcher =>
+      for
+        logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
+        given Logger[IO] = new RecordingLogger(logs)
+        failingStateManager = new StateUpdater:
+          def updateState(update: AppState => AppState): IO[Unit] =
+            IO.raiseError(new RuntimeException("markdown preview close signal failed"))
+          def updateBufferAnimations(
+            update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+              BufferId,
+              com.serenity.animation.AnimationState
+            ]
+          ): IO[Unit] = IO.unit
+        callback = AppRuntime.markdownPreviewCloseCallbackBridge(failingStateManager, dispatcher)
+        _ <- IO(callback())
+        failure <- awaitLogEntry(
+          logs,
+          _.message.contains("[RUNTIME] markdown preview close callback failed")
+        )
+      yield
+        failure.map(_.message) shouldBe defined
+        failure.flatMap(_.error).map(_.getMessage) should contain("markdown preview close signal failed")
     }
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
