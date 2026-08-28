@@ -564,25 +564,23 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     finally Files.deleteIfExists(missingFile.getParent)
   }
 
-  "FileBrowser" should "list directory contents" in {
-    val fileBrowser = new FileBrowser()
-
-    val currentDir = fileBrowser.getCurrentDirectory.unsafeRunSync()
-    currentDir should not be null
-
-    val entries = fileBrowser.listCurrentDirectory.unsafeRunSync()
-    entries should not be null
-    // Should contain at least some entries (directories or files)
+  "FileBrowser" should "list a directory's entries, directories first, sorted by name" in {
+    val root                     = Files.createTempDirectory("serenity-file-browser")
+    val (childDir, fileA, fileB) = (root.resolve("zzz-dir"), root.resolve("a.txt"), root.resolve("b.txt"))
+    try
+      Files.createDirectory(childDir)
+      Files.writeString(fileB, "hello")
+      Files.writeString(fileA, "hi")
+      val entries = FileBrowser.listDirectory(root).unsafeRunSync()
+      entries.map(e => (e.name, e.isDirectory)) shouldBe
+        List(("zzz-dir", true), ("a.txt", false), ("b.txt", false))
+      entries.find(_.name == "b.txt").map(_.size) shouldBe Some(Files.size(fileB))
+    finally List(fileA, fileB, childDir, root).foreach(Files.deleteIfExists)
   }
 
-  it should "raise a clear error when changing to a missing directory" in {
-    val fileBrowser      = new FileBrowser()
+  it should "return an empty listing for a missing directory rather than raising" in {
     val missingDirectory = Files.createTempDirectory("serenity-missing-directory").resolve("missing")
-
-    try
-      val result = fileBrowser.changeDirectory(missingDirectory).attempt.unsafeRunSync()
-
-      result.left.map(_.getMessage) shouldBe Left(s"Directory does not exist: $missingDirectory")
+    try FileBrowser.listDirectory(missingDirectory).unsafeRunSync() shouldBe Nil
     finally Files.deleteIfExists(missingDirectory.getParent)
   }
 

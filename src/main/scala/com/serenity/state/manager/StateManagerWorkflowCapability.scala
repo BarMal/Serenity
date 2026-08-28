@@ -427,7 +427,7 @@ final private[manager] class StateManagerWorkflowCapability(
       prefix =
         if endsWithSeparator || isDirectoryPath then ""
         else Option(resolvedPath.getFileName).map(_.toString).getOrElse("")
-      entries <- fileManager.getFileBrowser.listDirectory(baseDirectory)
+      entries <- fileManager.listDirectory(baseDirectory)
     yield entries
       .filter(_.isDirectory)
       .filter(entry => prefix.isEmpty || entry.name.toLowerCase.startsWith(prefix.toLowerCase))
@@ -436,7 +436,7 @@ final private[manager] class StateManagerWorkflowCapability(
   protected def filenameSuggestions(workflow: OpenFileWorkflowState): IO[List[FileWorkflowSuggestion]] =
     for
       directoryPath <- workflowDirectoryPath(workflow)
-      entries       <- fileManager.getFileBrowser.listDirectory(directoryPath)
+      entries       <- fileManager.listDirectory(directoryPath)
     yield entries
       .filterNot(_.isDirectory)
       .filter(entry =>
