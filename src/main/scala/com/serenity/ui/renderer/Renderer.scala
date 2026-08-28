@@ -318,7 +318,7 @@ object Renderer:
     surface.clearViewport(state.persisted.theme.background)
     forgetPreservedContent(surface, output)
     renderStartPage(page, surface, viewportSize, state.persisted.theme, uiFont, cellMetrics, uiMetrics)
-    surface.applyPostProcessing(state.persisted.config.postProcessingEffect)
+    surface.effects.foreach(_.applyPostProcessing(state.persisted.config.postProcessingEffect))
     surface.flush()
 
   private[serenity] def withSceneIfNeeded[A](
@@ -1043,7 +1043,7 @@ object Renderer:
         commitFramePlan(framePlan, output)
         Some(editorRenderPlan)
 
-    surface.applyPostProcessing(state.persisted.config.postProcessingEffect)
+    surface.effects.foreach(_.applyPostProcessing(state.persisted.config.postProcessingEffect))
     surface.flush()
     editorRenderPlan
 
@@ -1342,7 +1342,7 @@ object Renderer:
     val baseViewport =
       LayoutEngine.updateBufferViewportDimensions(buffer, contentRect, state.persisted.config.wordWrapEnabled)
     val fontRenderContext =
-      context.surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+      context.surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     val visibleColumns =
       if bufferFont == context.codeFont then baseViewport.visibleColumns
       else visibleColumnsFor(bufferFont, fontRenderContext, panelWidthPx, baseViewport.visibleColumns)
@@ -1365,7 +1365,7 @@ object Renderer:
     val renderBuffer = buffer.copy(
       viewport = renderedViewport
     )
-    context.surface.setFont(bufferFont)
+    context.surface.text.setFont(bufferFont)
     TextLayoutSnapshot.fromBuffer(
       renderBuffer,
       panelWidthPx,
@@ -1535,7 +1535,7 @@ object Renderer:
     val surface    = context.surface
     val headerRect = contract.paneHeaderRect(pane.id).getOrElse(paneLayout.headerRect)
     if headerRect.height > 0 then
-      context.surface.setFont(context.uiFont)
+      context.surface.text.setFont(context.uiFont)
       val isActive  = state.persisted.layout.activeEditorPaneId.contains(pane.id)
       val titleRect = contract.paneTitleRect(pane.id).getOrElse(paneLayout.titleRect)
 
@@ -1577,9 +1577,9 @@ object Renderer:
         context.cellMetrics.ascent,
         TextHorizontalAlignment.Center,
         TextVerticalAlignment.Top,
-        surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+        surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
       )
-      surface.drawRunPx(
+      surface.text.drawRunPx(
         titlePlacement.xPx,
         titlePlacement.yPx,
         titlePlacement.widthPx,
@@ -1613,7 +1613,7 @@ object Renderer:
     annotations: BufferRenderAnnotations,
     dirtyRows: Option[Set[Int]]
   ): Unit =
-    context.surface.setFont(context.fontForBuffer(buffer))
+    context.surface.text.setFont(context.fontForBuffer(buffer))
     if isInlineMarkdownLens(buffer, state) then
       val frame = markdownLensFrame.getOrElse(markdownLensFrameFor(buffer, snapshot))
       renderInlineMarkdownPreview(buffer, rect, state, context, frame)
@@ -1837,7 +1837,7 @@ object Renderer:
       ),
       reuseLastRenderWhileEditing = buffer.markdownPreviewEditGeneration != buffer.markdownPreviewCommittedGeneration
     )
-    context.surface.drawImage(image, rect.x, rect.y, rect.width, rect.height)
+    context.surface.pixels.drawImage(image, rect.x, rect.y, rect.width, rect.height)
 
   private def scaledImagePixelDimension(logicalPx: Int, scale: Double): Int =
     math.ceil(logicalPx.max(1).toDouble * scale.max(1.0)).toInt.max(1)
@@ -1867,7 +1867,7 @@ object Renderer:
               measuredRunWidthWithin(rect, context, startXPx, endXPx).foreach { widthPx =>
                 surface.setForegroundColor(theme.highlighted.foreground)
                 surface.setBackgroundColor(theme.highlighted.background)
-                surface.drawRunPx(
+                surface.text.drawRunPx(
                   startXPx,
                   lineTopPx,
                   widthPx,
@@ -1966,7 +1966,7 @@ object Renderer:
         measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach { widthPx =>
           surface.setForegroundColor(foreground)
           surface.setBackgroundColor(background)
-          surface.drawRunPx(
+          surface.text.drawRunPx(
             startXPx,
             lineTopPx,
             widthPx,
@@ -2280,7 +2280,7 @@ object Renderer:
                   usesMeasuredLayout = false
                 ).cursorTopPx(visualLine)
                 caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx).foreach { (caretXPx, widthPx) =>
-                  context.surface.fillPixelRect(
+                  context.surface.pixels.fillPixelRect(
                     caretXPx,
                     screenYPx,
                     widthPx,
@@ -2317,7 +2317,7 @@ object Renderer:
     val textMetrics  = CellMetrics.fromFont(context.textFont)
     val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
     val yPx          = centeredBlockTopPx(rect, context.cellMetrics, 1, lineHeightPx)
-    context.surface.setFont(context.textFont)
+    context.surface.text.setFont(context.textFont)
     context.surface.setForegroundColor(theme.foreground)
     context.surface.setBackgroundColor(theme.background)
     renderAlignedTextLine(
@@ -2343,7 +2343,7 @@ object Renderer:
     val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
     val startYPx     = centeredBlockTopPx(rect, context.cellMetrics, lines.length, lineHeightPx)
 
-    context.surface.setFont(context.textFont)
+    context.surface.text.setFont(context.textFont)
     context.surface.setForegroundColor(theme.muted)
     context.surface.setBackgroundColor(theme.background)
 
@@ -2372,7 +2372,7 @@ object Renderer:
     val lineHeightPx     = math.max(cellMetrics.lineHeight, textMetrics.lineHeight)
     val viewportHeightPx = surface.viewportHeight * cellMetrics.lineHeight
     if yPx + lineHeightPx > 0 && yPx < viewportHeightPx then
-      surface.fontRenderContext match
+      surface.text.fontRenderContext match
         case Some(frc) =>
           val placement = TextAlignment.placeLine(
             text = line,
@@ -2389,7 +2389,7 @@ object Renderer:
             vertical = TextVerticalAlignment.Top,
             fontRenderContext = frc
           )
-          surface.drawRunPx(
+          surface.text.drawRunPx(
             placement.xPx,
             placement.yPx,
             placement.widthPx,
@@ -2411,7 +2411,7 @@ object Renderer:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics
   ): Unit =
-    surface.setFont(uiFont)
+    surface.text.setFont(uiFont)
     val lines         = page.renderLines
     val lineHeightPx  = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
     val totalHeightPx = lines.size * lineHeightPx
@@ -2435,7 +2435,7 @@ object Renderer:
             surface.setBackgroundColor(theme.highlighted.background)
             surface.enableStyle(theme.focusStyle)
             optionIndex.flatMap(actionBounds.get).foreach { bounds =>
-              surface.fillPixelRect(
+              surface.pixels.fillPixelRect(
                 xPx = bounds.xPx,
                 yPx = bounds.yPx,
                 widthPx = bounds.widthPx,
@@ -2463,7 +2463,7 @@ object Renderer:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics
   ): Unit =
-    surface.fontRenderContext match
+    surface.text.fontRenderContext match
       case Some(frc) =>
         val lineHeightPx = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
         val placement = TextAlignment.placeLine(
@@ -2481,7 +2481,7 @@ object Renderer:
           vertical = TextVerticalAlignment.Top,
           fontRenderContext = frc
         )
-        surface.drawRunPx(
+        surface.text.drawRunPx(
           xPx = placement.xPx,
           yPx = placement.yPx,
           bgWidthPx = placement.widthPx,
@@ -2531,7 +2531,7 @@ object Renderer:
               textRowMetrics(rect, context, snapshot).cursorTopPx(visualLine)
             caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx) match
               case Some((caretXPx, widthPx)) =>
-                context.surface.fillPixelRect(
+                context.surface.pixels.fillPixelRect(
                   caretXPx,
                   screenYPx,
                   widthPx,
@@ -2586,7 +2586,7 @@ object Renderer:
     else config.cursorColors.inactiveOr(activeColor)
 
   private def renderFloatingPanels(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
-    context.surface.setFont(context.uiFont)
+    context.surface.text.setFont(context.uiFont)
     val overlays = OverlayViewModel.fromState(state, scene)
 
     overlays.aboveCursor.foreach { overlay =>
@@ -2625,27 +2625,45 @@ object Renderer:
     context: RenderContext
   ): Unit =
     val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(overlay.verticalOffsetRows, context.cellMetrics)
-    context.surface.withPixelTranslation(0.0, offsetPx) {
-      context.surface.withRoundRectClip(
+    context.surface.pixels.withPixelTranslation(0.0, offsetPx) {
+      withOptionalRoundRectClip(
+        context.surface,
         overlay.rect.x,
         overlay.rect.y,
         overlay.rect.width,
         overlay.rect.height,
         config.uiCornerRadiusPx
       ) {
-        context.surface.blurRegion(
-          overlay.rect.x,
-          overlay.rect.y,
-          overlay.rect.width,
-          overlay.rect.height,
-          blurRadius
+        context.surface.effects.foreach(
+          _.blurRegion(
+            overlay.rect.x,
+            overlay.rect.y,
+            overlay.rect.width,
+            overlay.rect.height,
+            blurRadius
+          )
         )
       }
     }
 
+  /** Falls back to running `render` unclipped when the surface doesn't support rounded-rect clipping -- content still
+    * draws, just without the corner mask.
+    */
+  private def withOptionalRoundRectClip(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int
+  )(render: => Unit): Unit =
+    surface.roundedRects match
+      case Some(rounded) => rounded.withRoundRectClip(x, y, width, height, arcPx)(render)
+      case None          => render
+
   private def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
     scene.modalBackdrop.foreach { backdrop =>
-      context.surface.setAlpha(0.4f)
+      context.surface.effects.foreach(_.setAlpha(0.4f))
       context.surface.setBackgroundColor(state.persisted.theme.margin)
       context.surface.fillRect(
         backdrop.frameRect.x,
@@ -2654,7 +2672,7 @@ object Renderer:
         backdrop.frameRect.height,
         ' '
       )
-      context.surface.setAlpha(1.0f)
+      context.surface.effects.foreach(_.setAlpha(1.0f))
     }
     OverlayViewModel.fromState(state, scene).modal.foreach { overlay =>
       TextOverlayRenderer.render(
@@ -2673,7 +2691,7 @@ object Renderer:
     context: RenderContext,
     scene: UiSceneSnapshot
   ): Unit =
-    context.surface.setFont(context.uiFont)
+    context.surface.text.setFont(context.uiFont)
     val surfaceNodes = scene.workspace.collect {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) => surfaceId -> node
     }.toMap
@@ -2692,12 +2710,14 @@ object Renderer:
               .getOrElse(com.serenity.animation.AnimationState.empty)
           val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
           if blurRadius > 0f then
-            context.surface.blurRegion(
-              rect.x,
-              rect.y,
-              rect.width,
-              rect.height,
-              blurRadius
+            context.surface.effects.foreach(
+              _.blurRegion(
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                blurRadius
+              )
             )
           content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
@@ -2729,12 +2749,14 @@ object Renderer:
               .getOrElse(com.serenity.animation.AnimationState.empty)
           val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
           if blurRadius > 0f then
-            context.surface.blurRegion(
-              rect.x,
-              rect.y,
-              rect.width,
-              rect.height,
-              blurRadius
+            context.surface.effects.foreach(
+              _.blurRegion(
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                blurRadius
+              )
             )
           content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
@@ -2795,7 +2817,7 @@ object Renderer:
       reuseLastRenderWhileEditing =
         buffer.exists(b => b.markdownPreviewEditGeneration != b.markdownPreviewCommittedGeneration)
     )
-    context.surface.drawImage(image, imageRect.x, imageRect.y, contentWidthCells, contentHeightCells)
+    context.surface.pixels.drawImage(image, imageRect.x, imageRect.y, contentWidthCells, contentHeightCells)
 
   private def markdownPreviewImageRect(
     rect: LayoutRect,
@@ -2839,7 +2861,7 @@ object Renderer:
 
   private def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     if state.persisted.config.showLineNumbers then
-      context.surface.setFont(context.uiFont)
+      context.surface.text.setFont(context.uiFont)
       renderPlan.layoutContract.lineNumberRect foreach { lineRect =>
         val surface = context.surface
 
@@ -2875,8 +2897,8 @@ object Renderer:
                       else continuationIndicatorText(lineRect.width)
                     val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
                     if snapshot.usesMeasuredLayout && measuredLineNumberFont.nonEmpty then
-                      measuredLineNumberFont.foreach(buf => surface.setFont(context.fontForBuffer(buf)))
-                      surface.drawRunPx(
+                      measuredLineNumberFont.foreach(buf => surface.text.setFont(context.fontForBuffer(buf)))
+                      surface.text.drawRunPx(
                         context.cellMetrics.toPixelX(lineRect.x).toFloat,
                         lineTopPx,
                         lineRect.width * context.cellMetrics.charWidth.toFloat,
@@ -2884,7 +2906,7 @@ object Renderer:
                         snapshot.ascentPx,
                         lineNumberText
                       )
-                      surface.setFont(context.uiFont)
+                      surface.text.setFont(context.uiFont)
                     else surface.putString(lineRect.x, rowY, lineNumberText)
                     if rendersLineNumber then
                       for
@@ -2935,7 +2957,7 @@ object Renderer:
 
   private def renderGutter(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     contract.gutterRect.foreach { gutterRect =>
-      context.surface.setFont(context.uiFont)
+      context.surface.text.setFont(context.uiFont)
       val surface = context.surface
 
       surface.setBackgroundColor(state.persisted.theme.panel.background)
@@ -2973,10 +2995,10 @@ object Renderer:
       ascentPx = ascentPx,
       horizontal = TextHorizontalAlignment.Left,
       vertical = TextVerticalAlignment.Middle,
-      fontRenderContext = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+      fontRenderContext = surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     )
 
-    surface.drawRunPx(
+    surface.text.drawRunPx(
       xPx = placement.xPx,
       yPx = placement.yPx,
       bgWidthPx = placement.widthPx,

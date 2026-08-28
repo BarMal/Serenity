@@ -697,7 +697,7 @@ object LayoutEngine:
     val borderCells = SurfaceFrameLayout.borderCellsFor(surface.content)
     val preferredWidth = surface.content match
       case SurfaceContent.ContextualToolbar(toolbarState) =>
-        ContextualToolbar.compactContentWidth(
+        ContextualToolbarLayout.compactContentWidth(
           toolbarState,
           state,
           contentRect.width - (borderCells * 2)
@@ -1017,7 +1017,7 @@ object LayoutEngine:
       case SurfaceContent.ContextualToolbar(toolbarState) =>
         val borderCells  = SurfaceFrameLayout.borderCellsFor(content)
         val contentWidth = (maxWidth - (borderCells * 2)).max(1)
-        val toolbarRows  = ContextualToolbar.rowCount(toolbarState, state, contentWidth)
+        val toolbarRows  = ContextualToolbarLayout.rowCount(toolbarState, state, contentWidth)
         SurfaceFrameLayout.frameHeightForItemRows(
           toolbarRows,
           hasHeader = false,

@@ -1,10 +1,7 @@
 package com.serenity.ui.renderer
 
-import java.awt.font.FontRenderContext
-import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
+import java.awt.Color
 
-import com.serenity.config.PostProcessingEffect
 import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.theme.TextStyle
 
@@ -29,8 +26,6 @@ trait RenderSurface:
     * unknown pixels and everything must be drawn.
     */
   def persistentContentKey: Option[SurfaceContentIdentity] = None
-  def setFont(font: Font): Unit                            = ()
-  def fontRenderContext: Option[FontRenderContext]         = None
   def setForegroundColor(color: Color): Unit
   def setBackgroundColor(color: Color): Unit
   def getBackgroundColor: Color
@@ -51,73 +46,26 @@ trait RenderSurface:
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit
   def enableStyle(style: TextStyle): Unit
   def disableStyle(style: TextStyle): Unit
-  def setAlpha(alpha: Float): Unit                                                  = ()
-  def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit      = ()
-  def applyPostProcessing(effect: PostProcessingEffect): Unit                       = ()
-  def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long): Unit = applyPostProcessing(effect)
-  def devicePixelScaleX: Double                                                     = 1.0
-  def devicePixelScaleY: Double                                                     = 1.0
+  def devicePixelScaleX: Double = 1.0
+  def devicePixelScaleY: Double = 1.0
 
-  def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color,
-    strokeWidth: Float = 1.5f
-  ): Unit = ()
+  /** Character- and pixel-run text drawing. Required: every real surface must draw text. */
+  def text: TextDrawing
 
-  /** Draw a soft shadow behind a rounded UI surface. */
-  def drawRoundRectShadow(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color
-  ): Unit = ()
-
-  /** Restrict drawing performed by `render` to a rounded rectangle in cell coordinates. */
-  def withRoundRectClip(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int
-  )(render: => Unit): Unit
-
-  /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
-  def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit = render
-
-  def fillPixelRect(
-    xPx: Int,
-    yPx: Int,
-    widthPx: Int,
-    heightPx: Int,
-    color: Color
-  ): Unit = ()
-
-  /** Draw a proportional text run at exact pixel coordinates.
-    *
-    * Fills background [xPx, xPx + bgWidthPx) × [yPx, yPx + lineHeightPx) with the current background color, then draws
-    * s at (xPx, yPx + ascent) with the current foreground color. Callers set fg/bg colors before calling. Set
-    * clipGlyphToRun when a styled overlay must not paint outside its measured run bounds.
+  /** Pixel-addressed rect fills, image blits, and pixel-space translation. Required: every real surface must draw
+    * carets and images.
     */
-  def drawRunPx(
-    xPx: Float,
-    yPx: Int,
-    bgWidthPx: Float,
-    lineHeightPx: Int,
-    ascentPx: Int,
-    s: String,
-    clipGlyphToRun: Boolean = false
-  ): Unit = ()
+  def pixels: PixelDrawing
 
-  /** Render cell-addressed content for one row at its logical-pixel top edge. */
-  def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit = render
+  /** Alpha compositing, region blur, and post-processing, when this surface supports them. `None` means callers must
+    * skip the effect rather than assume it happened.
+    */
+  def effects: Option[Effects] = None
 
-  def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit = ()
+  /** Rounded-rectangle borders, shadows, and clipping, when this surface supports them. `None` means callers must fall
+    * back to drawing without that chrome rather than assume it happened.
+    */
+  def roundedRects: Option[RoundedRectDrawing] = None
 
   def hideCursor(): Unit
   def viewportWidth: Int

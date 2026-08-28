@@ -20,15 +20,17 @@ object PinnedPanelRenderer:
     val rect = panel.rect
 
     if config.uiShadowsEnabled then
-      surface.drawRoundRectShadow(
-        rect.x,
-        rect.y,
-        rect.width,
-        rect.height,
-        config.uiCornerRadiusPx,
-        new java.awt.Color(0, 0, 0)
+      surface.roundedRects.foreach(
+        _.drawRoundRectShadow(
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height,
+          config.uiCornerRadiusPx,
+          new java.awt.Color(0, 0, 0)
+        )
       )
-    surface.setAlpha(SurfaceMaterials.panelAlpha(config, theme))
+    surface.effects.foreach(_.setAlpha(SurfaceMaterials.panelAlpha(config, theme)))
     surface.setForegroundColor(theme.panel.foreground)
     surface.setBackgroundColor(theme.panel.background)
 
@@ -39,7 +41,7 @@ object PinnedPanelRenderer:
     drawTitle(surface, panel, theme, animationState)
     drawLines(surface, panel, theme, animationState)
 
-    surface.setAlpha(1.0f)
+    surface.effects.foreach(_.setAlpha(1.0f))
     surface.setForegroundColor(theme.foreground)
     surface.setBackgroundColor(theme.background)
 
@@ -54,14 +56,16 @@ object PinnedPanelRenderer:
     if rect.width >= 2 && rect.height >= 2 then
       val borderColor =
         animationForeground(animationState, BorderAnimationColumn, BorderAnimationRow).getOrElse(theme.border)
-      surface.strokeRoundRect(
-        rect.x,
-        rect.y,
-        rect.width,
-        rect.height,
-        config.uiCornerRadiusPx,
-        borderColor,
-        config.uiOutlineThicknessPx.toFloat
+      surface.roundedRects.foreach(
+        _.strokeRoundRect(
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height,
+          config.uiCornerRadiusPx,
+          borderColor,
+          config.uiOutlineThicknessPx.toFloat
+        )
       )
 
   private def drawTitle(

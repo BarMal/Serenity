@@ -30,8 +30,16 @@ class Java2DRenderSurface(
     deviceScaleX: Double = 1.0,
     deviceScaleY: Double = 1.0,
     contentPersists: Boolean = false
-) extends RenderSurface:
-  private val g: Graphics2D = image.createGraphics()
+) extends RenderSurface
+    with TextDrawing
+    with PixelDrawing
+    with Effects
+    with RoundedRectDrawing:
+  def text: TextDrawing                                 = this
+  def pixels: PixelDrawing                              = this
+  override def effects: Option[Effects]                 = Some(this)
+  override def roundedRects: Option[RoundedRectDrawing] = Some(this)
+  private val g: Graphics2D                             = image.createGraphics()
   private val effectiveLogicalWidthPx =
     if logicalWidthPx > 0 then logicalWidthPx else image.getWidth
   private val effectiveLogicalHeightPx =
@@ -254,9 +262,6 @@ class Java2DRenderSurface(
         if outA == 0 then 0
         else ((srcC * srcA + dstC * dstA * (255 - srcA) / 255) / outA).min(255).max(0)
       (outA << 24) | (blendChannel(srcR, dstR) << 16) | (blendChannel(srcG, dstG) << 8) | blendChannel(srcB, dstB)
-
-  override def applyPostProcessing(effect: PostProcessingEffect): Unit =
-    applyPostProcessing(effect, System.nanoTime() / 50000000L)
 
   override def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long): Unit =
     effect match

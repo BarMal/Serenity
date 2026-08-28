@@ -1031,14 +1031,15 @@ object SurfaceContentResolver:
     val contentRect = SurfaceFrameLayout(rect, borderCells).contentRect
     val items       = ContextualToolbar.itemsFor(state)
     val normalized  = toolbarState.normalized(items)
-    val rowGroups   = ContextualToolbar.rowGroups(items, contentRect.width.max(1), normalized.displayMode)
+    val rowGroups   = ContextualToolbarLayout.rowGroups(items, contentRect.width.max(1), normalized.displayMode)
     val focused     = normalized.focusedIndex
     val iconFont    = FontLoader.toolbarIconFontFamily
     val topRows = rowGroups
       .foldLeft((0, List.empty[OverlayRow])) {
         case ((offset, acc), rowItems) =>
-          val cellWidths = ContextualToolbar.itemCellWidths(rowItems, contentRect.width.max(1), normalized.displayMode)
-          val leadingPadding = ContextualToolbar.rowLeadingPadding(
+          val cellWidths =
+            ContextualToolbarLayout.itemCellWidths(rowItems, contentRect.width.max(1), normalized.displayMode)
+          val leadingPadding = ContextualToolbarLayout.rowLeadingPadding(
             rowItems,
             contentRect.width.max(1),
             normalized.displayMode
@@ -1085,7 +1086,7 @@ object SurfaceContentResolver:
       }
       ._2
 
-    val dropdownDetailRows = ContextualToolbar.detailRowGroups(normalized, items, contentRect.width.max(1))
+    val dropdownDetailRows = ContextualToolbarLayout.detailRowGroups(normalized, items, contentRect.width.max(1))
     val detailRows =
       if dropdownDetailRows.nonEmpty then
         val selectedIndex = normalized.detailState.collect {

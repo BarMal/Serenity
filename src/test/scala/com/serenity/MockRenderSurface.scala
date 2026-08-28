@@ -6,7 +6,14 @@ import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.layout.{CellMetrics, PixelRect, TextLayoutSnapshot}
-import com.serenity.ui.renderer.{RenderSurface, SurfaceContentIdentity}
+import com.serenity.ui.renderer.{
+  Effects,
+  PixelDrawing,
+  RenderSurface,
+  RoundedRectDrawing,
+  SurfaceContentIdentity,
+  TextDrawing
+}
 import com.serenity.ui.theme.TextStyle
 
 /** In-memory RenderSurface for renderer tests. Records putString calls so assertions can inspect what was drawn at each
@@ -14,8 +21,21 @@ import com.serenity.ui.theme.TextStyle
   *
   * `persistentContent` models a surface whose pixels survive between frames, which is what lets a test drive the
   * renderer's dirty-region path. It is off by default so that a plain mock behaves like a fresh image every frame.
+  *
+  * Implements every capability trait so renderer tests exercise the full drawing surface rather than silently no-op'ing
+  * on operations a real surface supports -- see #1012.
   */
-class MockRenderSurface(val width: Int, val height: Int, persistentContent: Boolean = false) extends RenderSurface:
+class MockRenderSurface(val width: Int, val height: Int, persistentContent: Boolean = false)
+    extends RenderSurface
+    with TextDrawing
+    with PixelDrawing
+    with Effects
+    with RoundedRectDrawing:
+
+  def text: TextDrawing                                 = this
+  def pixels: PixelDrawing                              = this
+  override def effects: Option[Effects]                 = Some(this)
+  override def roundedRects: Option[RoundedRectDrawing] = Some(this)
   final case class PixelTranslationCall(xPx: Double, yPx: Double)
   private val pixelTranslationCallsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
   private val currentPixelTranslation     = AtomicReference(PixelTranslationCall(0.0, 0.0))
@@ -222,6 +242,17 @@ class MockRenderSurface(val width: Int, val height: Int, persistentContent: Bool
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     drawImageCallsBuffer += DrawImageCall(image, x, y, width, height)
 
+  final case class PostProcessingCall(effect: com.serenity.config.PostProcessingEffect, animationPhase: Long)
+  private val postProcessingCallsBuffer = scala.collection.mutable.ListBuffer.empty[PostProcessingCall]
+
+  override def applyPostProcessing(
+    effect: com.serenity.config.PostProcessingEffect,
+    animationPhase: Long
+  ): Unit =
+    postProcessingCallsBuffer += PostProcessingCall(effect, animationPhase)
+
+  def postProcessingCalls: List[PostProcessingCall] = postProcessingCallsBuffer.toList
+
   def currentAlphaValue: Float                           = currentAlpha.get()
   def blurRegionCalls: List[BlurRegionCall]              = blurRegionCallsBuffer.toList
   def blurRegionTranslations: List[PixelTranslationCall] = blurRegionTranslationsBuffer.toList
@@ -269,6 +300,7 @@ class MockRenderSurface(val width: Int, val height: Int, persistentContent: Bool
     roundRectShadowCallsBuffer.clear()
     blurRegionCallsBuffer.clear()
     blurRegionTranslationsBuffer.clear()
+    postProcessingCallsBuffer.clear()
     fillPixelRectCallsBuffer.clear()
     drawImageCallsBuffer.clear()
     alphaCallsBuffer.clear()

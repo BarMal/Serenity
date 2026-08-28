@@ -228,22 +228,8 @@ object UiSurface:
     position: PanelPosition,
     size: Int
   ): UiSurface =
-    val surfaceContent = content match
-      case PanelContent.DirectoryTree(tree, selectedPath) =>
-        SurfaceContent.DirectoryTree(tree, selectedPath)
-      case PanelContent.Terminal(buffer, cursor) =>
-        SurfaceContent.Terminal(buffer, cursor)
-      case PanelContent.Outline(symbols, activeLocation) =>
-        SurfaceContent.Outline(symbols, activeLocation)
-      case PanelContent.Comments(symbols, activeLocation) =>
-        SurfaceContent.Comments(symbols, activeLocation)
-      case PanelContent.Diagnostics(issues) =>
-        SurfaceContent.Diagnostics(issues)
-      case PanelContent.MarkdownPreview(bufferId, title) =>
-        SurfaceContent.MarkdownPreview(bufferId, title)
-
     UiSurface(
       id = id,
-      content = surfaceContent,
+      content = content.asSurfaceContent,
       presentation = SurfacePresentation.Pinned(position, size)
     )
