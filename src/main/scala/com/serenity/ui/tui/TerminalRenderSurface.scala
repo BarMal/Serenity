@@ -23,10 +23,17 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
     extends RenderSurface
     with TextDrawing
     with PixelDrawing
-    with RoundedRectDrawing:
+    with RoundedRectDrawing
+    with HardwareCursor:
 
   private val screenBuffer     = new TerminalScreenBuffer(width, height)
   private val previousFrameRef = new AtomicReference[Option[TerminalFrame]](None)
+
+  // The caret this surface's own hardware cursor is currently asked to show -- `None` is hidden (DECTCEM hide).
+  // Diffed against `lastEmittedCaretRef` on flush the same way screen content is diffed, so a flush with no caret
+  // movement and no content damage writes nothing at all (#1170's zero-idle-wakeup contract).
+  private val caretRef            = new AtomicReference[Option[TerminalRenderSurface.Caret]](None)
+  private val lastEmittedCaretRef = new AtomicReference[Option[Option[TerminalRenderSurface.Caret]]](None)
 
   def text: TextDrawing                                 = this
   def pixels: PixelDrawing                              = this
@@ -68,19 +75,45 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   def enableStyle(style: TextStyle): Unit  = screenBuffer.enableStyle(style)
   def disableStyle(style: TextStyle): Unit = screenBuffer.disableStyle(style)
 
-  // The hardware cursor is hidden once, for the whole session, by TerminalShell's acquire -- what the renderer calls
-  // "the cursor" is a glyph it paints as ordinary cell content (same as every other RenderSurface), so there is
-  // nothing further for this call to do.
+  // Start-page frames have no caret at all; #1170's per-flush caret diffing already leaves the hardware cursor
+  // hidden by default (`caretRef` starts `None`), so there is nothing further for this call to do.
   def hideCursor(): Unit = ()
 
   def viewportWidth: Int  = width
   def viewportHeight: Int = height
 
+  // -- HardwareCursor (#1170: the caret delegated to the terminal's own cursor) -----------------------------------
+
+  override def hardwareCursor: Option[HardwareCursor] = Some(this)
+
+  def present(cellX: Int, cellY: Int, style: HardwareCursorStyle): Unit =
+    caretRef.set(Some(TerminalRenderSurface.Caret(cellX, cellY, style)))
+
+  def hide(): Unit = caretRef.set(None)
+
   def flush(): Unit =
     val next = screenBuffer.snapshot
     val ansi = TerminalAnsiDiff.emit(previousFrameRef.getAndSet(Some(next)), next)
     writer.write(ansi)
+    writer.write(caretEscape())
     writer.flush()
+
+  /** The caret escape for this flush, or `""` when the caret's presented/hidden state hasn't changed since the last
+    * flush that actually emitted one -- an unmoved, already-visible caret costs nothing on a content-unchanged flush,
+    * same as the content diff itself.
+    */
+  private def caretEscape(): String =
+    val current  = caretRef.get()
+    val previous = lastEmittedCaretRef.getAndSet(Some(current))
+    if previous.contains(current) then ""
+    else
+      current match
+        case Some(caret) =>
+          s"${TerminalRenderSurface.Esc}[${caret.cellY + 1};${caret.cellX + 1}H" +
+            s"${TerminalRenderSurface.Esc}[${caret.style.decscusrParam} q" +
+            s"${TerminalRenderSurface.Esc}[?25h"
+        case None =>
+          s"${TerminalRenderSurface.Esc}[?25l"
 
   // -- TextDrawing --------------------------------------------------------------------------------------------------
 
@@ -145,3 +178,7 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
 object TerminalRenderSurface:
   final private case class CellRect(x0: Int, y0: Int, x1: Int, y1: Int):
     def contains(col: Int, row: Int): Boolean = col >= x0 && col < x1 && row >= y0 && row < y1
+
+  final private case class Caret(cellX: Int, cellY: Int, style: HardwareCursorStyle)
+
+  private val Esc: Char = 0x1b.toChar

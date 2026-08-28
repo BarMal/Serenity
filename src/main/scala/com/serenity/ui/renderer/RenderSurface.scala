@@ -67,6 +67,11 @@ trait RenderSurface:
     */
   def roundedRects: Option[RoundedRectDrawing] = None
 
+  /** Delegating the caret to this surface's own native cursor, when it has one. `None` means every caret this surface
+    * draws is app-painted content -- the default, and what every GUI canvas keeps doing.
+    */
+  def hardwareCursor: Option[HardwareCursor] = None
+
   def hideCursor(): Unit
   def viewportWidth: Int
   def viewportHeight: Int
