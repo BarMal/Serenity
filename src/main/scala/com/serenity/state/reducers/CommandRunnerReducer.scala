@@ -23,6 +23,24 @@ object CommandRunnerReducer:
     if currentRunner(state).exists(_.isActive) then reduceActive(event, state, registry)
     else ReducerResult.noEffects(state)
 
+  /** Opens the command runner (activating it first if it is closed) directly into its settings view. Moved out of the
+    * `OpenSettings` command interpreter, which previously reached into `uiSurfaces` directly — this reducer is where
+    * that state is otherwise owned.
+    */
+  def openSettings(state: AppState, registry: CommandRegistry)(using com.serenity.rope.Balance): AppState =
+    val opened = AppEventReducer.reduce(com.serenity.keystroke.events.ToggleCommandRunner, state, registry).state
+    opened.commandRunnerSurface match
+      case Some(surface) =>
+        surface.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            opened.copy(runtime = opened.runtime.copy(uiSurfaces = opened.runtime.uiSurfaces.map {
+              case current if current.id == surface.id =>
+                current.copy(content = SurfaceContent.CommandPalette(runner.openSettings))
+              case current => current
+            }))
+          case _ => opened
+      case None => opened
+
   private def reduceActive(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
     event match
       case RunnerDismiss =>
@@ -68,7 +86,10 @@ object CommandRunnerReducer:
               currentRunner(state).flatMap(_.selectedItem) match
                 case Some(_: CommandSurfaceItem.InputItem) =>
                   ReducerResult.noEffects(state)
-                case Some(CommandSurfaceItem.CommandItem(command)) if command.intent == CommandIntent.OpenSettings =>
+                case Some(CommandSurfaceItem.CommandItem(command))
+                    if command.intent == CommandIntent.Settings(
+                      SettingsIntent.General(GeneralSettingsIntent.OpenSettings)
+                    ) =>
                   ReducerResult.noEffects(replaceRunner(state, _.openSettings))
                 case Some(CommandSurfaceItem.CommandItem(command)) =>
                   ReducerResult(
@@ -557,7 +578,7 @@ object CommandRunnerReducer:
                   Command.typed(
                     item.id,
                     item.label,
-                    CommandIntent.ResolveGlobalHotkeyConflict(action, binding),
+                    CommandIntent.Keybindings(KeybindingsIntent.ResolveGlobalHotkeyConflict(action, binding)),
                     item.category
                   )
                 )
@@ -587,7 +608,7 @@ object CommandRunnerReducer:
                   Command.typed(
                     item.id,
                     item.label,
-                    CommandIntent.ResolveFocusedKeymapConflict(itemId, binding),
+                    CommandIntent.Keybindings(KeybindingsIntent.ResolveFocusedKeymapConflict(itemId, binding)),
                     item.category
                   )
                 )

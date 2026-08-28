@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.command.{CommandRegistry, CommandRunner, FileIntent}
 import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -834,7 +834,10 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
   it should "enforce configured minimum gaps between stacked below-cursor overlays" in {
     val commands =
-      List(com.serenity.command.Command.typed("open", "Open file", com.serenity.command.CommandIntent.OpenFile))
+      List(
+        com.serenity.command.Command
+          .typed("open", "Open file", com.serenity.command.CommandIntent.File(FileIntent.OpenFile))
+      )
     val registry = CommandRegistry(commands)
     val cursor   = CursorPosition(1, 2)
     val buffer = Buffer

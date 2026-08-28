@@ -4,7 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
-import com.serenity.command.CommandIntent
+import com.serenity.command.{CommandIntent, FileIntent, SessionIntent}
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.{ComponentResult, StartupPageComponent}
 import com.serenity.state.models.*
@@ -40,7 +40,8 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     val result = StartupPageComponent().processEvent(InsertChar('2'), stateFor(page))
 
     result should matchPattern {
-      case ComponentResult.ExecuteCommand(command) if command.intent == CommandIntent.StartupOpenFile =>
+      case ComponentResult.ExecuteCommand(command)
+          if command.intent == CommandIntent.Session(SessionIntent.StartupOpenFile) =>
     }
   }
 
@@ -55,7 +56,7 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
 
     result match
       case ComponentResult.ExecuteCommand(command) =>
-        command.intent shouldBe CommandIntent.OpenRecentFile(recent)
+        command.intent shouldBe CommandIntent.File(FileIntent.OpenRecentFile(recent))
       case other =>
         fail(s"Expected an executable recent-file command, got $other")
   }

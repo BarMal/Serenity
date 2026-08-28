@@ -301,24 +301,29 @@ object ContextualToolbar:
     val currentColor     = normalizedColor(style.color)
     val currentColorText = currentColor.getOrElse("#202020")
     val familyOptions = normalizedFontFamilies(currentFamily).map(family =>
-      CommandOption(family, CommandIntent.SetRichTextFontFamily(family))
+      CommandOption(family, CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily(family)))
     )
     val familyIndex = familyOptions.indexWhere(_.label.equalsIgnoreCase(currentFamily)) match
       case -1    => 0
       case index => index
     val colorOptions = normalizedColorOptions(currentColor).map {
       case (label, color) =>
-        CommandOption(label, CommandIntent.SetRichTextColor(color))
+        CommandOption(label, CommandIntent.RichText(RichTextIntent.SetRichTextColor(color)))
     }
     val colorIndex =
-      colorOptions.indexWhere(_.intent == CommandIntent.SetRichTextColor(currentColorText)) match
+      colorOptions.indexWhere(
+        _.intent == CommandIntent.RichText(RichTextIntent.SetRichTextColor(currentColorText))
+      ) match
         case -1    => 0
         case index => index
     val paragraphRole = paragraph.map(_.role).getOrElse(ParagraphRole.Body)
     val paragraphRoleOptions =
-      CommandOption("Body", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body)) ::
+      CommandOption("Body", CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))) ::
         (1 to 6).toList.map(level =>
-          CommandOption(s"H$level", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)))
+          CommandOption(
+            s"H$level",
+            CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)))
+          )
         )
     val paragraphRoleIndex = paragraphRole match
       case ParagraphRole.Body           => 0
@@ -386,7 +391,7 @@ object ContextualToolbar:
           parse = text =>
             text.toFloatOption
               .filter(size => size >= 1.0f && size <= 144.0f)
-              .map(CommandIntent.SetRichTextFontSize(_)),
+              .map(commandIntentArg => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(commandIntentArg))),
           category = CommandCategory.Edit
         )
       ),

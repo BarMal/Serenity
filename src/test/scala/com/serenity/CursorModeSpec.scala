@@ -106,7 +106,9 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val item = settingsItems(runner).collectFirst {
       case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
     }.get
-    item.options.find(_.label == "Blink").get.intent shouldBe CommandIntent.SetCursorMode(CursorMode.Blink)
+    item.options.find(_.label == "Blink").get.intent shouldBe CommandIntent.Settings(
+      SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Blink))
+    )
   }
 
   it should "map Breathe option to SetCursorMode(Breathe) intent" in {
@@ -114,7 +116,9 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val item = settingsItems(runner).collectFirst {
       case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
     }.get
-    item.options.find(_.label == "Breathe").get.intent shouldBe CommandIntent.SetCursorMode(CursorMode.Breathe)
+    item.options.find(_.label == "Breathe").get.intent shouldBe CommandIntent.Settings(
+      SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Breathe))
+    )
   }
 
   // ── StateManager ─────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ package com.serenity.ui.layout
 
 import java.awt.Color
 
-import com.serenity.command.{CommandCategory, CommandSurfaceItem}
+import com.serenity.command.{CommandCategory, CommandSurfaceItem, FontIntent, SettingsIntent}
 import com.serenity.config.ToolbarDisplayMode
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
@@ -706,10 +706,13 @@ object SurfaceContentResolver:
 
   private def fontFamilyForCommand(command: com.serenity.command.Command): Option[String] =
     command.intent match
-      case com.serenity.command.CommandIntent.SetCodeFontFamily(family) => Some(family)
-      case com.serenity.command.CommandIntent.SetTextFontFamily(family) => Some(family)
-      case com.serenity.command.CommandIntent.SetUiFontFamily(family)   => Some(family)
-      case _                                                            => None
+      case com.serenity.command.CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetCodeFontFamily(family))) =>
+        Some(family)
+      case com.serenity.command.CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontFamily(family))) =>
+        Some(family)
+      case com.serenity.command.CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiFontFamily(family))) =>
+        Some(family)
+      case _ => None
 
   private def optionRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
     val selectedHint = option.selectedHint.getOrElse("")

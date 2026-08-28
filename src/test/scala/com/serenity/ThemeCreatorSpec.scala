@@ -3,7 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandIntent, CommandRegistry}
+import com.serenity.command.{CommandIntent, CommandRegistry, ThemeIntent}
 import com.serenity.keystroke.events.{Enter, InsertChar}
 import com.serenity.rope.Balance
 import com.serenity.state.components.ThemeCreatorComponent
@@ -167,11 +167,15 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
   }
 
   "CommandRegistry" should "expose a theme creator command" in {
-    CommandRegistry.default.findCommand("theme-creator").map(_.intent) shouldBe Some(CommandIntent.OpenThemeCreator)
+    CommandRegistry.default.findCommand("theme-creator").map(_.intent) shouldBe Some(
+      CommandIntent.Theme(ThemeIntent.OpenThemeCreator)
+    )
   }
 
   it should "expose a theme export command" in {
-    CommandRegistry.default.findCommand("export-theme").map(_.intent) shouldBe Some(CommandIntent.ExportCurrentTheme)
+    CommandRegistry.default.findCommand("export-theme").map(_.intent) shouldBe Some(
+      CommandIntent.Theme(ThemeIntent.ExportCurrentTheme)
+    )
   }
 
 end ThemeCreatorSpec

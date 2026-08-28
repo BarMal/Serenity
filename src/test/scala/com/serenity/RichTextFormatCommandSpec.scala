@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandIntent, CommandRegistry}
+import com.serenity.command.{CommandIntent, CommandRegistry, RichTextIntent}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.rope.Balance
@@ -52,21 +52,23 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
   "Rich text format commands" should "be registered in the command runner" in {
     val registry = CommandRegistry.withToggleUI
 
-    registry.findCommand("bold").map(_.intent) shouldBe Some(CommandIntent.ToggleRichTextMark(InlineMark.Bold))
+    registry.findCommand("bold").map(_.intent) shouldBe Some(
+      CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Bold))
+    )
     registry.findCommand("italic").map(_.intent) shouldBe Some(
-      CommandIntent.ToggleRichTextMark(InlineMark.Italic)
+      CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Italic))
     )
     registry.findCommand("underline").map(_.intent) shouldBe Some(
-      CommandIntent.ToggleRichTextMark(InlineMark.Underline)
+      CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Underline))
     )
     registry.findCommand("heading-1").map(_.intent) shouldBe Some(
-      CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(1))
+      CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(1)))
     )
     registry.findCommand("paragraph-body").map(_.intent) shouldBe Some(
-      CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body)
+      CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))
     )
     registry.findCommand("align-center").map(_.intent) shouldBe Some(
-      CommandIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Center)
+      CommandIntent.RichText(RichTextIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Center))
     )
   }
 
@@ -211,7 +213,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         com.serenity.command.Command.typed(
           "rich-text-font-family",
           "Set selection font family.",
-          CommandIntent.SetRichTextFontFamily("Serif")
+          CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily("Serif"))
         )
       )
       .unsafeRunSync()
@@ -220,7 +222,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         com.serenity.command.Command.typed(
           "rich-text-font-size",
           "Set selection font size.",
-          CommandIntent.SetRichTextFontSize(18.0f)
+          CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(18.0f))
         )
       )
       .unsafeRunSync()
@@ -229,7 +231,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         com.serenity.command.Command.typed(
           "rich-text-color",
           "Set selection colour.",
-          CommandIntent.SetRichTextColor("#336699")
+          CommandIntent.RichText(RichTextIntent.SetRichTextColor("#336699"))
         )
       )
       .unsafeRunSync()

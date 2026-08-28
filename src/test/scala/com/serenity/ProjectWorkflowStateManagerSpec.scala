@@ -42,7 +42,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     command.label shouldBe "Run Debug Task"
     command.description shouldBe "Launch the detected project through its debug task."
-    command.intent shouldBe CommandIntent.RunProjectTask(ProjectTaskKind.Debug)
+    command.intent shouldBe CommandIntent.Project(ProjectIntent.RunProjectTask(ProjectTaskKind.Debug))
   }
 
   it should "pin a terminal status when no project task can be detected" in {
@@ -65,7 +65,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
           Command.typed(
             "project-build",
             "Build the detected project.",
-            CommandIntent.RunProjectTask(ProjectTaskKind.Build),
+            CommandIntent.Project(ProjectIntent.RunProjectTask(ProjectTaskKind.Build)),
             CommandCategory.Project
           )
         )

@@ -16,8 +16,14 @@ object CommandRunnerSettingsItems:
       id = "cursor-mode",
       label = "Cursor Style",
       options = List(
-        CommandOption("Blink", CommandIntent.SetCursorMode(CursorMode.Blink)),
-        CommandOption("Breathe", CommandIntent.SetCursorMode(CursorMode.Breathe))
+        CommandOption(
+          "Blink",
+          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Blink)))
+        ),
+        CommandOption(
+          "Breathe",
+          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Breathe)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("cursor-mode", 0),
       category = CommandCategory.Settings,
@@ -31,14 +37,36 @@ object CommandRunnerSettingsItems:
       id = "editor-text-transition",
       label = "Text Reveal",
       options = List(
-        CommandOption("Fade", CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.Fade)),
-        CommandOption("Typed", CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.TypedText)),
-        CommandOption("Directional", CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.DirectionalSweep)),
+        CommandOption(
+          "Fade",
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetEditorInsertionTransitionKind(TransitionKind.Fade))
+          )
+        ),
+        CommandOption(
+          "Typed",
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetEditorInsertionTransitionKind(TransitionKind.TypedText))
+          )
+        ),
+        CommandOption(
+          "Directional",
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetEditorInsertionTransitionKind(TransitionKind.DirectionalSweep))
+          )
+        ),
         CommandOption(
           "Tandem",
-          CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem)
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem))
+          )
         ),
-        CommandOption("Off", CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.Disabled))
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetEditorInsertionTransitionKind(TransitionKind.Disabled))
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("editor-text-transition", 0),
       category = CommandCategory.Settings,
@@ -52,7 +80,7 @@ object CommandRunnerSettingsItems:
       id = "panel-open-transition",
       label = "Panel Open Reveal",
       selectedIndex = optionSelections.getOrElse("panel-open-transition", 3),
-      setIntent = CommandIntent.SetPanelOpenTransitionKind.apply,
+      setIntent = kind => CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetPanelOpenTransitionKind(kind))),
       hint = "Pinned panel opening reveal style"
     )
 
@@ -63,7 +91,7 @@ object CommandRunnerSettingsItems:
       id = "panel-close-transition",
       label = "Panel Close Reveal",
       selectedIndex = optionSelections.getOrElse("panel-close-transition", 0),
-      setIntent = CommandIntent.SetPanelCloseTransitionKind.apply,
+      setIntent = kind => CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetPanelCloseTransitionKind(kind))),
       hint = "Pinned panel closing reveal style"
     )
 
@@ -74,7 +102,8 @@ object CommandRunnerSettingsItems:
       id = "command-runner-transition",
       label = "Command Runner Reveal",
       selectedIndex = optionSelections.getOrElse("command-runner-transition", 0),
-      setIntent = CommandIntent.SetCommandRunnerTransitionKind.apply,
+      setIntent =
+        kind => CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionKind(kind))),
       hint = "Palette opening reveal style"
     )
 
@@ -107,10 +136,22 @@ object CommandRunnerSettingsItems:
       id = "command-runner-fade",
       label = "Command Runner Fade",
       options = List(
-        CommandOption("Off", CommandIntent.SetCommandRunnerAnimation(None)),
-        CommandOption("Subtle", CommandIntent.SetCommandRunnerAnimation(AnimationConfig.subtle)),
-        CommandOption("Smooth", CommandIntent.SetCommandRunnerAnimation(AnimationConfig.smooth)),
-        CommandOption("Expressive", CommandIntent.SetCommandRunnerAnimation(AnimationConfig.quick))
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerAnimation(None)))
+        ),
+        CommandOption(
+          "Subtle",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerAnimation(AnimationConfig.subtle)))
+        ),
+        CommandOption(
+          "Smooth",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerAnimation(AnimationConfig.smooth)))
+        ),
+        CommandOption(
+          "Expressive",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerAnimation(AnimationConfig.quick)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("command-runner-fade", 2),
       category = CommandCategory.Settings,
@@ -124,10 +165,19 @@ object CommandRunnerSettingsItems:
       id = "ui-animation",
       label = "UI Animation",
       options = List(
-        CommandOption("Off", CommandIntent.SetUiAnimation(None)),
-        CommandOption("Subtle", CommandIntent.SetUiAnimation(AnimationConfig.subtle)),
-        CommandOption("Smooth", CommandIntent.SetUiAnimation(AnimationConfig.smooth)),
-        CommandOption("Expressive", CommandIntent.SetUiAnimation(AnimationConfig.quick))
+        CommandOption("Off", CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiAnimation(None)))),
+        CommandOption(
+          "Subtle",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiAnimation(AnimationConfig.subtle)))
+        ),
+        CommandOption(
+          "Smooth",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiAnimation(AnimationConfig.smooth)))
+        ),
+        CommandOption(
+          "Expressive",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiAnimation(AnimationConfig.quick)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("ui-animation", 2),
       category = CommandCategory.Settings,
@@ -141,11 +191,36 @@ object CommandRunnerSettingsItems:
       id = "render-fps",
       label = "Render FPS",
       options = List(
-        CommandOption("30 FPS", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps30)),
-        CommandOption("60 FPS", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps60)),
-        CommandOption("90 FPS", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps90)),
-        CommandOption("120 FPS", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps120)),
-        CommandOption("Uncapped", CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Uncapped))
+        CommandOption(
+          "30 FPS",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderFpsTarget(RenderFpsTarget.Fps30))
+          )
+        ),
+        CommandOption(
+          "60 FPS",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderFpsTarget(RenderFpsTarget.Fps60))
+          )
+        ),
+        CommandOption(
+          "90 FPS",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderFpsTarget(RenderFpsTarget.Fps90))
+          )
+        ),
+        CommandOption(
+          "120 FPS",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderFpsTarget(RenderFpsTarget.Fps120))
+          )
+        ),
+        CommandOption(
+          "Uncapped",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderFpsTarget(RenderFpsTarget.Uncapped))
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("render-fps", 1),
       category = CommandCategory.Settings,
@@ -159,8 +234,18 @@ object CommandRunnerSettingsItems:
       id = "render-damage-granularity",
       label = "Repaint Granularity",
       options = List(
-        CommandOption("Rows", CommandIntent.SetRenderDamageGranularity(RenderDamageGranularity.Rows)),
-        CommandOption("Cells", CommandIntent.SetRenderDamageGranularity(RenderDamageGranularity.Cells))
+        CommandOption(
+          "Rows",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderDamageGranularity(RenderDamageGranularity.Rows))
+          )
+        ),
+        CommandOption(
+          "Cells",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderDamageGranularity(RenderDamageGranularity.Cells))
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("render-damage-granularity", 0),
       category = CommandCategory.Settings,
@@ -172,9 +257,18 @@ object CommandRunnerSettingsItems:
       id = "cursor-info-bar",
       label = "Cursor Info Bar",
       options = List(
-        CommandOption("Off", CommandIntent.SetCursorInfoBarMode(CursorInfoBarMode.Off)),
-        CommandOption("Position", CommandIntent.SetCursorInfoBarMode(CursorInfoBarMode.Position)),
-        CommandOption("Detailed", CommandIntent.SetCursorInfoBarMode(CursorInfoBarMode.Detailed))
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarMode(CursorInfoBarMode.Off)))
+        ),
+        CommandOption(
+          "Position",
+          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarMode(CursorInfoBarMode.Position)))
+        ),
+        CommandOption(
+          "Detailed",
+          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarMode(CursorInfoBarMode.Detailed)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("cursor-info-bar", 0),
       category = CommandCategory.Settings,
@@ -188,8 +282,18 @@ object CommandRunnerSettingsItems:
       id = "cursor-info-bar-placement",
       label = "Cursor Info Placement",
       options = List(
-        CommandOption("Floating", CommandIntent.SetCursorInfoBarPlacement(CursorInfoBarPlacement.Floating)),
-        CommandOption("Pinned Bottom", CommandIntent.SetCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom))
+        CommandOption(
+          "Floating",
+          CommandIntent.Settings(
+            SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarPlacement(CursorInfoBarPlacement.Floating))
+          )
+        ),
+        CommandOption(
+          "Pinned Bottom",
+          CommandIntent.Settings(
+            SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom))
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("cursor-info-bar-placement", 0),
       category = CommandCategory.Settings,
@@ -203,10 +307,30 @@ object CommandRunnerSettingsItems:
       id = "background-style",
       label = "Background Style",
       options = List(
-        CommandOption("Solid", CommandIntent.SetBackgroundStyle(BackgroundStyle.Solid)),
-        CommandOption("Transparent", CommandIntent.SetBackgroundStyle(BackgroundStyle.Transparent)),
-        CommandOption("Frosted", CommandIntent.SetBackgroundStyle(BackgroundStyle.Frosted)),
-        CommandOption("Glass", CommandIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
+        CommandOption(
+          "Solid",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.Solid))
+          )
+        ),
+        CommandOption(
+          "Transparent",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.Transparent))
+          )
+        ),
+        CommandOption(
+          "Frosted",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.Frosted))
+          )
+        ),
+        CommandOption(
+          "Glass",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("background-style", 2),
       category = CommandCategory.Settings,
@@ -220,9 +344,24 @@ object CommandRunnerSettingsItems:
       id = "interface-density",
       label = "Interface Density",
       options = List(
-        CommandOption("Compact", CommandIntent.SetInterfaceDensity(InterfaceDensity.Compact)),
-        CommandOption("Comfortable", CommandIntent.SetInterfaceDensity(InterfaceDensity.Comfortable)),
-        CommandOption("Spacious", CommandIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
+        CommandOption(
+          "Compact",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetInterfaceDensity(InterfaceDensity.Compact))
+          )
+        ),
+        CommandOption(
+          "Comfortable",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetInterfaceDensity(InterfaceDensity.Comfortable))
+          )
+        ),
+        CommandOption(
+          "Spacious",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("interface-density", 1),
       category = CommandCategory.Settings,
@@ -236,10 +375,30 @@ object CommandRunnerSettingsItems:
       id = "window-chrome",
       label = "Window Chrome",
       options = List(
-        CommandOption("Auto (Linux Rounded)", CommandIntent.SetWindowChromeMode(WindowChromeMode.Auto)),
-        CommandOption("Native", CommandIntent.SetWindowChromeMode(WindowChromeMode.Native)),
-        CommandOption("Native Themed (Windows)", CommandIntent.SetWindowChromeMode(WindowChromeMode.NativeThemed)),
-        CommandOption("Custom", CommandIntent.SetWindowChromeMode(WindowChromeMode.Custom))
+        CommandOption(
+          "Auto (Linux Rounded)",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto))
+          )
+        ),
+        CommandOption(
+          "Native",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.Native))
+          )
+        ),
+        CommandOption(
+          "Native Themed (Windows)",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.NativeThemed))
+          )
+        ),
+        CommandOption(
+          "Custom",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.Custom))
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("window-chrome", 0),
       category = CommandCategory.Settings,
@@ -253,8 +412,14 @@ object CommandRunnerSettingsItems:
       id = "window-sitter-enabled",
       label = "Window Sitter",
       options = List(
-        CommandOption("On", CommandIntent.SetWindowSitterEnabled(true)),
-        CommandOption("Off", CommandIntent.SetWindowSitterEnabled(false))
+        CommandOption(
+          "On",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterEnabled(true)))
+        ),
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterEnabled(false)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("window-sitter-enabled", 0),
       category = CommandCategory.Settings,
@@ -268,9 +433,24 @@ object CommandRunnerSettingsItems:
       id = "window-sitter-action",
       label = "Sitter Action",
       options = List(
-        CommandOption("Cycle", CommandIntent.SetWindowSitterAction(WindowSitterAction.Cycle)),
-        CommandOption("Pulse", CommandIntent.SetWindowSitterAction(WindowSitterAction.Pulse)),
-        CommandOption("Blink", CommandIntent.SetWindowSitterAction(WindowSitterAction.Blink))
+        CommandOption(
+          "Cycle",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterAction(WindowSitterAction.Cycle))
+          )
+        ),
+        CommandOption(
+          "Pulse",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterAction(WindowSitterAction.Pulse))
+          )
+        ),
+        CommandOption(
+          "Blink",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterAction(WindowSitterAction.Blink))
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("window-sitter-action", 1),
       category = CommandCategory.Settings,
@@ -284,11 +464,30 @@ object CommandRunnerSettingsItems:
       id = "material-preset",
       label = "Material Preset",
       options = List(
-        CommandOption("Solid", CommandIntent.SetMaterialPreset(MaterialPreset.Solid)),
-        CommandOption("Clear", CommandIntent.SetMaterialPreset(MaterialPreset.Clear)),
-        CommandOption("Frosted", CommandIntent.SetMaterialPreset(MaterialPreset.Frosted)),
-        CommandOption("Crystal", CommandIntent.SetMaterialPreset(MaterialPreset.Crystal)),
-        CommandOption("Custom", CommandIntent.SetMaterialPreset(MaterialPreset.Custom))
+        CommandOption(
+          "Solid",
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetMaterialPreset(MaterialPreset.Solid)))
+        ),
+        CommandOption(
+          "Clear",
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetMaterialPreset(MaterialPreset.Clear)))
+        ),
+        CommandOption(
+          "Frosted",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetMaterialPreset(MaterialPreset.Frosted))
+          )
+        ),
+        CommandOption(
+          "Crystal",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetMaterialPreset(MaterialPreset.Crystal))
+          )
+        ),
+        CommandOption(
+          "Custom",
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetMaterialPreset(MaterialPreset.Custom)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("material-preset", 2),
       category = CommandCategory.Settings,
@@ -302,10 +501,30 @@ object CommandRunnerSettingsItems:
       id = "post-processing",
       label = "Post-processing",
       options = List(
-        CommandOption("Off", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Off)),
-        CommandOption("Scanlines", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Scanlines)),
-        CommandOption("Glow", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Glow)),
-        CommandOption("Scanlines + Glow", CommandIntent.SetPostProcessingEffect(PostProcessingEffect.ScanlinesAndGlow))
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.Off))
+          )
+        ),
+        CommandOption(
+          "Scanlines",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.Scanlines))
+          )
+        ),
+        CommandOption(
+          "Glow",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.Glow))
+          )
+        ),
+        CommandOption(
+          "Scanlines + Glow",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.ScanlinesAndGlow))
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("post-processing", 0),
       category = CommandCategory.Settings,
@@ -317,8 +536,14 @@ object CommandRunnerSettingsItems:
       id = "ui-shadows",
       label = "Menu & Panel Shadows",
       options = List(
-        CommandOption("Off", CommandIntent.SetUiShadowsEnabled(false)),
-        CommandOption("On", CommandIntent.SetUiShadowsEnabled(true))
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(false)))
+        ),
+        CommandOption(
+          "On",
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(true)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("ui-shadows", 1),
       category = CommandCategory.Settings,
@@ -330,11 +555,26 @@ object CommandRunnerSettingsItems:
       id = "motion-preset",
       label = "Motion Preset",
       options = List(
-        CommandOption("Reduced", CommandIntent.SetMotionPreset(MotionPreset.Reduced)),
-        CommandOption("Subtle", CommandIntent.SetMotionPreset(MotionPreset.Subtle)),
-        CommandOption("Smooth", CommandIntent.SetMotionPreset(MotionPreset.Smooth)),
-        CommandOption("Expressive", CommandIntent.SetMotionPreset(MotionPreset.Expressive)),
-        CommandOption("Custom", CommandIntent.SetMotionPreset(MotionPreset.Custom))
+        CommandOption(
+          "Reduced",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Reduced)))
+        ),
+        CommandOption(
+          "Subtle",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle)))
+        ),
+        CommandOption(
+          "Smooth",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Smooth)))
+        ),
+        CommandOption(
+          "Expressive",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Expressive)))
+        ),
+        CommandOption(
+          "Custom",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Custom)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("motion-preset", 2),
       category = CommandCategory.Settings,
@@ -348,9 +588,22 @@ object CommandRunnerSettingsItems:
       id = "motion-accessibility",
       label = "Motion Accessibility",
       options = List(
-        CommandOption("Standard", CommandIntent.SetMotionAccessibility(MotionAccessibility.Standard)),
-        CommandOption("Reduced", CommandIntent.SetMotionAccessibility(MotionAccessibility.Reduced)),
-        CommandOption("Off", CommandIntent.SetMotionAccessibility(MotionAccessibility.Off))
+        CommandOption(
+          "Standard",
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Standard))
+          )
+        ),
+        CommandOption(
+          "Reduced",
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Reduced))
+          )
+        ),
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("motion-accessibility", 0),
       category = CommandCategory.Settings,
@@ -362,9 +615,12 @@ object CommandRunnerSettingsItems:
       id = "markdown-view",
       label = "Markdown View",
       options = List(
-        CommandOption("Source", CommandIntent.SetMarkdownViewMode(MarkdownViewMode.Source)),
-        CommandOption("Split Preview", CommandIntent.SetMarkdownViewMode(MarkdownViewMode.SplitPreview)),
-        CommandOption("Inline Lens", CommandIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens))
+        CommandOption("Source", CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.Source))),
+        CommandOption(
+          "Split Preview",
+          CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.SplitPreview))
+        ),
+        CommandOption("Inline Lens", CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens)))
       ),
       selectedIndex = optionSelections.getOrElse("markdown-view", 0),
       category = CommandCategory.Settings,
@@ -378,9 +634,12 @@ object CommandRunnerSettingsItems:
       id = "default-document-mode",
       label = "Default Document",
       options = List(
-        CommandOption("Plain Text", CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText)),
-        CommandOption("Markdown", CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
-        CommandOption("Rich Text", CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText))
+        CommandOption(
+          "Plain Text",
+          CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText))
+        ),
+        CommandOption("Markdown", CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown))),
+        CommandOption("Rich Text", CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText)))
       ),
       selectedIndex = optionSelections.getOrElse("default-document-mode", 0),
       category = CommandCategory.Settings,
@@ -392,8 +651,14 @@ object CommandRunnerSettingsItems:
       id = "spellcheck-enabled",
       label = "Spell Check",
       options = List(
-        CommandOption("Off", CommandIntent.SetSpellCheckEnabled(false)),
-        CommandOption("On", CommandIntent.SetSpellCheckEnabled(true))
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(false)))
+        ),
+        CommandOption(
+          "On",
+          CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true)))
+        )
       ),
       selectedIndex = optionSelections.getOrElse("spellcheck-enabled", 0),
       category = CommandCategory.Settings,
@@ -406,10 +671,18 @@ object CommandRunnerSettingsItems:
   ): CommandSurfaceItem.OptionItem =
     val builtInOptions = UiPreset.builtIns.map { preset =>
       val preview = UiPreset.Preview.fromPreset(preset)
-      CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
+      CommandOption(
+        preview.name,
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(preview.name)),
+        hint = Some(preview.hint)
+      )
     }
     val customOptions = normalizedUiPresetPreviews(previews).map { preview =>
-      CommandOption(preview.name, CommandIntent.ApplyUiPreset(preview.name), hint = Some(preview.hint))
+      CommandOption(
+        preview.name,
+        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(preview.name)),
+        hint = Some(preview.hint)
+      )
     }
     val options = builtInOptions ++ customOptions
     val selectedIndex =
@@ -434,7 +707,7 @@ object CommandRunnerSettingsItems:
         Command.typed(
           "theme-chooser",
           "Choose a theme with live preview.",
-          CommandIntent.OpenThemeChooser,
+          CommandIntent.Theme(ThemeIntent.OpenThemeChooser),
           CommandCategory.Settings,
           label = "Theme Chooser"
         )
@@ -443,7 +716,7 @@ object CommandRunnerSettingsItems:
         Command.typed(
           "theme-creator",
           "Create and save a custom theme with live colour previews.",
-          CommandIntent.OpenThemeCreator,
+          CommandIntent.Theme(ThemeIntent.OpenThemeCreator),
           CommandCategory.Settings,
           label = "Theme Creator"
         )
@@ -452,7 +725,7 @@ object CommandRunnerSettingsItems:
         Command.typed(
           "toggle-theme",
           "Switch between the light and dark themes.",
-          CommandIntent.ToggleTheme,
+          CommandIntent.Theme(ThemeIntent.ToggleTheme),
           CommandCategory.Settings,
           label = "Toggle Theme"
         )
@@ -461,7 +734,7 @@ object CommandRunnerSettingsItems:
         Command.typed(
           "reload-theme",
           "Reload the current theme configuration.",
-          CommandIntent.ReloadTheme,
+          CommandIntent.Theme(ThemeIntent.ReloadTheme),
           CommandCategory.Settings,
           label = "Reload Theme"
         )
@@ -495,7 +768,7 @@ object CommandRunnerSettingsItems:
             Command.typed(
               s"move-${commandId(panel.label)}-panel-earlier",
               s"Move the ${panel.label} panel earlier within its pinned edge.",
-              CommandIntent.MovePanelEarlier(panel.kind),
+              CommandIntent.View(ViewIntent.MovePanelEarlier(panel.kind)),
               CommandCategory.Settings,
               label = s"Move ${panel.label} Earlier"
             )
@@ -504,7 +777,7 @@ object CommandRunnerSettingsItems:
             Command.typed(
               s"move-${commandId(panel.label)}-panel-later",
               s"Move the ${panel.label} panel later within its pinned edge.",
-              CommandIntent.MovePanelLater(panel.kind),
+              CommandIntent.View(ViewIntent.MovePanelLater(panel.kind)),
               CommandCategory.Settings,
               label = s"Move ${panel.label} Later"
             )
@@ -522,7 +795,7 @@ object CommandRunnerSettingsItems:
             Command.typed(
               "collapse-expanded-panel",
               "Collapse the expanded panel back to its pinned position.",
-              CommandIntent.CollapseExpandedPanel,
+              CommandIntent.View(ViewIntent.CollapseExpandedPanel),
               CommandCategory.View,
               label = "Collapse Expanded Panel"
             )
@@ -572,7 +845,7 @@ object CommandRunnerSettingsItems:
         Command.typed(
           s"focus-$id-panel",
           s"Focus the $id pinned panel.",
-          CommandIntent.FocusPanel(position),
+          CommandIntent.View(ViewIntent.FocusPanel(position)),
           CommandCategory.View,
           label = s"Focus $label Panel"
         )
@@ -581,7 +854,7 @@ object CommandRunnerSettingsItems:
         Command.typed(
           s"expand-$id-panel",
           s"Expand the $id pinned panel.",
-          CommandIntent.ExpandPanel(position),
+          CommandIntent.View(ViewIntent.ExpandPanel(position)),
           CommandCategory.View,
           label = s"Expand $label Panel"
         )
@@ -590,7 +863,7 @@ object CommandRunnerSettingsItems:
         Command.typed(
           s"unpin-$id-panel",
           s"Unpin the $id panel.",
-          CommandIntent.UnpinPanel(position),
+          CommandIntent.View(ViewIntent.UnpinPanel(position)),
           CommandCategory.View,
           label = s"Unpin $label Panel"
         )
@@ -611,11 +884,11 @@ object CommandRunnerSettingsItems:
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =
     val options = List(
-      CommandOption("Off", CommandIntent.SetPanelPin(kind, None), hint = Some(s"Hide $label")),
-      CommandOption("Top", CommandIntent.SetPanelPin(kind, Some(PanelPosition.Top))),
-      CommandOption("Right", CommandIntent.SetPanelPin(kind, Some(PanelPosition.Right))),
-      CommandOption("Bottom", CommandIntent.SetPanelPin(kind, Some(PanelPosition.Bottom))),
-      CommandOption("Left", CommandIntent.SetPanelPin(kind, Some(PanelPosition.Left)))
+      CommandOption("Off", CommandIntent.View(ViewIntent.SetPanelPin(kind, None)), hint = Some(s"Hide $label")),
+      CommandOption("Top", CommandIntent.View(ViewIntent.SetPanelPin(kind, Some(PanelPosition.Top)))),
+      CommandOption("Right", CommandIntent.View(ViewIntent.SetPanelPin(kind, Some(PanelPosition.Right)))),
+      CommandOption("Bottom", CommandIntent.View(ViewIntent.SetPanelPin(kind, Some(PanelPosition.Bottom)))),
+      CommandOption("Left", CommandIntent.View(ViewIntent.SetPanelPin(kind, Some(PanelPosition.Left))))
     )
     CommandSurfaceItem.OptionItem(
       id = id,
@@ -631,8 +904,8 @@ object CommandRunnerSettingsItems:
       id = "line-numbers",
       label = "Line Numbers",
       selectedIndex = optionSelections.getOrElse("line-numbers", 0),
-      enabledIntent = CommandIntent.SetLineNumbers(true),
-      disabledIntent = CommandIntent.SetLineNumbers(false),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(false))),
       hint = "Show or hide line numbers"
     )
 
@@ -641,8 +914,8 @@ object CommandRunnerSettingsItems:
       id = "gutter",
       label = "Gutter",
       selectedIndex = optionSelections.getOrElse("gutter", 0),
-      enabledIntent = CommandIntent.SetGutter(true),
-      disabledIntent = CommandIntent.SetGutter(false),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(false))),
       hint = "Show or hide the status gutter"
     )
 
@@ -651,8 +924,8 @@ object CommandRunnerSettingsItems:
       id = "line-wrap",
       label = "Line Wrap",
       selectedIndex = optionSelections.getOrElse("line-wrap", optionSelections.getOrElse("word-wrap", 0)),
-      enabledIntent = CommandIntent.SetWordWrap(true),
-      disabledIntent = CommandIntent.SetWordWrap(false),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(false))),
       hint = "Wrap long logical lines to the editor width"
     )
 
@@ -663,8 +936,8 @@ object CommandRunnerSettingsItems:
       id = "focused-text-body",
       label = "Text Body Focus",
       selectedIndex = optionSelections.getOrElse("focused-text-body", 1),
-      enabledIntent = CommandIntent.SetFocusedTextBody(true),
-      disabledIntent = CommandIntent.SetFocusedTextBody(false),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(false))),
       hint = "Dim text outside the active body"
     )
 
@@ -675,8 +948,10 @@ object CommandRunnerSettingsItems:
       id = "contextual-toolbar",
       label = "Contextual Toolbar",
       selectedIndex = optionSelections.getOrElse("contextual-toolbar", 0),
-      enabledIntent = CommandIntent.SetContextualToolbarEnabled(true),
-      disabledIntent = CommandIntent.SetContextualToolbarEnabled(false),
+      enabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(true))),
+      disabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(false))),
       hint = "Show the floating rich-text toolbar near the cursor"
     )
 
@@ -687,9 +962,26 @@ object CommandRunnerSettingsItems:
       id = "contextual-toolbar-display",
       label = "Contextual Toolbar Style",
       options = List(
-        CommandOption("Icon Only", CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)),
-        CommandOption("Text Only", CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)),
-        CommandOption("Icon + Text", CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText))
+        CommandOption(
+          "Icon Only",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+          )
+        ),
+        CommandOption(
+          "Text Only",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
+          )
+        ),
+        CommandOption(
+          "Icon + Text",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(
+              PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
+            )
+          )
+        )
       ),
       selectedIndex = optionSelections.getOrElse("contextual-toolbar-display", 2),
       category = CommandCategory.Settings,
@@ -701,84 +993,84 @@ object CommandRunnerSettingsItems:
       Command.typed(
         "comment-lens",
         "Show or hide the rendered comment at the cursor.",
-        CommandIntent.ToggleCommentLens,
+        CommandIntent.Comments(CommentsIntent.ToggleCommentLens),
         CommandCategory.View,
         label = "Comment Lens"
       ),
       Command.typed(
         "add-document-comment",
         "Add a document comment at the current cursor or selection.",
-        CommandIntent.AddDocumentComment("Comment"),
+        CommandIntent.Comments(CommentsIntent.AddDocumentComment("Comment")),
         CommandCategory.Edit,
         label = "Add Document Comment"
       ),
       Command.typed(
         "delete-document-comment",
         "Delete the document comment at the current cursor.",
-        CommandIntent.DeleteDocumentComment,
+        CommandIntent.Comments(CommentsIntent.DeleteDocumentComment),
         CommandCategory.Edit,
         label = "Delete Document Comment"
       ),
       Command.typed(
         "toggle-bookmark",
         "Add or remove a bookmark at the current cursor.",
-        CommandIntent.ToggleBookmark,
+        CommandIntent.Navigation(NavigationIntent.ToggleBookmark),
         CommandCategory.View,
         label = "Toggle Bookmark"
       ),
       Command.typed(
         "next-bookmark",
         "Go to the next bookmark.",
-        CommandIntent.NextBookmark,
+        CommandIntent.Navigation(NavigationIntent.NextBookmark),
         CommandCategory.View,
         label = "Next Bookmark"
       ),
       Command.typed(
         "previous-bookmark",
         "Go to the previous bookmark.",
-        CommandIntent.PreviousBookmark,
+        CommandIntent.Navigation(NavigationIntent.PreviousBookmark),
         CommandCategory.View,
         label = "Previous Bookmark"
       ),
       Command.typed(
         "next-document-comment",
         "Go to the next document comment.",
-        CommandIntent.NextDocumentComment,
+        CommandIntent.Comments(CommentsIntent.NextDocumentComment),
         CommandCategory.View,
         label = "Next Document Comment"
       ),
       Command.typed(
         "previous-document-comment",
         "Go to the previous document comment.",
-        CommandIntent.PreviousDocumentComment,
+        CommandIntent.Comments(CommentsIntent.PreviousDocumentComment),
         CommandCategory.View,
         label = "Previous Document Comment"
       ),
       Command.typed(
         "next-document-symbol",
         "Go to the next document symbol.",
-        CommandIntent.NextDocumentSymbol,
+        CommandIntent.Navigation(NavigationIntent.NextDocumentSymbol),
         CommandCategory.View,
         label = "Next Document Symbol"
       ),
       Command.typed(
         "previous-document-symbol",
         "Go to the previous document symbol.",
-        CommandIntent.PreviousDocumentSymbol,
+        CommandIntent.Navigation(NavigationIntent.PreviousDocumentSymbol),
         CommandCategory.View,
         label = "Previous Document Symbol"
       ),
       Command.typed(
         "navigate-back",
         "Go back to the previous document navigation point.",
-        CommandIntent.NavigateBack,
+        CommandIntent.Navigation(NavigationIntent.NavigateBack),
         CommandCategory.View,
         label = "Navigate Back"
       ),
       Command.typed(
         "navigate-forward",
         "Go forward to the next document navigation point.",
-        CommandIntent.NavigateForward,
+        CommandIntent.Navigation(NavigationIntent.NavigateForward),
         CommandCategory.View,
         label = "Navigate Forward"
       )
@@ -828,7 +1120,8 @@ object CommandRunnerSettingsItems:
       label = "Code Font",
       selectedIndex = optionSelections.getOrElse("code-font", 0),
       families = FontLoader.availableMonospaceFamilies,
-      intent = CommandIntent.SetCodeFontFamily(_),
+      intent =
+        commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetCodeFontFamily(commandIntentArg))),
       hint = "Used in code buffers"
     )
 
@@ -838,7 +1131,8 @@ object CommandRunnerSettingsItems:
       label = "Text Font",
       selectedIndex = optionSelections.getOrElse("text-font", 0),
       families = FontLoader.availableTextFamilies,
-      intent = CommandIntent.SetTextFontFamily(_),
+      intent =
+        commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontFamily(commandIntentArg))),
       hint = "Used in prose buffers"
     )
 
@@ -848,15 +1142,28 @@ object CommandRunnerSettingsItems:
       label = "UI Font",
       selectedIndex = optionSelections.getOrElse("ui-font", 0),
       families = FontLoader.availableUiFamilies,
-      intent = CommandIntent.SetUiFontFamily(_),
+      intent =
+        commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiFontFamily(commandIntentArg))),
       hint = "Used in the app interface"
     )
 
   private[command] def textScaleModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     val options = List(
-      CommandOption("Auto", CommandIntent.SetTextScaleMode(TextScaleMode.Auto), Some("Use display transform")),
-      CommandOption("Manual", CommandIntent.SetTextScaleMode(TextScaleMode.Manual), Some("Use configured multiplier")),
-      CommandOption("Off", CommandIntent.SetTextScaleMode(TextScaleMode.Off), Some("Use unscaled point sizes"))
+      CommandOption(
+        "Auto",
+        CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextScaleMode(TextScaleMode.Auto))),
+        Some("Use display transform")
+      ),
+      CommandOption(
+        "Manual",
+        CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextScaleMode(TextScaleMode.Manual))),
+        Some("Use configured multiplier")
+      ),
+      CommandOption(
+        "Off",
+        CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextScaleMode(TextScaleMode.Off))),
+        Some("Use unscaled point sizes")
+      )
     )
     CommandSurfaceItem.OptionItem(
       id = "text-scale-mode",
@@ -901,8 +1208,8 @@ object CommandRunnerSettingsItems:
       id = "code-ligatures",
       label = "Code Ligatures",
       options = List(
-        CommandOption("On", CommandIntent.SetCodeLigatures(true)),
-        CommandOption("Off", CommandIntent.SetCodeLigatures(false))
+        CommandOption("On", CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetCodeLigatures(true)))),
+        CommandOption("Off", CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetCodeLigatures(false))))
       ),
       selectedIndex = optionSelections.getOrElse("code-ligatures", 0),
       category = CommandCategory.Settings,
@@ -914,8 +1221,8 @@ object CommandRunnerSettingsItems:
       id = "text-ligatures",
       label = "Prose Ligatures",
       options = List(
-        CommandOption("On", CommandIntent.SetTextLigatures(true)),
-        CommandOption("Off", CommandIntent.SetTextLigatures(false))
+        CommandOption("On", CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextLigatures(true)))),
+        CommandOption("Off", CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextLigatures(false))))
       ),
       selectedIndex = optionSelections.getOrElse("text-ligatures", 0),
       category = CommandCategory.Settings,
@@ -927,8 +1234,8 @@ object CommandRunnerSettingsItems:
       id = "ui-ligatures",
       label = "UI Ligatures",
       options = List(
-        CommandOption("On", CommandIntent.SetUiLigatures(true)),
-        CommandOption("Off", CommandIntent.SetUiLigatures(false))
+        CommandOption("On", CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiLigatures(true)))),
+        CommandOption("Off", CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiLigatures(false))))
       ),
       selectedIndex = optionSelections.getOrElse("ui-ligatures", 0),
       category = CommandCategory.Settings,
@@ -940,7 +1247,7 @@ object CommandRunnerSettingsItems:
       Command.typed(
         "lang-plain-text",
         "Use plain text mode for the current buffer.",
-        CommandIntent.SetBufferLanguage(None),
+        CommandIntent.File(FileIntent.SetBufferLanguage(None)),
         CommandCategory.Settings,
         label = "Plain Text"
       )
@@ -950,7 +1257,7 @@ object CommandRunnerSettingsItems:
         Command.typed(
           s"lang-${lang.id}",
           s"Use ${lang.displayName} mode for the current buffer.",
-          CommandIntent.SetBufferLanguage(Some(lang)),
+          CommandIntent.File(FileIntent.SetBufferLanguage(Some(lang))),
           CommandCategory.Settings,
           label = lang.displayName
         )

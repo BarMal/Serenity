@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.CommandRunner
+import com.serenity.command.{CommandRunner, FileIntent}
 import com.serenity.config.InterfaceDensity
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -35,7 +35,7 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
     val command = com.serenity.command.Command.typed(
       "new-file",
       "New file",
-      com.serenity.command.CommandIntent.NewFile,
+      com.serenity.command.CommandIntent.File(FileIntent.NewFile),
       com.serenity.command.CommandCategory.File
     )
     val menu = SurfaceContent.ContextMenu(

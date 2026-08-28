@@ -65,7 +65,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     lineResults.map(_.name) should contain("toggle-line-numbers")
     numberResults.map(_.name) should contain("toggle-line-numbers")
     toggleResults.map(_.name) should contain("toggle-line-numbers")
-    command.intent shouldBe CommandIntent.ToggleLineNumbers
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
   }
 
   it should "toggle line numbers from enabled to disabled" in {
@@ -107,7 +107,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     gutterResults.map(_.name) should contain("toggle-gutter")
     statusResults.map(_.name) should contain("toggle-gutter")
     toggleResults.map(_.name) should contain("toggle-gutter")
-    command.intent shouldBe CommandIntent.ToggleGutter
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleGutter))
   }
 
   it should "toggle gutter from enabled to disabled" in {
@@ -183,7 +183,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     lineResults.map(_.name) should contain("toggle-line-wrap")
     wrapResults.map(_.name) should contain("toggle-line-wrap")
-    command.intent shouldBe CommandIntent.ToggleWordWrap
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleWordWrap))
   }
 
   it should "toggle soft line wrapping through the line wrap command" in {
@@ -205,7 +205,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     wordResults.map(_.name) should contain("toggle-word-wrap")
     wrapResults.map(_.name) should contain("toggle-word-wrap")
-    command.intent shouldBe CommandIntent.ToggleWordWrap
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleWordWrap))
   }
 
   it should "toggle text body focus from disabled to enabled" in {
@@ -249,19 +249,29 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "line-numbers-off",
           "Set line numbers off",
-          CommandIntent.SetLineNumbers(false),
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(false))),
           CommandCategory.Settings
         )
       )
       .unsafeRunSync()
     stateManager
       .executeCommand(
-        Command.typed("gutter-off", "Set gutter off", CommandIntent.SetGutter(false), CommandCategory.Settings)
+        Command.typed(
+          "gutter-off",
+          "Set gutter off",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(false))),
+          CommandCategory.Settings
+        )
       )
       .unsafeRunSync()
     stateManager
       .executeCommand(
-        Command.typed("word-wrap-off", "Set word wrap off", CommandIntent.SetWordWrap(false), CommandCategory.Settings)
+        Command.typed(
+          "word-wrap-off",
+          "Set word wrap off",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(false))),
+          CommandCategory.Settings
+        )
       )
       .unsafeRunSync()
     stateManager
@@ -269,7 +279,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "focused-body-on",
           "Set focused text body on",
-          CommandIntent.SetFocusedTextBody(true),
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(true))),
           CommandCategory.Settings
         )
       )
@@ -279,7 +289,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "contextual-toolbar-off",
           "Set contextual toolbar off",
-          CommandIntent.SetContextualToolbarEnabled(false),
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(false))),
           CommandCategory.Settings
         )
       )
@@ -289,7 +299,9 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "contextual-toolbar-text-only",
           "Set contextual toolbar display to text only",
-          CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly),
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
+          ),
           CommandCategory.Settings
         )
       )
@@ -306,17 +318,32 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     stateManager
       .executeCommand(
         Command
-          .typed("line-numbers-on", "Set line numbers on", CommandIntent.SetLineNumbers(true), CommandCategory.Settings)
+          .typed(
+            "line-numbers-on",
+            "Set line numbers on",
+            CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(true))),
+            CommandCategory.Settings
+          )
       )
       .unsafeRunSync()
     stateManager
       .executeCommand(
-        Command.typed("gutter-on", "Set gutter on", CommandIntent.SetGutter(true), CommandCategory.Settings)
+        Command.typed(
+          "gutter-on",
+          "Set gutter on",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(true))),
+          CommandCategory.Settings
+        )
       )
       .unsafeRunSync()
     stateManager
       .executeCommand(
-        Command.typed("word-wrap-on", "Set word wrap on", CommandIntent.SetWordWrap(true), CommandCategory.Settings)
+        Command.typed(
+          "word-wrap-on",
+          "Set word wrap on",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(true))),
+          CommandCategory.Settings
+        )
       )
       .unsafeRunSync()
     stateManager
@@ -324,7 +351,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "focused-body-off",
           "Set focused text body off",
-          CommandIntent.SetFocusedTextBody(false),
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(false))),
           CommandCategory.Settings
         )
       )
@@ -334,7 +361,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "contextual-toolbar-on",
           "Set contextual toolbar on",
-          CommandIntent.SetContextualToolbarEnabled(true),
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(true))),
           CommandCategory.Settings
         )
       )
@@ -344,7 +371,11 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "contextual-toolbar-icon-text",
           "Set contextual toolbar display to icon and text",
-          CommandIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText),
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(
+              PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
+            )
+          ),
           CommandCategory.Settings
         )
       )

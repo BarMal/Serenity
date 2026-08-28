@@ -2,7 +2,7 @@ package com.serenity.state.models
 
 import java.nio.file.Path
 
-import com.serenity.command.{Command, CommandRunner}
+import com.serenity.command.{Command, CommandRunner, SessionIntent}
 import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ThemeCreatorState
@@ -49,25 +49,25 @@ final case class StartupPage(
             "new-session" -> Command.typed(
               "startup.new-session",
               "Start a new session",
-              com.serenity.command.CommandIntent.StartupNewSession
+              com.serenity.command.CommandIntent.Session(SessionIntent.StartupNewSession)
             )
           case 1 =>
             "restore-session" -> Command.typed(
               "startup.restore-session",
               "Restore an existing session",
-              com.serenity.command.CommandIntent.StartupRestoreSession
+              com.serenity.command.CommandIntent.Session(SessionIntent.StartupRestoreSession)
             )
           case 2 =>
             "open-file" -> Command.typed(
               "startup.open-file",
               "Open an existing file or directory",
-              com.serenity.command.CommandIntent.StartupOpenFile
+              com.serenity.command.CommandIntent.Session(SessionIntent.StartupOpenFile)
             )
           case _ =>
             s"option-$index" -> Command.typed(
               "startup.new-session",
               "Start a new session",
-              com.serenity.command.CommandIntent.StartupNewSession
+              com.serenity.command.CommandIntent.Session(SessionIntent.StartupNewSession)
             )
         StartupAction(id, label, command)
     }

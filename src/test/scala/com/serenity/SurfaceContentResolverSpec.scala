@@ -83,12 +83,12 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "resolve command palettes into search chrome, highlighted rows, and scroll metadata once typing begins" in {
     val commands = List(
-      Command.typed("open", "Open file", CommandIntent.OpenFile),
-      Command.typed("close", "Close current file", CommandIntent.CloseCurrentFile),
-      Command.typed("save", "Save current file", CommandIntent.SaveCurrentFile),
-      Command.typed("format", "Format current file", CommandIntent.FormatCurrentFile),
-      Command.typed("find", "Find text in file", CommandIntent.FindInCurrentFile),
-      Command.typed("replace", "Find and replace text", CommandIntent.ReplaceInCurrentFile)
+      Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),
+      Command.typed("close", "Close current file", CommandIntent.File(FileIntent.CloseCurrentFile)),
+      Command.typed("save", "Save current file", CommandIntent.File(FileIntent.SaveCurrentFile)),
+      Command.typed("format", "Format current file", CommandIntent.Edit(EditIntent.FormatCurrentFile)),
+      Command.typed("find", "Find text in file", CommandIntent.Edit(EditIntent.FindInCurrentFile)),
+      Command.typed("replace", "Find and replace text", CommandIntent.Edit(EditIntent.ReplaceInCurrentFile))
     )
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("open file")(using registry)
@@ -150,8 +150,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resolve context menus into a selected command list" in {
-    val save = Command.typed("save", "Save file", CommandIntent.SaveCurrentFile, label = "Save")
-    val find = Command.typed("find", "Find text", CommandIntent.FindInCurrentFile, label = "Find")
+    val save = Command.typed("save", "Save file", CommandIntent.File(FileIntent.SaveCurrentFile), label = "Save")
+    val find = Command.typed("find", "Find text", CommandIntent.Edit(EditIntent.FindInCurrentFile), label = "Find")
     val menu = ContextMenu(
       title = "editor",
       targetFocus = Focus.EditorPane(PaneId(0)),
@@ -176,8 +176,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reserve configured gap rows between context menu items" in {
-    val save = Command.typed("save", "Save file", CommandIntent.SaveCurrentFile, label = "Save")
-    val find = Command.typed("find", "Find text", CommandIntent.FindInCurrentFile, label = "Find")
+    val save = Command.typed("save", "Save file", CommandIntent.File(FileIntent.SaveCurrentFile), label = "Save")
+    val find = Command.typed("find", "Find text", CommandIntent.Edit(EditIntent.FindInCurrentFile), label = "Find")
     val menu = ContextMenu(
       title = "editor",
       targetFocus = Focus.EditorPane(PaneId(0)),
@@ -600,7 +600,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         s"cmd-$index",
         s"Command number $index",
-        CommandIntent.ToggleTheme
+        CommandIntent.Theme(ThemeIntent.ToggleTheme)
       )
     )
     val registry = CommandRegistry(commands)
@@ -630,7 +630,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "reduce command palette capacity when item gaps reserve blank content rows" in {
     val commands =
-      (1 to 8).toList.map(index => Command.typed(s"cmd-$index", s"Command number $index", CommandIntent.ToggleTheme))
+      (1 to 8).toList.map(index =>
+        Command.typed(s"cmd-$index", s"Command number $index", CommandIntent.Theme(ThemeIntent.ToggleTheme))
+      )
     val runner = CommandRunner.empty.activate(CommandRegistry(commands), AppConfig.default)
     val rect   = LayoutRect(0, 0, 80, 8)
 

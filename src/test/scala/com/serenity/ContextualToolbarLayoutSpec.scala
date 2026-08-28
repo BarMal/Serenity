@@ -288,10 +288,22 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
           id = "paragraph-role",
           label = "Role",
           options = List(
-            com.serenity.command.CommandOption("Body", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Body)),
-            com.serenity.command.CommandOption("H1", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(1))),
-            com.serenity.command.CommandOption("H2", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(2))),
-            com.serenity.command.CommandOption("H3", CommandIntent.SetRichTextParagraphRole(ParagraphRole.Heading(3)))
+            com.serenity.command.CommandOption(
+              "Body",
+              CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))
+            ),
+            com.serenity.command.CommandOption(
+              "H1",
+              CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(1)))
+            ),
+            com.serenity.command.CommandOption(
+              "H2",
+              CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(2)))
+            ),
+            com.serenity.command.CommandOption(
+              "H3",
+              CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(3)))
+            )
           ),
           selectedIndex = 1,
           category = CommandCategory.Edit

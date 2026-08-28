@@ -425,98 +425,96 @@ final private[manager] class StateManagerEffectHandlers(
 
   private[manager] def interpretCommand(command: Command, state: AppState): IO[Unit] =
     command.intent match
-      case CommandIntent.OpenSettings =>
-        val registry = CommandRegistry.withToggleUI
-        updateState { current =>
-          val opened = AppEventReducer
-            .reduce(com.serenity.keystroke.events.ToggleCommandRunner, current, registry)(using balance)
-            .state
-          opened.commandRunnerSurface match
-            case Some(surface) =>
-              surface.content match
-                case SurfaceContent.CommandPalette(runner) =>
-                  opened.copy(runtime = opened.runtime.copy(uiSurfaces = opened.runtime.uiSurfaces.map {
-                    case currentSurface if currentSurface.id == surface.id =>
-                      currentSurface.copy(content = SurfaceContent.CommandPalette(runner.openSettings))
-                    case currentSurface => currentSurface
-                  }))
-                case _ => opened
-            case None => opened
-        }
-      case CommandIntent.ToggleLineNumbers =>
-        updateTextDisplayConfig(config => config.withLineNumbers(!config.showLineNumbers)).void
-      case CommandIntent.ToggleGutter =>
-        updateTextDisplayConfig(config => config.withGutter(!config.showGutter)).void
-      case CommandIntent.ToggleWordWrap =>
-        updateTextDisplayConfig(config => config.withWordWrap(!config.wordWrapEnabled)).void
-      case CommandIntent.ToggleFocusedTextBody =>
-        updateTextDisplayConfig(config => config.withFocusedTextBody(!config.focusedTextBodyEnabled)).void
-      case CommandIntent.ToggleContextualToolbar =>
-        enqueueEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
-      case CommandIntent.SetLineNumbers(enabled) =>
-        updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
-      case CommandIntent.SetGutter(enabled) =>
-        updateTextDisplayConfig(config => config.withGutter(enabled)).void
-      case CommandIntent.SetWordWrap(enabled) =>
-        updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
-      case CommandIntent.SetFocusedTextBody(enabled) =>
-        updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
-      case CommandIntent.SetContextualToolbarEnabled(enabled) =>
-        updateTextDisplayConfig(config => config.withContextualToolbarEnabled(enabled)).void
-      case CommandIntent.SetContextualToolbarDisplayMode(mode) =>
-        updateTextDisplayConfig(config => config.withContextualToolbarDisplayMode(mode)).void
-      case CommandIntent.SaveCurrentFile =>
+      case CommandIntent.Lifecycle(intent)   => interpretLifecycleIntent(intent, state)
+      case CommandIntent.File(intent)        => interpretFileIntent(intent, state)
+      case CommandIntent.Edit(intent)        => interpretEditIntent(intent)
+      case CommandIntent.RichText(intent)    => interpretRichTextIntent(intent)
+      case CommandIntent.Comments(intent)    => interpretCommentsIntent(intent, state)
+      case CommandIntent.Navigation(intent)  => interpretNavigationIntent(intent, state)
+      case CommandIntent.Lsp(intent)         => interpretLspIntent(intent, state)
+      case CommandIntent.Theme(intent)       => interpretThemeIntent(intent, state)
+      case CommandIntent.View(intent)        => interpretViewIntent(intent)
+      case CommandIntent.Project(intent)     => interpretProjectIntent(intent, state)
+      case CommandIntent.Session(intent)     => interpretSessionIntent(intent, state)
+      case CommandIntent.Keybindings(intent) => interpretKeybindingsIntent(intent)
+      case CommandIntent.UiPresets(intent)   => interpretUiPresetsIntent(intent)
+      case CommandIntent.Settings(intent)    => interpretSettingsIntent(intent, state)
+
+  private def interpretLifecycleIntent(intent: LifecycleIntent, state: AppState): IO[Unit] =
+    intent match
+      case LifecycleIntent.QuitApp => beginCloseAction(CloseScope.Quit, state)
+
+  private def interpretFileIntent(intent: FileIntent, state: AppState): IO[Unit] =
+    intent match
+      case FileIntent.SaveCurrentFile =>
         state.focusedBufferId match
           case Some(bufferId) => saveBufferEffect(bufferId)
           case None           => logger.debug("[CMD] No focused buffer to save")
-      case CommandIntent.SaveCurrentFileAs =>
+      case FileIntent.SaveCurrentFileAs =>
         requestSaveAsFileDialog(state, state.focusedBufferId)
-      case CommandIntent.SaveConfig =>
-        persistConfigFile(state.persisted.config)
-      case CommandIntent.SaveSession =>
-        saveSession()
-      case CommandIntent.RestoreSession =>
-        loadSession().flatMap {
-          case Some(restored) => validateAndUpdateState(restoreSessionIntoCurrentViewport(restored, state), state)
-          case None           => logger.debug("[SESSION] Restore requested without a saved session")
-        }
-      case CommandIntent.ClearSession =>
-        clearSession()
-      case CommandIntent.OpenFile =>
+      case FileIntent.OpenFile =>
         requestOpenFileDialog
-      case CommandIntent.OpenRecentFile(path) =>
+      case FileIntent.OpenRecentFile(path) =>
         IO.blocking(java.nio.file.Files.isRegularFile(path) && java.nio.file.Files.isReadable(path)).flatMap {
           case true  => directLoadFileEffect(path)
           case false => logger.warn(s"[STARTUP] Recent file is unavailable: $path")
         }
-      case CommandIntent.OpenFileSearch =>
+      case FileIntent.OpenFileSearch =>
         openFileSearchEffect(state)
-      case CommandIntent.ExportCurrentTheme =>
-        exportCurrentThemeEffect(state)
-      case CommandIntent.QuitApp =>
-        beginCloseAction(CloseScope.Quit, state)
-      case CommandIntent.CloseAll =>
+      case FileIntent.CloseAll =>
         beginCloseAction(CloseScope.All, state)
-      case CommandIntent.CloseOthers =>
+      case FileIntent.CloseOthers =>
         beginCloseAction(CloseScope.Others, state)
-      case CommandIntent.NewFile =>
+      case FileIntent.CloseCurrentFile =>
+        beginCloseAction(CloseScope.Current, state)
+      case FileIntent.NewFile =>
         val registry = CommandRegistry.withToggleUI
         updateState(current =>
           AppEventReducer.reduce(com.serenity.keystroke.events.NewTab, current, registry)(using balance).state
         )
-      case CommandIntent.NextTab =>
-        updateState(EditorState.navigateToNextBuffer)
-      case CommandIntent.PreviousTab =>
-        updateState(EditorState.navigateToPreviousBuffer)
-      case CommandIntent.CloseCurrentFile =>
-        beginCloseAction(CloseScope.Current, state)
-      case CommandIntent.FindInCurrentFile =>
+      case FileIntent.SetBufferLanguage(language) =>
+        setBufferLanguage(state, language)
+
+  private def setBufferLanguage(state: AppState, language: Option[LanguageId]): IO[Unit] =
+    (state.focusedBufferId, state.focusedBufferId.flatMap(state.persisted.buffers.get)) match
+      case (Some(bufferId), Some(buffer)) =>
+        val updateLanguage =
+          updateState(s =>
+            s.copy(persisted =
+              s.persisted.copy(buffers =
+                s.persisted.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(language = language)))
+              )
+            )
+          )
+
+        val refreshLspBinding =
+          buffer.document.filePath match
+            case Some(path) if buffer.document.language != language =>
+              val uri  = path.toUri.toString
+              val text = buffer.document.content.collect()
+              val closeOld =
+                buffer.document.language.fold(IO.unit)(previous =>
+                  lspQueue.enqueue(LspEffect.FileClosed(uri, previous))
+                )
+              val openNew =
+                language.fold(IO.unit)(next => lspQueue.enqueue(LspEffect.FileOpened(uri, next, text)))
+              closeOld >> openNew
+            case _ =>
+              IO.unit
+
+        updateLanguage >> refreshLspBinding
+      case _ =>
+        IO.unit
+
+  private def interpretEditIntent(intent: EditIntent): IO[Unit] =
+    intent match
+      case EditIntent.FindInCurrentFile =>
         updateState(current => ModalStateReducer.show(findModalForState(current), current).state)
-      case CommandIntent.FindAllInCurrentFile =>
+      case EditIntent.FindAllInCurrentFile =>
         updateState(current => ModalStateReducer.show(findModalForState(current), current).state)
-      case CommandIntent.ReplaceInCurrentFile =>
+      case EditIntent.ReplaceInCurrentFile =>
         updateState(current => ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), current).state)
-      case CommandIntent.ReplaceAllInCurrentFile =>
+      case EditIntent.ReplaceAllInCurrentFile =>
         updateState(current =>
           ModalStateReducer
             .show(
@@ -525,362 +523,425 @@ final private[manager] class StateManagerEffectHandlers(
             )
             .state
         )
-      case CommandIntent.Copy =>
+      case EditIntent.Copy =>
         enqueueEvent(com.serenity.keystroke.events.Copy)
-      case CommandIntent.Cut =>
+      case EditIntent.Cut =>
         enqueueEvent(com.serenity.keystroke.events.Cut)
-      case CommandIntent.Paste =>
+      case EditIntent.Paste =>
         enqueueEvent(com.serenity.keystroke.events.Paste)
-      case CommandIntent.SelectAll =>
+      case EditIntent.SelectAll =>
         enqueueEvent(com.serenity.keystroke.events.SelectAll)
-      case CommandIntent.Undo =>
+      case EditIntent.Undo =>
         enqueueEvent(com.serenity.keystroke.events.Undo)
-      case CommandIntent.Redo =>
+      case EditIntent.Redo =>
         enqueueEvent(com.serenity.keystroke.events.Redo)
-      case CommandIntent.ToggleRichTextMark(mark) =>
+      case EditIntent.FormatCurrentFile =>
+        logger.debug("[CMD] Format command requested")
+
+  private def interpretRichTextIntent(intent: RichTextIntent): IO[Unit] =
+    intent match
+      case RichTextIntent.ToggleRichTextMark(mark) =>
         updateState(current => toggleRichTextMark(current, mark))
-      case CommandIntent.SetRichTextFontFamily(family) =>
+      case RichTextIntent.SetRichTextFontFamily(family) =>
         updateState(current => setRichTextFontFamily(current, family))
-      case CommandIntent.SetRichTextFontSize(size) =>
+      case RichTextIntent.SetRichTextFontSize(size) =>
         updateState(current => setRichTextFontSize(current, size))
-      case CommandIntent.SetRichTextColor(color) =>
+      case RichTextIntent.SetRichTextColor(color) =>
         updateState(current => setRichTextColor(current, color))
-      case CommandIntent.SetRichTextParagraphRole(role) =>
+      case RichTextIntent.SetRichTextParagraphRole(role) =>
         updateState(current => setRichTextParagraphRole(current, role))
-      case CommandIntent.SetRichTextParagraphAlignment(alignment) =>
+      case RichTextIntent.SetRichTextParagraphAlignment(alignment) =>
         updateState(current => setRichTextParagraphAlignment(current, alignment))
-      case CommandIntent.ToggleCommentLens =>
+
+  private def interpretCommentsIntent(intent: CommentsIntent, state: AppState): IO[Unit] =
+    intent match
+      case CommentsIntent.ToggleCommentLens =>
         toggleCommentLens(state)
-      case CommandIntent.AddDocumentComment(text) =>
+      case CommentsIntent.AddDocumentComment(text) =>
         addDocumentComment(state, text)
-      case CommandIntent.DeleteDocumentComment =>
+      case CommentsIntent.DeleteDocumentComment =>
         deleteDocumentComment(state)
-      case CommandIntent.OpenGotoLine =>
-        updateState(current => ModalStateReducer.show(Modal.GotoLine(""), current).state)
-      case CommandIntent.ToggleBookmark =>
-        toggleBookmark(state)
-      case CommandIntent.NextBookmark =>
-        navigateBookmark(state, DocumentNavigation.nextSymbol)
-      case CommandIntent.PreviousBookmark =>
-        navigateBookmark(state, DocumentNavigation.previousSymbol)
-      case CommandIntent.NextDocumentComment =>
+      case CommentsIntent.NextDocumentComment =>
         navigateDocumentComment(state, DocumentNavigation.nextSymbol)
-      case CommandIntent.PreviousDocumentComment =>
+      case CommentsIntent.PreviousDocumentComment =>
         navigateDocumentComment(state, DocumentNavigation.previousSymbol)
-      case CommandIntent.NextDocumentSymbol =>
+
+  private def interpretNavigationIntent(intent: NavigationIntent, state: AppState): IO[Unit] =
+    intent match
+      case NavigationIntent.OpenGotoLine =>
+        updateState(current => ModalStateReducer.show(Modal.GotoLine(""), current).state)
+      case NavigationIntent.ToggleBookmark =>
+        toggleBookmark(state)
+      case NavigationIntent.NextBookmark =>
+        navigateBookmark(state, DocumentNavigation.nextSymbol)
+      case NavigationIntent.PreviousBookmark =>
+        navigateBookmark(state, DocumentNavigation.previousSymbol)
+      case NavigationIntent.NextDocumentSymbol =>
         navigateDocumentSymbol(state, DocumentNavigation.nextSymbol)
-      case CommandIntent.PreviousDocumentSymbol =>
+      case NavigationIntent.PreviousDocumentSymbol =>
         navigateDocumentSymbol(state, DocumentNavigation.previousSymbol)
-      case CommandIntent.NavigateBack =>
+      case NavigationIntent.NavigateBack =>
         navigateHistoryBack()
-      case CommandIntent.NavigateForward =>
+      case NavigationIntent.NavigateForward =>
         navigateHistoryForward()
-      case CommandIntent.RequestLspHover =>
+
+  private def interpretLspIntent(intent: LspIntent, state: AppState): IO[Unit] =
+    intent match
+      case LspIntent.RequestLspHover =>
         requestLspHover(state)
-      case CommandIntent.RequestLspCompletion =>
+      case LspIntent.RequestLspCompletion =>
         requestLspCompletion(state)
-      case CommandIntent.RequestLspDefinition =>
+      case LspIntent.RequestLspDefinition =>
         requestLspDefinition(state)
-      case CommandIntent.ToggleTheme =>
+
+  private def interpretThemeIntent(intent: ThemeIntent, state: AppState): IO[Unit] =
+    intent match
+      case ThemeIntent.ToggleTheme =>
         toggleThemeEffect(state)
-      case CommandIntent.ReloadTheme =>
+      case ThemeIntent.ReloadTheme =>
         reloadThemeEffect(state)
-      case CommandIntent.OpenThemeChooser =>
+      case ThemeIntent.OpenThemeChooser =>
         openThemePickerEffect(state)
-      case CommandIntent.OpenThemeCreator =>
+      case ThemeIntent.OpenThemeCreator =>
         openThemeCreatorEffect(state)
-      case CommandIntent.ReloadThemes =>
+      case ThemeIntent.ExportCurrentTheme =>
+        exportCurrentThemeEffect(state)
+      case ThemeIntent.ReloadThemes =>
         themeManager.listAvailableThemes
           .flatMap(themeNamesRef.set)
           .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
-      case CommandIntent.PinExplorerPanel =>
+
+  private def interpretViewIntent(intent: ViewIntent): IO[Unit] =
+    intent match
+      case ViewIntent.NextTab =>
+        updateState(EditorState.navigateToNextBuffer)
+      case ViewIntent.PreviousTab =>
+        updateState(EditorState.navigateToPreviousBuffer)
+      case ViewIntent.PinExplorerPanel =>
         setPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))
-      case CommandIntent.PinOutlinePanel =>
+      case ViewIntent.PinOutlinePanel =>
         setPanelPin(PanelKind.Outline, Some(PanelPosition.Right))
-      case CommandIntent.PinCommentsPanel =>
+      case ViewIntent.PinCommentsPanel =>
         setPanelPin(PanelKind.Comments, Some(PanelPosition.Right))
-      case CommandIntent.PinDiagnosticsPanel =>
+      case ViewIntent.PinDiagnosticsPanel =>
         setPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
-      case CommandIntent.OpenMarkdownPreview =>
+      case ViewIntent.OpenMarkdownPreview =>
         setPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right))
-      case CommandIntent.SetPanelPin(kind, position) =>
+      case ViewIntent.SetPanelPin(kind, position) =>
         setPanelPin(kind, position)
-      case CommandIntent.MovePanelEarlier(kind) =>
+      case ViewIntent.MovePanelEarlier(kind) =>
         movePanelKind(kind, delta = -1)
-      case CommandIntent.MovePanelLater(kind) =>
+      case ViewIntent.MovePanelLater(kind) =>
         movePanelKind(kind, delta = 1)
-      case CommandIntent.SetMarkdownViewMode(mode) =>
+      case ViewIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(mode)
-      case CommandIntent.SetDefaultDocumentMode(mode) =>
+      case ViewIntent.SetDefaultDocumentMode(mode) =>
         updateDocumentDefaultsConfig(_.withDefaultDocumentMode(mode)).void
-      case CommandIntent.SetSpellCheckEnabled(enabled) =>
-        updateSpellCheckConfig(_.copy(enabled = enabled))
-      case CommandIntent.SetSpellCheckLanguages(languages) =>
-        updateSpellCheckConfig(_.copy(languages = languages))
-      case CommandIntent.SetSpellCheckDictionaryPaths(paths) =>
-        updateSpellCheckConfig(_.copy(dictionaryPaths = paths))
-      case CommandIntent.SetSpellCheckWords(words) =>
-        updateSpellCheckConfig(_.copy(additionalWords = words))
-      case CommandIntent.SetInterfaceDensity(density) =>
-        updateAppearanceConfig(_.withInterfaceDensity(density)).void
-      case CommandIntent.SetWindowChromeMode(mode) =>
-        updateAppearanceConfig(_.withWindowChromeMode(mode)).void
-      case CommandIntent.SetWindowSitterEnabled(enabled) =>
-        updateWindowSitterConfig(_.copy(enabled = enabled))
-      case CommandIntent.SetWindowSitterAction(action) =>
-        updateWindowSitterConfig(_.copy(action = action))
-      case CommandIntent.SetWindowSitterFrames(frames) =>
-        updateWindowSitterConfig(_.copy(frames = frames))
-      case CommandIntent.SetWindowSitterActiveTicks(ticks) =>
-        updateWindowSitterConfig(_.copy(activeTicks = ticks))
-      case CommandIntent.SetWindowSitterFastActiveTicks(ticks) =>
-        updateWindowSitterConfig(_.copy(fastActiveTicks = ticks))
-      case CommandIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
-        updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
-      case CommandIntent.FocusPanel(position) =>
+      case ViewIntent.FocusPanel(position) =>
         switchToPinnedPanel(PanelTarget.ByPosition(position))
-      case CommandIntent.UnpinPanel(position) =>
+      case ViewIntent.UnpinPanel(position) =>
         unpinPanel(PanelTarget.ByPosition(position))
-      case CommandIntent.ExpandPanel(position) =>
+      case ViewIntent.ExpandPanel(position) =>
         expandPinnedPanel(PanelTarget.ByPosition(position))
-      case CommandIntent.CollapseExpandedPanel =>
+      case ViewIntent.CollapseExpandedPanel =>
         collapseExpandedPanel()
-      case CommandIntent.FormatCurrentFile =>
-        logger.debug("[CMD] Format command requested")
-      case CommandIntent.SetMaterialPreset(preset) =>
-        updateAppearanceConfig(_.withMaterialPreset(preset)).void
-      case CommandIntent.SetPostProcessingEffect(effect) =>
-        updateAppearanceConfig(_.withPostProcessingEffect(effect)).void
-      case CommandIntent.SetUiShadowsEnabled(enabled) =>
-        updateAppearanceConfig(_.withUiShadowsEnabled(enabled)).void
-      case CommandIntent.SetMotionPreset(preset) =>
-        updateMotionConfig(_.withMotionPreset(preset)).void
-      case CommandIntent.SetMotionAccessibility(accessibility) =>
-        updateMotionAccessibility(accessibility).void
-      case CommandIntent.SetElementTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withElementTransitionSpeedScale(scale)).void
-      case CommandIntent.SetEditorTextTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withEditorTextTransitionSpeedScale(Some(scale))).void
-      case CommandIntent.SetCommandRunnerTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withCommandRunnerTransitionSpeedScale(Some(scale))).void
-      case CommandIntent.SetUiTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withUiTransitionSpeedScale(Some(scale))).void
-      case CommandIntent.SetCursorTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withCursorTransitionSpeedScale(Some(scale))).void
-      case CommandIntent.SetCommandRunnerAnimation(animation) =>
-        updateCustomMotionConfig(_.withCommandRunnerAnimation(animation)).void
-      case CommandIntent.SetUiAnimation(animation) =>
-        updateCustomMotionConfig(_.withUiAnimation(animation)).void
-      case CommandIntent.SetCommandRunnerVisibleRows(rows) =>
-        updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
-      case CommandIntent.SetCommandRunnerItemGapRows(rows) =>
-        updateAppearanceConfig(_.withCommandRunnerItemGapRows(rows)).void
-      case CommandIntent.SetCommandRunnerCursorGapRows(rows) =>
-        updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
-      case CommandIntent.SetRenderFpsTarget(target) =>
-        updateAppearanceConfig(_.withRenderFpsTarget(target)).void
-      case CommandIntent.SetRenderDamageGranularity(granularity) =>
-        updateAppearanceConfig(_.withRenderDamageGranularity(granularity)).void
-      case CommandIntent.SetEditorInsertionTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
-      case CommandIntent.SetCommandRunnerTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withCommandRunnerTransitionKind(Some(kind))).void
-      case CommandIntent.SetPanelOpenTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withPanelOpenTransitionKind(Some(kind))).void
-      case CommandIntent.SetPanelCloseTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withPanelCloseTransitionKind(Some(kind))).void
-      case CommandIntent.SetBackgroundStyle(style) =>
-        updateAppearanceConfig(_.withBackgroundStyle(style)).void
-      case CommandIntent.SetBlurRadius(r) =>
-        updateAppearanceConfig(_.withBlurRadius(r)).void
-      case CommandIntent.SetAnimationDuration(ms) =>
-        updateCustomMotionConfig { config =>
-          val newAnim =
-            if ms <= 0 then None
-            else
-              Some(
-                config.characterAnimation.fold(
-                  AnimationConfig(
-                    steps = 12,
-                    totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L)
-                  )
-                )(existing =>
-                  existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
-                )
-              )
-          config.withEditorTextAnimation(newAnim)
-        }.void
-      case CommandIntent.SetAnimationSteps(n) =>
-        updateCustomMotionConfig { config =>
-          val newAnim =
-            if n <= 0 then None
-            else
-              Some(
-                config.characterAnimation.fold(
-                  AnimationConfig(
-                    steps = n,
-                    totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000L)
-                  )
-                )(existing => existing.copy(steps = n))
-              )
-          config.withEditorTextAnimation(newAnim)
-        }.void
-      case CommandIntent.SetCursorMode(mode) =>
-        updateAppearanceConfig(_.withCursorMode(mode)).void
-      case CommandIntent.SetCursorInfoBarMode(mode) =>
-        updateAppearanceConfig(_.withCursorInfoBarMode(mode)).void
-      case CommandIntent.SetCursorInfoBarPlacement(placement) =>
-        updateAppearanceConfig(_.withCursorInfoBarPlacement(placement)).void
-      case CommandIntent.SetUiElementGap(gap) =>
-        updateAppearanceConfig(_.withUiElementGap(gap)).void
-      case CommandIntent.SetUiCornerRadiusPx(radius) =>
-        updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
-      case CommandIntent.SetUiOutlineThicknessPx(thickness) =>
-        updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
-      case CommandIntent.IncreaseFontSize =>
+
+  private def interpretProjectIntent(intent: ProjectIntent, state: AppState): IO[Unit] =
+    intent match
+      case ProjectIntent.RunProjectTask(kind) =>
+        runProjectTask(state, kind)
+      case ProjectIntent.CancelProjectTask =>
+        cancelProjectTask
+
+  private def interpretSessionIntent(intent: SessionIntent, state: AppState): IO[Unit] =
+    intent match
+      case SessionIntent.SaveSession =>
+        saveSession()
+      case SessionIntent.RestoreSession =>
+        loadSession().flatMap {
+          case Some(restored) => validateAndUpdateState(restoreSessionIntoCurrentViewport(restored, state), state)
+          case None           => logger.debug("[SESSION] Restore requested without a saved session")
+        }
+      case SessionIntent.ClearSession =>
+        clearSession()
+      case SessionIntent.StartupNewSession =>
+        createStartupSession()
+      case SessionIntent.StartupRestoreSession =>
+        restoreStartupSession()
+      case SessionIntent.StartupOpenFile =>
+        requestOpenFileDialog
+
+  private def interpretKeybindingsIntent(intent: KeybindingsIntent): IO[Unit] =
+    intent match
+      case KeybindingsIntent.SetGlobalHotkey(action, binding) =>
+        updateGlobalHotkeyBinding(action, binding)
+      case KeybindingsIntent.ResolveGlobalHotkeyConflict(action, binding) =>
+        updateConfig(_.withHotkeyOverrideUnbindingConflicts(action, binding)).void
+      case KeybindingsIntent.ResolveFocusedKeymapConflict(itemId, binding) =>
+        updateConfig(resolveFocusedKeymapConflict(itemId, binding)).void
+      case KeybindingsIntent.SetEditorKeyBinding(action, binding) =>
+        setKeymapBinding("keymap-editor-", KeymapGroup.Editor)(action, binding)
+      case KeybindingsIntent.SetCommandRunnerKeyBinding(action, binding) =>
+        setKeymapBinding("keymap-command-runner-", KeymapGroup.CommandRunner)(action, binding)
+      case KeybindingsIntent.SetModalKeyBinding(action, binding) =>
+        setKeymapBinding("keymap-modal-", KeymapGroup.Modal)(action, binding)
+      case KeybindingsIntent.SetPanelKeyBinding(action, binding) =>
+        setKeymapBinding("keymap-panel-", KeymapGroup.Panel)(action, binding)
+      case KeybindingsIntent.SetPeekKeyBinding(action, binding) =>
+        setKeymapBinding("keymap-peek-", KeymapGroup.Peek)(action, binding)
+      case KeybindingsIntent.ResetGlobalHotkey(action) =>
+        updateConfig(_.resetHotkeyOverride(action)).void
+      case KeybindingsIntent.ResetEditorKeyBinding(action) =>
+        updateConfig(_.resetKeymapBinding(KeymapGroup.Editor)(action)).void
+      case KeybindingsIntent.ResetCommandRunnerKeyBinding(action) =>
+        updateConfig(_.resetKeymapBinding(KeymapGroup.CommandRunner)(action)).void
+      case KeybindingsIntent.ResetModalKeyBinding(action) =>
+        updateConfig(_.resetKeymapBinding(KeymapGroup.Modal)(action)).void
+      case KeybindingsIntent.ResetPanelKeyBinding(action) =>
+        updateConfig(_.resetKeymapBinding(KeymapGroup.Panel)(action)).void
+      case KeybindingsIntent.ResetPeekKeyBinding(action) =>
+        updateConfig(_.resetKeymapBinding(KeymapGroup.Peek)(action)).void
+
+  private def interpretUiPresetsIntent(intent: UiPresetsIntent): IO[Unit] =
+    intent match
+      case UiPresetsIntent.SaveUiPresetAsNew(name) =>
+        saveUiPresetAsNewEffect(name)
+      case UiPresetsIntent.OverwriteUiPreset(name) =>
+        overwriteUiPresetEffect(name)
+      case UiPresetsIntent.ApplyUiPreset(name) =>
+        applyUiPresetEffect(name)
+      case UiPresetsIntent.DuplicateUiPreset(sourceName, targetName) =>
+        duplicateUiPresetEffect(sourceName, targetName)
+      case UiPresetsIntent.RenameUiPreset(sourceName, targetName) =>
+        renameUiPresetEffect(sourceName, targetName)
+      case UiPresetsIntent.DeleteUiPreset(name) =>
+        deleteUiPresetEffect(name)
+      case UiPresetsIntent.ResetUiPreset(name) =>
+        resetUiPresetEffect(name)
+
+  private def interpretSettingsIntent(intent: SettingsIntent, state: AppState): IO[Unit] =
+    intent match
+      case SettingsIntent.Font(fontIntent)               => interpretFontIntent(fontIntent)
+      case SettingsIntent.Motion(motionIntent)           => interpretMotionIntent(motionIntent)
+      case SettingsIntent.Cursor(cursorIntent)           => interpretCursorIntent(cursorIntent)
+      case SettingsIntent.PanelChrome(panelChromeIntent) => interpretPanelChromeIntent(panelChromeIntent)
+      case SettingsIntent.SpellCheck(spellCheckIntent)   => interpretSpellCheckIntent(spellCheckIntent)
+      case SettingsIntent.General(generalIntent)         => interpretGeneralSettingsIntent(generalIntent, state)
+
+  private def interpretFontIntent(intent: FontIntent): IO[Unit] =
+    intent match
+      case FontIntent.IncreaseFontSize =>
         updateFontConfig(config =>
           config.copy(
             fontSize = clampFontSize(config.fontSize + 1.0f),
             textFontSize = clampFontSize(config.textFontSize + 1.0f)
           )
         )
-      case CommandIntent.DecreaseFontSize =>
+      case FontIntent.DecreaseFontSize =>
         updateFontConfig(config =>
           config.copy(
             fontSize = clampFontSize(config.fontSize - 1.0f),
             textFontSize = clampFontSize(config.textFontSize - 1.0f)
           )
         )
-      case CommandIntent.SetFontSize(size) =>
+      case FontIntent.SetFontSize(size) =>
         updateFontConfig(config => config.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size)))
-      case CommandIntent.SetCodeFontSize(size) =>
+      case FontIntent.SetCodeFontSize(size) =>
         updateFontConfig(_.copy(fontSize = clampFontSize(size)))
-      case CommandIntent.SetTextFontSize(size) =>
+      case FontIntent.SetTextFontSize(size) =>
         updateFontConfig(_.copy(textFontSize = clampFontSize(size)))
-      case CommandIntent.SetUiFontSize(size) =>
+      case FontIntent.SetUiFontSize(size) =>
         updateFontConfig(_.copy(uiFontSize = clampFontSize(size)))
-      case CommandIntent.SetTextScaleMode(mode) =>
+      case FontIntent.SetTextScaleMode(mode) =>
         updateFontConfig(_.copy(textScaleMode = mode))
-      case CommandIntent.SetTextScaleMultiplier(scale) =>
+      case FontIntent.SetTextScaleMultiplier(scale) =>
         updateFontConfig(config =>
           config.copy(
             textScaleMode = com.serenity.ui.fonts.FontLoader.TextScaleMode.Manual,
             textScaleMultiplier = com.serenity.ui.fonts.FontLoader.FontConfig.clampTextScale(scale)
           )
         )
-      case CommandIntent.SetCodeFontFamily(family) =>
+      case FontIntent.SetCodeFontFamily(family) =>
         updateFontConfig(_.copy(codeFontFamily = family))
-      case CommandIntent.SetTextFontFamily(family) =>
+      case FontIntent.SetTextFontFamily(family) =>
         updateFontConfig(_.copy(textFontFamily = family))
-      case CommandIntent.SetUiFontFamily(family) =>
+      case FontIntent.SetUiFontFamily(family) =>
         updateFontConfig(_.copy(uiFontFamily = family))
-      case CommandIntent.SetLigatures(enabled) =>
+      case FontIntent.SetLigatures(enabled) =>
         updateFontConfig(_.copy(enableLigatures = enabled, textLigatures = enabled))
-      case CommandIntent.SetCodeLigatures(enabled) =>
+      case FontIntent.SetCodeLigatures(enabled) =>
         updateFontConfig(_.copy(enableLigatures = enabled))
-      case CommandIntent.SetTextLigatures(enabled) =>
+      case FontIntent.SetTextLigatures(enabled) =>
         updateFontConfig(_.copy(textLigatures = enabled))
-      case CommandIntent.SetUiLigatures(enabled) =>
+      case FontIntent.SetUiLigatures(enabled) =>
         updateFontConfig(_.copy(uiLigatures = enabled))
-      case CommandIntent.SaveUiPresetAsNew(name) =>
-        saveUiPresetAsNewEffect(name)
-      case CommandIntent.OverwriteUiPreset(name) =>
-        overwriteUiPresetEffect(name)
-      case CommandIntent.ApplyUiPreset(name) =>
-        applyUiPresetEffect(name)
-      case CommandIntent.DuplicateUiPreset(sourceName, targetName) =>
-        duplicateUiPresetEffect(sourceName, targetName)
-      case CommandIntent.RenameUiPreset(sourceName, targetName) =>
-        renameUiPresetEffect(sourceName, targetName)
-      case CommandIntent.DeleteUiPreset(name) =>
-        deleteUiPresetEffect(name)
-      case CommandIntent.ResetUiPreset(name) =>
-        resetUiPresetEffect(name)
-      case CommandIntent.SetTextAreaLeftInset(value) =>
-        updateTextDisplayConfig(_.withTextAreaLeftInset(value)).void
-      case CommandIntent.SetTextAreaRightInset(value) =>
-        updateTextDisplayConfig(_.withTextAreaRightInset(value)).void
-      case CommandIntent.SetTextAreaTopInset(value) =>
-        updateTextDisplayConfig(_.withTextAreaTopInset(value)).void
-      case CommandIntent.SetTextAreaBottomInset(value) =>
-        updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
-      case CommandIntent.RunProjectTask(kind) =>
-        runProjectTask(state, kind)
-      case CommandIntent.CancelProjectTask =>
-        cancelProjectTask
-      case CommandIntent.ToggleLigatures =>
+      case FontIntent.ToggleLigatures =>
         updateFontConfig(config =>
           config.copy(enableLigatures = !config.enableLigatures, textLigatures = !config.textLigatures)
         )
-      case CommandIntent.StartupNewSession =>
-        createStartupSession()
-      case CommandIntent.StartupRestoreSession =>
-        restoreStartupSession()
-      case CommandIntent.StartupOpenFile =>
-        requestOpenFileDialog
-      case CommandIntent.SetBufferLanguage(language) =>
-        state.focusedBufferId match
-          case Some(bufferId) =>
-            state.persisted.buffers.get(bufferId) match
-              case Some(buffer) =>
-                val updateLanguage =
-                  updateState(s =>
-                    s.copy(persisted =
-                      s.persisted.copy(buffers =
-                        s.persisted.buffers + (bufferId -> buffer.copy(document =
-                          buffer.document.copy(language = language)
-                        ))
-                      )
-                    )
-                  )
 
-                val refreshLspBinding =
-                  buffer.document.filePath match
-                    case Some(path) if buffer.document.language != language =>
-                      val uri  = path.toUri.toString
-                      val text = buffer.document.content.collect()
-                      val closeOld =
-                        buffer.document.language.fold(IO.unit)(previous =>
-                          lspQueue.enqueue(LspEffect.FileClosed(uri, previous))
-                        )
-                      val openNew =
-                        language.fold(IO.unit)(next => lspQueue.enqueue(LspEffect.FileOpened(uri, next, text)))
-                      closeOld >> openNew
-                    case _ =>
-                      IO.unit
+  private def interpretMotionIntent(intent: MotionIntent): IO[Unit] =
+    intent match
+      case MotionIntent.SetMotionPreset(preset) =>
+        updateMotionConfig(_.withMotionPreset(preset)).void
+      case MotionIntent.SetMotionAccessibility(accessibility) =>
+        updateMotionAccessibility(accessibility).void
+      case MotionIntent.SetElementTransitionSpeedScale(scale) =>
+        updateCustomMotionConfig(_.withElementTransitionSpeedScale(scale)).void
+      case MotionIntent.SetEditorTextTransitionSpeedScale(scale) =>
+        updateCustomMotionConfig(_.withEditorTextTransitionSpeedScale(Some(scale))).void
+      case MotionIntent.SetCommandRunnerTransitionSpeedScale(scale) =>
+        updateCustomMotionConfig(_.withCommandRunnerTransitionSpeedScale(Some(scale))).void
+      case MotionIntent.SetUiTransitionSpeedScale(scale) =>
+        updateCustomMotionConfig(_.withUiTransitionSpeedScale(Some(scale))).void
+      case MotionIntent.SetCursorTransitionSpeedScale(scale) =>
+        updateCustomMotionConfig(_.withCursorTransitionSpeedScale(Some(scale))).void
+      case MotionIntent.SetCommandRunnerAnimation(animation) =>
+        updateCustomMotionConfig(_.withCommandRunnerAnimation(animation)).void
+      case MotionIntent.SetUiAnimation(animation) =>
+        updateCustomMotionConfig(_.withUiAnimation(animation)).void
+      case MotionIntent.SetCommandRunnerVisibleRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
+      case MotionIntent.SetCommandRunnerItemGapRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerItemGapRows(rows)).void
+      case MotionIntent.SetCommandRunnerCursorGapRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
+      case MotionIntent.SetEditorInsertionTransitionKind(kind) =>
+        updateCustomMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
+      case MotionIntent.SetCommandRunnerTransitionKind(kind) =>
+        updateCustomMotionConfig(_.withCommandRunnerTransitionKind(Some(kind))).void
+      case MotionIntent.SetPanelOpenTransitionKind(kind) =>
+        updateCustomMotionConfig(_.withPanelOpenTransitionKind(Some(kind))).void
+      case MotionIntent.SetPanelCloseTransitionKind(kind) =>
+        updateCustomMotionConfig(_.withPanelCloseTransitionKind(Some(kind))).void
 
-                updateLanguage >> refreshLspBinding
-              case None =>
-                IO.unit
-          case None => IO.unit
-      case CommandIntent.SetGlobalHotkey(action, binding) =>
-        updateGlobalHotkeyBinding(action, binding)
-      case CommandIntent.ResolveGlobalHotkeyConflict(action, binding) =>
-        updateConfig(_.withHotkeyOverrideUnbindingConflicts(action, binding)).void
-      case CommandIntent.ResolveFocusedKeymapConflict(itemId, binding) =>
-        updateConfig(resolveFocusedKeymapConflict(itemId, binding)).void
-      case CommandIntent.SetEditorKeyBinding(action, binding) =>
-        setKeymapBinding("keymap-editor-", KeymapGroup.Editor)(action, binding)
-      case CommandIntent.SetCommandRunnerKeyBinding(action, binding) =>
-        setKeymapBinding("keymap-command-runner-", KeymapGroup.CommandRunner)(action, binding)
-      case CommandIntent.SetModalKeyBinding(action, binding) =>
-        setKeymapBinding("keymap-modal-", KeymapGroup.Modal)(action, binding)
-      case CommandIntent.SetPanelKeyBinding(action, binding) =>
-        setKeymapBinding("keymap-panel-", KeymapGroup.Panel)(action, binding)
-      case CommandIntent.SetPeekKeyBinding(action, binding) =>
-        setKeymapBinding("keymap-peek-", KeymapGroup.Peek)(action, binding)
-      case CommandIntent.ResetGlobalHotkey(action) =>
-        updateConfig(_.resetHotkeyOverride(action)).void
-      case CommandIntent.ResetEditorKeyBinding(action) =>
-        updateConfig(_.resetKeymapBinding(KeymapGroup.Editor)(action)).void
-      case CommandIntent.ResetCommandRunnerKeyBinding(action) =>
-        updateConfig(_.resetKeymapBinding(KeymapGroup.CommandRunner)(action)).void
-      case CommandIntent.ResetModalKeyBinding(action) =>
-        updateConfig(_.resetKeymapBinding(KeymapGroup.Modal)(action)).void
-      case CommandIntent.ResetPanelKeyBinding(action) =>
-        updateConfig(_.resetKeymapBinding(KeymapGroup.Panel)(action)).void
-      case CommandIntent.ResetPeekKeyBinding(action) =>
-        updateConfig(_.resetKeymapBinding(KeymapGroup.Peek)(action)).void
+  private def interpretCursorIntent(intent: CursorIntent): IO[Unit] =
+    intent match
+      case CursorIntent.SetCursorMode(mode) =>
+        updateAppearanceConfig(_.withCursorMode(mode)).void
+      case CursorIntent.SetCursorInfoBarMode(mode) =>
+        updateAppearanceConfig(_.withCursorInfoBarMode(mode)).void
+      case CursorIntent.SetCursorInfoBarPlacement(placement) =>
+        updateAppearanceConfig(_.withCursorInfoBarPlacement(placement)).void
+
+  private def interpretPanelChromeIntent(intent: PanelChromeIntent): IO[Unit] =
+    intent match
+      case PanelChromeIntent.ToggleLineNumbers =>
+        updateTextDisplayConfig(config => config.withLineNumbers(!config.showLineNumbers)).void
+      case PanelChromeIntent.ToggleGutter =>
+        updateTextDisplayConfig(config => config.withGutter(!config.showGutter)).void
+      case PanelChromeIntent.ToggleWordWrap =>
+        updateTextDisplayConfig(config => config.withWordWrap(!config.wordWrapEnabled)).void
+      case PanelChromeIntent.ToggleFocusedTextBody =>
+        updateTextDisplayConfig(config => config.withFocusedTextBody(!config.focusedTextBodyEnabled)).void
+      case PanelChromeIntent.ToggleContextualToolbar =>
+        enqueueEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
+      case PanelChromeIntent.SetLineNumbers(enabled) =>
+        updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
+      case PanelChromeIntent.SetGutter(enabled) =>
+        updateTextDisplayConfig(config => config.withGutter(enabled)).void
+      case PanelChromeIntent.SetWordWrap(enabled) =>
+        updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
+      case PanelChromeIntent.SetFocusedTextBody(enabled) =>
+        updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
+      case PanelChromeIntent.SetContextualToolbarEnabled(enabled) =>
+        updateTextDisplayConfig(config => config.withContextualToolbarEnabled(enabled)).void
+      case PanelChromeIntent.SetContextualToolbarDisplayMode(mode) =>
+        updateTextDisplayConfig(config => config.withContextualToolbarDisplayMode(mode)).void
+      case PanelChromeIntent.SetUiElementGap(gap) =>
+        updateAppearanceConfig(_.withUiElementGap(gap)).void
+      case PanelChromeIntent.SetUiCornerRadiusPx(radius) =>
+        updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
+      case PanelChromeIntent.SetUiOutlineThicknessPx(thickness) =>
+        updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
+      case PanelChromeIntent.SetInterfaceDensity(density) =>
+        updateAppearanceConfig(_.withInterfaceDensity(density)).void
+      case PanelChromeIntent.SetWindowChromeMode(mode) =>
+        updateAppearanceConfig(_.withWindowChromeMode(mode)).void
+      case PanelChromeIntent.SetWindowSitterEnabled(enabled) =>
+        updateWindowSitterConfig(_.copy(enabled = enabled))
+      case PanelChromeIntent.SetWindowSitterAction(action) =>
+        updateWindowSitterConfig(_.copy(action = action))
+      case PanelChromeIntent.SetWindowSitterFrames(frames) =>
+        updateWindowSitterConfig(_.copy(frames = frames))
+      case PanelChromeIntent.SetWindowSitterActiveTicks(ticks) =>
+        updateWindowSitterConfig(_.copy(activeTicks = ticks))
+      case PanelChromeIntent.SetWindowSitterFastActiveTicks(ticks) =>
+        updateWindowSitterConfig(_.copy(fastActiveTicks = ticks))
+      case PanelChromeIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
+        updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
+      case PanelChromeIntent.SetTextAreaLeftInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaLeftInset(value)).void
+      case PanelChromeIntent.SetTextAreaRightInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaRightInset(value)).void
+      case PanelChromeIntent.SetTextAreaTopInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaTopInset(value)).void
+      case PanelChromeIntent.SetTextAreaBottomInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
+
+  private def interpretSpellCheckIntent(intent: SpellCheckIntent): IO[Unit] =
+    intent match
+      case SpellCheckIntent.SetSpellCheckEnabled(enabled) =>
+        updateSpellCheckConfig(_.copy(enabled = enabled))
+      case SpellCheckIntent.SetSpellCheckLanguages(languages) =>
+        updateSpellCheckConfig(_.copy(languages = languages))
+      case SpellCheckIntent.SetSpellCheckDictionaryPaths(paths) =>
+        updateSpellCheckConfig(_.copy(dictionaryPaths = paths))
+      case SpellCheckIntent.SetSpellCheckWords(words) =>
+        updateSpellCheckConfig(_.copy(additionalWords = words))
+
+  private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
+    intent match
+      case GeneralSettingsIntent.OpenSettings =>
+        updateState(current => CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance))
+      case GeneralSettingsIntent.SaveConfig =>
+        persistConfigFile(state.persisted.config)
+      case GeneralSettingsIntent.SetMaterialPreset(preset) =>
+        updateAppearanceConfig(_.withMaterialPreset(preset)).void
+      case GeneralSettingsIntent.SetPostProcessingEffect(effect) =>
+        updateAppearanceConfig(_.withPostProcessingEffect(effect)).void
+      case GeneralSettingsIntent.SetUiShadowsEnabled(enabled) =>
+        updateAppearanceConfig(_.withUiShadowsEnabled(enabled)).void
+      case GeneralSettingsIntent.SetRenderFpsTarget(target) =>
+        updateAppearanceConfig(_.withRenderFpsTarget(target)).void
+      case GeneralSettingsIntent.SetRenderDamageGranularity(granularity) =>
+        updateAppearanceConfig(_.withRenderDamageGranularity(granularity)).void
+      case GeneralSettingsIntent.SetBackgroundStyle(style) =>
+        updateAppearanceConfig(_.withBackgroundStyle(style)).void
+      case GeneralSettingsIntent.SetBlurRadius(r) =>
+        updateAppearanceConfig(_.withBlurRadius(r)).void
+      case GeneralSettingsIntent.SetAnimationDuration(ms) =>
+        updateCustomMotionConfig(withEditorTextAnimationDuration(_, ms)).void
+      case GeneralSettingsIntent.SetAnimationSteps(n) =>
+        updateCustomMotionConfig(withEditorTextAnimationSteps(_, n)).void
+
+  private def withEditorTextAnimationDuration(
+    config: com.serenity.config.AppConfig,
+    ms: Int
+  ): com.serenity.config.AppConfig =
+    val newAnim =
+      if ms <= 0 then None
+      else
+        Some(
+          config.characterAnimation.fold(
+            AnimationConfig(steps = 12, totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
+          )(existing => existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L)))
+        )
+    config.withEditorTextAnimation(newAnim)
+
+  private def withEditorTextAnimationSteps(
+    config: com.serenity.config.AppConfig,
+    n: Int
+  ): com.serenity.config.AppConfig =
+    val newAnim =
+      if n <= 0 then None
+      else
+        Some(
+          config.characterAnimation.fold(
+            AnimationConfig(steps = n, totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000L))
+          )(existing => existing.copy(steps = n))
+        )
+    config.withEditorTextAnimation(newAnim)
 
   private def setKeymapBinding[A <: com.serenity.config.KeymapEventAction[E], E <: com.serenity.keystroke.events.Event](
     prefix: String,

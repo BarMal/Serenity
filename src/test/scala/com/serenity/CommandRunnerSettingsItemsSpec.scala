@@ -15,23 +15,35 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
 
     background.label shouldBe "Background Style"
     background.selectedOption shouldBe "Glass"
-    background.selectedIntent shouldBe Some(CommandIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
+    background.selectedIntent shouldBe Some(
+      CommandIntent.Settings(
+        SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
+      )
+    )
     background.options.map(_.label) shouldBe List("Solid", "Transparent", "Frosted", "Glass")
 
     val postProcessing = CommandRunnerSettingsItems.postProcessingOptionItem(Map("post-processing" -> 2))
     postProcessing.label shouldBe "Post-processing"
     postProcessing.selectedOption shouldBe "Glow"
-    postProcessing.selectedIntent shouldBe Some(CommandIntent.SetPostProcessingEffect(PostProcessingEffect.Glow))
+    postProcessing.selectedIntent shouldBe Some(
+      CommandIntent.Settings(
+        SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.Glow))
+      )
+    )
     postProcessing.options.map(_.label) shouldBe List("Off", "Scanlines", "Glow", "Scanlines + Glow")
 
     val shadows = CommandRunnerSettingsItems.uiShadowsOptionItem(Map("ui-shadows" -> 1))
     shadows.selectedOption shouldBe "On"
-    shadows.selectedIntent shouldBe Some(CommandIntent.SetUiShadowsEnabled(true))
+    shadows.selectedIntent shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(true)))
+    )
 
     cursor.label shouldBe "Cursor Style"
     cursor.selectedOption shouldBe "Breathe"
     chrome.selectedOption shouldBe "Auto (Linux Rounded)"
-    chrome.selectedIntent shouldBe Some(CommandIntent.SetWindowChromeMode(WindowChromeMode.Auto))
+    chrome.selectedIntent shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto)))
+    )
     chrome.options.map(_.label) shouldBe List("Auto (Linux Rounded)", "Native", "Native Themed (Windows)", "Custom")
   }
 
@@ -58,10 +70,12 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       "panel-markdown-preview-pin"
     )
     outline.selectedOption shouldBe "Right"
-    outline.selectedIntent shouldBe Some(CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)))
+    outline.selectedIntent shouldBe Some(
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)))
+    )
     diagnostics.selectedOption shouldBe "Left"
     diagnostics.selectedIntent shouldBe Some(
-      CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Left))
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Left)))
     )
     workspaceItems.map(_.id) should not contain "settings-panel-order"
   }
@@ -150,9 +164,9 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     val languageIds = CommandRunnerSettingsItems.languageItems.map(_.id)
 
     themeIntents should contain allOf (
-      CommandIntent.OpenThemeChooser,
-      CommandIntent.ToggleTheme,
-      CommandIntent.ReloadTheme
+      CommandIntent.Theme(ThemeIntent.OpenThemeChooser),
+      CommandIntent.Theme(ThemeIntent.ToggleTheme),
+      CommandIntent.Theme(ThemeIntent.ReloadTheme)
     )
     languageIds.headOption shouldBe Some("lang-plain-text")
     languageIds should contain("lang-scala")

@@ -1,7 +1,7 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, MotionIntent, SettingsIntent}
 import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
@@ -29,10 +29,13 @@ class MotionUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver
       .create("motion-overrides", initialConfig = AppConfig.default.withMotionPreset(MotionPreset.Smooth))
       .unsafeRunSync()
-    execute(driver, CommandIntent.SetEditorTextTransitionSpeedScale(0.5))
-    execute(driver, CommandIntent.SetCommandRunnerTransitionSpeedScale(1.5))
-    execute(driver, CommandIntent.SetUiTransitionSpeedScale(2.0))
-    execute(driver, CommandIntent.SetCursorTransitionSpeedScale(0.75))
+    execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(0.5))))
+    execute(
+      driver,
+      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionSpeedScale(1.5)))
+    )
+    execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiTransitionSpeedScale(2.0))))
+    execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCursorTransitionSpeedScale(0.75))))
     val overridden = driver.state.unsafeRunSync().persisted.config
 
     overridden.motionPreset shouldBe MotionPreset.Custom
@@ -41,7 +44,7 @@ class MotionUiScenarioSpec extends AnyFlatSpec with Matchers:
     overridden.effectiveUiTransitionSpeedScale shouldBe 2.0
     overridden.effectiveCursorTransitionSpeedScale shouldBe 0.75
 
-    execute(driver, CommandIntent.SetMotionPreset(MotionPreset.Reduced))
+    execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Reduced))))
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     val before = driver.renderFrame("reduced-open").unsafeRunSync().evidence.surfaceRects
     driver.advanceToSettled().unsafeRunSync() shouldBe true

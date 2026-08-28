@@ -907,7 +907,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "previous-document-symbol",
           "Go to the previous document symbol.",
-          CommandIntent.PreviousDocumentSymbol,
+          CommandIntent.Navigation(NavigationIntent.PreviousDocumentSymbol),
           CommandCategory.View
         )
       )
@@ -1253,7 +1253,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-diagnostics-pin-bottom",
           "Pin diagnostics at the bottom.",
-          CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom)),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))),
           CommandCategory.Settings
         )
       )
@@ -1263,7 +1263,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-outline-pin-right",
           "Pin outline on the right.",
-          CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
           CommandCategory.Settings
         )
       )
@@ -1273,7 +1273,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-outline-pin-left",
           "Move outline to the left.",
-          CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Left)),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Left))),
           CommandCategory.Settings
         )
       )
@@ -1296,7 +1296,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-outline-pin-right",
           "Pin outline on the right.",
-          CommandIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
           CommandCategory.Settings
         )
       )
@@ -1306,7 +1306,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-diagnostics-pin-bottom",
           "Pin diagnostics at the bottom.",
-          CommandIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom)),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))),
           CommandCategory.Settings
         )
       )
@@ -1316,7 +1316,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-outline-pin-off",
           "Hide outline panel.",
-          CommandIntent.SetPanelPin(PanelKind.Outline, None),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, None)),
           CommandCategory.Settings
         )
       )
@@ -1372,7 +1372,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "comment-lens",
           "Toggle comment lens.",
-          CommandIntent.ToggleCommentLens,
+          CommandIntent.Comments(CommentsIntent.ToggleCommentLens),
           CommandCategory.View
         )
       )
@@ -1531,7 +1531,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "document-comment",
           "Add document comment.",
-          CommandIntent.AddDocumentComment("Tighten this opening"),
+          CommandIntent.Comments(CommentsIntent.AddDocumentComment("Tighten this opening")),
           CommandCategory.Edit
         )
       )
@@ -1558,7 +1558,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "document-comment",
           "Update document comment.",
-          CommandIntent.AddDocumentComment("Make this quieter"),
+          CommandIntent.Comments(CommentsIntent.AddDocumentComment("Make this quieter")),
           CommandCategory.Edit
         )
       )
@@ -1596,7 +1596,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "document-comment",
           "Add document comment.",
-          CommandIntent.AddDocumentComment("Accent"),
+          CommandIntent.Comments(CommentsIntent.AddDocumentComment("Accent")),
           CommandCategory.Edit
         )
       )
@@ -1626,7 +1626,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "document-comment",
           "Add document comment.",
-          CommandIntent.AddDocumentComment("Point"),
+          CommandIntent.Comments(CommentsIntent.AddDocumentComment("Point")),
           CommandCategory.Edit
         )
       )
@@ -1663,7 +1663,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "document-comment",
           "Add document comment.",
-          CommandIntent.AddDocumentComment("Flag point"),
+          CommandIntent.Comments(CommentsIntent.AddDocumentComment("Flag point")),
           CommandCategory.Edit
         )
       )
@@ -1746,7 +1746,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-visible-rows",
           "Set command runner visible rows.",
-          CommandIntent.SetCommandRunnerVisibleRows(Some(9)),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(Some(9)))),
           CommandCategory.Settings
         )
       )
@@ -1759,7 +1759,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-visible-rows-auto",
           "Reset command runner visible rows.",
-          CommandIntent.SetCommandRunnerVisibleRows(None),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(None))),
           CommandCategory.Settings
         )
       )
@@ -1776,7 +1776,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-item-gap-rows",
           "Set command runner item gaps.",
-          CommandIntent.SetCommandRunnerItemGapRows(1),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerItemGapRows(1))),
           CommandCategory.Settings
         )
       )
@@ -1786,7 +1786,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-cursor-gap-rows",
           "Set command runner cursor gap.",
-          CommandIntent.SetCommandRunnerCursorGapRows(Some(3)),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerCursorGapRows(Some(3)))),
           CommandCategory.Settings
         )
       )

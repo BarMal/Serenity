@@ -6,7 +6,7 @@ import java.nio.file.Files
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, AnimationOwner, TransitionKind, WindowSitter, WindowSitterConfig}
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, GeneralSettingsIntent, MotionIntent, PanelChromeIntent, SettingsIntent}
 import com.serenity.config.*
 import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance
@@ -34,7 +34,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "element-transition-speed-scale",
           "Set element transition speed scale",
-          CommandIntent.SetElementTransitionSpeedScale(2.25),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(2.25))),
           CommandCategory.Settings
         )
       )
@@ -58,7 +58,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "motion-accessibility",
           "Set motion accessibility",
-          CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off))),
           CommandCategory.Settings
         )
       )
@@ -88,7 +88,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "motion-accessibility",
           "Set motion accessibility",
-          CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off))),
           CommandCategory.Settings
         )
       )
@@ -108,7 +108,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "motion-accessibility-off",
           "Disable motion",
-          CommandIntent.SetMotionAccessibility(MotionAccessibility.Off),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off))),
           CommandCategory.Settings
         )
       )
@@ -118,7 +118,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "motion-accessibility-standard",
           "Enable motion",
-          CommandIntent.SetMotionAccessibility(MotionAccessibility.Standard),
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Standard))
+          ),
           CommandCategory.Settings
         )
       )
@@ -130,12 +132,16 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
   it should "update persisted window sitter controls through settings commands" in {
     val stateManager = createStateManager()
     val commands = List(
-      CommandIntent.SetWindowSitterEnabled(false),
-      CommandIntent.SetWindowSitterAction(com.serenity.animation.WindowSitterAction.Blink),
-      CommandIntent.SetWindowSitterFrames(Vector(".", "x")),
-      CommandIntent.SetWindowSitterActiveTicks(4),
-      CommandIntent.SetWindowSitterFastActiveTicks(9),
-      CommandIntent.SetWindowSitterFastTypingThresholdMs(275)
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterEnabled(false))),
+      CommandIntent.Settings(
+        SettingsIntent.PanelChrome(
+          PanelChromeIntent.SetWindowSitterAction(com.serenity.animation.WindowSitterAction.Blink)
+        )
+      ),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFrames(Vector(".", "x")))),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterActiveTicks(4))),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastActiveTicks(9))),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastTypingThresholdMs(275)))
     )
     commands.zipWithIndex.foreach {
       case (intent, index) =>
@@ -168,7 +174,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "element-transition-speed-scale",
           "Set element transition speed scale",
-          CommandIntent.SetElementTransitionSpeedScale(2.25),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(2.25))),
           CommandCategory.Settings
         )
       )
@@ -191,7 +197,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "element-transition-speed-scale",
           "Set element transition speed scale",
-          CommandIntent.SetElementTransitionSpeedScale(2.25),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(2.25))),
           CommandCategory.Settings
         )
       )
@@ -211,7 +217,10 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
   it should "promote custom editor timing into the authoritative family" in {
     val stateManager = createStateManager(AppConfig.default.withMotionPreset(MotionPreset.Custom))
 
-    List(CommandIntent.SetAnimationDuration(375), CommandIntent.SetAnimationSteps(9)).zipWithIndex.foreach {
+    List(
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationDuration(375))),
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(9)))
+    ).zipWithIndex.foreach {
       case (intent, index) =>
         stateManager
           .executeCommand(
@@ -306,8 +315,12 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
 
   it should "preserve the accessibility override through manual motion edits" in
     List(
-      MotionAccessibility.Off     -> CommandIntent.SetElementTransitionSpeedScale(2.25),
-      MotionAccessibility.Reduced -> CommandIntent.SetCommandRunnerTransitionKind(TransitionKind.DirectionalSweep)
+      MotionAccessibility.Off -> CommandIntent.Settings(
+        SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(2.25))
+      ),
+      MotionAccessibility.Reduced -> CommandIntent.Settings(
+        SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionKind(TransitionKind.DirectionalSweep))
+      )
     ).foreach {
       case (accessibility, edit) =>
         val stateManager = createStateManager()
@@ -324,7 +337,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
             Command.typed(
               "motion-accessibility",
               "Set motion accessibility",
-              CommandIntent.SetMotionAccessibility(accessibility),
+              CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(accessibility))),
               CommandCategory.Settings
             )
           )
@@ -356,7 +369,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "editor-text-transition",
           "Set editor text transition",
-          CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.Disabled),
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetEditorInsertionTransitionKind(TransitionKind.Disabled))
+          ),
           CommandCategory.Settings
         )
       )
@@ -376,7 +391,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "editor-text-speed-scale",
           "Set editor text speed scale",
-          CommandIntent.SetEditorTextTransitionSpeedScale(0.5),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(0.5))),
           CommandCategory.Settings
         )
       )
@@ -427,7 +442,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "command-runner-speed-scale",
           "Set command runner speed scale",
-          CommandIntent.SetCommandRunnerTransitionSpeedScale(2.25),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionSpeedScale(2.25))),
           CommandCategory.Settings
         )
       )
@@ -444,7 +459,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "ui-speed-scale",
           "Set UI speed scale",
-          CommandIntent.SetUiTransitionSpeedScale(1.25),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiTransitionSpeedScale(1.25))),
           CommandCategory.Settings
         )
       )
@@ -461,7 +476,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "cursor-speed-scale",
           "Set cursor speed scale",
-          CommandIntent.SetCursorTransitionSpeedScale(0.75),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCursorTransitionSpeedScale(0.75))),
           CommandCategory.Settings
         )
       )
@@ -478,7 +493,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "editor-text-transition",
           "Set editor text transition",
-          CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.TypedText),
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetEditorInsertionTransitionKind(TransitionKind.TypedText))
+          ),
           CommandCategory.Settings
         )
       )
@@ -505,7 +522,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "editor-text-transition",
           "Set editor text transition",
-          CommandIntent.SetEditorInsertionTransitionKind(TransitionKind.TypedText),
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetEditorInsertionTransitionKind(TransitionKind.TypedText))
+          ),
           CommandCategory.Settings
         )
       )
@@ -522,7 +541,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "panel-open-transition",
           "Set panel open transition",
-          CommandIntent.SetPanelOpenTransitionKind(TransitionKind.OutlineThenContent),
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetPanelOpenTransitionKind(TransitionKind.OutlineThenContent))
+          ),
           CommandCategory.Settings
         )
       )
@@ -541,7 +562,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "panel-close-transition",
           "Set panel close transition",
-          CommandIntent.SetPanelCloseTransitionKind(TransitionKind.Disabled),
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetPanelCloseTransitionKind(TransitionKind.Disabled))
+          ),
           CommandCategory.Settings
         )
       )
@@ -560,7 +583,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "command-runner-transition",
           "Set command runner transition",
-          CommandIntent.SetCommandRunnerTransitionKind(TransitionKind.OutlineThenContent),
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionKind(TransitionKind.OutlineThenContent))
+          ),
           CommandCategory.Settings
         )
       )
@@ -585,7 +610,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "command-runner-transition",
           "Set command runner transition",
-          CommandIntent.SetCommandRunnerTransitionKind(TransitionKind.DirectionalSweep),
+          CommandIntent.Settings(
+            SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionKind(TransitionKind.DirectionalSweep))
+          ),
           CommandCategory.Settings
         )
       )
@@ -604,7 +631,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "command-runner-fade",
           "Set command runner fade",
-          CommandIntent.SetCommandRunnerAnimation(AnimationConfig.subtle),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerAnimation(AnimationConfig.subtle))),
           CommandCategory.Settings
         )
       )
@@ -627,7 +654,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "command-runner-fade",
           "Set command runner fade",
-          CommandIntent.SetCommandRunnerAnimation(None),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerAnimation(None))),
           CommandCategory.Settings
         )
       )
@@ -646,7 +673,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "ui-animation",
           "Set UI animation",
-          CommandIntent.SetUiAnimation(AnimationConfig.subtle),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiAnimation(AnimationConfig.subtle))),
           CommandCategory.Settings
         )
       )
@@ -663,7 +690,9 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "render-fps",
           "Set render FPS target",
-          CommandIntent.SetRenderFpsTarget(RenderFpsTarget.Fps120),
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderFpsTarget(RenderFpsTarget.Fps120))
+          ),
           CommandCategory.Settings
         )
       )
@@ -680,7 +709,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "ui-element-gap",
           "Set UI element gap",
-          CommandIntent.SetUiElementGap(3),
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(3))),
           CommandCategory.Settings
         )
       )
@@ -697,7 +726,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "ui-corner-radius",
           "Set UI corner radius",
-          CommandIntent.SetUiCornerRadiusPx(14),
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiCornerRadiusPx(14))),
           CommandCategory.Settings
         )
       )
@@ -714,7 +743,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
         Command.typed(
           "ui-outline-thickness",
           "Set UI outline thickness",
-          CommandIntent.SetUiOutlineThicknessPx(4),
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(4))),
           CommandCategory.Settings
         )
       )

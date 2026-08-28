@@ -54,7 +54,11 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "filter commands when typing and execute the selection on enter" in {
-    val command  = Command.typed("test", "Test command", CommandIntent.ToggleLineNumbers)
+    val command = Command.typed(
+      "test",
+      "Test command",
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+    )
     val registry = CommandRegistry(List(command))
     val state    = activeState(registry)
 
@@ -69,7 +73,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     executed.effects should have size 1
     executed.effects.head match
       case com.serenity.state.reducers.AppEffect.ExecuteCommand(commandToRun) =>
-        commandToRun.intent shouldBe CommandIntent.ToggleLineNumbers
+        commandToRun.intent shouldBe CommandIntent.Settings(
+          SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)
+        )
       case other =>
         fail(s"Expected ExecuteCommand effect, got $other")
 
@@ -79,7 +85,11 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "surface typed command intents through execute effects" in {
     val command =
-      Command.typed("toggle-line-numbers", "Toggle line numbers display on/off", CommandIntent.ToggleLineNumbers)
+      Command.typed(
+        "toggle-line-numbers",
+        "Toggle line numbers display on/off",
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+      )
     val registry = CommandRegistry(List(command))
     val state    = activeState(registry)
 
@@ -88,7 +98,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     executed.effects should have size 1
     executed.effects.head match
       case com.serenity.state.reducers.AppEffect.ExecuteCommand(commandToRun) =>
-        commandToRun.intent shouldBe CommandIntent.ToggleLineNumbers
+        commandToRun.intent shouldBe CommandIntent.Settings(
+          SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)
+        )
       case other =>
         fail(s"Expected ExecuteCommand effect, got $other")
   }
@@ -219,7 +231,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     completed.effects.head match
       case AppEffect.ExecuteCommand(command) =>
-        command.intent shouldBe CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+ctrl")
+        command.intent shouldBe CommandIntent.Keybindings(
+          KeybindingsIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+ctrl")
+        )
       case other => fail(s"Expected setting command, got $other")
     runnerFrom(completed.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
   }
@@ -266,7 +280,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+ctrl")
+      CommandIntent.Keybindings(KeybindingsIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+ctrl"))
     )
   }
 
@@ -307,7 +321,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.SetGlobalHotkey(HotkeyAction.Find, "k")
+      CommandIntent.Keybindings(KeybindingsIntent.SetGlobalHotkey(HotkeyAction.Find, "k"))
     )
     runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
   }
@@ -453,7 +467,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "default-document-mode",
           "Default Document",
-          CommandIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText),
+          CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText)),
           CommandCategory.Settings
         )
       )
@@ -617,7 +631,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), movedLeft.state, registry)
     movedRight.effects.exists {
       case AppEffect.ExecuteCommand(command) =>
-        command.intent == CommandIntent.SetBackgroundStyle(BackgroundStyle.Frosted)
+        command.intent == CommandIntent.Settings(
+          SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.Frosted))
+        )
       case _ =>
         false
     } shouldBe true
@@ -657,7 +673,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     movedRight.effects.exists {
       case AppEffect.ExecuteCommand(command) =>
-        command.intent == CommandIntent.SetInterfaceDensity(InterfaceDensity.Spacious)
+        command.intent == CommandIntent.Settings(
+          SettingsIntent.PanelChrome(PanelChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
+        )
       case _ =>
         false
     } shouldBe true
@@ -774,7 +792,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry)
     submitted.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.SetBufferLanguage(Some(com.serenity.lsp.config.LanguageId.Java))
+      CommandIntent.File(FileIntent.SetBufferLanguage(Some(com.serenity.lsp.config.LanguageId.Java)))
     )
   }
 
@@ -1134,7 +1152,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
     result.effects.exists {
       case AppEffect.ExecuteCommand(command) =>
-        command.intent == CommandIntent.SetAnimationSteps(20)
+        command.intent == CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(20)))
       case _ =>
         false
     } shouldBe true
@@ -1152,7 +1170,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
 
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.AddDocumentComment("Tighten this opening")
+      CommandIntent.Comments(CommentsIntent.AddDocumentComment("Tighten this opening"))
     )
   }
 
@@ -1226,7 +1244,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
 
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.SetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit, "ctrl+enter")
+      CommandIntent.Keybindings(
+        KeybindingsIntent.SetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit, "ctrl+enter")
+      )
     )
   }
 
@@ -1242,7 +1262,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
 
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.ResetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit)
+      CommandIntent.Keybindings(KeybindingsIntent.ResetCommandRunnerKeyBinding(CommandRunnerKeyAction.Submit))
     )
   }
 
@@ -1272,7 +1292,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
 
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.SetTextAreaTopInset(0.225)
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaTopInset(0.225)))
     )
   }
 

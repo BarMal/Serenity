@@ -4,7 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
-import com.serenity.command.{Command, CommandCategory, CommandIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, GeneralSettingsIntent, SettingsIntent}
 import com.serenity.config.{AppConfig, MarkdownViewMode, MaterialPreset, MotionPreset}
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
@@ -103,7 +103,12 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       val settingsDriver = UiScenarioDriver.create(s"semantic-$themeName-settings", environment).unsafeRunSync()
       settingsDriver.stateManager
         .executeCommand(
-          Command.typed("scenario-settings", "Scenario settings", CommandIntent.OpenSettings, CommandCategory.Settings)
+          Command.typed(
+            "scenario-settings",
+            "Scenario settings",
+            CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.OpenSettings)),
+            CommandCategory.Settings
+          )
         )
         .unsafeRunSync()
       val settings = settingsDriver.renderFrame("settings").unsafeRunSync()

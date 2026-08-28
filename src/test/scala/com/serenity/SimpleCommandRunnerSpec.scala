@@ -8,15 +8,15 @@ import org.scalatest.matchers.should.Matchers
 class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   "Command" should "have name and description" in {
-    val cmd = com.serenity.command.Command.typed("test", "Test command", CommandIntent.ToggleTheme)
+    val cmd = com.serenity.command.Command.typed("test", "Test command", CommandIntent.Theme(ThemeIntent.ToggleTheme))
     cmd.name shouldBe "test"
     cmd.description shouldBe "Test command"
   }
 
   "CommandSearcher" should "find commands by name" in {
     val commands = List(
-      com.serenity.command.Command.typed("save", "Save file", CommandIntent.SaveCurrentFile),
-      com.serenity.command.Command.typed("open", "Open file", CommandIntent.OpenFile)
+      com.serenity.command.Command.typed("save", "Save file", CommandIntent.File(FileIntent.SaveCurrentFile)),
+      com.serenity.command.Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile))
     )
     val searcher = new CommandSearcher(commands)
 
@@ -53,9 +53,14 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "move selection correctly" in {
     val commands = List(
-      com.serenity.command.Command.typed("cmd1", "Command 1", CommandIntent.ToggleTheme),
-      com.serenity.command.Command.typed("cmd2", "Command 2", CommandIntent.ToggleLineNumbers),
-      com.serenity.command.Command.typed("cmd3", "Command 3", CommandIntent.ToggleGutter)
+      com.serenity.command.Command.typed("cmd1", "Command 1", CommandIntent.Theme(ThemeIntent.ToggleTheme)),
+      com.serenity.command.Command.typed(
+        "cmd2",
+        "Command 2",
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+      ),
+      com.serenity.command.Command
+        .typed("cmd3", "Command 3", CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleGutter)))
     )
     val runner = CommandRunner.withCommands(commands)
 
