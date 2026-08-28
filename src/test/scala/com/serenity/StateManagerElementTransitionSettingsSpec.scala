@@ -265,7 +265,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .withMotionPreset(MotionPreset.Custom)
       .withEditorTextAnimation(
         Some(
-          AnimationConfig.smooth.get
+          AnimationConfig.Enabled.smooth
             .copy(steps = 9, totalDuration = scala.concurrent.duration.Duration.fromNanos(375_000_000L))
         )
       )
@@ -320,7 +320,7 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
     val families = configured
       .withEditorTextAnimation(
         Some(
-          AnimationConfig.smooth.get
+          AnimationConfig.Enabled.smooth
             .copy(steps = 9, totalDuration = scala.concurrent.duration.Duration.fromNanos(375_000_000L))
         )
       )

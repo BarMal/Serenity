@@ -173,7 +173,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val state     = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state.commandRunnerSurface.get.id
     val firstCell = state.runtime.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
-    firstCell.backgroundSteps.length shouldBe AnimationConfig.smooth.get.steps * 2
+    firstCell.backgroundSteps.length shouldBe AnimationConfig.Enabled.smooth.steps * 2
   }
 
   it should "use the command runner reveal kind for open choreography" in {
@@ -292,7 +292,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val partialState       = sm.getCurrentState.unsafeRunSync()
     val partialFadeCell    = partialState.runtime.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
     val partialBackground  = partialFadeCell.currentBackground.get
-    val totalFadeSteps     = com.serenity.animation.AnimationConfig.smooth.get.steps
+    val totalFadeSteps     = com.serenity.animation.AnimationConfig.Enabled.smooth.steps
     val remainingFadeSteps = partialFadeCell.backgroundSteps.length
 
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()

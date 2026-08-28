@@ -1442,7 +1442,7 @@ object SurfaceConfig:
           case "enabled"    => parseBoolean(value).map(enabled => settings.copy(enabled = enabled))
           case "transition" => parseTransitionKind(value).map(kind => settings.copy(transitionKind = kind))
           case "animation" if value.equalsIgnoreCase("custom") =>
-            Some(settings.copy(animation = Some(settings.animation.getOrElse(AnimationConfig.smooth.get))))
+            Some(settings.copy(animation = Some(settings.animation.getOrElse(AnimationConfig.Enabled.smooth))))
           case "animation" => parseAnimationPreset(value).map(animation => settings.copy(animation = animation))
           case "animation.duration_ms" =>
             value.toIntOption
@@ -1451,7 +1451,7 @@ object SurfaceConfig:
                 settings.copy(animation =
                   Some(
                     settings.animation
-                      .getOrElse(AnimationConfig.smooth.get)
+                      .getOrElse(AnimationConfig.Enabled.smooth)
                       .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(durationMs * 1_000_000L))
                   )
                 )
@@ -1461,7 +1461,9 @@ object SurfaceConfig:
               .filter(_ > 0)
               .map(steps =>
                 settings
-                  .copy(animation = Some(settings.animation.getOrElse(AnimationConfig.smooth.get).copy(steps = steps)))
+                  .copy(animation =
+                    Some(settings.animation.getOrElse(AnimationConfig.Enabled.smooth).copy(steps = steps))
+                  )
               )
           case "speed_scale" => parseElementTransitionSpeedScale(value).map(scale => settings.copy(speedScale = scale))
           case "open_transition" if family == MotionFamily.PinnedPanels =>

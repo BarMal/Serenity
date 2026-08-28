@@ -23,9 +23,9 @@ object ConfigManager:
   /** Available animation presets */
   object Presets:
     val none   = AppConfig.default.withoutCharacterAnimation
-    val quick  = AppConfig.default.withCharacterAnimation(AnimationConfig.quick.get)
-    val smooth = AppConfig.default.withCharacterAnimation(AnimationConfig.smooth.get)
-    val subtle = AppConfig.default.withCharacterAnimation(AnimationConfig.subtle.get)
+    val quick  = AppConfig.default.withCharacterAnimation(AnimationConfig.Enabled.quick)
+    val smooth = AppConfig.default.withCharacterAnimation(AnimationConfig.Enabled.smooth)
+    val subtle = AppConfig.default.withCharacterAnimation(AnimationConfig.Enabled.subtle)
 
   /** Load configuration from file or return default */
   def loadConfig(configPath: Option[String] = None): AppConfig =
@@ -85,14 +85,14 @@ object ConfigManager:
             case "none" | "false" | "off" | "disabled" =>
               config.withoutCharacterAnimation
             case "quick" =>
-              config.withCharacterAnimation(AnimationConfig.quick.get)
+              config.withCharacterAnimation(AnimationConfig.Enabled.quick)
             case "smooth" =>
-              config.withCharacterAnimation(AnimationConfig.smooth.get)
+              config.withCharacterAnimation(AnimationConfig.Enabled.smooth)
             case "subtle" =>
-              config.withCharacterAnimation(AnimationConfig.subtle.get)
+              config.withCharacterAnimation(AnimationConfig.Enabled.subtle)
             case "custom" =>
               config.withCharacterAnimation(
-                config.editorConfig.characterAnimation.getOrElse(AnimationConfig.smooth.get)
+                config.editorConfig.characterAnimation.getOrElse(AnimationConfig.Enabled.smooth)
               )
             case _ =>
               config // Unknown value, keep current config
@@ -103,7 +103,7 @@ object ConfigManager:
             .map(ms =>
               config.withCharacterAnimation(
                 config.editorConfig.characterAnimation
-                  .getOrElse(AnimationConfig.smooth.get)
+                  .getOrElse(AnimationConfig.Enabled.smooth)
                   .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
               )
             )
@@ -114,7 +114,7 @@ object ConfigManager:
             .map(steps =>
               config.withCharacterAnimation(
                 config.editorConfig.characterAnimation
-                  .getOrElse(AnimationConfig.smooth.get)
+                  .getOrElse(AnimationConfig.Enabled.smooth)
                   .copy(steps = steps)
               )
             )
@@ -301,11 +301,11 @@ object ConfigManager:
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String =
     val animationSetting = config.editorConfig.characterAnimation match
-      case None                                             => "none"
-      case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
-      case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
-      case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
-      case Some(_)                                          => "custom" // For custom configurations
+      case None                                                 => "none"
+      case Some(anim) if anim == AnimationConfig.Enabled.quick  => "quick"
+      case Some(anim) if anim == AnimationConfig.Enabled.smooth => "smooth"
+      case Some(anim) if anim == AnimationConfig.Enabled.subtle => "subtle"
+      case Some(_)                                              => "custom" // For custom configurations
     val characterAnimationDetails =
       if animationSetting == "custom" then config.editorConfig.characterAnimation.fold("")(anim => s"""
              |character.animation.duration_ms = ${anim.durationMs}
@@ -313,11 +313,11 @@ object ConfigManager:
       else ""
     def motionAnimationSetting(animation: Option[AnimationConfig]): String =
       animation match
-        case None                                             => "none"
-        case Some(anim) if anim == AnimationConfig.quick.get  => "quick"
-        case Some(anim) if anim == AnimationConfig.smooth.get => "smooth"
-        case Some(anim) if anim == AnimationConfig.subtle.get => "subtle"
-        case Some(_)                                          => "custom"
+        case None                                                 => "none"
+        case Some(anim) if anim == AnimationConfig.Enabled.quick  => "quick"
+        case Some(anim) if anim == AnimationConfig.Enabled.smooth => "smooth"
+        case Some(anim) if anim == AnimationConfig.Enabled.subtle => "subtle"
+        case Some(_)                                              => "custom"
     val motionConfiguration = config.surfaceConfig.motionConfiguration match
       case Some(configuration) =>
         configuration.withFallback(MotionConfig.fromLegacy(config.surfaceConfig, configuration.baseline))
