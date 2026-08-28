@@ -1028,24 +1028,62 @@ object Renderer:
             surface.clearViewportExcept(state.persisted.theme.background, plan.preserved)
           case _ =>
             surface.clearViewport(state.persisted.theme.background)
-        renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
-        renderLineNumbers(state, context, editorRenderPlan)
-        renderGutter(state, context, editorRenderPlan.layoutContract)
-        renderEditorPanes(
-          state,
-          context,
-          editorRenderPlan,
-          framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty)
-        )
-        renderPinnedPanels(state, context, finalizedScene)
-        renderFloatingPanels(state, context, finalizedScene)
-        renderModalLayer(state, context, finalizedScene)
+        paintFrameLayers(state, context, editorRenderPlan, finalizedScene, framePlan, damage)
         commitFramePlan(framePlan, output)
         Some(editorRenderPlan)
 
     surface.effects.foreach(_.applyPostProcessing(state.persisted.config.surfaceConfig.postProcessingEffect))
     surface.flush()
     editorRenderPlan
+
+  private val ChromeLayerId         = LayerId("chrome")
+  private val EditorContentLayerId  = LayerId("editor-content")
+  private val PinnedPanelsLayerId   = LayerId("pinned-panels")
+  private val FloatingPanelsLayerId = LayerId("floating-panels")
+  private val ModalLayerId          = LayerId("modal")
+
+  /** Paint one frame's editor content as an explicit, z-ordered stack of layers rather than a hard-coded sequence of
+    * calls -- the compositing seam #1100 introduces. `Renderer` still paints every layer directly into the shared
+    * `context.surface` (no layer owns a buffer of its own yet), so [[LayerCompositor.orderedForComposite]] resolving to
+    * today's existing paint order is the whole of what changes visually here: nothing. Every layer shares this frame's
+    * own `damage`, since nothing upstream reports damage scoped to an individual pinned panel, floating overlay or
+    * modal yet -- that per-layer damage, and the per-layer buffers needed to safely skip a layer whose damage is empty,
+    * is the follow-up this issue's staging plan defers.
+    */
+  private def paintFrameLayers(
+    state: AppState,
+    context: RenderContext,
+    editorRenderPlan: EditorPaneRenderPlan,
+    scene: UiSceneSnapshot,
+    framePlan: Option[FramePlan],
+    damage: Damage
+  ): Unit =
+    val layers = List(
+      Layer(ChromeLayerId, zOrder = 0, LayerEffect.identity, damage),
+      Layer(EditorContentLayerId, zOrder = 1, LayerEffect.identity, damage),
+      Layer(PinnedPanelsLayerId, zOrder = 2, LayerEffect.identity, damage),
+      Layer(FloatingPanelsLayerId, zOrder = 3, LayerEffect.identity, damage),
+      Layer(ModalLayerId, zOrder = 4, LayerEffect.identity, damage)
+    )
+    val paintByLayer: Map[LayerId, () => Unit] = Map(
+      ChromeLayerId -> { () =>
+        renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
+        renderLineNumbers(state, context, editorRenderPlan)
+        renderGutter(state, context, editorRenderPlan.layoutContract)
+      },
+      EditorContentLayerId -> { () =>
+        renderEditorPanes(
+          state,
+          context,
+          editorRenderPlan,
+          framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty)
+        )
+      },
+      PinnedPanelsLayerId   -> { () => renderPinnedPanels(state, context, scene) },
+      FloatingPanelsLayerId -> { () => renderFloatingPanels(state, context, scene) },
+      ModalLayerId          -> { () => renderModalLayer(state, context, scene) }
+    )
+    LayerCompositor.orderedForComposite(layers).foreach(layer => paintByLayer(layer.id)())
 
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *
@@ -2665,18 +2703,20 @@ object Renderer:
       case Some(rounded) => rounded.withRoundRectClip(x, y, width, height, arcPx)(render)
       case None          => render
 
+  private val ModalBackdropEffect = LayerEffect(0.4f)
+
   private def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
     scene.modalBackdrop.foreach { backdrop =>
-      context.surface.effects.foreach(_.setAlpha(0.4f))
-      context.surface.setBackgroundColor(state.persisted.theme.margin)
-      context.surface.fillRect(
-        backdrop.frameRect.x,
-        backdrop.frameRect.y,
-        backdrop.frameRect.width,
-        backdrop.frameRect.height,
-        ' '
-      )
-      context.surface.effects.foreach(_.setAlpha(1.0f))
+      LayerCompositor.withEffect(context.surface)(ModalBackdropEffect) {
+        context.surface.setBackgroundColor(state.persisted.theme.margin)
+        context.surface.fillRect(
+          backdrop.frameRect.x,
+          backdrop.frameRect.y,
+          backdrop.frameRect.width,
+          backdrop.frameRect.height,
+          ' '
+        )
+      }
     }
     OverlayViewModel.fromState(state, scene).modal.foreach { overlay =>
       TextOverlayRenderer.render(
