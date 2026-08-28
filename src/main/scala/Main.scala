@@ -39,7 +39,7 @@ object Main extends IOApp:
       _ <- ConfigMigrationWarning
         .message(ConfigManager.defaultConfigPath, configLoad.report)
         .fold(IO.unit)(message => logger.warn(message))
-      appConfig = resolveAutoTextScale(configLoad.config, DisplayScale.defaultDeviceScale.textScale)
+      appConfig = resolveAppConfig(configLoad.config, launchOptions)
       displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
       initialDisplay = displayState.snapshot
       _ <- (
@@ -144,6 +144,16 @@ object Main extends IOApp:
 
   private def resolveAutoTextScale(config: AppConfig, detectedTextScale: Double): AppConfig =
     config.withFontConfig(config.editorConfig.fontConfig.resolveAutoTextScale(detectedTextScale))
+
+  /** Applies the eco overlay (if requested via `--eco` or `SERENITY_ECO=1`) before the auto text-scale resolution that
+    * follows every config load, so eco's fps/motion changes are visible to that step just like any other loaded
+    * setting.
+    */
+  private def resolveAppConfig(loadedConfig: AppConfig, launchOptions: LaunchOptions): AppConfig =
+    resolveAutoTextScale(
+      EcoMode.applyIfRequested(loadedConfig, launchOptions),
+      DisplayScale.defaultDeviceScale.textScale
+    )
 
   /** Paint a whole frame.
     *

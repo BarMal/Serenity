@@ -400,6 +400,7 @@ private[manager] trait WorkflowCapabilityPort:
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
   def updateState(update: AppState => AppState): IO[Unit]
+  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
   def createNewEmptyBuffer(): IO[BufferId]
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
   def switchToPane(paneId: PaneId): IO[Unit]
@@ -601,10 +602,12 @@ private[manager] class StateManagerComposition(
     val fileManager                                         = runtimeFileManager
     val sessionPersistence                                  = runtimeSessionPersistence
     def updateState(update: AppState => AppState): IO[Unit] = runtimeStateRef.update(update)
-    def createNewEmptyBuffer(): IO[BufferId]                = editor.createNewEmptyBuffer()
-    def createPane(bufferId: Option[BufferId]): IO[PaneId]  = editor.createPane(bufferId)
-    def switchToPane(paneId: PaneId): IO[Unit]              = editor.switchToPane(paneId)
-    def loadSession(): IO[Option[AppState]]                 = sessionManager.loadSession()
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      operations.validateAndUpdateState(newState, fallbackState)
+    def createNewEmptyBuffer(): IO[BufferId]               = editor.createNewEmptyBuffer()
+    def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
+    def switchToPane(paneId: PaneId): IO[Unit]             = editor.switchToPane(paneId)
+    def loadSession(): IO[Option[AppState]]                = sessionManager.loadSession()
     def ensureCommandRunnerSurface(state: AppState): AppState =
       operations.ensureCommandRunnerSurface(state)
     def saveBufferEffect(bufferId: BufferId): IO[Unit] =
