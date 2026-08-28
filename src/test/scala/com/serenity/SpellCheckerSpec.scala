@@ -364,7 +364,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     val baseBuffer  = AppState.initial.persisted.buffers(bufferId)
     val buffer      = baseBuffer.copy(document = baseBuffer.document.copy(content = content))
     val uri         = SpellChecker.diagnosticsUri(buffer)
-    val fingerprint = SpellCheckFingerprint.from(buffer, config)
+    val fingerprint = SpellCheckFingerprint.from(buffer, config, Nil)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default.withSpellCheck(config),
@@ -378,7 +378,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val refreshed = SpellChecker.refreshDiagnostics(state)
+    val refreshed = SpellChecker.refreshDiagnostics(state, SpellChecker.loadDictionarySnapshot(config))
 
     refreshed.runtime.diagnosticsState.diagnostics.getOrElse(uri, Nil) shouldBe diagnostics
     refreshed.runtime.diagnosticsState.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(fingerprint)
@@ -403,18 +403,18 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         diagnosticsState = AppState.initial.runtime.diagnosticsState.copy(
           diagnostics = Map(uri -> staleDiagnostics),
           spellCheckCache = Map(
-            uri -> SpellCheckCacheEntry(SpellCheckFingerprint.from(staleBuffer, config), staleDiagnostics)
+            uri -> SpellCheckCacheEntry(SpellCheckFingerprint.from(staleBuffer, config, Nil), staleDiagnostics)
           )
         )
       )
     )
 
-    val refreshed = SpellChecker.refreshDiagnostics(state)
+    val refreshed = SpellChecker.refreshDiagnostics(state, SpellChecker.loadDictionarySnapshot(config))
 
     refreshed.runtime.diagnosticsState.diagnostics.get(uri) shouldBe None
     refreshed.runtime.diagnosticsState.spellCheckCache.get(uri).map(_.diagnostics) shouldBe Some(Nil)
     refreshed.runtime.diagnosticsState.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(
-      SpellCheckFingerprint.from(updatedBuffer, config)
+      SpellCheckFingerprint.from(updatedBuffer, config, Nil)
     )
   }
 
@@ -431,13 +431,14 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         buffers = Map(bufferId -> buffer)
       )
     )
-    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState)
+    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState, SpellChecker.loadDictionarySnapshot(config))
     staleDiagnostics.runtime.diagnosticsState.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
       List("Possible spelling issue: added")
 
     Files.writeString(dictionary, "2\nhello\nadded\n", StandardCharsets.UTF_8)
     Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
-    val refreshed = SpellChecker.refreshDiagnostics(staleDiagnostics)
+    val refreshed =
+      SpellChecker.refreshDiagnostics(staleDiagnostics, SpellChecker.loadDictionarySnapshot(config))
 
     refreshed.runtime.diagnosticsState.diagnostics.get(uri) shouldBe None
   }
@@ -459,7 +460,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         buffers = Map(bufferId -> buffer)
       )
     )
-    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState)
+    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState, SpellChecker.loadDictionarySnapshot(config))
     staleDiagnostics.runtime.diagnosticsState.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
       List("Possible spelling issue: drafting")
 
@@ -469,7 +470,8 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       StandardCharsets.UTF_8
     )
     Files.setLastModifiedTime(affix, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
-    val refreshed = SpellChecker.refreshDiagnostics(staleDiagnostics)
+    val refreshed =
+      SpellChecker.refreshDiagnostics(staleDiagnostics, SpellChecker.loadDictionarySnapshot(config))
 
     refreshed.runtime.diagnosticsState.diagnostics.get(uri) shouldBe None
   }
@@ -488,10 +490,11 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     )
     val currentState =
       staleState.copy(persisted = staleState.persisted.copy(buffers = Map(bufferId -> currentBuffer)))
-    val expected = SpellChecker.analysisFingerprints(staleState)
-    val analyzed = SpellChecker.refreshDiagnostics(staleState)
+    val dictionary = SpellChecker.loadDictionarySnapshot(config)
+    val expected   = SpellChecker.analysisFingerprints(staleState, dictionary.fingerprints)
+    val analyzed   = SpellChecker.refreshDiagnostics(staleState, dictionary)
 
-    val published = SpellChecker.applyIfCurrent(currentState, analyzed, expected)
+    val published = SpellChecker.applyIfCurrent(currentState, analyzed, expected, dictionary.fingerprints)
 
     published shouldBe currentState
   }
