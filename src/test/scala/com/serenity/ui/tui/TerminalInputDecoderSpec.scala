@@ -188,3 +188,65 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
       tok(InputKey.Enter)
     )
   }
+
+  // ===CSI-u (fixterms): kitty-protocol and xterm modifyOtherKeys/formatOtherKeys=1 share this exact wire shape --
+  // `CSI keycode[:alt-codes] ; modifiers[:event][;text] u` -- so one decoding path serves both (#1109).===
+
+  it should "decode Ctrl+A and Ctrl+Shift+A as distinct CSI-u sequences, unlike the legacy control-byte collapse" in {
+    decodeAll(csi("97;5u")) shouldBe List(tok(InputKey.Character, Some('a'), Set(Modifier.Ctrl)))
+    decodeAll(csi("97;6u")) shouldBe List(tok(InputKey.Character, Some('a'), Set(Modifier.Ctrl, Modifier.Shift)))
+  }
+
+  it should "decode Ctrl+Enter as distinct from bare Enter via CSI-u" in {
+    decodeAll(csi("13u")) shouldBe List(tok(InputKey.Enter))
+    decodeAll(csi("13;5u")) shouldBe List(tok(InputKey.Enter, mods = Set(Modifier.Ctrl)))
+  }
+
+  it should "decode CSI-u Tab and Shift+Tab, collapsing Shift into ReverseTab as the legacy path does" in {
+    decodeAll(csi("9u")) shouldBe List(tok(InputKey.Tab))
+    decodeAll(csi("9;2u")) shouldBe List(tok(InputKey.ReverseTab))
+    decodeAll(csi("9;6u")) shouldBe List(tok(InputKey.ReverseTab, mods = Set(Modifier.Ctrl)))
+  }
+
+  it should "decode CSI-u Backspace and Escape with modifiers" in {
+    decodeAll(csi("127;2u")) shouldBe List(tok(InputKey.Backspace, mods = Set(Modifier.Shift)))
+    decodeAll(csi("27;3u")) shouldBe List(tok(InputKey.Escape, mods = Set(Modifier.Alt)))
+  }
+
+  it should "decode every CSI-u modifier bit (shift/alt/ctrl/meta)" in {
+    decodeAll(csi("97;2u")) shouldBe List(tok(InputKey.Character, Some('a'), Set(Modifier.Shift)))
+    decodeAll(csi("97;3u")) shouldBe List(tok(InputKey.Character, Some('a'), Set(Modifier.Alt)))
+    decodeAll(csi("97;5u")) shouldBe List(tok(InputKey.Character, Some('a'), Set(Modifier.Ctrl)))
+    decodeAll(csi("97;33u")) shouldBe List(tok(InputKey.Character, Some('a'), Set(Modifier.Meta)))
+    decodeAll(csi("97;8u")) shouldBe List(
+      tok(InputKey.Character, Some('a'), Set(Modifier.Shift, Modifier.Alt, Modifier.Ctrl))
+    )
+  }
+
+  it should "decode CSI-u repeat events as an ordinary key stroke" in {
+    decodeAll(csi("97;5:2u")) shouldBe List(tok(InputKey.Character, Some('a'), Set(Modifier.Ctrl)))
+  }
+
+  it should "drop CSI-u release events for ordinary keys, rather than emitting a second stroke" in {
+    decodeAll(csi("97;5:3u")) shouldBe Nil
+  }
+
+  it should "decode bare kitty-protocol modifier press/release as ModifierEdge tokens, not Key tokens" in {
+    decodeAll(csi("57442u")) shouldBe List(DecodedToken.ModifierEdge(Modifier.Ctrl, pressed = true))
+    decodeAll(csi("57442;1:3u")) shouldBe List(DecodedToken.ModifierEdge(Modifier.Ctrl, pressed = false))
+    decodeAll(csi("57448u")) shouldBe List(DecodedToken.ModifierEdge(Modifier.Ctrl, pressed = true)) // right Ctrl
+    decodeAll(csi("57441u")) shouldBe List(DecodedToken.ModifierEdge(Modifier.Shift, pressed = true))
+    decodeAll(csi("57443u")) shouldBe List(DecodedToken.ModifierEdge(Modifier.Alt, pressed = true))
+    decodeAll(csi("57446u")) shouldBe List(DecodedToken.ModifierEdge(Modifier.Meta, pressed = true))
+  }
+
+  it should "treat a kitty-protocol modifier repeat event as another press edge" in {
+    decodeAll(csi("57442;1:2u")) shouldBe List(DecodedToken.ModifierEdge(Modifier.Ctrl, pressed = true))
+  }
+
+  it should "decode a modifyOtherKeys/formatOtherKeys=1 combo identically to the equivalent basic kitty CSI-u sequence" in {
+    // modifyOtherKeys mode 2 + formatOtherKeys=1 never sends the event-type or alternate-key subfields kitty can --
+    // it is a strict subset of the same wire shape, so the same code path must decode it identically.
+    decodeAll(csi("13;5u")) shouldBe decodeAll(csi("13;5:1u"))
+    decodeAll(csi("97;6u")) shouldBe List(tok(InputKey.Character, Some('a'), Set(Modifier.Ctrl, Modifier.Shift)))
+  }
