@@ -26,6 +26,7 @@ import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.{ThemeConfigWriter, ThemeCreatorState}
+import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 import fs2.Stream
 
 /** Workflow operations selected by command effects. */
@@ -430,7 +431,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.Navigation(intent)  => interpretNavigationIntent(intent, state)
       case CommandIntent.Lsp(intent)         => interpretLspIntent(intent, state)
       case CommandIntent.Theme(intent)       => interpretThemeIntent(intent, state)
-      case CommandIntent.View(intent)        => interpretViewIntent(intent)
+      case CommandIntent.View(intent)        => interpretViewIntent(intent, state)
       case CommandIntent.Project(intent)     => interpretProjectIntent(intent, state)
       case CommandIntent.Session(intent)     => interpretSessionIntent(intent, state)
       case CommandIntent.Keybindings(intent) => interpretKeybindingsIntent(intent)
@@ -608,7 +609,7 @@ final private[manager] class StateManagerEffectHandlers(
           .flatMap(themeNamesRef.set)
           .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
 
-  private def interpretViewIntent(intent: ViewIntent): IO[Unit] =
+  private def interpretViewIntent(intent: ViewIntent, state: AppState): IO[Unit] =
     intent match
       case ViewIntent.NextTab =>
         updateState(EditorState.navigateToNextBuffer)
@@ -623,7 +624,10 @@ final private[manager] class StateManagerEffectHandlers(
       case ViewIntent.PinDiagnosticsPanel =>
         setPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
       case ViewIntent.OpenMarkdownPreview =>
-        setPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right))
+        // In-pane preview is structurally unavailable in the TUI (cell surfaces cannot `drawImage`) -- toggle the
+        // spawned Swing window there instead of pinning the GUI-only panel (issue #1113).
+        if state.runtime.isTuiMode then toggleMarkdownPreviewWindow(state)
+        else setPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right))
       case ViewIntent.SetPanelPin(kind, position) =>
         setPanelPin(kind, position)
       case ViewIntent.MovePanelEarlier(kind) =>
@@ -1783,6 +1787,35 @@ final private[manager] class StateManagerEffectHandlers(
           .getOrElse("Untitled")
         SurfaceContent.MarkdownPreview(buffer.id, title)
       }
+
+  private def markdownPreviewBufferId(state: AppState): Option[BufferId] =
+    state.focusedBufferId
+      .flatMap(state.persisted.buffers.get)
+      .filter(_.document.language.contains(LanguageId.Markdown))
+      .map(_.id)
+
+  /** Toggles the TUI's spawned Swing preview window (issue #1113): closes it when already open for the focused buffer,
+    * opens it (following the focused buffer) when closed, and reports unavailability -- rather than silently no-op'ing
+    * -- both when no display was reachable at startup and when there is no Markdown buffer to preview.
+    */
+  private def toggleMarkdownPreviewWindow(state: AppState): IO[Unit] =
+    markdownPreviewWindow match
+      case MarkdownPreviewWindowAvailability.Unavailable =>
+        showMarkdownPreviewUnavailablePeek(state, "Markdown preview window needs a graphical display.")
+      case MarkdownPreviewWindowAvailability.Available(window) =>
+        state.runtime.markdownPreviewWindowBuffer match
+          case Some(_) =>
+            window.hide() >> updateState(s => s.copy(runtime = s.runtime.copy(markdownPreviewWindowBuffer = None)))
+          case None =>
+            markdownPreviewBufferId(state) match
+              case Some(bufferId) =>
+                window.show() >>
+                  updateState(s => s.copy(runtime = s.runtime.copy(markdownPreviewWindowBuffer = Some(bufferId))))
+              case None =>
+                showMarkdownPreviewUnavailablePeek(state, "Markdown preview needs an active Markdown buffer.")
+
+  private def showMarkdownPreviewUnavailablePeek(state: AppState, message: String): IO[Unit] =
+    showPeek(PeekContent.QuickInfo(message), state.activeCursorPosition.getOrElse(CursorPosition(0, 0)))
 
   private def updatePanelState(update: AppState => AppState): IO[Unit] =
     stateRef.get.flatMap { state =>

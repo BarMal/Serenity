@@ -254,7 +254,11 @@ final case class Runtime(
     // Never persisted -- set once at startup from the launch mode (see AppRuntime.run/AppStartup.initializeState) so
     // settings-surface rendering can hide or annotate controls that are inert in cell space (post-processing effects,
     // typography) without threading AppConfig itself into the command runner.
-    isTuiMode: Boolean = false
+    isTuiMode: Boolean = false,
+    // The buffer whose Markdown preview is showing in the TUI's spawned Swing window (issue #1113), or `None` when
+    // that window is closed. Unused in GUI mode, where the in-app pinned panel (`PanelKind.MarkdownPreview`) is the
+    // preview surface instead.
+    markdownPreviewWindowBuffer: Option[BufferId] = None
 )
 
 final case class AppState(
