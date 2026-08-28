@@ -241,7 +241,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         persisted = state.persisted.copy(
           config = state.persisted.config
             .withHotkeyOverride(HotkeyAction.ToggleCommandRunner, "alt+p")
-            .withEditorKeyOverride(EditorKeyAction.MoveLeft, "alt+h")
+            .withKeymapBinding(KeymapGroup.Editor)(EditorKeyAction.MoveLeft, "alt+h")
             .withLanguageToolsConfig(
               state.persisted.config.languageToolsConfig.copy(lspUserConfig = lspConfig, spellCheck = spellCheck)
             )

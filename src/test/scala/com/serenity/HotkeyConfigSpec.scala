@@ -63,9 +63,10 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "unbind a conflicting focused keymap trigger before assigning it" in {
-    val config = FocusedKeymapConfig().withCommandRunnerBinding(CommandRunnerKeyAction.NavigateDown, "ctrl+enter")
+    val config =
+      FocusedKeymapConfig().withBinding(KeymapGroup.CommandRunner)(CommandRunnerKeyAction.NavigateDown, "ctrl+enter")
 
-    val reassigned = config.withCommandRunnerBindingUnbindingConflicts(
+    val reassigned = config.withBindingUnbindingConflicts(KeymapGroup.CommandRunner)(
       CommandRunnerKeyAction.Submit,
       "ctrl+enter"
     )

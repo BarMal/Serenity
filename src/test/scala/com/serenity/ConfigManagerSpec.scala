@@ -7,6 +7,7 @@ import java.nio.file.Files
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterConfig}
 import com.serenity.config.*
+import com.serenity.keystroke.events.EditorEvent
 import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
@@ -239,6 +240,50 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     )
   }
 
+  it should "round-trip a legacy-format keymap config file across all five keymap groups" in {
+    val configFile = Files.createTempFile("serenity-keymap-round-trip", ".conf")
+    Files.writeString(
+      configFile,
+      """keymap.editor.move_left = alt+h
+        |keymap.editor.page_down = ctrl+pagedown
+        |keymap.command_runner.submit = ctrl+enter
+        |keymap.command_runner.navigate_down = alt+j
+        |keymap.modal.dismiss = ctrl+escape
+        |keymap.modal.next_field = alt+n
+        |keymap.panel.activate = ctrl+enter
+        |keymap.panel.return_focus = alt+r
+        |keymap.peek.accept = ctrl+enter
+        |keymap.peek.dismiss = alt+d
+        |""".stripMargin
+    )
+
+    val keymap = ConfigManager.loadConfig(Some(configFile.toString)).focusedKeymapConfig
+
+    keymap.editor.bindingsFor(EditorKeyAction.MoveLeft).map(_.render) shouldBe List("alt+h")
+    keymap.editor.bindingsFor(EditorKeyAction.PageDown).map(_.render) shouldBe List("ctrl+pagedown")
+    keymap.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit).map(_.render) shouldBe List("ctrl+enter")
+    keymap.commandRunner.bindingsFor(CommandRunnerKeyAction.NavigateDown).map(_.render) shouldBe List("alt+j")
+    keymap.modal.bindingsFor(ModalKeyAction.Dismiss).map(_.render) shouldBe List("ctrl+escape")
+    keymap.modal.bindingsFor(ModalKeyAction.NextField).map(_.render) shouldBe List("alt+n")
+    keymap.panel.bindingsFor(PanelKeyAction.Activate).map(_.render) shouldBe List("ctrl+enter")
+    keymap.panel.bindingsFor(PanelKeyAction.ReturnFocus).map(_.render) shouldBe List("alt+r")
+    keymap.peek.bindingsFor(PeekKeyAction.Accept).map(_.render) shouldBe List("ctrl+enter")
+    keymap.peek.bindingsFor(PeekKeyAction.Dismiss).map(_.render) shouldBe List("alt+d")
+  }
+
+  it should "round-trip the focused keymap config through its JSON codec unchanged" in {
+    import _root_.io.circe.syntax.*
+
+    val customized = FocusedKeymapConfig()
+      .withBinding(KeymapGroup.Editor)(EditorKeyAction.MoveLeft, "alt+h")
+      .withBinding(KeymapGroup.CommandRunner)(CommandRunnerKeyAction.Submit, "meta+enter")
+      .withBinding(KeymapGroup.Modal)(ModalKeyAction.Dismiss, "ctrl+escape")
+      .withBinding(KeymapGroup.Panel)(PanelKeyAction.Activate, "ctrl+enter")
+      .withBinding(KeymapGroup.Peek)(PeekKeyAction.Accept, "ctrl+enter")
+
+    customized.asJson.as[FocusedKeymapConfig] shouldBe Right(customized)
+  }
+
   it should "load and write font configuration including UI font family" in {
     val configFile = Files.createTempFile("serenity-font-config", ".conf")
     Files.writeString(
@@ -290,7 +335,9 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   it should "fall back to default editor key bindings when writing sparse keymap config" in {
-    val config  = AppConfig.default.withFocusedKeymapConfig(FocusedKeymapConfig(editor = EditorKeymapConfig(Map.empty)))
+    val config = AppConfig.default.withFocusedKeymapConfig(
+      FocusedKeymapConfig(editor = KeymapGroupConfig[EditorKeyAction, EditorEvent](Map.empty))
+    )
     val written = ConfigManager.configToString(config)
 
     written should include("keymap.editor.page_down = pagedown")

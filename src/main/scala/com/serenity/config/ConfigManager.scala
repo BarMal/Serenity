@@ -258,27 +258,27 @@ object ConfigManager:
         case keymapKey if keymapKey.startsWith("keymap.editor.") =>
           EditorKeyAction.values
             .find(action => s"keymap.editor.${action.configKey}" == keymapKey)
-            .map(action => config.withEditorKeyOverride(action, value.trim))
+            .map(action => config.withKeymapBinding(KeymapGroup.Editor)(action, value.trim))
             .getOrElse(config)
         case keymapKey if keymapKey.startsWith("keymap.command_runner.") =>
           CommandRunnerKeyAction.values
             .find(action => s"keymap.command_runner.${action.configKey}" == keymapKey)
-            .map(action => config.withCommandRunnerKeyOverride(action, value.trim))
+            .map(action => config.withKeymapBinding(KeymapGroup.CommandRunner)(action, value.trim))
             .getOrElse(config)
         case keymapKey if keymapKey.startsWith("keymap.modal.") =>
           ModalKeyAction.values
             .find(action => s"keymap.modal.${action.configKey}" == keymapKey)
-            .map(action => config.withModalKeyOverride(action, value.trim))
+            .map(action => config.withKeymapBinding(KeymapGroup.Modal)(action, value.trim))
             .getOrElse(config)
         case keymapKey if keymapKey.startsWith("keymap.panel.") =>
           PanelKeyAction.values
             .find(action => s"keymap.panel.${action.configKey}" == keymapKey)
-            .map(action => config.withPanelKeyOverride(action, value.trim))
+            .map(action => config.withKeymapBinding(KeymapGroup.Panel)(action, value.trim))
             .getOrElse(config)
         case keymapKey if keymapKey.startsWith("keymap.peek.") =>
           PeekKeyAction.values
             .find(action => s"keymap.peek.${action.configKey}" == keymapKey)
-            .map(action => config.withPeekKeyOverride(action, value.trim))
+            .map(action => config.withKeymapBinding(KeymapGroup.Peek)(action, value.trim))
             .getOrElse(config)
         case "config.version" =>
           config
@@ -349,7 +349,7 @@ object ConfigManager:
     def editorBinding(action: EditorKeyAction): String =
       bindingValue(
         config.focusedKeymapConfig.editor.bindingsFor(action),
-        EditorKeymapConfig.defaultBindings.getOrElse(action, Nil)
+        EditorKeyAction.defaultBindings.getOrElse(action, Nil)
       )
     val hotkeySettings = HotkeyAction.values
       .map { action =>
@@ -467,9 +467,9 @@ object ConfigManager:
        |keymap.editor.extend_selection_down = ${editorBinding(EditorKeyAction.ExtendSelectionDown)}
        |keymap.command_runner.submit = ${bindingValue(
         config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit),
-        CommandRunnerKeymapConfig.defaultBindings.getOrElse(CommandRunnerKeyAction.Submit, Nil)
+        CommandRunnerKeyAction.defaultBindings.getOrElse(CommandRunnerKeyAction.Submit, Nil)
       )}
-       |keymap.modal.dismiss = ${bindingValue(config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss), ModalKeymapConfig.defaultBindings.getOrElse(ModalKeyAction.Dismiss, Nil))}
+       |keymap.modal.dismiss = ${bindingValue(config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss), ModalKeyAction.defaultBindings.getOrElse(ModalKeyAction.Dismiss, Nil))}
        |""".stripMargin
 
   /** Save configuration to file */

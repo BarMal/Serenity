@@ -73,7 +73,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   it should "include keymap editing rows seeded from current bindings" in {
     val config = AppConfig.default
       .withHotkeyOverride(HotkeyAction.ToggleCommandRunner, "ctrl+k")
-      .withCommandRunnerKeyOverride(CommandRunnerKeyAction.Submit, "ctrl+enter")
+      .withKeymapBinding(KeymapGroup.CommandRunner)(CommandRunnerKeyAction.Submit, "ctrl+enter")
     val runner = CommandRunner.empty.activate(registry, config)
 
     val keymapGroup = runner.settingsGroups.find(_.id == "settings-keymap").getOrElse(fail("Expected keymap group"))

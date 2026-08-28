@@ -511,7 +511,8 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val commandRunnerState = editorState.copy(
       persisted = editorState.persisted.copy(
         focus = Focus.Surface(SurfaceId("command-runner")),
-        config = editorState.persisted.config.withCommandRunnerKeyOverride(CommandRunnerKeyAction.Submit, "ctrl+enter")
+        config = editorState.persisted.config
+          .withKeymapBinding(KeymapGroup.CommandRunner)(CommandRunnerKeyAction.Submit, "ctrl+enter")
       ),
       runtime = editorState.runtime.copy(
         uiSurfaces = List(
@@ -537,7 +538,8 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val modalState = editorState.copy(
       persisted = editorState.persisted.copy(
         focus = Focus.Surface(SurfaceId("file-modal")),
-        config = editorState.persisted.config.withModalKeyOverride(ModalKeyAction.Dismiss, "ctrl+escape")
+        config =
+          editorState.persisted.config.withKeymapBinding(KeymapGroup.Modal)(ModalKeyAction.Dismiss, "ctrl+escape")
       ),
       runtime = editorState.runtime.copy(
         uiSurfaces = List(
@@ -565,7 +567,8 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val panelState = editorState.copy(
       persisted = editorState.persisted.copy(
         focus = Focus.Surface(SurfaceId("left-panel")),
-        config = editorState.persisted.config.withPanelKeyOverride(PanelKeyAction.Activate, "ctrl+enter")
+        config =
+          editorState.persisted.config.withKeymapBinding(KeymapGroup.Panel)(PanelKeyAction.Activate, "ctrl+enter")
       ),
       runtime = editorState.runtime.copy(
         uiSurfaces = List(
@@ -592,7 +595,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val peekState = editorState.copy(
       persisted = editorState.persisted.copy(
         focus = Focus.Surface(SurfaceId("peek")),
-        config = editorState.persisted.config.withPeekKeyOverride(PeekKeyAction.Dismiss, "ctrl+escape")
+        config = editorState.persisted.config.withKeymapBinding(KeymapGroup.Peek)(PeekKeyAction.Dismiss, "ctrl+escape")
       ),
       runtime = editorState.runtime.copy(
         uiSurfaces = List(

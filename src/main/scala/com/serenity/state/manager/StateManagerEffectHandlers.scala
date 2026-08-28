@@ -8,7 +8,7 @@ import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
-import com.serenity.config.{DefaultDocumentMode, HotkeyTrigger, MarkdownViewMode}
+import com.serenity.config.{DefaultDocumentMode, HotkeyTrigger, KeymapGroup, MarkdownViewMode}
 import com.serenity.document.{CommentRendering, DocumentNavigation, DocumentOutline}
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
@@ -860,31 +860,33 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.ResolveFocusedKeymapConflict(itemId, binding) =>
         updateConfig(resolveFocusedKeymapConflict(itemId, binding)).void
       case CommandIntent.SetEditorKeyBinding(action, binding) =>
-        updateKeyBinding(s"keymap-editor-${action.configKey}", binding, _.withEditorKeyOverride(action, binding))
+        setKeymapBinding("keymap-editor-", KeymapGroup.Editor)(action, binding)
       case CommandIntent.SetCommandRunnerKeyBinding(action, binding) =>
-        updateKeyBinding(
-          s"keymap-command-runner-${action.configKey}",
-          binding,
-          _.withCommandRunnerKeyOverride(action, binding)
-        )
+        setKeymapBinding("keymap-command-runner-", KeymapGroup.CommandRunner)(action, binding)
       case CommandIntent.SetModalKeyBinding(action, binding) =>
-        updateKeyBinding(s"keymap-modal-${action.configKey}", binding, _.withModalKeyOverride(action, binding))
+        setKeymapBinding("keymap-modal-", KeymapGroup.Modal)(action, binding)
       case CommandIntent.SetPanelKeyBinding(action, binding) =>
-        updateKeyBinding(s"keymap-panel-${action.configKey}", binding, _.withPanelKeyOverride(action, binding))
+        setKeymapBinding("keymap-panel-", KeymapGroup.Panel)(action, binding)
       case CommandIntent.SetPeekKeyBinding(action, binding) =>
-        updateKeyBinding(s"keymap-peek-${action.configKey}", binding, _.withPeekKeyOverride(action, binding))
+        setKeymapBinding("keymap-peek-", KeymapGroup.Peek)(action, binding)
       case CommandIntent.ResetGlobalHotkey(action) =>
         updateConfig(_.resetHotkeyOverride(action)).void
       case CommandIntent.ResetEditorKeyBinding(action) =>
-        updateConfig(_.resetEditorKeyOverride(action)).void
+        updateConfig(_.resetKeymapBinding(KeymapGroup.Editor)(action)).void
       case CommandIntent.ResetCommandRunnerKeyBinding(action) =>
-        updateConfig(_.resetCommandRunnerKeyOverride(action)).void
+        updateConfig(_.resetKeymapBinding(KeymapGroup.CommandRunner)(action)).void
       case CommandIntent.ResetModalKeyBinding(action) =>
-        updateConfig(_.resetModalKeyOverride(action)).void
+        updateConfig(_.resetKeymapBinding(KeymapGroup.Modal)(action)).void
       case CommandIntent.ResetPanelKeyBinding(action) =>
-        updateConfig(_.resetPanelKeyOverride(action)).void
+        updateConfig(_.resetKeymapBinding(KeymapGroup.Panel)(action)).void
       case CommandIntent.ResetPeekKeyBinding(action) =>
-        updateConfig(_.resetPeekKeyOverride(action)).void
+        updateConfig(_.resetKeymapBinding(KeymapGroup.Peek)(action)).void
+
+  private def setKeymapBinding[A <: com.serenity.config.KeymapEventAction[E], E <: com.serenity.keystroke.events.Event](
+    prefix: String,
+    group: KeymapGroup[A, E]
+  )(action: A, binding: String): IO[Unit] =
+    updateKeyBinding(s"$prefix${action.configKey}", binding, _.withKeymapBinding(group)(action, binding))
 
   private def updateKeyBinding(
     itemId: String,
@@ -904,57 +906,21 @@ final private[manager] class StateManagerEffectHandlers(
     itemId: String,
     binding: String
   ): Boolean =
-    HotkeyTrigger.parse(binding).exists { trigger =>
-      itemId match
-        case id if id.startsWith("keymap-editor-") =>
-          com.serenity.config.EditorKeyAction.values
-            .find(_.configKey == id.stripPrefix("keymap-editor-"))
-            .exists(action => config.focusedKeymapConfig.editor.bindingsFor(action).contains(trigger))
-        case id if id.startsWith("keymap-command-runner-") =>
-          com.serenity.config.CommandRunnerKeyAction.values
-            .find(_.configKey == id.stripPrefix("keymap-command-runner-"))
-            .exists(action => config.focusedKeymapConfig.commandRunner.bindingsFor(action).contains(trigger))
-        case id if id.startsWith("keymap-modal-") =>
-          com.serenity.config.ModalKeyAction.values
-            .find(_.configKey == id.stripPrefix("keymap-modal-"))
-            .exists(action => config.focusedKeymapConfig.modal.bindingsFor(action).contains(trigger))
-        case id if id.startsWith("keymap-panel-") =>
-          com.serenity.config.PanelKeyAction.values
-            .find(_.configKey == id.stripPrefix("keymap-panel-"))
-            .exists(action => config.focusedKeymapConfig.panel.bindingsFor(action).contains(trigger))
-        case id if id.startsWith("keymap-peek-") =>
-          com.serenity.config.PeekKeyAction.values
-            .find(_.configKey == id.stripPrefix("keymap-peek-"))
-            .exists(action => config.focusedKeymapConfig.peek.bindingsFor(action).contains(trigger))
-        case _ => false
-    }
+    HotkeyTrigger
+      .parse(binding)
+      .exists(trigger =>
+        StateManagerEffectHandlers.keymapGroupBindings
+          .exists(_.ownsBinding(config.focusedKeymapConfig, itemId, trigger))
+      )
 
   private def resolveFocusedKeymapConflict(
     itemId: String,
     binding: String
   )(config: com.serenity.config.AppConfig): com.serenity.config.AppConfig =
-    itemId match
-      case id if id.startsWith("keymap-editor-") =>
-        com.serenity.config.EditorKeyAction.values
-          .find(_.configKey == id.stripPrefix("keymap-editor-"))
-          .fold(config)(action => config.withEditorKeyOverrideUnbindingConflicts(action, binding))
-      case id if id.startsWith("keymap-command-runner-") =>
-        com.serenity.config.CommandRunnerKeyAction.values
-          .find(_.configKey == id.stripPrefix("keymap-command-runner-"))
-          .fold(config)(action => config.withCommandRunnerKeyOverrideUnbindingConflicts(action, binding))
-      case id if id.startsWith("keymap-modal-") =>
-        com.serenity.config.ModalKeyAction.values
-          .find(_.configKey == id.stripPrefix("keymap-modal-"))
-          .fold(config)(action => config.withModalKeyOverrideUnbindingConflicts(action, binding))
-      case id if id.startsWith("keymap-panel-") =>
-        com.serenity.config.PanelKeyAction.values
-          .find(_.configKey == id.stripPrefix("keymap-panel-"))
-          .fold(config)(action => config.withPanelKeyOverrideUnbindingConflicts(action, binding))
-      case id if id.startsWith("keymap-peek-") =>
-        com.serenity.config.PeekKeyAction.values
-          .find(_.configKey == id.stripPrefix("keymap-peek-"))
-          .fold(config)(action => config.withPeekKeyOverrideUnbindingConflicts(action, binding))
-      case _ => config
+    StateManagerEffectHandlers.keymapGroupBindings
+      .flatMap(_.resolveConflict(config, itemId, binding))
+      .headOption
+      .getOrElse(config)
 
   private def updateGlobalHotkeyBinding(action: com.serenity.config.HotkeyAction, binding: String): IO[Unit] =
     stateRef.get.flatMap { state =>
@@ -2530,3 +2496,39 @@ final private[manager] class StateManagerEffectHandlers(
       ),
       state
     )
+
+private[manager] object StateManagerEffectHandlers:
+  import com.serenity.config.{
+    AppConfig,
+    CommandRunnerKeyAction,
+    EditorKeyAction,
+    FocusedKeymapConfig,
+    KeymapEventAction,
+    ModalKeyAction,
+    PanelKeyAction,
+    PeekKeyAction
+  }
+  import com.serenity.keystroke.events.Event
+
+  /** One keymap group's item-id prefix and action set, bundled with its [[KeymapGroup]] lens. */
+  final private case class KeymapGroupBinding[A <: KeymapEventAction[E], E <: Event](
+      prefix: String,
+      group: KeymapGroup[A, E],
+      values: Array[A]
+  ):
+    def actionFor(itemId: String): Option[A] =
+      Option.when(itemId.startsWith(prefix))(itemId.stripPrefix(prefix)).flatMap(key => values.find(_.configKey == key))
+
+    def ownsBinding(config: FocusedKeymapConfig, itemId: String, trigger: HotkeyTrigger): Boolean =
+      actionFor(itemId).exists(action => group.get(config).bindingsFor(action).contains(trigger))
+
+    def resolveConflict(config: AppConfig, itemId: String, binding: String): Option[AppConfig] =
+      actionFor(itemId).map(action => config.withKeymapBindingUnbindingConflicts(group)(action, binding))
+
+  private val keymapGroupBindings: List[KeymapGroupBinding[?, ?]] = List(
+    KeymapGroupBinding("keymap-editor-", KeymapGroup.Editor, EditorKeyAction.values),
+    KeymapGroupBinding("keymap-command-runner-", KeymapGroup.CommandRunner, CommandRunnerKeyAction.values),
+    KeymapGroupBinding("keymap-modal-", KeymapGroup.Modal, ModalKeyAction.values),
+    KeymapGroupBinding("keymap-panel-", KeymapGroup.Panel, PanelKeyAction.values),
+    KeymapGroupBinding("keymap-peek-", KeymapGroup.Peek, PeekKeyAction.values)
+  )

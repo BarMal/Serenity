@@ -7,8 +7,21 @@ import io.circe.{Decoder, Encoder}
 import HotkeyConfig.given
 
 trait KeymapEventAction[+E <: Event]:
-  def configKey: String
+  /** Set only when a group's on-disk key genuinely diverges from its mechanical snake_case derivation. */
+  def configKeyOverride: Option[String] = None
+
+  final def configKey: String = configKeyOverride.getOrElse(KeymapEventAction.deriveConfigKey(toString))
+
   def event: E
+
+object KeymapEventAction:
+  private def deriveConfigKey(caseName: String): String =
+    caseName.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase
+
+/** The full set of actions and their default bindings for one keymap group's action enum. */
+trait KeymapActionCodec[A]:
+  def values: List[A]
+  def defaultBindings: Map[A, List[HotkeyTrigger]]
 
 private object KeymapBindings:
 
@@ -48,32 +61,6 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
   case Tab
   case ReverseTab
 
-  def configKey: String =
-    this match
-      case MoveLeft            => "move_left"
-      case MoveRight           => "move_right"
-      case MoveUp              => "move_up"
-      case MoveDown            => "move_down"
-      case ExtendSelectionLeft => "extend_selection_left"
-      case ExtendSelectionRight =>
-        "extend_selection_right"
-      case ExtendSelectionUp   => "extend_selection_up"
-      case ExtendSelectionDown => "extend_selection_down"
-      case MoveToStart         => "move_to_start"
-      case MoveToEnd           => "move_to_end"
-      case MoveToStartOfFile   => "move_to_start_of_file"
-      case MoveToEndOfFile     => "move_to_end_of_file"
-      case PageUp              => "page_up"
-      case PageDown            => "page_down"
-      case DeleteBackward      => "delete_backward"
-      case DeleteForward       => "delete_forward"
-      case DeleteWordBackward  => "delete_word_backward"
-      case DeleteWordForward   => "delete_word_forward"
-      case Escape              => "escape"
-      case NewLine             => "new_line"
-      case Tab                 => "tab"
-      case ReverseTab          => "reverse_tab"
-
   def event: EditorEvent =
     this match
       case MoveLeft            => com.serenity.keystroke.events.MoveLeft
@@ -100,168 +87,7 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
       case Tab                 => com.serenity.keystroke.events.TabKey
       case ReverseTab          => com.serenity.keystroke.events.ReverseTabKey
 
-enum CommandRunnerKeyAction extends KeymapEventAction[CommandRunnerEvent]:
-  case NavigateUp
-  case NavigateDown
-  case NavigateLeft
-  case NavigateRight
-  case DeleteBackward
-  case DeleteForward
-  case DeleteWordBackward
-  case DeleteWordForward
-  case NextCategory
-  case PreviousCategory
-  case Submit
-  case Dismiss
-
-  def configKey: String =
-    this match
-      case NavigateUp         => "navigate_up"
-      case NavigateDown       => "navigate_down"
-      case NavigateLeft       => "navigate_left"
-      case NavigateRight      => "navigate_right"
-      case DeleteBackward     => "delete_backward"
-      case DeleteForward      => "delete_forward"
-      case DeleteWordBackward => "delete_word_backward"
-      case DeleteWordForward  => "delete_word_forward"
-      case NextCategory       => "next_category"
-      case PreviousCategory   => "previous_category"
-      case Submit             => "submit"
-      case Dismiss            => "dismiss"
-
-  def event: CommandRunnerEvent =
-    this match
-      case NavigateUp         => RunnerNavigate(Direction.Up)
-      case NavigateDown       => RunnerNavigate(Direction.Down)
-      case NavigateLeft       => RunnerNavigate(Direction.Left)
-      case NavigateRight      => RunnerNavigate(Direction.Right)
-      case DeleteBackward     => RunnerDeleteBackward
-      case DeleteForward      => RunnerDeleteForward
-      case DeleteWordBackward => RunnerDeleteWordBackward
-      case DeleteWordForward  => RunnerDeleteWordForward
-      case NextCategory       => RunnerNextCategory
-      case PreviousCategory   => RunnerPreviousCategory
-      case Submit             => RunnerSubmit
-      case Dismiss            => RunnerDismiss
-
-enum ModalKeyAction extends KeymapEventAction[ModalInputEvent]:
-  case NavigateUp
-  case NavigateDown
-  case NavigateLeft
-  case NavigateRight
-  case DeleteBackward
-  case DeleteForward
-  case DeleteWordBackward
-  case DeleteWordForward
-  case NextField
-  case PreviousField
-  case Submit
-  case Dismiss
-
-  def configKey: String =
-    this match
-      case NavigateUp         => "navigate_up"
-      case NavigateDown       => "navigate_down"
-      case NavigateLeft       => "navigate_left"
-      case NavigateRight      => "navigate_right"
-      case DeleteBackward     => "delete_backward"
-      case DeleteForward      => "delete_forward"
-      case DeleteWordBackward => "delete_word_backward"
-      case DeleteWordForward  => "delete_word_forward"
-      case NextField          => "next_field"
-      case PreviousField      => "previous_field"
-      case Submit             => "submit"
-      case Dismiss            => "dismiss"
-
-  def event: ModalInputEvent =
-    this match
-      case NavigateUp         => ModalNavigate(Direction.Up)
-      case NavigateDown       => ModalNavigate(Direction.Down)
-      case NavigateLeft       => ModalNavigate(Direction.Left)
-      case NavigateRight      => ModalNavigate(Direction.Right)
-      case DeleteBackward     => ModalDeleteBackward
-      case DeleteForward      => ModalDeleteForward
-      case DeleteWordBackward => ModalDeleteWordBackward
-      case DeleteWordForward  => ModalDeleteWordForward
-      case NextField          => ModalNextField
-      case PreviousField      => ModalPreviousField
-      case Submit             => ModalSubmit
-      case Dismiss            => ModalDismiss
-
-enum PanelKeyAction extends KeymapEventAction[PanelInputEvent]:
-  case NavigateUp
-  case NavigateDown
-  case NavigateLeft
-  case NavigateRight
-  case ReturnFocus
-  case Activate
-
-  def configKey: String =
-    this match
-      case NavigateUp    => "navigate_up"
-      case NavigateDown  => "navigate_down"
-      case NavigateLeft  => "navigate_left"
-      case NavigateRight => "navigate_right"
-      case ReturnFocus   => "return_focus"
-      case Activate      => "activate"
-
-  def event: PanelInputEvent =
-    this match
-      case NavigateUp    => PanelInputEvent.Navigate(Direction.Up)
-      case NavigateDown  => PanelInputEvent.Navigate(Direction.Down)
-      case NavigateLeft  => PanelInputEvent.Navigate(Direction.Left)
-      case NavigateRight => PanelInputEvent.Navigate(Direction.Right)
-      case ReturnFocus   => PanelInputEvent.ReturnFocus
-      case Activate      => PanelInputEvent.Activate
-
-enum PeekKeyAction extends KeymapEventAction[PeekInputEvent]:
-  case NavigateUp
-  case NavigateDown
-  case NavigateLeft
-  case NavigateRight
-  case Accept
-  case Dismiss
-  case OtherInput
-
-  def configKey: String =
-    this match
-      case NavigateUp    => "navigate_up"
-      case NavigateDown  => "navigate_down"
-      case NavigateLeft  => "navigate_left"
-      case NavigateRight => "navigate_right"
-      case Accept        => "accept"
-      case Dismiss       => "dismiss"
-      case OtherInput    => "other_input"
-
-  def event: PeekInputEvent =
-    this match
-      case NavigateUp    => PeekInputEvent.Navigate(Direction.Up)
-      case NavigateDown  => PeekInputEvent.Navigate(Direction.Down)
-      case NavigateLeft  => PeekInputEvent.Navigate(Direction.Left)
-      case NavigateRight => PeekInputEvent.Navigate(Direction.Right)
-      case Accept        => PeekInputEvent.Accept
-      case Dismiss       => PeekInputEvent.Dismiss
-      case OtherInput    => PeekInputEvent.OtherInput
-
-final case class EditorKeymapConfig(
-    bindings: Map[EditorKeyAction, List[HotkeyTrigger]] = EditorKeymapConfig.defaultBindings
-):
-  def bindingsFor(action: EditorKeyAction): List[HotkeyTrigger] =
-    bindings.getOrElse(action, Nil)
-
-  def withBinding(action: EditorKeyAction, trigger: HotkeyTrigger): EditorKeymapConfig =
-    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
-
-  def withBindingUnbindingConflicts(action: EditorKeyAction, trigger: HotkeyTrigger): EditorKeymapConfig =
-    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
-
-  def withBinding(action: EditorKeyAction, binding: String): EditorKeymapConfig =
-    HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
-
-  def resetBinding(action: EditorKeyAction): EditorKeymapConfig =
-    copy(bindings = bindings + (action -> EditorKeymapConfig.defaultBindings.getOrElse(action, Nil)))
-
-object EditorKeymapConfig:
+object EditorKeyAction:
 
   val defaultBindings: Map[EditorKeyAction, List[HotkeyTrigger]] = Map(
     EditorKeyAction.MoveLeft  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowLeft, None, Set.empty)),
@@ -320,46 +146,40 @@ object EditorKeymapConfig:
     EditorKeyAction.ReverseTab -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ReverseTab, None, Set.empty))
   )
 
-  given Encoder[EditorKeyAction] = Encoder.encodeString.contramap(_.configKey)
+  given KeymapActionCodec[EditorKeyAction] with
+    def values: List[EditorKeyAction]                              = EditorKeyAction.values.toList
+    def defaultBindings: Map[EditorKeyAction, List[HotkeyTrigger]] = EditorKeyAction.defaultBindings
 
-  given Decoder[EditorKeyAction] = Decoder.decodeString.emap(key =>
-    EditorKeyAction.values.find(_.configKey == key).toRight(s"Unknown editor key action: $key")
-  )
+enum CommandRunnerKeyAction extends KeymapEventAction[CommandRunnerEvent]:
+  case NavigateUp
+  case NavigateDown
+  case NavigateLeft
+  case NavigateRight
+  case DeleteBackward
+  case DeleteForward
+  case DeleteWordBackward
+  case DeleteWordForward
+  case NextCategory
+  case PreviousCategory
+  case Submit
+  case Dismiss
 
-  given Encoder[EditorKeymapConfig] =
-    Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
+  def event: CommandRunnerEvent =
+    this match
+      case NavigateUp         => RunnerNavigate(Direction.Up)
+      case NavigateDown       => RunnerNavigate(Direction.Down)
+      case NavigateLeft       => RunnerNavigate(Direction.Left)
+      case NavigateRight      => RunnerNavigate(Direction.Right)
+      case DeleteBackward     => RunnerDeleteBackward
+      case DeleteForward      => RunnerDeleteForward
+      case DeleteWordBackward => RunnerDeleteWordBackward
+      case DeleteWordForward  => RunnerDeleteWordForward
+      case NextCategory       => RunnerNextCategory
+      case PreviousCategory   => RunnerPreviousCategory
+      case Submit             => RunnerSubmit
+      case Dismiss            => RunnerDismiss
 
-  given Decoder[EditorKeymapConfig] =
-    Decoder
-      .decodeMap[String, List[HotkeyTrigger]]
-      .emap(bindings =>
-        KeymapCodecSupport
-          .decodeBindings(bindings, EditorKeyAction.values.toList, _.configKey, defaultBindings)
-          .map(EditorKeymapConfig(_))
-      )
-
-final case class CommandRunnerKeymapConfig(
-    bindings: Map[CommandRunnerKeyAction, List[HotkeyTrigger]] = CommandRunnerKeymapConfig.defaultBindings
-):
-  def bindingsFor(action: CommandRunnerKeyAction): List[HotkeyTrigger] =
-    bindings.getOrElse(action, Nil)
-
-  def withBinding(action: CommandRunnerKeyAction, trigger: HotkeyTrigger): CommandRunnerKeymapConfig =
-    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
-
-  def withBindingUnbindingConflicts(
-    action: CommandRunnerKeyAction,
-    trigger: HotkeyTrigger
-  ): CommandRunnerKeymapConfig =
-    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
-
-  def withBinding(action: CommandRunnerKeyAction, binding: String): CommandRunnerKeymapConfig =
-    HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
-
-  def resetBinding(action: CommandRunnerKeyAction): CommandRunnerKeymapConfig =
-    copy(bindings = bindings + (action -> CommandRunnerKeymapConfig.defaultBindings.getOrElse(action, Nil)))
-
-object CommandRunnerKeymapConfig:
+object CommandRunnerKeyAction:
 
   val defaultBindings: Map[CommandRunnerKeyAction, List[HotkeyTrigger]] = Map(
     CommandRunnerKeyAction.NavigateUp -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
@@ -392,43 +212,40 @@ object CommandRunnerKeymapConfig:
     CommandRunnerKeyAction.Dismiss -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty))
   )
 
-  given Encoder[CommandRunnerKeyAction] = Encoder.encodeString.contramap(_.configKey)
+  given KeymapActionCodec[CommandRunnerKeyAction] with
+    def values: List[CommandRunnerKeyAction]                              = CommandRunnerKeyAction.values.toList
+    def defaultBindings: Map[CommandRunnerKeyAction, List[HotkeyTrigger]] = CommandRunnerKeyAction.defaultBindings
 
-  given Decoder[CommandRunnerKeyAction] = Decoder.decodeString.emap(key =>
-    CommandRunnerKeyAction.values.find(_.configKey == key).toRight(s"Unknown command runner key action: $key")
-  )
+enum ModalKeyAction extends KeymapEventAction[ModalInputEvent]:
+  case NavigateUp
+  case NavigateDown
+  case NavigateLeft
+  case NavigateRight
+  case DeleteBackward
+  case DeleteForward
+  case DeleteWordBackward
+  case DeleteWordForward
+  case NextField
+  case PreviousField
+  case Submit
+  case Dismiss
 
-  given Encoder[CommandRunnerKeymapConfig] =
-    Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
+  def event: ModalInputEvent =
+    this match
+      case NavigateUp         => ModalNavigate(Direction.Up)
+      case NavigateDown       => ModalNavigate(Direction.Down)
+      case NavigateLeft       => ModalNavigate(Direction.Left)
+      case NavigateRight      => ModalNavigate(Direction.Right)
+      case DeleteBackward     => ModalDeleteBackward
+      case DeleteForward      => ModalDeleteForward
+      case DeleteWordBackward => ModalDeleteWordBackward
+      case DeleteWordForward  => ModalDeleteWordForward
+      case NextField          => ModalNextField
+      case PreviousField      => ModalPreviousField
+      case Submit             => ModalSubmit
+      case Dismiss            => ModalDismiss
 
-  given Decoder[CommandRunnerKeymapConfig] =
-    Decoder
-      .decodeMap[String, List[HotkeyTrigger]]
-      .emap(bindings =>
-        KeymapCodecSupport
-          .decodeBindings(bindings, CommandRunnerKeyAction.values.toList, _.configKey, defaultBindings)
-          .map(CommandRunnerKeymapConfig(_))
-      )
-
-final case class ModalKeymapConfig(
-    bindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeymapConfig.defaultBindings
-):
-  def bindingsFor(action: ModalKeyAction): List[HotkeyTrigger] =
-    bindings.getOrElse(action, Nil)
-
-  def withBinding(action: ModalKeyAction, trigger: HotkeyTrigger): ModalKeymapConfig =
-    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
-
-  def withBindingUnbindingConflicts(action: ModalKeyAction, trigger: HotkeyTrigger): ModalKeymapConfig =
-    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
-
-  def withBinding(action: ModalKeyAction, binding: String): ModalKeymapConfig =
-    HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
-
-  def resetBinding(action: ModalKeyAction): ModalKeymapConfig =
-    copy(bindings = bindings + (action -> ModalKeymapConfig.defaultBindings.getOrElse(action, Nil)))
-
-object ModalKeymapConfig:
+object ModalKeyAction:
 
   val defaultBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = Map(
     ModalKeyAction.NavigateUp     -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
@@ -449,43 +266,28 @@ object ModalKeymapConfig:
     ModalKeyAction.Dismiss       -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty))
   )
 
-  given Encoder[ModalKeyAction] = Encoder.encodeString.contramap(_.configKey)
+  given KeymapActionCodec[ModalKeyAction] with
+    def values: List[ModalKeyAction]                              = ModalKeyAction.values.toList
+    def defaultBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings
 
-  given Decoder[ModalKeyAction] = Decoder.decodeString.emap(key =>
-    ModalKeyAction.values.find(_.configKey == key).toRight(s"Unknown modal key action: $key")
-  )
+enum PanelKeyAction extends KeymapEventAction[PanelInputEvent]:
+  case NavigateUp
+  case NavigateDown
+  case NavigateLeft
+  case NavigateRight
+  case ReturnFocus
+  case Activate
 
-  given Encoder[ModalKeymapConfig] =
-    Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
+  def event: PanelInputEvent =
+    this match
+      case NavigateUp    => PanelInputEvent.Navigate(Direction.Up)
+      case NavigateDown  => PanelInputEvent.Navigate(Direction.Down)
+      case NavigateLeft  => PanelInputEvent.Navigate(Direction.Left)
+      case NavigateRight => PanelInputEvent.Navigate(Direction.Right)
+      case ReturnFocus   => PanelInputEvent.ReturnFocus
+      case Activate      => PanelInputEvent.Activate
 
-  given Decoder[ModalKeymapConfig] =
-    Decoder
-      .decodeMap[String, List[HotkeyTrigger]]
-      .emap(bindings =>
-        KeymapCodecSupport
-          .decodeBindings(bindings, ModalKeyAction.values.toList, _.configKey, defaultBindings)
-          .map(ModalKeymapConfig(_))
-      )
-
-final case class PanelKeymapConfig(
-    bindings: Map[PanelKeyAction, List[HotkeyTrigger]] = PanelKeymapConfig.defaultBindings
-):
-  def bindingsFor(action: PanelKeyAction): List[HotkeyTrigger] =
-    bindings.getOrElse(action, Nil)
-
-  def withBinding(action: PanelKeyAction, trigger: HotkeyTrigger): PanelKeymapConfig =
-    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
-
-  def withBindingUnbindingConflicts(action: PanelKeyAction, trigger: HotkeyTrigger): PanelKeymapConfig =
-    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
-
-  def withBinding(action: PanelKeyAction, binding: String): PanelKeymapConfig =
-    HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
-
-  def resetBinding(action: PanelKeyAction): PanelKeymapConfig =
-    copy(bindings = bindings + (action -> PanelKeymapConfig.defaultBindings.getOrElse(action, Nil)))
-
-object PanelKeymapConfig:
+object PanelKeyAction:
 
   val defaultBindings: Map[PanelKeyAction, List[HotkeyTrigger]] = Map(
     PanelKeyAction.NavigateUp    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
@@ -502,43 +304,30 @@ object PanelKeymapConfig:
     PanelKeyAction.Activate -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty))
   )
 
-  given Encoder[PanelKeyAction] = Encoder.encodeString.contramap(_.configKey)
+  given KeymapActionCodec[PanelKeyAction] with
+    def values: List[PanelKeyAction]                              = PanelKeyAction.values.toList
+    def defaultBindings: Map[PanelKeyAction, List[HotkeyTrigger]] = PanelKeyAction.defaultBindings
 
-  given Decoder[PanelKeyAction] = Decoder.decodeString.emap(key =>
-    PanelKeyAction.values.find(_.configKey == key).toRight(s"Unknown panel key action: $key")
-  )
+enum PeekKeyAction extends KeymapEventAction[PeekInputEvent]:
+  case NavigateUp
+  case NavigateDown
+  case NavigateLeft
+  case NavigateRight
+  case Accept
+  case Dismiss
+  case OtherInput
 
-  given Encoder[PanelKeymapConfig] =
-    Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
+  def event: PeekInputEvent =
+    this match
+      case NavigateUp    => PeekInputEvent.Navigate(Direction.Up)
+      case NavigateDown  => PeekInputEvent.Navigate(Direction.Down)
+      case NavigateLeft  => PeekInputEvent.Navigate(Direction.Left)
+      case NavigateRight => PeekInputEvent.Navigate(Direction.Right)
+      case Accept        => PeekInputEvent.Accept
+      case Dismiss       => PeekInputEvent.Dismiss
+      case OtherInput    => PeekInputEvent.OtherInput
 
-  given Decoder[PanelKeymapConfig] =
-    Decoder
-      .decodeMap[String, List[HotkeyTrigger]]
-      .emap(bindings =>
-        KeymapCodecSupport
-          .decodeBindings(bindings, PanelKeyAction.values.toList, _.configKey, defaultBindings)
-          .map(PanelKeymapConfig(_))
-      )
-
-final case class PeekKeymapConfig(
-    bindings: Map[PeekKeyAction, List[HotkeyTrigger]] = PeekKeymapConfig.defaultBindings
-):
-  def bindingsFor(action: PeekKeyAction): List[HotkeyTrigger] =
-    bindings.getOrElse(action, Nil)
-
-  def withBinding(action: PeekKeyAction, trigger: HotkeyTrigger): PeekKeymapConfig =
-    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
-
-  def withBindingUnbindingConflicts(action: PeekKeyAction, trigger: HotkeyTrigger): PeekKeymapConfig =
-    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
-
-  def withBinding(action: PeekKeyAction, binding: String): PeekKeymapConfig =
-    HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
-
-  def resetBinding(action: PeekKeyAction): PeekKeymapConfig =
-    copy(bindings = bindings + (action -> PeekKeymapConfig.defaultBindings.getOrElse(action, Nil)))
-
-object PeekKeymapConfig:
+object PeekKeyAction:
 
   val defaultBindings: Map[PeekKeyAction, List[HotkeyTrigger]] = Map(
     PeekKeyAction.NavigateUp    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set.empty)),
@@ -555,86 +344,92 @@ object PeekKeymapConfig:
     )
   )
 
-  given Encoder[PeekKeyAction] = Encoder.encodeString.contramap(_.configKey)
+  given KeymapActionCodec[PeekKeyAction] with
+    def values: List[PeekKeyAction]                              = PeekKeyAction.values.toList
+    def defaultBindings: Map[PeekKeyAction, List[HotkeyTrigger]] = PeekKeyAction.defaultBindings
 
-  given Decoder[PeekKeyAction] = Decoder.decodeString.emap(key =>
-    PeekKeyAction.values.find(_.configKey == key).toRight(s"Unknown peek key action: $key")
-  )
+/** One keymap group's bindings: the action-to-trigger map plus the four operations every group supports. */
+final case class KeymapGroupConfig[A <: KeymapEventAction[E], E <: Event](
+    bindings: Map[A, List[HotkeyTrigger]]
+)(using codec: KeymapActionCodec[A]):
 
-  given Encoder[PeekKeymapConfig] =
+  def bindingsFor(action: A): List[HotkeyTrigger] = bindings.getOrElse(action, Nil)
+
+  def withBinding(action: A, trigger: HotkeyTrigger): KeymapGroupConfig[A, E] =
+    copy(bindings = KeymapBindings.assign(bindings, action, trigger))
+
+  def withBindingUnbindingConflicts(action: A, trigger: HotkeyTrigger): KeymapGroupConfig[A, E] =
+    copy(bindings = KeymapBindings.assignUnbindingConflicts(bindings, action, trigger))
+
+  def withBinding(action: A, binding: String): KeymapGroupConfig[A, E] =
+    HotkeyTrigger.parse(binding).map(trigger => withBinding(action, trigger)).getOrElse(this)
+
+  def resetBinding(action: A): KeymapGroupConfig[A, E] =
+    copy(bindings = bindings + (action -> codec.defaultBindings.getOrElse(action, Nil)))
+
+object KeymapGroupConfig:
+
+  /** The group populated with its action type's default bindings. */
+  def defaults[A <: KeymapEventAction[E], E <: Event](using codec: KeymapActionCodec[A]): KeymapGroupConfig[A, E] =
+    KeymapGroupConfig(codec.defaultBindings)
+
+  given [A <: KeymapEventAction[E], E <: Event]: Encoder[KeymapGroupConfig[A, E]] =
     Encoder.instance(config => KeymapCodecSupport.encodeBindings(config.bindings)(_.configKey))
 
-  given Decoder[PeekKeymapConfig] =
+  given [A <: KeymapEventAction[E], E <: Event](using codec: KeymapActionCodec[A]): Decoder[KeymapGroupConfig[A, E]] =
     Decoder
       .decodeMap[String, List[HotkeyTrigger]]
       .emap(bindings =>
         KeymapCodecSupport
-          .decodeBindings(bindings, PeekKeyAction.values.toList, _.configKey, defaultBindings)
-          .map(PeekKeymapConfig(_))
+          .decodeBindings(bindings, codec.values, (action: A) => action.configKey, codec.defaultBindings)
+          .map(KeymapGroupConfig(_))
       )
 
-final case class FocusedKeymapConfig(
-    editor: EditorKeymapConfig = EditorKeymapConfig(),
-    commandRunner: CommandRunnerKeymapConfig = CommandRunnerKeymapConfig(),
-    modal: ModalKeymapConfig = ModalKeymapConfig(),
-    panel: PanelKeymapConfig = PanelKeymapConfig(),
-    peek: PeekKeymapConfig = PeekKeymapConfig()
+/** Selects one of [[FocusedKeymapConfig]]'s keymap groups, carrying the lens needed to read and update it. Adding a new
+  * keymap group means adding one case here (and the enum/codec pair it points at) — no new methods on
+  * [[FocusedKeymapConfig]] or [[AppConfig]] are needed.
+  */
+enum KeymapGroup[A <: KeymapEventAction[E], E <: Event](
+    val get: FocusedKeymapConfig => KeymapGroupConfig[A, E],
+    val set: (FocusedKeymapConfig, KeymapGroupConfig[A, E]) => FocusedKeymapConfig
 ):
-  def withEditorBinding(action: EditorKeyAction, binding: String): FocusedKeymapConfig =
-    copy(editor = editor.withBinding(action, binding))
+  case Editor
+      extends KeymapGroup[EditorKeyAction, EditorEvent](_.editor, (config, group) => config.copy(editor = group))
 
-  def withEditorBindingUnbindingConflicts(action: EditorKeyAction, binding: String): FocusedKeymapConfig =
+  case CommandRunner
+      extends KeymapGroup[CommandRunnerKeyAction, CommandRunnerEvent](
+        _.commandRunner,
+        (config, group) => config.copy(commandRunner = group)
+      )
+
+  case Modal
+      extends KeymapGroup[ModalKeyAction, ModalInputEvent](_.modal, (config, group) => config.copy(modal = group))
+  case Panel
+      extends KeymapGroup[PanelKeyAction, PanelInputEvent](_.panel, (config, group) => config.copy(panel = group))
+  case Peek extends KeymapGroup[PeekKeyAction, PeekInputEvent](_.peek, (config, group) => config.copy(peek = group))
+
+final case class FocusedKeymapConfig(
+    editor: KeymapGroupConfig[EditorKeyAction, EditorEvent] = KeymapGroupConfig.defaults,
+    commandRunner: KeymapGroupConfig[CommandRunnerKeyAction, CommandRunnerEvent] = KeymapGroupConfig.defaults,
+    modal: KeymapGroupConfig[ModalKeyAction, ModalInputEvent] = KeymapGroupConfig.defaults,
+    panel: KeymapGroupConfig[PanelKeyAction, PanelInputEvent] = KeymapGroupConfig.defaults,
+    peek: KeymapGroupConfig[PeekKeyAction, PeekInputEvent] = KeymapGroupConfig.defaults
+):
+
+  def withBinding[A <: KeymapEventAction[E], E <: Event](
+    group: KeymapGroup[A, E]
+  )(action: A, binding: String): FocusedKeymapConfig =
+    group.set(this, group.get(this).withBinding(action, binding))
+
+  def withBindingUnbindingConflicts[A <: KeymapEventAction[E], E <: Event](
+    group: KeymapGroup[A, E]
+  )(action: A, binding: String): FocusedKeymapConfig =
     HotkeyTrigger
       .parse(binding)
-      .fold(this)(trigger => copy(editor = editor.withBindingUnbindingConflicts(action, trigger)))
+      .fold(this)(trigger => group.set(this, group.get(this).withBindingUnbindingConflicts(action, trigger)))
 
-  def withCommandRunnerBinding(action: CommandRunnerKeyAction, binding: String): FocusedKeymapConfig =
-    copy(commandRunner = commandRunner.withBinding(action, binding))
-
-  def withCommandRunnerBindingUnbindingConflicts(
-    action: CommandRunnerKeyAction,
-    binding: String
-  ): FocusedKeymapConfig =
-    HotkeyTrigger
-      .parse(binding)
-      .fold(this)(trigger => copy(commandRunner = commandRunner.withBindingUnbindingConflicts(action, trigger)))
-
-  def withModalBinding(action: ModalKeyAction, binding: String): FocusedKeymapConfig =
-    copy(modal = modal.withBinding(action, binding))
-
-  def withModalBindingUnbindingConflicts(action: ModalKeyAction, binding: String): FocusedKeymapConfig =
-    HotkeyTrigger
-      .parse(binding)
-      .fold(this)(trigger => copy(modal = modal.withBindingUnbindingConflicts(action, trigger)))
-
-  def withPanelBinding(action: PanelKeyAction, binding: String): FocusedKeymapConfig =
-    copy(panel = panel.withBinding(action, binding))
-
-  def withPanelBindingUnbindingConflicts(action: PanelKeyAction, binding: String): FocusedKeymapConfig =
-    HotkeyTrigger
-      .parse(binding)
-      .fold(this)(trigger => copy(panel = panel.withBindingUnbindingConflicts(action, trigger)))
-
-  def withPeekBinding(action: PeekKeyAction, binding: String): FocusedKeymapConfig =
-    copy(peek = peek.withBinding(action, binding))
-
-  def withPeekBindingUnbindingConflicts(action: PeekKeyAction, binding: String): FocusedKeymapConfig =
-    HotkeyTrigger.parse(binding).fold(this)(trigger => copy(peek = peek.withBindingUnbindingConflicts(action, trigger)))
-
-  def resetEditorBinding(action: EditorKeyAction): FocusedKeymapConfig =
-    copy(editor = editor.resetBinding(action))
-
-  def resetCommandRunnerBinding(action: CommandRunnerKeyAction): FocusedKeymapConfig =
-    copy(commandRunner = commandRunner.resetBinding(action))
-
-  def resetModalBinding(action: ModalKeyAction): FocusedKeymapConfig =
-    copy(modal = modal.resetBinding(action))
-
-  def resetPanelBinding(action: PanelKeyAction): FocusedKeymapConfig =
-    copy(panel = panel.resetBinding(action))
-
-  def resetPeekBinding(action: PeekKeyAction): FocusedKeymapConfig =
-    copy(peek = peek.resetBinding(action))
+  def resetBinding[A <: KeymapEventAction[E], E <: Event](group: KeymapGroup[A, E])(action: A): FocusedKeymapConfig =
+    group.set(this, group.get(this).resetBinding(action))
 
 object FocusedKeymapConfig:
 
