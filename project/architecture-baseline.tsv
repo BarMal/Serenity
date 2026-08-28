@@ -20,7 +20,7 @@ main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2592
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	865
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	method submitReplaceNextEffect	85
-main/scala/com/serenity/state/models/AppState.scala	file length	734
+main/scala/com/serenity/state/models/AppState.scala	file length	817
 main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseItems	173
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	830
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceActive	422
@@ -38,14 +38,14 @@ main/scala/com/serenity/ui/renderer/TextOverlayRenderer.scala	file length	1027
 main/scala/com/serenity/ui/terminal/SwingWindow.scala	file length	1152
 main/scala/com/serenity/ui/theme/ThemeManager.scala	method highlightMarkdownLine	89
 test/scala/com/serenity/AppRuntimeSpec.scala	file length	1250
-test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1863
+test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1871
 test/scala/com/serenity/CommandRunnerFloatingRenderingSpec.scala	file length	864
 test/scala/com/serenity/CommandRunnerReducerSpec.scala	file length	1309
 test/scala/com/serenity/CommandRunnerSpec.scala	file length	1111
 test/scala/com/serenity/ConfigManagerSpec.scala	file length	1337
 test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1252
 test/scala/com/serenity/CursorOverlayLayoutSpec.scala	file length	615
-test/scala/com/serenity/EditorBehaviorSpec.scala	file length	634
+test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
 test/scala/com/serenity/EditorEventReducerSpec.scala	file length	2255
 test/scala/com/serenity/FileHandlingSpec.scala	file length	625
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	640

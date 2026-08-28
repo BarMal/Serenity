@@ -616,8 +616,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
             .copy(document = state.persisted.buffers(dirtyBufferId).document.copy(isDirty = true))
         state.copy(persisted =
           state.persisted.copy(
-            buffers = state.persisted.buffers + (dirtyBufferId -> buffer),
-            bufferOrder = state.persisted.bufferOrder :+ dirtyBufferId
+            buffers = state.persisted.buffers + (dirtyBufferId -> buffer)
           )
         )
       }
@@ -645,8 +644,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
             .copy(document = state.persisted.buffers(dirtyBufferId).document.copy(isDirty = true))
         state.copy(persisted =
           state.persisted.copy(
-            buffers = state.persisted.buffers + (dirtyBufferId -> buffer),
-            bufferOrder = state.persisted.bufferOrder :+ dirtyBufferId
+            buffers = state.persisted.buffers + (dirtyBufferId -> buffer)
           )
         )
       }
@@ -956,7 +954,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer =
           state.persisted
             .buffers(bufferId)
-            .copy(editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4))))
+            .copy(
+              document = state.persisted
+                .buffers(bufferId)
+                .document
+                .copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie")),
+              editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4)))
+            )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
@@ -981,6 +985,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state.persisted
           .buffers(bufferId)
           .copy(
+            document = state.persisted
+              .buffers(bufferId)
+              .document
+              .copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho")),
             editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
             annotations = state.persisted
               .buffers(bufferId)
