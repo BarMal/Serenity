@@ -113,14 +113,15 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   "SpellChecker Hunspell affix support" should "explicitly report unsupported affix directives instead of silently ignoring them" in {
+    // COMPOUNDFLAG and CIRCUMFIX (issue #1182) remain unimplemented -- compounding is deferred to a follow-up
+    // issue, see the PR description for the real-dictionary evidence behind that call.
     val (dictionary, _) = writeHunspellDictionary(
       "serenity-unsupported-affix",
       List("hello/A"),
       List(
         "SET UTF-8",
         "COMPOUNDFLAG A",
-        "ICONV 1",
-        "ICONV a b"
+        "CIRCUMFIX A"
       )
     )
     val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
@@ -130,7 +131,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     diagnostics.map(_.code) should contain(Some("dictionary-load-failed"))
     val failureMessages = diagnostics.filter(_.code.contains("dictionary-load-failed")).map(_.message)
     failureMessages.exists(_.contains("COMPOUNDFLAG")) shouldBe true
-    failureMessages.exists(_.contains("ICONV")) shouldBe true
+    failureMessages.exists(_.contains("CIRCUMFIX")) shouldBe true
     diagnostics.map(_.message) should contain("Possible spelling issue: wurld")
   }
 
@@ -145,5 +146,67 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     val diagnostics = SpellChecker.check("draft drafting", config)
 
     diagnostics.map(_.code) should not contain Some("dictionary-load-failed")
+  }
+
+  // Real-shaped fixture: en_US.aff / fr_FR.aff and friends (SubtitleEdit, LibreOffice dictionaries) declare
+  // exactly this ICONV pair to normalize the "fi" ligature typed by many PDF/typeset copy-paste sources into
+  // plain ASCII before matching against the dictionary, and OCONV to convert a plain apostrophe in generated
+  // suggestions into a typographic one.
+  it should "apply ICONV input conversion so ligature variants of a dictionary word are recognized" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-iconv-ligature",
+      List("file"),
+      List(
+        "SET UTF-8",
+        "ICONV 1",
+        "ICONV ﬁ fi"
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    // "ﬁle" is the ligature-typed variant of "file" (fi-ligature + "le").
+    val diagnostics = SpellChecker.check("ﬁle wurld", config)
+
+    diagnostics.map(_.code) should not contain Some("dictionary-load-failed")
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
+  }
+
+  it should "apply OCONV output conversion to REP-based suggestions" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-oconv-suggestion",
+      List("café/A"),
+      List(
+        "SET UTF-8",
+        "OCONV 1",
+        "OCONV ' ’",
+        "REP 1",
+        "REP cafe caf'e"
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("cafe", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: cafe (suggestion: caf’e)")
+  }
+
+  // Real-shaped fixture: NEEDAFFIX marks "draft" (flag X) as a virtual stem -- valid only when affixed, per
+  // hunspell(5): "words only valid when affixed". Flag G separately supplies the "-ing" suffix.
+  it should "reject the bare form of a NEEDAFFIX-flagged root while accepting its affixed forms" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-needaffix-root-rejected",
+      List("draft/XG"),
+      List(
+        "SET UTF-8",
+        "NEEDAFFIX X",
+        "SFX G Y 1",
+        "SFX G 0 ing ."
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("draft drafting", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: draft")
   }
 end SpellCheckerDictionaryIoSpec

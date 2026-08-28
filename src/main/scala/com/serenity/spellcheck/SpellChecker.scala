@@ -38,16 +38,23 @@ object SpellChecker:
   final private case class DictionaryLoadResult(
       words: Set[String],
       replacements: Map[String, List[String]],
-      failures: List[String]
+      failures: List[String],
+      iconv: List[(String, String)],
+      oconv: List[(String, String)]
   )
 
   /** Immutable, already-loaded dictionary data that pure analysis (`analyzeText`, `refreshDiagnostics`) consumes.
     * Building one performs no filesystem IO; only `loadDictionarySnapshot` does.
+    *
+    * `iconv`/`oconv` are the merged Hunspell ICONV/OCONV conversion tables (issue #1182) across every loaded
+    * dictionary, applied respectively to words before dictionary lookup and to REP-based suggestions before display.
     */
   final case class DictionaryContext(
       words: Set[String],
       replacements: Map[String, List[String]],
-      failures: List[String]
+      failures: List[String],
+      iconv: List[(String, String)] = Nil,
+      oconv: List[(String, String)] = Nil
   )
 
   /** The result of one explicit dictionary-discovery pass: the loaded words/replacements/failures plus the on-disk
@@ -69,12 +76,15 @@ object SpellChecker:
       flagAliases: Map[String, Set[String]],
       prefixes: Map[String, List[HunspellAffixRule]],
       suffixes: Map[String, List[HunspellAffixRule]],
-      replacements: Map[String, List[String]]
+      replacements: Map[String, List[String]],
+      needAffixFlag: Option[String],
+      iconv: List[(String, String)],
+      oconv: List[(String, String)]
   )
 
   private object HunspellAffixRules:
     val empty: HunspellAffixRules =
-      HunspellAffixRules(HunspellFlagMode.Simple, Map.empty, Map.empty, Map.empty, Map.empty)
+      HunspellAffixRules(HunspellFlagMode.Simple, Map.empty, Map.empty, Map.empty, Map.empty, None, Nil, Nil)
 
   final private case class HunspellAffixRule(strip: String, append: String, condition: String, combineable: Boolean)
   final private case class HunspellEntry(word: String, flags: Set[String])
@@ -147,10 +157,18 @@ object SpellChecker:
           .flatMap { (line, lineIndex) =>
             WordPattern
               .findAllMatchIn(line)
-              .filterNot(match_ => isAccepted(match_.matched, dictionary.words))
+              // ICONV (#1182): normalize input character variants (ligatures, alternate quote glyphs, ...) to the
+              // form the dictionary was built from before checking membership -- exactly what hunspell itself does
+              // before matching checked text against the dictionary.
+              .filterNot(match_ => isAccepted(applyConversionTable(match_.matched, dictionary.iconv), dictionary.words))
               .map { match_ =>
-                val word        = match_.matched
-                val suggestions = dictionary.replacements.getOrElse(normalizeWord(word), Nil)
+                val word          = match_.matched
+                val convertedWord = applyConversionTable(word, dictionary.iconv)
+                // OCONV (#1182): applied only to generated suggestions, matching hunspell's output-conversion
+                // semantics -- the word as typed (`word`, above) is shown unconverted in the diagnostic message.
+                val suggestions = dictionary.replacements
+                  .getOrElse(normalizeWord(convertedWord), Nil)
+                  .map(applyConversionTable(_, dictionary.oconv))
                 Diagnostic(
                   range = LspRange(
                     LspPosition(lineIndex, match_.start),
@@ -276,7 +294,9 @@ object SpellChecker:
     val context = DictionaryContext(
       words = (externalWords ++ fallbackWords ++ normalized.additionalWords).map(normalizeWord),
       replacements = externalReplacements,
-      failures = failures.distinct
+      failures = failures.distinct,
+      iconv = externalResults.flatMap(_.iconv).distinct,
+      oconv = externalResults.flatMap(_.oconv).distinct
     )
     DictionarySnapshot(context, SpellCheckConfig.discoverDictionaryFingerprints(normalized))
 
@@ -300,9 +320,9 @@ object SpellChecker:
 
   private def readDictionary(path: Path): DictionaryLoadResult =
     if !Files.exists(path) then
-      DictionaryLoadResult(Set.empty, Map.empty, List(s"Dictionary file does not exist: $path"))
+      DictionaryLoadResult(Set.empty, Map.empty, List(s"Dictionary file does not exist: $path"), Nil, Nil)
     else if Files.isDirectory(path) then
-      DictionaryLoadResult(Set.empty, Map.empty, List(s"Dictionary path is a directory: $path"))
+      DictionaryLoadResult(Set.empty, Map.empty, List(s"Dictionary path is a directory: $path"), Nil, Nil)
     else
       try
         val affixPath      = affixPathFor(path)
@@ -322,10 +342,16 @@ object SpellChecker:
           .map(normalizeWord)
           .toSet
 
-        DictionaryLoadResult(words, affixRules.replacements, unsupportedAff)
+        DictionaryLoadResult(words, affixRules.replacements, unsupportedAff, affixRules.iconv, affixRules.oconv)
       catch
         case NonFatal(error) =>
-          DictionaryLoadResult(Set.empty, Map.empty, List(s"Could not load dictionary $path: ${error.getMessage}"))
+          DictionaryLoadResult(
+            Set.empty,
+            Map.empty,
+            List(s"Could not load dictionary $path: ${error.getMessage}"),
+            Nil,
+            Nil
+          )
 
   private def affixPathFor(dictionaryPath: Path): Option[Path] =
     SpellCheckConfig
@@ -349,18 +375,25 @@ object SpellChecker:
     Files.readAllLines(path, charset).toArray.toList.collect { case line: String => line.trim }
 
   private def parseAffixRules(lines: List[String]): HunspellAffixRules =
-    val flagMode     = parseFlagMode(lines)
-    val flagAliases  = parseFlagAliases(lines, flagMode)
-    val prefixRules  = parseAffixRules(lines, "PFX")
-    val suffixRules  = parseAffixRules(lines, "SFX")
-    val replacements = parseReplacements(lines)
-    HunspellAffixRules(flagMode, flagAliases, prefixRules, suffixRules, replacements)
+    val flagMode      = parseFlagMode(lines)
+    val flagAliases   = parseFlagAliases(lines, flagMode)
+    val prefixRules   = parseAffixRules(lines, "PFX")
+    val suffixRules   = parseAffixRules(lines, "SFX")
+    val replacements  = parseReplacements(lines)
+    val needAffixFlag = parseNeedAffixFlag(lines)
+    val iconv         = parseConversionTable(lines, "ICONV")
+    val oconv         = parseConversionTable(lines, "OCONV")
+    HunspellAffixRules(flagMode, flagAliases, prefixRules, suffixRules, replacements, needAffixFlag, iconv, oconv)
 
   /** Directives from the Hunspell affix format that this handwritten parser does not implement (compounding,
-    * character-set conversion, morphological generation, and similar). Rather than silently ignoring them -- which
-    * would mis-flag words that rely on them -- their presence is surfaced as an explicit dictionary-load diagnostic.
-    * See the PR description for why this project carries a partial parser instead of a dependency on Lucene's Hunspell
-    * implementation.
+    * morphological generation, and similar). Rather than silently ignoring them -- which would mis-flag words that rely
+    * on them -- their presence is surfaced as an explicit dictionary-load diagnostic. See the PR description for why
+    * this project carries a partial parser instead of a dependency on Lucene's Hunspell implementation.
+    *
+    * ICONV/OCONV and NEEDAFFIX (issue #1182) are implemented and intentionally absent from this set -- see
+    * `parseConversionTable` and `parseNeedAffixFlag`. The compounding family (COMPOUND*, SYLLABLENUM, ONLYINCOMPOUND,
+    * CHECKCOMPOUND*, SIMPLIFIEDTRIPLE) and CIRCUMFIX remain unsupported and are deferred to a follow-up issue -- see
+    * the PR description for why.
     */
   private val UnsupportedAffixDirectives = Set(
     "COMPOUNDFLAG",
@@ -379,10 +412,7 @@ object SpellChecker:
     "CHECKCOMPOUNDTRIPLE",
     "CHECKCOMPOUNDPATTERN",
     "SIMPLIFIEDTRIPLE",
-    "ICONV",
-    "OCONV",
     "CIRCUMFIX",
-    "NEEDAFFIX",
     "PSEUDOROOT",
     "FORBIDDENWORD",
     "WARN",
@@ -470,6 +500,36 @@ object SpellChecker:
           replacements
     }
 
+  /** `NEEDAFFIX <flag>` (hunspell(5)): marks a root as a "virtual stem", valid only when affixed -- the bare root must
+    * be excluded from the accepted word set even though it appears in the .dic file, while its affixed forms remain
+    * valid. `<flag>` is a single flag token in whatever representation the file's FLAG mode uses, matched directly
+    * against an entry's parsed flag set.
+    */
+  private def parseNeedAffixFlag(lines: List[String]): Option[String] =
+    lines
+      .collectFirst {
+        case line if line.startsWith("NEEDAFFIX ") => line.stripPrefix("NEEDAFFIX ").trim
+      }
+      .filter(_.nonEmpty)
+
+  /** `ICONV`/`OCONV` (hunspell(5)): an input/output character conversion table, one `directive from to` line per entry
+    * after the `directive count` header. Real-world dictionaries (en_US.aff, fr_FR.aff, nl_NL.aff, and others) use it
+    * for ligature and typographic-quote normalization, e.g. `ICONV ﬁ fi`. This implements only the common
+    * literal-substring form seen in every real dictionary checked for issue #1182; the rarer `_` end-of-word anchor
+    * form is read as an ordinary pattern rather than specially handled, so a rule using it is a safe no-op (its
+    * pattern, containing a literal underscore, will not occur in real words) instead of matching the wrong position --
+    * no real dictionary surveyed for this issue used it.
+    */
+  private def parseConversionTable(lines: List[String], directive: String): List[(String, String)] =
+    lines.flatMap { line =>
+      line.split("\\s+").toList match
+        case candidate :: from :: to :: Nil if candidate == directive => Some(from -> to)
+        case _                                                        => None
+    }
+
+  private def applyConversionTable(word: String, table: List[(String, String)]): String =
+    table.foldLeft(word) { case (converted, (from, to)) => converted.replace(from, to) }
+
   private def parseHunspellDictionaryEntry(line: String, affixRules: HunspellAffixRules): Option[HunspellEntry] =
     val withoutMorphology = line.takeWhile(char => !char.isWhitespace)
     val word              = withoutMorphology.takeWhile(_ != '/').trim
@@ -505,7 +565,10 @@ object SpellChecker:
         suffixed   <- applySuffix(entry.word, suffixRule)
         combined   <- applyPrefix(suffixed, prefixRule)
       yield combined
-    Set(entry.word) ++ prefixes ++ suffixes ++ combined
+    // NEEDAFFIX (#1182): a root flagged with the configured NEEDAFFIX flag is a "virtual stem" -- valid only
+    // affixed, per hunspell(5) -- so the bare word is dropped here while its affixed forms above are kept.
+    val standalone = if affixRules.needAffixFlag.exists(entry.flags.contains) then Set.empty else Set(entry.word)
+    standalone ++ prefixes ++ suffixes ++ combined
 
   private def applyPrefix(word: String, rule: HunspellAffixRule): Option[String] =
     Option.when(word.startsWith(rule.strip) && prefixConditionMatches(word, rule.condition)) {
