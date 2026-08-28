@@ -2,7 +2,7 @@ package com.serenity.state.components
 
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, Focus, SurfacePresentation}
-import com.serenity.state.reducers.{AppEffect, ReducerResult}
+import com.serenity.state.reducers.{AppEffect, ExplorerEffect, FileEffect, ReducerResult}
 import com.serenity.ui.layout.{DirectoryTreeData, PanelPosition}
 
 class PinnedPanelComponent(
@@ -86,11 +86,14 @@ class PinnedPanelComponent(
                   ComponentResult.updateState(replaceSurface(_, updated))
                 else
                   ComponentResult.reducerResult(
-                    ReducerResult.withEffect(currentState, AppEffect.LoadPinnedDirectory(position, row.path))
+                    ReducerResult.withEffect(
+                      currentState,
+                      AppEffect.Explorer(ExplorerEffect.LoadDirectory(position, row.path))
+                    )
                   )
               else
                 ComponentResult.reducerResult(
-                  ReducerResult.withEffect(currentState, AppEffect.DirectLoadFile(row.path))
+                  ReducerResult.withEffect(currentState, AppEffect.File(FileEffect.DirectLoadFile(row.path)))
                 )
             }
         case _ =>

@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.ThemePickerComponent
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ThemeEventReducer}
+import com.serenity.state.reducers.{AppEffect, SurfaceEffect, ThemeEffect, ThemeEventReducer}
 import com.serenity.ui.layout.Layout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -42,7 +42,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
 
   "ThemeEventReducer" should "emit OpenThemePicker for ListAvailableThemes" in {
     val result = ThemeEventReducer.reduce(ListAvailableThemes, AppState.empty)
-    result.effects shouldBe List(AppEffect.OpenThemePicker())
+    result.effects shouldBe List(AppEffect.Surface(SurfaceEffect.OpenThemePicker))
     result.state shouldBe AppState.empty
   }
 
@@ -90,7 +90,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
       case com.serenity.state.components.ComponentResult.ReducerUpdate(r) => r
       case other                                                          => fail(s"Expected ReducerUpdate, got $other")
 
-    reducerResult.effects shouldBe List(AppEffect.SwitchTheme("light"))
+    reducerResult.effects shouldBe List(AppEffect.Theme(ThemeEffect.SwitchTheme("light")))
     reducerResult.state.themePickerSurface.map(_.content) shouldBe
       Some(SurfaceContent.ThemePicker(ThemePickerState(themes, 1, "dark")))
   }
@@ -104,7 +104,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
       case com.serenity.state.components.ComponentResult.ReducerUpdate(r) => r
       case other                                                          => fail(s"Expected ReducerUpdate, got $other")
 
-    reducerResult.effects shouldBe List(AppEffect.SwitchTheme("mocha"))
+    reducerResult.effects shouldBe List(AppEffect.Theme(ThemeEffect.SwitchTheme("mocha")))
     reducerResult.state.themePickerSurface.map(_.content) shouldBe
       Some(SurfaceContent.ThemePicker(ThemePickerState(themes, 2, "dark")))
   }
@@ -131,7 +131,7 @@ class ThemePickerSpec extends AnyFlatSpec with Matchers:
       case com.serenity.state.components.ComponentResult.ReducerUpdate(r) => r
       case other                                                          => fail(s"Expected ReducerUpdate, got $other")
 
-    reducerResult.effects shouldBe List(AppEffect.SwitchTheme("dark"))
+    reducerResult.effects shouldBe List(AppEffect.Theme(ThemeEffect.SwitchTheme("dark")))
     reducerResult.state.themePickerSurface shouldBe None
     reducerResult.state.persisted.focus shouldBe Focus.Surface(runnerId)
   }

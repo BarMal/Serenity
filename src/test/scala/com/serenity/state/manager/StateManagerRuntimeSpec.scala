@@ -264,7 +264,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       observed <- Ref.of[IO, List[LspEffect]](Nil)
       behavior = new CommandEffectInterpreter(
         CommandEffectInterpreter.Dependencies(
-          lifecycle = _ => IO.unit,
+          lifecycle = IO.unit,
           command = _ => IO.unit,
           theme = _ => IO.unit,
           surface = _ => IO.unit,

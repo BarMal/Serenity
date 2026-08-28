@@ -20,25 +20,25 @@ object FileEventReducer:
       case SaveFile =>
         bufferLookup(state) match
           case Some(buffer) if buffer.document.filePath.isDefined =>
-            ReducerResult.withEffect(state, AppEffect.SaveBuffer(buffer.id))
+            ReducerResult.withEffect(state, AppEffect.File(FileEffect.SaveBuffer(buffer.id)))
           case _ =>
             ReducerResult.noEffects(state)
 
       case SaveFileAs(path) =>
         bufferLookup(state) match
           case Some(buffer) =>
-            ReducerResult.withEffect(state, AppEffect.SaveBufferAs(buffer.id, path))
+            ReducerResult.withEffect(state, AppEffect.File(FileEffect.SaveBufferAs(buffer.id, path)))
           case None =>
             ReducerResult.noEffects(state)
 
       case SaveAsFile =>
-        ReducerResult.withEffect(state, AppEffect.RequestSaveAs())
+        ReducerResult.withEffect(state, AppEffect.Workflow(WorkflowEffect.RequestSaveAs))
 
       case OpenFile | OpenFileBrowser =>
-        ReducerResult.withEffect(state, AppEffect.RequestOpenFile())
+        ReducerResult.withEffect(state, AppEffect.Workflow(WorkflowEffect.RequestOpenFile))
 
       case LoadFile(path) =>
-        ReducerResult.withEffect(state, AppEffect.DirectLoadFile(path))
+        ReducerResult.withEffect(state, AppEffect.File(FileEffect.DirectLoadFile(path)))
 
   private def focusedBuffer(state: AppState): Option[Buffer] =
     state.persisted.focus match

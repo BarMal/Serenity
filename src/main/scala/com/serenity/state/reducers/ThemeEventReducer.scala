@@ -8,8 +8,8 @@ object ThemeEventReducer:
   def reduce(event: ThemeEvent, state: AppState): ReducerResult =
     event match
       case SwitchTheme(themeName) =>
-        ReducerResult.withEffect(state, AppEffect.SwitchTheme(themeName))
+        ReducerResult.withEffect(state, AppEffect.Theme(ThemeEffect.SwitchTheme(themeName)))
       case ReloadCurrentTheme =>
-        ReducerResult.withEffect(state, AppEffect.ReloadTheme(state.persisted.theme.name))
+        ReducerResult.withEffect(state, AppEffect.Theme(ThemeEffect.ReloadTheme(state.persisted.theme.name)))
       case ListAvailableThemes =>
-        ReducerResult.withEffect(state, AppEffect.OpenThemePicker())
+        ReducerResult.withEffect(state, AppEffect.Surface(SurfaceEffect.OpenThemePicker))

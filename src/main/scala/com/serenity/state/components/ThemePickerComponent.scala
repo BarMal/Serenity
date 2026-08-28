@@ -2,7 +2,7 @@ package com.serenity.state.components
 
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ReducerResult}
+import com.serenity.state.reducers.{AppEffect, ReducerResult, ThemeEffect}
 
 class ThemePickerComponent extends TypedFocusedComponent[ModalInputEvent]:
 
@@ -22,7 +22,7 @@ class ThemePickerComponent extends TypedFocusedComponent[ModalInputEvent]:
               case ModalDismiss =>
                 val dismissed = dismissToRunner(currentState, surface)
                 ComponentResult.reducerResult(
-                  ReducerResult(dismissed, List(AppEffect.SwitchTheme(pickerState.originalTheme)))
+                  ReducerResult(dismissed, List(AppEffect.Theme(ThemeEffect.SwitchTheme(pickerState.originalTheme))))
                 )
               case _ => ComponentResult.noChange
           case _ => ComponentResult.noChange
@@ -40,7 +40,7 @@ class ThemePickerComponent extends TypedFocusedComponent[ModalInputEvent]:
     )
     newPicker.selectedTheme match
       case Some(name) =>
-        ComponentResult.reducerResult(ReducerResult(newState, List(AppEffect.SwitchTheme(name))))
+        ComponentResult.reducerResult(ReducerResult(newState, List(AppEffect.Theme(ThemeEffect.SwitchTheme(name)))))
       case None =>
         ComponentResult.updateState(_ => newState)
 
