@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.jdk.CollectionConverters.*
 
 import com.serenity.animation.ThemeInterpolator
-import com.serenity.config.{AppConfig, CursorInfoBarPlacement, MarkdownViewMode, PostProcessingEffect}
+import com.serenity.config.{AppConfig, CursorInfoBarPlacement, CursorMode, MarkdownViewMode, PostProcessingEffect}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.{AuthoritativeUiScene, FocusedTextBody}
@@ -447,8 +447,34 @@ object Renderer:
       bufferAnimations
     )
     val cursorRects = renderEditorCursors(state0, context, renderPlan)
+    presentHardwareCursor(surface, state0, cursorVisible, cursorRects, cellMetrics)
     surface.flush()
     cursorRects
+
+  /** #1170: on a surface that can delegate the caret to a real hardware/terminal cursor, position and style it from the
+    * primary caret's rect instead of leaving it to be painted as surface content -- except in breathe mode, which
+    * animates color/opacity over time (something a DECSCUSR style can't represent) and so stays the documented,
+    * app-painted exception. A surface with no hardware cursor to delegate to (`hardwareCursor` is `None`, i.e. every
+    * GUI canvas) is entirely unaffected: this is a no-op there.
+    */
+  private def presentHardwareCursor(
+    surface: RenderSurface,
+    state0: AppState,
+    cursorVisible: Boolean,
+    cursorRects: List[PixelRect],
+    cellMetrics: CellMetrics
+  ): Unit =
+    surface.hardwareCursor.foreach { hardwareCursor =>
+      (state0.persisted.config.cursorMode, cursorRects.headOption) match
+        case (CursorMode.Blink, Some(rect)) if cursorVisible =>
+          hardwareCursor.present(
+            cellMetrics.toCol(rect.xPx),
+            cellMetrics.toRow(rect.yPx),
+            HardwareCursorStyle(HardwareCursorShape.Block, blinking = true)
+          )
+        case _ =>
+          hardwareCursor.hide()
+    }
 
   /** Surface-generic form of [[renderCursorOnly]]: redraws just the cursor glyphs into `surface`, reusing the cached
     * render plan from the last full layout when it is still valid. `false` only for a start-page-only state, which has

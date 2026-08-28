@@ -57,6 +57,45 @@ trait Effects:
     */
   def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long = System.nanoTime() / 50000000L): Unit
 
+/** A caret shape a real terminal's own cursor can be styled as via DECSCUSR (`CSI Ps SP q`). */
+enum HardwareCursorShape:
+  case Block, Underline, Bar
+
+/** A DECSCUSR-expressible caret style: shape plus whether the terminal should blink it itself.
+  *
+  * There is no cursor-shape setting in [[com.serenity.config.CursorConfig]] today (only
+  * [[com.serenity.config.CursorMode]]'s blink/breathe choice) -- callers that delegate the caret to the terminal
+  * (#1170) currently always ask for a blinking block, the shape every terminal defaults to. `decscusrParam` is kept as
+  * a total function of shape/blink regardless, so a future per-buffer shape setting has somewhere to plug in without
+  * touching the escape-emission code.
+  */
+final case class HardwareCursorStyle(shape: HardwareCursorShape, blinking: Boolean):
+
+  /** The DECSCUSR parameter for this shape/blink pair, per xterm's ctlseqs: `CSI Ps SP q` where `Ps` is 1/2 =
+    * blinking/steady block, 3/4 = blinking/steady underline, 5/6 = blinking/steady bar.
+    */
+  def decscusrParam: Int =
+    shape match
+      case HardwareCursorShape.Block     => if blinking then 1 else 2
+      case HardwareCursorShape.Underline => if blinking then 3 else 4
+      case HardwareCursorShape.Bar       => if blinking then 5 else 6
+
+/** Delegating the caret to a real hardware/terminal cursor instead of painting it as surface content. Genuinely
+  * optional -- a surface with no native cursor to delegate to (the GUI canvas, which composites its own caret overlay)
+  * simply keeps painting its own caret -- so [[RenderSurface.hardwareCursor]] exposes it as an `Option`.
+  */
+trait HardwareCursor:
+  /** Move the terminal's own cursor to cell `(cellX, cellY)`, style it per `style`, and make it visible (`DECTCEM`
+    * show). Called on every flush the caret is present for, so the terminal cursor tracks the caret's cell exactly,
+    * including across scrolling and multi-cursor navigation.
+    */
+  def present(cellX: Int, cellY: Int, style: HardwareCursorStyle): Unit
+
+  /** Hide the terminal's own cursor (`DECTCEM` hide) -- used when the caret is app-painted instead (breathe mode,
+    * #1170's documented exception) or genuinely not visible this frame.
+    */
+  def hide(): Unit
+
 /** Rounded-rectangle chrome: borders, drop shadows, and clipping content to a rounded rect. Genuinely optional
   * decoration -- panels and overlays still read correctly with square corners and no border/shadow -- so
   * [[RenderSurface.roundedRects]] exposes it as an `Option`.
