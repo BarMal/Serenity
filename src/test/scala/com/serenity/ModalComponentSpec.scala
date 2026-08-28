@@ -6,7 +6,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, ModalComponent}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.AppEffect
+import com.serenity.state.reducers.{AppEffect, WorkflowEffect}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -81,7 +81,7 @@ class ModalComponentSpec extends AnyFlatSpec with Matchers:
               )
             )
           )
-        result.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("modal")))
+        result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("modal"))))
       case other =>
         fail(s"Expected reducer update, got $other")
   }

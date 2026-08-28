@@ -4,7 +4,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.components.{ComponentResult, FileSearchComponent}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, AppEventReducer}
+import com.serenity.state.reducers.{AppEffect, AppEventReducer, SurfaceEffect}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -61,7 +61,7 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
   "AppEventReducer" should "emit OpenFileSearch for FileSearch event" in {
     import com.serenity.command.CommandRegistry
     val result = AppEventReducer.reduce(FileSearch, AppState.initial, CommandRegistry.default)
-    result.effects shouldBe List(AppEffect.OpenFileSearch())
+    result.effects shouldBe List(AppEffect.Surface(SurfaceEffect.OpenFileSearch))
   }
 
   // ── FileSearchComponent ───────────────────────────────────────────────────
