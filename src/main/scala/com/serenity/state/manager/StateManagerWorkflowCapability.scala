@@ -497,7 +497,10 @@ final private[manager] class StateManagerWorkflowCapability(
                 }
                 .flatMap(bufferId => fileManager.loadFile(targetPath, bufferId))
                 .flatMap { loadedBuffer =>
-                  stateRef.modify { state =>
+                  // Structural mutation (adds a buffer, reorders bufferOrder, reassigns pane focus): routed through
+                  // the checked commit so a drifted `nextBufferId` (see #858) can't silently duplicate a
+                  // bufferOrder entry or overwrite a live buffer instead of being rejected.
+                  stateRef.get.flatMap { state =>
                     val newBufferId = loadedBuffer.id
                     val stateWithBuffer = state.copy(
                       persisted = state.persisted.copy(
@@ -513,7 +516,7 @@ final private[manager] class StateManagerWorkflowCapability(
                       focused.runtime.viewportSize
                         .map(viewportSize => LayoutEngine.syncViewportDimensions(focused, viewportSize))
                         .getOrElse(focused)
-                    (resized, ())
+                    validateAndUpdateState(resized, state)
                   }
                 }
                 .handleErrorWith(ex => logger.error(ex)(s"[FILE-WORKFLOW] Failed to open $targetPath"))
