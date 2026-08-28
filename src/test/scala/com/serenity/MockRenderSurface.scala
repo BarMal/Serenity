@@ -22,11 +22,19 @@ import com.serenity.ui.theme.TextStyle
   * `persistentContent` models a surface whose pixels survive between frames, which is what lets a test drive the
   * renderer's dirty-region path. It is off by default so that a plain mock behaves like a fresh image every frame.
   *
+  * `fontRenderContextOverride` defaults to `Some(defaultFontRenderContext())` so existing specs keep exercising the
+  * measured pixel-run path unchanged; pass `None` to model a cell-only surface (e.g. a terminal) for #1105's
+  * cell-fallback specs.
+  *
   * Implements every capability trait so renderer tests exercise the full drawing surface rather than silently no-op'ing
   * on operations a real surface supports -- see #1012.
   */
-class MockRenderSurface(val width: Int, val height: Int, persistentContent: Boolean = false)
-    extends RenderSurface
+class MockRenderSurface(
+    val width: Int,
+    val height: Int,
+    persistentContent: Boolean = false,
+    fontRenderContextOverride: Option[FontRenderContext] = Some(TextLayoutSnapshot.defaultFontRenderContext())
+) extends RenderSurface
     with TextDrawing
     with PixelDrawing
     with Effects
@@ -60,8 +68,7 @@ class MockRenderSurface(val width: Int, val height: Int, persistentContent: Bool
     currentFont.set(Some(font))
     setFontCallsBuffer += font
 
-  override def fontRenderContext: Option[FontRenderContext] =
-    Some(TextLayoutSnapshot.defaultFontRenderContext())
+  override def fontRenderContext: Option[FontRenderContext] = fontRenderContextOverride
 
   def setFontCalls: List[Font] = setFontCallsBuffer.toList
 

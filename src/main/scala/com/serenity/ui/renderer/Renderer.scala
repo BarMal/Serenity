@@ -1257,7 +1257,7 @@ object Renderer:
     val leftPx     = context.cellMetrics.toPixelX(contentRect.x)
     val widthPx    = context.cellMetrics.toPixelX(contentRect.right) - leftPx
     val heightPx =
-      if snapshot.usesMeasuredLayout then snapshot.lineHeightPx else context.cellMetrics.lineHeight
+      if usesMeasuredDrawing(snapshot, context) then snapshot.lineHeightPx else context.cellMetrics.lineHeight
     val topLimitPx    = context.cellMetrics.toPixelY(contentRect.y)
     val bottomLimitPx = rowMetrics.contentBottomPx
     snapshot.visualLines.indices.toVector.map { row =>
@@ -1367,16 +1367,32 @@ object Renderer:
   ): Map[Int, List[A]] =
     visibleLines.iterator.flatMap(line => indexed.get(line).map(line -> _)).toMap
 
+  /** Whether buffer text should actually be painted through the measured pixel-run path.
+    *
+    * `snapshot.usesMeasuredLayout` is a font-only judgement (proportional advances, ligatures, ...) computed once when
+    * the pane's [[TextLayoutSnapshot]] is built -- including by [[com.serenity.state.manager.AuthoritativeUiScene]],
+    * which has no surface to ask and always uses it as a scene-wide, surface-agnostic cache shared with mouse
+    * targeting. `drawRunPx` is a no-op on a surface reporting no `FontRenderContext` (a terminal), so painting must
+    * additionally require the surface's own capability -- #1105.
+    */
+  private def usesMeasuredDrawing(snapshot: TextLayoutSnapshot, context: RenderContext): Boolean =
+    snapshot.usesMeasuredLayout && context.surface.text.fontRenderContext.nonEmpty
+
   private def snapshotForBuffer(
     buffer: Buffer,
     contentRect: LayoutRect,
     state: AppState,
     context: RenderContext
   ): TextLayoutSnapshot =
-    val bufferFont    = context.fontForBuffer(buffer)
-    val panelWidthPx  = contentRect.width * context.cellMetrics.charWidth
-    val panelHeightPx = contentRect.height * context.cellMetrics.lineHeight
-    val bufferMetrics = CellMetrics.fromFont(bufferFont)
+    // #1105: a surface reporting no FontRenderContext (a terminal) can't draw a measured pixel run at all -- drawRunPx
+    // is a no-op there -- so a buffer that would otherwise pick a proportional text/ui font is forced onto the code
+    // font instead, and the resulting snapshot is forced onto the cell path below, regardless of what the font itself
+    // would have decided (ligatures, non-monospace advances, ...).
+    val hasFontRenderContext = context.surface.text.fontRenderContext.nonEmpty
+    val bufferFont           = if hasFontRenderContext then context.fontForBuffer(buffer) else context.codeFont
+    val panelWidthPx         = contentRect.width * context.cellMetrics.charWidth
+    val panelHeightPx        = contentRect.height * context.cellMetrics.lineHeight
+    val bufferMetrics        = CellMetrics.fromFont(bufferFont)
     val baseViewport =
       LayoutEngine.updateBufferViewportDimensions(
         buffer,
@@ -1408,13 +1424,14 @@ object Renderer:
       viewport = renderedViewport
     )
     context.surface.text.setFont(bufferFont)
-    TextLayoutSnapshot.fromBuffer(
+    val snapshot = TextLayoutSnapshot.fromBuffer(
       renderBuffer,
       panelWidthPx,
       bufferFont,
       fontRenderContext,
       wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
     )
+    if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 
   private def visibleColumnsFor(
     font: Font,
@@ -1606,29 +1623,34 @@ object Renderer:
 
       surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
 
-      val titlePlacement = TextAlignment.placeLine(
-        displayTitle,
-        TextAreaPx(
-          xPx = context.cellMetrics.toPixelX(titleRect.x).toFloat,
-          yPx = context.cellMetrics.toPixelY(titleRect.y),
-          widthPx = titleRect.width * context.cellMetrics.charWidth.toFloat,
-          heightPx = context.cellMetrics.lineHeight
-        ),
-        context.uiFont,
-        context.cellMetrics.lineHeight,
-        context.cellMetrics.ascent,
-        TextHorizontalAlignment.Center,
-        TextVerticalAlignment.Top,
-        surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-      )
-      surface.text.drawRunPx(
-        titlePlacement.xPx,
-        titlePlacement.yPx,
-        titlePlacement.widthPx,
-        titlePlacement.lineHeightPx,
-        titlePlacement.ascentPx,
-        displayTitle
-      )
+      surface.text.fontRenderContext match
+        case Some(frc) =>
+          val titlePlacement = TextAlignment.placeLine(
+            displayTitle,
+            TextAreaPx(
+              xPx = context.cellMetrics.toPixelX(titleRect.x).toFloat,
+              yPx = context.cellMetrics.toPixelY(titleRect.y),
+              widthPx = titleRect.width * context.cellMetrics.charWidth.toFloat,
+              heightPx = context.cellMetrics.lineHeight
+            ),
+            context.uiFont,
+            context.cellMetrics.lineHeight,
+            context.cellMetrics.ascent,
+            TextHorizontalAlignment.Center,
+            TextVerticalAlignment.Top,
+            frc
+          )
+          surface.text.drawRunPx(
+            titlePlacement.xPx,
+            titlePlacement.yPx,
+            titlePlacement.widthPx,
+            titlePlacement.lineHeightPx,
+            titlePlacement.ascentPx,
+            displayTitle
+          )
+        case None =>
+          val centerX = titleRect.x + math.max(0, (titleRect.width - displayTitle.length) / 2)
+          CharacterRenderer.renderString(surface, centerX, titleRect.y, displayTitle)
 
     surface.setBackgroundColor(state.persisted.theme.background)
     surface.setForegroundColor(state.persisted.theme.foreground)
@@ -1703,7 +1725,7 @@ object Renderer:
             val styledSegments = visualLineStyledSegments(visualLine, lineTheme, snapshot, activeBodyLines)
             val lexStartState =
               lexStartStates.lift(visualLine.bufferLine).getOrElse(com.serenity.ui.theme.LexState.Default)
-            if snapshot.usesMeasuredLayout then
+            if usesMeasuredDrawing(snapshot, context) then
               CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,
                 xOriginPx,
@@ -1807,7 +1829,7 @@ object Renderer:
       contentRect = rect,
       gridMetrics = context.cellMetrics,
       rowLineHeightPx = snapshot.lineHeightPx,
-      usesMeasuredLayout = snapshot.usesMeasuredLayout
+      usesMeasuredLayout = usesMeasuredDrawing(snapshot, context)
     )
 
   private def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
@@ -1918,7 +1940,7 @@ object Renderer:
     buffer.allSelections.foreach { selection =>
       columnsForRange(selection.start, selection.end, visualLine, markPoint = false).foreach {
         case (selectionStart, selectionEnd) =>
-          if snapshot.usesMeasuredLayout then
+          if usesMeasuredDrawing(snapshot, context) then
             val localStart = selectionStart - visualLine.startColumn
             val localEnd   = selectionEnd - visualLine.startColumn
             if localStart >= 0 && localStart < localEnd && localEnd <= visualLine.text.length then
@@ -2010,7 +2032,7 @@ object Renderer:
     rangeStart: Int,
     rangeEnd: Int
   ): Unit =
-    if snapshot.usesMeasuredLayout then
+    if usesMeasuredDrawing(snapshot, context) then
       val localStart = rangeStart - visualLine.startColumn
       val localEnd   = rangeEnd - visualLine.startColumn
       if localStart >= 0 && localStart < localEnd then
@@ -2257,7 +2279,7 @@ object Renderer:
             then
               context.surface.setForegroundColor(state.persisted.theme.foreground)
               context.surface.setBackgroundColor(state.persisted.theme.panel.background)
-              if snapshot.usesMeasuredLayout then
+              if usesMeasuredDrawing(snapshot, context) then
                 CharacterRenderer.renderMeasuredLineWithAnimation(
                   context.surface,
                   context.cellMetrics.toPixelX(rect.x).toFloat,
@@ -2963,7 +2985,7 @@ object Renderer:
                         (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
                       else continuationIndicatorText(lineRect.width)
                     val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
-                    if snapshot.usesMeasuredLayout && measuredLineNumberFont.nonEmpty then
+                    if usesMeasuredDrawing(snapshot, context) && measuredLineNumberFont.nonEmpty then
                       measuredLineNumberFont.foreach(buf => surface.text.setFont(context.fontForBuffer(buf)))
                       surface.text.drawRunPx(
                         context.cellMetrics.toPixelX(lineRect.x).toFloat,
@@ -3046,33 +3068,38 @@ object Renderer:
     rect: LayoutRect,
     text: String
   ): Unit =
-    val rowHeightPx  = math.max(1, rect.height * context.cellMetrics.lineHeight)
-    val lineHeightPx = math.max(1, math.min(context.uiMetrics.lineHeight, rowHeightPx - 2))
-    val ascentPx     = math.max(1, math.min(context.uiMetrics.ascent, lineHeightPx))
-    val placement = TextAlignment.placeLine(
-      text = text,
-      area = TextAreaPx(
-        xPx = context.cellMetrics.toPixelX(rect.x).toFloat,
-        yPx = context.cellMetrics.toPixelY(rect.y),
-        widthPx = rect.width * context.cellMetrics.charWidth.toFloat,
-        heightPx = rowHeightPx
-      ),
-      font = context.uiFont,
-      lineHeightPx = lineHeightPx,
-      ascentPx = ascentPx,
-      horizontal = TextHorizontalAlignment.Left,
-      vertical = TextVerticalAlignment.Middle,
-      fontRenderContext = surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-    )
+    surface.text.fontRenderContext match
+      case Some(frc) =>
+        val rowHeightPx  = math.max(1, rect.height * context.cellMetrics.lineHeight)
+        val lineHeightPx = math.max(1, math.min(context.uiMetrics.lineHeight, rowHeightPx - 2))
+        val ascentPx     = math.max(1, math.min(context.uiMetrics.ascent, lineHeightPx))
+        val placement = TextAlignment.placeLine(
+          text = text,
+          area = TextAreaPx(
+            xPx = context.cellMetrics.toPixelX(rect.x).toFloat,
+            yPx = context.cellMetrics.toPixelY(rect.y),
+            widthPx = rect.width * context.cellMetrics.charWidth.toFloat,
+            heightPx = rowHeightPx
+          ),
+          font = context.uiFont,
+          lineHeightPx = lineHeightPx,
+          ascentPx = ascentPx,
+          horizontal = TextHorizontalAlignment.Left,
+          vertical = TextVerticalAlignment.Middle,
+          fontRenderContext = frc
+        )
 
-    surface.text.drawRunPx(
-      xPx = placement.xPx,
-      yPx = placement.yPx,
-      bgWidthPx = placement.widthPx,
-      lineHeightPx = placement.lineHeightPx,
-      ascentPx = placement.ascentPx,
-      s = text
-    )
+        surface.text.drawRunPx(
+          xPx = placement.xPx,
+          yPx = placement.yPx,
+          bgWidthPx = placement.widthPx,
+          lineHeightPx = placement.lineHeightPx,
+          ascentPx = placement.ascentPx,
+          s = text
+        )
+      case None =>
+        val middleRow = rect.y + math.max(0, (rect.height - 1) / 2)
+        CharacterRenderer.renderString(surface, rect.x, middleRow, text.take(math.max(0, rect.width)))
 
   private def buildGutterContent(state: AppState): String =
     if state.persisted.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom then
