@@ -121,7 +121,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
 
     overrides.foreach {
       case (action, binding) =>
-        reloaded.hotkeyConfig.bindingsFor(action).headOption.map(_.render) shouldBe Some(binding)
+        reloaded.inputConfig.hotkeyConfig.bindingsFor(action).headOption.map(_.render) shouldBe Some(binding)
     }
   }
 
@@ -131,7 +131,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+ctrl"
+    config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+ctrl"
   }
 
   it should "round-trip all command palette bindings through config persistence" in {
@@ -142,7 +142,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
 
     val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
 
-    reloaded.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List(
+    reloaded.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List(
       "ctrl+p",
       "ctrl+ctrl"
     )
@@ -173,6 +173,6 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
       HotkeyAction.SaveAs     -> List("ctrl+alt+s", "alt+meta+s")
     ).foreach {
       case (action, expected) =>
-        reloaded.hotkeyConfig.bindingsFor(action).map(_.render) shouldBe expected
+        reloaded.inputConfig.hotkeyConfig.bindingsFor(action).map(_.render) shouldBe expected
     }
   }

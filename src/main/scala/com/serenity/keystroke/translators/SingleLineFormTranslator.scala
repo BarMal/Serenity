@@ -7,7 +7,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 class SingleLineFormTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[ModalInputEvent]:
 
   override def converters = List(
-    LocalKeymapConverters.converter(appConfig.focusedKeymapConfig.modal.bindings),
+    LocalKeymapConverters.converter(appConfig.inputConfig.focusedKeymapConfig.modal.bindings),
     singleLineFormCharacterConverter
   )
 

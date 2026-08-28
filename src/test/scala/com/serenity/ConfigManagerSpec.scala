@@ -52,21 +52,21 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.hotkeyConfig
+    config.inputConfig.hotkeyConfig
       .bindingsFor(HotkeyAction.ToggleCommandRunner)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Character,
       character = Some('k'),
       modifiers = Set(Modifier.Ctrl)
     )
-    config.hotkeyConfig
+    config.inputConfig.hotkeyConfig
       .bindingsFor(HotkeyAction.FileSearch)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Character,
       character = Some('f'),
       modifiers = Set(Modifier.Ctrl, Modifier.Alt)
     )
-    config.hotkeyConfig
+    config.inputConfig.hotkeyConfig
       .bindingsFor(HotkeyAction.PreviousTab)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Tab,
@@ -87,21 +87,21 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.hotkeyConfig
+    config.inputConfig.hotkeyConfig
       .bindingsFor(HotkeyAction.ToggleCommandRunner)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Character,
       character = Some('p'),
       modifiers = Set(Modifier.Meta)
     )
-    config.hotkeyConfig
+    config.inputConfig.hotkeyConfig
       .bindingsFor(HotkeyAction.FileSearch)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Character,
       character = Some('f'),
       modifiers = Set(Modifier.Meta, Modifier.Shift)
     )
-    config.focusedKeymapConfig.commandRunner
+    config.inputConfig.focusedKeymapConfig.commandRunner
       .bindingsFor(CommandRunnerKeyAction.Submit)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Enter,
@@ -196,42 +196,42 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.focusedKeymapConfig.editor
+    config.inputConfig.focusedKeymapConfig.editor
       .bindingsFor(EditorKeyAction.PageDown)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.PageDown,
       character = None,
       modifiers = Set(Modifier.Ctrl)
     )
-    config.focusedKeymapConfig.editor
+    config.inputConfig.focusedKeymapConfig.editor
       .bindingsFor(EditorKeyAction.ExtendSelectionRight)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.ArrowRight,
       character = None,
       modifiers = Set(Modifier.Shift)
     )
-    config.focusedKeymapConfig.commandRunner
+    config.inputConfig.focusedKeymapConfig.commandRunner
       .bindingsFor(CommandRunnerKeyAction.Submit)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Enter,
       character = None,
       modifiers = Set(Modifier.Ctrl)
     )
-    config.focusedKeymapConfig.modal
+    config.inputConfig.focusedKeymapConfig.modal
       .bindingsFor(ModalKeyAction.Dismiss)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Escape,
       character = None,
       modifiers = Set(Modifier.Ctrl)
     )
-    config.focusedKeymapConfig.panel
+    config.inputConfig.focusedKeymapConfig.panel
       .bindingsFor(PanelKeyAction.Activate)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Enter,
       character = None,
       modifiers = Set(Modifier.Ctrl)
     )
-    config.focusedKeymapConfig.peek
+    config.inputConfig.focusedKeymapConfig.peek
       .bindingsFor(PeekKeyAction.Accept)
       .head shouldBe com.serenity.config.HotkeyTrigger(
       keyType = InputKey.Enter,
@@ -257,7 +257,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         |""".stripMargin
     )
 
-    val keymap = ConfigManager.loadConfig(Some(configFile.toString)).focusedKeymapConfig
+    val keymap = ConfigManager.loadConfig(Some(configFile.toString)).inputConfig.focusedKeymapConfig
 
     keymap.editor.bindingsFor(EditorKeyAction.MoveLeft).map(_.render) shouldBe List("alt+h")
     keymap.editor.bindingsFor(EditorKeyAction.PageDown).map(_.render) shouldBe List("ctrl+pagedown")

@@ -910,7 +910,7 @@ final private[manager] class StateManagerEffectHandlers(
       .parse(binding)
       .exists(trigger =>
         StateManagerEffectHandlers.keymapGroupBindings
-          .exists(_.ownsBinding(config.focusedKeymapConfig, itemId, trigger))
+          .exists(_.ownsBinding(config.inputConfig.focusedKeymapConfig, itemId, trigger))
       )
 
   private def resolveFocusedKeymapConflict(

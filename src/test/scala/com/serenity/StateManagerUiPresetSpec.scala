@@ -261,8 +261,10 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val config = sm.getCurrentState.unsafeRunSync().persisted.config
 
-    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List("alt+p")
-    config.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.MoveLeft).map(_.render) shouldBe List("alt+h")
+    config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List("alt+p")
+    config.inputConfig.focusedKeymapConfig.editor.bindingsFor(EditorKeyAction.MoveLeft).map(_.render) shouldBe List(
+      "alt+h"
+    )
     config.lspUserConfig shouldBe lspConfig
     config.spellCheck shouldBe spellCheck
     config.windowConfig shouldBe windowConfig

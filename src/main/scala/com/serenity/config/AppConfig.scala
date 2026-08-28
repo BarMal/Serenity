@@ -1552,8 +1552,7 @@ object SurfaceConfig:
 final case class AppConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     syntaxHighlightingEnabled: Boolean = false,
-    hotkeyConfig: HotkeyConfig = HotkeyConfig(),
-    focusedKeymapConfig: FocusedKeymapConfig = FocusedKeymapConfig(),
+    inputConfig: InputConfig = InputConfig(),
     fontConfig: FontConfig = FontConfig(),
     minimumPaneWidth: Int = 50,
     showLineNumbers: Boolean = true,
@@ -1628,17 +1627,8 @@ final case class AppConfig(
       spellCheck = normalized.spellCheck
     )
 
-  def inputConfig: InputConfig =
-    InputConfig(
-      hotkeyConfig = hotkeyConfig,
-      focusedKeymapConfig = focusedKeymapConfig
-    )
-
   def withInputConfig(config: InputConfig): AppConfig =
-    copy(
-      hotkeyConfig = config.hotkeyConfig,
-      focusedKeymapConfig = config.focusedKeymapConfig
-    )
+    copy(inputConfig = config)
 
   def surfaceConfig: SurfaceConfig =
     SurfaceConfig(
@@ -1774,13 +1764,15 @@ final case class AppConfig(
     withInputConfig(inputConfig.copy(hotkeyConfig = config))
 
   def withHotkeyOverride(action: HotkeyAction, binding: String): AppConfig =
-    withInputConfig(inputConfig.copy(hotkeyConfig = hotkeyConfig.withBinding(action, binding)))
+    withInputConfig(inputConfig.copy(hotkeyConfig = inputConfig.hotkeyConfig.withBinding(action, binding)))
 
   def withHotkeyOverrideUnbindingConflicts(action: HotkeyAction, binding: String): AppConfig =
-    withInputConfig(inputConfig.copy(hotkeyConfig = hotkeyConfig.withBindingUnbindingConflicts(action, binding)))
+    withInputConfig(
+      inputConfig.copy(hotkeyConfig = inputConfig.hotkeyConfig.withBindingUnbindingConflicts(action, binding))
+    )
 
   def resetHotkeyOverride(action: HotkeyAction): AppConfig =
-    withInputConfig(inputConfig.copy(hotkeyConfig = hotkeyConfig.resetBinding(action)))
+    withInputConfig(inputConfig.copy(hotkeyConfig = inputConfig.hotkeyConfig.resetBinding(action)))
 
   def withFocusedKeymapConfig(config: FocusedKeymapConfig): AppConfig =
     withInputConfig(inputConfig.copy(focusedKeymapConfig = config))
@@ -1788,17 +1780,23 @@ final case class AppConfig(
   def withKeymapBinding[A <: KeymapEventAction[E], E <: Event](
     group: KeymapGroup[A, E]
   )(action: A, binding: String): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withBinding(group)(action, binding)))
+    withInputConfig(
+      inputConfig.copy(focusedKeymapConfig = inputConfig.focusedKeymapConfig.withBinding(group)(action, binding))
+    )
 
   def withKeymapBindingUnbindingConflicts[A <: KeymapEventAction[E], E <: Event](
     group: KeymapGroup[A, E]
   )(action: A, binding: String): AppConfig =
     withInputConfig(
-      inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.withBindingUnbindingConflicts(group)(action, binding))
+      inputConfig.copy(focusedKeymapConfig =
+        inputConfig.focusedKeymapConfig.withBindingUnbindingConflicts(group)(action, binding)
+      )
     )
 
   def resetKeymapBinding[A <: KeymapEventAction[E], E <: Event](group: KeymapGroup[A, E])(action: A): AppConfig =
-    withInputConfig(inputConfig.copy(focusedKeymapConfig = focusedKeymapConfig.resetBinding(group)(action)))
+    withInputConfig(
+      inputConfig.copy(focusedKeymapConfig = inputConfig.focusedKeymapConfig.resetBinding(group)(action))
+    )
 
   /** Create a new config with font configuration */
   def withFontConfig(config: FontConfig): AppConfig =

@@ -34,7 +34,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
-    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+k"
+    config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+k"
   }
 
   it should "reset global hotkey bindings to defaults through the command runner" in {
@@ -56,7 +56,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
 
     val config         = stateManager.getCurrentState.unsafeRunSync().persisted.config
     val defaultBinding = HotkeyConfig.defaultBindings(HotkeyAction.ToggleCommandRunner).head.render
-    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe defaultBinding
+    config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe defaultBinding
   }
 
   it should "finalize a single-key recording without follow-up input" in {
@@ -85,6 +85,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
       .unsafeRunSync()
       .persisted
       .config
+      .inputConfig
       .hotkeyConfig
       .bindingsFor(HotkeyAction.ToggleCommandRunner)
       .map(_.render) shouldBe List("k")
@@ -108,7 +109,10 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.persisted.config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+k"
+    state.persisted.config.inputConfig.hotkeyConfig
+      .bindingsFor(HotkeyAction.ToggleCommandRunner)
+      .head
+      .render shouldBe "ctrl+k"
     state.commandRunnerSurface.flatMap(_.content match
       case SurfaceContent.CommandPalette(runner) => runner.statusMessage
       case _                                     => None) shouldBe Some(
@@ -127,8 +131,8 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
-    config.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+o"
-    config.hotkeyConfig.bindingsFor(HotkeyAction.OpenFile) shouldBe Nil
+    config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+o"
+    config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.OpenFile) shouldBe Nil
   }
 
   it should "leave an idempotent focused keymap assignment unchanged" in {
@@ -154,7 +158,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.persisted.config.focusedKeymapConfig.commandRunner
+    state.persisted.config.inputConfig.focusedKeymapConfig.commandRunner
       .bindingsFor(CommandRunnerKeyAction.Submit)
       .map(_.render) shouldBe List("ctrl+k")
     state.commandRunnerSurface.flatMap(_.content match
@@ -192,10 +196,10 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val conflicted = stateManager.getCurrentState.unsafeRunSync()
-    conflicted.persisted.config.focusedKeymapConfig.commandRunner
+    conflicted.persisted.config.inputConfig.focusedKeymapConfig.commandRunner
       .bindingsFor(CommandRunnerKeyAction.NavigateDown)
       .map(_.render) shouldBe List("ctrl+k")
-    conflicted.persisted.config.focusedKeymapConfig.commandRunner
+    conflicted.persisted.config.inputConfig.focusedKeymapConfig.commandRunner
       .bindingsFor(CommandRunnerKeyAction.Submit)
       .map(_.render) shouldBe List("enter")
     conflicted.commandRunnerSurface.flatMap(_.content match
@@ -206,7 +210,8 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-    val resolved = stateManager.getCurrentState.unsafeRunSync().persisted.config.focusedKeymapConfig.commandRunner
+    val resolved =
+      stateManager.getCurrentState.unsafeRunSync().persisted.config.inputConfig.focusedKeymapConfig.commandRunner
     resolved.bindingsFor(CommandRunnerKeyAction.Submit).map(_.render) shouldBe List("ctrl+k")
     resolved.bindingsFor(CommandRunnerKeyAction.NavigateDown) shouldBe Nil
   }

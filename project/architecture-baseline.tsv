@@ -10,12 +10,12 @@ main/scala/com/serenity/command/CommandRunner.scala	file length	807
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	file length	697
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	method build	545
 main/scala/com/serenity/command/CommandRunnerSettingsItems.scala	file length	959
-main/scala/com/serenity/config/AppConfig.scala	file length	2275
-main/scala/com/serenity/config/ConfigManager.scala	file length	901
+main/scala/com/serenity/config/AppConfig.scala	file length	2273
+main/scala/com/serenity/config/ConfigManager.scala	file length	904
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	218
-main/scala/com/serenity/config/ConfigManager.scala	method configToString	179
+main/scala/com/serenity/config/ConfigManager.scala	method configToString	182
 main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	983
-main/scala/com/serenity/session/SessionState.scala	file length	1217
+main/scala/com/serenity/session/SessionState.scala	file length	1231
 main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	816
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2534
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	865
@@ -59,7 +59,7 @@ test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	669
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	728
 test/scala/com/serenity/SessionStateSpec.scala	file length	1429
 test/scala/com/serenity/StateManagerElementTransitionSettingsSpec.scala	file length	724
-test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	1004
+test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	1006
 test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1178
 test/scala/com/serenity/TextOverlayRendererSpec.scala	file length	673
 test/scala/com/serenity/UiPresetSpec.scala	file length	700

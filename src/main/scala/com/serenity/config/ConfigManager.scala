@@ -249,7 +249,7 @@ object ConfigManager:
               if triggers.nonEmpty && triggers.forall(_.isDefined) then
                 Some(
                   config.withHotkeyConfig(
-                    HotkeyConfig(config.hotkeyConfig.bindings + (action -> triggers.flatten))
+                    HotkeyConfig(config.inputConfig.hotkeyConfig.bindings + (action -> triggers.flatten))
                   )
                 )
               else None
@@ -289,7 +289,7 @@ object ConfigManager:
     val withLists    = applyHoconLists(parsed, source)
     val withLspLists = applyHoconLspLists(withLists, source)
     HotkeyConfig
-      .fromBindings(withLspLists.hotkeyConfig.bindings)
+      .fromBindings(withLspLists.inputConfig.hotkeyConfig.bindings)
       .fold(_ => withLspLists.withHotkeyConfig(HotkeyConfig()), withLspLists.withHotkeyConfig)
 
   /** Generate configuration file content from AppConfig */
@@ -348,12 +348,12 @@ object ConfigManager:
       hoconString(bindings.headOption.orElse(defaults.headOption).fold("")(_.render))
     def editorBinding(action: EditorKeyAction): String =
       bindingValue(
-        config.focusedKeymapConfig.editor.bindingsFor(action),
+        config.inputConfig.focusedKeymapConfig.editor.bindingsFor(action),
         EditorKeyAction.defaultBindings.getOrElse(action, Nil)
       )
     val hotkeySettings = HotkeyAction.values
       .map { action =>
-        val bindings = config.hotkeyConfig.bindingsFor(action).map(_.render)
+        val bindings = config.inputConfig.hotkeyConfig.bindingsFor(action).map(_.render)
         s"hotkey.${action.configKey} = ${hoconList(bindings)}"
       }
       .mkString("\n")
@@ -466,10 +466,13 @@ object ConfigManager:
        |keymap.editor.extend_selection_up = ${editorBinding(EditorKeyAction.ExtendSelectionUp)}
        |keymap.editor.extend_selection_down = ${editorBinding(EditorKeyAction.ExtendSelectionDown)}
        |keymap.command_runner.submit = ${bindingValue(
-        config.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit),
+        config.inputConfig.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit),
         CommandRunnerKeyAction.defaultBindings.getOrElse(CommandRunnerKeyAction.Submit, Nil)
       )}
-       |keymap.modal.dismiss = ${bindingValue(config.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss), ModalKeyAction.defaultBindings.getOrElse(ModalKeyAction.Dismiss, Nil))}
+       |keymap.modal.dismiss = ${bindingValue(
+        config.inputConfig.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss),
+        ModalKeyAction.defaultBindings.getOrElse(ModalKeyAction.Dismiss, Nil)
+      )}
        |""".stripMargin
 
   /** Save configuration to file */
