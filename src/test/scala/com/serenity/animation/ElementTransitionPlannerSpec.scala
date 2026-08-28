@@ -142,7 +142,7 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
   it should "derive general UI animation from its own config rather than editor text animation" in {
     val config = AppConfig.default
       .withMotionPreset(MotionPreset.Smooth)
-      .withCharacterAnimation(AnimationConfig.quick.get)
+      .withCharacterAnimation(AnimationConfig.Enabled.quick)
       .withUiAnimation(AnimationConfig.subtle)
 
     config.scaledCharacterAnimation.map(_.steps) shouldBe AnimationConfig.quick.map(_.steps)
@@ -152,7 +152,7 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
   it should "let per-family animation speed scales override the global fallback" in {
     val config = AppConfig.default
       .withMotionPreset(MotionPreset.Smooth)
-      .withCharacterAnimation(AnimationConfig.smooth.get)
+      .withCharacterAnimation(AnimationConfig.Enabled.smooth)
       .withCommandRunnerAnimation(AnimationConfig.smooth)
       .withUiAnimation(AnimationConfig.smooth)
       .withElementTransitionSpeedScale(2.0)
@@ -173,7 +173,7 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
   it should "use the global animation speed scale when family scales are unset" in {
     val config = AppConfig.default
       .withMotionPreset(MotionPreset.Smooth)
-      .withCharacterAnimation(AnimationConfig.smooth.get)
+      .withCharacterAnimation(AnimationConfig.Enabled.smooth)
       .withCommandRunnerAnimation(AnimationConfig.smooth)
       .withUiAnimation(AnimationConfig.smooth)
       .withElementTransitionSpeedScale(2.0)

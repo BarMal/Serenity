@@ -10,7 +10,7 @@ main/scala/com/serenity/command/CommandRunner.scala	file length	807
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	file length	806
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	method build	650
 main/scala/com/serenity/command/CommandRunnerSettingsItems.scala	file length	1266
-main/scala/com/serenity/config/AppConfig.scala	file length	2172
+main/scala/com/serenity/config/AppConfig.scala	file length	2174
 main/scala/com/serenity/config/ConfigManager.scala	file length	912
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	224
 main/scala/com/serenity/config/ConfigManager.scala	method configToString	184
@@ -47,7 +47,7 @@ test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1252
 test/scala/com/serenity/CursorOverlayLayoutSpec.scala	file length	615
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	634
 test/scala/com/serenity/EditorEventReducerSpec.scala	file length	2255
-test/scala/com/serenity/FileHandlingSpec.scala	file length	637
+test/scala/com/serenity/FileHandlingSpec.scala	file length	635
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	640
 test/scala/com/serenity/LayoutContractSpec.scala	file length	965
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	637

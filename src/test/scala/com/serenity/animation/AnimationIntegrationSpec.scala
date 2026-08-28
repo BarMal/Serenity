@@ -14,7 +14,7 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
   "Animation System Integration" should "create realistic character animation workflow" in {
     val backgroundColor = black
     val foregroundColor = white
-    val animConfig      = AnimationConfig.quick.get
+    val animConfig      = AnimationConfig.Enabled.quick
 
     val characters = List(('H', 0, 0), ('e', 1, 0), ('l', 2, 0), ('l', 3, 0), ('o', 4, 0))
 

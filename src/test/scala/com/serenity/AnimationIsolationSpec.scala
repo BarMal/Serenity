@@ -24,7 +24,7 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState(state =>
         state.copy(persisted =
-          state.persisted.copy(config = state.persisted.config.withCharacterAnimation(AnimationConfig.smooth.get))
+          state.persisted.copy(config = state.persisted.config.withCharacterAnimation(AnimationConfig.Enabled.smooth))
         )
       )
       .unsafeRunSync()
