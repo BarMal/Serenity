@@ -86,7 +86,7 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
                 runner.settingsSurfaceSelectedIndex,
                 hasHeader = true,
                 hasFooter = true,
-                itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+                itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
                 itemTargetRows =
                   SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
               )
@@ -108,7 +108,7 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
                     runner.selectedIndex,
                     hasHeader = true,
                     hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-                    itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+                    itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
                     itemTargetRows =
                       SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
                   )
@@ -134,7 +134,7 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
               hasHeader = group.nonEmpty,
               hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
               reservedContentRows = detailRows,
-              itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+              itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
               itemTargetRows =
                 SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
             )

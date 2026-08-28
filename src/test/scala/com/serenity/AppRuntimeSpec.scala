@@ -148,7 +148,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     val frameInterval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config.copy(renderFpsTarget = RenderFpsTarget.Fps30)
+        config = AppState.initial.persisted.config.withRenderFpsTarget(RenderFpsTarget.Fps30)
       ),
       runtime = AppState.initial.runtime.copy(
         surfaceAnimations = Map(
@@ -248,7 +248,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
   it should "route fast-mode frames through the cursor-only render path when only the window sitter is active" in {
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config.copy(renderFpsTarget = RenderFpsTarget.Fps30)
+        config = AppState.initial.persisted.config.withRenderFpsTarget(RenderFpsTarget.Fps30)
       ),
       runtime = AppState.initial.runtime.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L))
     )

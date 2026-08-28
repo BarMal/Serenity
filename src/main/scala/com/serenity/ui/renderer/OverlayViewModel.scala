@@ -236,7 +236,7 @@ object OverlayViewModel:
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
           com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
-        state.persisted.config.commandRunnerItemGapRows
+        state.persisted.config.surfaceConfig.commandRunnerItemGapRows
       case com.serenity.state.models.SurfaceContent.ContextualToolbar(_) =>
         state.persisted.config.uiElementGap
       case _ => 0

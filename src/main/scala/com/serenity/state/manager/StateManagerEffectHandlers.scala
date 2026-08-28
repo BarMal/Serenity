@@ -200,8 +200,9 @@ final private[manager] class StateManagerEffectHandlers(
         current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner.get, groupId, previewOnly))
       case current @ UiSurface(_, SurfaceContent.ContextualToolbar(toolbarState), _, _) =>
         current.copy(
-          content =
-            SurfaceContent.ContextualToolbar(toolbarState.copy(displayMode = config.contextualToolbarDisplayMode))
+          content = SurfaceContent.ContextualToolbar(
+            toolbarState.copy(displayMode = config.surfaceConfig.contextualToolbarDisplayMode)
+          )
         )
       case other =>
         other
@@ -823,13 +824,13 @@ final private[manager] class StateManagerEffectHandlers(
   private def interpretPanelChromeIntent(intent: PanelChromeIntent): IO[Unit] =
     intent match
       case PanelChromeIntent.ToggleLineNumbers =>
-        updateTextDisplayConfig(config => config.withLineNumbers(!config.showLineNumbers)).void
+        updateTextDisplayConfig(config => config.withLineNumbers(!config.surfaceConfig.showLineNumbers)).void
       case PanelChromeIntent.ToggleGutter =>
-        updateTextDisplayConfig(config => config.withGutter(!config.showGutter)).void
+        updateTextDisplayConfig(config => config.withGutter(!config.surfaceConfig.showGutter)).void
       case PanelChromeIntent.ToggleWordWrap =>
-        updateTextDisplayConfig(config => config.withWordWrap(!config.wordWrapEnabled)).void
+        updateTextDisplayConfig(config => config.withWordWrap(!config.surfaceConfig.wordWrapEnabled)).void
       case PanelChromeIntent.ToggleFocusedTextBody =>
-        updateTextDisplayConfig(config => config.withFocusedTextBody(!config.focusedTextBodyEnabled)).void
+        updateTextDisplayConfig(config => config.withFocusedTextBody(!config.surfaceConfig.focusedTextBodyEnabled)).void
       case PanelChromeIntent.ToggleContextualToolbar =>
         enqueueEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
       case PanelChromeIntent.SetLineNumbers(enabled) =>
@@ -2027,7 +2028,7 @@ final private[manager] class StateManagerEffectHandlers(
     state.persisted.buffers.get(point.bufferId).flatMap { buffer =>
       val cells = VisibleBufferAnimationCells.fromBuffer(
         buffer,
-        state.persisted.config.wordWrapEnabled,
+        state.persisted.config.surfaceConfig.wordWrapEnabled,
         state.persisted.theme.background,
         state.persisted.theme.foreground
       )

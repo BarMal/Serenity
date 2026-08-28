@@ -23,34 +23,36 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     val textFont = FontLoader.availableTextFamilies.drop(1).headOption.getOrElse("missing-text-font")
     val uiFont   = FontLoader.availableUiFamilies.drop(1).headOption.getOrElse("missing-ui-font")
     val config = AppConfig.default.copy(
-      materialPreset = MaterialPreset.Crystal,
-      postProcessingEffect = PostProcessingEffect.ScanlinesAndGlow,
-      uiShadowsEnabled = false,
-      motionPreset = MotionPreset.Expressive,
-      commandRunnerAnimation = AnimationConfig.quick,
-      uiAnimation = AnimationConfig.subtle,
-      editorInsertionTransitionKind = TransitionKind.Disabled,
-      commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
-      panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
-      panelCloseTransitionKind = Some(TransitionKind.DirectionalSweep),
+      surfaceConfig = AppConfig.default.surfaceConfig.copy(
+        materialPreset = MaterialPreset.Crystal,
+        postProcessingEffect = PostProcessingEffect.ScanlinesAndGlow,
+        uiShadowsEnabled = false,
+        motionPreset = MotionPreset.Expressive,
+        commandRunnerAnimation = AnimationConfig.quick,
+        uiAnimation = AnimationConfig.subtle,
+        editorInsertionTransitionKind = TransitionKind.Disabled,
+        commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
+        panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
+        panelCloseTransitionKind = Some(TransitionKind.DirectionalSweep),
+        backgroundStyle = BackgroundStyle.GlassLike,
+        contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly,
+        showLineNumbers = false,
+        showGutter = false,
+        wordWrapEnabled = false,
+        contextualToolbarEnabled = false
+      ),
       cursorConfig = CursorConfig(
         mode = CursorMode.Breathe,
         infoBarMode = CursorInfoBarMode.Detailed,
         infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
       ),
-      backgroundStyle = BackgroundStyle.GlassLike,
       documentConfig = DocumentConfig(
         markdownViewMode = MarkdownViewMode.InlineLens,
         defaultMode = DefaultDocumentMode.RichText
       ),
       interfaceConfig = InterfaceConfig(density = InterfaceDensity.Compact),
       windowConfig = WindowConfig(chromeMode = WindowChromeMode.NativeThemed),
-      contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly,
       languageToolsConfig = LanguageToolsConfig(spellCheck = SpellCheckConfig(enabled = true)),
-      showLineNumbers = false,
-      showGutter = false,
-      wordWrapEnabled = false,
-      contextualToolbarEnabled = false,
       editorConfig = EditorConfig(
         characterAnimation = AnimationConfig.subtle,
         fontConfig = AppConfig.default.editorConfig.fontConfig.copy(
@@ -119,10 +121,12 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
 
   it should "show custom as the selected motion preset for manually edited motion settings" in {
     val config = AppConfig.default.copy(
-      motionPreset = MotionPreset.Custom,
-      commandRunnerAnimation = None,
-      commandRunnerTransitionKind = Some(TransitionKind.TypedText),
-      editorInsertionTransitionKind = TransitionKind.TypedText
+      surfaceConfig = AppConfig.default.surfaceConfig.copy(
+        motionPreset = MotionPreset.Custom,
+        commandRunnerAnimation = None,
+        commandRunnerTransitionKind = Some(TransitionKind.TypedText),
+        editorInsertionTransitionKind = TransitionKind.TypedText
+      )
     )
 
     val selections = CommandRunnerOptionSelections.default(config)

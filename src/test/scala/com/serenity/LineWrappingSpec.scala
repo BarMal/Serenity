@@ -408,7 +408,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       beforeBuffer.copy(viewport = beforeBuffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
       panelWidth * CellMetrics.fromFont(font).charWidth,
       font,
-      wordWrapEnabled = beforeNavState.persisted.config.wordWrapEnabled
+      wordWrapEnabled = beforeNavState.persisted.config.surfaceConfig.wordWrapEnabled
     )
     val preferredXPx    = snapshot.xPxForCursor(beforeCursor).getOrElse(fail("missing caret x"))
     val fallbackAfterUp = beforeCursor.copy(column = beforeCursor.column % panelWidth)

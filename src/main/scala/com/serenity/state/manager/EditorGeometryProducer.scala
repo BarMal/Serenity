@@ -26,7 +26,7 @@ object EditorGeometryProducer:
         buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
         TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.persisted.config.editorConfig.fontConfig),
         font,
-        wordWrapEnabled = state.persisted.config.wordWrapEnabled
+        wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 

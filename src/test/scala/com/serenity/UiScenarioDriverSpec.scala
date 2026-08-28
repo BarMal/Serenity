@@ -54,9 +54,9 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("isolated-config", isolatedConfig = true).unsafeRunSync()
     val config = driver.state.unsafeRunSync().persisted.config
 
-    config.motionPreset shouldBe MotionPreset.Reduced
+    config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
     config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
-    config.commandRunnerItemGapRows shouldBe 0
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe 0
   }
 
   it should "match stable semantic and region references for narrow startup, prose, code, command runner, and settings workflows" in

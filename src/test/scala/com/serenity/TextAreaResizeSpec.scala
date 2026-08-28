@@ -33,8 +33,8 @@ class TextAreaResizeSpec extends AnyFlatSpec with Matchers with StateManagerTest
     val after       = stateManager.getCurrentState.unsafeRunSync()
     val afterLayout = LayoutEngine.calculateLayout(after, ViewportSize(100, 30))
 
-    after.persisted.config.textAreaInsets.left shouldBe (4.0 / 70.0) +- 0.0001
-    after.persisted.config.textAreaInsets.right shouldBe before.persisted.config.textAreaInsets.right
+    after.persisted.config.surfaceConfig.textAreaInsets.left shouldBe (4.0 / 70.0) +- 0.0001
+    after.persisted.config.surfaceConfig.textAreaInsets.right shouldBe before.persisted.config.surfaceConfig.textAreaInsets.right
     afterLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe 10
     afterLayout.pinnedPanelRects(PanelPosition.Right).width shouldBe 20
     afterLayout.editorPanelRect.x should be < beforeLayout.editorPanelRect.x
@@ -64,8 +64,8 @@ class TextAreaResizeSpec extends AnyFlatSpec with Matchers with StateManagerTest
     val after       = stateManager.getCurrentState.unsafeRunSync()
     val afterLayout = LayoutEngine.calculateLayout(after, ViewportSize(80, 30))
 
-    after.persisted.config.textAreaInsets.top shouldBe (3.0 / contentHeight.toDouble) +- 0.0001
-    after.persisted.config.textAreaInsets.bottom shouldBe before.persisted.config.textAreaInsets.bottom
+    after.persisted.config.surfaceConfig.textAreaInsets.top shouldBe (3.0 / contentHeight.toDouble) +- 0.0001
+    after.persisted.config.surfaceConfig.textAreaInsets.bottom shouldBe before.persisted.config.surfaceConfig.textAreaInsets.bottom
     afterLayout.topSpacerRect.height should be < beforeLayout.topSpacerRect.height
     afterLayout.editorPanelRect.y shouldBe beforeLayout.editorPanelRect.y
   }
@@ -94,8 +94,8 @@ class TextAreaResizeSpec extends AnyFlatSpec with Matchers with StateManagerTest
     val after       = stateManager.getCurrentState.unsafeRunSync()
     val afterLayout = LayoutEngine.calculateLayout(after, ViewportSize(80, 30))
 
-    after.persisted.config.textAreaInsets.top shouldBe before.persisted.config.textAreaInsets.top
-    after.persisted.config.textAreaInsets.bottom shouldBe (3.0 / contentHeight.toDouble) +- 0.0001
+    after.persisted.config.surfaceConfig.textAreaInsets.top shouldBe before.persisted.config.surfaceConfig.textAreaInsets.top
+    after.persisted.config.surfaceConfig.textAreaInsets.bottom shouldBe (3.0 / contentHeight.toDouble) +- 0.0001
     afterLayout.bottomSpacerRect.height should be < beforeLayout.bottomSpacerRect.height
     afterLayout.editorPanelRect.y shouldBe beforeLayout.editorPanelRect.y
   }

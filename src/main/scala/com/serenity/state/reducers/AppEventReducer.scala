@@ -80,7 +80,7 @@ object AppEventReducer:
           .pushFocus(Focus.Surface(surfaceId))
 
   private def toggleContextualToolbar(state: AppState): AppState =
-    if !state.persisted.config.contextualToolbarEnabled then state
+    if !state.persisted.config.surfaceConfig.contextualToolbarEnabled then state
     else
       state.contextualToolbarSurface match
         case Some(surface) =>
@@ -98,7 +98,7 @@ object AppEventReducer:
             val surface = UiSurface(
               id = surfaceId,
               content = SurfaceContent.ContextualToolbar(
-                ContextualToolbarState(displayMode = state.persisted.config.contextualToolbarDisplayMode)
+                ContextualToolbarState(displayMode = state.persisted.config.surfaceConfig.contextualToolbarDisplayMode)
               ),
               presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
             )

@@ -151,7 +151,7 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
         menu.selectedIndex,
         hasHeader = true,
         hasFooter = menu.items.nonEmpty,
-        itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+        itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
         itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
       )
     yield (surface, menu, index)

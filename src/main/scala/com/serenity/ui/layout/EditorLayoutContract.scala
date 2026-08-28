@@ -569,7 +569,7 @@ object EditorLayoutContract:
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           SurfaceContent.ContextMenu(_) =>
-        state.persisted.config.commandRunnerItemGapRows
+        state.persisted.config.surfaceConfig.commandRunnerItemGapRows
       case SurfaceContent.ContextualToolbar(_) =>
         state.persisted.config.uiElementGap
       case SurfaceContent.GhostOverlay(originalContent, _) =>

@@ -105,10 +105,10 @@ object LayoutEngine:
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
     val uiElementGap   = math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
     val textAreaInsets =
-      if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.textAreaInsets.normalized
+      if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.surfaceConfig.textAreaInsets.normalized
       else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
     val lineNumberWidth =
-      if state.persisted.config.showLineNumbers then calculateLineNumberWidth(state)
+      if state.persisted.config.surfaceConfig.showLineNumbers then calculateLineNumberWidth(state)
       else 0
     val horizontalTextFraction = (1.0 - textAreaInsets.left - textAreaInsets.right).max(0.01)
     val minimumEditorWorkspaceWidth =
@@ -172,7 +172,7 @@ object LayoutEngine:
 
     val leftSpacerRect = LayoutRect(workspaceX, workspaceY, leftSpacerWidth, availableHeight)
     val lineNumberRect =
-      if state.persisted.config.showLineNumbers then
+      if state.persisted.config.surfaceConfig.showLineNumbers then
         val lineNumberY      = workspaceY + editorPaneHeaderHeight + topSpacerHeight
         val lineNumberHeight = math.max(1, contentAreaHeight - topSpacerHeight - bottomSpacerHeight)
         Some(
@@ -269,12 +269,12 @@ object LayoutEngine:
     )
 
   private def usesBottomGutter(state: AppState): Boolean =
-    state.persisted.config.showGutter ||
+    state.persisted.config.surfaceConfig.showGutter ||
       (state.persisted.config.cursorInfoBarMode != com.serenity.config.CursorInfoBarMode.Off &&
         state.persisted.config.cursorInfoBarPlacement == com.serenity.config.CursorInfoBarPlacement.PinnedBottom)
 
   private def paneHeaderHeight(state: AppState): Int =
-    if state.persisted.config.showPaneHeaders then EditorPaneHeaderHeight else 0
+    if state.persisted.config.surfaceConfig.showPaneHeaders then EditorPaneHeaderHeight else 0
 
   final private case class PinnedPanelLayout(
       panelRects: Map[PanelPosition, LayoutRect],
@@ -719,7 +719,7 @@ object LayoutEngine:
         buffer.document.content,
         contentRect,
         buffer.viewport,
-        state.persisted.config.wordWrapEnabled
+        state.persisted.config.surfaceConfig.wordWrapEnabled
       )
       if surface.content match
         case SurfaceContent.ContextualToolbar(_) => contentRect.contains(screenPosition.x, screenPosition.y)
@@ -778,7 +778,7 @@ object LayoutEngine:
             buffer.document.content,
             contentRect,
             buffer.viewport,
-            state.persisted.config.wordWrapEnabled
+            state.persisted.config.surfaceConfig.wordWrapEnabled
           )
         )
       case _ =>
@@ -803,7 +803,7 @@ object LayoutEngine:
         buffer.document.content,
         paneLayout.contentRect,
         buffer.viewport,
-        state.persisted.config.wordWrapEnabled
+        state.persisted.config.surfaceConfig.wordWrapEnabled
       )
     yield FloatingAnchorFrame(paneLayout.contentRect, screenPosition)
 
@@ -913,7 +913,10 @@ object LayoutEngine:
   private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
-        math.max(0.0, state.persisted.config.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state)))
+        math.max(
+          0.0,
+          state.persisted.config.surfaceConfig.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state))
+        )
       case _ => floatingStackGapRows(state)
 
   private def floatingStackGapRows(state: AppState): Double =
@@ -983,14 +986,14 @@ object LayoutEngine:
   ): Int =
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
     val commandMaxHeight =
-      state.persisted.config.commandRunnerVisibleRows
+      state.persisted.config.surfaceConfig.commandRunnerVisibleRows
         .map(rows =>
           SurfaceFrameLayout.frameHeightForItemRows(
             AppConfig.clampCommandRunnerVisibleRows(rows),
             hasHeader = true,
             hasFooter = true,
             borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-            itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+            itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
             itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
           )
         )
@@ -1034,7 +1037,7 @@ object LayoutEngine:
           hasHeader = true,
           hasFooter = menu.items.nonEmpty,
           borderCells = SurfaceFrameLayout.borderCellsFor(content),
-          itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+          itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
           itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
         )
       case SurfaceContent.CommentLens(lens) =>
@@ -1054,7 +1057,7 @@ object LayoutEngine:
               hasHeader = true,
               hasFooter = true,
               borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-              itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+              itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
               itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
             )
           )
@@ -1198,7 +1201,11 @@ object LayoutEngine:
           val updatedBuffer = pane.bufferId.flatMap(buffers.get).map { buffer =>
             buffer.id -> buffer
               .copy(viewport =
-                updateBufferViewportDimensions(buffer, contentRect, state.persisted.config.wordWrapEnabled)
+                updateBufferViewportDimensions(
+                  buffer,
+                  contentRect,
+                  state.persisted.config.surfaceConfig.wordWrapEnabled
+                )
               )
           }
           val nextBuffers = updatedBuffer.fold(buffers)(buffers + _)
@@ -1366,7 +1373,7 @@ object LayoutEngine:
     calculatedLayout: CalculatedLayout
   ): EditorPaneLayout =
     val headerHeight   = paneHeaderHeight(state)
-    val insets         = state.persisted.config.textAreaInsets.normalized
+    val insets         = state.persisted.config.surfaceConfig.textAreaInsets.normalized
     val paneHeaderRect = paneRect.copy(height = headerHeight)
     val headerRect =
       if state.persisted.layout.activeEditorPaneId.contains(paneId) then

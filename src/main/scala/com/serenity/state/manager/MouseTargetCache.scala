@@ -142,19 +142,19 @@ private[manager] object MouseTargetLayoutKey:
     MouseTargetLayoutKey(
       viewportSize = viewportSize,
       fontConfig = state.persisted.config.editorConfig.fontConfig,
-      showGutter = state.persisted.config.showGutter,
-      showLineNumbers = state.persisted.config.showLineNumbers,
-      wordWrapEnabled = state.persisted.config.wordWrapEnabled,
+      showGutter = state.persisted.config.surfaceConfig.showGutter,
+      showLineNumbers = state.persisted.config.surfaceConfig.showLineNumbers,
+      wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
       minimumPaneWidth = state.persisted.config.editorConfig.minimumPaneWidth,
-      textAreaInsets = state.persisted.config.textAreaInsets,
+      textAreaInsets = state.persisted.config.surfaceConfig.textAreaInsets,
       interfaceDensity = state.persisted.config.interfaceDensity,
       uiElementGap = state.persisted.config.uiElementGap,
-      showPaneHeaders = state.persisted.config.showPaneHeaders,
+      showPaneHeaders = state.persisted.config.surfaceConfig.showPaneHeaders,
       cursorInfoBarMode = state.persisted.config.cursorInfoBarMode,
       cursorInfoBarPlacement = state.persisted.config.cursorInfoBarPlacement,
-      commandRunnerVisibleRows = state.persisted.config.commandRunnerVisibleRows,
-      commandRunnerItemGapRows = state.persisted.config.commandRunnerItemGapRows,
-      commandRunnerCursorGapRows = state.persisted.config.commandRunnerCursorGapRows,
+      commandRunnerVisibleRows = state.persisted.config.surfaceConfig.commandRunnerVisibleRows,
+      commandRunnerItemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+      commandRunnerCursorGapRows = state.persisted.config.surfaceConfig.commandRunnerCursorGapRows,
       layoutState = state.persisted.layout,
       focus = state.persisted.focus,
       focusPaneId = state.persisted.focus match
@@ -185,7 +185,7 @@ private[manager] object MouseTargetLayoutKey:
         case UiSurface(id, _, SurfacePresentation.Pinned(position, size), _) => (id, position, size)
       },
       lineNumberContent =
-        if state.persisted.config.showLineNumbers then
+        if state.persisted.config.surfaceConfig.showLineNumbers then
           state.persisted.buffers.toList
             .sortBy(_._1.value)
             .map((bufferId, buffer) => bufferId -> RopeIdentity(buffer.document.content))
@@ -240,9 +240,13 @@ private[serenity] object AuthoritativeUiScene:
             val width       = paneLayout.contentRect.width * gridMetrics.charWidth
             val heightPx    = paneLayout.contentRect.height * gridMetrics.lineHeight
             val baseViewport = LayoutEngine
-              .updateBufferViewportDimensions(buffer, paneLayout.contentRect, state.persisted.config.wordWrapEnabled)
+              .updateBufferViewportDimensions(
+                buffer,
+                paneLayout.contentRect,
+                state.persisted.config.surfaceConfig.wordWrapEnabled
+              )
             val visibleColumns =
-              if state.persisted.config.wordWrapEnabled then baseViewport.visibleColumns
+              if state.persisted.config.surfaceConfig.wordWrapEnabled then baseViewport.visibleColumns
               else
                 val averageAdvance = math.max(
                   1.0f,
@@ -262,7 +266,7 @@ private[serenity] object AuthoritativeUiScene:
                   .max(paneLayout.contentRect.width + 64)
             val cursorColumn = buffer.editing.cursors.headOption.map(_.column).getOrElse(baseViewport.leftColumn)
             val leftColumn =
-              if state.persisted.config.wordWrapEnabled then 0
+              if state.persisted.config.surfaceConfig.wordWrapEnabled then 0
               else baseViewport.leftColumn.max(0).max(cursorColumn - visibleColumns + 1)
             val viewport = baseViewport.copy(
               leftColumn = leftColumn,
@@ -273,7 +277,7 @@ private[serenity] object AuthoritativeUiScene:
               buffer.copy(viewport = viewport),
               width,
               font,
-              wordWrapEnabled = state.persisted.config.wordWrapEnabled
+              wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
             )
       }
       val scene = base.withTextSnapshots(snapshots)

@@ -68,7 +68,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     "toggle-line".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    before.persisted.config.showLineNumbers shouldBe true
+    before.persisted.config.surfaceConfig.showLineNumbers shouldBe true
     val point = shiftedCommandRunnerItemPoint(before, 0)
 
     stateManager
@@ -76,7 +76,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       .unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
-    after.persisted.config.showLineNumbers shouldBe false
+    after.persisted.config.surfaceConfig.showLineNumbers shouldBe false
     after.commandRunnerSurface shouldBe None
   }
 
@@ -120,13 +120,13 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     "toggle-line".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    before.persisted.config.showLineNumbers shouldBe true
+    before.persisted.config.surfaceConfig.showLineNumbers shouldBe true
     val point = commandRunnerItemPoint(before, 0)
 
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
-    after.persisted.config.showLineNumbers shouldBe false
+    after.persisted.config.surfaceConfig.showLineNumbers shouldBe false
     after.commandRunnerSurface shouldBe None
   }
 
@@ -333,7 +333,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
         itemCount = runner.visibleItems.length,
         hasHeader = true,
         hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-        itemGapRows = state.persisted.config.commandRunnerItemGapRows,
+        itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
         itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
       )
       .translated(

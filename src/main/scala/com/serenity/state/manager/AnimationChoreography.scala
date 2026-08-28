@@ -31,7 +31,7 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
         buffer <- state.persisted.buffers.get(buffId)
         cells = VisibleBufferAnimationCells.fromBuffer(
           buffer,
-          state.persisted.config.wordWrapEnabled,
+          state.persisted.config.surfaceConfig.wordWrapEnabled,
           state.persisted.theme.background,
           state.persisted.theme.foreground
         )

@@ -190,10 +190,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       initialState <- stateManager.getCurrentState
       stateWithLineNumbers = initialState.copy(
         persisted = initialState.persisted.copy(
-          config = initialState.persisted.config.copy(
-            showLineNumbers = true,
-            showGutter = true
-          )
+          config = initialState.persisted.config.withLineNumbers(true).withGutter(true)
         )
       )
 
@@ -203,15 +200,15 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
       // Calculate expected dimensions based on actual buffer content (3 lines = 1 digit + 1 space = min 3 chars)
       lineNumberWidth = 3 // Based on actual LayoutEngine calculation for 3-line buffer
-      gutterHeight    = if stateWithLineNumbers.persisted.config.showGutter then 1 else 0
+      gutterHeight    = if stateWithLineNumbers.persisted.config.surfaceConfig.showGutter then 1 else 0
     yield
       // Then: Layout should allocate space for line numbers and gutter
-      if stateWithLineNumbers.persisted.config.showLineNumbers then
+      if stateWithLineNumbers.persisted.config.surfaceConfig.showLineNumbers then
         layout.editorPanelRect.x should be >= lineNumberWidth
         layout.lineNumberRect should be(defined)
         layout.lineNumberRect.get.width should be(lineNumberWidth)
 
-      if stateWithLineNumbers.persisted.config.showGutter then
+      if stateWithLineNumbers.persisted.config.surfaceConfig.showGutter then
         layout.gutterRect should be(defined)
         layout.gutterRect.get.height should be(gutterHeight)
         // Gutter should be at bottom of terminal
@@ -338,7 +335,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
           focus = Focus.EditorPane(PaneId(0)),
           config = AppState.initial.persisted.config
             .withInterfaceDensity(density)
-            .copy(showLineNumbers = true),
+            .withLineNumbers(true),
           theme = Theme.light
         )
       )
@@ -421,7 +418,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
       // When: Calculate layout with gutter enabled
       stateWithGutter = initialState.copy(
-        persisted = initialState.persisted.copy(config = initialState.persisted.config.copy(showGutter = true))
+        persisted = initialState.persisted.copy(config = initialState.persisted.config.withGutter(true))
       )
       viewportSize = ViewportSize(80, 24)
       layout       = LayoutEngine.calculateLayoutWithUI(stateWithGutter, viewportSize)
@@ -457,7 +454,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         config = AppState.initial.persisted.config
           .withCursorInfoBarMode(CursorInfoBarMode.Position)
           .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-          .copy(showGutter = false),
+          .withGutter(false),
         theme = Theme.light
       )
     )
@@ -488,7 +485,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         config = AppState.initial.persisted.config
           .withCursorInfoBarMode(CursorInfoBarMode.Position)
           .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-          .copy(showGutter = false),
+          .withGutter(false),
         theme = Theme.light
       )
     )

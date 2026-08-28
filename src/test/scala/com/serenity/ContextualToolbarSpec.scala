@@ -881,7 +881,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
       .unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.persisted.config.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.IconOnly
+    state.persisted.config.surfaceConfig.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.IconOnly
     toolbarStateFrom(state).displayMode shouldBe ToolbarDisplayMode.IconOnly
   }
 

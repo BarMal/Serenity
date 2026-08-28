@@ -1382,7 +1382,7 @@ object EditorEventReducer:
     direction: Int
   ): CursorPosition =
     measuredVerticalMoveBySnapshot(
-      currentState.persisted.config.wordWrapEnabled,
+      currentState.persisted.config.surfaceConfig.wordWrapEnabled,
       cursor,
       geometry.navigation,
       preferredXPx,
@@ -1393,7 +1393,7 @@ object EditorEventReducer:
           cursor,
           buffer,
           geometry,
-          currentState.persisted.config.wordWrapEnabled,
+          currentState.persisted.config.surfaceConfig.wordWrapEnabled,
           preferredColumn,
           direction
         )
@@ -1615,7 +1615,7 @@ object EditorEventReducer:
     val preferredXPx    = buffer.editing.preferredXPx.getOrElse(measuredCursorXPxFrom(geometry, from))
     val landed =
       measuredVerticalMoveBySnapshot(
-        currentState.persisted.config.wordWrapEnabled,
+        currentState.persisted.config.surfaceConfig.wordWrapEnabled,
         from,
         geometry.navigation,
         preferredXPx,
@@ -1626,7 +1626,7 @@ object EditorEventReducer:
             from,
             buffer,
             geometry,
-            currentState.persisted.config.wordWrapEnabled,
+            currentState.persisted.config.surfaceConfig.wordWrapEnabled,
             preferredColumn,
             direction
           )

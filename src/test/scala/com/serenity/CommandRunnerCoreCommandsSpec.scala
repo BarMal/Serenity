@@ -1752,7 +1752,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.commandRunnerVisibleRows shouldBe Some(9)
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.commandRunnerVisibleRows shouldBe Some(
+      9
+    )
 
     stateManager
       .executeCommand(
@@ -1765,7 +1767,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.commandRunnerVisibleRows shouldBe None
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.commandRunnerVisibleRows shouldBe None
   }
 
   it should "set command runner item and cursor gaps from typed settings commands" in {
@@ -1793,8 +1795,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
-    config.commandRunnerItemGapRows shouldBe 1
-    config.commandRunnerCursorGapRows shouldBe Some(3)
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe 1
+    config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
   }
 
   it should "apply a built-in writing preset from a searchable command" in {
@@ -1805,9 +1807,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
     updatedState.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
-    updatedState.persisted.config.showLineNumbers shouldBe false
-    updatedState.persisted.config.showGutter shouldBe false
-    updatedState.persisted.config.showPaneHeaders shouldBe false
+    updatedState.persisted.config.surfaceConfig.showLineNumbers shouldBe false
+    updatedState.persisted.config.surfaceConfig.showGutter shouldBe false
+    updatedState.persisted.config.surfaceConfig.showPaneHeaders shouldBe false
     updatedState.pinnedSurfaces shouldBe Nil
   }
 
@@ -1820,16 +1822,16 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updated   = stateManager.getCurrentState.unsafeRunSync().persisted.config
     val persisted = ConfigManager.loadConfig(Some(configFile.toString))
 
-    updated.showLineNumbers shouldBe true
-    updated.showGutter shouldBe true
-    updated.showPaneHeaders shouldBe true
-    updated.wordWrapEnabled shouldBe false
-    updated.contextualToolbarEnabled shouldBe false
-    persisted.showLineNumbers shouldBe updated.showLineNumbers
-    persisted.showGutter shouldBe updated.showGutter
-    persisted.showPaneHeaders shouldBe updated.showPaneHeaders
-    persisted.wordWrapEnabled shouldBe updated.wordWrapEnabled
-    persisted.contextualToolbarEnabled shouldBe updated.contextualToolbarEnabled
+    updated.surfaceConfig.showLineNumbers shouldBe true
+    updated.surfaceConfig.showGutter shouldBe true
+    updated.surfaceConfig.showPaneHeaders shouldBe true
+    updated.surfaceConfig.wordWrapEnabled shouldBe false
+    updated.surfaceConfig.contextualToolbarEnabled shouldBe false
+    persisted.surfaceConfig.showLineNumbers shouldBe updated.surfaceConfig.showLineNumbers
+    persisted.surfaceConfig.showGutter shouldBe updated.surfaceConfig.showGutter
+    persisted.surfaceConfig.showPaneHeaders shouldBe updated.surfaceConfig.showPaneHeaders
+    persisted.surfaceConfig.wordWrapEnabled shouldBe updated.surfaceConfig.wordWrapEnabled
+    persisted.surfaceConfig.contextualToolbarEnabled shouldBe updated.surfaceConfig.contextualToolbarEnabled
   }
 
   it should "focus the left panel from the command runner" in {

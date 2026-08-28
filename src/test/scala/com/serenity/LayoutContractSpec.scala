@@ -47,9 +47,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
             .withInterfaceDensity(density)
             .withLineNumbers(true)
             .withGutter(true)
-            .copy(
-              textAreaInsets = TextAreaInsets(left = 0.05, right = 0.10)
-            )
+            .withTextAreaInsets(TextAreaInsets(left = 0.05, right = 0.10))
             .withUiElementGap(2)
         ),
         runtime = AppState.initial.runtime.copy(
@@ -191,11 +189,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.copy(
-          showLineNumbers = false,
-          showGutter = false,
-          textAreaInsets = TextAreaInsets()
-        ),
+        config = AppConfig.default.withLineNumbers(false).withGutter(false).withTextAreaInsets(TextAreaInsets()),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
@@ -239,11 +233,9 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
-          .copy(
-            showLineNumbers = false,
-            showGutter = false,
-            textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0)
-          )
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
           .withUiElementGap(gap)
       ),
       runtime = AppState.initial.runtime.copy(
@@ -280,11 +272,9 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
-          .copy(
-            showLineNumbers = false,
-            showGutter = false,
-            textAreaInsets = TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0)
-          )
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0))
           .withUiElementGap(gap)
       ),
       runtime = AppState.initial.runtime.copy(
@@ -318,11 +308,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   it should "apply horizontal spacer overrides consistently to workspace and active pane bounds" in {
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.copy(
-          showLineNumbers = false,
-          showGutter = false,
-          textAreaInsets = TextAreaInsets()
-        )
+        config = AppConfig.default.withLineNumbers(false).withGutter(false).withTextAreaInsets(TextAreaInsets())
       )
     )
 
@@ -353,7 +339,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withLineNumbers(true)
           .withGutter(true)
-          .copy(textAreaInsets = TextAreaInsets(left = 0.05, right = 0.05))
+          .withTextAreaInsets(TextAreaInsets(left = 0.05, right = 0.05))
           .withUiElementGap(1),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
@@ -720,11 +706,10 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   it should "provide shared spacer lookups" in {
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.copy(
-          showLineNumbers = false,
-          showGutter = false,
-          textAreaInsets = TextAreaInsets(left = 0.10, right = 0.15)
-        )
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.15))
       )
     )
 

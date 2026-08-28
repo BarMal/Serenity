@@ -135,7 +135,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     )
     val initialState = com.serenity.state.models.AppState.initial.copy(
       persisted = com.serenity.state.models.AppState.initial.persisted.copy(
-        config = AppConfig.default.copy(viewportSizing = viewportSizing)
+        config = AppConfig.default.withViewportSizing(viewportSizing)
       )
     )
     val newSize = ViewportSize(120, 40)

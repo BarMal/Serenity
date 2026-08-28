@@ -399,47 +399,51 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
               uiLigatures = true
             )
           ),
-          blurRadius = 0.42f,
-          backgroundStyle = BackgroundStyle.GlassLike,
-          materialPreset = MaterialPreset.Crystal,
-          motionPreset = MotionPreset.Reduced,
-          elementTransitionSpeedScale = 1.75,
-          editorTextTransitionSpeedScale = Some(0.5),
-          commandRunnerTransitionSpeedScale = Some(2.25),
-          uiTransitionSpeedScale = Some(1.25),
-          cursorTransitionSpeedScale = Some(0.75),
-          commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
-          panelOpenTransitionKind = Some(TransitionKind.DirectionalSweep),
-          panelCloseTransitionKind = Some(TransitionKind.Disabled),
-          uiAnimation = AnimationConfig.subtle,
-          motionConfiguration = Some(
-            MotionConfig(
-              MotionAccessibility.Off,
-              MotionPreset.Smooth,
-              Map(
-                MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-                  enabled = true,
-                  transitionKind = TransitionKind.TypedText,
-                  animation = AnimationConfig.subtle,
-                  speedScale = 0.5
-                ),
-                MotionFamily.PinnedPanels -> MotionFamilyConfig(
-                  enabled = true,
-                  transitionKind = TransitionKind.DirectionalSweep,
-                  animation = AnimationConfig.smooth,
-                  speedScale = 1.0,
-                  transitionOverrides = Map(
-                    TransitionScope.PanelOpen  -> TransitionKind.DirectionalSweep,
-                    TransitionScope.PanelClose -> TransitionKind.Disabled
+          surfaceConfig = SurfaceConfig(
+            blurRadius = 0.42f,
+            backgroundStyle = BackgroundStyle.GlassLike,
+            materialPreset = MaterialPreset.Crystal,
+            motionPreset = MotionPreset.Reduced,
+            elementTransitionSpeedScale = 1.75,
+            editorTextTransitionSpeedScale = Some(0.5),
+            commandRunnerTransitionSpeedScale = Some(2.25),
+            uiTransitionSpeedScale = Some(1.25),
+            cursorTransitionSpeedScale = Some(0.75),
+            commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
+            panelOpenTransitionKind = Some(TransitionKind.DirectionalSweep),
+            panelCloseTransitionKind = Some(TransitionKind.Disabled),
+            uiAnimation = AnimationConfig.subtle,
+            motionConfiguration = Some(
+              MotionConfig(
+                MotionAccessibility.Off,
+                MotionPreset.Smooth,
+                Map(
+                  MotionFamily.CommandSurfaces -> MotionFamilyConfig(
+                    enabled = true,
+                    transitionKind = TransitionKind.TypedText,
+                    animation = AnimationConfig.subtle,
+                    speedScale = 0.5
+                  ),
+                  MotionFamily.PinnedPanels -> MotionFamilyConfig(
+                    enabled = true,
+                    transitionKind = TransitionKind.DirectionalSweep,
+                    animation = AnimationConfig.smooth,
+                    speedScale = 1.0,
+                    transitionOverrides = Map(
+                      TransitionScope.PanelOpen  -> TransitionKind.DirectionalSweep,
+                      TransitionScope.PanelClose -> TransitionKind.Disabled
+                    )
                   )
                 )
               )
-            )
+            ),
+            commandRunnerVisibleRows = Some(9),
+            commandRunnerItemGapRows = 1,
+            commandRunnerCursorGapRows = Some(3),
+            renderFpsTarget = RenderFpsTarget.Fps120,
+            showLineNumbers = false,
+            showGutter = false
           ),
-          commandRunnerVisibleRows = Some(9),
-          commandRunnerItemGapRows = 1,
-          commandRunnerCursorGapRows = Some(3),
-          renderFpsTarget = RenderFpsTarget.Fps120,
           cursorConfig = CursorConfig(
             mode = CursorMode.Breathe,
             colors = CursorColorConfig(
@@ -463,8 +467,6 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
             cornerRadiusPx = 12,
             outlineThicknessPx = 4
           ),
-          showLineNumbers = false,
-          showGutter = false,
           languageToolsConfig = LanguageToolsConfig(
             lspUserConfig = LspUserConfig(
               servers = Some(
@@ -490,24 +492,24 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState].toOption.get
 
-    decoded.config.blurRadius shouldBe 0.42f
-    decoded.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
-    decoded.config.materialPreset shouldBe MaterialPreset.Crystal
-    decoded.config.motionPreset shouldBe MotionPreset.Reduced
-    decoded.config.elementTransitionSpeedScale shouldBe 1.75
-    decoded.config.editorTextTransitionSpeedScale shouldBe Some(0.5)
-    decoded.config.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
-    decoded.config.uiTransitionSpeedScale shouldBe Some(1.25)
-    decoded.config.cursorTransitionSpeedScale shouldBe Some(0.75)
-    decoded.config.commandRunnerTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
-    decoded.config.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
-    decoded.config.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
-    decoded.config.uiAnimation shouldBe AnimationConfig.subtle
-    decoded.config.motionConfiguration shouldBe appState.persisted.config.motionConfiguration
-    decoded.config.commandRunnerVisibleRows shouldBe Some(9)
-    decoded.config.commandRunnerItemGapRows shouldBe 1
-    decoded.config.commandRunnerCursorGapRows shouldBe Some(3)
-    decoded.config.renderFpsTarget shouldBe RenderFpsTarget.Fps120
+    decoded.config.surfaceConfig.blurRadius shouldBe 0.42f
+    decoded.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    decoded.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Crystal
+    decoded.config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
+    decoded.config.surfaceConfig.elementTransitionSpeedScale shouldBe 1.75
+    decoded.config.surfaceConfig.editorTextTransitionSpeedScale shouldBe Some(0.5)
+    decoded.config.surfaceConfig.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
+    decoded.config.surfaceConfig.uiTransitionSpeedScale shouldBe Some(1.25)
+    decoded.config.surfaceConfig.cursorTransitionSpeedScale shouldBe Some(0.75)
+    decoded.config.surfaceConfig.commandRunnerTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
+    decoded.config.surfaceConfig.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
+    decoded.config.surfaceConfig.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
+    decoded.config.surfaceConfig.uiAnimation shouldBe AnimationConfig.subtle
+    decoded.config.surfaceConfig.motionConfiguration shouldBe appState.persisted.config.surfaceConfig.motionConfiguration
+    decoded.config.surfaceConfig.commandRunnerVisibleRows shouldBe Some(9)
+    decoded.config.surfaceConfig.commandRunnerItemGapRows shouldBe 1
+    decoded.config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
+    decoded.config.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Fps120
     decoded.config.cursorConfig shouldBe CursorConfig(
       mode = CursorMode.Breathe,
       colors = CursorColorConfig(
@@ -540,8 +542,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.config.editorConfig.fontConfig.codeLigatures shouldBe false
     decoded.config.editorConfig.fontConfig.textLigatures shouldBe true
     decoded.config.editorConfig.fontConfig.uiLigatures shouldBe true
-    decoded.config.showLineNumbers shouldBe false
-    decoded.config.showGutter shouldBe false
+    decoded.config.surfaceConfig.showLineNumbers shouldBe false
+    decoded.config.surfaceConfig.showGutter shouldBe false
     decoded.config.languageToolsConfig.lspUserConfig.servers.map(_(LanguageId.Scala.id)) shouldBe Some(
       LspServerOverride(
         command = Some("custom-metals"),
@@ -608,7 +610,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutBackgroundStyle.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.backgroundStyle shouldBe BackgroundStyle.Frosted
+    decoded.toOption.get.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Frosted
   }
 
   it should "default material and motion presets when loading older JSON without the fields" in {
@@ -628,8 +630,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutPresets.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.materialPreset shouldBe MaterialPreset.Frosted
-    decoded.toOption.get.config.motionPreset shouldBe MotionPreset.Smooth
+    decoded.toOption.get.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Frosted
+    decoded.toOption.get.config.surfaceConfig.motionPreset shouldBe MotionPreset.Smooth
   }
 
   it should "default element transition speed scale when loading older JSON without the field" in {
@@ -646,7 +648,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutSpeedScale.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.elementTransitionSpeedScale shouldBe 1.0
+    decoded.toOption.get.config.surfaceConfig.elementTransitionSpeedScale shouldBe 1.0
   }
 
   it should "default per-family animation speed scales when loading older JSON without the fields" in {
@@ -672,10 +674,10 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutFamilyScales.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.editorTextTransitionSpeedScale shouldBe None
-    decoded.toOption.get.config.commandRunnerTransitionSpeedScale shouldBe None
-    decoded.toOption.get.config.uiTransitionSpeedScale shouldBe None
-    decoded.toOption.get.config.cursorTransitionSpeedScale shouldBe None
+    decoded.toOption.get.config.surfaceConfig.editorTextTransitionSpeedScale shouldBe None
+    decoded.toOption.get.config.surfaceConfig.commandRunnerTransitionSpeedScale shouldBe None
+    decoded.toOption.get.config.surfaceConfig.uiTransitionSpeedScale shouldBe None
+    decoded.toOption.get.config.surfaceConfig.cursorTransitionSpeedScale shouldBe None
   }
 
   it should "default command and panel transition kind overrides when loading older JSON without the fields" in {
@@ -700,9 +702,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutPanelKinds.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.panelOpenTransitionKind shouldBe None
-    decoded.toOption.get.config.panelCloseTransitionKind shouldBe None
-    decoded.toOption.get.config.commandRunnerTransitionKind shouldBe None
+    decoded.toOption.get.config.surfaceConfig.panelOpenTransitionKind shouldBe None
+    decoded.toOption.get.config.surfaceConfig.panelCloseTransitionKind shouldBe None
+    decoded.toOption.get.config.surfaceConfig.commandRunnerTransitionKind shouldBe None
   }
 
   it should "default command runner animation when loading older JSON without the field" in {
@@ -719,7 +721,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutCommandRunnerAnimation.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
+    decoded.toOption.get.config.surfaceConfig.commandRunnerAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
   }
 
   it should "default UI animation when loading older JSON without the field" in {
@@ -736,7 +738,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutUiAnimation.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.uiAnimation shouldBe AppConfig.default.uiAnimation
+    decoded.toOption.get.config.surfaceConfig.uiAnimation shouldBe AppConfig.default.surfaceConfig.uiAnimation
   }
 
   it should "default renderFpsTarget to 60 FPS when loading older JSON without the field" in {
@@ -753,7 +755,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutRenderFps.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.renderFpsTarget shouldBe RenderFpsTarget.Fps60
+    decoded.toOption.get.config.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Fps60
   }
 
   it should "default windowChromeMode to the app default when loading older JSON without the field" in {
@@ -842,8 +844,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded = SessionState.fromAppState(state).asJson.as[SessionState].toOption.get
 
     decoded.config.uiElementGap shouldBe 0.75
-    decoded.config.commandRunnerItemGapRows shouldBe 0.25
-    decoded.config.commandRunnerCursorGapRows shouldBe Some(0.5)
+    decoded.config.surfaceConfig.commandRunnerItemGapRows shouldBe 0.25
+    decoded.config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(0.5)
   }
 
   it should "default UI corner radius to the existing panel radius when loading older JSON without the field" in {
@@ -1323,7 +1325,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val decoded  = legacy.as[SessionState].toOption.getOrElse(fail("legacy session should decode"))
     val restored = SessionState.toAppState(decoded, Theme.dark)
 
-    restored.persisted.config.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    restored.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
   }
 
   it should "decode a session file written by the current release using old toString enum spellings" in {
@@ -1398,9 +1400,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
     decoded.toOption.get.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
     decoded.toOption.get.config.interfaceDensity shouldBe InterfaceDensity.Spacious
-    decoded.toOption.get.config.materialPreset shouldBe MaterialPreset.Crystal
-    decoded.toOption.get.config.motionPreset shouldBe MotionPreset.Expressive
-    decoded.toOption.get.config.motionConfiguration shouldBe Some(
+    decoded.toOption.get.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Crystal
+    decoded.toOption.get.config.surfaceConfig.motionPreset shouldBe MotionPreset.Expressive
+    decoded.toOption.get.config.surfaceConfig.motionConfiguration shouldBe Some(
       MotionConfig(
         accessibility = MotionAccessibility.Reduced,
         baseline = MotionPreset.Expressive,

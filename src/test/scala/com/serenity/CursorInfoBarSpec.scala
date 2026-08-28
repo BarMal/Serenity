@@ -74,7 +74,7 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withCursorInfoBarMode(CursorInfoBarMode.Detailed)
       .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-      .copy(showGutter = false)
+      .withGutter(false)
     val state  = editorState(config = config)
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
 

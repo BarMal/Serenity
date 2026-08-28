@@ -47,7 +47,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     val saved = store.find("Scenario").unsafeRunSync()
     val frame = driver.renderFrame("saved").unsafeRunSync()
 
-    saved.map(_.config.backgroundStyle) shouldBe Some(BackgroundStyle.Solid)
+    saved.map(_.config.surfaceConfig.backgroundStyle) shouldBe Some(BackgroundStyle.Solid)
     frame.evidence.layoutViolations shouldBe empty
   }
 
@@ -63,25 +63,25 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    val savedMotion = driver.state.unsafeRunSync().persisted.config.motionPreset
+    val savedMotion = driver.state.unsafeRunSync().persisted.config.surfaceConfig.motionPreset
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Scenario")))
     val beforeChange = driver.renderFrame("before-settings-change").unsafeRunSync()
     execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))))
     val changed = driver.renderFrame("changed").unsafeRunSync()
-    driver.state.unsafeRunSync().persisted.config.motionPreset shouldBe MotionPreset.Subtle
+    driver.state.unsafeRunSync().persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
     changed.evidence.layoutViolations shouldBe empty
-    store.find("Scenario").unsafeRunSync().map(_.config.motionPreset) shouldBe Some(savedMotion)
+    store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset) shouldBe Some(savedMotion)
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
     val reapplied = driver.state.unsafeRunSync()
-    reapplied.persisted.config.backgroundStyle shouldBe BackgroundStyle.Solid
-    reapplied.persisted.config.motionPreset shouldBe savedMotion
+    reapplied.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Solid
+    reapplied.persisted.config.surfaceConfig.motionPreset shouldBe savedMotion
     beforeChange.evidence.layoutViolations shouldBe empty
     driver.renderFrame("after-reapply").unsafeRunSync().evidence.layoutViolations shouldBe empty
 
     val restarted = UiScenarioDriver.create("ui-preset-restarted", uiPresetStore = Some(store)).unsafeRunSync()
     execute(restarted, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
-    restarted.state.unsafeRunSync().persisted.config.backgroundStyle shouldBe BackgroundStyle.Solid
+    restarted.state.unsafeRunSync().persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Solid
     restarted.renderFrame("restarted").unsafeRunSync().evidence.layoutViolations shouldBe empty
   }
 
@@ -91,21 +91,21 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Scenario")))
     val beforeChange = driver.renderFrame("before-change-save").unsafeRunSync()
-    val savedMotion  = store.find("Scenario").unsafeRunSync().map(_.config.motionPreset)
+    val savedMotion  = store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset)
     execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))))
     val changed = driver.renderFrame("changed-save").unsafeRunSync()
-    store.find("Scenario").unsafeRunSync().map(_.config.motionPreset) shouldBe savedMotion
+    store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset) shouldBe savedMotion
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Scenario")))
     val saved = driver.renderFrame("after-save").unsafeRunSync()
-    store.find("Scenario").unsafeRunSync().map(_.config.motionPreset) shouldBe Some(MotionPreset.Subtle)
+    store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset) shouldBe Some(MotionPreset.Subtle)
 
     val restarted =
       UiScenarioDriver.create("ui-preset-preview-save-restarted", uiPresetStore = Some(store)).unsafeRunSync()
     execute(restarted, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
     val appliedAfterRestart = restarted.renderFrame("applied-after-restart").unsafeRunSync()
 
-    restarted.state.unsafeRunSync().persisted.config.motionPreset shouldBe MotionPreset.Subtle
+    restarted.state.unsafeRunSync().persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
     beforeChange.evidence.layoutViolations shouldBe empty
     changed.evidence.layoutViolations shouldBe empty
     saved.evidence.layoutViolations shouldBe empty
@@ -140,7 +140,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
         case _                                      => None)
       .getOrElse(fail("command runner should reopen after session restore"))
 
-    reopened.persisted.config.materialPreset shouldBe MaterialPreset.Solid
+    reopened.persisted.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Solid
     store.find("Restart Draft").unsafeRunSync() shouldBe None
     inputIds(runner.settingsGroups) should contain allOf ("ui-preset-save-as-new", "ui-preset-overwrite")
     changed.evidence.layoutViolations shouldBe empty

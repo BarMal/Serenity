@@ -6,7 +6,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, SurfaceConfig}
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionId, SessionIndex, SessionManager, SessionMetadata}
 import com.serenity.state.models.*
@@ -255,8 +255,10 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       loaded.map(_.persisted.config.editorConfig.minimumPaneWidth) shouldBe Some(
         AppConfig.default.editorConfig.minimumPaneWidth
       )
-      loaded.map(_.persisted.config.showLineNumbers) shouldBe Some(AppConfig.default.showLineNumbers)
-      loaded.map(_.persisted.config.showGutter) shouldBe Some(AppConfig.default.showGutter)
+      loaded.map(_.persisted.config.surfaceConfig.showLineNumbers) shouldBe Some(
+        AppConfig.default.surfaceConfig.showLineNumbers
+      )
+      loaded.map(_.persisted.config.surfaceConfig.showGutter) shouldBe Some(AppConfig.default.surfaceConfig.showGutter)
 
     program.unsafeRunSync()
   }
@@ -284,14 +286,18 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
 
     val initial = AppState.initial
     val state =
-      initial.copy(persisted = initial.persisted.copy(config = AppConfig(blurRadius = 0.75f, showLineNumbers = false)))
+      initial.copy(persisted =
+        initial.persisted.copy(config =
+          AppConfig(surfaceConfig = SurfaceConfig(blurRadius = 0.75f, showLineNumbers = false))
+        )
+      )
 
     val program = for
       _      <- sessionManager.saveSession(state)
       loaded <- sessionManager.loadSession()
     yield
-      loaded.map(_.persisted.config.blurRadius) shouldBe Some(0.75f)
-      loaded.map(_.persisted.config.showLineNumbers) shouldBe Some(false)
+      loaded.map(_.persisted.config.surfaceConfig.blurRadius) shouldBe Some(0.75f)
+      loaded.map(_.persisted.config.surfaceConfig.showLineNumbers) shouldBe Some(false)
 
     program.unsafeRunSync()
   }

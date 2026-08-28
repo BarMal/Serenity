@@ -67,7 +67,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
           activeEditorPaneId = Some(paneId)
         ),
         theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.copy(showLineNumbers = false)
+        config = com.serenity.config.AppConfig.default.withLineNumbers(false)
       )
     )
     val viewport = ViewportSize(80, 24)
@@ -115,7 +115,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
           activeEditorPaneId = Some(paneId)
         ),
         theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.copy(showLineNumbers = true)
+        config = com.serenity.config.AppConfig.default.withLineNumbers(true)
       )
     )
     val viewport = ViewportSize(80, 24)

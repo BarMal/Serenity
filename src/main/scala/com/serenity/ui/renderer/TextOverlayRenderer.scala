@@ -34,7 +34,7 @@ object TextOverlayRenderer:
   ): Unit =
     val rect = overlay.rect
 
-    if config.uiShadowsEnabled then
+    if config.surfaceConfig.uiShadowsEnabled then
       surface.roundedRects.foreach(
         _.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, new Color(0, 0, 0))
       )
