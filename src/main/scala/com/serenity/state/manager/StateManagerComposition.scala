@@ -8,7 +8,7 @@ import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.PreferredWindowSize
+import com.serenity.config.{PreferredWindowSize, SpellCheckConfig}
 import com.serenity.diagnostics.Trace
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.{Direction, Event}
@@ -133,7 +133,10 @@ final private[manager] class StateManagerOperationBoundary private (
 
   def scheduleDocumentAnalysis(): IO[Unit] =
     stateRef.get.flatMap { state =>
-      IO.blocking(SpellChecker.analysisFingerprints(state)).flatMap { inputs =>
+      val spellCheckConfig = state.persisted.config.languageToolsConfig.spellCheck
+      IO.blocking(
+        SpellChecker.analysisFingerprints(state, SpellCheckConfig.discoverDictionaryFingerprints(spellCheckConfig))
+      ).flatMap { inputs =>
         documentAnalysisInputsRef.modify(previous => Some(inputs) -> previous.forall(_ != inputs)).flatMap {
           inputsChanged =>
             if !inputsChanged || !requiresDocumentAnalysis(state) then IO.unit
@@ -196,9 +199,13 @@ final private[manager] class StateManagerOperationBoundary private (
     (IO.sleep(DocumentAnalysisDebounce) >>
       Trace.timed("analysis.documentAnalysisJob") {
         stateRef.get.flatMap { snapshot =>
-          val expected = SpellChecker.analysisFingerprints(snapshot)
-          IO.blocking(SpellChecker.refreshDiagnostics(snapshot))
-            .flatMap(analyzed => stateRef.update(current => SpellChecker.applyIfCurrent(current, analyzed, expected)))
+          val spellCheckConfig = snapshot.persisted.config.languageToolsConfig.spellCheck
+          IO.blocking(SpellChecker.loadDictionarySnapshot(spellCheckConfig)).flatMap { dictionary =>
+            val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
+            val analyzed = SpellChecker.refreshDiagnostics(snapshot, dictionary)
+            stateRef
+              .update(current => SpellChecker.applyIfCurrent(current, analyzed, expected, dictionary.fingerprints))
+          }
         }
       }).handleErrorWith(error =>
       documentAnalysisInputsRef.set(None) >> logger.error(error)("[ANALYSIS] Document analysis refresh failed")

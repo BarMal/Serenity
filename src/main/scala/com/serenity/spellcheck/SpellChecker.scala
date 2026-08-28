@@ -18,10 +18,22 @@ object SpellChecker:
 
   private val WordPattern = """[\p{L}\p{M}]+(?:['’-][\p{L}\p{M}]+)*""".r
 
-  private val DictionaryCache                   = ConcurrentHashMap[DictionaryCacheKey, DictionaryLoadResult]()
+  /** One entry per normalized dictionary path, holding only the most recently loaded version of that dictionary. A path
+    * whose fingerprint no longer matches is replaced in place rather than accumulating a new entry, so repeated
+    * dictionary edits cannot grow this map without bound.
+    */
+  private val DictionaryCache                   = ConcurrentHashMap[String, DictionaryCacheEntry]()
   private val DefaultDictionaryCharset: Charset = StandardCharsets.UTF_8
 
-  final private case class DictionaryCacheKey(fingerprints: List[SpellCheckDictionaryFingerprint])
+  /** Number of distinct dictionary paths currently cached -- exposed only so tests can assert the cache stays bounded
+    * to one entry per normalized path rather than growing with every historical fingerprint.
+    */
+  private[serenity] def dictionaryCacheSize: Int = DictionaryCache.size()
+
+  final private case class DictionaryCacheEntry(
+      fingerprints: List[SpellCheckDictionaryFingerprint],
+      result: DictionaryLoadResult
+  )
 
   final private case class DictionaryLoadResult(
       words: Set[String],
@@ -29,10 +41,22 @@ object SpellChecker:
       failures: List[String]
   )
 
-  final private case class DictionaryContext(
+  /** Immutable, already-loaded dictionary data that pure analysis (`analyzeText`, `refreshDiagnostics`) consumes.
+    * Building one performs no filesystem IO; only `loadDictionarySnapshot` does.
+    */
+  final case class DictionaryContext(
       words: Set[String],
       replacements: Map[String, List[String]],
       failures: List[String]
+  )
+
+  /** The result of one explicit dictionary-discovery pass: the loaded words/replacements/failures plus the on-disk
+    * fingerprints that produced them. Obtain one via `loadDictionarySnapshot`, called from `IO.blocking`, then thread
+    * it into `refreshDiagnostics`/`analysisFingerprints`/`applyIfCurrent` so those stay pure.
+    */
+  final case class DictionarySnapshot(
+      context: DictionaryContext,
+      fingerprints: List[SpellCheckDictionaryFingerprint]
   )
 
   private enum HunspellFlagMode:
@@ -101,11 +125,21 @@ object SpellChecker:
     )
   )
 
+  /** Convenience entry point that discovers and loads dictionaries itself -- handy for tests and one-off checks, but it
+    * performs filesystem IO synchronously and so must never be called from a pure state method or from inside
+    * `Ref.update`. Production analysis instead calls `loadDictionarySnapshot` explicitly from `IO.blocking` and passes
+    * the resulting `DictionaryContext` into the pure `analyzeText`.
+    */
   def check(text: String, config: SpellCheckConfig): List[Diagnostic] =
+    analyzeText(text, config, loadDictionarySnapshot(config).context)
+
+  /** Pure: matches `text` against an already-loaded `dictionary`. Performs no filesystem access -- its signature
+    * carries no `Path`, so there is nothing here for a future change to accidentally turn into IO.
+    */
+  def analyzeText(text: String, config: SpellCheckConfig, dictionary: DictionaryContext): List[Diagnostic] =
     val normalized = config.normalized
     if !normalized.enabled then Nil
     else
-      val dictionary = dictionaryFor(normalized)
       dictionaryLoadDiagnostics(dictionary.failures) ++
         text
           .split("\n", -1)
@@ -132,7 +166,11 @@ object SpellChecker:
           }
           .toList
 
-  def refreshDiagnostics(state: AppState): AppState =
+  /** Pure: recomputes cached diagnostics against an already-loaded `dictionary` snapshot. Callers obtain that snapshot
+    * once via `loadDictionarySnapshot` inside `IO.blocking`, then pass the same immutable value here -- this method
+    * itself never touches the filesystem, so it is safe to call from inside `Ref.update`.
+    */
+  def refreshDiagnostics(state: AppState, dictionary: DictionarySnapshot): AppState =
     val preserved = state.runtime.diagnosticsState.diagnostics.view
       .mapValues(_.filterNot(isSpellCheckDiagnostic))
       .filter(_._2.nonEmpty)
@@ -143,13 +181,20 @@ object SpellChecker:
         case ((diagnostics, cache), buffer) =>
           val uri = diagnosticsUri(buffer)
           if shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck) then
-            val fingerprint = SpellCheckFingerprint.from(buffer, state.persisted.config.languageToolsConfig.spellCheck)
+            val fingerprint = SpellCheckFingerprint.from(
+              buffer,
+              state.persisted.config.languageToolsConfig.spellCheck,
+              dictionary.fingerprints
+            )
             val entry = state.runtime.diagnosticsState.spellCheckCache
               .get(uri)
               .filter(_.fingerprint == fingerprint)
               .getOrElse {
-                val spellDiagnostics =
-                  check(buffer.document.content.collect(), state.persisted.config.languageToolsConfig.spellCheck)
+                val spellDiagnostics = analyzeText(
+                  buffer.document.content.collect(),
+                  state.persisted.config.languageToolsConfig.spellCheck,
+                  dictionary.context
+                )
                 SpellCheckCacheEntry(fingerprint, spellDiagnostics)
               }
             val nextDiagnostics =
@@ -165,17 +210,34 @@ object SpellChecker:
       )
     )
 
-  def analysisFingerprints(state: AppState): Map[String, SpellCheckFingerprint] =
+  /** Pure: `dictionaryFingerprints` must be discovered once (via `SpellCheckConfig.discoverDictionaryFingerprints` or
+    * `loadDictionarySnapshot`, both `IO.blocking`) and passed in -- this method never reads the filesystem, so it is
+    * safe to call from inside `Ref.update` when comparing against a state commit's expected fingerprints.
+    */
+  def analysisFingerprints(
+    state: AppState,
+    dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
+  ): Map[String, SpellCheckFingerprint] =
     state.persisted.buffers.values
       .filter(buffer => shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck))
       .map(buffer =>
         diagnosticsUri(buffer) -> SpellCheckFingerprint
-          .from(buffer, state.persisted.config.languageToolsConfig.spellCheck)
+          .from(buffer, state.persisted.config.languageToolsConfig.spellCheck, dictionaryFingerprints)
       )
       .toMap
 
-  def applyIfCurrent(current: AppState, analyzed: AppState, expected: Map[String, SpellCheckFingerprint]): AppState =
-    if analysisFingerprints(current) == expected then
+  /** Pure: publishes `analyzed` onto `current` only if `current` still matches the fingerprints the analysis was
+    * computed against, rejecting stale results from a buffer or dictionary that changed mid-analysis.
+    * `dictionaryFingerprints` is the same precomputed value used to build `expected`, not re-read here -- this is what
+    * makes the comparison safe to run from inside `Ref.update`.
+    */
+  def applyIfCurrent(
+    current: AppState,
+    analyzed: AppState,
+    expected: Map[String, SpellCheckFingerprint],
+    dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
+  ): AppState =
+    if analysisFingerprints(current, dictionaryFingerprints) == expected then
       current.copy(runtime =
         current.runtime.copy(diagnosticsState =
           current.runtime.diagnosticsState.copy(
@@ -195,26 +257,46 @@ object SpellChecker:
   private def shouldCheck(buffer: Buffer, config: SpellCheckConfig): Boolean =
     config.enabled && buffer.usesTextFont
 
-  private def dictionaryFor(config: SpellCheckConfig): DictionaryContext =
-    val externalResults = config.dictionarySourcePaths.map(loadDictionary)
+  /** The one function that performs all dictionary discovery, reading and fingerprinting -- explicit filesystem IO
+    * throughout. Callers must invoke this from `IO.blocking` and thread the resulting immutable snapshot into the pure
+    * analysis methods above rather than calling this (or `check`) from a state-commit path.
+    */
+  def loadDictionarySnapshot(config: SpellCheckConfig): DictionarySnapshot =
+    val normalized      = config.normalized
+    val sourcePaths     = SpellCheckConfig.discoverDictionarySourcePaths(normalized)
+    val externalResults = sourcePaths.map(loadDictionary)
     val externalWords   = externalResults.flatMap(_.words).toSet
     val externalReplacements =
       mergeReplacementMaps(externalResults.map(_.replacements))
     val failures = externalResults.flatMap(_.failures)
     val fallbackWords =
-      if config.dictionaryPaths.nonEmpty && externalWords.nonEmpty then Set.empty[String]
-      else config.languages.flatMap(language => BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
+      if normalized.dictionaryPaths.nonEmpty && externalWords.nonEmpty then Set.empty[String]
+      else normalized.languages.flatMap(language => BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
 
-    DictionaryContext(
-      words = (externalWords ++ fallbackWords ++ config.additionalWords).map(normalizeWord),
+    val context = DictionaryContext(
+      words = (externalWords ++ fallbackWords ++ normalized.additionalWords).map(normalizeWord),
       replacements = externalReplacements,
       failures = failures.distinct
     )
+    DictionarySnapshot(context, SpellCheckConfig.discoverDictionaryFingerprints(normalized))
 
+  /** Loads (or reuses) the dictionary at `path`, keyed by its normalized path so a later call with a changed
+    * fingerprint replaces the cached entry rather than adding a new one -- the cache never holds more than one loaded
+    * dictionary per distinct path.
+    */
   private def loadDictionary(path: Path): DictionaryLoadResult =
+    val normalizedPath  = path.toAbsolutePath.normalize().toString
     val dependencyPaths = SpellCheckConfig.dictionaryDependencyPaths(List(path))
-    val cacheKey        = DictionaryCacheKey(dependencyPaths.map(SpellCheckDictionaryFingerprint.fromPath))
-    DictionaryCache.computeIfAbsent(cacheKey, _ => readDictionary(path))
+    val fingerprints    = dependencyPaths.map(SpellCheckDictionaryFingerprint.fromPath)
+    DictionaryCache
+      .compute(
+        normalizedPath,
+        (_, existing) =>
+          Option(existing)
+            .filter(_.fingerprints == fingerprints)
+            .getOrElse(DictionaryCacheEntry(fingerprints, readDictionary(path)))
+      )
+      .result
 
   private def readDictionary(path: Path): DictionaryLoadResult =
     if !Files.exists(path) then
@@ -223,10 +305,12 @@ object SpellChecker:
       DictionaryLoadResult(Set.empty, Map.empty, List(s"Dictionary path is a directory: $path"))
     else
       try
-        val affixPath  = affixPathFor(path)
-        val charset    = affixPath.map(readDeclaredCharset).getOrElse(DefaultDictionaryCharset)
-        val affixRules = affixPath.map(parseAffixRules(_, charset)).getOrElse(HunspellAffixRules.empty)
-        val lines      = Files.readAllLines(path, charset)
+        val affixPath      = affixPathFor(path)
+        val charset        = affixPath.map(readDeclaredCharset).getOrElse(DefaultDictionaryCharset)
+        val affixLines     = affixPath.map(readTrimmedLines(_, charset)).getOrElse(Nil)
+        val affixRules     = affixPath.map(_ => parseAffixRules(affixLines)).getOrElse(HunspellAffixRules.empty)
+        val unsupportedAff = affixPath.map(unsupportedAffixDirectives(affixLines, _)).getOrElse(Nil)
+        val lines          = Files.readAllLines(path, charset)
         val entries = lines.toArray.toList
           .collect { case line: String => line.trim }
           .dropWhile(line => line.forall(_.isDigit))
@@ -238,7 +322,7 @@ object SpellChecker:
           .map(normalizeWord)
           .toSet
 
-        DictionaryLoadResult(words, affixRules.replacements, Nil)
+        DictionaryLoadResult(words, affixRules.replacements, unsupportedAff)
       catch
         case NonFatal(error) =>
           DictionaryLoadResult(Set.empty, Map.empty, List(s"Could not load dictionary $path: ${error.getMessage}"))
@@ -261,15 +345,67 @@ object SpellChecker:
       .map(Charset.forName)
       .getOrElse(DefaultDictionaryCharset)
 
-  private def parseAffixRules(path: Path, charset: Charset): HunspellAffixRules =
-    val lines =
-      Files.readAllLines(path, charset).toArray.toList.collect { case line: String => line.trim }
+  private def readTrimmedLines(path: Path, charset: Charset): List[String] =
+    Files.readAllLines(path, charset).toArray.toList.collect { case line: String => line.trim }
+
+  private def parseAffixRules(lines: List[String]): HunspellAffixRules =
     val flagMode     = parseFlagMode(lines)
     val flagAliases  = parseFlagAliases(lines, flagMode)
     val prefixRules  = parseAffixRules(lines, "PFX")
     val suffixRules  = parseAffixRules(lines, "SFX")
     val replacements = parseReplacements(lines)
     HunspellAffixRules(flagMode, flagAliases, prefixRules, suffixRules, replacements)
+
+  /** Directives from the Hunspell affix format that this handwritten parser does not implement (compounding,
+    * character-set conversion, morphological generation, and similar). Rather than silently ignoring them -- which
+    * would mis-flag words that rely on them -- their presence is surfaced as an explicit dictionary-load diagnostic.
+    * See the PR description for why this project carries a partial parser instead of a dependency on Lucene's Hunspell
+    * implementation.
+    */
+  private val UnsupportedAffixDirectives = Set(
+    "COMPOUNDFLAG",
+    "COMPOUNDRULE",
+    "COMPOUNDMIN",
+    "COMPOUNDBEGIN",
+    "COMPOUNDMIDDLE",
+    "COMPOUNDLAST",
+    "COMPOUNDWORDMAX",
+    "COMPOUNDSYLLABLE",
+    "SYLLABLENUM",
+    "ONLYINCOMPOUND",
+    "CHECKCOMPOUNDCASE",
+    "CHECKCOMPOUNDDUP",
+    "CHECKCOMPOUNDREP",
+    "CHECKCOMPOUNDTRIPLE",
+    "CHECKCOMPOUNDPATTERN",
+    "SIMPLIFIEDTRIPLE",
+    "ICONV",
+    "OCONV",
+    "CIRCUMFIX",
+    "NEEDAFFIX",
+    "PSEUDOROOT",
+    "FORBIDDENWORD",
+    "WARN",
+    "FORBIDWARN",
+    "LEMMA_PRESENT",
+    "COMPLEXPREFIXES",
+    "KEEPCASE",
+    "FULLSTRIP",
+    "BREAK",
+    "MAP",
+    "PHONE",
+    "IGNORE"
+  )
+
+  private def unsupportedAffixDirectives(lines: List[String], affixPath: Path): List[String] =
+    lines
+      .flatMap(_.split("\\s+").toList.headOption)
+      .filter(UnsupportedAffixDirectives.contains)
+      .distinct
+      .map(directive =>
+        s"Unsupported Hunspell affix directive '$directive' in $affixPath is not applied " +
+          "(words relying on it may be mis-flagged)"
+      )
 
   private def parseFlagMode(lines: List[String]): HunspellFlagMode =
     lines
