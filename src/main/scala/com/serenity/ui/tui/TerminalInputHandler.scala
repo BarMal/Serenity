@@ -1,0 +1,215 @@
+package com.serenity.ui.tui
+
+import java.nio.charset.StandardCharsets
+
+import scala.concurrent.duration.*
+
+import cats.effect.std.Queue
+import cats.effect.{FiberIO, IO, Ref}
+import cats.syntax.all.*
+import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
+import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import fs2.Stream
+import org.jline.terminal.Terminal
+import org.jline.utils.NonBlockingReader
+
+import TerminalInputDecoder.DecodedToken
+
+/** [[InputHandler]] for TUI mode: decodes JLine's raw key input stream to the same [[KeyStrokeInfo]] / [[Event]]
+  * vocabulary `SwingInputHandler` produces from AWT, so nothing downstream of the handler boundary (translators,
+  * keymaps, `InputRouter`, reducers) needs to know it isn't looking at a Swing component.
+  *
+  * The byte-level decoding itself is [[TerminalInputDecoder]], a pure function -- this class is the effectful shell
+  * around it: it owns the JLine read loop, the short ESC-disambiguation deadline, mouse-move/drag dedup (mirroring
+  * `SwingInputHandler`'s latest-wins `MovementSlot`), routing bracketed-paste text through the existing paste event
+  * path, and EOF-to-graceful-shutdown.
+  */
+final class TerminalInputHandler private (
+    inputRouter: InputRouter[IO, Event],
+    queue: Queue[IO, Option[TerminalInputHandler.QueuedInput]],
+    readerFiber: FiberIO[Unit],
+    disableModes: IO[Unit]
+) extends InputHandler[IO]:
+
+  import TerminalInputHandler.QueuedInput
+
+  def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] =
+    orderedInputStream.collect { case QueuedInput.Key(info) => info }
+
+  def eventStream: Stream[IO, Event] =
+    orderedInputStream.flatMap {
+      case QueuedInput.Key(info)      => inputRouter.eventStream(Stream.emit(info))
+      case QueuedInput.Direct(event)  => Stream.emit(event)
+      case QueuedInput.Movement(slot) => Stream.eval(slot.claim).unNone
+    }
+
+  private def orderedInputStream: Stream[IO, QueuedInput] = Stream.fromQueueNoneTerminated(queue)
+
+  def shutdown: IO[Unit] =
+    readerFiber.cancel >> disableModes.attempt.void >> queue.offer(None)
+
+object TerminalInputHandler:
+
+  /** How long a lone `ESC` byte is held before it is resolved to a bare [[InputKey.Escape]] rather than the start of a
+    * multi-byte escape sequence. 50ms is comfortably above the delay a real terminal introduces between the bytes of
+    * one escape sequence (they arrive as a single burst from the pty), and comfortably below the gap a human perceives
+    * as sluggish.
+    */
+  val EscDisambiguationDeadline: FiniteDuration = 50.millis
+
+  private[tui] enum MovementKind:
+    case Move, Drag
+
+  sealed private trait MovementState
+  final private case class AvailableMovement(event: MouseInputEvent) extends MovementState
+  private case object ClaimedMovement                                extends MovementState
+
+  /** Mirrors `SwingInputHandler`'s `MovementSlot`: only the latest move/drag of a burst is ever delivered, so a slow
+    * consumer doesn't fall behind replaying stale mouse positions. The producer here is a single sequential read loop
+    * (unlike Swing's concurrent AWT listeners), so a plain [[Ref]] update is enough -- no CAS retry loop is needed to
+    * guard against concurrent producers.
+    */
+  final private[tui] class MovementSlot(val kind: MovementKind, initial: MouseInputEvent):
+    private val state = Ref.unsafe[IO, MovementState](AvailableMovement(initial))
+
+    def replace(event: MouseInputEvent): IO[Boolean] =
+      state.modify {
+        case AvailableMovement(_) => (AvailableMovement(event), true)
+        case ClaimedMovement      => (ClaimedMovement, false)
+      }
+
+    def claim: IO[Option[MouseInputEvent]] =
+      state.getAndSet(ClaimedMovement).map {
+        case AvailableMovement(event) => Some(event)
+        case ClaimedMovement          => None
+      }
+
+  sealed private[tui] trait QueuedInput
+
+  private[tui] object QueuedInput:
+    final case class Key(info: KeyStrokeInfo)     extends QueuedInput
+    final case class Direct(event: Event)         extends QueuedInput
+    final case class Movement(slot: MovementSlot) extends QueuedInput
+
+  /** Enable SGR mouse reporting (clicks/drags via 1002, hover-tracking any-motion via 1003, extended coordinates via
+    * 1006) and bracketed paste (2004). Sent once at handler creation; [[shutdown]] sends the matching disable sequences
+    * so a quitting Serenity doesn't leave the user's regular shell reporting mouse events at it.
+    */
+  private def enableModes(terminal: Terminal): IO[Unit] =
+    IO.blocking {
+      val w = terminal.writer()
+      w.write("\u001b[?1002h\u001b[?1003h\u001b[?1006h\u001b[?2004h")
+      w.flush()
+    }
+
+  private def disableModes(terminal: Terminal): IO[Unit] =
+    IO.blocking {
+      val w = terminal.writer()
+      w.write("\u001b[?2004l\u001b[?1006l\u001b[?1003l\u001b[?1002l")
+      w.flush()
+    }
+
+  def create(
+    terminal: Terminal,
+    inputRouter: InputRouter[IO, Event],
+    systemClipboard: SystemClipboard[IO]
+  ): IO[TerminalInputHandler] =
+    for
+      queue          <- Queue.unbounded[IO, Option[QueuedInput]]
+      latestMovement <- Ref.of[IO, Option[MovementSlot]](None)
+      remainder      <- Ref.of[IO, Array[Byte]](Array.emptyByteArray)
+      _              <- enableModes(terminal)
+      fiber          <- readLoop(terminal.reader(), queue, latestMovement, remainder, systemClipboard).start
+    yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal))
+
+  private enum ReadOutcome:
+    case Bytes(value: Array[Byte])
+    case Eof
+    case Expired
+
+  private def read(reader: NonBlockingReader): IO[ReadOutcome] =
+    IO.interruptible(reader.read()).map(toOutcome)
+
+  private def readWithDeadline(reader: NonBlockingReader, deadline: FiniteDuration): IO[ReadOutcome] =
+    IO.interruptible(reader.read(deadline.toMillis)).map(toOutcome)
+
+  private def toOutcome(read: Int): ReadOutcome =
+    if read == NonBlockingReader.EOF then ReadOutcome.Eof
+    else if read == NonBlockingReader.READ_EXPIRED then ReadOutcome.Expired
+    else ReadOutcome.Bytes(toUtf8Bytes(read))
+
+  /** JLine's reader hands us decoded Unicode chars, one UTF-16 code unit per `read()`; the pure decoder works on UTF-8
+    * bytes (so it stays testable with plain byte arrays, and so the same decoder could serve a raw byte stream too). A
+    * char above ASCII is re-encoded to its full UTF-8 byte sequence here before joining the byte buffer, so a
+    * multi-byte character never gets split across separate reads on our side.
+    */
+  private def toUtf8Bytes(ch: Int): Array[Byte] =
+    if ch < 0x80 then Array(ch.toByte) else String.valueOf(ch.toChar).getBytes(StandardCharsets.UTF_8)
+
+  private def readLoop(
+    reader: NonBlockingReader,
+    queue: Queue[IO, Option[QueuedInput]],
+    latestMovement: Ref[IO, Option[MovementSlot]],
+    remainder: Ref[IO, Array[Byte]],
+    systemClipboard: SystemClipboard[IO]
+  ): IO[Unit] =
+
+    def processTokens(tokens: List[DecodedToken]): IO[Unit] =
+      tokens.traverse_(processToken)
+
+    def processToken(token: DecodedToken): IO[Unit] = token match
+      case DecodedToken.Key(info)    => latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info)))
+      case DecodedToken.Mouse(event) => enqueueMouse(event)
+      case DecodedToken.Pasted(text) =>
+        // The "paste event path": write the pasted text where a Ctrl+V paste would have left it, then emit the
+        // same `Paste` event a hotkey would -- so multi-line pastes are inserted as one paste, not replayed as
+        // individual keystrokes (which would fire hotkeys on embedded control characters).
+        systemClipboard.writeText(text) >> latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(Paste)))
+
+    def enqueueMouse(event: MouseInputEvent): IO[Unit] = event match
+      case m: MouseMove => enqueueMovement(MovementKind.Move, m)
+      case d: MouseDrag => enqueueMovement(MovementKind.Drag, d)
+      case other        => latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(other)))
+
+    def enqueueMovement(kind: MovementKind, event: MouseInputEvent): IO[Unit] =
+      latestMovement.get.flatMap {
+        case Some(slot) if slot.kind == kind =>
+          slot.replace(event).flatMap(replaced => if replaced then IO.unit else freshMovementSlot(kind, event))
+        case _ => freshMovementSlot(kind, event)
+      }
+
+    def freshMovementSlot(kind: MovementKind, event: MouseInputEvent): IO[Unit] =
+      val slot = new MovementSlot(kind, event)
+      latestMovement.set(Some(slot)) >> queue.offer(Some(QueuedInput.Movement(slot)))
+
+    def emitEof: IO[Unit] =
+      queue.offer(Some(QueuedInput.Key(KeyStrokeInfo(InputKey.EOF, None, Set.empty)))) >> queue.offer(None)
+
+    def appendAndDecode(buffer: Array[Byte]): IO[Unit] =
+      val result = TerminalInputDecoder.decode(buffer)
+      processTokens(result.tokens) >> remainder.set(result.remainder)
+
+    def loop: IO[Unit] =
+      remainder.get.flatMap { pending =>
+        if pending.length == 1 && pending(0) == 0x1b.toByte then
+          readWithDeadline(reader, EscDisambiguationDeadline).flatMap {
+            case ReadOutcome.Expired =>
+              processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray) >> loop
+            case ReadOutcome.Eof =>
+              processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
+            case ReadOutcome.Bytes(bs) =>
+              appendAndDecode(pending ++ bs) >> loop
+          }
+        else
+          read(reader).flatMap {
+            case ReadOutcome.Eof =>
+              processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
+            case ReadOutcome.Bytes(bs) =>
+              appendAndDecode(pending ++ bs) >> loop
+            case ReadOutcome.Expired =>
+              loop // Unreachable: only readWithDeadline's call can expire.
+          }
+      }
+
+    loop
