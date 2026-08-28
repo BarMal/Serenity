@@ -26,8 +26,8 @@ main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	83
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceActive	422
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitSubmenu	134
 main/scala/com/serenity/state/reducers/EditorEventReducer.scala	file length	1891
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	634
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	113
+main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	637
+main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	114
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
 main/scala/com/serenity/ui/layout/LayoutEngine.scala	file length	1551
 main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1177
@@ -52,7 +52,7 @@ test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	640
 test/scala/com/serenity/LayoutContractSpec.scala	file length	980
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	640
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745
-test/scala/com/serenity/ModalEventReducerSpec.scala	file length	985
+test/scala/com/serenity/ModalEventReducerSpec.scala	file length	999
 test/scala/com/serenity/MouseClickSpec.scala	file length	1060
 test/scala/com/serenity/RendererMarkdownLensSpec.scala	file length	889
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	669

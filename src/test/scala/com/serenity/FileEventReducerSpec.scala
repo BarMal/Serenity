@@ -7,7 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, FileEventReducer}
+import com.serenity.state.reducers.{AppEffect, FileEffect, FileEventReducer, WorkflowEffect}
 import com.serenity.ui.layout.Layout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -42,7 +42,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = FileEventReducer.reduce(SaveFile, state)
 
     result.state shouldBe state
-    result.effects shouldBe List(AppEffect.SaveBuffer(buffer.id))
+    result.effects shouldBe List(AppEffect.File(FileEffect.SaveBuffer(buffer.id)))
   }
 
   it should "emit a save-buffer effect for an explicitly targeted pane" in {
@@ -68,7 +68,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = FileEventReducer.reduceForPane(SaveFile, paneId, state)
 
     result.state shouldBe state
-    result.effects shouldBe List(AppEffect.SaveBuffer(buffer.id))
+    result.effects shouldBe List(AppEffect.File(FileEffect.SaveBuffer(buffer.id)))
   }
 
   it should "emit no save effect when the buffer has no file path" in {
@@ -86,7 +86,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = FileEventReducer.reduce(OpenFile, AppState.empty)
 
     result.state shouldBe AppState.empty
-    result.effects shouldBe List(AppEffect.RequestOpenFile())
+    result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.RequestOpenFile))
   }
 
   it should "emit a request-save-as effect for SaveAsFile" in {
@@ -96,7 +96,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = FileEventReducer.reduce(SaveAsFile, state)
 
     result.state shouldBe state
-    result.effects shouldBe List(AppEffect.RequestSaveAs())
+    result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.RequestSaveAs))
   }
 
   it should "emit a direct-load-file effect for LoadFile with a path" in {
@@ -107,5 +107,5 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = FileEventReducer.reduce(LoadFile(path), state)
 
     result.state shouldBe state
-    result.effects shouldBe List(AppEffect.DirectLoadFile(path))
+    result.effects shouldBe List(AppEffect.File(FileEffect.DirectLoadFile(path)))
   }

@@ -5,7 +5,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, SurfaceId}
-import com.serenity.state.reducers.{LifecycleEffect, ReducerResult, WorkflowEffect}
+import com.serenity.state.reducers.{ReducerResult, WorkflowEffect}
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -74,7 +74,7 @@ class StateManagerComponentPortsSpec extends AnyFlatSpec with Matchers:
         def completeQuit: IO[Unit] = completed.update(_ + 1)
     )
 
-    handler.interpret(LifecycleEffect.CompleteQuit).unsafeRunSync()
+    handler.interpret.unsafeRunSync()
 
     completed.get.unsafeRunSync() shouldBe 1
   }

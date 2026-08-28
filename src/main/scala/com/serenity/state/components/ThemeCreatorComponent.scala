@@ -2,7 +2,7 @@ package com.serenity.state.components
 
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ReducerResult}
+import com.serenity.state.reducers.{AppEffect, ReducerResult, ThemeEffect}
 
 class ThemeCreatorComponent extends TypedFocusedComponent[ModalInputEvent]:
 
@@ -46,7 +46,9 @@ class ThemeCreatorComponent extends TypedFocusedComponent[ModalInputEvent]:
           ),
           surface
         )
-        ComponentResult.reducerResult(ReducerResult(savedState, List(AppEffect.SaveThemeConfig(config))))
+        ComponentResult.reducerResult(
+          ReducerResult(savedState, List(AppEffect.Theme(ThemeEffect.SaveThemeConfig(config))))
+        )
       case Left(error) =>
         ComponentResult.updateState(_ => replaceSurface(state, surface, creatorState.withStatus(error)))
 

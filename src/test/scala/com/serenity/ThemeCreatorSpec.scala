@@ -8,7 +8,7 @@ import com.serenity.keystroke.events.{Enter, InsertChar}
 import com.serenity.rope.Balance
 import com.serenity.state.components.ThemeCreatorComponent
 import com.serenity.state.models.*
-import com.serenity.state.reducers.AppEffect
+import com.serenity.state.reducers.{AppEffect, ThemeEffect}
 import com.serenity.ui.layout.{Layout, LayoutRect}
 import com.serenity.ui.renderer.{OverlayRowLayout, SurfaceContentResolver, SurfaceRenderMode}
 import com.serenity.ui.theme.DefaultThemes
@@ -163,7 +163,11 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
     val reducerResult = result match
       case com.serenity.state.components.ComponentResult.ReducerUpdate(value) => value
       case other => fail(s"Expected ReducerUpdate, got $other")
-    reducerResult.effects.collect { case AppEffect.SaveThemeConfig(config) => config.name } shouldBe List("quiet-focus")
+    reducerResult.effects.collect {
+      case AppEffect.Theme(ThemeEffect.SaveThemeConfig(config)) => config.name
+    } shouldBe List(
+      "quiet-focus"
+    )
   }
 
   "CommandRegistry" should "expose a theme creator command" in {

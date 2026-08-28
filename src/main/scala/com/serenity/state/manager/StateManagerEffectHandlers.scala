@@ -58,9 +58,7 @@ private[manager] trait LifecycleEffectPort:
 /** Interprets lifecycle effects without runtime, editor, or workflow dependencies. */
 final private[manager] class LifecycleEffectHandler(port: LifecycleEffectPort):
 
-  def interpret(effect: LifecycleEffect): IO[Unit] =
-    effect match
-      case LifecycleEffect.CompleteQuit => port.completeQuit
+  def interpret: IO[Unit] = port.completeQuit
 
 /** Owns ordered I/O interpretation for reducer effects. */
 final private[manager] class StateManagerEffectHandlers(
@@ -129,14 +127,12 @@ final private[manager] class StateManagerEffectHandlers(
         validateAndUpdateState(result.state, state) >> result.effects.traverse_(interpretEffect)
       }).start.void
 
-  private def interpretLifecycleEffect(effect: LifecycleEffect): IO[Unit] =
-    lifecycleEffects.interpret(effect)
+  private def interpretLifecycleEffect: IO[Unit] =
+    lifecycleEffects.interpret
 
-  private def interpretCommandEffect(effect: CommandEffect): IO[Unit] =
-    effect match
-      case CommandEffect.Execute(command) =>
-        logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
-          stateRef.get.flatMap(state => interpretCommand(command, state))
+  private def interpretCommandEffect(command: Command): IO[Unit] =
+    logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
+      stateRef.get.flatMap(state => interpretCommand(command, state))
 
   private def interpretThemeEffect(effect: ThemeEffect): IO[Unit] =
     effect match
@@ -2473,10 +2469,10 @@ final private[manager] class StateManagerEffectHandlers(
         case name if name.toLowerCase.contains("light") => "default-dark"
         case _                                          => "default-light"
 
-    interpretEffect(AppEffect.SwitchTheme(targetThemeName))
+    interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(targetThemeName)))
 
   protected def reloadThemeEffect(state: AppState): IO[Unit] =
-    interpretEffect(AppEffect.ReloadTheme(state.persisted.theme.name))
+    interpretEffect(AppEffect.Theme(ThemeEffect.ReloadTheme(state.persisted.theme.name)))
 
   protected def applyThemeByName(themeName: String): IO[Unit] =
     themeManager

@@ -144,7 +144,7 @@ object ModalEventReducer:
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.appendToActiveField(char))),
-              AppEffect.RefreshFileWorkflow(surface.id)
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -153,7 +153,7 @@ object ModalEventReducer:
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteFromActiveField)),
-              AppEffect.RefreshFileWorkflow(surface.id)
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -162,7 +162,7 @@ object ModalEventReducer:
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteForwardFromActiveField)),
-              AppEffect.RefreshFileWorkflow(surface.id)
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -171,7 +171,7 @@ object ModalEventReducer:
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteWordBackwardFromActiveField)),
-              AppEffect.RefreshFileWorkflow(surface.id)
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -180,7 +180,7 @@ object ModalEventReducer:
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteWordForwardFromActiveField)),
-              AppEffect.RefreshFileWorkflow(surface.id)
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -189,12 +189,12 @@ object ModalEventReducer:
           case Some((surface, Modal.FileWorkflow(workflow))) if workflow.suggestions.nonEmpty =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.applySelectedSuggestion)),
-              AppEffect.RefreshFileWorkflow(surface.id)
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
             )
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.switchField(1))),
-              AppEffect.RefreshFileWorkflow(surface.id)
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -203,7 +203,7 @@ object ModalEventReducer:
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.switchField(-1))),
-              AppEffect.RefreshFileWorkflow(surface.id)
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -222,7 +222,7 @@ object ModalEventReducer:
       case ModalSubmit =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(_))) =>
-            ReducerResult.withEffect(currentState, AppEffect.SubmitFileWorkflow(surface.id))
+            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitFileWorkflow(surface.id)))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalClick(focusId, actionId) =>
@@ -241,7 +241,8 @@ object ModalEventReducer:
               case _          => None
             val nextState =
               updateModal(currentState, surface, Modal.FileWorkflow(updated.orElse(fieldUpdated).getOrElse(workflow)))
-            if fieldUpdated.nonEmpty then ReducerResult.withEffect(nextState, AppEffect.RefreshFileWorkflow(surface.id))
+            if fieldUpdated.nonEmpty then
+              ReducerResult.withEffect(nextState, AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id)))
             else ReducerResult.noEffects(nextState)
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -267,7 +268,7 @@ object ModalEventReducer:
       case ModalSubmit =>
         currentModal(currentState) match
           case Some((surface, Modal.CloseWorkflow(_))) =>
-            ReducerResult.withEffect(currentState, AppEffect.SubmitCloseWorkflow(surface.id))
+            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitCloseWorkflow(surface.id)))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalClick(_, Some(actionId)) =>
@@ -389,7 +390,7 @@ object ModalEventReducer:
       case ModalSubmit =>
         currentModal(currentState) match
           case Some((surface, Modal.ReplaceWorkflow(_))) =>
-            ReducerResult.withEffect(currentState, AppEffect.SubmitReplaceWorkflow(surface.id))
+            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitReplaceWorkflow(surface.id)))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalClick(focusId, actionId) =>
@@ -487,7 +488,9 @@ object ModalEventReducer:
             buffer   <- clearedState.persisted.buffers.get(bufferId)
           yield ReducerResult.withEffect(
             clearedState,
-            AppEffect.RefreshFind(FindSearchRequest(surface.id, bufferId, query, buffer.document.content))
+            AppEffect.Workflow(
+              WorkflowEffect.RefreshFind(FindSearchRequest(surface.id, bufferId, query, buffer.document.content))
+            )
           )).getOrElse(ReducerResult.noEffects(clearedState))
 
   private def updateFindSelection(

@@ -539,7 +539,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val withFilenameResult = ModalEventReducer.reduce(ModalType.FileWorkflow, InsertChar('n'), initialState)
-    withFilenameResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    withFilenameResult.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    )
     val withFilename = withFilenameResult.state
     withFilename.modalSurface.flatMap {
       _.content match
@@ -560,10 +562,14 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val withPathFieldFocusResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, withFilename)
-    withPathFieldFocusResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    withPathFieldFocusResult.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    )
     val withPathFieldFocus = withPathFieldFocusResult.state
     val withPathResult     = ModalEventReducer.reduce(ModalType.FileWorkflow, InsertChar('/'), withPathFieldFocus)
-    withPathResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    withPathResult.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    )
     val withPath = withPathResult.state
 
     withPath.modalSurface.map(_.content) shouldBe Some(
@@ -599,7 +605,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val pathFocusedResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, initialState)
-    pathFocusedResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    pathFocusedResult.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    )
     val pathFocused = pathFocusedResult.state
     pathFocused.modalSurface.flatMap {
       _.content match
@@ -620,7 +628,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val filenameFocusedResult = ModalEventReducer.reduce(ModalType.FileWorkflow, ReverseTabKey, pathFocused)
-    filenameFocusedResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    filenameFocusedResult.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    )
     val filenameFocused = filenameFocusedResult.state
     filenameFocused.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
@@ -661,7 +671,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val acceptedResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, moved)
-    acceptedResult.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    acceptedResult.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    )
     val accepted = acceptedResult.state
     accepted.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
@@ -699,7 +711,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = ModalEventReducer.reduce(ModalType.FileWorkflow, Enter, initialState)
 
     result.state shouldBe initialState
-    result.effects shouldBe List(AppEffect.SubmitFileWorkflow(SurfaceId("file-workflow")))
+    result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.SubmitFileWorkflow(SurfaceId("file-workflow"))))
   }
 
   it should "accept the selected filename suggestion with tab in open workflow mode" in {
@@ -726,7 +738,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val result = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, initialState)
 
-    result.effects shouldBe List(AppEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow"))))
     result.state.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.FileWorkflow(initialWorkflow.copy(filename = "beta.scala"))
@@ -755,7 +767,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = ModalEventReducer.reduce(ModalType.FileWorkflow, Enter, initialState)
 
     result.state shouldBe initialState
-    result.effects shouldBe List(AppEffect.SubmitFileWorkflow(SurfaceId("file-workflow")))
+    result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.SubmitFileWorkflow(SurfaceId("file-workflow"))))
   }
 
   it should "edit replace workflow fields, switch action and scope, and queue submission" in {
@@ -855,7 +867,9 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val submitted = ModalEventReducer.reduce(ModalType.ReplaceWorkflow, Enter, withSelectionScope)
     submitted.state shouldBe withSelectionScope
-    submitted.effects shouldBe List(AppEffect.SubmitReplaceWorkflow(SurfaceId("replace-workflow")))
+    submitted.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.SubmitReplaceWorkflow(SurfaceId("replace-workflow")))
+    )
   }
 
   it should "preview replace match counts while editing the find text" in {
@@ -981,5 +995,5 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val result = ModalEventReducer.reduce(ModalType.CloseWorkflow, Enter, moved)
     result.state shouldBe moved
-    result.effects shouldBe List(AppEffect.SubmitCloseWorkflow(SurfaceId("close-workflow")))
+    result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.SubmitCloseWorkflow(SurfaceId("close-workflow"))))
   }

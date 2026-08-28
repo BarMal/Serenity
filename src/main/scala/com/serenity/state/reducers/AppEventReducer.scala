@@ -14,7 +14,7 @@ object AppEventReducer:
   )(using com.serenity.rope.Balance): ReducerResult =
     event match
       case Quit =>
-        ReducerResult.withEffect(state, AppEffect.CompleteQuit())
+        ReducerResult.withEffect(state, AppEffect.CompleteQuit)
 
       case ToggleCommandRunner =>
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
@@ -37,7 +37,7 @@ object AppEventReducer:
         ReducerResult.noEffects(EditorState.navigateToPreviousBuffer(state))
 
       case FileSearch =>
-        ReducerResult.withEffect(state, AppEffect.OpenFileSearch())
+        ReducerResult.withEffect(state, AppEffect.Surface(SurfaceEffect.OpenFileSearch))
 
   def rebalancePanes(state: AppState, focusedBufferId: Option[BufferId] = None): AppState =
     EditorState.rebalancePanes(state, focusedBufferId)

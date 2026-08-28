@@ -368,7 +368,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         _ => stateRef.get.flatMap(state => observed.update(_ :+ state.runtime.nextBufferId.value))
       )
       _ <- pipeline.applyReducerResult(
-        ReducerResult.withEffect(committedState, AppEffect.CompleteQuit()),
+        ReducerResult.withEffect(committedState, AppEffect.CompleteQuit),
         initialState
       )
       observedStates <- observed.get
@@ -396,7 +396,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         _ => operations.enqueueEvent(ToggleCommandRunner) >> operations.enqueueEvent(RunnerInsertChar('x'))
       )
       _ <- pipeline.applyReducerResult(
-        ReducerResult.withEffect(initialState, AppEffect.CompleteQuit()),
+        ReducerResult.withEffect(initialState, AppEffect.CompleteQuit),
         initialState
       )
       state <- stateRef.get
@@ -422,7 +422,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       observed <- Ref.of[IO, List[String]](Nil)
       interpreter = new CommandEffectInterpreter(
         CommandEffectInterpreter.Dependencies(
-          lifecycle = _ => observed.update(_ :+ "lifecycle"),
+          lifecycle = observed.update(_ :+ "lifecycle"),
           command = _ => observed.update(_ :+ "command"),
           theme = _ => observed.update(_ :+ "theme"),
           surface = _ => observed.update(_ :+ "surface"),
@@ -433,7 +433,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
           animation = _ => observed.update(_ :+ "animation")
         )
       )
-      _       <- interpreter.interpret(AppEffect.Lifecycle(LifecycleEffect.CompleteQuit))
+      _       <- interpreter.interpret(AppEffect.CompleteQuit)
       failure <- interpreter.interpret(AppEffect.File(FileEffect.DirectLoadFile(Path.of("missing")))).attempt
       entries <- observed.get
     yield
