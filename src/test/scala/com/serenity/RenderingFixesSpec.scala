@@ -129,7 +129,8 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
       "if",
       Theme.default,
       AnimationState.empty,
-      syntaxHighlightingEnabled = true
+      syntaxHighlightingEnabled = true,
+      language = Some(LanguageId.Scala)
     )
 
     surface.styleCalls should contain(surface.StyleCall("enable", com.serenity.ui.theme.TextStyle.bold))

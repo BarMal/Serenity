@@ -39,16 +39,24 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     theme.syntaxColors should contain key SyntaxElement.Number
   }
 
-  "ThemeManager" should "apply theme to buffer content" in {
-    val bufferId = BufferId(1)
-    val buffer   = Buffer.fromString(bufferId, "function hello() { return 'world'; }")
-    val theme    = Theme.dark
+  "ThemeManager" should "highlight Scala keywords and string literals" in {
+    val theme = Theme.dark
 
-    val styledContent = ThemeManager.applyTheme(buffer.document.content, theme)
+    val styled = ThemeManager.highlightLine("def hello() = \"world\"", theme, Some(LanguageId.Scala))
 
-    styledContent should not be empty
-    styledContent.exists(_.element == SyntaxElement.Keyword) shouldBe true
-    styledContent.exists(_.element == SyntaxElement.String) shouldBe true
+    styled should not be empty
+    styled.exists(s => s.style == theme.colorFor(SyntaxElement.Keyword).style && s.content == "def") shouldBe true
+    styled.exists(s => s.style == theme.colorFor(SyntaxElement.String).style && s.content == "\"world\"") shouldBe true
+  }
+
+  it should "render unsupported languages as plain text instead of applying Scala keyword rules" in {
+    val theme = Theme.dark
+
+    val styled = ThemeManager.highlightLine("function hello() { return 'world'; }", theme, Some(LanguageId.JavaScript))
+
+    styled shouldBe List(
+      StyledText("function hello() { return 'world'; }", TextStyle.normal, theme.foreground, theme.background)
+    )
   }
 
   it should "highlight markdown headings and list markers with markdown-aware styles" in {
