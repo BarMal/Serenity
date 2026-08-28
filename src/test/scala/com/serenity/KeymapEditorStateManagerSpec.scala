@@ -4,7 +4,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{CommandRunnerKeyAction, HotkeyAction, HotkeyConfig}
+import com.serenity.config.{CommandRunnerKeyAction, HotkeyAction, HotkeyConfig, KeymapGroup}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.state.models.SurfaceContent
@@ -138,7 +138,10 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
       .updateState(state =>
         state.copy(
           persisted = state.persisted.copy(
-            config = state.persisted.config.withCommandRunnerKeyOverride(CommandRunnerKeyAction.Submit, "ctrl+k")
+            config = state.persisted.config.withKeymapBinding(KeymapGroup.CommandRunner)(
+              CommandRunnerKeyAction.Submit,
+              "ctrl+k"
+            )
           )
         )
       )
@@ -167,7 +170,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
         state.copy(
           persisted = state.persisted.copy(
             config = state.persisted.config
-              .withCommandRunnerKeyOverride(CommandRunnerKeyAction.NavigateDown, "ctrl+k")
+              .withKeymapBinding(KeymapGroup.CommandRunner)(CommandRunnerKeyAction.NavigateDown, "ctrl+k")
           )
         )
       )
