@@ -276,7 +276,7 @@ object CharacterRenderer:
           surface.setForegroundColor(run.foreground)
           surface.setBackgroundColor(run.background)
           withStyle(surface, run.style) {
-            surface.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text.toString)
+            surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text.toString)
           }
 
       val chars = styledSegments0

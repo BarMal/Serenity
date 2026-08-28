@@ -19,7 +19,7 @@ object TextOverlayRenderer:
     cellMetrics: CellMetrics
   ): Unit =
     val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(overlay.verticalOffsetRows, cellMetrics)
-    surface.withPixelTranslation(0.0, offsetPx) {
+    surface.pixels.withPixelTranslation(0.0, offsetPx) {
       renderAtLogicalPixelOrigin(surface, overlay, theme, config, cursorVisible, font, cellMetrics)
     }
 
@@ -35,7 +35,9 @@ object TextOverlayRenderer:
     val rect = overlay.rect
 
     if config.uiShadowsEnabled then
-      surface.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, new Color(0, 0, 0))
+      surface.roundedRects.foreach(
+        _.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, new Color(0, 0, 0))
+      )
 
     def rowColors(rowOffset: Int): (Color, Color) =
       overlay.animationState
@@ -48,9 +50,9 @@ object TextOverlayRenderer:
         )
         .getOrElse((theme.panel.foreground, theme.panel.background))
 
-    surface.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier)
+    surface.effects.foreach(_.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier))
 
-    surface.withRoundRectClip(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx) {
+    withOptionalRoundRectClip(surface, rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx) {
       for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
         val (fg, bg) = rowColors(rowOffset)
         surface.setForegroundColor(fg)
@@ -66,7 +68,7 @@ object TextOverlayRenderer:
     }
     drawBorder(surface, overlay, theme, config)
 
-    surface.setAlpha(1.0f)
+    surface.effects.foreach(_.setAlpha(1.0f))
     surface.setForegroundColor(theme.foreground)
     surface.setBackgroundColor(theme.background)
 
@@ -78,15 +80,32 @@ object TextOverlayRenderer:
   ): Unit =
     val rect = overlay.rect
     if rect.width >= 2 && rect.height >= 2 then
-      surface.strokeRoundRect(
-        rect.x,
-        rect.y,
-        rect.width,
-        rect.height,
-        config.uiCornerRadiusPx,
-        theme.border,
-        config.uiOutlineThicknessPx.toFloat
+      surface.roundedRects.foreach(
+        _.strokeRoundRect(
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height,
+          config.uiCornerRadiusPx,
+          theme.border,
+          config.uiOutlineThicknessPx.toFloat
+        )
       )
+
+  /** Falls back to running `render` unclipped when the surface doesn't support rounded-rect clipping -- content still
+    * draws, just without the corner mask.
+    */
+  private def withOptionalRoundRectClip(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int
+  )(render: => Unit): Unit =
+    surface.roundedRects match
+      case Some(rounded) => rounded.withRoundRectClip(x, y, width, height, arcPx)(render)
+      case None          => render
 
   private def drawContent(
     surface: RenderSurface,
@@ -216,7 +235,7 @@ object TextOverlayRenderer:
     pixelY: Option[Int] = None,
     pixelHeight: Option[Int] = None
   ): Unit =
-    surface.withLogicalPixelRow(y, pixelY.getOrElse(cellMetrics.toPixelY(y))) {
+    surface.text.withLogicalPixelRow(y, pixelY.getOrElse(cellMetrics.toPixelY(y))) {
       renderRowAt(
         surface,
         x,
@@ -267,7 +286,7 @@ object TextOverlayRenderer:
     surface.setBackgroundColor(rowBackground)
     if rowView.row.selected then
       pixelHeight.foreach { height =>
-        surface.fillPixelRect(
+        surface.pixels.fillPixelRect(
           xPx = rowLeftXPx,
           yPx = pixelY.getOrElse(cellMetrics.toPixelY(y)),
           widthPx = rowRightXPx - rowLeftXPx,
@@ -927,15 +946,15 @@ object TextOverlayRenderer:
       val inlineIcon = segment.inlineIcon.filter(_ => width > 0)
       inlineIcon.foreach { icon =>
         segment.inlineIconFontFamily.foreach(family =>
-          surface.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
+          surface.text.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
         )
         CharacterRenderer.renderStringPlain(surface, x, y, icon.take(width))
-        if segment.inlineIconFontFamily.nonEmpty then surface.setFont(font)
+        if segment.inlineIconFontFamily.nonEmpty then surface.text.setFont(font)
       }
       val iconWidth = inlineIcon.map(_.length.min(width)).getOrElse(0)
       val iconGap   = if iconWidth > 0 && width > iconWidth && segmentText.nonEmpty then 1 else 0
       segment.fontFamily.foreach(family =>
-        surface.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
+        surface.text.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
       )
       CharacterRenderer.renderStringPlain(
         surface,
@@ -943,14 +962,14 @@ object TextOverlayRenderer:
         y,
         segmentText.take(math.max(0, width - iconWidth - iconGap))
       )
-      if segment.fontFamily.nonEmpty then surface.setFont(font)
+      if segment.fontFamily.nonEmpty then surface.text.setFont(font)
 
   private def withAlpha(color: Color, alpha: Int): Color =
     if color.getAlpha == alpha then color
     else new Color(color.getRed, color.getGreen, color.getBlue, alpha)
 
   private def shouldUseMeasuredCursor(font: java.awt.Font, surface: RenderSurface): Boolean =
-    FontLoader.ligaturesEnabled(font) || !FontLoader.isMonospacedFont(font) || surface.fontRenderContext.nonEmpty
+    FontLoader.ligaturesEnabled(font) || !FontLoader.isMonospacedFont(font) || surface.text.fontRenderContext.nonEmpty
 
   private def renderMeasuredPlainRow(
     surface: RenderSurface,
@@ -964,12 +983,12 @@ object TextOverlayRenderer:
   ): Unit =
     val visibleText = text.take(width)
     if visibleText.nonEmpty then
-      val frc        = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+      val frc        = surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
       val caretXs    = TextLayoutSnapshot.caretXsForText(visibleText, font, frc)
       val textXPx    = cellMetrics.toPixelX(x).toFloat
       val maxWidthPx = math.max(1.0f, maxRightXPx.toFloat - textXPx)
       val widthPx    = caretXs.lastOption.getOrElse(0.0f).max(1.0f).min(maxWidthPx)
-      surface.drawRunPx(textXPx, yPx, widthPx, cellMetrics.lineHeight, cellMetrics.ascent, visibleText)
+      surface.text.drawRunPx(textXPx, yPx, widthPx, cellMetrics.lineHeight, cellMetrics.ascent, visibleText)
 
   private def renderMeasuredCursor(
     surface: RenderSurface,
@@ -982,13 +1001,13 @@ object TextOverlayRenderer:
     minXPx: Int,
     maxRightXPx: Int
   ): Unit =
-    val frc          = surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+    val frc          = surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     val caretXs      = TextLayoutSnapshot.caretXsForText(textBeforeCursor, font, frc)
     val rawWidthPx   = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
     val caretWidthPx = math.min(rawWidthPx, math.max(1, maxRightXPx - minXPx))
     val unclampedXPx = cellMetrics.toPixelX(x) + math.round(caretXs.lastOption.getOrElse(0.0f))
     val xPx          = math.max(minXPx, math.min(unclampedXPx, maxRightXPx - caretWidthPx))
-    surface.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, theme.cursor)
+    surface.pixels.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, theme.cursor)
 
   private def applyGlassSheen(
     surface: RenderSurface,
