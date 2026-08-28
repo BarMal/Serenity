@@ -429,14 +429,6 @@ object SessionManager:
       maxUndoDepth: Int = 1000
   )
 
-/** Higher-level session operations.
-  */
-trait SessionOperations:
-  def saveSession(appState: AppState): IO[Unit]
-  def loadSession()(using com.serenity.rope.Balance): IO[Option[AppState]]
-  def sessionExists: IO[Boolean]
-  def clearSession(): IO[Unit]
-
 /** Session persistence integration for StateManager.
   */
 class SessionPersistence(

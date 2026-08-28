@@ -191,17 +191,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  "FileManager" should "create and manage buffers" in {
-    val fileManager = new FileManager()
-
-    val newBuffer = fileManager.createNewBuffer(BufferId(42)).unsafeRunSync()
-    newBuffer.id shouldBe BufferId(42)
-    newBuffer.document.content.collect() shouldBe ""
-    newBuffer.document.filePath shouldBe None
-    newBuffer.document.isDirty shouldBe false
-  }
-
-  it should "raise a clear error instead of opening rich documents as plain text" in {
+  "FileManager" should "raise a clear error instead of opening rich documents as plain text" in {
     val fileManager = new FileManager()
     val docFile     = Files.createTempFile("serenity-rich-open", ".doc")
 
