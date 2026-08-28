@@ -984,6 +984,196 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
 
+  it should "park the cursor steady and request a fast render when focus is lost" in {
+    val program = for
+      windowFocused       <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      cursorVisible       <- Ref.of[IO, Boolean](false)
+      breathIndex         <- Ref.of[IO, Int](7)
+      fastRenderRequested <- Ref.of[IO, Boolean](false)
+      _ <- AppRuntime.onWindowFocusChanged(
+        focused = false,
+        windowFocused = windowFocused,
+        cursorVisible = cursorVisible,
+        breathIndex = breathIndex,
+        requestFastRender = fastRenderRequested.set(true)
+      )
+      focusedAfter <- windowFocused.get
+      visible      <- cursorVisible.get
+      breathe      <- breathIndex.get
+      requested    <- fastRenderRequested.get
+    yield
+      focusedAfter shouldBe false
+      visible shouldBe true
+      breathe shouldBe 0
+      requested shouldBe true
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "mark the window focused again without forcing a fast render when focus is regained" in {
+    val program = for
+      windowFocused       <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      cursorVisible       <- Ref.of[IO, Boolean](true)
+      breathIndex         <- Ref.of[IO, Int](0)
+      fastRenderRequested <- Ref.of[IO, Boolean](false)
+      _ <- AppRuntime.onWindowFocusChanged(
+        focused = true,
+        windowFocused = windowFocused,
+        cursorVisible = cursorVisible,
+        breathIndex = breathIndex,
+        requestFastRender = fastRenderRequested.set(true)
+      )
+      focusedAfter <- windowFocused.get
+      requested    <- fastRenderRequested.get
+    yield
+      focusedAfter shouldBe true
+      requested shouldBe false
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "block the idle tick while unfocused and unblock once focus returns" in {
+    val program = for
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      earlyRace <- IO.race(
+        AppRuntime.awaitFocusedIdleTick(IO.pure(AppState.initial), windowFocused),
+        IO.sleep(150.millis)
+      )
+      _ <- windowFocused.set(true)
+      lateRace <- IO.race(
+        AppRuntime.awaitFocusedIdleTick(IO.pure(AppState.initial), windowFocused),
+        IO.sleep(2.seconds)
+      )
+    yield
+      earlyRace shouldBe Right(())
+      lateRace.isLeft shouldBe true
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "sleep for the cursor idle interval, not block, while the window is focused" in {
+    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val state      = AppState.initial(fastConfig)
+
+    val program = for
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      result <- IO.race(
+        AppRuntime.awaitFocusedIdleTick(IO.pure(state), windowFocused),
+        IO.sleep(500.millis)
+      )
+    yield result shouldBe Left(())
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "skip idle cursor rendering entirely while unfocused, then resume once focus returns" in {
+    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val state      = AppState.initial(fastConfig)
+
+    val program = for
+      fastModeSignal     <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      windowFocused      <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
+      cursorVisible      <- Ref.of[IO, Boolean](true)
+      breathIndex        <- Ref.of[IO, Int](0)
+      renderCalls        <- Ref.of[IO, Int](0)
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      fiber <- AppRuntime
+        .idleRenderPhase(
+          loadState = IO.pure(state),
+          loadBufferAnimations = IO.pure(Map.empty),
+          fastModeSignal = fastModeSignal,
+          windowFocused = windowFocused,
+          pendingPaintDamage = pendingPaintDamage,
+          currentStateForDiagnostics = IO.pure(Some(state)),
+          checkResizeAndHandle = IO.unit,
+          cursorVisible = cursorVisible,
+          breathIndex = breathIndex,
+          renderCursorOnly = (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => renderCalls.update(_ + 1),
+          requestFastRender = IO.unit
+        )
+        .compile
+        .drain
+        .start
+      _                   <- IO.sleep(150.millis)
+      callsWhileUnfocused <- renderCalls.get
+      _                   <- windowFocused.set(true)
+      _                   <- IO.sleep(150.millis)
+      callsAfterFocus     <- renderCalls.get
+      _                   <- fiber.cancel
+    yield
+      callsWhileUnfocused shouldBe 0
+      callsAfterFocus should be > 0
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "pause idle cursor rendering while unfocused and resume once focus returns, via registerFocusCallback wiring" in {
+    given Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFocusWiringSpec"))
+
+    val fastConfig          = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val focusCallbackHolder = new java.util.concurrent.atomic.AtomicReference[Option[Boolean => Unit]](None)
+
+    val program = for
+      stateManager <- StateManager.apply(
+        LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFocusWiringSpec")),
+        policy = SessionManager.SessionPolicy(saveOnAppClose = false),
+        initialConfig = fastConfig
+      )
+      idleRenderCalls <- Ref.of[IO, Int](0)
+      closeRequested  <- Deferred[IO, Unit]
+      fiber <- AppRuntime
+        .run(
+          initialViewportSize = ViewportSize(120, 40),
+          makeInputHandler = _ => new SilentInputHandler,
+          checkResize = IO.pure(None),
+          renderFull = (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => IO.unit,
+          renderCursorOnly = (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => idleRenderCalls.update(_ + 1),
+          appConfig = fastConfig,
+          makeStateManager = Some(_ => IO.pure(stateManager)),
+          awaitExternalQuit = closeRequested.get,
+          registerResizeCallback = _ => (),
+          registerFocusCallback = cb => focusCallbackHolder.set(Some(cb))
+        )
+        .start
+      _                   <- IO.sleep(200.millis)
+      callsBeforeBlur     <- idleRenderCalls.get
+      _                   <- IO(focusCallbackHolder.get().foreach(_.apply(false)))
+      _                   <- IO.sleep(100.millis)
+      _                   <- idleRenderCalls.set(0)
+      _                   <- IO.sleep(300.millis)
+      callsWhileUnfocused <- idleRenderCalls.get
+      _                   <- IO(focusCallbackHolder.get().foreach(_.apply(true)))
+      _                   <- IO.sleep(300.millis)
+      callsAfterRefocus   <- idleRenderCalls.get
+      _                   <- closeRequested.complete(())
+      _                   <- fiber.joinWithNever
+    yield
+      callsBeforeBlur should be > 0
+      callsWhileUnfocused shouldBe 0
+      callsAfterRefocus should be > 0
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   it should "recover idle cursor render failures with phase and state diagnostics" in {
     val program = for
       logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)

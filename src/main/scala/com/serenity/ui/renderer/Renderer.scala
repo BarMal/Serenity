@@ -1680,6 +1680,7 @@ object Renderer:
     val xOriginPx       = context.cellMetrics.toPixelX(rect.x).toFloat
     val contentRightXPx = context.cellMetrics.toPixelX(rect.right).toFloat
     val activeBodyLines = focusedTextBodyLines(buffer, state)
+    val lexStartStates  = bufferLexStartStates(buffer)
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
@@ -1700,6 +1701,8 @@ object Renderer:
           then
             val lineTheme      = state.persisted.theme
             val styledSegments = visualLineStyledSegments(visualLine, lineTheme, snapshot, activeBodyLines)
+            val lexStartState =
+              lexStartStates.lift(visualLine.bufferLine).getOrElse(com.serenity.ui.theme.LexState.Default)
             if snapshot.usesMeasuredLayout then
               CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,
@@ -1713,7 +1716,8 @@ object Renderer:
                 state.syntaxHighlightingEnabled,
                 buffer.document.language,
                 styledSegments,
-                clipRightXPx = Some(contentRightXPx)
+                clipRightXPx = Some(contentRightXPx),
+                lexStartState = lexStartState
               )
             else
               CharacterRenderer.renderStringWithAnimation(
@@ -1727,7 +1731,8 @@ object Renderer:
                 buffer.document.language,
                 bufferLine = visualLine.bufferLine,
                 bufferStartColumn = visualLine.startColumn,
-                styledSegments = styledSegments
+                styledSegments = styledSegments,
+                lexStartState = lexStartState
               )
 
             renderDocumentCommentHighlights(
@@ -1825,6 +1830,21 @@ object Renderer:
         )
       }
       .filter(segments => segments.map(_.content).mkString == visualLine.text)
+
+  /** Lexical state at the start of each buffer line, needed so an open block comment or triple-quoted string keeps
+    * coloring correctly on the lines after it opened. Cheap for languages without token-aware highlighting (a single
+    * `Default` per line, no document scan); for Scala it's recomputed incrementally by [[ThemeManager]], keyed by
+    * buffer id, so an edit only re-scans from the changed line forward.
+    */
+  private def bufferLexStartStates(buffer: Buffer): Vector[com.serenity.ui.theme.LexState] =
+    if !buffer.document.language.contains(LanguageId.Scala) then Vector.empty
+    else
+      val rope = buffer.document.content
+      ThemeManager.lineStartStates(
+        buffer.id.value.toString,
+        rope.linesFrom(0, rope.lineCount),
+        buffer.document.language
+      )
 
   private def visualLineStyledSegments(
     visualLine: TextVisualLine,

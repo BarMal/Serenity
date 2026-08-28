@@ -57,6 +57,13 @@ private[manager] object SurfaceGeometryKey:
           .map(_.filteredItems(allItems).size)
           .getOrElse(allItems.size)
         ("command-palette-submenu", groupId, previewOnly, itemCount)
+      case SurfaceContent.StartPage(_) =>
+        // LayoutEngine.calculateFloatingSurfaceHeight/Width for StartPage never read the page's content: height
+        // is unconditionally maxHeight and width is content-independent. Without this, the page's selectedIndex
+        // (which changes on every arrow-key press) would defeat this cache on the very next mouse-hit-testing
+        // call, forcing a full LayoutEngine.calculateLayoutWithUI rebuild -- the same class of bug #932 fixed for
+        // the command palette's search text, but for the startup screen's own navigation.
+        "start-page"
       case other =>
         other
     SurfaceGeometryKey(surface.id, surface.presentation, contentKey)

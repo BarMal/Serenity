@@ -411,8 +411,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
             .copy(document = state.persisted.buffers(secondBufferId).document.copy(isDirty = true))
         state.copy(persisted =
           state.persisted.copy(
-            buffers = state.persisted.buffers + (BufferId(0) -> first) + (secondBufferId -> second),
-            bufferOrder = state.persisted.bufferOrder :+ secondBufferId
+            buffers = state.persisted.buffers + (BufferId(0) -> first) + (secondBufferId -> second)
           )
         )
       }
