@@ -132,8 +132,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     // The gutter's line number reaches the screen through `putString` (a real cell-addressed draw this surface
     // performs), confirming the frame actually painted through to the terminal rather than producing an empty diff.
     output should include("1")
-    // Proportional buffer prose is painted through `drawRunPx`, which this surface -- correctly, per #1107's scope --
-    // leaves a deliberate no-op (`fontRenderContext = None`) until #1105 wires the cell-fallback path elsewhere. So
-    // the buffer's own text does not reach the screen yet; that gap is #1105's, not this spec's, to close.
-    output should not include "hello terminal"
+    // #1105: a surface reporting no FontRenderContext degrades every measured-text call site to the cell-based
+    // putString path, so the buffer's own (proportional-font) text now reaches the screen too, instead of being
+    // silently dropped behind drawRunPx's no-op.
+    output should include("hello terminal")
   }

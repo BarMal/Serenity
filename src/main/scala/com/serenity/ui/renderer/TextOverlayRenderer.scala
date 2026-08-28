@@ -3,7 +3,6 @@ package com.serenity.ui.renderer
 import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 
@@ -968,8 +967,14 @@ object TextOverlayRenderer:
     if color.getAlpha == alpha then color
     else new Color(color.getRed, color.getGreen, color.getBlue, alpha)
 
+  // #1105: drawRunPx is a no-op on a surface with no FontRenderContext (a terminal), so the measured path can never be
+  // taken there regardless of what the font alone would call for (ligatures, proportional advances, ...). Every real
+  // (GUI) surface reports a FontRenderContext unconditionally, so this was already the de facto behaviour for GUI mode
+  // -- the font-only checks previously OR'd in here never had the chance to matter on a real surface, only on a
+  // cell-only one, where they were exactly the bug: they could force the measured (dropped) path even with no
+  // FontRenderContext to measure against.
   private def shouldUseMeasuredCursor(font: java.awt.Font, surface: RenderSurface): Boolean =
-    FontLoader.ligaturesEnabled(font) || !FontLoader.isMonospacedFont(font) || surface.text.fontRenderContext.nonEmpty
+    surface.text.fontRenderContext.nonEmpty
 
   private def renderMeasuredPlainRow(
     surface: RenderSurface,
