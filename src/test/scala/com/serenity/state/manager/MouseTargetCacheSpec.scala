@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.awt.Font
 
-import com.serenity.command.{CommandRegistry, CommandRunner, CommandRunnerSubmenuState}
+import com.serenity.command.{Command, CommandRegistry, CommandRunner, CommandRunnerSubmenuState}
 import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -265,6 +265,49 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     MouseTargetCache.fromState(spaciousState, size).scene should not be theSameInstanceAs(
       MouseTargetCache.fromState(state, size).scene
     )
+  }
+
+  private def stateWithStartPage(selectedIndex: Int): AppState =
+    val newSessionCommand = Command.typed(
+      "startup.new-session",
+      "Start a new session",
+      com.serenity.command.CommandIntent.Session(com.serenity.command.SessionIntent.StartupNewSession)
+    )
+    val openFileCommand = Command.typed(
+      "startup.open-file",
+      "Open an existing file or directory",
+      com.serenity.command.CommandIntent.Session(com.serenity.command.SessionIntent.StartupOpenFile)
+    )
+    val actions = List(
+      StartupAction("new-session", "Start a new session", newSessionCommand),
+      StartupAction("open-file", "Open a file", openFileCommand)
+    )
+    val page = StartupPage(title = "Welcome", actions = actions, selectedIndex = selectedIndex)
+    val surface = UiSurface(
+      SurfaceId("surface-0"),
+      SurfaceContent.StartPage(page),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    AppState
+      .empty(AppConfig.default)
+      .copy(
+        persisted = AppState.empty(AppConfig.default).persisted.copy(focus = Focus.Surface(surface.id)),
+        runtime = AppState.empty(AppConfig.default).runtime.copy(uiSurfaces = List(surface))
+      )
+
+  it should "reuse the prepared scene when only the startup page's selected action changes" in {
+    // #892: LayoutEngine.calculateFloatingSurfaceHeight/Width never read StartupPage content (height is
+    // unconditionally maxHeight, width is content-independent), so selectedIndex must not defeat this cache --
+    // otherwise every arrow-key press on the startup screen forces a full LayoutEngine.calculateLayoutWithUI
+    // rebuild on the next mouse-hit-testing call, reintroducing the per-navigation stutter #932 already fixed
+    // for the command palette's search text.
+    val size     = ViewportSize(80, 24)
+    val selected = stateWithStartPage(selectedIndex = 0)
+    val moved    = stateWithStartPage(selectedIndex = 1)
+
+    MouseTargetLayoutKey.from(selected, size) shouldBe MouseTargetLayoutKey.from(moved, size)
+    MouseTargetCache.fromState(moved, size).scene should be theSameInstanceAs
+      MouseTargetCache.fromState(selected, size).scene
   }
 
   private val commandPaletteBaseState =
