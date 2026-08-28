@@ -96,6 +96,12 @@ final private[manager] class StateManagerEventPipeline(
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
       StateManagerEventPipeline.this.validateAndUpdateState(newState, fallbackState))
 
+  private val lspDocumentSync = new LspDocumentSync(new LspDocumentSyncPort:
+    def stateRef: cats.effect.Ref[cats.effect.IO, AppState]      = state.stateRef
+    def interpretEffect(effect: AppEffect): cats.effect.IO[Unit] = effects.interpretEffect(effect)
+    def candidateLspBufferIds(previousState: AppState, currentState: AppState): Set[BufferId] =
+      StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState))
+
   private val EditorContextMenuCommands =
     List(
       "copy",
@@ -145,7 +151,9 @@ final private[manager] class StateManagerEventPipeline(
           else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))
         syncFocus >> handleEvent >>
           undoRecording.recordUndoableEdit(event, prevState) >>
-          Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(enqueueChangedLspDocuments(prevState)) >>
+          Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
+            lspDocumentSync.enqueueChangedLspDocuments(prevState)
+          ) >>
           Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState)) >>
           Trace.timed(s"$eventLabel.applyAnimationHooks")(applyAnimationHooks(prevState))
       }
@@ -221,25 +229,6 @@ final private[manager] class StateManagerEventPipeline(
       case NextTab                                       => reduced >> applyPaneFlowAnimation(SweepDirection.Backward)
       case PreviousTab                                   => reduced >> applyPaneFlowAnimation(SweepDirection.Forward)
       case ToggleContextualToolbar | NewTab | FileSearch => reduced
-
-  private def enqueueChangedLspDocuments(previousState: AppState): cats.effect.IO[Unit] =
-    stateRef.get.flatMap { currentState =>
-      StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState).toList.traverse_ { bufferId =>
-        currentState.persisted.buffers.get(bufferId) match
-          case None => cats.effect.IO.unit
-          case Some(buffer) =>
-            val changedContent =
-              previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
-            (for
-              path       <- buffer.document.filePath
-              languageId <- buffer.document.language
-              if changedContent
-            yield AppEffect.LspQueue(
-              LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.document.content.collect())
-            ))
-              .fold(cats.effect.IO.unit)(effects.interpretEffect)
-      }
-    }
 
   /** Bumps `markdownPreviewEditGeneration` synchronously for any buffer this event's dispatch changed the content of,
     * provided that buffer currently has a live markdown preview -- and schedules a debounced commit of that generation
