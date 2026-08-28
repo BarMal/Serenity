@@ -6,22 +6,29 @@ import com.serenity.ui.presets.UiPreset
 object CommandRunnerSettingsGroups:
 
   /** Derive the nested settings menu without depending on command-runner navigation state. */
+  /** `isTuiMode` hides no controls -- every setting still applies its intent identically in TUI mode, so hiding one
+    * would make it impossible to prepare a config while running headless. Instead the two groups epic #1103 called out
+    * as inert in cell space (post-processing effects, typography) get their hint annotated to say so, exactly as
+    * `postProcessingOptionItem`'s own hint documents Cells-only granularity today.
+    */
   def build(
     optionSelections: Map[String, Int],
     inputItems: List[CommandSurfaceItem.InputItem],
     uiPresetPreviews: List[UiPreset.Preview],
-    editingPresetName: Option[String]
+    editingPresetName: Option[String],
+    isTuiMode: Boolean = false
   ): List[CommandSurfaceItem.GroupItem] =
-    val cursorModeItem              = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
-    val cursorInfoBarItem           = CommandRunnerSettingsItems.cursorInfoBarOptionItem(optionSelections)
-    val cursorInfoPlacement         = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
-    val backgroundStyleItem         = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
-    val interfaceDensityItem        = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
-    val windowChromeItem            = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
-    val windowSitterEnabledItem     = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
-    val windowSitterActionItem      = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
-    val materialPresetItem          = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
-    val postProcessingItem          = CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections)
+    val cursorModeItem          = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
+    val cursorInfoBarItem       = CommandRunnerSettingsItems.cursorInfoBarOptionItem(optionSelections)
+    val cursorInfoPlacement     = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
+    val backgroundStyleItem     = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
+    val interfaceDensityItem    = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
+    val windowChromeItem        = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
+    val windowSitterEnabledItem = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
+    val windowSitterActionItem  = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
+    val materialPresetItem      = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
+    val postProcessingItem =
+      annotateInertInTui(CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections), isTuiMode)
     val uiShadowsItem               = CommandRunnerSettingsItems.uiShadowsOptionItem(optionSelections)
     val motionPresetItem            = CommandRunnerSettingsItems.motionPresetOptionItem(optionSelections)
     val motionAccessibilityItem     = CommandRunnerSettingsItems.motionAccessibilityOptionItem(optionSelections)
@@ -163,7 +170,7 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsItems.codeLigaturesOptionItem(optionSelections)
       ) ++ inputItems.filter(_.id == "code-font-size"),
       category = CommandCategory.Settings,
-      hint = Some("Family, size, ligatures")
+      hint = Some(inertInTuiHint("Family, size, ligatures", isTuiMode))
     )
     val proseFontGroup = CommandSurfaceItem.GroupItem(
       id = "settings-prose-font",
@@ -173,7 +180,7 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsItems.textLigaturesOptionItem(optionSelections)
       ) ++ inputItems.filter(_.id == "text-font-size"),
       category = CommandCategory.Settings,
-      hint = Some("Family, size, ligatures")
+      hint = Some(inertInTuiHint("Family, size, ligatures", isTuiMode))
     )
     val richTextGroup = CommandSurfaceItem.GroupItem(
       id = "settings-rich-text",
@@ -190,7 +197,7 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsItems.uiLigaturesOptionItem(optionSelections)
       ) ++ inputItems.filter(_.id == "ui-font-size"),
       category = CommandCategory.Settings,
-      hint = Some("Family, size, ligatures")
+      hint = Some(inertInTuiHint("Family, size, ligatures", isTuiMode))
     )
     val textScaleGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-scale",
@@ -255,7 +262,7 @@ object CommandRunnerSettingsGroups:
       label = "Typography",
       children = List(proseFontGroup, codeFontGroup, uiFontGroup),
       category = CommandCategory.Settings,
-      hint = Some("Typefaces for prose, code, and interface")
+      hint = Some(inertInTuiHint("Typefaces for prose, code, and interface", isTuiMode))
     )
     val appearanceMotionGroup = CommandSurfaceItem.GroupItem(
       id = "settings-appearance-motion",
@@ -472,6 +479,19 @@ object CommandRunnerSettingsGroups:
       accessibilityGroup,
       keymapGroup
     )
+
+  /** Suffix a hint to note that the control it describes has no visible effect on a fixed-cell terminal surface -- the
+    * setting still applies and persists identically, it just paints nothing different in TUI mode (see epic #1103's
+    * accepted degradations).
+    */
+  private def inertInTuiHint(hint: String, isTuiMode: Boolean): String =
+    if isTuiMode then s"$hint -- inert in TUI mode" else hint
+
+  private def annotateInertInTui(
+    item: CommandSurfaceItem.OptionItem,
+    isTuiMode: Boolean
+  ): CommandSurfaceItem.OptionItem =
+    item.copy(hint = Some(inertInTuiHint(item.hint.getOrElse(item.label), isTuiMode)))
 
   private[command] def presetEditContextName(
     optionSelections: Map[String, Int],

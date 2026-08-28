@@ -48,6 +48,51 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     finalState.persisted.layout.editorPanes.shouldBe(Map.empty)
     finalState.startPageSurface.shouldBe(defined)
     finalState.persisted.focus.shouldBe(Focus.Surface(finalState.startPageSurface.get.id))
+    finalState.runtime.isTuiMode.shouldBe(false)
+  }
+
+  it should "default isTuiMode to false and thread it through when requested (issue #1112)" in {
+    given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+    given LoggerFactory[IO]         = Slf4jFactory.create[IO]
+
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Main"))
+    val initialViewportSize = ViewportSize(120, 40)
+
+    def stateFor(isTuiMode: Boolean): IO[com.serenity.state.models.AppState] =
+      for
+        themeManager <- IO.pure(AppThemeManager.create)
+        defaultTheme <- themeManager.initializeWithTheme()
+        stateManager <- StateManager.apply(logger)
+        finalState <- AppStartup.initializeState(stateManager, defaultTheme, initialViewportSize, isTuiMode = isTuiMode)
+      yield finalState
+
+    stateFor(isTuiMode = false).unsafeRunSync().runtime.isTuiMode shouldBe false
+    stateFor(isTuiMode = true).unsafeRunSync().runtime.isTuiMode shouldBe true
+  }
+
+  it should "thread isTuiMode into the start page state the same way as an opened-file state" in {
+    given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+    given LoggerFactory[IO]         = Slf4jFactory.create[IO]
+
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Main"))
+    val initialViewportSize = ViewportSize(120, 40)
+
+    val file = java.nio.file.Files.createTempFile("main-startup-tui-mode-spec", ".md")
+
+    val result = for
+      themeManager <- IO.pure(AppThemeManager.create)
+      defaultTheme <- themeManager.initializeWithTheme()
+      stateManager <- StateManager.apply(logger)
+      openedState <- AppStartup.initializeState(
+        stateManager,
+        defaultTheme,
+        initialViewportSize,
+        openPath = Some(file),
+        isTuiMode = true
+      )
+    yield openedState
+
+    result.unsafeRunSync().runtime.isTuiMode shouldBe true
   }
 
   it should "render the expected startup choices on the dedicated start page" in {

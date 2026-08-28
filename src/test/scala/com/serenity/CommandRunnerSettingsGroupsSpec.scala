@@ -301,3 +301,51 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "spellcheck-words"
     )
   }
+
+  "CommandRunnerSettingsGroups.build with isTuiMode = true" should
+    "annotate the typography and post-processing groups as inert, leaving every other hint untouched" in {
+      val config = AppConfig.default
+      val guiGroups = CommandRunnerSettingsGroups.build(
+        optionSelections = CommandRunnerOptionSelections.default(config),
+        inputItems = CommandRunnerSettingsInputItems.build(config),
+        uiPresetPreviews = Nil,
+        editingPresetName = None,
+        isTuiMode = false
+      )
+      val tuiGroups = CommandRunnerSettingsGroups.build(
+        optionSelections = CommandRunnerOptionSelections.default(config),
+        inputItems = CommandRunnerSettingsInputItems.build(config),
+        uiPresetPreviews = Nil,
+        editingPresetName = None,
+        isTuiMode = true
+      )
+
+      def hintOf(groups: List[CommandSurfaceItem.GroupItem], id: String): Option[String] =
+        groupById(groups, id).hint
+
+      def optionHintOf(groups: List[CommandSurfaceItem.GroupItem], groupId: String, itemId: String): Option[String] =
+        groupById(groups, groupId).children.collectFirst {
+          case item: CommandSurfaceItem.OptionItem if item.id == itemId => item.hint
+        }.flatten
+
+      hintOf(tuiGroups, "settings-typography") shouldBe Some(
+        "Typefaces for prose, code, and interface -- inert in TUI mode"
+      )
+      hintOf(tuiGroups, "settings-code-font") shouldBe Some("Family, size, ligatures -- inert in TUI mode")
+      hintOf(tuiGroups, "settings-prose-font") shouldBe Some("Family, size, ligatures -- inert in TUI mode")
+      hintOf(tuiGroups, "settings-ui-font") shouldBe Some("Family, size, ligatures -- inert in TUI mode")
+      optionHintOf(tuiGroups, "settings-surface-appearance", "post-processing").exists(
+        _.endsWith("-- inert in TUI mode")
+      ) shouldBe true
+
+      hintOf(guiGroups, "settings-typography") shouldBe Some("Typefaces for prose, code, and interface")
+      hintOf(guiGroups, "settings-code-font") shouldBe Some("Family, size, ligatures")
+      optionHintOf(guiGroups, "settings-surface-appearance", "post-processing").exists(
+        _.endsWith("-- inert in TUI mode")
+      ) shouldBe false
+
+      // Unrelated groups are untouched by the flag.
+      hintOf(tuiGroups, "settings-cursor") shouldBe hintOf(guiGroups, "settings-cursor")
+      hintOf(tuiGroups, "settings-rendering") shouldBe hintOf(guiGroups, "settings-rendering")
+      tuiGroups.map(_.id) shouldBe guiGroups.map(_.id)
+    }

@@ -462,7 +462,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       fiber <- AppRuntime
         .run(
           initialViewportSize = ViewportSize(120, 40),
-          makeInputHandler = _ => inputHandler,
+          makeInputHandler = _ => IO.pure(inputHandler),
           checkResize = IO.pure(None),
           renderFull = (
             _: AppState,
@@ -514,7 +514,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       result <- AppRuntime
         .run(
           initialViewportSize = ViewportSize(120, 40),
-          makeInputHandler = _ => inputHandler,
+          makeInputHandler = _ => IO.pure(inputHandler),
           checkResize = IO.pure(None),
           renderFull = (
             _: AppState,
@@ -610,7 +610,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),
-      makeInputHandler = _ => new SilentInputHandler,
+      makeInputHandler = _ => IO.pure(new SilentInputHandler),
       checkResize = IO.pure(None),
       renderFull = (
         _: AppState,
@@ -647,7 +647,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),
-      makeInputHandler = _ => new TrackingInputHandler,
+      makeInputHandler = _ => IO.pure(new TrackingInputHandler),
       checkResize = IO.pure(None),
       renderFull = (
         _: AppState,
@@ -678,7 +678,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),
-      makeInputHandler = _ => new SilentInputHandler,
+      makeInputHandler = _ => IO.pure(new SilentInputHandler),
       checkResize = IO.pure(None),
       renderFull = (
         _: AppState,
@@ -719,7 +719,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
 
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),
-      makeInputHandler = _ => new SilentInputHandler,
+      makeInputHandler = _ => IO.pure(new SilentInputHandler),
       checkResize = IO.raiseError(new RuntimeException("resize check failed")),
       renderFull = (
         _: AppState,
@@ -1131,7 +1131,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       fiber <- AppRuntime
         .run(
           initialViewportSize = ViewportSize(120, 40),
-          makeInputHandler = _ => new SilentInputHandler,
+          makeInputHandler = _ => IO.pure(new SilentInputHandler),
           checkResize = IO.pure(None),
           renderFull = (
             _: AppState,
@@ -1182,7 +1182,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         AppRuntime
           .run(
             initialViewportSize = ViewportSize(120, 40),
-            makeInputHandler = _ => new SilentInputHandler,
+            makeInputHandler = _ => IO.pure(new SilentInputHandler),
             checkResize = IO.pure(None),
             renderFull = (
               _: AppState,

@@ -250,7 +250,11 @@ final case class Runtime(
     navigation: NavigationHistory = NavigationHistory(),
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
     windowSitter: WindowSitter = WindowSitter.default,
-    diagnosticsState: DiagnosticsState = DiagnosticsState()
+    diagnosticsState: DiagnosticsState = DiagnosticsState(),
+    // Never persisted -- set once at startup from the launch mode (see AppRuntime.run/AppStartup.initializeState) so
+    // settings-surface rendering can hide or annotate controls that are inert in cell space (post-processing effects,
+    // typography) without threading AppConfig itself into the command runner.
+    isTuiMode: Boolean = false
 )
 
 final case class AppState(

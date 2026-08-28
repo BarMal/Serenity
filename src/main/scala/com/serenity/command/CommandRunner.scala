@@ -49,7 +49,8 @@ final case class CommandRunner(
     uiPresetPreviews: List[UiPreset.Preview] = Nil,
     editingPresetName: Option[String] = None,
     commandBindings: Map[String, String] = Map.empty,
-    mode: CommandRunnerMode = CommandRunnerMode.Palette
+    mode: CommandRunnerMode = CommandRunnerMode.Palette,
+    isTuiMode: Boolean = false
 ):
 
   def isSettingsSurface: Boolean = mode == CommandRunnerMode.Settings
@@ -114,7 +115,8 @@ final case class CommandRunner(
       optionSelections = optionSelections,
       inputItems = inputItems,
       uiPresetPreviews = uiPresetPreviews,
-      editingPresetName = editingPresetName
+      editingPresetName = editingPresetName,
+      isTuiMode = isTuiMode
     )
 
   def openSettings: CommandRunner =
@@ -425,8 +427,12 @@ final case class CommandRunner(
       case None =>
         this
 
-  /** Activate the command runner with given registry and config */
-  def activate(registry: CommandRegistry, config: AppConfig): CommandRunner =
+  /** Activate the command runner with given registry and config.
+    *
+    * `isTuiMode` is not carried by `config` (see `AppState.Runtime.isTuiMode`'s doc) -- callers pass it separately from
+    * `state.runtime.isTuiMode` so settings rendering can hide/annotate controls that are inert in cell space.
+    */
+  def activate(registry: CommandRegistry, config: AppConfig, isTuiMode: Boolean = false): CommandRunner =
     copy(
       isActive = true,
       searchTerm = "",
@@ -434,7 +440,8 @@ final case class CommandRunner(
       filteredCommands = registry.commandsForCategory(activeCategory),
       optionSelections = CommandRunner.defaultOptionSelections(config),
       inputItems = CommandRunner.buildInputItems(config),
-      commandBindings = CommandRunner.commandBindings(config)
+      commandBindings = CommandRunner.commandBindings(config),
+      isTuiMode = isTuiMode
     ).syncEditMode
 
   /** Rebuild input items from a new config (called after a setting is applied) */
