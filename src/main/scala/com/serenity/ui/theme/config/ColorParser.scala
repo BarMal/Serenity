@@ -6,6 +6,12 @@ import scala.util.Try
 
 object ColorParser:
 
+  /** `color` with alpha zeroed out, otherwise identical -- the starting/ending point for every fade-in/fade-out
+    * animation that needs a transparent variant of a theme color.
+    */
+  def transparent(color: Color): Color =
+    new Color(color.getRed, color.getGreen, color.getBlue, 0)
+
   def parseColor(colorStr: String): Either[String, Color] =
     colorStr.trim match
       case hex if hex.startsWith("#")    => parseHexColor(hex)

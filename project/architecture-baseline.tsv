@@ -18,7 +18,6 @@ main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	983
 main/scala/com/serenity/session/SessionState.scala	file length	1217
 main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	816
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2534
-main/scala/com/serenity/state/manager/StateManagerEventPipeline.scala	file length	2156
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	865
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	method submitReplaceNextEffect	85
 main/scala/com/serenity/state/models/AppState.scala	file length	726
