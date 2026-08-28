@@ -2337,7 +2337,10 @@ final private[manager] class StateManagerEffectHandlers(
           }
           .flatMap(bufferId => fileManager.loadFile(path, bufferId))
           .flatMap { loadedBuffer =>
-            stateRef.modify { state =>
+            // Structural mutation (adds a buffer, reorders bufferOrder, reassigns pane focus): routed through the
+            // checked commit so a drifted `nextBufferId` (see #858) can't silently duplicate a bufferOrder entry or
+            // overwrite a live buffer instead of being rejected.
+            stateRef.get.flatMap { state =>
               val newBufferId = loadedBuffer.id
               val stateWithBuffer = state.copy(persisted =
                 state.persisted.copy(buffers = state.persisted.buffers + (newBufferId -> loadedBuffer))
@@ -2349,7 +2352,7 @@ final private[manager] class StateManagerEffectHandlers(
                 focused.runtime.viewportSize
                   .map(viewportSize => LayoutEngine.syncViewportDimensions(focused, viewportSize))
                   .getOrElse(focused)
-              (resized, loadedBuffer)
+              validateAndUpdateState(resized, state).as(loadedBuffer)
             }
           }
           .flatTap { loadedBuffer =>
