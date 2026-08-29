@@ -196,8 +196,7 @@ object PanelStateReducer:
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
           SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
         Some(surface.copy(presentation = SurfacePresentation.Pinned(position, 30), dismissOnMove = false))
-      case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) |
-          SurfaceContent.CommandPaletteSubmenu(_, _, _) | SurfaceContent.ThemePicker(_) |
+      case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.ThemePicker(_) |
           SurfaceContent.ThemeCreator(_) | SurfaceContent.FileSearch(_) | SurfaceContent.ContextualToolbar(_) |
           SurfaceContent.ContextMenu(_) | SurfaceContent.CommentLens(_) | SurfaceContent.ModalWorkflow(_) |
           SurfaceContent.QuickInfo(_) | SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) |

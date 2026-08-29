@@ -73,7 +73,7 @@ private[manager] object FocusHandlerRouting:
     */
   private[manager] def forSurfaceContent(content: SurfaceContent): LocalEventHandler =
     content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+      case SurfaceContent.CommandPalette(_) =>
         commandRunner
       case SurfaceContent.ThemePicker(_)       => themePicker
       case SurfaceContent.ThemeCreator(_)      => themeCreator

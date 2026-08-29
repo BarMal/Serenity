@@ -59,12 +59,6 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
         val currentSurfaces = animatedCommandSurfaces(currentState)
         val openedSurfaces =
           currentSurfaces.filter(surface => !prevSurfaces.exists(_.id == surface.id))
-        val transitionedSurfaces =
-          currentSurfaces.filter(current =>
-            prevSurfaces
-              .find(_.id == current.id)
-              .exists(previous => commandSurfaceTransitionKey(previous) != commandSurfaceTransitionKey(current))
-          )
         val closedSurfaces =
           prevSurfaces.filter(surface => !currentSurfaces.exists(_.id == surface.id))
         val prevPanels    = animatedPanelSurfaces(prevState)
@@ -74,9 +68,7 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
         val closedPanels =
           prevPanels.filter(surface => !currentPanels.exists(_.id == surface.id))
 
-        (openedSurfaces ++ transitionedSurfaces).distinct.traverse_(surface =>
-          applyCommandRunnerOpenAnimation(surface, currentState)
-        ) >>
+        openedSurfaces.traverse_(surface => applyCommandRunnerOpenAnimation(surface, currentState)) >>
           closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState)) >>
           openedPanels.traverse_(surface => applyPinnedPanelOpenAnimation(surface)) >>
           closedPanels.traverse_(surface => applyPinnedPanelCloseAnimation(surface, prevState))
@@ -86,20 +78,6 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
     state.runtime.surfaceAnimations.nonEmpty ||
       state.persisted.config.scaledCommandRunnerAnimation.exists(config => !config.isDisabled) ||
       state.persisted.config.pinnedPanelTransitionSettings.enabled
-
-  private def commandSurfaceTransitionKey(surface: UiSurface): Option[(String, Boolean, Option[String], List[String])] =
-    surface.content match
-      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
-        Some(
-          (
-            groupId,
-            previewOnly,
-            runner.activeSubmenu.flatMap(_.parentGroupId),
-            runner.activeSubmenu.fold(Nil)(_.ancestorGroupIds)
-          )
-        )
-      case _ =>
-        None
 
   private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): IO[Unit] =
     state.persisted.config.scaledCommandRunnerAnimation match
@@ -275,9 +253,8 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
   private def animatedCommandSurfaces(state: AppState): List[UiSurface] =
     state.runtime.uiSurfaces.filter {
       _.content match
-        case SurfaceContent.CommandPalette(_)              => true
-        case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
-        case _                                             => false
+        case SurfaceContent.CommandPalette(_) => true
+        case _                                => false
     }
 
   private def matchingExitingCommandGhost(surface: UiSurface, state: AppState): Option[UiSurface] =
@@ -285,9 +262,8 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
       case UiSurface(id, SurfaceContent.GhostOverlay(content, _), _, _) =>
         state.runtime.surfaceAnimations.get(id).exists(_.phase == SurfacePhase.Exiting) &&
         ((surface.content, content) match
-          case (SurfaceContent.CommandPalette(_), SurfaceContent.CommandPalette(_))                           => true
-          case (SurfaceContent.CommandPaletteSubmenu(_, _, _), SurfaceContent.CommandPaletteSubmenu(_, _, _)) => true
-          case _                                                                                              => false)
+          case (SurfaceContent.CommandPalette(_), SurfaceContent.CommandPalette(_)) => true
+          case _                                                                    => false)
       case _ => false
     }
 

@@ -708,7 +708,7 @@ object LayoutEngine:
           state,
           contentRect.width - (borderCells * 2)
         ) + (borderCells * 2)
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+      case SurfaceContent.CommandPalette(_) =>
         calculateFloatingSurfaceWidth(contentRect.width)
       case _ =>
         contentRect.width
@@ -819,9 +819,7 @@ object LayoutEngine:
   private def orderedBelowCursorSurfaces(state: AppState): List[UiSurface] =
     val maybeToolbar = state.contextualToolbarSurface.filter(isBelowCursorSurface).toList
     val maybeRunner  = state.commandRunnerSurface.filter(isBelowCursorSurface).toList
-    val maybeSubmenu = state.commandRunnerSubmenuSurface.filter(isBelowCursorSurface).toList
-    if maybeRunner.nonEmpty && maybeSubmenu.nonEmpty then maybeToolbar ++ maybeRunner ++ maybeSubmenu
-    else if maybeToolbar.nonEmpty && maybeRunner.nonEmpty then maybeToolbar ++ maybeRunner
+    if maybeToolbar.nonEmpty && maybeRunner.nonEmpty then maybeToolbar ++ maybeRunner
     else
       val belowSurfaces = state.floatingSurfaces.filter {
         _.presentation match
@@ -859,64 +857,17 @@ object LayoutEngine:
         Set.empty
       )
     else
-      surfaces match
-        case main :: submenu :: Nil if isCommandRunnerStackPair(main, submenu) =>
-          val mainRectOpt        = calculateFloatingSurfaceRect(main, state, paneLayouts)
-          val submenuBaseRectOpt = calculateFloatingSurfaceRect(submenu, state, paneLayouts)
-          val anchorFrameOpt     = calculateFloatingAnchorFrame(main, state, paneLayouts)
-          (mainRectOpt, submenuBaseRectOpt, anchorFrameOpt) match
-            case (Some(mainRect), Some(submenuRect), Some(anchorFrame)) =>
-              val collapsedHeight         = 3
-              val gapRows                 = wholeRowOrigin(floatingCursorGapRows(state, main.content))
-              val stackGapRows            = wholeRowOrigin(floatingStackGapRows(state))
-              val availableBottom         = anchorFrame.contentRect.bottom
-              val totalHeight             = mainRect.height + stackGapRows + submenuRect.height
-              val preferredBelowY         = anchorFrame.screenPosition.y + 1 + gapRows
-              val preferredAboveY         = anchorFrame.screenPosition.y - gapRows - totalHeight
-              val collapsedTotalHeight    = collapsedHeight + stackGapRows + submenuRect.height
-              val collapsedAboveY         = anchorFrame.screenPosition.y - gapRows - collapsedTotalHeight
-              val fullStackFitsBelow      = preferredBelowY + totalHeight <= availableBottom
-              val fullStackFitsAbove      = preferredAboveY >= anchorFrame.contentRect.y
-              val collapsedStackFitsAbove = collapsedAboveY >= anchorFrame.contentRect.y
-              val shouldCollapse          = !fullStackFitsBelow && !fullStackFitsAbove
-              val stackY =
-                if fullStackFitsBelow then preferredBelowY
-                else if fullStackFitsAbove then preferredAboveY
-                else if collapsedStackFitsAbove then collapsedAboveY
-                else
-                  math.max(
-                    anchorFrame.contentRect.y,
-                    math.min(preferredBelowY, availableBottom - math.min(totalHeight, anchorFrame.contentRect.height))
-                  )
-              val stackHeightBudget = math.max(0, availableBottom - stackY)
-              val adjustedMainHeight =
-                if shouldCollapse then math.min(collapsedHeight, stackHeightBudget) else mainRect.height
-              val adjustedMainRect    = mainRect.copy(y = stackY, height = adjustedMainHeight)
-              val submenuY            = adjustedMainRect.bottom + stackGapRows
-              val submenuHeightBudget = math.max(0, availableBottom - submenuY)
-              val adjustedSubmenuHeight =
-                math.min(submenuRect.height, submenuHeightBudget)
-              val adjustedSubmenuY =
-                if adjustedSubmenuHeight == 0 then availableBottom else submenuY
-              val adjustedSubmenuRect = submenuRect.copy(
-                y = adjustedSubmenuY,
-                height = adjustedSubmenuHeight
-              )
-              BelowOverlayLayout(
-                List(main.id -> adjustedMainRect, submenu.id -> adjustedSubmenuRect),
-                if shouldCollapse then Set(main.id) else Set.empty
-              )
-            case _ =>
-              BelowOverlayLayout(Nil, Set.empty)
-        case _ =>
-          stackBelowCursorSurfaces(surfaces, state, paneLayouts)
+      // The command-runner two-surface stack case (main palette + its settings-group submenu) is gone -- a settings
+      // group now renders on the one `CommandPalette` surface instead of a second floating one (issue #1059), so
+      // every below-cursor multi-surface case now goes through the same generic stacking.
+      stackBelowCursorSurfaces(surfaces, state, paneLayouts)
 
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
     math.min(math.max(0, maxWidth), 72)
 
   private def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
     content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+      case SurfaceContent.CommandPalette(_) =>
         math.max(
           0.0,
           state.persisted.config.surfaceConfig.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state))
@@ -1046,26 +997,6 @@ object LayoutEngine:
         )
       case SurfaceContent.CommentLens(lens) =>
         math.max(4, math.min(8, lens.draft.split("\n", -1).length + 3))
-      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, _) =>
-        val allItems = runner.submenuItems(groupId)
-        val itemCount = runner.activeSubmenu
-          .filter(_.groupId == groupId)
-          .map(_.filteredItems(allItems).size)
-          .getOrElse(allItems.size)
-        math.min(
-          commandMaxHeight,
-          math.max(
-            densityMetrics.commandSurfaceMinHeight,
-            SurfaceFrameLayout.frameHeightForItemRows(
-              itemCount,
-              hasHeader = true,
-              hasFooter = true,
-              borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-              itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
-              itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-            )
-          )
-        )
       case SurfaceContent.ModalWorkflow(modal) =>
         ModalSurfaceComposition.frameHeight(
           modal,
@@ -1092,15 +1023,10 @@ object LayoutEngine:
     surface.content match
       case SurfaceContent.ContextualToolbar(_) =>
         activeBuffer.primarySelection.map(_.start).orElse(state.activeCursorPosition).orElse(surfaceAnchor(surface))
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) =>
+      case SurfaceContent.CommandPalette(_) =>
         state.activeCursorPosition.orElse(surfaceAnchor(surface))
       case _ =>
         surfaceAnchor(surface).orElse(state.activeCursorPosition)
-
-  private def isCommandRunnerStackPair(main: UiSurface, submenu: UiSurface): Boolean =
-    (main.content, submenu.content) match
-      case (SurfaceContent.CommandPalette(_), SurfaceContent.CommandPaletteSubmenu(_, _, _)) => true
-      case _                                                                                 => false
 
   private def stackBelowCursorSurfaces(
     surfaces: List[UiSurface],

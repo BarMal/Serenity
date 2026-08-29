@@ -14,9 +14,7 @@ object FocusedInputTranslator:
     val recordingBinding = state.activeSurface.exists { surface =>
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
-          runner.recordingItemId.nonEmpty || runner.activeSubmenu.exists(_.recordingItemId.nonEmpty)
-        case SurfaceContent.CommandPaletteSubmenu(runner, _, _) =>
-          runner.activeSubmenu.exists(_.recordingItemId.nonEmpty)
+          runner.recordingItemId.nonEmpty || runner.activeSettingsSurface.exists(_.current.recording.nonEmpty)
         case _ => false
     }
     val editorTranslator        = new EditorInputTranslator(state.persisted.config)
@@ -38,16 +36,15 @@ object FocusedInputTranslator:
                 formTranslator
               case _ =>
                 surface.content match
-                  case SurfaceContent.CommandPalette(_)              => commandRunnerTranslator
-                  case SurfaceContent.CommandPaletteSubmenu(_, _, _) => commandRunnerTranslator
-                  case SurfaceContent.ModalWorkflow(_)               => formTranslator
-                  case SurfaceContent.ThemePicker(_)                 => formTranslator
-                  case SurfaceContent.ThemeCreator(_)                => formTranslator
-                  case SurfaceContent.FileSearch(_)                  => formTranslator
-                  case SurfaceContent.ContextualToolbar(_)           => formTranslator
-                  case SurfaceContent.CommentLens(_)                 => formTranslator
-                  case SurfaceContent.StartPage(_)                   => editorTranslator
-                  case _                                             => peekOverlayTranslator
+                  case SurfaceContent.CommandPalette(_)    => commandRunnerTranslator
+                  case SurfaceContent.ModalWorkflow(_)     => formTranslator
+                  case SurfaceContent.ThemePicker(_)       => formTranslator
+                  case SurfaceContent.ThemeCreator(_)      => formTranslator
+                  case SurfaceContent.FileSearch(_)        => formTranslator
+                  case SurfaceContent.ContextualToolbar(_) => formTranslator
+                  case SurfaceContent.CommentLens(_)       => formTranslator
+                  case SurfaceContent.StartPage(_)         => editorTranslator
+                  case _                                   => peekOverlayTranslator
           case None =>
             editorTranslator
 

@@ -281,50 +281,18 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "render preset selection as a horizontal carousel" in {
-    val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
-      .copy(
-        activeCategory = CommandCategory.Settings,
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-preset-select", selectedIndex = 0)),
-        inputItems = Nil
-      )
-
-    val row = SurfaceContentResolver
-      .resolve(
-        SurfaceContent.CommandPaletteSubmenu(
-          runner,
-          "settings-preset-select",
-          previewOnly = false
-        ),
-        LayoutRect(0, 0, 80, 10),
-        SurfaceRenderMode.Floating
-      )
-      .rows
-      .find(_.selected)
-      .getOrElse(fail("Expected preset option row"))
-
-    row.layout shouldBe OverlayRowLayout.Distributed
-    row.segments.map(_.text) shouldBe List("Writing", "Documentation", "Code", "Compact", "Review")
-    row.segments.filter(_.selected).map(_.text) shouldBe List("Writing")
-  }
-
   it should "resolve option rows into label, hint, and selected value columns" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
         optionSelections = Map("interface-density" -> 1),
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-interface-layout"))
+        activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-interface-layout")))
       )
 
     val row = SurfaceContentResolver
       .resolve(
-        SurfaceContent.CommandPaletteSubmenu(
-          runner,
-          "settings-interface-layout",
-          previewOnly = false
-        ),
+        SurfaceContent.CommandPalette(runner),
         LayoutRect(0, 0, 80, 10),
         SurfaceRenderMode.Floating
       )
@@ -343,29 +311,24 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
-        activeSubmenu = Some(
-          CommandRunnerSubmenuState(
-            "settings-preset-fonts",
-            parentGroupId = Some("settings-preset-edit"),
-            ancestorGroupIds = List("settings-ui-presets", "settings-preset-edit")
+        activeSettingsSurface = Some(
+          SettingsSurfaceState(
+            SettingsPage.Group("settings-preset-fonts"),
+            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
           )
         )
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(
-        runner,
-        "settings-preset-fonts",
-        previewOnly = false
-      ),
+      SurfaceContent.CommandPalette(runner),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating
     )
 
     val header = resolved.header.getOrElse(fail("Expected breadcrumb header"))
-    header.plainText shouldBe "UI Presets > Edit Preset: Writing > Fonts"
-    header.segments.map(_.text) shouldBe List("UI Presets >", "Edit Preset: Writing >", "Fonts")
-    header.segments.map(_.selected) shouldBe List(true, true, false)
+    header.plainText shouldBe "Settings > UI Presets > Edit Preset: Writing > Fonts"
+    header.segments.map(_.text) shouldBe List("Settings >", "UI Presets >", "Edit Preset: Writing >", "Fonts")
+    header.segments.map(_.selected) shouldBe List(true, true, true, false)
   }
 
   it should "resolve preset font submenu as grouped typography rows" in {
@@ -373,32 +336,28 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
-        activeSubmenu = Some(
-          CommandRunnerSubmenuState(
-            "settings-preset-fonts",
-            parentGroupId = Some("settings-preset-edit"),
-            ancestorGroupIds = List("settings-ui-presets", "settings-preset-edit")
+        activeSettingsSurface = Some(
+          SettingsSurfaceState(
+            SettingsPage.Group("settings-preset-fonts"),
+            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
           )
         )
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(
-        runner,
-        "settings-preset-fonts",
-        previewOnly = false
-      ),
+      SurfaceContent.CommandPalette(runner),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating
     )
 
-    resolved.rows.map(_.plainText) shouldBe List("Editor Typography", "Code Typography", "UI Typography")
-    resolved.rows.map(_.segments.map(_.text)) shouldBe List(
+    val groupRows = resolved.rows.filter(_.leadingPadding == 0)
+    groupRows.map(_.plainText) shouldBe List("Editor Typography", "Code Typography", "UI Typography")
+    groupRows.map(_.segments.map(_.text)) shouldBe List(
       List("Editor Typography", "Prose editor family, size, and ligatures"),
       List("Code Typography", "Code editor family, size, and ligatures"),
       List("UI Typography", "Interface family, size, and ligatures")
     )
-    resolved.footer.map(_.plainText) shouldBe Some("1/3")
+    resolved.footer.map(_.plainText) shouldBe Some("Navigate • Open • Back • Dismiss • 1/3")
   }
 
   it should "resolve preset theme submenu as grouped theme and surface rows" in {
@@ -406,31 +365,27 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
-        activeSubmenu = Some(
-          CommandRunnerSubmenuState(
-            "settings-preset-theme",
-            parentGroupId = Some("settings-preset-edit"),
-            ancestorGroupIds = List("settings-ui-presets", "settings-preset-edit")
+        activeSettingsSurface = Some(
+          SettingsSurfaceState(
+            SettingsPage.Group("settings-preset-theme"),
+            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
           )
         )
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(
-        runner,
-        "settings-preset-theme",
-        previewOnly = false
-      ),
+      SurfaceContent.CommandPalette(runner),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating
     )
 
-    resolved.rows.map(_.plainText) shouldBe List("Theme Selection", "Surface Material")
-    resolved.rows.map(_.segments.map(_.text)) shouldBe List(
+    val groupRows = resolved.rows.filter(_.leadingPadding == 0)
+    groupRows.map(_.plainText) shouldBe List("Theme Selection", "Surface Material")
+    groupRows.map(_.segments.map(_.text)) shouldBe List(
       List("Theme Selection", "Choose, create, toggle, or reload themes"),
       List("Surface Material", "Background, material, and blur")
     )
-    resolved.footer.map(_.plainText) shouldBe Some("1/2")
+    resolved.footer.map(_.plainText) shouldBe Some("Navigate • Open • Back • Dismiss • 1/2")
   }
 
   it should "resolve preset document defaults submenu as grouped document, preview, and spelling rows" in {
@@ -438,109 +393,53 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
-        activeSubmenu = Some(
-          CommandRunnerSubmenuState(
-            "settings-preset-document-defaults",
-            parentGroupId = Some("settings-preset-edit"),
-            ancestorGroupIds = List("settings-ui-presets", "settings-preset-edit")
+        activeSettingsSurface = Some(
+          SettingsSurfaceState(
+            SettingsPage.Group("settings-preset-document-defaults"),
+            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
           )
         )
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(
-        runner,
-        "settings-preset-document-defaults",
-        previewOnly = false
-      ),
+      SurfaceContent.CommandPalette(runner),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating
     )
 
-    resolved.rows.map(_.plainText) shouldBe List("New Documents", "Markdown Preview", "Spelling")
-    resolved.rows.map(_.segments.map(_.text)) shouldBe List(
+    val groupRows = resolved.rows.filter(_.leadingPadding == 0)
+    groupRows.map(_.plainText) shouldBe List("New Documents", "Markdown Preview", "Spelling")
+    groupRows.map(_.segments.map(_.text)) shouldBe List(
       List("New Documents", "Default mode for new buffers"),
       List("Markdown Preview", "Source, split preview, or inline lens"),
       List("Spelling", "Enable, languages, dictionaries, accepted words")
     )
-    resolved.footer.map(_.plainText) shouldBe Some("1/3")
+    resolved.footer.map(_.plainText) shouldBe Some("Navigate • Open • Back • Dismiss • 1/3")
   }
 
-  it should "append a selected UI preset detail row in the preset submenu" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
+  // issue #1059: selecting a nested group ("Create New Preset"/"Edit Preset") within "settings-ui-presets" used to
+  // append a hand-written "Preset Preview ..." detail row from the old second-surface resolver. It now expands the
+  // capped, generic group preview inline instead (SettingsSurfaceState.previewRows, indented via leadingPadding),
+  // the same mechanism every other group uses -- there is no preset-specific detail row left.
+  it should "expand the selected preset group's own children inline as the capped group preview" in {
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         activeCategory = CommandCategory.Settings,
-        optionSelections = Map("ui-preset-built-in" -> 1),
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-preset-select", selectedIndex = 0))
+        activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1)))
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(
-        runner,
-        "settings-preset-select",
-        previewOnly = false
-      ),
+      SurfaceContent.CommandPalette(runner),
       LayoutRect(0, 0, 90, 12),
       SurfaceRenderMode.Floating
     )
 
-    resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Documentation - markdown split preview; dark; subtle motion; tandem text reveal; frosted material; frosted background; comfortable density; SansSerif 14pt prose; 1 editor pane"
-    )
-  }
-
-  it should "append a create preset detail row in the preset submenu" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .copy(
-        activeCategory = CommandCategory.Settings,
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 1))
-      )
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(
-        runner,
-        "settings-ui-presets",
-        previewOnly = false
-      ),
-      LayoutRect(0, 0, 90, 12),
-      SurfaceRenderMode.Floating
-    )
-
-    resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Create New Preset - name and save the current workspace setup"
-    )
-  }
-
-  it should "append a preset options detail row in the preset submenu" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .copy(
-        activeCategory = CommandCategory.Settings,
-        editingPresetName = Some("Research Notes"),
-        activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 2))
-      )
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(
-        runner,
-        "settings-ui-presets",
-        previewOnly = false
-      ),
-      LayoutRect(0, 0, 90, 12),
-      SurfaceRenderMode.Floating
-    )
-
-    resolved.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Research Notes - name, preset actions, active panels, theme, animations, fonts, document defaults"
-    )
+    val selectedIndex = resolved.rows.indexWhere(_.selected)
+    selectedIndex should be >= 0
+    val previewRow = resolved.rows.lift(selectedIndex + 1).getOrElse(fail("Expected a group preview row"))
+    previewRow.leadingPadding shouldBe 2
+    previewRow.segments.map(_.tone) should contain(OverlayTone.Muted)
   }
 
   it should "return no floating rows for inactive command palettes" in {
@@ -574,10 +473,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-language", selectedIndex = 10)))
+      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-language", 10))))
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(runner, "settings-language", previewOnly = false),
+      SurfaceContent.CommandPalette(runner),
       LayoutRect(0, 0, 40, 8),
       SurfaceRenderMode.Floating
     )
@@ -592,7 +491,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows.find(_.selected).map(_.plainText) shouldBe Some(
       "JavaScript - Use JavaScript mode for the current buffer."
     )
-    floating.footer.map(_.plainText) shouldBe Some("11/23")
+    floating.footer.map(_.plainText) shouldBe Some("Navigate • Run • Back • Dismiss • 11/23")
   }
 
   it should "derive command runner visible rows from the framed surface content contract" in {
@@ -650,35 +549,36 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "reserve submenu detail rows without clipping available submenu items or footer" in {
+  it should "reserve group preview rows without clipping available submenu items or footer" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-ui-presets", selectedIndex = 1)))
+      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
+    val items        = runner.submenuItems("settings-ui-presets")
+    val preview      = SettingsSurfaceState.previewRows(items, 1)
+    val previewCount = preview.rows.size + (if preview.overflowCount > 0 then 1 else 0)
     val rect = LayoutRect(
       x = 0,
       y = 0,
       width = 90,
       height = SurfaceFrameLayout.frameHeightForItemRows(
-        itemRows = 3,
+        itemRows = items.size,
         hasHeader = true,
         hasFooter = true,
-        reservedContentRows = 1
+        reservedContentRows = previewCount
       )
     )
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(runner, "settings-ui-presets", previewOnly = false),
+      SurfaceContent.CommandPalette(runner),
       rect,
       SurfaceRenderMode.Floating
     )
 
     floating.header shouldBe defined
-    floating.rows.dropRight(1) should have size 3
-    floating.rows.lastOption.map(_.plainText) shouldBe Some(
-      "Preset Preview Create New Preset - name and save the current workspace setup"
-    )
+    floating.rows.count(row => row.leadingPadding == 0) shouldBe items.size
+    floating.rows.count(row => row.leadingPadding > 0) shouldBe previewCount
     floating.footer shouldBe defined
   }
 
@@ -686,31 +586,31 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-language", searchTerm = "java")))
+      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-language", 0, "java"))))
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(runner, "settings-language", previewOnly = false),
+      SurfaceContent.CommandPalette(runner),
       LayoutRect(0, 0, 40, 8),
       SurfaceRenderMode.Floating
     )
 
-    floating.header.map(_.plainText) shouldBe Some("Current Buffer Language search: java")
+    floating.header.map(_.plainText) shouldBe Some("Settings > Current Buffer Language search: java")
     floating.rows.map(_.plainText) shouldBe List(
       "Java - Use Java mode for the current buffer.",
       "JavaScript - Use JavaScript mode for the current buffer."
     )
     floating.rows.headOption.map(_.selected) shouldBe Some(true)
-    floating.footer.map(_.plainText) shouldBe Some("1/2")
+    floating.footer.map(_.plainText) shouldBe Some("Navigate • Run • Back • Dismiss • 1/2")
   }
 
   it should "mark font submenu labels with their preview font family" in {
     val family = FontLoader.availableTextFamilies.head
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .copy(activeSubmenu = Some(CommandRunnerSubmenuState("text-font")))
+      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("text-font"))))
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPaletteSubmenu(runner, "text-font", previewOnly = false),
+      SurfaceContent.CommandPalette(runner),
       LayoutRect(0, 0, 60, 8),
       SurfaceRenderMode.Floating
     )

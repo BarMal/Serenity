@@ -22,9 +22,7 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   private val directoryTree: SurfaceContent =
     SurfaceContent.DirectoryTree(DirectoryTreeData(Path.of("root")), None)
   private val commandPalette: SurfaceContent = SurfaceContent.CommandPalette(CommandRunner.empty)
-  private val commandPaletteSubmenu: SurfaceContent =
-    SurfaceContent.CommandPaletteSubmenu(CommandRunner.empty, "group", previewOnly = false)
-  private val themePicker: SurfaceContent = SurfaceContent.ThemePicker(ThemePickerState(List("dark"), 0, "dark"))
+  private val themePicker: SurfaceContent    = SurfaceContent.ThemePicker(ThemePickerState(List("dark"), 0, "dark"))
   private val themeCreator: SurfaceContent =
     SurfaceContent.ThemeCreator(ThemeCreatorState.fromTheme(DefaultThemes.defaultDark))
   private val fileSearch: SurfaceContent        = SurfaceContent.FileSearch(FileSearchState("q", Nil, 0))
@@ -59,7 +57,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
     directoryListing,
     directoryTree,
     commandPalette,
-    commandPaletteSubmenu,
     themePicker,
     themeCreator,
     fileSearch,
@@ -82,11 +79,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
         FocusHandlerRouting.forSurfaceContent(content) should not be null
       }
     }
-
-  it should "route command palette and its submenu to the same pooled CommandRunnerComponent instance" in {
-    FocusHandlerRouting.forSurfaceContent(commandPalette) should
-      be theSameInstanceAs FocusHandlerRouting.forSurfaceContent(commandPaletteSubmenu)
-  }
 
   it should "route theme picker content to a ThemePickerComponent" in {
     FocusHandlerRouting.forSurfaceContent(themePicker).getClass.getSimpleName shouldBe "ThemePickerComponent"

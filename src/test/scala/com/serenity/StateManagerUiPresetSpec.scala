@@ -816,17 +816,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
           case _                                     => None
       }
       .getOrElse(fail("command runner should stay open"))
-    val submenu = state.runtime.uiSurfaces.collectFirst {
-      case UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
-        groupId -> previewOnly
-    }
-
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-edit")
-    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
+    runner.activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-preset-edit")
+    runner.activeSettingsSurface.flatMap(_.ancestors.headOption.map(_.groupId)) shouldBe Some("settings-ui-presets")
     runner.editingPresetName shouldBe Some("Drafting")
     runner.statusMessage shouldBe Some("Preset saved. Configure Drafting.")
-    state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
-    submenu shouldBe Some("settings-preset-edit" -> false)
+    state.runtime.uiSurfaces should have size 1
+    state.persisted.focus shouldBe Focus.Surface(state.commandRunnerSurface.get.id)
   }
 
   it should "leave a saved preset untouched while later settings change the live workspace" in {

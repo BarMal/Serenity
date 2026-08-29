@@ -299,20 +299,36 @@ object TextOverlayRenderer:
 
     rowView.row.layout match
       case OverlayRowLayout.Plain =>
+        // `leadingPadding` indents a Plain row (e.g. the settings-surface group-preview rows) by shrinking its
+        // available width and shifting its start column, rather than baking literal spaces into `plainText` --
+        // consistent with how `renderCompactDistributedRow` already honors it for the toolbar's row shape.
+        val pad           = rowView.row.leadingPadding.max(0).min(width)
+        val indentedX     = x + pad
+        val indentedWidth = width - pad
         if rowView.row.segments.nonEmpty then
-          renderInlineSegments(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+          renderInlineSegments(
+            surface,
+            indentedX,
+            y,
+            indentedWidth,
+            rowView.row,
+            theme,
+            rowForeground,
+            rowBackground,
+            font
+          )
         else if rowView.useMeasuredCursor && shouldUseMeasuredCursor(surface) then
           renderMeasuredPlainRow(
             surface,
-            x,
+            indentedX,
             pixelY.getOrElse(cellMetrics.toPixelY(y)),
-            width,
+            indentedWidth,
             rowView.row.plainText,
             font,
             cellMetrics,
             rowRightXPx
           )
-        else CharacterRenderer.renderStringPlain(surface, x, y, rowView.row.plainText.take(width))
+        else CharacterRenderer.renderStringPlain(surface, indentedX, y, rowView.row.plainText.take(indentedWidth))
       case OverlayRowLayout.Distributed =>
         renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
       case OverlayRowLayout.Split =>

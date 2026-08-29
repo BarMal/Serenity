@@ -6,11 +6,35 @@ import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier, Modifier}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
-import com.serenity.ui.layout.Layout
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
+
+  /** Read-only conveniences mirroring the old flat `CommandRunnerSubmenuState`'s accessors, on top of the page-stack
+    * `activeSettingsSurface` that replaced it (issue #1059) -- kept local to this spec since production code has no
+    * need for them (it reads through `settingsSurfaceItems`/`settingsSurfaceSelectedIndex`/`focusedSubmenuItems`
+    * instead).
+    */
+  extension (runner: CommandRunner)
+    private def activeSubmenuGroupId: Option[String]    = runner.activeSettingsSurface.map(_.current.groupId)
+    private def activeSubmenuSearchTerm: Option[String] = runner.activeSettingsSurface.map(_.current.searchTerm)
+    private def activeSubmenuEditingItemId: Option[String] =
+      runner.activeSettingsSurface.flatMap(_.current.editingItemId)
+    private def activeSubmenuEditingText: Option[String] = runner.activeSettingsSurface.map(_.current.draftText)
+    private def activeSubmenuSelectedIndex: Option[Int] =
+      runner.activeSettingsSurface.map(_ => runner.settingsSurfaceSelectedIndex)
+    private def activeSubmenuParentGroupId: Option[String] =
+      runner.activeSettingsSurface.flatMap(_.ancestors.headOption.map(_.groupId))
+    private def activeSubmenuAncestorGroupIds: Option[List[String]] =
+      runner.activeSettingsSurface.map(_.ancestors.reverse.map(_.groupId))
+    private def activeSubmenuRecordingItemId: Option[String] =
+      runner.activeSettingsSurface.flatMap(_.current.recording).map(_.itemId)
+    private def activeSubmenuPendingRecordedBinding: Option[(KeyStrokeInfo, Long)] =
+      runner.activeSettingsSurface.flatMap(_.current.recording).flatMap(_.pendingRecordedBinding)
+    private def activeSubmenuSelectedItem: Option[CommandSurfaceItem] =
+      runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex)
 
   private def activeState(registry: CommandRegistry, config: AppConfig = AppConfig.default): AppState =
     val runner = CommandRunner.empty.activate(registry, config)
@@ -155,8 +179,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
     val items    = base.submenuItems("settings-keymap")
     val runner = base.copy(
-      activeSubmenu = Some(
-        CommandRunnerSubmenuState("settings-keymap", selectedIndex = items.indexWhere(_.id == "keymap-global-find"))
+      activeSettingsSurface = Some(
+        SettingsSurfaceState(
+          SettingsPage.Group("settings-keymap", items.indexWhere(_.id == "keymap-global-find"))
+        )
       )
     )
     val activated = activeState(registry)
@@ -175,20 +201,22 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val result = CommandRunnerReducer.reduce(Enter, state, registry)
 
-    runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe Some("keymap-global-find")
+    runnerFrom(result.state).activeSubmenuRecordingItemId shouldBe Some("keymap-global-find")
     runnerFrom(result.state).statusMessage shouldBe Some("Press a key or shortcut to assign")
   }
 
   it should "assign a recorded key and submit its setting intent" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val items    = base.submenuItems("settings-keymap")
     val runner = base.copy(
-      activeSubmenu = Some(
-        CommandRunnerSubmenuState(
-          "settings-keymap",
-          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
-          recordingItemId = Some("keymap-global-find")
+      activeSettingsSurface = Some(
+        SettingsSurfaceState(
+          SettingsPage.Editing(
+            groupId = "settings-keymap",
+            itemId = "keymap-global-find",
+            draftText = "",
+            recording = Some(RecordingState("keymap-global-find"))
+          )
         )
       )
     )
@@ -216,8 +244,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     result.effects shouldBe List(AppEffect.ScheduleCommandRunnerBindingExpiry(1_000L))
-    runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe Some("keymap-global-find")
-    runnerFrom(result.state).activeSubmenu.flatMap(_.pendingRecordedBinding).map(_._1) shouldBe
+    runnerFrom(result.state).activeSubmenuRecordingItemId shouldBe Some("keymap-global-find")
+    runnerFrom(result.state).activeSubmenuPendingRecordedBinding.map(_._1) shouldBe
       Some(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty))
 
     val completed = CommandRunnerReducer.reduce(
@@ -235,19 +263,21 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
           KeybindingsIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+ctrl")
         )
       case other => fail(s"Expected setting command, got $other")
-    runnerFrom(completed.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
+    runnerFrom(completed.state).activeSubmenuRecordingItemId shouldBe None
   }
 
   it should "assign a modifier double tap when the matching second stroke arrives within 200ms" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val items    = base.submenuItems("settings-keymap")
     val runner = base.copy(
-      activeSubmenu = Some(
-        CommandRunnerSubmenuState(
-          "settings-keymap",
-          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
-          recordingItemId = Some("keymap-global-find")
+      activeSettingsSurface = Some(
+        SettingsSurfaceState(
+          SettingsPage.Editing(
+            groupId = "settings-keymap",
+            itemId = "keymap-global-find",
+            draftText = "",
+            recording = Some(RecordingState("keymap-global-find"))
+          )
         )
       )
     )
@@ -271,7 +301,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       registry
     )
     first.effects.collectFirst { case AppEffect.ExecuteCommand(_) => true } shouldBe None
-    runnerFrom(first.state).activeSubmenu.flatMap(_.pendingRecordedBinding).map(_._2) shouldBe Some(1_000L)
+    runnerFrom(first.state).activeSubmenuPendingRecordedBinding.map(_._2) shouldBe Some(1_000L)
 
     val result = CommandRunnerReducer.reduce(
       RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), 1_200L),
@@ -287,15 +317,19 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "finalize a pending single key after the double-tap window expires" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val items    = base.submenuItems("settings-keymap")
     val runner = base.copy(
-      activeSubmenu = Some(
-        CommandRunnerSubmenuState(
-          "settings-keymap",
-          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
-          recordingItemId = Some("keymap-global-find"),
-          pendingRecordedBinding = Some(
-            KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty) -> 1_000L
+      activeSettingsSurface = Some(
+        SettingsSurfaceState(
+          SettingsPage.Editing(
+            groupId = "settings-keymap",
+            itemId = "keymap-global-find",
+            draftText = "",
+            recording = Some(
+              RecordingState(
+                "keymap-global-find",
+                pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty) -> 1_000L)
+              )
+            )
           )
         )
       )
@@ -323,7 +357,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
       CommandIntent.Keybindings(KeybindingsIntent.SetGlobalHotkey(HotkeyAction.Find, "k"))
     )
-    runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
+    runnerFrom(result.state).activeSubmenuRecordingItemId shouldBe None
   }
 
   /** Builds active state for the settings keymap submenu, mid-recording, at a chosen tier -- shared by the
@@ -337,13 +371,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val base = CommandRunner.empty
       .activate(registry, AppConfig.default, isTuiMode = isTuiMode, keyboardFidelityTier = keyboardFidelityTier)
       .openSettings
-    val items = base.submenuItems("settings-keymap")
     val runner = base.copy(
-      activeSubmenu = Some(
-        CommandRunnerSubmenuState(
-          "settings-keymap",
-          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
-          recordingItemId = Some("keymap-global-find")
+      activeSettingsSurface = Some(
+        SettingsSurfaceState(
+          SettingsPage.Editing(
+            groupId = "settings-keymap",
+            itemId = "keymap-global-find",
+            draftText = "",
+            recording = Some(RecordingState("keymap-global-find"))
+          )
         )
       )
     )
@@ -430,15 +466,19 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "ignore an expiry event for a replaced pending recording" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val items    = base.submenuItems("settings-keymap")
     val runner = base.copy(
-      activeSubmenu = Some(
-        CommandRunnerSubmenuState(
-          "settings-keymap",
-          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
-          recordingItemId = Some("keymap-global-find"),
-          pendingRecordedBinding = Some(
-            KeyStrokeInfo(InputKey.Character, Some('j'), Set.empty) -> 2_000L
+      activeSettingsSurface = Some(
+        SettingsSurfaceState(
+          SettingsPage.Editing(
+            groupId = "settings-keymap",
+            itemId = "keymap-global-find",
+            draftText = "",
+            recording = Some(
+              RecordingState(
+                "keymap-global-find",
+                pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('j'), Set.empty) -> 2_000L)
+              )
+            )
           )
         )
       )
@@ -529,11 +569,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val opened = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry).state
     val runner = runnerFrom(opened)
 
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-animation")
-    runner.activeSubmenu
-      .flatMap(submenu => runner.submenuItems(submenu.groupId).lift(submenu.selectedIndex))
-      .map(_.id) shouldBe
-      Some("animation-duration")
+    runner.activeSubmenuGroupId shouldBe Some("settings-animation")
+    runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("animation-duration")
   }
 
   it should "execute the global intent described by a direct setting search result" in {
@@ -601,12 +638,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     val opened       = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
     val openedRunner = runnerFrom(opened)
-    val selectedItem = openedRunner.activeSubmenu.flatMap { submenu =>
-      openedRunner.submenuItems(submenu.groupId).lift(submenu.selectedIndex)
-    }
 
-    openedRunner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-actions")
-    selectedItem.map(_.id) shouldBe Some("ui-preset-overwrite")
+    openedRunner.activeSubmenuGroupId shouldBe Some("settings-preset-actions")
+    openedRunner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("ui-preset-overwrite")
   }
 
   it should "search globally even when opened on a narrower category" in {
@@ -686,31 +720,26 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "adjust the selected background style inside the surface appearance submenu with left and right" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
+    // "settings-surface-appearance" nests one level under the top-level "settings-appearance-motion" group, so it's
+    // reached directly here rather than through withSelectedItem/enterSelectedGroup (which only resolve a top-level
+    // selection) -- this test is about adjustSelectedSubmenuOption's Left/Right behavior once inside a group, not
+    // about the navigation path to reach it.
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
-      .withSelectedItem("settings-surface-appearance")
-      .enterSelectedGroup
-      .copy(activeSubmenu =
-        Some(com.serenity.command.CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 0))
-      )
+      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance"))))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val submenuSurface = UiSurface(
-      SurfaceId("command-runner-submenu"),
-      SurfaceContent.CommandPaletteSubmenu(runner, "settings-surface-appearance", previewOnly = false),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
       persisted = Persisted(
         layout = Layout.empty,
         buffers = Map.empty,
-        focus = Focus.Surface(submenuSurface.id)
+        focus = Focus.Surface(surface.id)
       ),
-      runtime = Runtime(uiSurfaces = List(surface, submenuSurface))
+      runtime = Runtime(uiSurfaces = List(surface))
     )
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
@@ -743,31 +772,24 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "adjust the selected interface density inside the interface layout submenu" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
+    // "settings-interface-layout" nests one level under the top-level "settings-appearance-motion" group -- see the
+    // same note on the background-style test above.
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withActiveCategory(CommandCategory.Settings)
-      .withSelectedItem("settings-interface-layout")
-      .enterSelectedGroup
-      .copy(activeSubmenu =
-        Some(com.serenity.command.CommandRunnerSubmenuState("settings-interface-layout", selectedIndex = 0))
-      )
+      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-interface-layout"))))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val submenuSurface = UiSurface(
-      SurfaceId("command-runner-submenu"),
-      SurfaceContent.CommandPaletteSubmenu(runner, "settings-interface-layout", previewOnly = false),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = AppState(
       persisted = Persisted(
         layout = Layout.empty,
         buffers = Map.empty,
-        focus = Focus.Surface(submenuSurface.id)
+        focus = Focus.Surface(surface.id)
       ),
-      runtime = Runtime(uiSurfaces = List(surface, submenuSurface))
+      runtime = Runtime(uiSurfaces = List(surface))
     )
 
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), state, registry)
@@ -782,7 +804,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
   }
 
-  it should "open a preview submenu for the selected expandable settings row without moving focus" in {
+  // issue #1059: a hovered-but-not-entered expandable settings row used to preview its children on a second floating
+  // surface without moving focus. It previews inline in the same list now (SurfaceContentResolver's capped,
+  // expand-in-place group preview) -- still without moving focus, but with no second surface at all.
+  it should "preview an expandable settings row's children inline without moving focus" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -802,14 +827,32 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       runtime = Runtime(uiSurfaces = List(surface))
     )
 
-    val previewed = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), state, registry)
+    val previewed       = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), state, registry)
+    val previewedRunner = runnerFrom(previewed.state)
 
     previewed.state.commandRunnerSurface shouldBe defined
-    previewed.state.commandRunnerSubmenuSurface shouldBe defined
+    previewed.state.runtime.uiSurfaces should have size 1
     previewed.state.persisted.focus shouldBe Focus.Surface(surface.id)
+
+    val selectedGroup = previewedRunner.selectedItem
+      .collect { case group: CommandSurfaceItem.GroupItem => group }
+      .getOrElse(fail("Expected the second row to be an expandable settings group"))
+    selectedGroup.children should not be empty
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(previewedRunner),
+      LayoutRect(0, 0, 90, 30),
+      SurfaceRenderMode.Floating
+    )
+    val selectedRowIndex = resolved.rows.indexWhere(_.selected)
+    selectedRowIndex should be >= 0
+    resolved.rows.lift(selectedRowIndex + 1).map(_.leadingPadding) shouldBe Some(2)
   }
 
-  it should "focus the submenu on enter and return to the parent runner on escape" in {
+  // issue #1059: entering a settings group used to move focus to a second floating submenu surface; it now stays on
+  // the one command-runner surface throughout (activeSettingsSurface is the signal, not a focus/surface change), and
+  // Escape pops back out rather than "returning to a parent surface" that no longer exists.
+  it should "enter the settings group on submit and pop back out on escape, staying on the one surface" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -832,14 +875,16 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
 
     entered.state.commandRunnerSurface shouldBe defined
-    entered.state.commandRunnerSubmenuSurface shouldBe defined
-    entered.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    entered.state.runtime.uiSurfaces should have size 1
+    entered.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
+    runnerFrom(entered.state).activeSettingsSurface shouldBe defined
 
     val exited = CommandRunnerReducer.reduce(RunnerDismiss, entered.state, registry)
 
     exited.state.commandRunnerSurface shouldBe defined
-    exited.state.commandRunnerSubmenuSurface shouldBe defined
+    exited.state.runtime.uiSurfaces should have size 1
     exited.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
+    runnerFrom(exited.state).activeSettingsSurface shouldBe None
   }
 
   it should "exit submenu edit mode on escape before leaving the submenu" in {
@@ -852,15 +897,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       )
       .state
 
-    runnerFrom(state).activeSubmenu.flatMap(_.editingItemId) shouldBe Some("animation-duration")
+    runnerFrom(state).activeSubmenuEditingItemId shouldBe Some("animation-duration")
 
     val escaped = CommandRunnerReducer.reduce(RunnerDismiss, state, registry)
     val runner  = runnerFrom(escaped.state)
 
-    runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
-    runner.activeSubmenu.map(_.editingText) shouldBe Some("")
-    escaped.state.commandRunnerSubmenuSurface shouldBe defined
-    escaped.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    runner.activeSubmenuEditingItemId shouldBe None
+    runner.activeSubmenuEditingText shouldBe Some("")
+    escaped.state.runtime.uiSurfaces should have size 1
+    escaped.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
   }
 
   it should "preserve submenu selection when exiting to the parent and re-entering the same group" in {
@@ -871,9 +916,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val reentered = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
     val runner    = runnerFrom(reentered.state)
 
-    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(16)
-    runner.activeSubmenu.flatMap(_.selectedItem(runner.submenuItems("settings-animation")).map(_.id)) shouldBe
-      Some("animation-steps")
+    runner.activeSubmenuSelectedIndex shouldBe Some(16)
+    runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("animation-steps")
   }
 
   it should "filter focused submenu items while typing and submit the filtered selection" in {
@@ -885,7 +929,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     }
     val runner = runnerFrom(searched)
 
-    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("java")
+    runner.activeSubmenuSearchTerm shouldBe Some("java")
     runner.focusedSubmenuItems.collect { case CommandSurfaceItem.CommandItem(command) => command.label } shouldBe List(
       "Java",
       "JavaScript"
@@ -909,10 +953,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val opened = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry)
     val runner = runnerFrom(opened.state)
 
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-language")
-    runner.activeSubmenu
-      .flatMap(_.selectedItem(runner.submenuItems("settings-language")).map(_.id)) shouldBe Some("lang-markdown")
-    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("")
+    runner.activeSubmenuGroupId shouldBe Some("settings-language")
+    runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("lang-markdown")
+    runner.activeSubmenuSearchTerm shouldBe Some("")
   }
 
   it should "open font family picker submenus and submit UI font choices" in {
@@ -924,8 +967,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val firstUiFontIntent =
       runner.submenuItems("ui-font").collectFirst { case CommandSurfaceItem.CommandItem(command) => command.intent }
 
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("ui-font")
-    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-font")
+    runner.activeSubmenuGroupId shouldBe Some("ui-font")
+    runner.activeSubmenuParentGroupId shouldBe Some("settings-ui-font")
 
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, entered.state, registry)
     submitted.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe
@@ -939,8 +982,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner  = runnerFrom(entered.state)
 
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-edit")
-    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-ui-presets")
+    runner.activeSubmenuGroupId shouldBe Some("settings-preset-edit")
+    runner.activeSubmenuParentGroupId shouldBe Some("settings-ui-presets")
     runner.focusedSubmenuItems.map(_.id) should contain allOf (
       "settings-preset-name",
       "settings-preset-actions",
@@ -963,14 +1006,69 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val typography = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry)
     val runner     = runnerFrom(typography.state)
 
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-fonts")
-    runner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-preset-edit")
-    runner.activeSubmenu.map(_.ancestorGroupIds) shouldBe Some(List("settings-ui-presets", "settings-preset-edit"))
+    runner.activeSubmenuGroupId shouldBe Some("settings-preset-fonts")
+    runner.activeSubmenuParentGroupId shouldBe Some("settings-preset-edit")
+    runner.activeSubmenuAncestorGroupIds shouldBe Some(List("settings-ui-presets", "settings-preset-edit"))
     runner.submenuBreadcrumbLabels("settings-preset-fonts") shouldBe List(
       "UI Presets",
       "Edit Preset: Writing",
       "Fonts"
     )
+  }
+
+  // issue #1059: Escape now uniformly pops one settings level at a time regardless of entry point (the settings
+  // category tab inside the palette, exercised here, vs. the dedicated Settings surface, exercised in
+  // SettingsSurfaceSpec) -- no more branching on `isSettingsSurface` to always fully deactivate instead of popping.
+  it should "pop one settings level at a time on Escape, matching the dedicated Settings surface" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
+
+    val presetOptions      = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
+    val typographySelected = CommandRunnerReducer.reduce(RunnerSelectSubmenuItem(5), presetOptions, registry).state
+    val typography         = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry).state
+    runnerFrom(typography).activeSubmenuGroupId shouldBe Some("settings-preset-fonts")
+
+    val backOnce = CommandRunnerReducer.reduce(Escape, typography, registry)
+    runnerFrom(backOnce.state).activeSubmenuGroupId shouldBe Some("settings-preset-edit")
+
+    val backTwice = CommandRunnerReducer.reduce(Escape, backOnce.state, registry)
+    runnerFrom(backTwice.state).activeSubmenuGroupId shouldBe Some("settings-ui-presets")
+
+    val backToRoot = CommandRunnerReducer.reduce(Escape, backTwice.state, registry)
+    val rootRunner = runnerFrom(backToRoot.state)
+    rootRunner.activeSettingsSurface shouldBe None
+    rootRunner.isActive shouldBe true // the palette itself stays open -- this Escape only closed the submenu stack
+  }
+
+  // issue #1059: Backspace only ever deletes text now -- it never falls back to navigating up a level once text is
+  // already empty, which is the bug this migration fixes (see the rewritten SettingsSurfaceSpec test of the same
+  // shape for the dedicated Settings surface).
+  it should "be a no-op on backspace when there is no text to delete, never navigating up a level" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-animation", "animation-steps")
+    val before   = runnerFrom(state).activeSettingsSurface
+
+    before.flatMap(_.current.editingItemId) shouldBe None
+    before.map(_.current.searchTerm) shouldBe Some("")
+
+    val result = CommandRunnerReducer.reduce(RunnerDeleteBackward, state, registry)
+
+    runnerFrom(result.state).activeSettingsSurface shouldBe before
+  }
+
+  it should "delete a character from the submenu search term via backspace, never navigating up" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-language", "lang-plain-text")
+    val searched = List('j', 'a', 'v').foldLeft(state) { (s, char) =>
+      CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state
+    }
+    runnerFrom(searched).activeSubmenuSearchTerm shouldBe Some("jav")
+
+    val afterBackspace = CommandRunnerReducer.reduce(RunnerDeleteBackward, searched, registry)
+    val runner         = runnerFrom(afterBackspace.state)
+
+    runner.activeSubmenuSearchTerm shouldBe Some("ja")
+    runner.activeSubmenuGroupId shouldBe Some("settings-language")
   }
 
   it should "preserve preset submenu ancestry when entering a nested settings group from search results" in {
@@ -1000,9 +1098,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val entered       = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val enteredRunner = runnerFrom(entered.state)
 
-    enteredRunner.activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-fonts")
-    enteredRunner.activeSubmenu.flatMap(_.parentGroupId) shouldBe Some("settings-preset-edit")
-    enteredRunner.activeSubmenu.map(_.ancestorGroupIds) shouldBe Some(
+    enteredRunner.activeSubmenuGroupId shouldBe Some("settings-preset-fonts")
+    enteredRunner.activeSubmenuParentGroupId shouldBe Some("settings-preset-edit")
+    enteredRunner.activeSubmenuAncestorGroupIds shouldBe Some(
       List("settings-ui-presets", "settings-preset-edit")
     )
     enteredRunner.submenuBreadcrumbLabels("settings-preset-fonts") shouldBe List(
@@ -1037,13 +1135,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner  = runnerFrom(entered.state)
 
-    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-interface-layout")
-    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("")
+    runner.activeSubmenuGroupId shouldBe Some("settings-interface-layout")
+    runner.activeSubmenuSearchTerm shouldBe Some("")
     runner.searchTerm shouldBe "UI Outline Thickness"
-    runner.activeSubmenu.flatMap(
-      _.selectedItemFromAll(runner.submenuItems("settings-interface-layout")).map(_.id)
-    ) shouldBe
-      Some("ui-outline-thickness")
+    runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("ui-outline-thickness")
   }
 
   it should "clear submenu search with escape before leaving the submenu" in {
@@ -1055,9 +1150,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val cleared = CommandRunnerReducer.reduce(RunnerDismiss, searched, registry)
     val runner  = runnerFrom(cleared.state)
 
-    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("")
-    cleared.state.commandRunnerSubmenuSurface shouldBe defined
-    cleared.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    runner.activeSubmenuSearchTerm shouldBe Some("")
+    cleared.state.runtime.uiSurfaces should have size 1
+    cleared.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
   }
 
   it should "discard in-progress submenu edit text when exiting and re-entering the group" in {
@@ -1073,9 +1168,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val reentered      = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
     val runner         = runnerFrom(reentered.state)
 
-    runner.activeSubmenu.map(_.selectedIndex) shouldBe Some(16)
-    runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
-    runner.activeSubmenu.map(_.editingText) shouldBe Some("")
+    runner.activeSubmenuSelectedIndex shouldBe Some(16)
+    runner.activeSubmenuEditingItemId shouldBe None
+    runner.activeSubmenuEditingText shouldBe Some("")
   }
 
   private def settingsStateOnItem(
@@ -1101,25 +1196,22 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       group.children.indexWhere(_.id == itemId) match
         case -1    => 0
         case index => index
+    // issue #1059: a drilled-in settings group renders on the one command-runner surface now -- no more second
+    // floating submenu surface or a separate focus target for it.
     val runner = baseRunner.enterSelectedGroup
-      .copy(activeSubmenu = Some(com.serenity.command.CommandRunnerSubmenuState(groupId, selectedIndex = groupIndex)))
+      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group(groupId, groupIndex))))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val submenuSurface = UiSurface(
-      SurfaceId("command-runner-submenu"),
-      SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly = false),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     AppState(
       persisted = Persisted(
         layout = Layout.empty,
         buffers = Map.empty,
-        focus = Focus.Surface(submenuSurface.id)
+        focus = Focus.Surface(surface.id)
       ),
-      runtime = Runtime(uiSurfaces = List(surface, submenuSurface))
+      runtime = Runtime(uiSurfaces = List(surface))
     )
 
   private def settingsGroupSearchTerm(groupId: String): String =
@@ -1139,8 +1231,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state  = settingsStateOnItem("settings-animation", "animation-duration")
     val runner = runnerFrom(state)
 
-    runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
-    runner.activeSubmenu.map(_.editingText) shouldBe Some("")
+    runner.activeSubmenuEditingItemId shouldBe None
+    runner.activeSubmenuEditingText shouldBe Some("")
   }
 
   it should "leave a selected submenu input item unchanged when enter is pressed before typing" in {
@@ -1150,8 +1242,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner    = runnerFrom(submitted.state)
 
-    runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
-    runner.activeSubmenu.map(_.editingText) shouldBe Some("")
+    runner.activeSubmenuEditingItemId shouldBe None
+    runner.activeSubmenuEditingText shouldBe Some("")
     submitted.effects shouldBe Nil
   }
 
@@ -1160,8 +1252,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = settingsStateOnItem("settings-animation", "animation-steps")
 
     val result = CommandRunnerReducer.reduce(RunnerInsertChar('5'), state, registry)
-    runnerFrom(result.state).activeSubmenu.flatMap(_.editingItemId) shouldBe Some("animation-steps")
-    runnerFrom(result.state).activeSubmenu.map(_.editingText) shouldBe Some("5")
+    runnerFrom(result.state).activeSubmenuEditingItemId shouldBe Some("animation-steps")
+    runnerFrom(result.state).activeSubmenuEditingText shouldBe Some("5")
   }
 
   it should "reject non-numeric characters silently" in {
@@ -1169,9 +1261,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = settingsStateOnItem("settings-animation", "animation-steps")
 
     val result = CommandRunnerReducer.reduce(RunnerInsertChar('x'), state, registry)
-    runnerFrom(result.state).activeSubmenu.map(_.editingText) shouldBe runnerFrom(state).activeSubmenu.map(
-      _.editingText
-    )
+    runnerFrom(result.state).activeSubmenuEditingText shouldBe runnerFrom(state).activeSubmenuEditingText
   }
 
   it should "reject a decimal point on an integer InputItem" in {
@@ -1179,9 +1269,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val state    = settingsStateOnItem("settings-animation", "animation-steps")
 
     val result = CommandRunnerReducer.reduce(RunnerInsertChar('.'), state, registry)
-    runnerFrom(result.state).activeSubmenu.map(_.editingText) shouldBe runnerFrom(state).activeSubmenu.map(
-      _.editingText
-    )
+    runnerFrom(result.state).activeSubmenuEditingText shouldBe runnerFrom(state).activeSubmenuEditingText
   }
 
   it should "accept a decimal point on a decimal InputItem once dots are cleared" in {
@@ -1196,7 +1284,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val afterDot = CommandRunnerReducer.reduce(RunnerInsertChar('.'), s0, registry)
-    runnerFrom(afterDot.state).activeSubmenu.map(_.editingText) shouldBe Some("0.")
+    runnerFrom(afterDot.state).activeSubmenuEditingText shouldBe Some("0.")
   }
 
   it should "reject a second decimal point" in {
@@ -1218,7 +1306,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       )
     val afterSecondDot = runnerFrom(CommandRunnerReducer.reduce(RunnerInsertChar('.'), s2, registry).state)
 
-    afterSecondDot.activeSubmenu.map(_.editingText) shouldBe afterDot.activeSubmenu.map(_.editingText)
+    afterSecondDot.activeSubmenuEditingText shouldBe afterDot.activeSubmenuEditingText
   }
 
   it should "delete the last character on backspace" in {
@@ -1231,10 +1319,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       )
       .state
     val runner     = runnerFrom(state)
-    val textBefore = runner.activeSubmenu.map(_.editingText).getOrElse("")
+    val textBefore = runner.activeSubmenuEditingText.getOrElse("")
 
     val result = CommandRunnerReducer.reduce(RunnerDeleteBackward, state, registry)
-    runnerFrom(result.state).activeSubmenu.map(_.editingText) shouldBe Some(textBefore.dropRight(1))
+    runnerFrom(result.state).activeSubmenuEditingText shouldBe Some(textBefore.dropRight(1))
   }
 
   it should "fire SetAnimationSteps intent on Enter with valid value" in {
@@ -1309,8 +1397,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val navigated = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), typedState, registry)
     val runner    = runnerFrom(navigated.state)
 
-    runner.activeSubmenu.flatMap(_.editingItemId) shouldNot be(Some("animation-steps"))
-    runner.activeSubmenu.map(_.editingText) shouldNot be(runnerFrom(typedState).activeSubmenu.map(_.editingText))
+    runner.activeSubmenuEditingItemId shouldNot be(Some("animation-steps"))
+    runner.activeSubmenuEditingText shouldNot be(runnerFrom(typedState).activeSubmenuEditingText)
   }
 
   it should "restore the saved value when escape cancels a pending submenu edit" in {
@@ -1330,8 +1418,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       .submenuItems("settings-animation")
       .collectFirst { case item: CommandSurfaceItem.InputItem if item.id == "animation-steps" => item.currentValue }
 
-    runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
-    runner.activeSubmenu.map(_.editingText) shouldBe Some("")
+    runner.activeSubmenuEditingItemId shouldBe None
+    runner.activeSubmenuEditingText shouldBe Some("")
     restoredValue shouldBe Some("0")
   }
 
@@ -1379,8 +1467,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     result.effects shouldBe Nil
     runner.statusMessage shouldBe Some("Invalid binding: ctrl")
-    runner.activeSubmenu.flatMap(_.editingItemId) shouldBe Some("keymap-command-runner-submit")
-    runner.activeSubmenu.map(_.editingText) shouldBe Some("ctrl")
+    runner.activeSubmenuEditingItemId shouldBe Some("keymap-command-runner-submit")
+    runner.activeSubmenuEditingText shouldBe Some("ctrl")
   }
 
   it should "edit text area inset percentages and emit a layout update intent" in {
@@ -1405,6 +1493,6 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val pasted = CommandRunnerReducer.reduce(Paste, state, registry)
     val runner = runnerFrom(pasted.state)
 
-    runner.activeSubmenu.flatMap(_.editingItemId) shouldBe Some("ui-outline-thickness")
-    runner.activeSubmenu.map(_.editingText) shouldBe Some("4")
+    runner.activeSubmenuEditingItemId shouldBe Some("ui-outline-thickness")
+    runner.activeSubmenuEditingText shouldBe Some("4")
   }

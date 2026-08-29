@@ -234,7 +234,6 @@ object OverlayViewModel:
   private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Double =
     content match
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
-          com.serenity.state.models.SurfaceContent.CommandPaletteSubmenu(_, _, _) |
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
         state.persisted.config.surfaceConfig.commandRunnerItemGapRows
       case com.serenity.state.models.SurfaceContent.ContextualToolbar(_) =>
@@ -261,13 +260,10 @@ object OverlayViewModel:
         case Focus.Surface(focusedId) if focusedId != surface.id && isCommandRunnerSurface(surface.content) =>
           InactiveFloatingPanelAlphaMultiplier
         case _ => 1.0f
-    surface.content match
-      case SurfaceContent.CommandPaletteSubmenu(_, _, previewOnly) if previewOnly => 0.55f
-      case _                                                                      => focusMultiplier
+    focusMultiplier
 
   private def isCommandRunnerSurface(content: com.serenity.state.models.SurfaceContent): Boolean =
     content match
       case SurfaceContent.CommandPalette(_)                => true
-      case SurfaceContent.CommandPaletteSubmenu(_, _, _)   => true
       case SurfaceContent.GhostOverlay(originalContent, _) => isCommandRunnerSurface(originalContent)
       case _                                               => false

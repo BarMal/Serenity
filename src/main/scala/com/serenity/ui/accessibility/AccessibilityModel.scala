@@ -113,16 +113,7 @@ object AccessibilitySnapshot:
               actionBounds(frameRect, index, page.launchActions.size)
             )
         }
-      case SurfaceContent.CommandPalette(runner) => commandControls(surface.id, runner, frameRect, state)
-      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, _) =>
-        commandControls(
-          surface.id,
-          runner,
-          runner.submenuItems(groupId),
-          SurfaceContent.CommandPaletteSubmenu(runner, groupId, false),
-          frameRect,
-          state
-        )
+      case SurfaceContent.CommandPalette(runner)          => commandControls(surface.id, runner, frameRect, state)
       case SurfaceContent.ContextMenu(menu)               => menuControls(surface.id, menu, frameRect, state)
       case SurfaceContent.ContextualToolbar(toolbarState) => toolbarControls(surface.id, toolbarState, frameRect, state)
       case SurfaceContent.ModalWorkflow(modal)            => modalControls(surface.id, modal, frameRect, state)
@@ -400,8 +391,7 @@ object AccessibilitySnapshot:
 
   private def surfaceRole(content: SurfaceContent): AccessibilityRole =
     content match
-      case _: SurfaceContent.CommandPalette | _: SurfaceContent.CommandPaletteSubmenu |
-          _: SurfaceContent.ModalWorkflow =>
+      case _: SurfaceContent.CommandPalette | _: SurfaceContent.ModalWorkflow =>
         AccessibilityRole.Dialog
       case _: SurfaceContent.CursorInfoBar => AccessibilityRole.Status
       case _                               => AccessibilityRole.Panel
@@ -410,7 +400,6 @@ object AccessibilitySnapshot:
     content match
       case SurfaceContent.StartPage(page)              => page.title
       case _: SurfaceContent.CommandPalette            => "Command runner"
-      case _: SurfaceContent.CommandPaletteSubmenu     => "Command runner submenu"
       case SurfaceContent.ModalWorkflow(modal)         => modal.toString
       case SurfaceContent.CursorInfoBar(_)             => "Document status"
       case SurfaceContent.MarkdownPreview(_, title)    => s"Preview: $title"
@@ -439,10 +428,9 @@ object AccessibilitySnapshot:
 
   private def statusMessage(content: SurfaceContent): Option[String] =
     content match
-      case SurfaceContent.CommandPalette(runner)              => runner.statusMessage
-      case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner.statusMessage
-      case SurfaceContent.ModalWorkflow(modal)                => modalStatusMessage(modal)
-      case _                                                  => None
+      case SurfaceContent.CommandPalette(runner) => runner.statusMessage
+      case SurfaceContent.ModalWorkflow(modal)   => modalStatusMessage(modal)
+      case _                                     => None
 
   private def modalStatusMessage(modal: Modal): Option[String] =
     modal match

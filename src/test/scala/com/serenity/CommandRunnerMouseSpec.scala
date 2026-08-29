@@ -149,76 +149,28 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     runnerFrom(after).activeCategory shouldBe CommandCategory.File
   }
 
+  // issue #1059: a drilled-in settings group renders on the one command-runner surface now (no second floating
+  // submenu surface), so this hit-tests against that surface directly.
   it should "highlight the focused submenu row under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
     openLanguageSubmenu(stateManager)
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    val point  = commandRunnerSubmenuItemPoint(before, 2)
+    val point  = commandRunnerItemPoint(before, 2)
 
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
-    runnerFrom(stateManager.getCurrentState.unsafeRunSync()).activeSubmenu.map(_.selectedIndex) shouldBe Some(2)
+    runnerFrom(stateManager.getCurrentState.unsafeRunSync()).settingsSurfaceSelectedIndex shouldBe 2
   }
 
-  it should "keep submenu focus when hovering over the parent command runner" in {
-    val stateManager = createStateManager("CommandRunnerMouseSpec")
-
-    openLanguageSubmenu(stateManager)
-
-    val before = stateManager.getCurrentState.unsafeRunSync()
-    before.persisted.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
-
-    val point = commandRunnerItemPoint(before, 0)
-
-    stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
-
-    val after = stateManager.getCurrentState.unsafeRunSync()
-    after.persisted.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
-    runnerFrom(after).activeSubmenu.map(_.groupId) shouldBe Some("settings-language")
-  }
-
-  it should "focus a preview submenu row when the pointer moves into the preview" in {
-    val stateManager = createStateManager("CommandRunnerMouseSpec")
-
-    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
-
-    val before = stateManager.getCurrentState.unsafeRunSync()
-    before.commandRunnerSubmenuSurface.map(_.content) should matchPattern {
-      case Some(SurfaceContent.CommandPaletteSubmenu(_, "settings-workspace-layout", true)) =>
-    }
-
-    val point = commandRunnerSubmenuItemPoint(before, 0)
-
-    stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
-
-    val after = stateManager.getCurrentState.unsafeRunSync()
-    after.persisted.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
-    runnerFrom(after).activeSubmenu.map(_.groupId) shouldBe Some("settings-workspace-layout")
-    runnerFrom(after).activeSubmenu.map(_.selectedIndex) shouldBe Some(0)
-  }
-
-  it should "enter the preview submenu row clicked under the pointer" in {
-    val stateManager = createStateManager("CommandRunnerMouseSpec")
-
-    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
-
-    val before = stateManager.getCurrentState.unsafeRunSync()
-    val point  = commandRunnerSubmenuItemPoint(before, 0)
-
-    stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
-
-    val after   = stateManager.getCurrentState.unsafeRunSync()
-    val submenu = runnerFrom(after).activeSubmenu.getOrElse(fail("Expected focused submenu"))
-    after.persisted.focus shouldBe Focus.Surface(before.commandRunnerSubmenuSurface.get.id)
-    submenu.groupId shouldBe "settings-panel-pins"
-    submenu.parentGroupId shouldBe Some("settings-workspace-layout")
-  }
+  // issue #1059: hovering a not-yet-entered group's preview rows, and clicking within them to select or enter a
+  // child without a real click on the group itself, were both second-floating-surface interactions
+  // (RunnerSelectPreviewSubmenuItem, dispatched against a previewOnly CommandPaletteSubmenu surface). The capped
+  // group preview that replaces that surface is inline, static, and explicitly never independently
+  // selectable/focusable (SurfaceContentResolver's groupPreviewRows), so there is no mouse interaction left to test
+  // here -- entering a group is only ever a direct click/submit on the group's own row, covered by "execute the
+  // focused submenu row clicked under the pointer" below and the palette's ordinary row-click tests above.
 
   it should "execute the focused submenu row clicked under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
@@ -244,7 +196,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     openLanguageSubmenu(stateManager)
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    val point  = commandRunnerSubmenuItemPoint(before, 0)
+    val point  = commandRunnerItemPoint(before, 0)
 
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
 
@@ -261,10 +213,6 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
   private def commandRunnerItemPoint(state: AppState, displayedItemRow: Int): Point =
     val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
-    overlayItemPoint(state, surface.id, displayedItemRow)
-
-  private def commandRunnerSubmenuItemPoint(state: AppState, displayedItemRow: Int): Point =
-    val surface = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected command runner submenu surface"))
     overlayItemPoint(state, surface.id, displayedItemRow)
 
   private def commandRunnerCategoryPoint(state: AppState, categoryIndex: Int): Point =

@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.{CommandRegistry, CommandRunner, FileIntent}
+import com.serenity.command.{CommandCategory, CommandRegistry, CommandRunner, FileIntent}
 import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -180,13 +180,20 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     assertInside(contentRect, overlayRect, s"above-cursor overlay $overlayRect")
   }
 
-  it should "keep stacked below-cursor command surfaces inside tiny active editor content rectangles" in {
+  // issue #1059: a settings group drilled into from either entry point renders on the one command-runner surface
+  // now, so there is no second below-cursor surface to stack alongside it -- this now just confirms the one surface
+  // still stays clamped inside a tiny active editor content rectangle.
+  it should "keep the below-cursor command surface inside tiny active editor content rectangles" in {
     val tinyViewport = ViewportSize(32, 6)
     val cursor       = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
       .copy(editing = EditingState(cursors = List(cursor)))
-    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
+    given CommandRegistry = CommandRegistry.default
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .withActiveCategory(CommandCategory.Settings)
+      .enterSelectedGroup
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default.withLineNumbers(false).withGutter(false).withTextAreaInsets(TextAreaInsets()),
@@ -197,18 +204,13 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
           activeEditorPaneId = Some(PaneId(0)),
           paneOrder = List(PaneId(0))
         ),
-        focus = Focus.Surface(SurfaceId("command-runner-submenu"))
+        focus = Focus.Surface(SurfaceId("command-runner"))
       ),
       runtime = AppState.initial.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("command-runner"),
             SurfaceContent.CommandPalette(runner),
-            SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
-          ),
-          UiSurface(
-            SurfaceId("command-runner-submenu"),
-            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
             SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
           )
         )
@@ -219,12 +221,8 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val contentRect = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
     val stack       = layout.belowCursorOverlayStack
 
-    stack.map(_._1) shouldBe List(SurfaceId("command-runner"), SurfaceId("command-runner-submenu"))
+    stack.map(_._1) shouldBe List(SurfaceId("command-runner"))
     stack.foreach { case (surfaceId, rect) => assertInside(contentRect, rect, s"$surfaceId") }
-    val stackById   = stack.toMap
-    val runnerRect  = stackById(SurfaceId("command-runner"))
-    val submenuRect = stackById(SurfaceId("command-runner-submenu"))
-    runnerRect.bottom should be <= submenuRect.y
   }
 
   it should "reserve configured gaps before clamping oversized pinned side panels" in {

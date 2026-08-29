@@ -47,16 +47,6 @@ private[manager] object SurfaceGeometryKey:
         // Verified against every LayoutEngine consumer of CommandPalette content: none read the runner's
         // fields, only the surface's presence/type, so no runner-derived data belongs in the geometry key.
         "command-palette"
-      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
-        // LayoutEngine.calculateFloatingSurfaceHeight sizes this surface from the visible item count after the
-        // submenu's own search filter (see CommandPaletteSubmenu height case) -- that's the only content-derived
-        // input to its geometry.
-        val allItems = runner.submenuItems(groupId)
-        val itemCount = runner.activeSubmenu
-          .filter(_.groupId == groupId)
-          .map(_.filteredItems(allItems).size)
-          .getOrElse(allItems.size)
-        ("command-palette-submenu", groupId, previewOnly, itemCount)
       case SurfaceContent.StartPage(_) =>
         // LayoutEngine.calculateFloatingSurfaceHeight/Width for StartPage never read the page's content: height
         // is unconditionally maxHeight and width is content-independent. Without this, the page's selectedIndex

@@ -77,8 +77,7 @@ final private[manager] class StateManagerEffectHandlers(
   import surfaces.*
   import sessions.*
   import workflow.*
-  private val CommandRunnerSubmenuSurfaceId = SurfaceId("command-runner-submenu")
-  private val DoubleTapWindow               = 200.millis
+  private val DoubleTapWindow = 200.millis
 
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
     def requestOpenFile: IO[Unit] = requestOpenFileDialog
@@ -195,10 +194,6 @@ final private[manager] class StateManagerEffectHandlers(
       // original `if updatedRunner.isDefined` guard produced by skipping to the `case other => other` tail.
       case current if commandRunnerSurfaceId.contains(current.id) =>
         updatedRunner.fold(current)(runner => current.copy(content = SurfaceContent.CommandPalette(runner)))
-      case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
-        updatedRunner.fold(current)(runner =>
-          current.copy(content = SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly))
-        )
       case current @ UiSurface(_, SurfaceContent.ContextualToolbar(toolbarState), _, _) =>
         current.copy(
           content = SurfaceContent.ContextualToolbar(
@@ -344,11 +339,11 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def isCommandSurface(surface: UiSurface): Boolean =
     surface.content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
+      case SurfaceContent.CommandPalette(_) => true
       case SurfaceContent.GhostOverlay(content, _) =>
         content match
-          case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
-          case _                                                                                => false
+          case SurfaceContent.CommandPalette(_) => true
+          case _                                => false
       case _ => false
 
   /** A transient close-fade ghost, which is discarded rather than animated when motion is cancelled. */
@@ -998,26 +993,20 @@ final private[manager] class StateManagerEffectHandlers(
     state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case current @ UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) =>
         current.copy(content = SurfaceContent.CommandPalette(withFocusedKeymapConflict(runner, itemId, binding)))
-      case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly), _, _) =>
-        current.copy(
-          content = SurfaceContent.CommandPaletteSubmenu(
-            withFocusedKeymapConflict(runner, itemId, binding),
-            groupId,
-            previewOnly
-          )
-        )
       case current => current
     }))
 
   private def withFocusedKeymapConflict(runner: CommandRunner, itemId: String, binding: String): CommandRunner =
     runner.copy(
-      activeSubmenu = runner.activeSubmenu.map(
-        _.copy(
-          editingItemId = Some(itemId),
-          editingText = binding,
-          recordingItemId = None,
-          pendingGlobalHotkeyConflict = None,
-          pendingFocusedKeymapConflict = Some(itemId -> binding)
+      activeSettingsSurface = runner.activeSettingsSurface.map(surface =>
+        surface.copy(current =
+          SettingsPage.Editing(
+            groupId = surface.current.groupId,
+            itemId = itemId,
+            draftText = binding,
+            searchTerm = surface.current.searchTerm,
+            recording = Some(RecordingState(itemId, pendingFocusedKeymapConflict = Some(itemId -> binding)))
+          )
         )
       ),
       statusMessage = Some(
@@ -1038,13 +1027,20 @@ final private[manager] class StateManagerEffectHandlers(
                 current.copy(content =
                   SurfaceContent.CommandPalette(
                     runner.copy(
-                      activeSubmenu = runner.activeSubmenu.map(
-                        _.copy(
-                          editingItemId = Some(s"keymap-global-${action.configKey}"),
-                          editingText = binding,
-                          recordingItemId = None,
-                          pendingGlobalHotkeyConflict = Some(action -> binding),
-                          pendingFocusedKeymapConflict = None
+                      activeSettingsSurface = runner.activeSettingsSurface.map(surface =>
+                        surface.copy(current =
+                          SettingsPage.Editing(
+                            groupId = surface.current.groupId,
+                            itemId = s"keymap-global-${action.configKey}",
+                            draftText = binding,
+                            searchTerm = surface.current.searchTerm,
+                            recording = Some(
+                              RecordingState(
+                                s"keymap-global-${action.configKey}",
+                                pendingGlobalHotkeyConflict = Some(action -> binding)
+                              )
+                            )
+                          )
                         )
                       ),
                       statusMessage = Some(
@@ -1443,8 +1439,6 @@ final private[manager] class StateManagerEffectHandlers(
             val updatedSurfaces = state.runtime.uiSurfaces.map {
               case current if current.id == surface.id =>
                 current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
-                current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
               case current =>
                 current
             }
@@ -1490,8 +1484,6 @@ final private[manager] class StateManagerEffectHandlers(
             val updatedSurfaces = state.runtime.uiSurfaces.map {
               case current if current.id == surface.id =>
                 current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
-                current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
               case current =>
                 current
             }
@@ -1501,6 +1493,9 @@ final private[manager] class StateManagerEffectHandlers(
       case None =>
         state
 
+  /** Focuses the just-created preset's own editing group (issue #1059: renders on the one `CommandPalette` surface,
+    * like every other settings drill-in, rather than spawning a second floating one).
+    */
   private def focusCreatedPresetOptions(name: String, statusMessage: String): IO[Unit] =
     stateRef.update { state =>
       state.commandRunnerSurface match
@@ -1508,11 +1503,10 @@ final private[manager] class StateManagerEffectHandlers(
           surface.content match
             case SurfaceContent.CommandPalette(runner) =>
               val updatedRunner = runner.copy(
-                previewedGroupId = Some("settings-ui-presets"),
-                activeSubmenu = Some(
-                  CommandRunnerSubmenuState(
-                    groupId = "settings-preset-edit",
-                    parentGroupId = Some("settings-ui-presets")
+                activeSettingsSurface = Some(
+                  SettingsSurfaceState(
+                    SettingsPage.Group("settings-preset-edit"),
+                    List(SettingsPage.Group("settings-ui-presets", 2))
                   )
                 ),
                 submenuSelections = runner.submenuSelections + ("settings-ui-presets" -> 2),
@@ -1521,25 +1515,14 @@ final private[manager] class StateManagerEffectHandlers(
                 editingPresetName = Some(name.trim),
                 statusMessage = Some(statusMessage)
               )
-              val submenuSurface = UiSurface(
-                id = CommandRunnerSubmenuSurfaceId,
-                content = SurfaceContent.CommandPaletteSubmenu(
-                  updatedRunner,
-                  "settings-preset-edit",
-                  previewOnly = false
-                ),
-                presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-              )
-              val updatedSurfaces = state.runtime.uiSurfaces
-                .filterNot(_.id == CommandRunnerSubmenuSurfaceId)
-                .map {
-                  case current if current.id == surface.id =>
-                    current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-                  case current =>
-                    current
-                } :+ submenuSurface
+              val updatedSurfaces = state.runtime.uiSurfaces.map {
+                case current if current.id == surface.id =>
+                  current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+                case current =>
+                  current
+              }
               state.copy(
-                persisted = state.persisted.copy(focus = Focus.Surface(CommandRunnerSubmenuSurfaceId)),
+                persisted = state.persisted.copy(focus = Focus.Surface(surface.id)),
                 runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)
               )
             case _ =>
@@ -1940,14 +1923,6 @@ final private[manager] class StateManagerEffectHandlers(
         case surface @ UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) =>
           surface.copy(content =
             SurfaceContent.CommandPalette(runner.copy(optionSelections = runner.optionSelections ++ selections))
-          )
-        case surface @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly), _, _) =>
-          surface.copy(content =
-            SurfaceContent.CommandPaletteSubmenu(
-              runner.copy(optionSelections = runner.optionSelections ++ selections),
-              groupId,
-              previewOnly
-            )
           )
         case other => other
       }

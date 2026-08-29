@@ -2,7 +2,7 @@ package com.serenity
 
 import java.nio.file.Files
 
-import com.serenity.command.{CommandRegistry, CommandRunner, CommandRunnerSubmenuState}
+import com.serenity.command.{CommandRegistry, CommandRunner, RecordingState, SettingsPage, SettingsSurfaceState}
 import com.serenity.config.*
 import com.serenity.document.RenderedComment
 import com.serenity.input.FocusedInputTranslator
@@ -114,16 +114,20 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        activeSubmenu = Some(
-          CommandRunnerSubmenuState(
-            groupId = "keymap",
-            recordingItemId = Some("keymap-global-find")
+        activeSettingsSurface = Some(
+          SettingsSurfaceState(
+            SettingsPage.Editing(
+              groupId = "keymap",
+              itemId = "keymap-global-find",
+              draftText = "",
+              recording = Some(RecordingState("keymap-global-find"))
+            )
           )
         )
       )
     val surface = UiSurface(
       SurfaceId("command-runner"),
-      SurfaceContent.CommandPaletteSubmenu(runner, "keymap", previewOnly = false),
+      SurfaceContent.CommandPalette(runner),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = editorState.copy(
@@ -147,16 +151,20 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        activeSubmenu = Some(
-          CommandRunnerSubmenuState(
-            groupId = "keymap",
-            recordingItemId = Some("keymap-global-command_palette")
+        activeSettingsSurface = Some(
+          SettingsSurfaceState(
+            SettingsPage.Editing(
+              groupId = "keymap",
+              itemId = "keymap-global-command_palette",
+              draftText = "",
+              recording = Some(RecordingState("keymap-global-command_palette"))
+            )
           )
         )
       )
     val surface = UiSurface(
       SurfaceId("command-runner"),
-      SurfaceContent.CommandPaletteSubmenu(runner, "keymap", previewOnly = false),
+      SurfaceContent.CommandPalette(runner),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val state = editorState.copy(
@@ -402,22 +410,19 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set.empty)) shouldBe RunnerPreviousCategory
   }
 
-  it should "treat submenu focus as command-runner input rather than peek input" in {
+  it should "treat a drilled-in settings group's focus as command-runner input rather than peek input" in {
     val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-animation"))))
     val submenuState = editorState.copy(
       persisted = editorState.persisted.copy(
-        focus = Focus.Surface(SurfaceId("command-runner-submenu"))
+        focus = Focus.Surface(SurfaceId("command-runner"))
       ),
       runtime = editorState.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             SurfaceId("command-runner"),
             SurfaceContent.CommandPalette(runner),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          ),
-          UiSurface(
-            SurfaceId("command-runner-submenu"),
-            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )
