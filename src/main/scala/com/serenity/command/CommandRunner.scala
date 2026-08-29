@@ -3,7 +3,7 @@ package com.serenity.command
 import java.util.Locale
 
 import com.serenity.config.*
-import com.serenity.keystroke.KeyStrokeInfo
+import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.ui.presets.UiPreset
 
 final case class CommandRunnerSubmenuState(
@@ -50,7 +50,11 @@ final case class CommandRunner(
     editingPresetName: Option[String] = None,
     commandBindings: Map[String, String] = Map.empty,
     mode: CommandRunnerMode = CommandRunnerMode.Palette,
-    isTuiMode: Boolean = false
+    isTuiMode: Boolean = false,
+    // Never carried by `config` (see `AppState.Runtime.keyboardFidelityTier`'s doc) -- callers pass it separately from
+    // `state.runtime.keyboardFidelityTier`, mirroring `isTuiMode` above, so `CommandRunnerReducer.assignRecordedBinding`
+    // can warn when a just-recorded binding can't actually fire at the currently negotiated tier (issue #1194).
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
 ):
 
   def isSettingsSurface: Boolean = mode == CommandRunnerMode.Settings
@@ -431,8 +435,14 @@ final case class CommandRunner(
     *
     * `isTuiMode` is not carried by `config` (see `AppState.Runtime.isTuiMode`'s doc) -- callers pass it separately from
     * `state.runtime.isTuiMode` so settings rendering can hide/annotate controls that are inert in cell space.
+    * `keyboardFidelityTier` is likewise passed separately from `state.runtime.keyboardFidelityTier` (issue #1194).
     */
-  def activate(registry: CommandRegistry, config: AppConfig, isTuiMode: Boolean = false): CommandRunner =
+  def activate(
+    registry: CommandRegistry,
+    config: AppConfig,
+    isTuiMode: Boolean = false,
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
+  ): CommandRunner =
     copy(
       isActive = true,
       searchTerm = "",
@@ -441,7 +451,8 @@ final case class CommandRunner(
       optionSelections = CommandRunner.defaultOptionSelections(config),
       inputItems = CommandRunner.buildInputItems(config),
       commandBindings = CommandRunner.commandBindings(config),
-      isTuiMode = isTuiMode
+      isTuiMode = isTuiMode,
+      keyboardFidelityTier = keyboardFidelityTier
     ).syncEditMode
 
   /** Rebuild input items from a new config (called after a setting is applied) */

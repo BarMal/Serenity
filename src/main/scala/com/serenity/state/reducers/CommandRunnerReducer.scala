@@ -2,6 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.command.*
 import com.serenity.config.HotkeyTrigger
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.text.TextEditing
@@ -731,7 +732,8 @@ object CommandRunnerReducer:
     item: CommandSurfaceItem.InputItem,
     first: com.serenity.keystroke.KeyStrokeInfo
   ): ReducerResult =
-    val binding = HotkeyTrigger(first.keyType, first.character, first.modifiers).render
+    val trigger = HotkeyTrigger(first.keyType, first.character, first.modifiers)
+    val binding = trigger.render
     item.parse(binding) match
       case Some(intent) =>
         ReducerResult(
@@ -749,7 +751,7 @@ object CommandRunnerReducer:
                     pendingFocusedKeymapConflict = None
                   )
                 ),
-                statusMessage = None
+                statusMessage = bareModifierFidelityWarning(current, trigger, binding)
               )
           ),
           effects = List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
@@ -758,6 +760,26 @@ object CommandRunnerReducer:
         ReducerResult.noEffects(
           replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, binding))))
         )
+
+  /** Issue #1194: a bare-modifier double tap (`ctrl+ctrl`, ...) has no representation in xterm's `modifyOtherKeys` wire
+    * format -- there is no bare press/release event for a lone modifier in that protocol, only in the kitty keyboard
+    * protocol's flags -- so recording one on a TUI session capped at [[KeyboardFidelityTier.ModifyOtherKeys]] would
+    * otherwise silently record a binding that can never fire. GUI mode and a kitty-tier TUI session are always
+    * [[KeyboardFidelityTier.Full]], so this never fires there.
+    */
+  private def bareModifierFidelityWarning(
+    runner: CommandRunner,
+    trigger: HotkeyTrigger,
+    binding: String
+  ): Option[String] =
+    Option.when(
+      runner.isTuiMode &&
+        runner.keyboardFidelityTier == KeyboardFidelityTier.ModifyOtherKeys &&
+        trigger.isBareModifierChord
+    )(
+      s"\"$binding\" recorded, but won't fire -- this terminal can't send a bare-modifier key event " +
+        "at its negotiated keyboard protocol tier"
+    )
 
   private def submenuRecording(state: AppState): Boolean =
     currentRunner(state).exists(_.activeSubmenu.exists(_.recordingItemId.nonEmpty))

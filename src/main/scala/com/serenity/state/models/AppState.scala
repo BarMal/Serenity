@@ -2,6 +2,7 @@ package com.serenity.state.models
 
 import com.serenity.animation.{AnimationState, WindowSitter}
 import com.serenity.config.*
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.rope.Rope
@@ -258,7 +259,12 @@ final case class Runtime(
     // The buffer whose Markdown preview is showing in the TUI's spawned Swing window (issue #1113), or `None` when
     // that window is closed. Unused in GUI mode, where the in-app pinned panel (`PanelKind.MarkdownPreview`) is the
     // preview surface instead.
-    markdownPreviewWindowBuffer: Option[BufferId] = None
+    markdownPreviewWindowBuffer: Option[BufferId] = None,
+    // Never persisted -- set once at startup, mirroring `isTuiMode` above: `Full` in GUI mode (no protocol negotiation
+    // happens there) and from `TerminalShell.keyboardProtocolTier` in TUI mode (see `TuiRuntime.run`). Consumed by
+    // `CommandRunnerReducer.assignRecordedBinding` to warn when a just-recorded bare-modifier chord can't fire at the
+    // negotiated tier (issue #1194).
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
 )
 
 final case class AppState(
