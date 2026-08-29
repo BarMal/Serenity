@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.IO
 import com.serenity.command.{Command, CommandIntent, FileIntent, SessionIntent, UiPresetsIntent}
 import com.serenity.config.AppConfig
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.state.manager.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
@@ -95,7 +96,8 @@ object AppStartup:
     theme: Theme,
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default,
-    isTuiMode: Boolean = false
+    isTuiMode: Boolean = false,
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
   ): IO[AppState] =
     for
       sessionExists <- stateManager.sessionExists
@@ -119,7 +121,8 @@ object AppStartup:
           ),
           viewportSize = Some(initialViewportSize),
           nextSurfaceId = 1,
-          isTuiMode = isTuiMode
+          isTuiMode = isTuiMode,
+          keyboardFidelityTier = keyboardFidelityTier
         )
       )
 
@@ -141,7 +144,8 @@ object AppStartup:
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default,
     openPath: Option[Path] = None,
-    isTuiMode: Boolean = false
+    isTuiMode: Boolean = false,
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
   ): IO[AppState] =
     openPath match
       case Some(path) =>
@@ -153,7 +157,8 @@ object AppStartup:
               runtime = base.runtime.copy(
                 uiSurfaces = List.empty,
                 viewportSize = Some(initialViewportSize),
-                isTuiMode = isTuiMode
+                isTuiMode = isTuiMode,
+                keyboardFidelityTier = keyboardFidelityTier
               )
             )
           }
@@ -162,7 +167,14 @@ object AppStartup:
         yield state
       case None =>
         for
-          startState <- startPageState(stateManager, theme, initialViewportSize, appConfig, isTuiMode)
-          _          <- stateManager.updateState(_ => startState)
-          state      <- stateManager.getCurrentState
+          startState <- startPageState(
+            stateManager,
+            theme,
+            initialViewportSize,
+            appConfig,
+            isTuiMode,
+            keyboardFidelityTier
+          )
+          _     <- stateManager.updateState(_ => startState)
+          state <- stateManager.getCurrentState
         yield state

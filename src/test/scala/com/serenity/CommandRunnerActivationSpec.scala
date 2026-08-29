@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.TransitionKind
 import com.serenity.command.*
 import com.serenity.config.*
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.rope.Balance
 import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -369,4 +370,17 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     tuiRunner.isTuiMode shouldBe true
     settingsGroup(tuiRunner, "settings-typography").flatMap(_.hint) shouldBe
       Some("Typefaces for prose, code, and interface -- inert in TUI mode")
+  }
+
+  "CommandRunner.activate with keyboardFidelityTier" should "default to Full and carry the negotiated tier through (issue #1194)" in {
+    val defaultRunner = CommandRunner.empty.activate(registry, AppConfig.default)
+    defaultRunner.keyboardFidelityTier shouldBe KeyboardFidelityTier.Full
+
+    val cappedRunner = CommandRunner.empty.activate(
+      registry,
+      AppConfig.default,
+      isTuiMode = true,
+      keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
+    )
+    cappedRunner.keyboardFidelityTier shouldBe KeyboardFidelityTier.ModifyOtherKeys
   }

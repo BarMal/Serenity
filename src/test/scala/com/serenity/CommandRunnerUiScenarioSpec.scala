@@ -1,10 +1,12 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.{CommandRunner, CommandRunnerSubmenuState}
 import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, SurfaceContent}
+import com.serenity.state.models.{AppState, SurfaceContent, SurfaceId, UiSurface}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -110,6 +112,64 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.advanceToSettled().unsafeRunSync() shouldBe true
     driver.state.unsafeRunSync().commandRunnerSurface shouldBe None
   }
+
+  it should
+    "paint the tier-fidelity warning footer after recording a bare-modifier chord on a ModifyOtherKeys-tier TUI session" in {
+      val driver = UiScenarioDriver.create("keymap-tier-warning").unsafeRunSync()
+      driver
+        .updateState { state =>
+          val activated = CommandRunner.empty
+            .activate(
+              com.serenity.command.CommandRegistry.default,
+              state.persisted.config,
+              isTuiMode = true,
+              keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
+            )
+            .openSettings
+          val items = activated.submenuItems("settings-keymap")
+          val runner = activated.copy(
+            activeSubmenu = Some(
+              CommandRunnerSubmenuState(
+                "settings-keymap",
+                selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
+                recordingItemId = Some("keymap-global-find")
+              )
+            )
+          )
+          // A dedicated settings surface (`isSettingsSurface`) renders its submenu view directly on the one
+          // `CommandPalette` surface -- `CommandRunnerReducer.syncSubmenuSurface` never allocates a second
+          // `CommandPaletteSubmenu` surface for it (that shape is only for the floating group-preview submenu).
+          val surface = UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            com.serenity.state.models.SurfacePresentation.Floating(
+              state.activeCursorPosition,
+              com.serenity.state.models.SurfacePlacement.BelowCursor
+            )
+          )
+          state.copy(
+            persisted = state.persisted.copy(focus = com.serenity.state.models.Focus.Surface(surface.id)),
+            runtime = state.runtime.copy(
+              uiSurfaces = List(surface),
+              isTuiMode = true,
+              keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
+            )
+          )
+        }
+        .unsafeRunSync()
+
+      // Alt, not Ctrl: `ctrl+ctrl` is already the default global binding for ToggleCommandRunner, so recording it here
+      // would route through the (unrelated) global-hotkey-conflict flow instead of exercising the tier warning.
+      driver.dispatch(RunnerRecordBinding(KeyStrokeInfo(InputKey.Alt, None, Set.empty), 1_000L)).unsafeRunSync()
+      driver.dispatch(RunnerRecordBinding(KeyStrokeInfo(InputKey.Alt, None, Set.empty), 1_100L)).unsafeRunSync()
+
+      runnerFrom(driver.state.unsafeRunSync()).statusMessage shouldBe Some(
+        "\"alt+alt\" recorded, but won't fire -- this terminal can't send a bare-modifier key event " +
+          "at its negotiated keyboard protocol tier"
+      )
+      val frame = driver.renderFrame("keymap-tier-warning").unsafeRunSync()
+      frame.evidence.drawnText.map(_.text).mkString(" ") should include("won't fire")
+    }
 
   private def runnerFrom(state: AppState): com.serenity.command.CommandRunner =
     state.commandRunnerSurface

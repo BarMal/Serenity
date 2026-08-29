@@ -3,7 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import com.serenity.config.*
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -100,6 +100,18 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     HotkeyConfig.defaultBindingsFor("Mac OS X")(HotkeyAction.ToggleCommandRunner).map(_.render) should contain(
       "meta+meta"
     )
+  }
+
+  it should "flag a bare-modifier double-tap trigger as a chord with no non-modifier key" in {
+    HotkeyTrigger(InputKey.Ctrl, None, Set.empty).isBareModifierChord shouldBe true
+    HotkeyTrigger(InputKey.Alt, None, Set.empty).isBareModifierChord shouldBe true
+    HotkeyTrigger(InputKey.Shift, None, Set.empty).isBareModifierChord shouldBe true
+    HotkeyTrigger(InputKey.Meta, None, Set.empty).isBareModifierChord shouldBe true
+  }
+
+  it should "not flag an ordinary combo binding as a bare-modifier chord" in {
+    HotkeyTrigger(InputKey.Character, Some('f'), Set(Modifier.Ctrl)).isBareModifierChord shouldBe false
+    HotkeyTrigger(InputKey.Enter, None, Set(Modifier.Ctrl)).isBareModifierChord shouldBe false
   }
 
   it should "preserve core editing overrides when configuration is saved and reloaded" in {

@@ -16,6 +16,7 @@ import com.serenity.input.{
   Osc52Clipboard,
   SystemClipboard
 }
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Buffer}
@@ -96,10 +97,20 @@ object TuiRuntime:
             registerMarkdownPreviewCloseCallback = registerMarkdownPreviewCloseCallbackFn(previewWindowAvailability),
             openPath = openPath,
             systemClipboard = systemClipboard,
-            isTuiMode = true
+            isTuiMode = true,
+            keyboardFidelityTier = keyboardFidelityTier(terminalShell.keyboardProtocolTier)
           )
         yield ()
     }
+
+  /** Maps #1109's negotiated wire-protocol tier onto the state layer's fidelity concept (issue #1194) --
+    * `TerminalShell.KeyboardProtocolTier` is this method's only caller outside `ui.tui`, kept from leaking into
+    * `AppState`/`CommandRunner` themselves so neither depends on the terminal-negotiation package.
+    */
+  private def keyboardFidelityTier(tier: TerminalShell.KeyboardProtocolTier): KeyboardFidelityTier =
+    tier match
+      case TerminalShell.KeyboardProtocolTier.Kitty           => KeyboardFidelityTier.Full
+      case TerminalShell.KeyboardProtocolTier.ModifyOtherKeys => KeyboardFidelityTier.ModifyOtherKeys
 
   /** Holds the one [[TerminalRenderSurface]] live for the current viewport size, rebuilding it (and so resetting its
     * damage-diff history) whenever the size actually changes -- a terminal resize warrants a full repaint anyway, so

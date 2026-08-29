@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.*
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier, Modifier}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
 import com.serenity.ui.layout.Layout
@@ -324,6 +324,107 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.Keybindings(KeybindingsIntent.SetGlobalHotkey(HotkeyAction.Find, "k"))
     )
     runnerFrom(result.state).activeSubmenu.flatMap(_.recordingItemId) shouldBe None
+  }
+
+  /** Builds active state for the settings keymap submenu, mid-recording, at a chosen tier -- shared by the
+    * tier-fidelity warning specs below (issue #1194).
+    */
+  private def recordingState(
+    registry: CommandRegistry,
+    isTuiMode: Boolean,
+    keyboardFidelityTier: KeyboardFidelityTier
+  ): AppState =
+    val base = CommandRunner.empty
+      .activate(registry, AppConfig.default, isTuiMode = isTuiMode, keyboardFidelityTier = keyboardFidelityTier)
+      .openSettings
+    val items = base.submenuItems("settings-keymap")
+    val runner = base.copy(
+      activeSubmenu = Some(
+        CommandRunnerSubmenuState(
+          "settings-keymap",
+          selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
+          recordingItemId = Some("keymap-global-find")
+        )
+      )
+    )
+    AppState(
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Surface(SurfaceId("command-runner"))
+      ),
+      runtime = Runtime(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("command-runner"),
+            SurfaceContent.CommandPalette(runner),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        ),
+        isTuiMode = isTuiMode,
+        keyboardFidelityTier = keyboardFidelityTier
+      )
+    )
+
+  it should
+    "warn that a recorded bare-modifier double tap won't fire on a TUI session capped at the ModifyOtherKeys tier" in {
+      val registry = CommandRegistry.default
+      val state =
+        recordingState(registry, isTuiMode = true, keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys)
+
+      val first = CommandRunnerReducer.reduce(
+        RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), 1_000L),
+        state,
+        registry
+      )
+      val result = CommandRunnerReducer.reduce(
+        RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), 1_100L),
+        first.state,
+        registry
+      )
+
+      result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+        CommandIntent.Keybindings(KeybindingsIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+ctrl"))
+      )
+      runnerFrom(result.state).statusMessage shouldBe Some(
+        "\"ctrl+ctrl\" recorded, but won't fire -- this terminal can't send a bare-modifier key event " +
+          "at its negotiated keyboard protocol tier"
+      )
+    }
+
+  it should "not warn when a recorded bare-modifier double tap is captured at the full-fidelity kitty tier" in {
+    val registry = CommandRegistry.default
+    val state    = recordingState(registry, isTuiMode = true, keyboardFidelityTier = KeyboardFidelityTier.Full)
+
+    val first = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), 1_000L),
+      state,
+      registry
+    )
+    val result = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty), 1_100L),
+      first.state,
+      registry
+    )
+
+    runnerFrom(result.state).statusMessage shouldBe None
+  }
+
+  it should "not warn when a recorded binding is an ordinary combo, even under the ModifyOtherKeys tier" in {
+    val registry = CommandRegistry.default
+    val state = recordingState(registry, isTuiMode = true, keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys)
+
+    val pending = CommandRunnerReducer.reduce(
+      RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)), 1_000L),
+      state,
+      registry
+    )
+    val result = CommandRunnerReducer.reduce(RunnerBindingRecordingExpired(1_000L), pending.state, registry)
+
+    result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
+      CommandIntent.Keybindings(KeybindingsIntent.SetGlobalHotkey(HotkeyAction.Find, "ctrl+k"))
+    )
+    runnerFrom(result.state).statusMessage shouldBe None
   }
 
   it should "ignore an expiry event for a replaced pending recording" in {

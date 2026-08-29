@@ -12,6 +12,7 @@ import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, CursorMode, MotionFamily, RenderFpsTarget}
 import com.serenity.diagnostics.Trace
 import com.serenity.input.*
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.keystroke.events.{Event, UnhandledEvent}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
@@ -145,7 +146,8 @@ object AppRuntime:
     registerMarkdownPreviewCloseCallback: (() => Unit) => Unit = _ => (),
     openPath: Option[Path] = None,
     systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
-    isTuiMode: Boolean = false
+    isTuiMode: Boolean = false,
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
       for
@@ -161,7 +163,8 @@ object AppRuntime:
           initialViewportSize,
           appConfig,
           openPath,
-          isTuiMode
+          isTuiMode,
+          keyboardFidelityTier
         )
         inputRouter    <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         inputHandler   <- makeInputHandler(inputRouter)

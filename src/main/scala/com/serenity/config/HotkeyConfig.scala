@@ -62,6 +62,14 @@ final case class HotkeyTrigger(
       info.character == character &&
       info.modifiers == modifiers
 
+  /** True for a double-tap-a-lone-modifier binding (`ctrl+ctrl`, `meta+meta`, ...) -- `keyType` itself is the modifier
+    * key, not a regular key held down with modifiers. No CSI-u tier below
+    * [[com.serenity.keystroke.KeyboardFidelityTier.Full]] can represent a bare modifier press/release event, so this
+    * predicate is what `CommandRunnerReducer`'s tier-fidelity warning keys off.
+    */
+  def isBareModifierChord: Boolean =
+    Set(InputKey.Ctrl, InputKey.Alt, InputKey.Shift, InputKey.Meta).contains(keyType)
+
   def render: String =
     val modifierParts =
       List(

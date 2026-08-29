@@ -97,14 +97,30 @@ object TerminalShell:
     *     bare-modifier press/release for double-tap bindings.
     *   - [[ModifyOtherKeys]]: no kitty response arrived, so xterm's `modifyOtherKeys` mode 2 with `formatOtherKeys=1`
     *     was enabled instead. Combo keys (Ctrl+Shift+letter, Ctrl+Enter) decode, but no bare-modifier events exist in
-    *     this protocol -- double-tap bindings stay inert.
+    *     this protocol -- double-tap bindings stay inert (issue #1194 surfaces a recording-time warning for this, see
+    *     `CommandRunnerReducer.bareModifierFidelityWarning`).
     *
-    * Caution, here be imagine dragons: unlike [[Kitty]], [[ModifyOtherKeys]] is never confirmed -- xterm's
-    * `modifyOtherKeys`/`formatOtherKeys` resources have no query/response this codebase could verify against (the
-    * primary xterm `ctlseqs` documentation was unreachable while implementing this; the escape sequences below are
-    * corroborated only via secondary sources). A terminal that ignores both negotiations entirely (today's Tier 3,
-    * #1108's existing legacy decoding) is indistinguishable from one that silently accepted the `ModifyOtherKeys`
-    * request but never sends a CSI-u sequence -- this field is therefore a ceiling on fidelity, not a guarantee.
+    * Issue #1194 verified the `[>4;2m` / `[>4;1f` enable sequences (and their `[>4;0m` / `[>4;0f` disable counterparts)
+    * below against xterm's own source tree -- `ctlseqs.txt` from github.com/ThomasDickey/xterm-snapshots (the upstream
+    * repo the `invisible-island.net/xterm/ctlseqs` reference page is generated from; that page itself was still
+    * unreachable through this environment's egress proxy at verification time, same as when this was first implemented
+    * for #1109). It confirms: `Pp = 4` selects `modifyOtherKeys` for `XTMODKEYS` (`CSI > Pp ; Pv m`) and
+    * `formatOtherKeys` for `XTFMTKEYS` (`CSI > Pp ; Pv f`), and mode 2 plus `formatOtherKeys=1` is exactly the
+    * combination that shapes modified-key sequences as CSI-u (`CSI keycode ; modifiers u`) rather than xterm's older
+    * `CSI 27 ; modifier ; keycode ~` encoding -- no discrepancy found, no code change needed here.
+    *
+    * That same source also turned up something #1109 didn't know to look for: xterm does define a query/response for
+    * both resources -- `XTQMODKEYS` (`CSI ? Pp m`) and `XTQFMTKEYS` (`CSI ? Pp g`), each answered with an `XTMODKEYS`/
+    * `XTFMTKEYS`-shaped reply carrying the resource's current value. That is a real query/response mechanism the way
+    * kitty's `CSI ? u` is, so in principle [[ModifyOtherKeys]] no longer has to be an inherently-unconfirmable tier.
+    *
+    * Caution, here be imagine dragons: this codebase does not send that query or parse its reply --
+    * [[negotiateKeyboardProtocol]] only pushes the enable sequences and never confirms xterm actually accepted them, so
+    * nothing above changes in practice yet. A terminal that ignores both negotiations entirely (today's Tier 3, #1108's
+    * existing legacy decoding) therefore remains indistinguishable from one that silently accepted the
+    * `ModifyOtherKeys` request but never sends a CSI-u sequence -- this field is still a ceiling on fidelity, not a
+    * guarantee. Wiring `XTQMODKEYS`/`XTQFMTKEYS` into the negotiation ladder to close that gap is a real follow-up, not
+    * attempted here.
     */
   enum KeyboardProtocolTier:
     case Kitty, ModifyOtherKeys
