@@ -12,10 +12,13 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerEditorCapability(
-    dependencies: EditorCapabilityPort
+    stateRef: cats.effect.Ref[IO, AppState],
+    lspQueue: LspEffectQueue,
+    bufferAnimationsRef: cats.effect.Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
+    operations: StateManagerOperationBoundary,
+    animations: AnimationChoreography
 )(using balance: com.serenity.rope.Balance):
 
-  import dependencies.*
   def getCurrentState: IO[AppState] = stateRef.get
 
   def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
@@ -63,7 +66,7 @@ final private[manager] class StateManagerEditorCapability(
               windowSitter = state.runtime.windowSitter.advance
             )
           )
-          val newState = advanceSurfaceAnimations(stateWithAdvancedBuffers)
+          val newState = animations.advanceSurfaceAnimations(stateWithAdvancedBuffers)
           for
             updatedBufferAnimations <- bufferAnimationsRef.updateAndGet(_.map {
               case (id, animations) =>
@@ -194,7 +197,7 @@ final private[manager] class StateManagerEditorCapability(
     stateRef.update { state =>
       val updated = EditorState.removePane(state, paneId)
       if state.persisted.layout.editorPanes.size == 1 && state.persisted.layout.editorPanes.contains(paneId) then
-        ensureCommandRunnerSurface(updated)
+        operations.ensureCommandRunnerSurface(updated)
       else updated
     }
 
