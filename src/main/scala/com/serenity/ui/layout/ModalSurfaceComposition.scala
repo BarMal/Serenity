@@ -97,7 +97,10 @@ object ModalSurfaceComposition:
     ResolvedSurfaceComposition(
       bounds = bounds,
       intrinsicSize = SurfaceIntrinsicSize(
-        width = ("unsaved changes" :: workflow.currentBufferLabel :: actions.map(_._2)).map(_.length.toDouble).max,
+        // The two literal strings prepended below guarantee this list is always non-empty.
+        width = ("unsaved changes" :: workflow.currentBufferLabel :: actions.map(_._2))
+          .map(_.length.toDouble)
+          .foldLeft(Double.MinValue)(_ max _),
         height = 2 + actions.length * actionRows
       ),
       paintBoxes = clippedTextBoxes ++ clippedActionBoxes,

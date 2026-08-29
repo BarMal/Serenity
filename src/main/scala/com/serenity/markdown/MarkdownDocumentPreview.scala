@@ -411,8 +411,9 @@ object MarkdownDocumentPreview:
       .distinct
     mappedRows match
       case rows if rows.nonEmpty =>
-        val firstMapped = rows.min
-        val lastMapped  = rows.max
+        // rows.nonEmpty is checked by the guard above, so these folds always see a real row.
+        val firstMapped = rows.foldLeft(Int.MaxValue)(_ min _)
+        val lastMapped  = rows.foldLeft(Int.MinValue)(_ max _)
         val first =
           Iterator
             .iterate(firstMapped - 1)(_ - 1)
@@ -897,7 +898,9 @@ object MarkdownDocumentPreview:
           .iterate(index)(_ + 1)
           .takeWhile(lineIndex => lineIndex < lines.length && isTableRow(lines(lineIndex)))
           .toVector
-        val endIndex     = rows.last
+        // rows always includes `index` itself (isTableRow(lines(index)) holds per the Option.when guard),
+        // so lastOption is always Some; index is the safe fallback for the unreachable None branch.
+        val endIndex     = rows.lastOption.getOrElse(index)
         val renderedRows = renderInlineTable(rows.map(lines))
         InlineTableBlock(endIndex, sourceMappedTableRows(rows, renderedRows))
       }

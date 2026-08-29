@@ -22,10 +22,12 @@ object FlowAnimationBuilder:
   ): Map[CharacterKey, AnimatedCell] =
     if cells.isEmpty then Map.empty
     else
-      val minCol = cells.keys.map(_.column).min
-      val maxCol = cells.keys.map(_.column).max
-      val minRow = cells.keys.map(_.line).min
-      val maxRow = cells.keys.map(_.line).max
+      // cells is non-empty here (guarded by the isEmpty check above), so these folds always see
+      // at least one element and the Int.MaxValue/MinValue seeds are never the reported result.
+      val minCol = cells.keys.map(_.column).foldLeft(Int.MaxValue)(_ min _)
+      val maxCol = cells.keys.map(_.column).foldLeft(Int.MinValue)(_ max _)
+      val minRow = cells.keys.map(_.line).foldLeft(Int.MaxValue)(_ min _)
+      val maxRow = cells.keys.map(_.line).foldLeft(Int.MinValue)(_ max _)
 
       cells.map { (key, cell) =>
         val offset = (direction, sweep) match
