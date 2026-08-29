@@ -23,7 +23,7 @@ import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.*
 import org.w3c.dom.Document
 import org.xhtmlrenderer.resource.ImageResource
-import org.xhtmlrenderer.swing.{AWTFSImage, ImageResourceLoader, Java2DRenderer, SwingReplacedElementFactory}
+import org.xhtmlrenderer.swing.{AWTFSImageFactory, ImageResourceLoader, Java2DRenderer, SwingReplacedElementFactory}
 import org.xml.sax.InputSource
 
 object MarkdownDocumentPreview:
@@ -833,7 +833,7 @@ object MarkdownDocumentPreview:
         ImageResourceLoader.NO_OP_REPAINT_LISTENER,
         new ImageResourceLoader:
           override def get(uri: String, width: Int, height: Int): ImageResource =
-            ImageResource(uri, AWTFSImage.createImage(resourcePolicy.imageFor(uri)))
+            ImageResource(uri, AWTFSImageFactory.createImage(resourcePolicy.imageFor(uri)))
       ):
 
     override def createReplacedElement(
