@@ -80,21 +80,24 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   "SpellChecker dictionary cache" should "hold at most one entry per normalized dictionary path across repeated edits" in {
+    // Scoped to this one dictionary's own cache entry (`dictionaryCacheEntryCount`), not `DictionaryCache`'s total
+    // size: `DictionaryCache` is a single process-wide map every spec exercising `loadDictionarySnapshot`/`check`
+    // shares, and sbt/ScalaTest run different suites concurrently in the same JVM by default -- a size-based
+    // assertion would spuriously fail whenever an unrelated, concurrently-running suite's own (different-path)
+    // dictionary load happened to land its own cache entry inside this test's window.
     val dictionary = writeDic("serenity-bounded-cache", List("hello"))
     val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
 
-    val before = SpellChecker.dictionaryCacheSize
+    SpellChecker.dictionaryCacheEntryCount(dictionary) shouldBe 0
     SpellChecker.loadDictionarySnapshot(config)
-    val afterFirstLoad = SpellChecker.dictionaryCacheSize
+    SpellChecker.dictionaryCacheEntryCount(dictionary) shouldBe 1
 
     (1 to 5).foreach { revision =>
       Files.writeString(dictionary, s"1\nrevision$revision", StandardCharsets.UTF_8)
       Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + revision * 10_000L))
       SpellChecker.loadDictionarySnapshot(config)
+      SpellChecker.dictionaryCacheEntryCount(dictionary) shouldBe 1
     }
-
-    afterFirstLoad shouldBe before + 1
-    SpellChecker.dictionaryCacheSize shouldBe afterFirstLoad
   }
 
   it should "pick up a dictionary's latest content after repeated edits despite the bounded cache" in {

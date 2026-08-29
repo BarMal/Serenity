@@ -16,7 +16,7 @@ main/scala/com/serenity/config/ConfigManager.scala	method configToString	184
 main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	986
 main/scala/com/serenity/rope/Rope.scala	file length	647
 main/scala/com/serenity/session/SessionState.scala	file length	1265
-main/scala/com/serenity/spellcheck/SpellChecker.scala	file length	895
+main/scala/com/serenity/spellcheck/SpellChecker.scala	file length	905
 main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	748
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2631
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	909

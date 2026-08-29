@@ -52,6 +52,12 @@ object TuiRuntime:
     hasDisplay: Boolean,
     sessionRootOverride: Option[Path] = None
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
+    // #1213: a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way AWT does for a focused Swing
+    // window, so any hotkey still at its macOS/Cmd-conditioned platform default (Quit, Save, ...) is rewritten here
+    // to the Ctrl-based binding every terminal actually forwards, before that config reaches the input translator or
+    // the running session's own state -- see `HotkeyConfig.forTerminalUse`.
+    val terminalConfig =
+      appConfig.withHotkeyConfig(appConfig.inputConfig.hotkeyConfig.forTerminalUse)
     (shell, markdownPreviewWindowResource(hasDisplay)).tupled.use {
       case (terminalShell, previewWindowAvailability) =>
         for
@@ -79,12 +85,12 @@ object TuiRuntime:
             checkResize = terminalShell.checkResize,
             renderFull = renderFullFn(surfaceHolder, terminalShell, previewWindowAvailability),
             renderCursorOnly = renderCursorOnlyFn(surfaceHolder, terminalShell, previewWindowAvailability),
-            appConfig = appConfig,
+            appConfig = terminalConfig,
             registerFocusCallback = cb => inputHandlerHolder.get().foreach(_.registerFocusCallback(cb)),
             makeStateManager = Some(logger =>
               StateManager.apply(
                 logger,
-                initialConfig = appConfig,
+                initialConfig = terminalConfig,
                 sessionRootOverride = sessionRootOverride,
                 configPersistencePath = configPersistencePath,
                 // Device scale and preferred window size are Swing-only concepts: a terminal cell grid has no device

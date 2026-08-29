@@ -239,6 +239,27 @@ final case class HotkeyConfig(
       .fromBindings(bindings + (action -> HotkeyConfig.defaultBindings.getOrElse(action, Nil)))
       .fold(_ => this, identity)
 
+  /** Rewrites every binding still at the macOS/Cmd-conditioned platform default to the Ctrl-based binding every
+    * terminal actually forwards (issue #1213): a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way
+    * AWT does for a focused Swing window -- macOS's own Terminal.app/iTerm2 intercept Cmd+Q as their own "quit the
+    * terminal" shortcut before it ever reaches a running program's stdin, and `TerminalInputDecoder` never produces
+    * `Modifier.Meta` from a plain keystroke either (only from a kitty-protocol-negotiated terminal actually choosing to
+    * report it). An action the user customized away from its platform default is left untouched here -- it was
+    * reachable enough for them to have bound it deliberately.
+    *
+    * Compares against `defaultBindingsFor`'s macOS output specifically -- never `defaultBindings`, which reads the
+    * *running* JVM's `os.name` -- so this rewrite behaves identically whether Serenity's TUI is actually running on
+    * macOS (the case it exists for) or is merely constructing/testing a mac-flavored `HotkeyConfig` from Linux CI.
+    */
+  def forTerminalUse: HotkeyConfig =
+    val macDefaults = HotkeyConfig.validatedBindings(HotkeyConfig.defaultBindingsFor("Mac OS X"))
+    val standard    = HotkeyConfig.terminalDefaultBindings
+    HotkeyConfig(bindings.map {
+      case (action, triggers) if macDefaults.get(action).contains(triggers) =>
+        action -> standard.getOrElse(action, triggers)
+      case unchanged => unchanged
+    })
+
 object HotkeyConfig:
 
   def forOs(osName: String): HotkeyConfig =
@@ -246,6 +267,14 @@ object HotkeyConfig:
 
   def defaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] =
     validatedBindings(defaultBindingsFor(System.getProperty("os.name", "")))
+
+  /** The Ctrl-based bindings [[defaultBindingsFor]] resolves to on any non-macOS `osName` -- what
+    * [[HotkeyConfig.forTerminalUse]] rewrites a still-at-default macOS/Cmd binding to (issue #1213). Any non-mac string
+    * works here; a literal one names the intent rather than relying on `defaultBindingsFor`'s `isMac` check failing on
+    * an empty string.
+    */
+  def terminalDefaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] =
+    validatedBindings(defaultBindingsFor("linux"))
 
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
     val isMac           = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
