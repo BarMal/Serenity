@@ -11,7 +11,7 @@ import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.{PreferredWindowSize, SpellCheckConfig}
 import com.serenity.diagnostics.Trace
 import com.serenity.io.FileManager
-import com.serenity.keystroke.events.{Direction, Event}
+import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
@@ -20,7 +20,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, ModalEventReducer}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent, WorkspaceNodeId}
+import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
@@ -489,7 +489,6 @@ private[manager] class StateManagerComposition(
     runtimeStateRef,
     runtimeLspQueue,
     runtimeBufferAnimationsRef,
-    operations,
     animations
   )
 
@@ -607,18 +606,12 @@ private[manager] class StateManagerComposition(
     new StateManagerEventPipeline(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort, operations)
   private val viewport =
     new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, events, effects)
-  private val files = new StateManagerFileCapability(stateRef, editor, effects)
+  private val files = new StateManagerFileCapability(stateRef, effects)
 
-  export editor.{focusPaneInDirection as _, resizePaneSplit as _, *}
+  export editor.*
   export events.applyEvent
   export files.*
   export viewport.*
-
-  def resizePaneSplit(splitId: WorkspaceNodeId, ratio: Double): IO[Unit] =
-    editor.resizePaneSplit(splitId, ratio)
-
-  def focusPaneInDirection(direction: Direction): IO[Unit] =
-    editor.focusPaneInDirection(direction)
 
   def lspEffectStream: Stream[IO, LspEffect] =
     lspQueue.stream
