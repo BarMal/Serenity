@@ -42,6 +42,13 @@ object TerminalInputDecoder:
       */
     final case class ModifierEdge(modifier: Modifier, pressed: Boolean) extends DecodedToken
 
+    /** Terminal focus reporting (`CSI ?1004h`, #1171): `CSI I` on focus-in, `CSI O` on focus-out. `TerminalShell`
+      * enables the mode on acquire and disables it on release; `TerminalInputHandler` routes this token to the
+      * runtime's focus callback rather than the ordinary key/event queue, mirroring how the Swing window's
+      * focus-lost/focus-gained listeners feed [[com.serenity.app.AppRuntime.onWindowFocusChanged]].
+      */
+    final case class FocusChanged(focused: Boolean) extends DecodedToken
+
   /** @param tokens
     *   tokens fully decoded from the front of `bytes`, in order.
     * @param remainder
@@ -57,6 +64,13 @@ object TerminalInputDecoder:
   private val Ss3: Byte   = 'O'.toByte
   private val Tilde: Byte = '~'.toByte
   private val CsiU: Byte  = 'u'.toByte
+
+  /** Terminal focus reporting (`CSI ?1004h`): the terminal sends a bare `CSI I` on focus-in and `CSI O` on focus-out --
+    * no params, so gated on `params.isEmpty` in [[decodeCsi]] to avoid colliding with a param-carrying sequence that
+    * happened to share a final byte (none do today, but the guard costs nothing and documents the intent).
+    */
+  private val FocusIn: Byte  = 'I'.toByte
+  private val FocusOut: Byte = 'O'.toByte
 
   private val PasteStartParams              = "200"
   private val PasteStartMarker: Array[Byte] = Array(Esc, Csi, '2'.toByte, '0'.toByte, '0'.toByte, Tilde)
@@ -132,6 +146,9 @@ object TerminalInputDecoder:
         else if params.headOption.contains('<') && (finalByte == 'M'.toByte || finalByte == 'm'.toByte) then
           decodeSgrMouse(params.tail, finalByte == 'm'.toByte, j + 1)
         else if finalByte == CsiU then Step.Complete(decodeCsiU(params), j + 1)
+        else if params.isEmpty && finalByte == FocusIn then Step.Complete(List(DecodedToken.FocusChanged(true)), j + 1)
+        else if params.isEmpty && finalByte == FocusOut then
+          Step.Complete(List(DecodedToken.FocusChanged(false)), j + 1)
         else Step.Complete(List(decodeCsiKey(params, finalByte)), j + 1)
 
   @annotation.tailrec

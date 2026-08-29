@@ -1,6 +1,7 @@
 package com.serenity.ui.tui
 
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.duration.*
 
@@ -29,10 +30,18 @@ final class TerminalInputHandler private (
     inputRouter: InputRouter[IO, Event],
     queue: Queue[IO, Option[TerminalInputHandler.QueuedInput]],
     readerFiber: FiberIO[Unit],
-    disableModes: IO[Unit]
+    disableModes: IO[Unit],
+    focusCallback: AtomicReference[Option[Boolean => Unit]]
 ) extends InputHandler[IO]:
 
   import TerminalInputHandler.QueuedInput
+
+  /** Satisfies `AppRuntime.run`'s `registerFocusCallback: (Boolean => Unit) => Unit` capability for TUI mode (#1171):
+    * the read loop's own decoding of `CSI I`/`CSI O` (terminal focus reporting, `CSI ?1004h`, enabled by
+    * `TerminalShell`) invokes whatever is registered here, mirroring how the Swing window's focus listeners drive the
+    * same capability in `Main`'s GUI wiring.
+    */
+  def registerFocusCallback(callback: Boolean => Unit): Unit = focusCallback.set(Some(callback))
 
   def keyStrokeInfoStream: Stream[IO, KeyStrokeInfo] =
     orderedInputStream.collect { case QueuedInput.Key(info) => info }
@@ -128,6 +137,7 @@ object TerminalInputHandler:
       latestMovement   <- Ref.of[IO, Option[MovementSlot]](None)
       remainder        <- Ref.of[IO, Array[Byte]](Array.emptyByteArray)
       modifierTapState <- Ref.of[IO, ModifierTapState](ModifierTapState.empty)
+      focusCallback    <- IO(new AtomicReference[Option[Boolean => Unit]](None))
       _                <- enableModes(terminal)
       fiber <- readLoop(
         terminal.reader(),
@@ -136,9 +146,10 @@ object TerminalInputHandler:
         remainder,
         modifierTapState,
         systemClipboard,
-        seedBytes
+        seedBytes,
+        focusCallback
       ).start
-    yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal))
+    yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal), focusCallback)
 
   private enum ReadOutcome:
     case Bytes(value: Array[Byte])
@@ -174,7 +185,8 @@ object TerminalInputHandler:
     remainder: Ref[IO, Array[Byte]],
     modifierTapState: Ref[IO, ModifierTapState],
     systemClipboard: SystemClipboard[IO],
-    seedBytes: Array[Byte]
+    seedBytes: Array[Byte],
+    focusCallback: AtomicReference[Option[Boolean => Unit]]
   ): IO[Unit] =
 
     def processTokens(tokens: List[DecodedToken]): IO[Unit] =
@@ -191,6 +203,7 @@ object TerminalInputHandler:
         // individual keystrokes (which would fire hotkeys on embedded control characters).
         systemClipboard.writeText(text) >> latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(Paste)))
       case DecodedToken.ModifierEdge(modifier, pressed) => processModifierEdge(modifier, pressed)
+      case DecodedToken.FocusChanged(focused)           => IO(focusCallback.get().foreach(_.apply(focused)))
 
     // Drives ModifierTapDetector exactly as SwingInputHandler drives it over AWT modifier press/release events, so
     // `ctrl+ctrl`-style bindings behave identically in both input modes -- only reachable when the terminal answered

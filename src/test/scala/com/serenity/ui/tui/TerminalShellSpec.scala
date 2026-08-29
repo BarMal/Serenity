@@ -87,6 +87,37 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers:
     written should include(cursorHidden)
   }
 
+  // ===Terminal focus reporting (CSI ?1004h/l, #1171): enabled on acquire, restored (disabled) on release, same as
+  // every other terminal mode this shell owns.===
+
+  private val focusReportingEnable  = s"$esc[?1004h"
+  private val focusReportingDisable = s"$esc[?1004l"
+
+  "acquiring the shell" should "enable terminal focus reporting" in {
+    val harness = dumbTerminal()
+
+    TerminalShell.forTerminal(harness.terminal).use(_ => IO.unit).unsafeRunSync()
+
+    harness.written should include(focusReportingEnable)
+  }
+
+  "releasing the shell on clean quit" should "disable terminal focus reporting" in {
+    val harness = dumbTerminal()
+
+    TerminalShell.forTerminal(harness.terminal).use(_ => IO.unit).unsafeRunSync()
+
+    harness.written should include(focusReportingDisable)
+  }
+
+  "releasing the shell after an escaping IO.raiseError" should "still disable terminal focus reporting" in {
+    val harness = dumbTerminal()
+    val boom    = new RuntimeException("boom")
+
+    TerminalShell.forTerminal(harness.terminal).use(_ => IO.raiseError[Unit](boom)).attempt.unsafeRunSync()
+
+    harness.written should include(focusReportingDisable)
+  }
+
   "releasing the shell on clean quit" should "restore raw-mode attributes and exit the alternate screen" in {
     val harness  = dumbTerminal()
     val original = attributesSnapshot(harness.terminal)

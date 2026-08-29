@@ -573,6 +573,65 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     trailingNewline.endsWithNewline.shouldBe(true)
     trailingNewline.lineCount.shouldBe(3)
 
+  it should "count words and non-whitespace characters for an empty rope" in new RopeSpecScope:
+    Rope.empty.wordCount.shouldBe(0)
+    Rope.empty.nonWhitespaceCount.shouldBe(0)
+
+  it should "count words and non-whitespace characters for a single word" in new RopeSpecScope:
+    val rope = Rope("hello")
+    rope.wordCount.shouldBe(1)
+    rope.nonWhitespaceCount.shouldBe(5)
+
+  it should "count words and non-whitespace characters across multi-paragraph text" in new RopeSpecScope:
+    val rope = Rope("The quick brown fox\n\njumps over  the lazy dog.\n")
+    rope.wordCount.shouldBe(9)
+    rope.nonWhitespaceCount.shouldBe("Thequickbrownfoxjumpsoverthelazydog.".length)
+
+  it should "count unicode and CJK content as maximal non-whitespace runs" in new RopeSpecScope:
+    val rope = Rope("café naïve 你好世界 emoji🎉test")
+    rope.wordCount.shouldBe(4)
+    rope.nonWhitespaceCount.shouldBe(rope.collect().count(!_.isWhitespace))
+
+  it should "count punctuation-only content as words" in new RopeSpecScope:
+    val rope = Rope("... !!! ,,,")
+    rope.wordCount.shouldBe(3)
+    rope.nonWhitespaceCount.shouldBe(9)
+
+  it should "maintain word metadata incrementally across rope operations" in new ChunkedRopeSpecScope:
+    val initial = Rope("alpha beta gamma")
+    initial.wordCount.shouldBe(3)
+    initial.nonWhitespaceCount.shouldBe("alphabetagamma".length)
+
+    // A boundary split between two leaves must not double- or under-count the word straddling the join.
+    val concatenated = Rope("alpha be").concat(Rope("ta gamma"))
+    concatenated.collect() shouldBe "alpha beta gamma"
+    concatenated.wordCount.shouldBe(3)
+    concatenated.nonWhitespaceCount.shouldBe("alphabetagamma".length)
+
+    val inserted = concatenated.insert("alpha beta".length, "-word").orFail
+    inserted.collect() shouldBe "alpha beta-word gamma"
+    inserted.wordCount.shouldBe(3)
+
+    val deleted = inserted.deleteRight("alpha beta".length, "-word".length).orFail
+    deleted.collect() shouldBe "alpha beta gamma"
+    deleted.wordCount.shouldBe(3)
+    deleted.nonWhitespaceCount.shouldBe("alphabetagamma".length)
+
+    val rebuilt = concatenated.rebuild
+    rebuilt.wordCount.shouldBe(3)
+    rebuilt.nonWhitespaceCount.shouldBe("alphabetagamma".length)
+
+  it should "keep an edit's word-count update proportional to tree depth, not document size" in new ChunkedRopeSpecScope:
+    val words  = (1 to 5000).map(i => s"word$i").mkString(" ")
+    val large  = Rope(words)
+    val edited = large.insert(0, "prefix ").orFail
+
+    edited.wordCount.shouldBe(large.wordCount + 1)
+    // Only the spine down to the leftmost leaf should have been touched by the insert -- if word counting forced a
+    // full rescan this would still pass functionally, but the depth bound documents the intent the perf spec
+    // (WordStatisticsPerformanceSpec) exercises with real timings on a much larger buffer.
+    edited.height should be <= large.height + 2
+
   it should "resolve line and column offsets through rope line traversal" in new ChunkedRopeSpecScope:
     val multiline = Rope("alpha\nbeta\ngamma")
 

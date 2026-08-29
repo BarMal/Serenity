@@ -1,6 +1,6 @@
 package com.serenity.ui.tui
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, PipedInputStream, PipedOutputStream}
 import java.nio.charset.StandardCharsets
 
 import scala.concurrent.duration.*
@@ -170,6 +170,55 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       new DumbTerminal("test", "xterm-256color", blockingForever(), new ByteArrayOutputStream(), StandardCharsets.UTF_8)
     terminal.setSize(new Size(80, 24))
     terminal
+
+  // ===Terminal focus reporting (CSI ?1004h/l, #1171): CSI I/CSI O decode to a side-channel focus callback, not the
+  // ordinary key/event streams -- fed through a live pipe so bytes only arrive after the callback is registered,
+  // avoiding a race against the read loop's own start.===
+
+  private def livePipeTerminal(): (DumbTerminal, PipedOutputStream) =
+    val pipeIn  = new PipedInputStream()
+    val pipeOut = new PipedOutputStream(pipeIn)
+    val terminal =
+      new DumbTerminal("test", "xterm-256color", pipeIn, new ByteArrayOutputStream(), StandardCharsets.UTF_8)
+    terminal.setSize(new Size(80, 24))
+    (terminal, pipeOut)
+
+  private def focusCallbackResultFor(inputAfterRegistration: Array[Byte]): Option[Boolean] =
+    val (terminal, pipeOut) = livePipeTerminal()
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard)
+      flag      <- cats.effect.Ref.of[IO, Option[Boolean]](None)
+      _         <- IO(handler.registerFocusCallback(focused => flag.set(Some(focused)).unsafeRunAndForget()))
+      _         <- IO(pipeOut.write(inputAfterRegistration)) >> IO(pipeOut.flush())
+      _         <- IO.sleep(100.millis)
+      value     <- flag.get
+    yield value
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out waiting for focus callback"))
+
+  "a terminal focus-in escape sequence (CSI I)" should "invoke the registered focus callback with true" in {
+    focusCallbackResultFor(csi("I")) shouldBe Some(true)
+  }
+
+  "a terminal focus-out escape sequence (CSI O)" should "invoke the registered focus callback with false" in {
+    focusCallbackResultFor(csi("O")) shouldBe Some(false)
+  }
+
+  "a focus-out sequence" should "not appear on the ordinary event stream" in {
+    val (terminal, pipeOut) = livePipeTerminal()
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard)
+      _         <- IO(pipeOut.write(csi("O") ++ bytes("a"))) >> IO(pipeOut.flush())
+      events    <- handler.eventStream.take(1).compile.toList
+    yield events
+
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
+      translator.translate(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty))
+    )
+  }
 
   "shutdown" should "terminate the event stream without waiting for EOF" in {
     val program = for

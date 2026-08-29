@@ -61,6 +61,23 @@ class Java2DRenderSurface(
       onFlush
     )
 
+  /** As [[newLayerSurface]], but the returned buffer's backing image starts as a pixel copy of `image` -- this
+    * surface's own current backing image -- rather than fully transparent. See
+    * [[LayerBufferSupport.newSeededLayerSurface]]'s doc comment for why a layer that reads pixels back while painting
+    * (`blurRegion`) needs this instead of the transparent buffer [[newLayerSurface]] hands out.
+    */
+  override def newSeededLayerSurface(onFlush: BufferedImage => Unit): RenderSurface =
+    Java2DRenderSurface.forLayer(
+      metrics,
+      baseFontRef.get(),
+      effectiveLogicalWidthPx,
+      effectiveLogicalHeightPx,
+      deviceScaleX,
+      deviceScaleY,
+      onFlush,
+      seed = Some(image)
+    )
+
   private val g: Graphics2D = image.createGraphics()
   private val effectiveLogicalWidthPx =
     if logicalWidthPx > 0 then logicalWidthPx else image.getWidth
@@ -590,9 +607,11 @@ object Java2DRenderSurface:
     * #1100 flagged those two as "tied to a Swing `JPanel` for device-scale/logical-size derivation" as the open design
     * problem blocking per-surface buffering; this resolves it by deriving the same inputs from an existing
     * [[Java2DRenderSurface]] that already computed them (see [[Java2DRenderSurface.newLayerSurface]]) instead of from a
-    * canvas. The resulting image starts fully transparent (`TYPE_INT_ARGB`'s zero value), and is never reused across
-    * calls (`contentPersists = false`) -- each call to [[LayerBufferSupport.newLayerSurface]] hands back a brand-new
-    * buffer for its caller to composite and then own the lifetime of.
+    * canvas. The resulting image starts fully transparent (`TYPE_INT_ARGB`'s zero value) unless `seed` is given, in
+    * which case it starts as a pixel copy of `seed` instead (#1100 stage 3, [[newSeededLayerSurface]]) -- and is never
+    * reused across calls (`contentPersists = false`) -- each call to [[LayerBufferSupport.newLayerSurface]] /
+    * [[LayerBufferSupport.newSeededLayerSurface]] hands back a brand-new buffer for its caller to composite and then
+    * own the lifetime of.
     */
   def forLayer(
     metrics: CellMetrics,
@@ -601,13 +620,19 @@ object Java2DRenderSurface:
     logicalHeightPx: Int,
     deviceScaleX: Double,
     deviceScaleY: Double,
-    onFlush: BufferedImage => Unit
+    onFlush: BufferedImage => Unit,
+    seed: Option[BufferedImage] = None
   ): Java2DRenderSurface =
     val image = new BufferedImage(
       deviceImageDimension(logicalWidthPx, deviceScaleX),
       deviceImageDimension(logicalHeightPx, deviceScaleY),
       BufferedImage.TYPE_INT_ARGB
     )
+    seed.foreach { seedImage =>
+      val seedGraphics = image.createGraphics()
+      try seedGraphics.drawImage(seedImage, 0, 0, null)
+      finally seedGraphics.dispose()
+    }
     new Java2DRenderSurface(
       image,
       metrics,

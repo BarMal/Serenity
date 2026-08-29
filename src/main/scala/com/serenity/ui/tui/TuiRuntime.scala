@@ -58,19 +58,29 @@ object TuiRuntime:
           initialViewportSize <- terminalShell.viewportSize
           surfaceHolder = new SurfaceHolder(terminalShell)
           systemClipboard <- buildClipboard(terminalShell, hasDisplay)
+          // TerminalInputHandler decodes terminal focus reporting (CSI I/CSI O, #1171) and is only constructed once
+          // `makeInputHandler` runs -- which `AppRuntime.run` sequences before its own `registerFocusCallback` call --
+          // so this holder is always populated by the time that callback registration reaches into it.
+          inputHandlerHolder <- IO(new AtomicReference[Option[TerminalInputHandler]](None))
           _ <- AppRuntime.run(
             initialViewportSize = initialViewportSize,
             makeInputHandler = router =>
-              TerminalInputHandler.create(
-                terminalShell.terminal,
-                router,
-                systemClipboard,
-                terminalShell.pendingInputPrefix
-              ),
+              TerminalInputHandler
+                .create(
+                  terminalShell.terminal,
+                  router,
+                  systemClipboard,
+                  terminalShell.pendingInputPrefix
+                )
+                .map { handler =>
+                  inputHandlerHolder.set(Some(handler))
+                  handler
+                },
             checkResize = terminalShell.checkResize,
             renderFull = renderFullFn(surfaceHolder, terminalShell, previewWindowAvailability),
             renderCursorOnly = renderCursorOnlyFn(surfaceHolder, terminalShell, previewWindowAvailability),
             appConfig = appConfig,
+            registerFocusCallback = cb => inputHandlerHolder.get().foreach(_.registerFocusCallback(cb)),
             makeStateManager = Some(logger =>
               StateManager.apply(
                 logger,

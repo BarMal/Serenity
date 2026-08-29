@@ -926,6 +926,9 @@ final case class SurfaceConfig(
     showLineNumbers: Boolean = true,
     showGutter: Boolean = true,
     showPaneHeaders: Boolean = true,
+    // Opt-in (like `cursorInfoBarMode`): the status bar's default text (position/language/file) is covered by
+    // exact-string assertions elsewhere, so this ships off and callers turn it on explicitly (#1203).
+    showWordCount: Boolean = false,
     wordWrapEnabled: Boolean = true,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
@@ -1713,6 +1716,10 @@ final case class AppConfig(
   /** Show or hide the per-pane identity strip above editor content. */
   def withPaneHeaders(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(showPaneHeaders = enabled))
+
+  /** Show or hide the word/character-count and reading-time segment in the status bar (#1203). */
+  def withWordCount(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(showWordCount = enabled))
 
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
