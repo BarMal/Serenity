@@ -100,6 +100,42 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     harness.written should include(cursorShown)
   }
 
+  it should "keep editing working across a terminal focus-out/focus-in round trip (CSI O / CSI I, #1171)" in {
+    val file = Files.createTempFile("tui-runtime-focus-spec", ".md")
+    Files.writeString(file, "")
+    val sessionRoot = Files.createTempDirectory("tui-runtime-focus-spec-session")
+    val harness     = liveInputTerminal()
+
+    val program = TuiRuntime.run(
+      shell = TerminalShell.forTerminal(harness.terminal),
+      appConfig = AppConfig.default,
+      openPath = Some(file),
+      configPersistencePath = None,
+      hasDisplay = false,
+      sessionRootOverride = Some(sessionRoot)
+    )
+
+    val fiber = program.start.unsafeRunSync()
+
+    // Losing then regaining focus (terminal focus reporting, CSI O / CSI I) should be silently absorbed -- parking
+    // and resuming the idle cursor tick internally -- rather than being decoded as ordinary keystrokes or otherwise
+    // disrupting the input stream.
+    harness.send(esc.getBytes(StandardCharsets.UTF_8) ++ "[O".getBytes(StandardCharsets.UTF_8))
+    harness.send(esc.getBytes(StandardCharsets.UTF_8) ++ "[I".getBytes(StandardCharsets.UTF_8))
+    harness.send(Array('h'.toByte, 'i'.toByte))
+    harness.send(Array(ctrl('s')))
+
+    eventually {
+      Files.readString(file) shouldBe "hi"
+    }
+
+    harness.send(Array(ctrl('q')))
+
+    fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
+    harness.written should include(exitCaMode)
+    harness.written should include(cursorShown)
+  }
+
   it should "quit and restore the terminal on EOF alone, with no explicit Ctrl+Q" in {
     val file = Files.createTempFile("tui-runtime-eof-spec", ".md")
     Files.writeString(file, "hello")

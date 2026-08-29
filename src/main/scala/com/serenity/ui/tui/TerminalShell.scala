@@ -84,6 +84,7 @@ final class TerminalShell private (
   private[tui] def restore(): Unit =
     terminal.setAttributes(originalAttributes)
     TerminalShell.disableKeyboardProtocol(terminal, keyboardProtocolTier)
+    terminal.writer().write(TerminalShell.FocusReportingDisable)
     val _ = terminal.puts(Capability.cursor_normal)
     val _ = terminal.puts(Capability.exit_ca_mode)
     terminal.flush()
@@ -133,6 +134,14 @@ object TerminalShell:
   private val FormatOtherKeysEnable: String  = "[>4;1f"
   private val FormatOtherKeysDisable: String = "[>4;0f"
 
+  /** Terminal focus reporting (#1171): the standard xterm private mode that makes the terminal send `CSI I`/`CSI O` on
+    * focus-in/focus-out, decoded by [[TerminalInputDecoder]] and routed to `AppRuntime.run`'s `registerFocusCallback`
+    * capability by [[TerminalInputHandler]] -- the TUI counterpart to the Swing window's own focus-lost/focus-gained
+    * listeners, letting the idle-phase cursor tick park itself while the terminal is unfocused (same as the GUI path).
+    */
+  private[tui] val FocusReportingEnable: String  = "[?1004h"
+  private[tui] val FocusReportingDisable: String = "[?1004l"
+
   /** How long [[acquire]] waits for a kitty `CSI ? flags u` response before falling back to `modifyOtherKeys`.
     * Comfortably above a local pty round-trip, comfortably below a perceptible startup stall.
     */
@@ -166,6 +175,7 @@ object TerminalShell:
         val originalAttributes = terminal.enterRawMode()
         val _                  = terminal.puts(Capability.enter_ca_mode)
         val _                  = terminal.puts(Capability.cursor_invisible)
+        terminal.writer().write(FocusReportingEnable)
         terminal.flush()
         val (tier, prefix) = negotiateKeyboardProtocol(terminal)
         val shell          = new TerminalShell(terminal, originalAttributes, quitDeferred, dispatcher, tier, prefix)
