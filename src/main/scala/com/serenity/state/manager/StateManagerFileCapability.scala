@@ -9,8 +9,7 @@ final private[manager] class StateManagerFileFacade(
     stateRef: Ref[IO, AppState],
     loadFile: Path => IO[Unit],
     save: BufferId => IO[Unit],
-    saveAs: (BufferId, Path) => IO[Unit],
-    close: BufferId => IO[Unit]
+    saveAs: (BufferId, Path) => IO[Unit]
 ):
 
   def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =
@@ -57,15 +56,11 @@ final private[manager] class StateManagerFileFacade(
         case None     => state.persisted.buffers.values.exists(_.hasUnsavedChanges)
     }
 
-  def forceCloseBuffer(bufferId: BufferId): IO[Unit] =
-    close(bufferId)
-
   def getRecentFiles: IO[List[Path]] =
     stateRef.get.map(_.persisted.recentFiles)
 
 final private[manager] class StateManagerFileCapability(
     stateRef: Ref[IO, AppState],
-    editor: StateManagerEditorCapability,
     effects: StateManagerEffectHandlers
 )(using balance: com.serenity.rope.Balance):
 
@@ -73,8 +68,7 @@ final private[manager] class StateManagerFileCapability(
     stateRef,
     effects.directLoadFileEffect,
     effects.saveBufferEffect,
-    effects.saveBufferAsEffect,
-    editor.closeBuffer
+    effects.saveBufferAsEffect
   )
 
   def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =
@@ -94,9 +88,6 @@ final private[manager] class StateManagerFileCapability(
 
   def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean] =
     fileFacade.checkUnsavedChanges(bufferId)
-
-  def forceCloseBuffer(bufferId: BufferId): IO[Unit] =
-    fileFacade.forceCloseBuffer(bufferId)
 
   def getRecentFiles: IO[List[java.nio.file.Path]] =
     fileFacade.getRecentFiles

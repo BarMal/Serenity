@@ -56,49 +56,15 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       sm.applyEvent(Quit).unsafeRunSync()
   }
 
-  it should "emit FileClosed when a buffer with a file path is closed" in {
-    val sm       = makeStateManager()
-    val tempFile = Files.createTempFile("test-lsp-close", ".scala")
-    Files.writeString(tempFile, "object Bar")
-    try
-      sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
-
-      val fileOpened = sm.lspEffectStream
-        .take(1)
-        .timeout(2.seconds)
-        .compile
-        .toList
-        .unsafeRunSync()
-
-      fileOpened should have size 1
-
-      val bufferId = sm.getCurrentState
-        .unsafeRunSync()
-        .persisted
-        .buffers
-        .values
-        .find(_.document.filePath.contains(tempFile))
-        .map(_.id)
-
-      bufferId shouldBe defined
-      sm.closeBuffer(bufferId.get).unsafeRunSync()
-
-      val fileClosed = sm.lspEffectStream
-        .take(1)
-        .timeout(2.seconds)
-        .compile
-        .toList
-        .unsafeRunSync()
-
-      fileClosed should have size 1
-      fileClosed.head match
-        case LspEffect.FileClosed(uri, lang) =>
-          lang shouldBe LanguageId.Scala
-        case other => fail(s"Expected FileClosed, got $other")
-    finally
-      Files.deleteIfExists(tempFile)
-      sm.applyEvent(Quit).unsafeRunSync()
-  }
+  // A "close buffer, expect FileClosed" test previously lived here, driven through
+  // StateManagerEditorCapability.closeBuffer. That façade method was deleted in #1183 as dead production code (no
+  // caller outside test-scenario setup) -- and deleting it surfaced that it was, in fact, the *only* code path that
+  // ever emitted LspEffect.FileClosed for a genuinely closed buffer. The real production close-tab flow
+  // (StateManagerWorkflowCapability.closeBufferUsingExistingFlow -> EditorState.closeFocusedTab) does not notify the
+  // LSP server at all. FileClosed coverage for the two paths that ARE reachable from production remains below
+  // (SetBufferLanguage's language switch, and saveBufferAs's URI change) -- but closing a tab never reaching a real
+  // LSP server is a genuine gap, not something this façade-deletion PR should silently paper over or fix. Flagged
+  // for a follow-up issue rather than addressed here.
 
   it should "not emit FileOpened for files without a known language" in {
     val sm       = makeStateManager()

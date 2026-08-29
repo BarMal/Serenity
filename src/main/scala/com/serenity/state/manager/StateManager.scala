@@ -8,7 +8,7 @@ import com.serenity.animation.AnimationState
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
-import com.serenity.keystroke.events.{Direction, Event}
+import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -74,7 +74,6 @@ trait BufferManager:
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
   def createNewEmptyBuffer(): IO[BufferId]
   def updateBuffer(bufferId: BufferId, content: String): IO[Unit]
-  def closeBuffer(bufferId: BufferId): IO[Unit]
 
 /** Manages editor panes, tabs, and splits. */
 trait PaneManager:
@@ -82,17 +81,7 @@ trait PaneManager:
   def handleViewportResize(newSize: ViewportSize): IO[Unit]
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
   def switchToPane(paneId: PaneId): IO[Unit]
-  def closePane(paneId: PaneId): IO[Unit]
-  def setBufferForPane(paneId: PaneId, bufferId: BufferId): IO[Unit]
-  def setCursorPosition(paneId: PaneId, line: Int, column: Int): IO[Unit]
-  def setViewport(paneId: PaneId, viewport: Viewport): IO[Unit]
-  def setPaneProperties(paneId: PaneId, update: EditorPane => EditorPane): IO[Unit]
-  def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
   def getTabOrder(): IO[List[PaneId]]
-  def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
-  def splitPaneVertical(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId]
-  def resizePaneSplit(splitId: WorkspaceNodeId, ratio: Double): IO[Unit]
-  def focusPaneInDirection(direction: Direction): IO[Unit]
 
 /** Manages transient peek surfaces. */
 trait PeekManager:
@@ -131,7 +120,6 @@ trait FileService:
   def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit]
   def markBufferSaved(bufferId: BufferId): IO[Unit]
   def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean]
-  def forceCloseBuffer(bufferId: BufferId): IO[Unit]
   def getRecentFiles: IO[List[Path]]
 
 /** Controls editor viewport scrolling. */

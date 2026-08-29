@@ -241,19 +241,16 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         stateRef,
         opened => calls.update(_ :+ s"open:$opened"),
         saved => calls.update(_ :+ s"save:$saved"),
-        (saved, savedPath) => calls.update(_ :+ s"saveAs:$saved:$savedPath"),
-        closed => calls.update(_ :+ s"close:$closed")
+        (saved, savedPath) => calls.update(_ :+ s"saveAs:$saved:$savedPath")
       )
       _        <- facade.openFile(path)
       _        <- facade.saveBuffer(bufferId)
       _        <- facade.saveBufferAs(bufferId, path)
-      _        <- facade.forceCloseBuffer(bufferId)
       observed <- calls.get
     yield observed shouldBe List(
       s"open:$path",
       s"save:$bufferId",
-      s"saveAs:$bufferId:$path",
-      s"close:$bufferId"
+      s"saveAs:$bufferId:$path"
     )
 
     program.unsafeRunSync()

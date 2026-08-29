@@ -82,21 +82,18 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       stateRef,
       path => calls.update(_ :+ s"open:$path"),
       bufferId => calls.update(_ :+ s"save:$bufferId"),
-      (bufferId, path) => calls.update(_ :+ s"save-as:$bufferId:$path"),
-      bufferId => calls.update(_ :+ s"close:$bufferId")
+      (bufferId, path) => calls.update(_ :+ s"save-as:$bufferId:$path")
     )
     val path = Path.of("notes.md")
 
     facade.openFile(path).unsafeRunSync()
     facade.saveBuffer(BufferId(0)).unsafeRunSync()
     facade.saveBufferAs(BufferId(0), path).unsafeRunSync()
-    facade.forceCloseBuffer(BufferId(0)).unsafeRunSync()
 
     calls.get.unsafeRunSync() shouldBe List(
       s"open:$path",
       "save:BufferId(0)",
-      s"save-as:BufferId(0):$path",
-      "close:BufferId(0)"
+      s"save-as:BufferId(0):$path"
     )
   }
 
