@@ -1,5 +1,7 @@
 package com.serenity.input
 
+import scala.annotation.unused
+
 import com.serenity.keystroke.Modifier
 
 /** Tracking state for [[ModifierTapDetector]]: at most one modifier's tap is ever pending at a time, matching
@@ -63,7 +65,7 @@ object ModifierTapDetector:
   /** A release of `modifier` at `atMillis`. A no-op unless `modifier` is the one currently pending and not yet marked
     * released.
     */
-  def modifierReleased(state: ModifierTapState, modifier: Modifier, atMillis: Long): ModifierTapState =
+  def modifierReleased(state: ModifierTapState, modifier: Modifier, @unused atMillis: Long): ModifierTapState =
     state.pending match
       case Some(tap) if tap.modifier == modifier && !tap.released =>
         ModifierTapState(Some(tap.copy(released = true)))
@@ -72,4 +74,4 @@ object ModifierTapDetector:
   /** Any non-modifier key press cancels a pending tap, matching `SwingInputHandler.translatePressed`'s unconditional
     * `pendingModifierTap.set(None)` (`SwingInputHandler.scala:241`) before dispatching a real key.
     */
-  def otherKeyPressed(state: ModifierTapState): ModifierTapState = ModifierTapState.empty
+  def otherKeyPressed(@unused state: ModifierTapState): ModifierTapState = ModifierTapState.empty

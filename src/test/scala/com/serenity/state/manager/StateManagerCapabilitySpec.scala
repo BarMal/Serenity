@@ -427,7 +427,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
           explorer = _ => observed.update(_ :+ "explorer"),
           workflow = _ => observed.update(_ :+ "workflow"),
           lspQueue = _ => observed.update(_ :+ "lsp"),
-          animation = _ => observed.update(_ :+ "animation")
+          animation = _ => observed.update(_ :+ "animation"),
+          scheduleCommandRunnerBindingExpiry = _ => observed.update(_ :+ "scheduleCommandRunnerBindingExpiry")
         )
       )
       _       <- interpreter.interpret(AppEffect.CompleteQuit)

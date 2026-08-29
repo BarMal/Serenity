@@ -19,8 +19,8 @@ class EditorPaneComponent(
 
   protected def processTypedEvent(event: TextEntryEvent, currentState: AppState): ComponentResult =
     currentState.persisted.layout.editorPanes.get(paneId) match
-      case Some(pane) => processEventForPane(event, pane, currentState)
-      case None       => ComponentResult.noChange
+      case Some(_) => processEventForPane(event, currentState)
+      case None    => ComponentResult.noChange
 
   override protected def processFallbackEvent(event: Event, currentState: AppState): ComponentResult =
     event match
@@ -37,7 +37,6 @@ class EditorPaneComponent(
 
   private def processEventForPane(
     event: TextEntryEvent,
-    _pane: EditorPane,
     currentState: AppState
   ): ComponentResult =
     val reduced      = reducer.reduce(event, currentState)

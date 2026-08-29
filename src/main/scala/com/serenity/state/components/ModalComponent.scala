@@ -24,12 +24,12 @@ class ModalComponent(
 
   override protected def processFallbackEvent(event: Event, currentState: AppState): ComponentResult =
     modalType match
-      case ModalType.Custom(name) =>
-        processCustomModalEvent(name, event, currentState)
+      case ModalType.Custom(_) =>
+        processCustomModalEvent(event)
       case _ =>
         ComponentResult.noChange
 
-  private def processCustomModalEvent(name: String, event: Event, currentState: AppState): ComponentResult =
+  private def processCustomModalEvent(event: Event): ComponentResult =
     event match
       case textEvent: TextEntryEvent => processModalTextEvent(textEvent)
       case UnhandledEvent(info, _)   => processModalKeyInfo(info)
@@ -40,8 +40,6 @@ class ModalComponent(
       case InsertChar(_) =>
         ComponentResult.noChange
       case DeleteBackward =>
-        ComponentResult.noChange
-      case MoveUp | MoveDown =>
         ComponentResult.noChange
       case _ =>
         ComponentResult.noChange

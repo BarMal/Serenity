@@ -20,6 +20,8 @@ final private[manager] class CommandEffectInterpreter(
       case AppEffect.Workflow(value)       => dependencies.workflow(value)
       case AppEffect.LspQueue(value)       => dependencies.lspQueue(value)
       case AppEffect.Animation(value)      => dependencies.animation(value)
+      case AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis) =>
+        dependencies.scheduleCommandRunnerBindingExpiry(recordedAtMillis)
 
 private[manager] object CommandEffectInterpreter:
 
@@ -32,5 +34,6 @@ private[manager] object CommandEffectInterpreter:
       explorer: ExplorerEffect => IO[Unit],
       workflow: WorkflowEffect => IO[Unit],
       lspQueue: LspQueueEffect => IO[Unit],
-      animation: AnimationEffect => IO[Unit]
+      animation: AnimationEffect => IO[Unit],
+      scheduleCommandRunnerBindingExpiry: Long => IO[Unit]
   )

@@ -1,7 +1,6 @@
 package com.serenity.ui.theme.config
 
 import pureconfig.*
-import pureconfig.generic.derivation.default.*
 
 /** Configuration representation of a theme that can be loaded from config files */
 final case class ThemeConfig(

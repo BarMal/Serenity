@@ -11,7 +11,7 @@ final private[manager] class StateManagerViewportCapability(
     deviceTextScaleProvider: IO[Double],
     events: StateManagerEventPipeline,
     effects: StateManagerEffectHandlers
-)(using balance: com.serenity.rope.Balance):
+):
 
   private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     events.validateAndUpdateState(newState, fallbackState)

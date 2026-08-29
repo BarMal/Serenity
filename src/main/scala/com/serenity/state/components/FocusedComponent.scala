@@ -1,5 +1,7 @@
 package com.serenity.state.components
 
+import scala.annotation.unused
+
 import com.serenity.keystroke.events.Event
 import com.serenity.state.models.AppState
 
@@ -13,7 +15,7 @@ trait LocalEventHandler:
 
   protected def processTypedEvent(event: E, currentState: AppState): ComponentResult
 
-  protected def processFallbackEvent(event: Event, currentState: AppState): ComponentResult =
+  protected def processFallbackEvent(@unused event: Event, @unused currentState: AppState): ComponentResult =
     ComponentResult.noChange
 
   final def processEvent(event: Event, currentState: AppState): ComponentResult =

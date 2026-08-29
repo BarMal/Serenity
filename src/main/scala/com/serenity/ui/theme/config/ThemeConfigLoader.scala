@@ -60,7 +60,7 @@ class ThemeConfigLoader:
   def ensureUserThemesDirectory: IO[Path] =
     IO.blocking {
       val userThemesDir = getUserThemesDirectory
-      if !Files.exists(userThemesDir) then Files.createDirectories(userThemesDir)
+      if !Files.exists(userThemesDir) then Files.createDirectories(userThemesDir): Unit
       userThemesDir
     }
 

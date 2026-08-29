@@ -62,7 +62,7 @@ final private[manager] class StateManagerFileFacade(
 final private[manager] class StateManagerFileCapability(
     stateRef: Ref[IO, AppState],
     effects: StateManagerEffectHandlers
-)(using balance: com.serenity.rope.Balance):
+):
 
   private lazy val fileFacade = new StateManagerFileFacade(
     stateRef,

@@ -273,7 +273,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
             case LspQueueEffect.Enqueue(value) => observed.update(_ :+ value)
             case LspQueueEffect.DocumentChanged(uri, languageId, text) =>
               observed.update(_ :+ LspEffect.FileChanged(uri, languageId, text, version = 0)),
-          animation = _ => IO.unit
+          animation = _ => IO.unit,
+          scheduleCommandRunnerBindingExpiry = _ => IO.unit
         )
       )
       _       <- behavior.interpret(AppEffect.LspQueue(LspQueueEffect.Enqueue(effect)))

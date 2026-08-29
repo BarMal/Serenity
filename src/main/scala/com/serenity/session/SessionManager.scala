@@ -433,8 +433,7 @@ object SessionManager:
   */
 class SessionPersistence(
     sessionManager: SessionManager,
-    policy: SessionManager.SessionPolicy,
-    logger: Logger[IO]
+    policy: SessionManager.SessionPolicy
 ):
 
   /** Trigger session save based on policy.

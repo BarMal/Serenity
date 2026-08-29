@@ -60,6 +60,7 @@ private[serenity] object CommandRunnerPanelSelections:
       case SurfacePresentation.Pinned(position, _)   => Some(position)
       case SurfacePresentation.Expanded(position, _) => Some(position)
       case SurfacePresentation.Floating(_, _)        => None
+      case SurfacePresentation.Modal                 => None
 
   private def positionIndex(position: PanelPosition): Int =
     position match

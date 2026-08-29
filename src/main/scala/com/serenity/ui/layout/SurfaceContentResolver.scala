@@ -2,6 +2,8 @@ package com.serenity.ui.layout
 
 import java.awt.Color
 
+import scala.annotation.unused
+
 import com.serenity.command.{CommandCategory, CommandSurfaceItem, FontIntent, SettingsIntent}
 import com.serenity.config.ToolbarDisplayMode
 import com.serenity.markdown.MarkdownDocumentPreview
@@ -142,7 +144,7 @@ object SurfaceContentResolver:
   ): ResolvedSurfaceContent =
     modal match
       case Modal.FileWorkflow(workflow) =>
-        resolveFileWorkflow(workflow, rect, mode)
+        resolveFileWorkflow(workflow, mode)
       case Modal.ReplaceWorkflow(workflow) =>
         resolveReplaceWorkflow(workflow, mode)
       case Modal.Find(query, results, currentIndex) =>
@@ -292,7 +294,6 @@ object SurfaceContentResolver:
 
   private def resolveFileWorkflow(
     workflow: FileWorkflowState,
-    rect: LayoutRect,
     mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
     val operationLabel = workflow.operationLabel
@@ -365,7 +366,6 @@ object SurfaceContentResolver:
     if runner.isSettingsSurface then resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows)
     else if !runner.isActive then ResolvedSurfaceContent(titleFor(mode, "commands"))
     else
-      given com.serenity.command.CommandRegistry = com.serenity.command.CommandRegistry.withToggleUI
       val header =
         if runner.searchTerm.isEmpty then Some(categoryTabs(runner.activeCategory))
         else
@@ -402,17 +402,7 @@ object SurfaceContentResolver:
           val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
           inputRow(item, index == adjustedSelectedIndex, editingText)
         case (item: CommandSurfaceItem.SettingSearchItem, index) =>
-          OverlayRow(
-            plainText = item.label,
-            selected = index == adjustedSelectedIndex,
-            segments = List(
-              OverlaySegment(item.label),
-              OverlaySegment(item.effectiveValue.getOrElse(""), tone = OverlayTone.Normal),
-              OverlaySegment(item.sourceScope, tone = OverlayTone.Normal),
-              OverlaySegment(item.breadcrumb, tone = OverlayTone.Normal)
-            ).filterNot(_.text.isEmpty),
-            layout = OverlayRowLayout.Columns
-          )
+          settingSearchRow(item, index == adjustedSelectedIndex)
         case (group: CommandSurfaceItem.GroupItem, index) =>
           val groupLabel =
             if runner.searchTerm.nonEmpty then runner.settingsGroupBreadcrumbLabels(group.id).mkString(" > ")
@@ -577,6 +567,8 @@ object SurfaceContentResolver:
         inputRow(item, !previewOnly && index == adjustedSelectedIndex, editingText)
       case (CommandSurfaceItem.CommandItem(command), index) =>
         commandRow(command, !previewOnly && index == adjustedSelectedIndex, binding = runner.bindingFor(command))
+      case (item: CommandSurfaceItem.SettingSearchItem, index) =>
+        settingSearchRow(item, !previewOnly && index == adjustedSelectedIndex)
       case (group: CommandSurfaceItem.GroupItem, index) =>
         OverlayRow(
           plainText = group.label,
@@ -692,7 +684,7 @@ object SurfaceContentResolver:
     command: com.serenity.command.Command,
     selected: Boolean,
     prefix: String = "",
-    binding: Option[String] = None
+    binding: Option[String]
   ): OverlayRow =
     val label = s"$prefix${command.label}"
     OverlayRow(
@@ -713,6 +705,19 @@ object SurfaceContentResolver:
       case com.serenity.command.CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiFontFamily(family))) =>
         Some(family)
       case _ => None
+
+  private def settingSearchRow(item: CommandSurfaceItem.SettingSearchItem, selected: Boolean): OverlayRow =
+    OverlayRow(
+      plainText = item.label,
+      selected = selected,
+      segments = List(
+        OverlaySegment(item.label),
+        OverlaySegment(item.effectiveValue.getOrElse(""), tone = OverlayTone.Normal),
+        OverlaySegment(item.sourceScope, tone = OverlayTone.Normal),
+        OverlaySegment(item.breadcrumb, tone = OverlayTone.Normal)
+      ).filterNot(_.text.isEmpty),
+      layout = OverlayRowLayout.Columns
+    )
 
   private def optionRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
     val selectedHint = option.selectedHint.getOrElse("")
@@ -1028,7 +1033,7 @@ object SurfaceContentResolver:
     toolbarState: ContextualToolbarState,
     state: AppState,
     rect: LayoutRect,
-    mode: SurfaceRenderMode
+    @unused mode: SurfaceRenderMode
   ): ResolvedSurfaceContent =
     val borderCells = SurfaceFrameLayout.borderCellsFor(SurfaceContent.ContextualToolbar(toolbarState))
     val contentRect = SurfaceFrameLayout(rect, borderCells).contentRect

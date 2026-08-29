@@ -18,4 +18,4 @@ final case class PixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
 object PixelRect:
 
   def unionOf(rects: Iterable[PixelRect]): Option[PixelRect] =
-    rects.reduceOption(_ union _)
+    rects.reduceOption(_.union(_))

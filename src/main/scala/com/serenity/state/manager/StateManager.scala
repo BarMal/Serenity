@@ -2,6 +2,8 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
 
+import scala.annotation.unused
+
 import cats.effect.*
 import cats.effect.std.Semaphore
 import com.serenity.animation.AnimationState
@@ -163,7 +165,7 @@ object StateManager:
         IO.pure(None)
 
   def apply(
-    parentLogger: Logger[IO],
+    @unused parentLogger: Logger[IO],
     policy: SessionManager.SessionPolicy = SessionManager.SessionPolicy(),
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
     deviceTextScaleProvider: IO[Double] = IO.pure(1.0),

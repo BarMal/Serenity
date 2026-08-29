@@ -41,7 +41,7 @@ class PinnedPanelComponent(
       case Direction.Up | Direction.Down =>
         moveDirectorySelection(direction, currentState)
       case Direction.Left =>
-        activeDirectorySurface(currentState).flatMap(parentDirectoryNavigation(currentState, _))
+        activeDirectorySurface(currentState).flatMap(parentDirectoryNavigation)
       case Direction.Right =>
         activateDirectorySelection(currentState)
 
@@ -101,7 +101,6 @@ class PinnedPanelComponent(
     }
 
   private def parentDirectoryNavigation(
-    currentState: AppState,
     surface: com.serenity.state.models.UiSurface
   ): Option[ComponentResult] =
     surface.content match
