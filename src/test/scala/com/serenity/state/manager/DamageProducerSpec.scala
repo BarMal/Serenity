@@ -313,7 +313,7 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
-  it should "report Everything when an existing floating surface's content or position changes" in {
+  it should "report Damage.Surface scoped to a floating surface when only its own content changes (#1100 stage 3)" in {
     val surface = UiSurface(
       SurfaceId("palette"),
       SurfaceContent.Comments(Nil),
@@ -325,7 +325,7 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
       before.runtime.copy(uiSurfaces = List(surface.copy(content = SurfaceContent.Diagnostics(Nil))))
     )
 
-    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+    DamageProducer.forTransition(before, after) shouldBe Damage.Surface(SurfaceId("palette"))
   }
 
   it should "report Damage.Surface scoped to the modal when only its own content changes" in {
@@ -337,6 +337,32 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     )
 
     DamageProducer.forTransition(before, after) shouldBe Damage.Surface(SurfaceId("palette"))
+  }
+
+  it should "report Damage.Surface scoped to a pinned panel when only its own content changes (#1100 stage 3)" in {
+    val surface = UiSurface(
+      SurfaceId("outline"),
+      SurfaceContent.Outline(Nil),
+      SurfacePresentation.Pinned(PanelPosition.Left, 20)
+    )
+    val bare   = stateWithContent("alpha")
+    val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
+    val after  = before.copy(runtime = before.runtime.copy(uiSurfaces = List(surface.copy(dismissOnMove = true))))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Surface(SurfaceId("outline"))
+  }
+
+  it should "report Damage.Surface scoped to an expanded panel when only its own content changes (#1100 stage 3)" in {
+    val surface = UiSurface(
+      SurfaceId("outline"),
+      SurfaceContent.Outline(Nil),
+      SurfacePresentation.Expanded(PanelPosition.Left, 20)
+    )
+    val bare   = stateWithContent("alpha")
+    val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
+    val after  = before.copy(runtime = before.runtime.copy(uiSurfaces = List(surface.copy(dismissOnMove = true))))
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Surface(SurfaceId("outline"))
   }
 
   it should "report Everything when the modal changes alongside another surface" in {

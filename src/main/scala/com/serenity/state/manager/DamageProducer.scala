@@ -264,12 +264,16 @@ object DamageProducer:
     * floating surface `OverlayViewModel.preferredFloatingSurface` selects, or its dim/active tint, without `uiSurfaces`
     * itself changing (tabbing between two already-open floating panels).
     *
-    * [[uiSurfacesDamage]] carves out one narrower case: a transition that changes only the one surface presented as
-    * [[SurfacePresentation.Modal]], and nothing else about `uiSurfaces`, reports `Damage.Surface` scoped to that
-    * surface instead of `Everything` (#1100 stage 2). That's safe specifically for the modal layer because
-    * `Renderer.renderModalLayer` never reads pixels back off the frame surface it paints onto (no `blurRegion`, no
-    * shadow) -- unlike pinned/expanded panels, which do (`SurfaceMaterials.effectiveBlurRadius`), and floating panels,
-    * neither of which this carve-out touches; they keep reporting `Everything` on any change, same as before.
+    * [[uiSurfacesDamage]] carves out one narrower case: a transition that changes only the one surface identified by
+    * some `SurfaceId`, whose presentation is the same kind (`Modal`/`Pinned`/`Floating`/`Expanded`) on both sides, and
+    * nothing else about `uiSurfaces`, reports `Damage.Surface` scoped to that surface instead of `Everything` (#1100
+    * stage 2 for the modal only; stage 3 extends it to pinned/floating/expanded panels). This is safe for every
+    * presentation kind because `Renderer`'s per-surface layer buffer (`LayerBufferSupport.newLayerSurface` for the
+    * modal, `newSeededLayerSurface` for panels that read pixels back via `blurRegion`) always paints into an isolated
+    * buffer seeded correctly for that kind, never the live frame surface directly -- see `Renderer.paintPanelLayer`'s
+    * doc comment for why a panel that samples the pixels behind it additionally requires the *whole* frame to be
+    * undamaged (not just its own surface) before it may reuse a cached buffer, on top of the `Damage.Surface` narrowing
+    * this producer reports here.
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
     if before.runtime.themeTransition != after.runtime.themeTransition ||
@@ -281,26 +285,39 @@ object DamageProducer:
   private def uiSurfacesDamage(before: AppState, after: AppState): Damage =
     if before.runtime.uiSurfaces == after.runtime.uiSurfaces then Damage.Nothing
     else
-      modalOnlyContentChange(before, after) match
+      singleSurfaceOnlyContentChange(before, after) match
         case Some(surfaceId) => Damage.Surface(surfaceId)
         case None            => Damage.Everything
 
-  /** `Some(id)` when `uiSurfaces` differs only in the fields of the one surface identified by `id`, and that surface is
-    * presented as [[SurfacePresentation.Modal]] on both sides of the transition -- i.e. the modal didn't appear,
-    * disappear, or change presentation, and no other surface changed alongside it. Any broader difference (a surface
-    * added/removed, more than one surface changed, or the changed surface isn't a modal on both sides) reports `None`,
-    * which [[uiSurfacesDamage]] then treats the same blunt way as before this carve-out existed.
+  /** Whether `before`/`after` present the same *kind* of [[SurfacePresentation]] (ignoring the fields each kind
+    * carries, e.g. a `Pinned` panel's position/size) -- the presentation-stability half of
+    * [[singleSurfaceOnlyContentChange]]'s carve-out.
     */
-  private def modalOnlyContentChange(before: AppState, after: AppState): Option[SurfaceId] =
+  private def samePresentationKind(before: SurfacePresentation, after: SurfacePresentation): Boolean =
+    (before, after) match
+      case (SurfacePresentation.Modal, SurfacePresentation.Modal)             => true
+      case (_: SurfacePresentation.Pinned, _: SurfacePresentation.Pinned)     => true
+      case (_: SurfacePresentation.Floating, _: SurfacePresentation.Floating) => true
+      case (_: SurfacePresentation.Expanded, _: SurfacePresentation.Expanded) => true
+      case _                                                                  => false
+
+  /** `Some(id)` when `uiSurfaces` differs only in the fields of the one surface identified by `id`, and that surface
+    * presents as the same [[SurfacePresentation]] kind on both sides of the transition -- i.e. it didn't appear,
+    * disappear, or change which kind of layer it belongs to, and no other surface changed alongside it. Any broader
+    * difference (a surface added/removed, more than one surface changed, or the changed surface's presentation kind
+    * differs before/after) reports `None`, which [[uiSurfacesDamage]] then treats the same blunt way as before this
+    * carve-out existed.
+    */
+  private def singleSurfaceOnlyContentChange(before: AppState, after: AppState): Option[SurfaceId] =
     val beforeById = before.runtime.uiSurfaces.map(surface => surface.id -> surface).toMap
     val afterById  = after.runtime.uiSurfaces.map(surface => surface.id -> surface).toMap
     if beforeById.keySet != afterById.keySet then None
     else
       beforeById.keySet.filter(id => beforeById(id) != afterById(id)).toList match
         case List(onlyChangedId) =>
-          (beforeById(onlyChangedId).presentation, afterById(onlyChangedId).presentation) match
-            case (SurfacePresentation.Modal, SurfacePresentation.Modal) => Some(onlyChangedId)
-            case _                                                      => None
+          Option.when(
+            samePresentationKind(beforeById(onlyChangedId).presentation, afterById(onlyChangedId).presentation)
+          )(onlyChangedId)
         case _ => None
 
   /** Pane headers, gutter text and line numbers -- `Renderer.ChromeKey`'s `layout`/`gutterText`/`lineNumberRows`/

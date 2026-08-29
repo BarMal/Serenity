@@ -212,6 +212,24 @@ object Renderer:
 
   private val modalLayerBufferRef = new AtomicReference[Option[CachedModalLayer]](None)
 
+  /** What [[paintPanelLayer]] cached the last time it painted a given pinned/expanded/floating panel into its own
+    * buffer (#1100 stage 3): the [[CachedModalLayer]] pattern generalised to every panel kind that reads pixels back
+    * off the frame surface via `blurRegion`, keyed by [[SurfaceId]] rather than held as a single slot, since -- unlike
+    * the modal -- more than one of these panels can be on screen at once. `frameRect` is remembered alongside viewport
+    * shape and cursor-blink state because a panel's own rect can shift (another panel appearing/disappearing reflows
+    * pinned layout) without the panel's own `UiSurface` fields changing, which [[Damage.Surface]] narrowing alone would
+    * not catch.
+    */
+  final private case class CachedPanelLayer(
+      image: BufferedImage,
+      viewportWidth: Int,
+      viewportHeight: Int,
+      cursorVisible: Boolean,
+      frameRect: LayoutRect
+  )
+
+  private val panelLayerBufferRef = new AtomicReference[Map[SurfaceId, CachedPanelLayer]](Map.empty)
+
   /** Folds `damage` into every buffer identity already being tracked for `output`'s screen (every identity, if there is
     * no output to scope by), via [[DamageAccumulator.accumulateBuffers]] -- called unconditionally on every frame,
     * regardless of which identity (if any) this specific frame draws into, so a pixel buffer sitting idle through
@@ -1029,7 +1047,7 @@ object Renderer:
             cellMetrics,
             uiMetrics
           )
-        renderFloatingPanels(state, floatContext, scene)
+        renderFloatingPanels(state, floatContext, scene, Damage.Everything)
         None
       case None =>
         val prepared = preparedSceneRef
@@ -1111,6 +1129,7 @@ object Renderer:
       Layer(ModalLayerId, zOrder = 4, LayerEffect.identity, modalDamage)
     )
     val dirtyLayerIds = LayerCompositor.dirtyLayers(layers).map(_.id).toSet
+    forgetStalePanelLayerBuffers(state, scene)
     val paintByLayer: Map[LayerId, () => Unit] = Map(
       ChromeLayerId -> { () =>
         renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
@@ -1125,8 +1144,8 @@ object Renderer:
           framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty)
         )
       },
-      PinnedPanelsLayerId   -> { () => renderPinnedPanels(state, context, scene) },
-      FloatingPanelsLayerId -> { () => renderFloatingPanels(state, context, scene) },
+      PinnedPanelsLayerId   -> { () => renderPinnedPanels(state, context, scene, damage) },
+      FloatingPanelsLayerId -> { () => renderFloatingPanels(state, context, scene, damage) },
       ModalLayerId          -> { () => paintModalLayer(state, context, scene, dirtyLayerIds.contains(ModalLayerId)) }
     )
     LayerCompositor.orderedForComposite(layers).foreach(layer => paintByLayer(layer.id)())
@@ -1197,6 +1216,93 @@ object Renderer:
                   context.surface.viewportHeight
                 )
               }
+
+  /** Whether a pinned/expanded/floating panel identified by `surfaceId` must repaint this frame rather than reuse its
+    * cached buffer -- the panel generalisation of [[paintModalLayer]]'s `isDirty` flag (#1100 stage 3).
+    *
+    * `Damage.narrowToSurface(damage, surfaceId)` alone is exactly what makes the modal's own caching safe: it is
+    * `Damage.Nothing` whenever this frame's damage doesn't name this surface, even if it names something else entirely
+    * (editor content elsewhere, chrome, another surface). That is safe for the modal because `renderModalLayer` never
+    * reads pixels back off the frame it paints onto -- but a panel that blurs its own background
+    * (`SurfaceMaterials.effectiveBlurRadius > 0`) *does* read pixels back, via `blurRegion`, and those pixels can be
+    * exactly the ones some *other* damage (an edit under a translucent panel) just changed. Reusing a cached buffer in
+    * that case would composite a blur of stale content back onto a frame whose real content has since moved on --
+    * silently wrong output, not just a missed optimisation. So when blur is active, a panel is dirty unless the whole
+    * frame's damage is `Damage.Nothing` -- truly nothing changed anywhere, which is the one case a stale blur is
+    * provably still correct. When blur is inactive (`blurRadius <= 0f`), no panel reads pixels back, and the narrower,
+    * per-surface check applies exactly as it does for the modal: a panel only redraws when its own `Damage.Surface`
+    * entry says so.
+    */
+  private def panelDirtyCheck(damage: Damage, blurRadius: Float)(surfaceId: SurfaceId): Boolean =
+    Damage.narrowToSurface(damage, surfaceId) != Damage.Nothing || (blurRadius > 0f && damage != Damage.Nothing)
+
+  /** Paint one pinned/expanded/floating panel's own content into an isolated layer buffer, reusing its last-painted
+    * pixels instead of repainting when [[panelDirtyCheck]] says it's safe to -- the panel generalisation of
+    * [[paintModalLayer]] (#1100 stage 3).
+    *
+    * Unlike the modal, a panel's own paint step (`paintPanel`) can read pixels back off the surface it paints onto
+    * (`SurfaceMaterials.effectiveBlurRadius`'s `blurRegion` call), so this seeds the layer buffer from a snapshot of
+    * this frame's live pixels (`LayerBufferSupport.newSeededLayerSurface`) instead of starting fully transparent --
+    * `blurRegion` then reads exactly the same background it would reading the live frame surface directly, because the
+    * snapshot *is* that surface's pixels at the moment it was taken. Painting the rest of the panel into the same
+    * seeded buffer and compositing the whole buffer back at full opacity is then pixel-identical to painting directly,
+    * the same "paint onto a copy, composite back" argument [[Java2DRenderSurface.newLayerSurface]]'s doc comment makes
+    * for the transparent case.
+    *
+    * No `layerBuffers` capability (TUI's `TerminalRenderSurface`) -> falls straight through to `paintPanel`, painting
+    * directly into the shared surface every frame exactly as before this stage -- the same TUI exclusion #1100 stage 2
+    * documented for the modal.
+    */
+  private def paintPanelLayer(
+    context: RenderContext,
+    surfaceId: SurfaceId,
+    frameRect: LayoutRect,
+    isDirty: Boolean
+  )(paintPanel: RenderContext => Unit): Unit =
+    context.surface.layerBuffers match
+      case None => paintPanel(context)
+      case Some(support) =>
+        val cached = panelLayerBufferRef.get().get(surfaceId)
+        val reusable = !isDirty && cached.exists { c =>
+          c.viewportWidth == context.surface.viewportWidth &&
+          c.viewportHeight == context.surface.viewportHeight &&
+          c.cursorVisible == context.cursorVisible &&
+          c.frameRect == frameRect
+        }
+        if reusable then
+          cached.foreach(c => context.surface.pixels.drawImage(c.image, 0, 0, c.viewportWidth, c.viewportHeight))
+        else
+          val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
+          val layerSurface = support.newSeededLayerSurface(image => capturedRef.set(Some(image)))
+          paintPanel(context.copy(surface = layerSurface))
+          layerSurface.flush()
+          capturedRef.get().foreach { image =>
+            panelLayerBufferRef.updateAndGet(
+              _.updated(
+                surfaceId,
+                CachedPanelLayer(
+                  image,
+                  context.surface.viewportWidth,
+                  context.surface.viewportHeight,
+                  context.cursorVisible,
+                  frameRect
+                )
+              )
+            )
+            context.surface.pixels.drawImage(image, 0, 0, context.surface.viewportWidth, context.surface.viewportHeight)
+          }
+
+  /** Drop cached panel buffers for surfaces no longer on screen this frame -- a dismissed panel's cache would otherwise
+    * sit in [[panelLayerBufferRef]] forever (a `WeakHashMap` isn't used here since [[SurfaceId]] is a plain value, not
+    * a pixel buffer whose lifetime this module needs to track).
+    */
+  private def forgetStalePanelLayerBuffers(state: AppState, scene: UiSceneSnapshot): Unit =
+    val pinnedAndExpandedIds = pinnedAndExpandedSurfaces(state).map(_.id).toSet
+    val overlays             = OverlayViewModel.fromState(state, scene)
+    val floatingIds =
+      (overlays.aboveCursor.toList ++ overlays.belowCursorStack).flatMap(_.surfaceId).toSet
+    val activeIds = pinnedAndExpandedIds ++ floatingIds
+    val _         = panelLayerBufferRef.updateAndGet(_.filter { case (id, _) => activeIds.contains(id) })
 
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *
@@ -2782,38 +2888,37 @@ object Renderer:
     if isPrimaryCursor then activeColor
     else config.cursorColors.inactiveOr(activeColor)
 
-  private def renderFloatingPanels(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
+  private def renderFloatingPanels(
+    state: AppState,
+    context: RenderContext,
+    scene: UiSceneSnapshot,
+    damage: Damage
+  ): Unit =
     context.surface.text.setFont(context.uiFont)
-    val overlays = OverlayViewModel.fromState(state, scene)
+    val overlays     = OverlayViewModel.fromState(state, scene)
+    val blurRadius   = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
+    val panelIsDirty = panelDirtyCheck(damage, blurRadius)
 
-    overlays.aboveCursor.foreach { overlay =>
-      val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
-      if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.persisted.config, context)
-      TextOverlayRenderer.render(
-        context.surface,
-        overlay,
-        state.persisted.theme,
-        state.persisted.config,
-        context.cursorVisible,
-        context.uiFont,
-        context.cellMetrics
-      )
-    }
+    def paintOverlay(overlay: TextOverlayView): Unit =
+      def paint(layerContext: RenderContext): Unit =
+        if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.persisted.config, layerContext)
+        TextOverlayRenderer.render(
+          layerContext.surface,
+          overlay,
+          state.persisted.theme,
+          state.persisted.config,
+          layerContext.cursorVisible,
+          layerContext.uiFont,
+          layerContext.cellMetrics
+        )
+      overlay.surfaceId match
+        case Some(surfaceId) => paintPanelLayer(context, surfaceId, overlay.rect, panelIsDirty(surfaceId))(paint)
+        case None            => paint(context)
+
+    overlays.aboveCursor.foreach(paintOverlay)
     val belowOverlays =
       if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
-    belowOverlays.foreach { overlay =>
-      val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
-      if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.persisted.config, context)
-      TextOverlayRenderer.render(
-        context.surface,
-        overlay,
-        state.persisted.theme,
-        state.persisted.config,
-        context.cursorVisible,
-        context.uiFont,
-        context.cellMetrics
-      )
-    }
+    belowOverlays.foreach(paintOverlay)
 
   private def renderFloatingBackdrop(
     overlay: TextOverlayView,
@@ -2888,96 +2993,52 @@ object Renderer:
   private def renderPinnedPanels(
     state: AppState,
     context: RenderContext,
-    scene: UiSceneSnapshot
+    scene: UiSceneSnapshot,
+    damage: Damage
   ): Unit =
     context.surface.text.setFont(context.uiFont)
     val surfaceNodes = scene.workspace.collect {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) => surfaceId -> node
     }.toMap
-    (state.pinnedSurfaces ++ state.runtime.uiSurfaces.filter {
+    val blurRadius   = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
+    val panelIsDirty = panelDirtyCheck(damage, blurRadius)
+    pinnedAndExpandedSurfaces(state).foreach { surface =>
+      surfaceNodes.get(surface.id).foreach { node =>
+        val rect = node.frameRect
+        val animationState =
+          state.runtime.surfaceAnimations
+            .get(surface.id)
+            .map(_.animationState)
+            .getOrElse(com.serenity.animation.AnimationState.empty)
+
+        def paint(layerContext: RenderContext): Unit =
+          if blurRadius > 0f then
+            layerContext.surface.effects.foreach(_.blurRegion(rect.x, rect.y, rect.width, rect.height, blurRadius))
+          surface.content match
+            case SurfaceContent.MarkdownPreview(bufferId, title) =>
+              renderMarkdownPreviewPanel(bufferId, title, rect, node.contentRect, state, layerContext, animationState)
+            case _ =>
+              PinnedPanelRenderer.render(
+                layerContext.surface,
+                PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
+                state.persisted.theme,
+                state.persisted.config,
+                animationState
+              )
+
+        paintPanelLayer(context, surface.id, rect, panelIsDirty(surface.id))(paint)
+      }
+    }
+
+  /** Every pinned panel plus every surface presented as [[SurfacePresentation.Expanded]] -- the two presentation kinds
+    * [[renderPinnedPanels]] paints identically (an expanded panel is a pinned panel temporarily grown to fill more of
+    * the workspace; both read their geometry from the same scene node and the same [[PinnedPanelRenderer]]).
+    */
+  private def pinnedAndExpandedSurfaces(state: AppState): List[UiSurface] =
+    state.pinnedSurfaces ++ state.runtime.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
         case _                                  => false
-    }).foreach {
-      case surface @ UiSurface(_, content, SurfacePresentation.Pinned(position, _), _) =>
-        surfaceNodes.get(surface.id).foreach { node =>
-          val rect = node.frameRect
-          val animationState =
-            state.runtime.surfaceAnimations
-              .get(surface.id)
-              .map(_.animationState)
-              .getOrElse(com.serenity.animation.AnimationState.empty)
-          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
-          if blurRadius > 0f then
-            context.surface.effects.foreach(
-              _.blurRegion(
-                rect.x,
-                rect.y,
-                rect.width,
-                rect.height,
-                blurRadius
-              )
-            )
-          content match
-            case SurfaceContent.MarkdownPreview(bufferId, title) =>
-              renderMarkdownPreviewPanel(
-                bufferId,
-                title,
-                rect,
-                node.contentRect,
-                state,
-                context,
-                animationState
-              )
-            case _ =>
-              PinnedPanelRenderer.render(
-                context.surface,
-                PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
-                state.persisted.theme,
-                state.persisted.config,
-                animationState
-              )
-        }
-      case surface @ UiSurface(_, content, SurfacePresentation.Expanded(_, _), _) =>
-        surfaceNodes.get(surface.id).foreach { node =>
-          val rect = node.frameRect
-          val animationState =
-            state.runtime.surfaceAnimations
-              .get(surface.id)
-              .map(_.animationState)
-              .getOrElse(com.serenity.animation.AnimationState.empty)
-          val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
-          if blurRadius > 0f then
-            context.surface.effects.foreach(
-              _.blurRegion(
-                rect.x,
-                rect.y,
-                rect.width,
-                rect.height,
-                blurRadius
-              )
-            )
-          content match
-            case SurfaceContent.MarkdownPreview(bufferId, title) =>
-              renderMarkdownPreviewPanel(
-                bufferId,
-                title,
-                rect,
-                node.contentRect,
-                state,
-                context,
-                animationState
-              )
-            case _ =>
-              PinnedPanelRenderer.render(
-                context.surface,
-                PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
-                state.persisted.theme,
-                state.persisted.config,
-                animationState
-              )
-        }
-      case _ => ()
     }
 
   private def renderMarkdownPreviewPanel(

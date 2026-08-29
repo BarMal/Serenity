@@ -130,12 +130,17 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     * a real offscreen surface does.
     */
   private class CountingLayerBufferSurface(width: Int, height: Int) extends MockRenderSurface(width, height):
-    val newLayerSurfaceCalls = new java.util.concurrent.atomic.AtomicInteger(0)
+    val newLayerSurfaceCalls       = new java.util.concurrent.atomic.AtomicInteger(0)
+    val newSeededLayerSurfaceCalls = new java.util.concurrent.atomic.AtomicInteger(0)
 
     override def layerBuffers: Option[LayerBufferSupport] = Some(
       new LayerBufferSupport:
         def newLayerSurface(onFlush: BufferedImage => Unit): RenderSurface =
           newLayerSurfaceCalls.incrementAndGet()
+          new FlushingLayerSurface(width, height, onFlush)
+
+        def newSeededLayerSurface(onFlush: BufferedImage => Unit): RenderSurface =
+          newSeededLayerSurfaceCalls.incrementAndGet()
           new FlushingLayerSurface(width, height, onFlush)
     )
 
