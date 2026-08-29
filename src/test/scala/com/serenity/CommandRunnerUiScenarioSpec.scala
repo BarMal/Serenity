@@ -1,7 +1,7 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandRunner, CommandRunnerSubmenuState}
+import com.serenity.command.{CommandRunner, RecordingState, SettingsPage, SettingsSurfaceState}
 import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier}
@@ -56,7 +56,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(InsertChar('.')).unsafeRunSync()
     driver.dispatch(InsertChar('5')).unsafeRunSync()
     val editing = runnerFrom(driver.state.unsafeRunSync())
-    editing.activeSubmenu.map(_.editingText) shouldBe Some("0.5")
+    editing.activeSettingsSurface.map(_.current.draftText) shouldBe Some("0.5")
 
     val frame     = driver.renderFrame("nested-decimal").unsafeRunSync()
     val surfaceId = frame.evidence.surfaceRects.keys.head
@@ -100,7 +100,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     val opened = runnerFrom(driver.state.unsafeRunSync())
     opened.isSettingsSurface shouldBe true
-    driver.state.unsafeRunSync().commandRunnerSubmenuSurface shouldBe None
+    driver.state.unsafeRunSync().runtime.uiSurfaces should have size 1
 
     "blur radius".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
     driver.dispatch(Enter).unsafeRunSync()
@@ -112,7 +112,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     // issue #1059: Escape now pops one settings level at a time here too, matching the settings-tab-in-palette path
     // -- the dedicated Settings surface previously fully closed on a single Escape regardless of depth, which was
     // the bug. Dismissing entirely now takes one Escape per remaining page, so dispatch until it actually closes.
-    while driver.state.unsafeRunSync().commandRunnerSurface.isDefined do driver.dispatch(Escape).unsafeRunSync()
+    dismissUntilClosed(driver)
 
     driver.advanceToSettled().unsafeRunSync() shouldBe true
     driver.state.unsafeRunSync().commandRunnerSurface shouldBe None
@@ -131,19 +131,20 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
               keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
             )
             .openSettings
-          val items = activated.submenuItems("settings-keymap")
           val runner = activated.copy(
-            activeSubmenu = Some(
-              CommandRunnerSubmenuState(
-                "settings-keymap",
-                selectedIndex = items.indexWhere(_.id == "keymap-global-find"),
-                recordingItemId = Some("keymap-global-find")
+            activeSettingsSurface = Some(
+              SettingsSurfaceState(
+                SettingsPage.Editing(
+                  groupId = "settings-keymap",
+                  itemId = "keymap-global-find",
+                  draftText = "",
+                  recording = Some(RecordingState("keymap-global-find"))
+                )
               )
             )
           )
           // A dedicated settings surface (`isSettingsSurface`) renders its submenu view directly on the one
-          // `CommandPalette` surface -- `CommandRunnerReducer.syncSubmenuSurface` never allocates a second
-          // `CommandPaletteSubmenu` surface for it (that shape is only for the floating group-preview submenu).
+          // `CommandPalette` surface -- there is no second floating surface at all anymore (issue #1059).
           val surface = UiSurface(
             SurfaceId("command-runner"),
             SurfaceContent.CommandPalette(runner),
@@ -176,11 +177,15 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
       frame.evidence.drawnText.map(_.text).mkString(" ") should include("won't fire")
     }
 
+  @scala.annotation.tailrec
+  private def dismissUntilClosed(driver: UiScenarioDriver): Unit =
+    if driver.state.unsafeRunSync().commandRunnerSurface.isDefined then
+      driver.dispatch(Escape).unsafeRunSync()
+      dismissUntilClosed(driver)
+
   private def runnerFrom(state: AppState): com.serenity.command.CommandRunner =
     state.commandRunnerSurface
-      .orElse(state.commandRunnerSubmenuSurface)
       .getOrElse(fail("Expected command runner"))
       .content match
-      case SurfaceContent.CommandPalette(runner)              => runner
-      case SurfaceContent.CommandPaletteSubmenu(runner, _, _) => runner
-      case _                                                  => fail("Expected command runner content")
+      case SurfaceContent.CommandPalette(runner) => runner
+      case _                                     => fail("Expected command runner content")

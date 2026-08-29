@@ -206,7 +206,6 @@ enum SurfaceContent:
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
   case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None)
   case CommandPalette(runner: CommandRunner)
-  case CommandPaletteSubmenu(runner: CommandRunner, groupId: String, previewOnly: Boolean)
   case ThemePicker(state: ThemePickerState)
   case ThemeCreator(state: ThemeCreatorState)
   case FileSearch(state: FileSearchState)

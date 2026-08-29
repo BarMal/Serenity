@@ -5,22 +5,21 @@ import com.serenity.keystroke.KeyStrokeInfo
 
 sealed trait CommandRunnerEvent
 
-final case class RunnerInsertChar(char: Char)                                extends CommandRunnerEvent
-case object RunnerDeleteBackward                                             extends CommandRunnerEvent
-case object RunnerDeleteForward                                              extends CommandRunnerEvent
-case object RunnerDeleteWordBackward                                         extends CommandRunnerEvent
-case object RunnerDeleteWordForward                                          extends CommandRunnerEvent
-case object RunnerPaste                                                      extends CommandRunnerEvent
-final case class RunnerNavigate(direction: Direction)                        extends CommandRunnerEvent
-final case class RunnerSelectVisibleItem(index: Int)                         extends CommandRunnerEvent
-final case class RunnerSelectSubmenuItem(index: Int)                         extends CommandRunnerEvent
-final case class RunnerSelectPreviewSubmenuItem(groupId: String, index: Int) extends CommandRunnerEvent
-final case class RunnerSelectCategory(category: CommandCategory)             extends CommandRunnerEvent
-case object RunnerNextCategory                                               extends CommandRunnerEvent
-case object RunnerPreviousCategory                                           extends CommandRunnerEvent
-case object RunnerSubmit                                                     extends CommandRunnerEvent
-case object RunnerDismiss                                                    extends CommandRunnerEvent
-final case class RunnerBindingRecordingExpired(recordedAtMillis: Long)       extends CommandRunnerEvent
+final case class RunnerInsertChar(char: Char)                          extends CommandRunnerEvent
+case object RunnerDeleteBackward                                       extends CommandRunnerEvent
+case object RunnerDeleteForward                                        extends CommandRunnerEvent
+case object RunnerDeleteWordBackward                                   extends CommandRunnerEvent
+case object RunnerDeleteWordForward                                    extends CommandRunnerEvent
+case object RunnerPaste                                                extends CommandRunnerEvent
+final case class RunnerNavigate(direction: Direction)                  extends CommandRunnerEvent
+final case class RunnerSelectVisibleItem(index: Int)                   extends CommandRunnerEvent
+final case class RunnerSelectSubmenuItem(index: Int)                   extends CommandRunnerEvent
+final case class RunnerSelectCategory(category: CommandCategory)       extends CommandRunnerEvent
+case object RunnerNextCategory                                         extends CommandRunnerEvent
+case object RunnerPreviousCategory                                     extends CommandRunnerEvent
+case object RunnerSubmit                                               extends CommandRunnerEvent
+case object RunnerDismiss                                              extends CommandRunnerEvent
+final case class RunnerBindingRecordingExpired(recordedAtMillis: Long) extends CommandRunnerEvent
 
 /** The timestamp is required, not defaulted to the clock: a default makes construction an effect, so no two
   * constructions of the "same" binding are ever equal.

@@ -237,8 +237,8 @@ object SurfaceFrameLayout:
 
   def borderCellsFor(content: SurfaceContent): Int =
     content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) => CommandSurfaceBorderCells
-      case _                                                                                => DefaultBorderCells
+      case SurfaceContent.CommandPalette(_) => CommandSurfaceBorderCells
+      case _                                => DefaultBorderCells
 
   def forContent(frameRect: LayoutRect, content: SurfaceContent): SurfaceFrameLayout =
     SurfaceFrameLayout(frameRect, borderCellsFor(content))
@@ -281,8 +281,7 @@ object SurfaceFrameLayout:
   /** Minimum physical height for pointer-operable surface controls at the selected density. */
   def itemTargetRowsFor(content: SurfaceContent, density: InterfaceDensity): Int =
     content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandPaletteSubmenu(_, _, _) |
-          SurfaceContent.ContextMenu(_) | SurfaceContent.ContextualToolbar(_) =>
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.ContextMenu(_) | SurfaceContent.ContextualToolbar(_) =>
         minimumTargetRows(density)
       case _ => 1
 

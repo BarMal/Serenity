@@ -44,14 +44,7 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
         IO.pure(false)
 
   private def commandRunnerSelectionAt(event: MouseInputEvent, state: AppState): Option[CommandRunnerEvent] =
-    val surfaces =
-      event match
-        case _: MouseMove
-            if state.commandRunnerSubmenuSurface
-              .exists(surface => state.persisted.focus == Focus.Surface(surface.id)) =>
-          state.commandRunnerSubmenuSurface.toList
-        case _ =>
-          List(state.commandRunnerSubmenuSurface, state.commandRunnerSurface).flatten
+    val surfaces = state.commandRunnerSurface.toList
     if surfaces.isEmpty then None
     else
       state.runtime.viewportSize.flatMap { viewportSize =>
@@ -76,9 +69,9 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
         case SurfaceContent.CommandPalette(runner) =>
           // A settings group drilled into from the palette's Settings tab now renders on this same surface too
           // (issue #1059), so it hit-tests the same way as the dedicated Settings surface -- against
-          // settingsSurfaceItems/settingsSurfaceSelectedIndex -- whenever activeSubmenu is active, not only when
-          // isSettingsSurface.
-          if runner.isSettingsSurface || runner.activeSubmenu.nonEmpty then
+          // settingsSurfaceItems/settingsSurfaceSelectedIndex -- whenever activeSettingsSurface is active, not only
+          // when isSettingsSurface.
+          if runner.isSettingsSurface || runner.activeSettingsSurface.nonEmpty then
             val items = runner.settingsSurfaceItems
             MouseHitTestGeometry
               .overlayItemIndex(
@@ -97,7 +90,8 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
                   SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
               )
               .map { index =>
-                if runner.activeSubmenu.nonEmpty then RunnerSelectSubmenuItem(index) else RunnerSelectVisibleItem(index)
+                if runner.activeSettingsSurface.nonEmpty then RunnerSelectSubmenuItem(index)
+                else RunnerSelectVisibleItem(index)
               }
           else
             commandPaletteCategoryAt(event, contentRect, contract.overlayHeaderRect(surface.id), runner.searchTerm)
@@ -122,34 +116,6 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
                   )
                   .map(RunnerSelectVisibleItem(_))
               }
-        case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
-          val submenuState = runner.activeSubmenu.filter(_.groupId == groupId)
-          val items = submenuState
-            .map(_.filteredItems(runner.submenuItems(groupId)))
-            .getOrElse(runner.submenuItems(groupId))
-          val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
-          val group         = runner.submenuGroup(groupId)
-          val detailRows    = commandRunnerSubmenuDetailRowCount(groupId, items.lift(selectedIndex))
-          MouseHitTestGeometry
-            .overlayItemIndex(
-              event,
-              state,
-              layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
-              contentRect,
-              rowSlots,
-              items.length,
-              selectedIndex,
-              hasHeader = group.nonEmpty,
-              hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-              reservedContentRows = detailRows,
-              itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
-              itemTargetRows =
-                SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
-            )
-            .map { index =>
-              if previewOnly then RunnerSelectPreviewSubmenuItem(groupId, index)
-              else RunnerSelectSubmenuItem(index)
-            }
         case _ =>
           None
     }
@@ -173,19 +139,3 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
   private def groupPreviewRowCount(items: List[CommandSurfaceItem], selectedIndex: Int): Int =
     val preview = SettingsSurfaceState.previewRows(items, selectedIndex)
     preview.rows.size + (if preview.overflowCount > 0 then 1 else 0)
-
-  private def commandRunnerSubmenuDetailRowCount(
-    groupId: String,
-    selectedItem: Option[CommandSurfaceItem]
-  ): Int =
-    selectedItem.count {
-      case group: CommandSurfaceItem.GroupItem
-          if groupId == "settings-ui-presets" &&
-            (group.id == "settings-preset-create" || group.id == "settings-preset-edit") =>
-        true
-      case option: CommandSurfaceItem.OptionItem
-          if groupId == "settings-preset-select" && option.id == "ui-preset-select" =>
-        true
-      case _ =>
-        false
-    }

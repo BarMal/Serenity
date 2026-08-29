@@ -13,7 +13,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.renderer.{Java2DRenderSurface, Renderer, SurfaceMaterials}
+import com.serenity.ui.renderer.{Java2DRenderSurface, Renderer}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -305,7 +305,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     resultLine should include("Settings")
   }
 
-  it should "keep every editor cursor visible but steady while browsing a focused submenu" in {
+  // issue #1059: a settings group drilled into from either entry point now renders on the one command-runner
+  // surface -- previously this exercised focus sitting on a second floating submenu surface (dimming the root and
+  // keeping editor cursors steady relative to it); with that second surface gone, focus and content both live on
+  // the one surface, so there is nothing left to dim relative to, but the "editor cursors stay steady regardless of
+  // command-runner navigation" coverage still applies here.
+  it should "keep every editor cursor visible but steady while browsing a settings group" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -327,7 +332,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
           editorPanes = Map(paneId -> pane),
           activeEditorPaneId = Some(paneId)
         ),
-        focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+        focus = Focus.Surface(SurfaceId("command-runner")),
         theme = Theme.light
       ),
       runtime = initialState.runtime.copy(
@@ -335,11 +340,6 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
           UiSurface(
             SurfaceId("command-runner"),
             SurfaceContent.CommandPalette(runner),
-            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
-          ),
-          UiSurface(
-            SurfaceId("command-runner-submenu"),
-            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
             SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
           )
         )
@@ -357,53 +357,6 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     visibleCursors should have size 3
     hiddenCursors should have size 3
     hiddenCursors.map(_.xPx) shouldBe visibleCursors.map(_.xPx)
-  }
-
-  it should "dim the inactive root command runner while a submenu has focus" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
-      .enterSelectedGroup
-    val buffer = Buffer
-      .fromString(bufferId, "alpha\nbeta\ngamma")
-      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
-    val pane         = EditorPane.withBuffer(paneId, bufferId)
-    val initialState = AppState.initial
-    val state = initialState.copy(
-      persisted = initialState.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
-        ),
-        focus = Focus.Surface(SurfaceId("command-runner-submenu")),
-        theme = Theme.light
-      ),
-      runtime = initialState.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("command-runner"),
-            SurfaceContent.CommandPalette(runner),
-            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
-          ),
-          UiSurface(
-            SurfaceId("command-runner-submenu"),
-            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = false),
-            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
-          )
-        )
-      )
-    )
-    val surface = new MockRenderSurface(100, 30)
-
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
-
-    val baseAlpha = SurfaceMaterials.panelAlpha(state.persisted.config, state.persisted.theme)
-    surface.alphaCalls should contain(baseAlpha)
-    surface.alphaCalls.filter(_ < baseAlpha) should not be empty
   }
 
   // issue #1059: a settings leaf reached via search now renders its drilled-in navigation on the one command-runner
@@ -808,52 +761,4 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "render a ghost submenu preview beneath the main command runner with reduced alpha" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
-    val buffer = Buffer
-      .fromString(bufferId, "alpha\nbeta\ngamma")
-      .copy(
-        editing = EditingState(cursors = List(CursorPosition(1, 2)))
-      )
-    val pane         = EditorPane.withBuffer(paneId, bufferId)
-    val initialState = AppState.initial
-    val state = initialState.copy(
-      persisted = initialState.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
-        ),
-        focus = Focus.Surface(SurfaceId("command-runner")),
-        theme = Theme.light
-      ),
-      runtime = initialState.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("command-runner"),
-            SurfaceContent.CommandPalette(runner),
-            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
-          ),
-          UiSurface(
-            SurfaceId("command-runner-submenu"),
-            SurfaceContent.CommandPaletteSubmenu(runner, "settings-animation", previewOnly = true),
-            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
-          )
-        )
-      )
-    )
-    val surface = new MockRenderSurface(100, 30)
-
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
-
-    surface.strokeRoundRectCalls should have size 2
-    surface.alphaCalls.exists(
-      _ < SurfaceMaterials.panelAlpha(state.persisted.config, state.persisted.theme)
-    ) shouldBe true
-  }
 end CommandRunnerFloatingRenderingSpec

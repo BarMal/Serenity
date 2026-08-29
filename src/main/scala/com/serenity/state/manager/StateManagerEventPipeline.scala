@@ -332,8 +332,6 @@ final private[manager] class StateManagerEventPipeline(
             val updatedSurfaces = state.runtime.uiSurfaces.map {
               case current if current.id == surface.id =>
                 current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
-                current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner, groupId, previewOnly))
               case current =>
                 current
             }

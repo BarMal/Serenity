@@ -8,7 +8,6 @@ import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 
 object CommandRunnerReducer:
-  private val SubmenuSurfaceId      = SurfaceId("command-runner-submenu")
   private val DoubleTapWindowMillis = 200L
 
   def reducer(registry: CommandRegistry): Reducer[CommandRunnerEvent] =
@@ -127,26 +126,24 @@ object CommandRunnerReducer:
         if submenuHasFocus(state) then
           currentRunner(state) match
             case Some(runner) =>
-              runner.activeSubmenu match
-                case Some(submenu) =>
-                  val allItems = runner.submenuItems(submenu.groupId)
-                  val selectedInput =
-                    submenu.selectedItemFromAll(allItems).collect {
-                      case input: CommandSurfaceItem.InputItem =>
-                        input
-                    }
+              runner.activeSettingsSurface match
+                case Some(surface) =>
+                  val page          = surface.current
+                  val allItems      = runner.submenuItems(page.groupId)
+                  val editingItemId = page.editingItemId
+                  val editingText   = page.draftText
+                  val selectedInput = runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex).collect {
+                    case input: CommandSurfaceItem.InputItem => input
+                  }
                   val activeInput = allItems
                     .collectFirst {
-                      case input: CommandSurfaceItem.InputItem if submenu.editingItemId.contains(input.id) => input
+                      case input: CommandSurfaceItem.InputItem if editingItemId.contains(input.id) => input
                     }
                     .orElse(selectedInput)
-                  val currentText = Option.when(submenu.editingItemId.nonEmpty)(submenu.editingText).getOrElse("")
-                  if activeInput.exists(_.accepts(currentText, char)) then
+                  if activeInput.exists(_.accepts(editingText, char)) then
                     activeInput match
                       case Some(item) =>
-                        val nextText =
-                          if submenu.editingItemId.contains(item.id) then submenu.editingText + char
-                          else char.toString
+                        val nextText = if editingItemId.contains(item.id) then editingText + char else char.toString
                         ReducerResult.noEffects(
                           replaceRunner(
                             state,
@@ -154,9 +151,9 @@ object CommandRunnerReducer:
                           )
                         )
                       case None =>
-                        ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm + char)))
-                  else if submenu.editingItemId.isEmpty then
-                    ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm + char)))
+                        ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(page.searchTerm + char)))
+                  else if editingItemId.isEmpty then
+                    ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(page.searchTerm + char)))
                   else ReducerResult.noEffects(state)
                 case None =>
                   ReducerResult.noEffects(state)
@@ -224,8 +221,8 @@ object CommandRunnerReducer:
 
       case RunnerDeleteForward =>
         if submenuHasFocus(state) then
-          currentRunner(state).flatMap(_.activeSubmenu) match
-            case Some(submenu) if submenu.editingItemId.nonEmpty =>
+          currentRunner(state).flatMap(_.activeSettingsSurface) match
+            case Some(surface) if surface.current.editingItemId.nonEmpty =>
               ReducerResult.noEffects(state)
             case _ =>
               ReducerResult.noEffects(state)
@@ -238,19 +235,19 @@ object CommandRunnerReducer:
 
       case RunnerDeleteWordBackward =>
         if submenuHasFocus(state) then
-          currentRunner(state).flatMap(_.activeSubmenu) match
-            case Some(submenu) if submenu.editingItemId.nonEmpty && submenu.editingText.nonEmpty =>
+          currentRunner(state).flatMap(_.activeSettingsSurface) match
+            case Some(surface) if surface.current.editingItemId.nonEmpty && surface.current.draftText.nonEmpty =>
               ReducerResult.noEffects(
                 replaceRunner(
                   state,
                   r =>
-                    r.withSubmenuEditingText(TextEditing.deleteWordBackward(submenu.editingText))
+                    r.withSubmenuEditingText(TextEditing.deleteWordBackward(surface.current.draftText))
                       .copy(statusMessage = None)
                 )
               )
-            case Some(submenu) if submenu.searchTerm.nonEmpty =>
+            case Some(surface) if surface.current.searchTerm.nonEmpty =>
               ReducerResult.noEffects(
-                replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordBackward(submenu.searchTerm)))
+                replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordBackward(surface.current.searchTerm)))
               )
             case _ =>
               ReducerResult.noEffects(state)
@@ -278,19 +275,19 @@ object CommandRunnerReducer:
 
       case RunnerDeleteWordForward =>
         if submenuHasFocus(state) then
-          currentRunner(state).flatMap(_.activeSubmenu) match
-            case Some(submenu) if submenu.editingItemId.nonEmpty && submenu.editingText.nonEmpty =>
+          currentRunner(state).flatMap(_.activeSettingsSurface) match
+            case Some(surface) if surface.current.editingItemId.nonEmpty && surface.current.draftText.nonEmpty =>
               ReducerResult.noEffects(
                 replaceRunner(
                   state,
                   r =>
-                    r.withSubmenuEditingText(TextEditing.deleteWordForward(submenu.editingText))
+                    r.withSubmenuEditingText(TextEditing.deleteWordForward(surface.current.draftText))
                       .copy(statusMessage = None)
                 )
               )
-            case Some(submenu) if submenu.searchTerm.nonEmpty =>
+            case Some(surface) if surface.current.searchTerm.nonEmpty =>
               ReducerResult.noEffects(
-                replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordForward(submenu.searchTerm)))
+                replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordForward(surface.current.searchTerm)))
               )
             case _ =>
               ReducerResult.noEffects(state)
@@ -326,47 +323,23 @@ object CommandRunnerReducer:
 
       case RunnerNavigate(Direction.Up) =>
         if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(-1)))
-        else
-          ReducerResult.noEffects(replaceRunner(state, runner => updatePreviewForSelection(runner.moveSelection(-1))))
+        else ReducerResult.noEffects(replaceRunner(state, _.moveSelection(-1)))
 
       case RunnerNavigate(Direction.Down) =>
         if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(1)))
-        else ReducerResult.noEffects(replaceRunner(state, runner => updatePreviewForSelection(runner.moveSelection(1))))
+        else ReducerResult.noEffects(replaceRunner(state, _.moveSelection(1)))
 
       case RunnerSelectVisibleItem(index) =>
-        val mainFocusedState = state.commandRunnerSurface
-          .map(surface => state.copy(persisted = state.persisted.copy(focus = Focus.Surface(surface.id))))
-          .getOrElse(state)
-        ReducerResult.noEffects(
-          replaceRunner(
-            mainFocusedState,
-            runner => updatePreviewForSelection(runner.withSelectedVisibleIndex(index))
-          )
-        )
+        ReducerResult.noEffects(replaceRunner(state, _.withSelectedVisibleIndex(index)))
 
       case RunnerSelectSubmenuItem(index) =>
-        val submenuFocusedState = state.commandRunnerSubmenuSurface
-          .map(surface => state.copy(persisted = state.persisted.copy(focus = Focus.Surface(surface.id))))
-          .getOrElse(state)
-        ReducerResult.noEffects(
-          replaceRunner(submenuFocusedState, _.withSelectedFocusedSubmenuIndex(index))
-        )
-
-      case RunnerSelectPreviewSubmenuItem(groupId, index) =>
-        val submenuFocusedState = state.commandRunnerSubmenuSurface
-          .map(surface => state.copy(persisted = state.persisted.copy(focus = Focus.Surface(surface.id))))
-          .getOrElse(state)
-        ReducerResult.noEffects(
-          replaceRunner(submenuFocusedState, _.selectPreviewSubmenuItem(groupId, index))
-        )
+        ReducerResult.noEffects(replaceRunner(state, _.withSelectedFocusedSubmenuIndex(index)))
 
       case RunnerSelectCategory(category) =>
         given CommandRegistry = registry
         currentRunner(state) match
           case Some(runner) if runner.searchTerm.isEmpty && !submenuHasFocus(state) =>
-            ReducerResult.noEffects(
-              replaceRunner(state, current => updatePreviewForSelection(current.withActiveCategory(category)))
-            )
+            ReducerResult.noEffects(replaceRunner(state, _.withActiveCategory(category)))
           case _ =>
             ReducerResult.noEffects(state)
 
@@ -440,7 +413,7 @@ object CommandRunnerReducer:
         given CommandRegistry = registry
         currentRunner(state) match
           case Some(runner) if runner.searchTerm.isEmpty && !submenuHasFocus(state) =>
-            ReducerResult.noEffects(replaceRunner(state, r => updatePreviewForSelection(r.switchCategory(1))))
+            ReducerResult.noEffects(replaceRunner(state, _.switchCategory(1)))
           case _ =>
             ReducerResult.noEffects(state)
 
@@ -448,7 +421,7 @@ object CommandRunnerReducer:
         given CommandRegistry = registry
         currentRunner(state) match
           case Some(runner) if runner.searchTerm.isEmpty && !submenuHasFocus(state) =>
-            ReducerResult.noEffects(replaceRunner(state, r => updatePreviewForSelection(r.switchCategory(-1))))
+            ReducerResult.noEffects(replaceRunner(state, _.switchCategory(-1)))
           case _ =>
             ReducerResult.noEffects(state)
 
@@ -456,10 +429,7 @@ object CommandRunnerReducer:
     state
       .copy(runtime =
         state.runtime.copy(uiSurfaces =
-          state.runtime.uiSurfaces
-            .filterNot(surface =>
-              surface.id == SubmenuSurfaceId || state.commandRunnerSurface.exists(_.id == surface.id)
-            )
+          state.runtime.uiSurfaces.filterNot(surface => state.commandRunnerSurface.exists(_.id == surface.id))
         )
       )
       .popFocus
@@ -478,18 +448,18 @@ object CommandRunnerReducer:
       case _                                                                         => false
 
   /** Both entry points now render a drilled-in settings group on the one `CommandPalette` surface (issue #1059), so
-    * `activeSubmenu` being defined is the whole signal -- there is no more second surface to focus, and
+    * `activeSettingsSurface` being defined is the whole signal -- there is no second surface to focus, and
     * `isSettingsSurface` no longer needs distinguishing here since the two paths behave identically once inside a
     * group.
     */
   private def submenuHasFocus(state: AppState): Boolean =
-    currentRunner(state).exists(_.activeSubmenu.nonEmpty)
+    currentRunner(state).exists(_.activeSettingsSurface.nonEmpty)
 
   private def submenuEditing(state: AppState): Boolean =
-    currentRunner(state).flatMap(_.activeSubmenu.flatMap(_.editingItemId)).nonEmpty
+    currentRunner(state).exists(_.activeSettingsSurface.exists(_.current.editingItemId.nonEmpty))
 
   private def submenuSearching(state: AppState): Boolean =
-    currentRunner(state).flatMap(_.activeSubmenu).exists(_.searchTerm.nonEmpty)
+    currentRunner(state).exists(_.activeSettingsSurface.exists(_.current.searchTerm.nonEmpty))
 
   private def rootEditing(state: AppState): Boolean =
     currentRunner(state).flatMap(_.editingItemId).nonEmpty
@@ -501,32 +471,24 @@ object CommandRunnerReducer:
     replaceRunner(state, _.copy(editingItemId = None, editingText = "", statusMessage = None))
 
   private def submenuSelectedOption(runner: CommandRunner): Option[CommandSurfaceItem.OptionItem] =
-    runner.activeSubmenu.flatMap { submenu =>
-      submenu.selectedItemFromAll(runner.submenuItems(submenu.groupId)).collect {
-        case option: CommandSurfaceItem.OptionItem =>
-          option
+    runner.activeSettingsSurface.flatMap { _ =>
+      runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex).collect {
+        case option: CommandSurfaceItem.OptionItem => option
       }
     }
-
-  private def updatePreviewForSelection(runner: CommandRunner): CommandRunner =
-    runner.selectedItem match
-      case Some(group: CommandSurfaceItem.GroupItem) if runner.activeCategory == CommandCategory.Settings =>
-        runner.previewGroup(group.id)
-      case _ =>
-        runner.clearGroupPreview
 
   private def submitSubmenu(state: AppState): ReducerResult =
     currentRunner(state) match
       case None =>
         ReducerResult.noEffects(state)
       case Some(runner) =>
-        runner.activeSubmenu match
+        runner.activeSettingsSurface match
           case None =>
             ReducerResult.noEffects(state)
-          case Some(submenu) =>
-            submenu.selectedItemFromAll(runner.submenuItems(submenu.groupId)) match
-              case Some(item: CommandSurfaceItem.InputItem)
-                  if submenu.editingItemId.isEmpty && item.acceptsBindingText =>
+          case Some(surface) =>
+            val page = surface.current
+            runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex) match
+              case Some(item: CommandSurfaceItem.InputItem) if page.editingItemId.isEmpty && item.acceptsBindingText =>
                 ReducerResult.noEffects(
                   replaceRunner(
                     state,
@@ -534,10 +496,11 @@ object CommandRunnerReducer:
                       r.beginSubmenuRecording(item.id).copy(statusMessage = Some("Press a key or shortcut to assign"))
                   )
                 )
-              case Some(_: CommandSurfaceItem.InputItem) if submenu.editingItemId.isEmpty =>
+              case Some(_: CommandSurfaceItem.InputItem) if page.editingItemId.isEmpty =>
                 ReducerResult.noEffects(state)
-              case Some(item: CommandSurfaceItem.InputItem) if submenu.pendingGlobalHotkeyConflict.nonEmpty =>
-                submenu.pendingGlobalHotkeyConflict.fold(ReducerResult.noEffects(state)) {
+              case Some(item: CommandSurfaceItem.InputItem)
+                  if page.recording.flatMap(_.pendingGlobalHotkeyConflict).nonEmpty =>
+                page.recording.flatMap(_.pendingGlobalHotkeyConflict).fold(ReducerResult.noEffects(state)) {
                   case (action, binding) =>
                     ReducerResult(
                       state = replaceRunner(
@@ -556,8 +519,9 @@ object CommandRunnerReducer:
                       )
                     )
                 }
-              case Some(item: CommandSurfaceItem.InputItem) if submenu.pendingFocusedKeymapConflict.nonEmpty =>
-                submenu.pendingFocusedKeymapConflict.fold(ReducerResult.noEffects(state)) {
+              case Some(item: CommandSurfaceItem.InputItem)
+                  if page.recording.flatMap(_.pendingFocusedKeymapConflict).nonEmpty =>
+                page.recording.flatMap(_.pendingFocusedKeymapConflict).fold(ReducerResult.noEffects(state)) {
                   case (itemId, binding) =>
                     ReducerResult(
                       state = replaceRunner(
@@ -577,7 +541,7 @@ object CommandRunnerReducer:
                     )
                 }
               case Some(item: CommandSurfaceItem.InputItem) =>
-                item.parse(submenu.editingText) match
+                item.parse(page.draftText) match
                   case Some(intent) =>
                     ReducerResult(
                       state = replaceRunner(
@@ -591,7 +555,7 @@ object CommandRunnerReducer:
                     ReducerResult.noEffects(
                       replaceRunner(
                         state,
-                        _.copy(statusMessage = Some(invalidInputMessage(item, submenu.editingText)))
+                        _.copy(statusMessage = Some(invalidInputMessage(item, page.draftText)))
                       )
                     )
               case Some(option: CommandSurfaceItem.OptionItem) =>
@@ -628,18 +592,17 @@ object CommandRunnerReducer:
       case None =>
         ReducerResult.noEffects(state)
       case Some(runner) =>
-        runner.activeSubmenu match
+        runner.activeSettingsSurface match
           case None =>
             ReducerResult.noEffects(state)
-          case Some(submenu) =>
-            submenu.recordingItemId match
+          case Some(surface) =>
+            surface.current.recording match
               case None =>
                 ReducerResult.noEffects(state)
-              case Some(recordingItemId) =>
-                runner.submenuItems(submenu.groupId).find(_.id == recordingItemId) match
+              case Some(recording) =>
+                runner.submenuItems(surface.current.groupId).find(_.id == recording.itemId) match
                   case Some(item: CommandSurfaceItem.InputItem) =>
-                    val pending = submenu.pendingRecordedBinding
-                    pending match
+                    recording.pendingRecordedBinding match
                       case None =>
                         ReducerResult(
                           replaceRunner(
@@ -665,14 +628,15 @@ object CommandRunnerReducer:
   private def expireRecordedBinding(state: AppState, recordedAtMillis: Long): ReducerResult =
     currentRunner(state)
       .flatMap { runner =>
-        runner.activeSubmenu.flatMap { submenu =>
-          submenu.pendingRecordedBinding match
-            case Some((first, pendingAt)) if pendingAt == recordedAtMillis =>
-              submenu.recordingItemId
-                .flatMap(itemId => runner.submenuItems(submenu.groupId).find(_.id == itemId)) match
-                case Some(item: CommandSurfaceItem.InputItem) => Some(assignRecordedBinding(state, item, first))
-                case _                                        => None
-            case _ => None
+        runner.activeSettingsSurface.flatMap { surface =>
+          surface.current.recording.flatMap { recording =>
+            recording.pendingRecordedBinding match
+              case Some((first, pendingAt)) if pendingAt == recordedAtMillis =>
+                runner.submenuItems(surface.current.groupId).find(_.id == recording.itemId) match
+                  case Some(item: CommandSurfaceItem.InputItem) => Some(assignRecordedBinding(state, item, first))
+                  case _                                        => None
+              case _ => None
+          }
         }
       }
       .getOrElse(ReducerResult.noEffects(state))
@@ -727,44 +691,33 @@ object CommandRunnerReducer:
     )
 
   private def submenuRecording(state: AppState): Boolean =
-    currentRunner(state).exists(_.activeSubmenu.exists(_.recordingItemId.nonEmpty))
+    currentRunner(state).exists(_.activeSettingsSurface.exists(_.current.recording.nonEmpty))
 
   private def clearSubmenuRecording(state: AppState): AppState =
     replaceRunner(state, runner => runner.clearSubmenuEditingAndRecording.copy(statusMessage = None))
 
+  /** Settings navigation -- both the settings-tab-in-palette and the dedicated Settings surface -- renders entirely
+    * through `SurfaceContentResolver.resolveSettingsSurface` on the one `CommandPalette` surface (issue #1059's "one
+    * consistent settings experience"): capped group-preview rows expand in place in that single list instead of a
+    * second floating surface, so every runner update just rebuilds the one surface and reasserts focus on it.
+    */
   private def replaceRunner(state: AppState, update: CommandRunner => CommandRunner): AppState =
     state.commandRunnerSurface match
       case Some(surface) =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
             val updatedRunner = update(runner)
-            val updatedSurfaces = state.runtime.uiSurfaces.flatMap {
+            val updatedSurfaces = state.runtime.uiSurfaces.map {
               case current if current.id == surface.id =>
-                List(current.copy(content = SurfaceContent.CommandPalette(updatedRunner)))
-              case current if current.id == SubmenuSurfaceId =>
-                Nil
+                current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
               case other =>
-                List(other)
+                other
             }
-            clearSubmenuSurface(state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)))
+            state.copy(
+              runtime = state.runtime.copy(uiSurfaces = updatedSurfaces),
+              persisted = state.persisted.copy(focus = Focus.Surface(surface.id))
+            )
           case _ =>
             state
       case None =>
         state
-
-  /** Settings navigation -- both the settings-tab-in-palette and the dedicated Settings surface -- now renders entirely
-    * through `SurfaceContentResolver.resolveSettingsSurface` on the one `CommandPalette` surface (issue #1059's "one
-    * consistent settings experience"): capped group-preview rows expand in place in that single list instead of a
-    * second floating surface. `previewOrFocusedGroupId`/`SurfaceContent.CommandPaletteSubmenu` were only ever driven by
-    * Settings-category preview/navigation (`updatePreviewForSelection`'s `previewGroup` call is gated on
-    * `activeCategory == Settings`, and `activeSubmenu` only ever holds settings navigation) -- so there is nothing left
-    * that should spawn a second `UiSurface`; every `replaceRunner` call now just makes sure any leftover one from
-    * before this migration is gone and focus sits on the main surface.
-    */
-  private def clearSubmenuSurface(state: AppState): AppState =
-    val baseSurfaces  = state.runtime.uiSurfaces.filterNot(_.id == SubmenuSurfaceId)
-    val mainSurfaceId = state.commandRunnerSurface.map(_.id).getOrElse(SurfaceId("command-runner"))
-    state.copy(
-      runtime = state.runtime.copy(uiSurfaces = baseSurfaces),
-      persisted = state.persisted.copy(focus = Focus.Surface(mainSurfaceId))
-    )

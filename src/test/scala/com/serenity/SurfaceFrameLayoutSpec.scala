@@ -25,10 +25,6 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
       .forContent(frame, SurfaceContent.CommandPalette(runner))
       .contentRect
       .shouldBe(LayoutRect(11, 5, 38, 6))
-    SurfaceFrameLayout
-      .forContent(frame, SurfaceContent.CommandPaletteSubmenu(runner, "settings", previewOnly = false))
-      .contentRect
-      .shouldBe(LayoutRect(11, 5, 38, 6))
   }
 
   it should "reserve two rows for contextual menus and toolbars outside compact density" in {

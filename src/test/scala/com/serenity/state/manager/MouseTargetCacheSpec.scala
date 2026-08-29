@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.awt.Font
 
-import com.serenity.command.{Command, CommandRegistry, CommandRunner, CommandRunnerSubmenuState}
+import com.serenity.command.{Command, CommandRegistry, CommandRunner}
 import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -348,59 +348,9 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       MouseTargetCache.fromState(selected, size).scene
   }
 
-  private def stateWithSubmenu(groupId: String, submenuSearchTerm: String): AppState =
-    val registry = CommandRegistry.default
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withMotionPreset(com.serenity.config.MotionPreset.Custom))
-      .openSettings
-      .copy(activeSubmenu = Some(CommandRunnerSubmenuState(groupId, searchTerm = submenuSearchTerm)))
-    val mainSurface = UiSurface(
-      SurfaceId("command-runner"),
-      SurfaceContent.CommandPalette(runner),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val submenuSurface = UiSurface(
-      SurfaceId("command-runner-submenu"),
-      SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly = false),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    commandPaletteBaseState.copy(
-      persisted = commandPaletteBaseState.persisted.copy(focus = Focus.Surface(submenuSurface.id)),
-      runtime = commandPaletteBaseState.runtime.copy(uiSurfaces = List(mainSurface, submenuSurface))
-    )
-
-  it should "reuse the prepared scene when a submenu edit doesn't change its visible item count" in {
-    val size = ViewportSize(80, 24)
-    val base = stateWithSubmenu("settings-animation", submenuSearchTerm = "")
-    val runner = base.commandRunnerSurface.get.content match
-      case SurfaceContent.CommandPalette(r) => r
-      case _                                => fail("expected command palette")
-    val editing = base.copy(runtime = base.runtime.copy(uiSurfaces = base.runtime.uiSurfaces.map {
-      case s if s.id == SurfaceId("command-runner-submenu") =>
-        s.copy(content =
-          SurfaceContent.CommandPaletteSubmenu(
-            runner.copy(activeSubmenu =
-              runner.activeSubmenu.map(_.copy(editingItemId = Some("animation-duration"), editingText = "1"))
-            ),
-            "settings-animation",
-            previewOnly = false
-          )
-        )
-      case s => s
-    }))
-
-    MouseTargetLayoutKey.from(editing, size) shouldBe MouseTargetLayoutKey.from(base, size)
-    MouseTargetCache.fromState(editing, size).scene should be theSameInstanceAs
-      MouseTargetCache.fromState(base, size).scene
-  }
-
-  it should "invalidate the prepared scene when a submenu search changes its visible item count" in {
-    val size       = ViewportSize(80, 24)
-    val unfiltered = stateWithSubmenu("settings-animation", submenuSearchTerm = "")
-    val filtered   = stateWithSubmenu("settings-animation", submenuSearchTerm = "duration")
-
-    MouseTargetLayoutKey.from(unfiltered, size) should not be MouseTargetLayoutKey.from(filtered, size)
-    MouseTargetCache.fromState(filtered, size).scene should not be theSameInstanceAs(
-      MouseTargetCache.fromState(unfiltered, size).scene
-    )
-  }
+  // issue #1059: a drilled-in settings group now renders on the one `CommandPalette` surface, whose
+  // `SurfaceGeometryKey` was already item-count-agnostic before this migration (see the "Verified against every
+  // LayoutEngine consumer..." note on `SurfaceGeometryKey.from`'s `CommandPalette` case) -- there is no second
+  // surface whose geometry cache key depends on submenu item count anymore, so the scene-reuse/invalidation
+  // scenarios this used to cover no longer apply; "reuse the prepared scene when only the command palette's
+  // selected row changes" above already exercises that same item-count-agnostic caching for the one surface.

@@ -48,9 +48,7 @@ object AppEventReducer:
         state
           .copy(
             runtime = state.runtime.copy(
-              uiSurfaces = state.runtime.uiSurfaces.filterNot { current =>
-                current.id == surface.id || isCommandPaletteSubmenu(current.content)
-              }
+              uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)
             )
           )
           .popFocus
@@ -116,11 +114,6 @@ object AppEventReducer:
     surface.content match
       case SurfaceContent.CommandPalette(runner) => Some((surface, runner))
       case _                                     => None
-
-  private def isCommandPaletteSubmenu(content: SurfaceContent): Boolean =
-    content match
-      case SurfaceContent.CommandPaletteSubmenu(_, _, _) => true
-      case _                                             => false
 
   private def isFileSearch(content: SurfaceContent): Boolean =
     content match

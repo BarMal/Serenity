@@ -161,7 +161,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
-    runnerFrom(stateManager.getCurrentState.unsafeRunSync()).activeSubmenu.map(_.selectedIndex) shouldBe Some(2)
+    runnerFrom(stateManager.getCurrentState.unsafeRunSync()).settingsSurfaceSelectedIndex shouldBe 2
   }
 
   // issue #1059: hovering a not-yet-entered group's preview rows, and clicking within them to select or enter a

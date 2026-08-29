@@ -32,28 +32,27 @@ private[serenity] object CommandRunnerPanelSelections:
 
   private def panelKind(content: SurfaceContent): Option[PanelKind] =
     content match
-      case SurfaceContent.DirectoryTree(_, _)            => Some(PanelKind.Explorer)
-      case SurfaceContent.Outline(_, _)                  => Some(PanelKind.Outline)
-      case SurfaceContent.Comments(_, _)                 => Some(PanelKind.Comments)
-      case SurfaceContent.Diagnostics(_, _)              => Some(PanelKind.Diagnostics)
-      case SurfaceContent.MarkdownPreview(_, _)          => Some(PanelKind.MarkdownPreview)
-      case SurfaceContent.StartPage(_)                   => None
-      case SurfaceContent.QuickInfo(_)                   => None
-      case SurfaceContent.FilePreview(_, _)              => None
-      case SurfaceContent.SymbolDefinition(_, _)         => None
-      case SurfaceContent.CursorInfoBar(_)               => None
-      case SurfaceContent.DirectoryListing(_, _, _)      => None
-      case SurfaceContent.CommandPalette(_)              => None
-      case SurfaceContent.CommandPaletteSubmenu(_, _, _) => None
-      case SurfaceContent.ThemePicker(_)                 => None
-      case SurfaceContent.ThemeCreator(_)                => None
-      case SurfaceContent.FileSearch(_)                  => None
-      case SurfaceContent.ContextualToolbar(_)           => None
-      case SurfaceContent.ContextMenu(_)                 => None
-      case SurfaceContent.CommentLens(_)                 => None
-      case SurfaceContent.ModalWorkflow(_)               => None
-      case SurfaceContent.Terminal(_, _)                 => None
-      case SurfaceContent.GhostOverlay(_, _)             => None
+      case SurfaceContent.DirectoryTree(_, _)       => Some(PanelKind.Explorer)
+      case SurfaceContent.Outline(_, _)             => Some(PanelKind.Outline)
+      case SurfaceContent.Comments(_, _)            => Some(PanelKind.Comments)
+      case SurfaceContent.Diagnostics(_, _)         => Some(PanelKind.Diagnostics)
+      case SurfaceContent.MarkdownPreview(_, _)     => Some(PanelKind.MarkdownPreview)
+      case SurfaceContent.StartPage(_)              => None
+      case SurfaceContent.QuickInfo(_)              => None
+      case SurfaceContent.FilePreview(_, _)         => None
+      case SurfaceContent.SymbolDefinition(_, _)    => None
+      case SurfaceContent.CursorInfoBar(_)          => None
+      case SurfaceContent.DirectoryListing(_, _, _) => None
+      case SurfaceContent.CommandPalette(_)         => None
+      case SurfaceContent.ThemePicker(_)            => None
+      case SurfaceContent.ThemeCreator(_)           => None
+      case SurfaceContent.FileSearch(_)             => None
+      case SurfaceContent.ContextualToolbar(_)      => None
+      case SurfaceContent.ContextMenu(_)            => None
+      case SurfaceContent.CommentLens(_)            => None
+      case SurfaceContent.ModalWorkflow(_)          => None
+      case SurfaceContent.Terminal(_, _)            => None
+      case SurfaceContent.GhostOverlay(_, _)        => None
 
   private def positionOf(surface: UiSurface): Option[PanelPosition] =
     surface.presentation match

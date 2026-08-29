@@ -6,34 +6,11 @@ import com.serenity.config.*
 import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.ui.presets.UiPreset
 
-final case class CommandRunnerSubmenuState(
-    groupId: String,
-    selectedIndex: Int = 0,
-    editingItemId: Option[String] = None,
-    editingText: String = "",
-    recordingItemId: Option[String] = None,
-    pendingRecordedBinding: Option[(KeyStrokeInfo, Long)] = None,
-    pendingGlobalHotkeyConflict: Option[(HotkeyAction, String)] = None,
-    pendingFocusedKeymapConflict: Option[(String, String)] = None,
-    searchTerm: String = "",
-    parentGroupId: Option[String] = None,
-    ancestorGroupIds: List[String] = Nil
-):
-  def selectedItem(items: List[CommandSurfaceItem]): Option[CommandSurfaceItem] =
-    items.lift(selectedIndex)
-
-  def filteredItems(items: List[CommandSurfaceItem]): List[CommandSurfaceItem] =
-    val lowerTerm = searchTerm.trim.toLowerCase
-    if lowerTerm.isEmpty then items
-    else items.filter(_.searchText.toLowerCase.contains(lowerTerm))
-
-  def selectedItemFromAll(items: List[CommandSurfaceItem]): Option[CommandSurfaceItem] =
-    selectedItem(filteredItems(items))
-
 /** In-flight keybinding recording for a settings item, and any conflict it surfaced.
   *
-  * Consolidates the four `recordingItemId`/`pending*` fields carried per-item on `CommandRunnerSubmenuState` today into
-  * one value scoped to the page that owns the recording (see `SettingsPage.Editing.recording`), for issue #1059.
+  * Scoped to whichever page owns the recording (see `SettingsPage.Editing.recording`) rather than carried as per-item
+  * fields on a flat submenu state, since the page stack (issue #1059) already knows which item, if any, is being
+  * edited.
   */
 final case class RecordingState(
     itemId: String,
@@ -76,6 +53,23 @@ object SettingsPage:
     def searchTerm: String = page match
       case Group(_, _, term)         => term
       case Editing(_, _, _, term, _) => term
+
+    /** The item currently mid-edit, if `page` is an `Editing` page -- `None` for a plain `Group` page. */
+    def editingItemId: Option[String] = page match
+      case _: Group         => None
+      case editing: Editing => Some(editing.itemId)
+
+    /** The in-progress draft text for `page`'s edit -- empty for a plain `Group` page, since nothing is being edited
+      * there.
+      */
+    def draftText: String = page match
+      case _: Group         => ""
+      case editing: Editing => editing.draftText
+
+    /** The in-flight keybinding recording for `page`'s edit, if any -- `None` for a plain `Group` page. */
+    def recording: Option[RecordingState] = page match
+      case _: Group         => None
+      case editing: Editing => editing.recording
 
 /** The unified settings surface's navigation state: an explicit page stack (issue #1059).
   *
@@ -138,8 +132,9 @@ object SettingsSurfaceState:
 
   private val MaxPreviewRows = 4
 
-  /** Ghost-preview rows for a group nested under the selected item, capped to `MaxPreviewRows` with an overflow count
-    * -- a pure function of the selected item, carrying no state of its own (issue #1059's ghost-preview submenu).
+  /** Capped, expand-in-place group preview rows for a group nested under the selected item -- capped to
+    * `MaxPreviewRows` with an overflow count -- a pure function of the selected item, carrying no state of its own
+    * (issue #1059).
     */
   final case class PreviewRows(rows: List[String], overflowCount: Int):
     def isEmpty: Boolean = rows.isEmpty
@@ -173,14 +168,11 @@ final case class CommandRunner(
     editingText: String = "",
     recordingItemId: Option[String] = None,
     submenuSelections: Map[String, Int] = Map.empty,
-    previewedGroupId: Option[String] = None,
-    activeSubmenu: Option[CommandRunnerSubmenuState] = None,
-    // The page-stack replacement for `activeSubmenu` (issue #1059). Every method that touches `activeSubmenu` now
-    // keeps this in sync as a faithful mirror -- `activeSettingsSurface.isDefined == activeSubmenu.isDefined`, its
-    // `current`/`ancestors` track `activeSubmenu`'s `groupId`/`selectedIndex`/`searchTerm`/`ancestorGroupIds` -- so the
-    // two never drift regardless of which methods a caller chains. `CommandRunnerReducer`/`SurfaceContentResolver`
-    // still read only `activeSubmenu`; `activeSubmenu` stays authoritative (and is not deleted) until they're migrated
-    // too.
+    // Settings navigation -- both the settings-tab-in-palette and the dedicated Settings surface -- is an explicit
+    // page stack (issue #1059): `None` means no group is drilled into, `Some` carries the page on screen plus the
+    // pages to return to. Replaced the old flat `CommandRunnerSubmenuState`/`previewedGroupId` pair once
+    // `SurfaceContentResolver`/`CommandRunnerMouseHitTesting`/`CommandRunnerReducer` were all migrated to read and
+    // write only this field.
     activeSettingsSurface: Option[SettingsSurfaceState] = None,
     statusMessage: Option[String] = None,
     uiPresetPreviews: List[UiPreset.Preview] = Nil,
@@ -232,8 +224,6 @@ final case class CommandRunner(
       searchTerm = term,
       selectedIndex = 0,
       filteredCommands = filtered,
-      previewedGroupId = None,
-      activeSubmenu = None,
       activeSettingsSurface = None,
       recordingItemId = None,
       statusMessage = None
@@ -267,15 +257,13 @@ final case class CommandRunner(
       activeCategory = CommandCategory.Settings,
       searchTerm = "",
       selectedIndex = 0,
-      previewedGroupId = None,
-      activeSubmenu = None,
       activeSettingsSurface = None,
       statusMessage = None
     )
 
-  // Flipped to activeSettingsSurface now that SurfaceContentResolver/CommandRunnerMouseHitTesting are migrated
-  // (issue #1059) -- both now read through these five methods for a settings group rendered/hit-tested on the one
-  // command-runner surface, and no longer construct a second submenu surface that would desync from activeSubmenu.
+  /** Both the Settings-tab-in-palette and dedicated Settings entry points render a settings group through these three
+    * methods on the one `CommandPalette` surface (issue #1059) -- there is no second surface to desync from.
+    */
   def settingsSurfaceItems: List[CommandSurfaceItem] =
     activeSettingsSurface match
       case Some(surface)               => filteredPageItems(surface.current, submenuItems(surface.current.groupId))
@@ -293,12 +281,6 @@ final case class CommandRunner(
   def updateSettingsSearch(term: String)(using registry: CommandRegistry): CommandRunner =
     updateSearchTerm(term)
 
-  def previewGroup(groupId: String): CommandRunner =
-    copy(previewedGroupId = Some(groupId))
-
-  def clearGroupPreview: CommandRunner =
-    copy(previewedGroupId = None, activeSubmenu = None, activeSettingsSurface = None)
-
   def enterSelectedGroup: CommandRunner =
     selectedItem match
       case Some(setting: CommandSurfaceItem.SettingSearchItem) =>
@@ -306,15 +288,6 @@ final case class CommandRunner(
         val selectedIndex = items.indexWhere(_.id == setting.targetItemId).max(0)
         val ancestorIds   = preferredAncestorGroupIds(setting.targetGroupId)
         copy(
-          previewedGroupId = Some(setting.targetGroupId),
-          activeSubmenu = Some(
-            CommandRunnerSubmenuState(
-              setting.targetGroupId,
-              selectedIndex = selectedIndex,
-              parentGroupId = ancestorIds.lastOption,
-              ancestorGroupIds = ancestorIds
-            )
-          ),
           activeSettingsSurface = Some(
             SettingsSurfaceState(
               SettingsPage.Group(setting.targetGroupId, selectedIndex),
@@ -332,16 +305,6 @@ final case class CommandRunner(
             case "settings-preset-create" => None
             case _                        => editingPresetName
         copy(
-          previewedGroupId = Some(group.id),
-          activeSubmenu = Some(
-            CommandRunnerSubmenuState(
-              group.id,
-              selectedIndex = rememberedIndex,
-              searchTerm = carriedSearchTerm,
-              parentGroupId = ancestorIds.lastOption,
-              ancestorGroupIds = ancestorIds
-            )
-          ),
           activeSettingsSurface = Some(
             SettingsSurfaceState(
               SettingsPage.Group(group.id, rememberedIndex, carriedSearchTerm),
@@ -353,51 +316,36 @@ final case class CommandRunner(
       case _ => this
 
   /** `exitSubmenuToPreview`'s job is not a plain stack pop: it re-points the revealed parent page at the child we just
-    * left (so the ghost preview shows under the right row), overriding whatever `selectedIndex` that ancestor page
-    * carried from when it was pushed -- see the deviation note in the migration report.
+    * left (so the capped group preview shows under the right row), overriding whatever `selectedIndex` that ancestor
+    * page carried from when it was pushed. Reading the parent id straight off `surface.ancestors.headOption` (rather
+    * than a separately tracked `parentGroupId` field) makes the once-real self-referential-parent bug (see the
+    * migration report) structurally impossible: there is no second copy of "what's my parent" left to drift.
     */
   def exitSubmenuToPreview: CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        submenu.parentGroupId match
-          case Some(parentId) =>
+    activeSettingsSurface match
+      case Some(surface) =>
+        val groupId = surface.current.groupId
+        surface.ancestors match
+          case parent :: _ =>
+            val parentId    = parent.groupId
             val parentItems = submenuItems(parentId)
             val parentIndex =
-              parentItems.indexWhere(_.id == submenu.groupId) match
+              parentItems.indexWhere(_.id == groupId) match
                 case -1    => submenuSelections.getOrElse(parentId, 0)
                 case index => index
-            // `submenu.ancestorGroupIds` still includes `parentId` itself (it's the chain *above and including* the
-            // page we're leaving) -- drop it first, then `parentGroupId` is whatever's left at the end. Using
-            // `submenu.ancestorGroupIds.lastOption` directly here (the pre-drop list) made the revealed page's own
-            // `parentGroupId` self-referential -- a real bug, caught by exercising two consecutive pops at depth 2+
-            // once Escape started delegating to this method for every depth uniformly (issue #1059).
-            val revealedAncestorGroupIds = submenu.ancestorGroupIds.dropRight(1)
             copy(
               submenuSelections =
-                submenuSelections + (submenu.groupId -> submenu.selectedIndex) + (parentId -> parentIndex),
-              activeSubmenu = Some(
-                CommandRunnerSubmenuState(
-                  parentId,
-                  selectedIndex = parentIndex,
-                  parentGroupId = revealedAncestorGroupIds.lastOption,
-                  ancestorGroupIds = revealedAncestorGroupIds
-                )
-              ),
-              activeSettingsSurface = activeSettingsSurface
-                .flatMap(_.pop)
-                .map(surface => surface.copy(current = SettingsPage.Group(parentId, parentIndex)))
+                submenuSelections + (groupId -> pageSelectedIndex(surface.current)) + (parentId -> parentIndex),
+              activeSettingsSurface =
+                surface.pop.map(popped => popped.copy(current = SettingsPage.Group(parentId, parentIndex)))
             )
-          case None =>
+          case Nil =>
             copy(
-              submenuSelections = submenuSelections + (submenu.groupId -> submenu.selectedIndex),
-              activeSubmenu = None,
+              submenuSelections = submenuSelections + (groupId -> pageSelectedIndex(surface.current)),
               activeSettingsSurface = None
             )
       case None =>
-        copy(activeSubmenu = None, activeSettingsSurface = None)
-
-  def previewOrFocusedGroupId: Option[String] =
-    activeSubmenu.map(_.groupId).orElse(previewedGroupId)
+        copy(activeSettingsSurface = None)
 
   def submenuItems(groupId: String): List[CommandSurfaceItem] =
     submenuGroup(groupId).map(_.children).getOrElse(Nil)
@@ -431,13 +379,13 @@ final case class CommandRunner(
       .getOrElse(Nil)
 
   /** `ancestorGroupIds`-shaped (root-first) group ids as `SettingsSurfaceState` ancestor pages (nearest-first), each
-    * restored at its remembered `submenuSelections` index -- the page-stack counterpart of `ancestorGroupIds`.
+    * restored at its remembered `submenuSelections` index.
     */
   private def ancestorPagesFor(ancestorIds: List[String]): List[SettingsPage] =
     ancestorIds.reverse.map(id => SettingsPage.Group(id, submenuSelections.getOrElse(id, 0)))
 
-  /** `CommandRunnerSubmenuState.filteredItems`'s counterpart for a `SettingsPage`, using its `searchTerm` extension so
-    * it filters identically whether the page is `Group` or `Editing`.
+  /** A page's item list, filtered by its `searchTerm` extension so it filters identically whether the page is `Group`
+    * or `Editing`.
     */
   private def filteredPageItems(page: SettingsPage, items: List[CommandSurfaceItem]): List[CommandSurfaceItem] =
     val lowerTerm = page.searchTerm.trim.toLowerCase
@@ -467,7 +415,6 @@ final case class CommandRunner(
       current ++ groupPaths(groupId, childGroups).map(group.id :: _)
     }
 
-  // Flipped alongside settingsSurfaceItems above (issue #1059).
   def focusedSubmenuItems: List[CommandSurfaceItem] =
     activeSettingsSurface.toList.flatMap(surface =>
       filteredPageItems(surface.current, submenuItems(surface.current.groupId))
@@ -476,7 +423,7 @@ final case class CommandRunner(
   def submenuBreadcrumbLabels(groupId: String): List[String] =
     activeSettingsSurface match
       case Some(surface) if surface.current.groupId == groupId && surface.ancestors.nonEmpty =>
-        // `ancestors` is nearest-first; the old `ancestorGroupIds` it mirrors is root-first, so reverse it back.
+        // `ancestors` is nearest-first; breadcrumbs read root-first, so reverse it back.
         (surface.ancestors.reverse.map(_.groupId) :+ groupId).flatMap(id => submenuGroup(id).map(_.label))
       case _ =>
         submenuGroup(groupId).map(_.label).toList
@@ -487,55 +434,36 @@ final case class CommandRunner(
     groupIds.flatMap(id => submenuGroup(id).map(_.label))
 
   def moveSubmenuSelection(delta: Int): CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        val items = submenu.filteredItems(submenuItems(submenu.groupId))
+    activeSettingsSurface match
+      case Some(surface) =>
+        val groupId = surface.current.groupId
+        val items   = filteredPageItems(surface.current, submenuItems(groupId))
         if items.isEmpty then this
         else
           val itemCount    = items.size
-          val newIndex     = (submenu.selectedIndex + delta) % itemCount
+          val newIndex     = (pageSelectedIndex(surface.current) + delta) % itemCount
           val wrappedIndex = if newIndex < 0 then itemCount + newIndex else newIndex
           copy(
-            submenuSelections = submenuSelections + (submenu.groupId -> wrappedIndex),
-            activeSubmenu = Some(
-              submenu.copy(
-                selectedIndex = wrappedIndex,
-                editingItemId = None,
-                editingText = "",
-                recordingItemId = None,
-                pendingRecordedBinding = None,
-                pendingGlobalHotkeyConflict = None,
-                pendingFocusedKeymapConflict = None
-              )
-            ),
-            // Moving selection always exits edit mode (mirroring the old model's editingItemId=None above), so the
-            // new current page is always rebuilt as a Group, dropping any Editing page that was there.
-            activeSettingsSurface = activeSettingsSurface.map(surface =>
-              surface.copy(current = SettingsPage.Group(submenu.groupId, wrappedIndex, surface.current.searchTerm))
-            )
+            submenuSelections = submenuSelections + (groupId -> wrappedIndex),
+            // Moving selection always exits edit mode, so the new current page is always rebuilt as a Group,
+            // dropping any Editing page that was there.
+            activeSettingsSurface =
+              Some(surface.copy(current = SettingsPage.Group(groupId, wrappedIndex, surface.current.searchTerm)))
           )
       case None => this
 
   def beginSubmenuEditMode: CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
+    activeSettingsSurface match
+      case Some(surface) =>
+        val groupId = surface.current.groupId
+        val items   = filteredPageItems(surface.current, submenuItems(groupId))
+        items.lift(pageSelectedIndex(surface.current)) match
           case Some(item: CommandSurfaceItem.InputItem) =>
-            copy(
-              activeSubmenu = Some(
-                submenu.copy(
-                  editingItemId = Some(item.id),
-                  editingText = item.currentValue,
-                  recordingItemId = None,
-                  pendingRecordedBinding = None,
-                  pendingGlobalHotkeyConflict = None,
-                  pendingFocusedKeymapConflict = None
-                )
-              ),
-              activeSettingsSurface = activeSettingsSurface.map(surface =>
+            copy(activeSettingsSurface =
+              Some(
                 surface.copy(current =
                   SettingsPage.Editing(
-                    groupId = submenu.groupId,
+                    groupId = groupId,
                     itemId = item.id,
                     draftText = item.currentValue,
                     searchTerm = surface.current.searchTerm
@@ -553,14 +481,13 @@ final case class CommandRunner(
     * so it always writes `itemId` rather than assuming the previous one still applies.
     */
   def withSubmenuEditingItem(itemId: String, text: String): CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        copy(
-          activeSubmenu = Some(submenu.copy(editingItemId = Some(itemId), editingText = text)),
-          activeSettingsSurface = activeSettingsSurface.map(surface =>
+    activeSettingsSurface match
+      case Some(surface) =>
+        copy(activeSettingsSurface =
+          Some(
             surface.copy(current =
               SettingsPage.Editing(
-                groupId = submenu.groupId,
+                groupId = surface.current.groupId,
                 itemId = itemId,
                 draftText = text,
                 searchTerm = surface.current.searchTerm
@@ -575,17 +502,14 @@ final case class CommandRunner(
     * `deleteSubmenuTextBackward` for that). A no-op when nothing is being edited.
     */
   def withSubmenuEditingText(text: String): CommandRunner =
-    activeSubmenu match
-      case Some(submenu) if submenu.editingItemId.nonEmpty =>
-        copy(
-          activeSubmenu = Some(submenu.copy(editingText = text)),
-          activeSettingsSurface = activeSettingsSurface.map(surface =>
-            surface.current match
-              case editing: SettingsPage.Editing => surface.copy(current = editing.copy(draftText = text))
-              case _                             => surface
-          )
-        )
-      case _ =>
+    activeSettingsSurface match
+      case Some(surface) =>
+        surface.current match
+          case editing: SettingsPage.Editing =>
+            copy(activeSettingsSurface = Some(surface.copy(current = editing.copy(draftText = text))))
+          case _ =>
+            this
+      case None =>
         this
 
   /** Cancels an in-progress edit without touching any pending recording/conflict state or navigating -- Escape's
@@ -593,41 +517,38 @@ final case class CommandRunner(
     * recording state (used once a value has actually been submitted or a recording finished).
     */
   def cancelSubmenuEditingText: CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        copy(
-          activeSubmenu = Some(submenu.copy(editingItemId = None, editingText = "")),
-          activeSettingsSurface = activeSettingsSurface.map(surface =>
+    activeSettingsSurface match
+      case Some(surface) =>
+        copy(activeSettingsSurface =
+          Some(
             surface.copy(current =
-              SettingsPage.Group(submenu.groupId, submenu.selectedIndex, surface.current.searchTerm)
+              SettingsPage.Group(
+                surface.current.groupId,
+                pageSelectedIndex(surface.current),
+                surface.current.searchTerm
+              )
             )
           )
         )
       case None =>
         this
 
-  /** Clears all in-progress editing/recording sub-state for the current submenu item -- an unconditional version of
-    * `normalizeSubmenuEditMode`'s conditional clear, used once a value has been submitted, a conflict resolved, or a
-    * recording finished. Always rebuilds the current page as a Group. Leaves `statusMessage` for the caller, since
-    * callers disagree on what it should become afterward (`None`, or a freshly computed warning).
+  /** Clears all in-progress editing/recording sub-state for the current submenu item -- used once a value has been
+    * submitted, a conflict resolved, or a recording finished. Always rebuilds the current page as a Group; there is no
+    * separate recording sub-state left to clear once the page is rebuilt this way, since `Editing.recording` only
+    * exists on an `Editing` page.
     */
   def clearSubmenuEditingAndRecording: CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        copy(
-          activeSubmenu = Some(
-            submenu.copy(
-              editingItemId = None,
-              editingText = "",
-              recordingItemId = None,
-              pendingRecordedBinding = None,
-              pendingGlobalHotkeyConflict = None,
-              pendingFocusedKeymapConflict = None
-            )
-          ),
-          activeSettingsSurface = activeSettingsSurface.map(surface =>
+    activeSettingsSurface match
+      case Some(surface) =>
+        copy(activeSettingsSurface =
+          Some(
             surface.copy(current =
-              SettingsPage.Group(submenu.groupId, submenu.selectedIndex, surface.current.searchTerm)
+              SettingsPage.Group(
+                surface.current.groupId,
+                pageSelectedIndex(surface.current),
+                surface.current.searchTerm
+              )
             )
           )
         )
@@ -637,15 +558,13 @@ final case class CommandRunner(
   /** Begins recording a keybinding for `itemId`: an edit with empty draft text, tagged with a fresh `RecordingState`.
     */
   def beginSubmenuRecording(itemId: String): CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        copy(
-          activeSubmenu =
-            Some(submenu.copy(editingItemId = Some(itemId), editingText = "", recordingItemId = Some(itemId))),
-          activeSettingsSurface = activeSettingsSurface.map(surface =>
+    activeSettingsSurface match
+      case Some(surface) =>
+        copy(activeSettingsSurface =
+          Some(
             surface.copy(current =
               SettingsPage.Editing(
-                groupId = submenu.groupId,
+                groupId = surface.current.groupId,
                 itemId = itemId,
                 draftText = "",
                 searchTerm = surface.current.searchTerm,
@@ -659,94 +578,65 @@ final case class CommandRunner(
 
   /** Stashes a just-recorded keystroke as pending, awaiting a possible double-tap within the recorder's time window. */
   def withPendingRecordedBinding(info: KeyStrokeInfo, recordedAtMillis: Long): CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        copy(
-          activeSubmenu = Some(submenu.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))),
-          activeSettingsSurface = activeSettingsSurface.map(surface =>
-            surface.current match
-              case editing: SettingsPage.Editing =>
-                val recording = editing.recording.getOrElse(RecordingState(editing.itemId))
+    activeSettingsSurface match
+      case Some(surface) =>
+        surface.current match
+          case editing: SettingsPage.Editing =>
+            val recording = editing.recording.getOrElse(RecordingState(editing.itemId))
+            copy(activeSettingsSurface =
+              Some(
                 surface.copy(current =
                   editing.copy(recording =
                     Some(recording.copy(pendingRecordedBinding = Some(info -> recordedAtMillis)))
                   )
                 )
-              case _ => surface
-          )
-        )
+              )
+            )
+          case _ =>
+            this
       case None =>
         this
 
   /** Deletes one character from the current settings page's text -- an in-progress edit's draft, or (when not editing)
-    * a group's local search -- via `SettingsSurfaceState.deleteBackward`, keeping `activeSubmenu` in sync. A no-op when
-    * there is no text to delete; never navigates the stack. This replaces Backspace's old fallback to
-    * `exitSubmenuToPreview` once text was already empty (issue #1059).
+    * a group's local search -- via `SettingsSurfaceState.deleteBackward`. A no-op when there is no text to delete;
+    * never navigates the stack. This replaces Backspace's old fallback to `exitSubmenuToPreview` once text was already
+    * empty (issue #1059).
     */
   def deleteSubmenuTextBackward: CommandRunner =
     activeSettingsSurface match
       case Some(surface) =>
-        surface.current match
-          case page: SettingsPage.Group if page.searchTerm.nonEmpty =>
-            copy(
-              activeSubmenu = activeSubmenu.map(s => s.copy(searchTerm = s.searchTerm.dropRight(1))),
-              activeSettingsSurface = Some(SettingsSurfaceState.deleteBackward(surface)),
-              statusMessage = None
-            )
-          case page: SettingsPage.Editing if page.draftText.nonEmpty =>
-            copy(
-              activeSubmenu = activeSubmenu.map(s => s.copy(editingText = s.editingText.dropRight(1))),
-              activeSettingsSurface = Some(SettingsSurfaceState.deleteBackward(surface)),
-              statusMessage = None
-            )
-          case _ =>
-            this
+        val updated = SettingsSurfaceState.deleteBackward(surface)
+        if updated == surface then this
+        else copy(activeSettingsSurface = Some(updated), statusMessage = None)
       case None =>
         this
 
-  /** Selects an item within the ghost-preview panel for `groupId` without fully entering navigation -- a fresh,
-    * ancestor-less single-page stack at `index`, mirroring the direct `CommandRunnerSubmenuState` construction this
-    * replaces.
-    */
-  def selectPreviewSubmenuItem(groupId: String, index: Int): CommandRunner =
-    copy(
-      previewedGroupId = Some(groupId),
-      activeSubmenu = Some(CommandRunnerSubmenuState(groupId, selectedIndex = index)),
-      activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group(groupId, index))),
-      submenuSelections = submenuSelections + (groupId -> index)
-    )
-
   def enterSelectedSubmenuGroup: CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
+    activeSettingsSurface match
+      case Some(surface) =>
+        val groupId = surface.current.groupId
+        val items   = filteredPageItems(surface.current, submenuItems(groupId))
+        items.lift(pageSelectedIndex(surface.current)) match
           case Some(group: CommandSurfaceItem.GroupItem) =>
             val rememberedIndex = submenuSelections.getOrElse(group.id, 0)
             copy(
-              submenuSelections = submenuSelections + (submenu.groupId -> submenu.selectedIndex),
-              activeSubmenu = Some(
-                CommandRunnerSubmenuState(
-                  group.id,
-                  selectedIndex = rememberedIndex,
-                  parentGroupId = Some(submenu.groupId),
-                  ancestorGroupIds = submenu.ancestorGroupIds :+ submenu.groupId
-                )
-              ),
+              submenuSelections = submenuSelections + (groupId -> pageSelectedIndex(surface.current)),
               // A true push: the group we're leaving becomes the nearest ancestor of the group we're entering.
-              activeSettingsSurface = activeSettingsSurface.map(_.push(SettingsPage.Group(group.id, rememberedIndex)))
+              activeSettingsSurface = Some(surface.push(SettingsPage.Group(group.id, rememberedIndex)))
             )
           case _ =>
             this
       case None =>
         this
 
-  /** Adjusting an option's value writes to `optionSelections`, not to the submenu/page state itself, so this has
-    * nothing to migrate -- `activeSettingsSurface` is left exactly as it was.
+  /** Adjusting an option's value writes to `optionSelections`, not to the page-stack itself, so `activeSettingsSurface`
+    * is left exactly as it was.
     */
   def adjustSelectedSubmenuOption(delta: Int): CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
+    activeSettingsSurface match
+      case Some(surface) =>
+        val items = filteredPageItems(surface.current, submenuItems(surface.current.groupId))
+        items.lift(pageSelectedIndex(surface.current)) match
           case Some(option: CommandSurfaceItem.OptionItem) =>
             val updatedOption = option.moveSelection(delta)
             copy(optionSelections = optionSelections + (option.id -> updatedOption.selectedIndex))
@@ -759,8 +649,6 @@ final case class CommandRunner(
     copy(
       activeCategory = category,
       selectedIndex = 0,
-      previewedGroupId = None,
-      activeSubmenu = None,
       activeSettingsSurface = None
     ).updateSearchTerm("").syncEditMode
 
@@ -795,28 +683,17 @@ final case class CommandRunner(
     else this
 
   def withSelectedFocusedSubmenuIndex(index: Int): CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        val items = submenu.filteredItems(submenuItems(submenu.groupId))
+    activeSettingsSurface match
+      case Some(surface) =>
+        val groupId = surface.current.groupId
+        val items   = filteredPageItems(surface.current, submenuItems(groupId))
         if items.indices.contains(index) then
           copy(
-            submenuSelections = submenuSelections + (submenu.groupId -> index),
-            activeSubmenu = Some(
-              submenu.copy(
-                selectedIndex = index,
-                editingItemId = None,
-                editingText = "",
-                recordingItemId = None,
-                pendingRecordedBinding = None,
-                pendingGlobalHotkeyConflict = None,
-                pendingFocusedKeymapConflict = None
-              )
-            ),
+            submenuSelections = submenuSelections + (groupId -> index),
             // As with moveSubmenuSelection: setting an index directly always exits edit mode, so this is always
             // rebuilt as a Group.
-            activeSettingsSurface = activeSettingsSurface.map(surface =>
-              surface.copy(current = SettingsPage.Group(submenu.groupId, index, surface.current.searchTerm))
-            )
+            activeSettingsSurface =
+              Some(surface.copy(current = SettingsPage.Group(groupId, index, surface.current.searchTerm)))
           )
         else this
       case None =>
@@ -876,8 +753,6 @@ final case class CommandRunner(
       editingText = "",
       recordingItemId = None,
       submenuSelections = Map.empty,
-      previewedGroupId = None,
-      activeSubmenu = None,
       activeSettingsSurface = None,
       uiPresetPreviews = Nil,
       editingPresetName = None
@@ -894,53 +769,34 @@ final case class CommandRunner(
         copy(editingItemId = None, editingText = "")
 
   def normalizeSubmenuEditMode: CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        submenu.selectedItemFromAll(submenuItems(submenu.groupId)) match
-          case Some(item: CommandSurfaceItem.InputItem) if submenu.editingItemId.contains(item.id) =>
-            this
-          case _ =>
-            copy(
-              activeSubmenu = Some(
-                submenu.copy(
-                  editingItemId = None,
-                  editingText = "",
-                  recordingItemId = None,
-                  pendingRecordedBinding = None,
-                  pendingGlobalHotkeyConflict = None,
-                  pendingFocusedKeymapConflict = None
-                )
-              ),
-              // As above: no longer (or never) validly editing, so the current page is always rebuilt as a Group.
-              activeSettingsSurface = activeSettingsSurface.map(surface =>
-                surface.copy(current =
-                  SettingsPage.Group(submenu.groupId, submenu.selectedIndex, surface.current.searchTerm)
-                )
+    activeSettingsSurface match
+      case Some(surface) =>
+        val groupId = surface.current.groupId
+        val items   = filteredPageItems(surface.current, submenuItems(groupId))
+        val stillEditingAnExistingItem = surface.current match
+          case editing: SettingsPage.Editing =>
+            items.exists {
+              case item: CommandSurfaceItem.InputItem => item.id == editing.itemId
+              case _                                  => false
+            }
+          case _: SettingsPage.Group => false
+        if stillEditingAnExistingItem then this
+        else
+          copy(activeSettingsSurface =
+            Some(
+              surface.copy(current =
+                SettingsPage.Group(groupId, pageSelectedIndex(surface.current), surface.current.searchTerm)
               )
             )
+          )
       case None =>
         this
 
   def updateSubmenuSearch(term: String): CommandRunner =
-    activeSubmenu match
-      case Some(submenu) =>
-        val updated = submenu.copy(
-          searchTerm = term,
-          selectedIndex = 0,
-          editingItemId = None,
-          editingText = "",
-          recordingItemId = None,
-          pendingRecordedBinding = None,
-          pendingGlobalHotkeyConflict = None,
-          pendingFocusedKeymapConflict = None
-        )
-        copy(
-          activeSubmenu = Some(updated),
-          // Searching always exits edit mode and resets the index (mirroring `updated` above), and is always scoped
-          // to a Group page.
-          activeSettingsSurface =
-            activeSettingsSurface.map(surface => surface.copy(current = SettingsPage.Group(submenu.groupId, 0, term)))
-        )
+    activeSettingsSurface match
+      case Some(surface) =>
+        // Searching always exits edit mode and resets the index, and is always scoped to a Group page.
+        copy(activeSettingsSurface = Some(surface.copy(current = SettingsPage.Group(surface.current.groupId, 0, term))))
       case None =>
         this
 

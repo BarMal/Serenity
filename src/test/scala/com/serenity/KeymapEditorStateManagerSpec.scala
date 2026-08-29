@@ -74,9 +74,8 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
       .unsafeRunSync()
       .commandRunnerSurface
       .flatMap(_.content match
-        case SurfaceContent.CommandPalette(runner) => runner.activeSubmenu.flatMap(_.pendingRecordedBinding)
-        case SurfaceContent.CommandPaletteSubmenu(runner, _, _) =>
-          runner.activeSubmenu.flatMap(_.pendingRecordedBinding)
+        case SurfaceContent.CommandPalette(runner) =>
+          runner.activeSettingsSurface.flatMap(_.current.recording).flatMap(_.pendingRecordedBinding)
         case _ => None) should not be empty
 
     IO.sleep(500.millis).unsafeRunSync()
@@ -188,9 +187,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
       .commandRunnerSurface
       .flatMap(_.content match
         case SurfaceContent.CommandPalette(runner) =>
-          runner.activeSubmenu
-            .flatMap(submenu => runner.submenuItems(submenu.groupId).lift(submenu.selectedIndex))
-            .map(_.id)
+          runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex).map(_.id)
         case _ => None) shouldBe Some("keymap-command-runner-submit")
     "ctrl+k".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()

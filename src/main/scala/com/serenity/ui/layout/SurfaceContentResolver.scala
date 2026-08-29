@@ -105,8 +105,6 @@ object SurfaceContentResolver:
         resolveDirectoryTree(rect, mode, tree, selectedPath)
       case SurfaceContent.CommandPalette(runner) =>
         resolveCommandPalette(runner, rect, mode, itemGapRows, itemTargetRows)
-      case SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly) =>
-        resolveCommandPaletteSubmenu(runner, groupId, previewOnly, rect, mode, itemGapRows, itemTargetRows)
       case SurfaceContent.ModalWorkflow(modal) =>
         resolveModalWorkflow(modal, rect, mode)
       case SurfaceContent.Terminal(buffer, cursor) =>
@@ -366,11 +364,11 @@ object SurfaceContentResolver:
   ): ResolvedSurfaceContent =
     if runner.isSettingsSurface then resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows)
     else if !runner.isActive then ResolvedSurfaceContent(titleFor(mode, "commands"))
-    else if runner.activeSubmenu.isDefined then
-      // Drilled into a settings group from the palette's Settings tab -- `activeSubmenu` only ever holds settings
-      // navigation, so this renders through the same single-list resolver as the dedicated Settings surface rather
-      // than a second floating surface (issue #1059: "one consistent settings experience regardless of entry
-      // point").
+    else if runner.activeSettingsSurface.isDefined then
+      // Drilled into a settings group from the palette's Settings tab -- `activeSettingsSurface` only ever holds
+      // settings navigation, so this renders through the same single-list resolver as the dedicated Settings
+      // surface rather than a second floating surface (issue #1059: "one consistent settings experience regardless
+      // of entry point").
       resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows)
     else
       val header =
@@ -481,7 +479,10 @@ object SurfaceContentResolver:
           case option: CommandSurfaceItem.OptionItem =>
             optionRow(option, selected)
           case item: CommandSurfaceItem.InputItem =>
-            val editingText = runner.activeSubmenu.filter(_.editingItemId.contains(item.id)).map(_.editingText)
+            val editingText =
+              runner.activeSettingsSurface
+                .filter(_.current.editingItemId.contains(item.id))
+                .map(_.current.draftText)
             inputRow(item, selected, editingText)
           case item: CommandSurfaceItem.SettingSearchItem =>
             OverlayRow(
@@ -505,7 +506,7 @@ object SurfaceContentResolver:
             )
         if selected then row :: groupPreview else List(row)
     }
-    val searchTerm     = runner.activeSubmenu.fold(runner.searchTerm)(_.searchTerm)
+    val searchTerm     = runner.activeSettingsSurface.fold(runner.searchTerm)(_.current.searchTerm)
     val selectedAction = settingsSurfaceSelectedAction(runner, items.lift(selectedIndex))
     ResolvedSurfaceContent(
       title = Some("Settings"),
@@ -548,7 +549,7 @@ object SurfaceContentResolver:
       case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Open"
       case Some(_: CommandSurfaceItem.OptionItem)                                                => "Apply"
       case Some(item: CommandSurfaceItem.InputItem) =>
-        if runner.activeSubmenu.exists(_.editingItemId.contains(item.id)) then "Save" else "Edit"
+        if runner.activeSettingsSurface.exists(_.current.editingItemId.contains(item.id)) then "Save" else "Edit"
       case Some(_: CommandSurfaceItem.CommandItem) => "Run"
       case None                                    => "Select"
 
@@ -563,78 +564,6 @@ object SurfaceContentResolver:
       s"${runner.selectedIndex + 1}/$itemCount"
     ))
       .mkString(" • ")
-
-  private def resolveCommandPaletteSubmenu(
-    runner: com.serenity.command.CommandRunner,
-    groupId: String,
-    previewOnly: Boolean,
-    rect: LayoutRect,
-    mode: SurfaceRenderMode,
-    itemGapRows: Double,
-    itemTargetRows: Int
-  ): ResolvedSurfaceContent =
-    val group         = runner.submenuGroup(groupId)
-    val submenuState  = runner.activeSubmenu.filter(_.groupId == groupId)
-    val allItems      = runner.submenuItems(groupId)
-    val items         = submenuState.map(_.filteredItems(allItems)).getOrElse(allItems)
-    val selectedIndex = submenuState.map(_.selectedIndex).getOrElse(0)
-    val detailRows    = presetPreviewRow(runner, groupId, items.lift(selectedIndex))
-    val itemWindow = SurfaceFrameLayout
-      .forContent(rect, SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly))
-      .itemWindow(
-        itemCount = items.size,
-        selectedIndex = selectedIndex,
-        hasHeader = group.nonEmpty,
-        hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-        reservedContentRows = detailRows.size,
-        itemGapRows = itemGapRows,
-        itemTargetRows = itemTargetRows
-      )
-    val windowItems           = itemWindow.slice(items)
-    val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(selectedIndex)
-    val rows = windowItems.zipWithIndex.map {
-      case (option: CommandSurfaceItem.OptionItem, index)
-          if groupId == "settings-preset-select" && option.id == "ui-preset-select" =>
-        presetCarouselRow(option, !previewOnly && index == adjustedSelectedIndex)
-      case (option: CommandSurfaceItem.OptionItem, index) =>
-        optionRow(option, !previewOnly && index == adjustedSelectedIndex)
-      case (item: CommandSurfaceItem.InputItem, index) =>
-        val editingText =
-          if !previewOnly then submenuState.filter(_.editingItemId.contains(item.id)).map(_.editingText)
-          else None
-        inputRow(item, !previewOnly && index == adjustedSelectedIndex, editingText)
-      case (CommandSurfaceItem.CommandItem(command), index) =>
-        commandRow(command, !previewOnly && index == adjustedSelectedIndex, binding = runner.bindingFor(command))
-      case (item: CommandSurfaceItem.SettingSearchItem, index) =>
-        settingSearchRow(item, !previewOnly && index == adjustedSelectedIndex)
-      case (group: CommandSurfaceItem.GroupItem, index) =>
-        OverlayRow(
-          plainText = group.label,
-          selected = !previewOnly && index == adjustedSelectedIndex,
-          segments = List(
-            OverlaySegment(group.label),
-            OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Normal)
-          ).filterNot(_.text.isEmpty),
-          layout = OverlayRowLayout.Columns
-        )
-    }
-    val footer =
-      runner.statusMessage
-        .map(OverlayRow(_))
-        .orElse(Option.when(items.nonEmpty)(OverlayRow(s"${selectedIndex + 1}/${items.length}")))
-
-    ResolvedSurfaceContent(
-      title = titleFor(mode, group.map(_.label).getOrElse("submenu")),
-      header = group.map { _ =>
-        submenuState.filter(_.searchTerm.nonEmpty) match
-          case Some(submenu) =>
-            breadcrumbHeader(runner.submenuBreadcrumbLabels(groupId), Some(submenu.searchTerm))
-          case None =>
-            breadcrumbHeader(runner.submenuBreadcrumbLabels(groupId), None)
-      },
-      rows = rows ++ detailRows,
-      footer = footer
-    )
 
   private def breadcrumbHeader(labels: List[String], searchTerm: Option[String]): OverlayRow =
     val safeLabels = labels.filter(_.nonEmpty) match
@@ -655,38 +584,6 @@ object SurfaceContentResolver:
       plainText = plainText,
       cursorColumn = searchTerm.filter(_.nonEmpty).map(_ => plainText.length),
       segments = segments
-    )
-
-  private def presetPreviewRow(
-    runner: com.serenity.command.CommandRunner,
-    groupId: String,
-    selectedItem: Option[CommandSurfaceItem]
-  ): List[OverlayRow] =
-    selectedItem.collect {
-      case group: CommandSurfaceItem.GroupItem
-          if groupId == "settings-ui-presets" && group.id == "settings-preset-create" =>
-        presetPreviewDetail("Create New Preset", "name and save the current workspace setup")
-      case group: CommandSurfaceItem.GroupItem
-          if groupId == "settings-ui-presets" && group.id == "settings-preset-edit" =>
-        presetPreviewDetail(
-          runner.editingPresetName.getOrElse("Edit Preset"),
-          "name, preset actions, active panels, theme, animations, fonts, document defaults"
-        )
-      case option: CommandSurfaceItem.OptionItem
-          if groupId == "settings-preset-select" && option.id == "ui-preset-select" =>
-        val hint = option.selectedHint.getOrElse("")
-        presetPreviewDetail(option.selectedOption, hint)
-    }.toList
-
-  private def presetPreviewDetail(name: String, hint: String): OverlayRow =
-    OverlayRow(
-      plainText = s"Preset Preview $name - $hint",
-      segments = List(
-        OverlaySegment("Preset Preview"),
-        OverlaySegment(name, selected = true),
-        OverlaySegment(hint, tone = OverlayTone.Normal)
-      ).filterNot(_.text.isEmpty),
-      layout = OverlayRowLayout.PriorityColumns
     )
 
   private def categoryTabs(activeCategory: CommandCategory): OverlayRow =
@@ -769,16 +666,6 @@ object SurfaceContentResolver:
         OverlaySegment(option.selectedOption, selected = true)
       ),
       layout = OverlayRowLayout.Columns
-    )
-
-  private def presetCarouselRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
-    OverlayRow(
-      plainText = option.options.map(_.label).mkString(" "),
-      selected = selected,
-      segments = option.options.zipWithIndex.map { (preset, index) =>
-        OverlaySegment(preset.label, selected = index == option.selectedIndex)
-      },
-      layout = OverlayRowLayout.Distributed
     )
 
   private def inputRow(

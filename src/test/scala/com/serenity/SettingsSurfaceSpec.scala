@@ -66,21 +66,20 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
       .withSelectedFocusedSubmenuIndex(0)
       .enterSelectedSubmenuGroup
 
-    opened.activeSubmenu.map(_.groupId) shouldBe Some("settings-navigation")
+    opened.activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-navigation")
 
     val afterBackspace = CommandRunnerReducer.reduce(RunnerDeleteBackward, stateFor(opened), registry)
-    runnerFrom(afterBackspace.state).activeSubmenu.map(_.groupId) shouldBe Some("settings-navigation")
+    runnerFrom(afterBackspace.state).activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-navigation")
 
     val back = CommandRunnerReducer.reduce(Escape, stateFor(opened), registry)
-    runnerFrom(back.state).activeSubmenu.map(_.groupId) shouldBe Some("settings-document-writing")
+    runnerFrom(back.state).activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-document-writing")
 
     val backToRoot = CommandRunnerReducer.reduce(Escape, back.state, registry)
-    runnerFrom(backToRoot.state).activeSubmenu shouldBe None
+    runnerFrom(backToRoot.state).activeSettingsSurface shouldBe None
     runnerFrom(backToRoot.state).isActive shouldBe true
 
     val dismissed = CommandRunnerReducer.reduce(Escape, backToRoot.state, registry)
     dismissed.state.commandRunnerSurface shouldBe None
-    dismissed.state.commandRunnerSubmenuSurface shouldBe None
   }
 
   it should "open settings from the command runner without creating a submenu stack" in {
@@ -93,7 +92,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     val opened = CommandRunnerReducer.reduce(Enter, stateFor(palette), registry)
 
     runnerFrom(opened.state).isSettingsSurface shouldBe true
-    opened.state.commandRunnerSubmenuSurface shouldBe None
+    opened.state.runtime.uiSurfaces should have size 1
   }
 
   it should "render a single searchable settings surface with breadcrumbs and visible edit state" in {
@@ -121,19 +120,14 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
   it should "describe the selected group, option, and input action in its footer" in {
     val root = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    // activeSettingsSurface is kept in sync with activeSubmenu on each step below now that
-    // settingsSurfaceItems/settingsSurfaceSelectedIndex read this field (issue #1059).
     val option = root.copy(
-      activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance")),
       activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance")))
     )
     val input = option.copy(
-      activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 4)),
       activeSettingsSurface =
         Some(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance", selectedIndex = 4)))
     )
     val editing = input.copy(
-      activeSubmenu = input.activeSubmenu.map(_.copy(editingItemId = Some("blur-radius"), editingText = "1")),
       activeSettingsSurface = Some(
         SettingsSurfaceState(
           SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "blur-radius", draftText = "1")

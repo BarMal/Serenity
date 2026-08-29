@@ -372,21 +372,16 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     openSettingsCategory(sm)
-    sm.getCurrentState.unsafeRunSync().commandRunnerSubmenuSurface shouldBe None
+    sm.getCurrentState.unsafeRunSync().runtime.uiSurfaces should have size 1
 
     sm.applyEvent(MoveDown).unsafeRunSync()
-    sm.getCurrentState.unsafeRunSync().commandRunnerSubmenuSurface shouldBe None
+    sm.getCurrentState.unsafeRunSync().runtime.uiSurfaces should have size 1
 
     sm.applyEvent(Enter).unsafeRunSync()
-    sm.getCurrentState.unsafeRunSync().commandRunnerSubmenuSurface shouldBe None
+    sm.getCurrentState.unsafeRunSync().runtime.uiSurfaces should have size 1
 
     sm.applyEvent(TabKey).unsafeRunSync()
-    val state = sm.getCurrentState.unsafeRunSync()
-    state.commandRunnerSubmenuSurface shouldBe None
-    state.runtime.uiSurfaces.exists {
-      case UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.CommandPaletteSubmenu(_, _, _), _), _, _) => true
-      case _                                                                                                 => false
-    } shouldBe false
+    sm.getCurrentState.unsafeRunSync().runtime.uiSurfaces should have size 1
   }
 
   private def advanceToVisible(sm: StateManager): Unit =
