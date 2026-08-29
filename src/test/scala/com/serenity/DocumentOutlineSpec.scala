@@ -83,6 +83,34 @@ class DocumentOutlineSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "ignore heading-shaped lines inside a fenced code block" in {
+    val baseBuffer = Buffer
+      .fromString(
+        BufferId(1),
+        """# Chapter One
+          |
+          |```
+          |# not a heading
+          |## also not a heading
+          |```
+          |
+          |## Scene Two""".stripMargin
+      )
+    val buffer = baseBuffer.copy(document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)))
+
+    DocumentOutline.forBuffer(buffer) shouldBe List(
+      Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
+      Symbol("Scene Two", SymbolKind.Heading, Location(7, 0))
+    )
+  }
+
+  it should "produce no outline symbols for a Markdown buffer with no headings" in {
+    val baseBuffer = Buffer.fromString(BufferId(1), "Just prose.\n\nMore prose, no headings here.")
+    val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)))
+
+    DocumentOutline.forBuffer(buffer) shouldBe Nil
+  }
+
   it should "leave non-Markdown buffers without document navigation symbols" in {
     val baseBuffer = Buffer.fromString(BufferId(1), "# Not Markdown")
     val buffer     = baseBuffer.copy(document = baseBuffer.document.copy(language = Some(LanguageId.Scala)))
