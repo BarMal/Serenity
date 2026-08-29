@@ -97,6 +97,36 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     saved.persisted.buffers(bufferId).document.isDirty shouldBe true
   }
 
+  it should "ignore edit events while read-only" in {
+    val readOnlyState = withLensMode(baseState, CommentLensMode.ReadOnly)
+
+    val result = component.processEvent(ModalInsertChar('!'), readOnlyState)
+
+    result shouldBe ComponentResult.noChange
+  }
+
+  it should "still dismiss without saving on Escape while read-only" in {
+    val readOnlyState =
+      withLensMode(baseState, CommentLensMode.ReadOnly)
+        .copy(runtime = baseState.runtime.copy(focusHistory = List(Focus.EditorPane(paneId))))
+
+    val dismissed = stateAfter(component.processEvent(ModalDismiss, readOnlyState), readOnlyState)
+
+    dismissed.commentLensSurface shouldBe None
+    dismissed.persisted.focus shouldBe Focus.EditorPane(paneId)
+    dismissed.persisted.buffers(bufferId).annotations.documentComments shouldBe List(comment)
+  }
+
+  private def withLensMode(state: AppState, mode: CommentLensMode): AppState =
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
+      case surface if surface.id == lensId =>
+        surface.content match
+          case SurfaceContent.CommentLens(lens) =>
+            surface.copy(content = SurfaceContent.CommentLens(lens.copy(mode = mode)))
+          case _ => surface
+      case surface => surface
+    }))
+
   private def stateAfter(result: ComponentResult, state: AppState): AppState =
     result match
       case ComponentResult.StateChange(update) => update(state)

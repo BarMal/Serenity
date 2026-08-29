@@ -9,7 +9,7 @@ main/scala/com/serenity/command/CommandRunner.scala	file length	826
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	file length	806
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	method build	650
 main/scala/com/serenity/command/CommandRunnerSettingsItems.scala	file length	1266
-main/scala/com/serenity/config/AppConfig.scala	file length	2181
+main/scala/com/serenity/config/AppConfig.scala	file length	2215
 main/scala/com/serenity/config/ConfigManager.scala	file length	818
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	224
 main/scala/com/serenity/config/ConfigManager.scala	method configToString	184

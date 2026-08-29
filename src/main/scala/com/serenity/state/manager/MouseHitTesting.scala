@@ -1,6 +1,8 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
+import com.serenity.config.CommentDisplayMode
+import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 
@@ -20,7 +22,8 @@ final private[manager] class MouseHitTesting(
     contextualToolbar: ContextualToolbarHitTesting,
     commandRunner: CommandRunnerMouseHitTesting,
     pinnedPanel: PinnedPanelMouseHitTesting,
-    startupPage: StartupPageMouseHitTesting
+    startupPage: StartupPageMouseHitTesting,
+    commentLens: CommentLensMouseHitTesting
 ):
   import port.*
 
@@ -42,62 +45,92 @@ final private[manager] class MouseHitTesting(
                     commandRunner.handleCommandRunnerMouseClick(click, state).flatMap {
                       case true => IO.unit
                       case false =>
-                        if MouseHitTestGeometry.isInsideFloatingSurface(click, state) then IO.unit
-                        else
-                          pinnedPanel.handlePinnedPanelMouseClick(click, state).flatMap {
-                            case true => IO.unit
-                            case false =>
-                              pinnedPanel.handlePinnedPanelLocationClick(click, state).flatMap {
+                        commentLens.handleCommentLensMouseClick(click, state).flatMap {
+                          case true => IO.unit
+                          case false =>
+                            if MouseHitTestGeometry.isInsideFloatingSurface(click, state) then IO.unit
+                            else
+                              pinnedPanel.handlePinnedPanelMouseClick(click, state).flatMap {
                                 case true => IO.unit
                                 case false =>
-                                  editorTargeting.resolveMouseTarget(click, state).flatMap {
-                                    _.fold(contextMenu.dismissContextMenuIfOpen(state)) {
-                                      (paneId, buffer, clickedCursor) =>
-                                        stateRef.update { s =>
-                                          s.persisted.buffers.get(buffer.id) match
-                                            case Some(current) =>
-                                              val selection =
-                                                if click.shiftDown then
-                                                  editorTargeting.rangeSelectionFromAnchor(current, clickedCursor)
-                                                else if click.clickCount >= 3 then
-                                                  editorTargeting.lineSelectionAtCursor(current, clickedCursor)
-                                                else if click.clickCount >= 2 then
-                                                  editorTargeting.wordSelectionAtCursor(current, clickedCursor)
-                                                else None
-                                              val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-                                              contextMenu.dismissContextMenu(
-                                                s.copy(persisted =
-                                                  s.persisted.copy(
-                                                    buffers = s.persisted.buffers.updated(
-                                                      buffer.id,
-                                                      current.copy(editing =
-                                                        current.editing.copy(
-                                                          cursors = List(focusCursor),
-                                                          selection = selection,
-                                                          selections = Nil,
-                                                          preferredColumn = Some(focusCursor.column),
-                                                          preferredXPx = None,
-                                                          multiCursorVerticalStates = Nil
-                                                        )
-                                                      )
-                                                    ),
-                                                    focus = Focus.EditorPane(paneId),
-                                                    layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
-                                                  )
-                                                )
-                                              )
-                                            case None => contextMenu.dismissContextMenu(s)
+                                  pinnedPanel.handlePinnedPanelLocationClick(click, state).flatMap {
+                                    case true => IO.unit
+                                    case false =>
+                                      editorTargeting.resolveMouseTarget(click, state).flatMap {
+                                        _.fold(contextMenu.dismissContextMenuIfOpen(state)) {
+                                          (paneId, buffer, clickedCursor) =>
+                                            stateRef.update(applyEditorClick(_, click, paneId, buffer, clickedCursor))
                                         }
-                                    }
+                                      }
                                   }
                               }
-                          }
+                        }
                     }
                 }
             }
         }
       case _ =>
         IO.unit
+
+  /** Applies a resolved editor click's cursor/selection to its buffer, dismisses any open context menu, and -- in
+    * floating display mode, for a plain click inside a highlighted comment range -- layers the read-only floating lens
+    * on top (#1222).
+    */
+  private def applyEditorClick(
+    s: AppState,
+    click: MouseClick,
+    paneId: PaneId,
+    buffer: Buffer,
+    clickedCursor: CursorPosition
+  ): AppState =
+    s.persisted.buffers.get(buffer.id) match
+      case None => contextMenu.dismissContextMenu(s)
+      case Some(current) =>
+        val selection =
+          if click.shiftDown then editorTargeting.rangeSelectionFromAnchor(current, clickedCursor)
+          else if click.clickCount >= 3 then editorTargeting.lineSelectionAtCursor(current, clickedCursor)
+          else if click.clickCount >= 2 then editorTargeting.wordSelectionAtCursor(current, clickedCursor)
+          else None
+        val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
+        val withCursor = contextMenu.dismissContextMenu(
+          s.copy(persisted =
+            s.persisted.copy(
+              buffers = s.persisted.buffers.updated(
+                buffer.id,
+                current.copy(editing =
+                  current.editing.copy(
+                    cursors = List(focusCursor),
+                    selection = selection,
+                    selections = Nil,
+                    preferredColumn = Some(focusCursor.column),
+                    preferredXPx = None,
+                    multiCursorVerticalStates = Nil
+                  )
+                )
+              ),
+              focus = Focus.EditorPane(paneId),
+              layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
+            )
+          )
+        )
+        if opensFloatingCommentLens(click, s, current, clickedCursor) then
+          CommentRendering.openLensAtCursor(withCursor, CommentLensMode.ReadOnly)
+        else withCursor
+
+  /** A plain (unmodified, single) click landing inside a highlighted `DocumentComment` range opens the read-only
+    * floating lens in floating display mode (#1222) -- a double/triple click or shift-click is a word/line/range
+    * selection gesture instead, and margin display mode already shows every comment persistently, so neither opens the
+    * floating lens here.
+    */
+  private def opensFloatingCommentLens(
+    click: MouseClick,
+    state: AppState,
+    buffer: Buffer,
+    clickedCursor: CursorPosition
+  ): Boolean =
+    click.clickCount <= 1 && !click.shiftDown &&
+      state.persisted.config.surfaceConfig.commentDisplayMode == CommentDisplayMode.Floating &&
+      buffer.annotations.documentComments.exists(_.contains(clickedCursor))
 
   def handleMousePress(press: MousePress, state: AppState): IO[Unit] =
     if press.button != MouseButton.Primary then IO.unit

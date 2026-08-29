@@ -16,34 +16,44 @@ private[manager] object MouseHitTestGeometry:
 
   def isInsideFloatingSurface(event: MouseInputEvent, state: AppState): Boolean =
     state.runtime.viewportSize.exists { viewportSize =>
-      val scene    = AuthoritativeUiScene.forState(state, viewportSize)
-      val layout   = scene.calculatedLayout
-      val contract = scene.editorContract
-      val metrics  = floatingCellMetrics(state)
-      state.floatingSurfaces.exists { surface =>
-        contract.overlayRect(surface.id).exists { rect =>
-          val geometry = FloatingSurfaceGeometry
-            .fromCells(
-              rect,
-              metrics,
-              borderCells = 0,
-              itemCount = 0,
-              hasHeader = false,
-              hasFooter = false,
-              itemGapRows = 0.0
-            )
-            .translated(
-              0.0,
-              FloatingSurfaceGeometry.signedRowOffsetPixels(
-                layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
-                metrics
-              )
-            )
-          (event.pixelX, event.pixelY) match
-            case (Some(pixelX), Some(pixelY)) => geometry.frame.contains(pixelX, pixelY)
-            case _                            => rect.contains(event.col, event.row)
-        }
-      }
+      state.floatingSurfaces.exists(insideFloatingSurface(event, state, viewportSize, _))
+    }
+
+  /** Whether `event` lands inside a single floating surface's frame -- the per-surface primitive
+    * [[isInsideFloatingSurface]] applies across every floating surface, and that a caller with one specific surface
+    * already in hand (e.g. the comment lens) can use directly instead of re-deriving it from `state.floatingSurfaces`.
+    */
+  def insideFloatingSurface(
+    event: MouseInputEvent,
+    state: AppState,
+    viewportSize: ViewportSize,
+    surface: UiSurface
+  ): Boolean =
+    val scene    = AuthoritativeUiScene.forState(state, viewportSize)
+    val layout   = scene.calculatedLayout
+    val contract = scene.editorContract
+    val metrics  = floatingCellMetrics(state)
+    contract.overlayRect(surface.id).exists { rect =>
+      val geometry = FloatingSurfaceGeometry
+        .fromCells(
+          rect,
+          metrics,
+          borderCells = 0,
+          itemCount = 0,
+          hasHeader = false,
+          hasFooter = false,
+          itemGapRows = 0.0
+        )
+        .translated(
+          0.0,
+          FloatingSurfaceGeometry.signedRowOffsetPixels(
+            layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+            metrics
+          )
+        )
+      (event.pixelX, event.pixelY) match
+        case (Some(pixelX), Some(pixelY)) => geometry.frame.contains(pixelX, pixelY)
+        case _                            => rect.contains(event.col, event.row)
     }
 
   def overlayItemIndex(

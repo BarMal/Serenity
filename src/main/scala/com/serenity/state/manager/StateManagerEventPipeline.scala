@@ -138,6 +138,11 @@ final private[manager] class StateManagerEventPipeline(
     def resizePinnedPanel(target: com.serenity.ui.layout.PanelTarget, newSize: Int): cats.effect.IO[Unit] =
       ui.resizePinnedPanel(target, newSize))
 
+  private val commentLensMouseHitTesting = new CommentLensMouseHitTesting(
+    new CommentLensMouseHitTestingPort:
+      def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
+  )
+
   private val mouseHitTesting = new MouseHitTesting(
     new MouseHitTestingPort:
       def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
@@ -147,7 +152,8 @@ final private[manager] class StateManagerEventPipeline(
     contextualToolbarHitTesting,
     commandRunnerMouseHitTesting,
     pinnedPanelMouseHitTesting,
-    startupPageMouseHitTesting
+    startupPageMouseHitTesting,
+    commentLensMouseHitTesting
   )
 
   def applyEvent(event: Event): cats.effect.IO[Unit] =

@@ -14,6 +14,15 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
       case None => ComponentResult.dismiss
       case Some(surface) =>
         surface.content match
+          case SurfaceContent.CommentLens(lens) if lens.mode == CommentLensMode.ReadOnly =>
+            // A read-only lens (opened by clicking a highlighted comment range in floating display mode) only
+            // responds to dismiss; entering edit state is a mouse gesture (click-in-body), handled by
+            // `CommentLensMouseHitTesting` before this component ever sees a keystroke.
+            event match
+              case ModalDismiss =>
+                ComponentResult.updateState(_ => dismiss(state, surface))
+              case _ =>
+                ComponentResult.noChange
           case SurfaceContent.CommentLens(lens) =>
             event match
               case ModalInsertChar(char) =>
