@@ -463,3 +463,46 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       case _            => true
     } shouldBe true
   }
+
+  // -- #1215: cell-based (non-measured) layout must honour an explicit `cellMetrics` override rather than always
+  // re-deriving `CellMetrics.fromFont(font)` internally -- the units mismatch that inflated TUI's cursor position.
+  // `forceCellLayout` bypasses the font's own measured-vs-cell auto-detection: a "monospaced" AWT font can trip that
+  // probe's fractional-advance-drift check purely from this environment's own font-rendering stack, unrelated to
+  // whether the caller (a terminal surface, #1105) can draw a measured run at all -- so these tests, mirroring TUI's
+  // real call sites, force the cell path explicitly rather than depending on that auto-detection's outcome. --
+
+  it should "use an explicit cellMetrics override for the cell-based path instead of the font's own metrics" in {
+    val font        = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val override1x1 = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+
+    val xs = TextLayoutSnapshot.caretXsForText(
+      "abcde",
+      font,
+      cellMetricsOverride = Some(override1x1),
+      forceCellLayout = true
+    )
+
+    // Column 5 must land at x=5 (the override's own 1-pixel-per-cell scale), not at 5 * the real font's much wider
+    // natural charWidth -- exactly the mismatch that inflated TUI's on-screen cursor column.
+    xs.last shouldBe 5.0f
+  }
+
+  it should "size fromBuffer's row height/ascent from an explicit cellMetrics override, not the real font's metrics" in {
+    val font        = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val override1x1 = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+    val buffer      = Buffer.fromString(BufferId(1), "hello")
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      buffer,
+      panelWidthPx = 80,
+      font,
+      cellMetricsOverride = Some(override1x1),
+      forceCellLayout = true
+    )
+
+    snapshot.lineHeightPx shouldBe 1
+    snapshot.ascentPx shouldBe 0
+    // With the override's 1-pixel-per-cell scale, "hello" (5 chars) advances by exactly 5, not 5 * the real font's
+    // much wider natural charWidth.
+    snapshot.visualLines.head.widthPx shouldBe 5.0f
+  }

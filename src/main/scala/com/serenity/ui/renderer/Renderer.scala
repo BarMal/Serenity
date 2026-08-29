@@ -392,25 +392,32 @@ object Renderer:
       swingWin.acquireBaseImage
     )
     val viewportSize = swingWin.viewportSize
-    val _ = withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
-      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics, output)
-    ) { scene =>
-      renderFrame(
-        state0,
-        cursorVisible,
-        surface,
-        viewportSize,
-        scene,
-        codeFont,
-        textFont,
-        uiFont,
-        swingWin.metrics,
-        uiMetrics,
-        cursorColor,
-        output,
-        damage,
-        bufferAnimations
-      )
+    // A Swing/Java2D surface always has a real FontRenderContext to measure against, so this scene keeps its
+    // long-standing behaviour of deriving cell metrics from `codeFont` and letting `TextLayoutSnapshot` auto-detect
+    // measured vs. cell layout per buffer font -- no override needed (#1215's cellMetrics override is for a surface
+    // with no real font rendering at all, i.e. TUI's `TerminalRenderSurface`, reached only through the
+    // surface-generic entry points below).
+    val _ = withSceneIfNeeded(
+      state0,
+      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
+    )(page => renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics, output)) {
+      scene =>
+        renderFrame(
+          state0,
+          cursorVisible,
+          surface,
+          viewportSize,
+          scene,
+          codeFont,
+          textFont,
+          uiFont,
+          swingWin.metrics,
+          uiMetrics,
+          cursorColor,
+          output,
+          damage,
+          bufferAnimations
+        )
     }
 
   /** The render plan a cursor-only redraw needs: the cached one from the last full layout, if it is still valid for
@@ -556,36 +563,44 @@ object Renderer:
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
   ): Boolean =
     val state0 = withEffectiveTheme(state)
-    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(_ => false) {
-      authoritativeScene =>
-        val (layout, renderPlan) = resolveCursorRenderPlan(
-          state0,
-          authoritativeScene,
-          surface,
-          viewportSize,
-          cursorVisible,
-          cursorColor,
-          codeFont,
-          textFont,
-          uiFont,
-          cellMetrics,
-          uiMetrics
-        )
-        val _ = paintCursorsOnly(
-          state0,
-          surface,
-          layout,
-          renderPlan,
-          cursorVisible,
-          cursorColor,
-          codeFont,
-          textFont,
-          uiFont,
-          cellMetrics,
-          uiMetrics,
-          bufferAnimations
-        )
-        true
+    // #1105/#1215: a surface reporting no FontRenderContext (a terminal) has no real font rendering to measure
+    // against at all -- its own declared cellMetrics must reach this scene's cell-based layout, and must force it,
+    // rather than being silently discarded by the font's own measured-vs-cell auto-detection. A surface that does
+    // report one (every GUI canvas, and any other surface-generic caller with real font rendering) keeps this scene's
+    // long-standing auto-detected behaviour untouched.
+    val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
+    withSceneIfNeeded(
+      state0,
+      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+    )(_ => false) { authoritativeScene =>
+      val (layout, renderPlan) = resolveCursorRenderPlan(
+        state0,
+        authoritativeScene,
+        surface,
+        viewportSize,
+        cursorVisible,
+        cursorColor,
+        codeFont,
+        textFont,
+        uiFont,
+        cellMetrics,
+        uiMetrics
+      )
+      val _ = paintCursorsOnly(
+        state0,
+        surface,
+        layout,
+        renderPlan,
+        cursorVisible,
+        cursorColor,
+        codeFont,
+        textFont,
+        uiFont,
+        cellMetrics,
+        uiMetrics,
+        bufferAnimations
+      )
+      true
     }
 
   def renderCursorOnly(
@@ -601,41 +616,45 @@ object Renderer:
   ): Boolean =
     val state0       = withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
-    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(_ => false) {
-      authoritativeScene =>
-        // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
-        // only the cursor's own old and new pixel rects can have changed on screen.
-        swingWin.onCursorOverlayReady(Some(new java.awt.Rectangle(0, 0, 0, 0))) { image =>
-          val surface =
-            Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
-          val (layout, renderPlan) = resolveCursorRenderPlan(
-            state0,
-            authoritativeScene,
-            surface,
-            viewportSize,
-            cursorVisible,
-            cursorColor,
-            codeFont,
-            textFont,
-            uiFont,
-            swingWin.metrics,
-            uiMetrics
-          )
-          paintCursorsOnly(
-            state0,
-            surface,
-            layout,
-            renderPlan,
-            cursorVisible,
-            cursorColor,
-            codeFont,
-            textFont,
-            uiFont,
-            swingWin.metrics,
-            uiMetrics,
-            bufferAnimations
-          ).map(toAwtRectangle)
-        }
+    // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
+    // point above.
+    withSceneIfNeeded(
+      state0,
+      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
+    )(_ => false) { authoritativeScene =>
+      // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
+      // only the cursor's own old and new pixel rects can have changed on screen.
+      swingWin.onCursorOverlayReady(Some(new java.awt.Rectangle(0, 0, 0, 0))) { image =>
+        val surface =
+          Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
+        val (layout, renderPlan) = resolveCursorRenderPlan(
+          state0,
+          authoritativeScene,
+          surface,
+          viewportSize,
+          cursorVisible,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          swingWin.metrics,
+          uiMetrics
+        )
+        paintCursorsOnly(
+          state0,
+          surface,
+          layout,
+          renderPlan,
+          cursorVisible,
+          cursorColor,
+          codeFont,
+          textFont,
+          uiFont,
+          swingWin.metrics,
+          uiMetrics,
+          bufferAnimations
+        ).map(toAwtRectangle)
+      }
     }
 
   /** Surface-generic form of [[renderWithCursorOverlay]]: renders a base frame with the cursor left out, then draws the
@@ -683,10 +702,16 @@ object Renderer:
     val state0        = withEffectiveTheme(state)
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
     val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
-    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
+    // #1105/#1215: see the surface-generic renderCursorOnly above for why this is scoped to a surface with no real
+    // FontRenderContext.
+    val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
+    withSceneIfNeeded(
+      state0,
+      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+    ) { page =>
       renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics, output)
       true
-    ) { scene =>
+    } { scene =>
       renderFrame(
         state0,
         cursorVisible = false,
@@ -746,14 +771,19 @@ object Renderer:
       swingWin.onBaseImageReady,
       swingWin.acquireBaseImage
     )
-    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
+    // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
+    // point above.
+    withSceneIfNeeded(
+      state0,
+      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
+    ) { page =>
       renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics, output)
       // The base frame published above went through onBaseImageReady, which does not repaint the canvas by
       // itself -- only onCursorOverlayReady does. The editor branch below reaches it naturally via its cursor
       // composite step; the startup page has no cursor to draw, but still needs this call to actually get painted.
       // A start page also has no persisted content to reason about, so this always forces a full repaint.
       swingWin.onCursorOverlayReady(None)(_ => Nil)
-    ) { scene =>
+    } { scene =>
       renderFrame(
         state0,
         cursorVisible = false,
@@ -904,24 +934,29 @@ object Renderer:
     val state0        = withEffectiveTheme(state)
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
     val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
-    val _ = withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(page =>
-      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics, output)
-    ) { scene =>
-      renderFrame(
-        state0,
-        cursorVisible,
-        surface,
-        viewportSize,
-        scene,
-        codeFont,
-        textFont,
-        uiFont,
-        cellMetrics,
-        uiMetrics,
-        cursorColor,
-        output,
-        damage
-      )
+    // #1105/#1215: see the surface-generic renderCursorOnly above for why this is scoped to a surface with no real
+    // FontRenderContext.
+    val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
+    val _ = withSceneIfNeeded(
+      state0,
+      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+    )(page => renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics, output)) {
+      scene =>
+        renderFrame(
+          state0,
+          cursorVisible,
+          surface,
+          viewportSize,
+          scene,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics,
+          cursorColor,
+          output,
+          damage
+        )
     }
     repaintRegion.get()
 
@@ -941,33 +976,38 @@ object Renderer:
     cursorColor: Option[java.awt.Color]
   ): List[PixelRect] =
     val state0 = withEffectiveTheme(state)
-    withSceneIfNeeded(state0, AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont))(_ => Nil) {
-      scene =>
-        val prepared = prepareScene(
-          state0,
-          surface,
-          viewportSize,
-          scene,
-          cursorVisible = true,
-          cursorColor,
-          codeFont,
-          textFont,
-          uiFont,
-          cellMetrics,
-          uiMetrics
-        )
-        val context = RenderContext(
-          surface,
-          prepared.scene.calculatedLayout,
-          true,
-          cursorColor,
-          codeFont,
-          textFont,
-          uiFont,
-          cellMetrics,
-          uiMetrics
-        )
-        renderEditorCursors(state0, context, prepared.renderPlan)
+    // #1105/#1215: see the surface-generic renderCursorOnly above for why this is scoped to a surface with no real
+    // FontRenderContext.
+    val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
+    withSceneIfNeeded(
+      state0,
+      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+    )(_ => Nil) { scene =>
+      val prepared = prepareScene(
+        state0,
+        surface,
+        viewportSize,
+        scene,
+        cursorVisible = true,
+        cursorColor,
+        codeFont,
+        textFont,
+        uiFont,
+        cellMetrics,
+        uiMetrics
+      )
+      val context = RenderContext(
+        surface,
+        prepared.scene.calculatedLayout,
+        true,
+        cursorColor,
+        codeFont,
+        textFont,
+        uiFont,
+        cellMetrics,
+        uiMetrics
+      )
+      renderEditorCursors(state0, context, prepared.renderPlan)
     }
 
   def render(
@@ -1643,12 +1683,22 @@ object Renderer:
       viewport = renderedViewport
     )
     context.surface.text.setFont(bufferFont)
+    // A surface with a real FontRenderContext keeps deriving cell-based advances from the buffer's own font, same as
+    // always. A surface with none (a terminal, #1105) has no real font metrics to derive from at all -- its own
+    // declared `context.cellMetrics` (TUI's CellMetricsOne, 1 pixel == 1 terminal cell) is the only legitimate scale,
+    // so this is what must reach the cell-based layout path instead of `TextLayoutSnapshot` re-deriving
+    // `CellMetrics.fromFont(bufferFont)` (a real AWT measurement of a font this surface never actually draws) (#1215).
     val snapshot = TextLayoutSnapshot.fromBuffer(
       renderBuffer,
       panelWidthPx,
       bufferFont,
       fontRenderContext,
-      wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
+      wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
+      cellMetricsOverride = if hasFontRenderContext then Some(bufferMetrics) else Some(context.cellMetrics),
+      // #1215: forces the cell path during construction (not just the flag below) -- otherwise a "monospaced" font
+      // whose measured-vs-cell auto-detection trips on this environment's own font-rendering quirks would still bake
+      // real (and here, meaningless -- #1105) measured advances into the snapshot, discarding `context.cellMetrics`.
+      forceCellLayout = !hasFontRenderContext
     )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 
