@@ -10,6 +10,7 @@ import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
+import com.serenity.ui.theme.Theme
 
 enum SurfaceRenderMode:
   case Floating
@@ -997,8 +998,8 @@ object SurfaceContentResolver:
     )
 
   private def contrastColor(color: java.awt.Color): java.awt.Color =
-    val luminance = (0.299 * color.getRed + 0.587 * color.getGreen + 0.114 * color.getBlue) / 255.0
-    if luminance > 0.55 then java.awt.Color.BLACK else java.awt.Color.WHITE
+    if Theme.luminance(color) > Theme.EqualContrastLuminanceThreshold then java.awt.Color.BLACK
+    else java.awt.Color.WHITE
 
   private def resolveFileSearch(
     state: FileSearchState,

@@ -14,7 +14,7 @@ import scala.util.Try
 import scala.util.control.NonFatal
 import scala.util.hashing.MurmurHash3
 
-import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.{ColorFormat, Theme}
 import org.commonmark.Extension
 import org.commonmark.ext.gfm.tables.TablesExtension
 import org.commonmark.ext.task.list.items.TaskListItemsExtension
@@ -970,7 +970,7 @@ object MarkdownDocumentPreview:
     isTableRow(line) && parseTableCells(line).forall(cell => cell.matches(""":?-{3,}:?"""))
 
   private def css(color: Color): String =
-    f"#${color.getRed}%02x${color.getGreen}%02x${color.getBlue}%02x"
+    ColorFormat.toHex(color, withAlpha = false)
 
   private def cssString(value: String): String =
     "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"

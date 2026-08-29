@@ -163,6 +163,30 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
   }
 
+  it should "not let a different render surface reusing the same SurfaceId disturb this surface's own cached panel buffer" in {
+    // Renderer's panel layer cache used to be a single JVM-wide slot keyed only by SurfaceId, so two independently
+    // rendered surfaces sharing a SurfaceId (as "outline" is, across a dozen specs) could stomp on each other's
+    // cached image -- exactly the shape of the flake seen when this spec ran under sbt's default parallel-suite
+    // execution alongside another spec painting a same-named panel. This reproduces that cross-surface interaction
+    // deterministically, without depending on real thread scheduling.
+    val surfaceA = new CountingLayerBufferSurface(120, 40)
+    val before   = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = true)
+
+    Renderer.render(before, cursorVisible = false, surfaceA, viewport, None, Damage.Everything)
+    surfaceA.newSeededLayerSurfaceCalls.get() shouldBe 1
+
+    // Stand in for a concurrently running render path -- another suite, another window -- painting a panel with the
+    // *same* SurfaceId but a different frame shape.
+    val surfaceB     = new CountingLayerBufferSurface(200, 60)
+    val wideViewport = ViewportSize(200, 60)
+    Renderer.render(before, cursorVisible = false, surfaceB, wideViewport, None, Damage.Everything)
+
+    val after = editContent(before)
+    Renderer.render(after, cursorVisible = false, surfaceA, viewport, None, DamageProducer.forTransition(before, after))
+
+    surfaceA.newSeededLayerSurfaceCalls.get() shouldBe 1
+  }
+
   it should "not repaint a floating panel's own buffer when only editor content changed and blur is off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true)
