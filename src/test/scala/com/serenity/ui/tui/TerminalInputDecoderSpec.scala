@@ -250,3 +250,22 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
     decodeAll(csi("13;5u")) shouldBe decodeAll(csi("13;5:1u"))
     decodeAll(csi("97;6u")) shouldBe List(tok(InputKey.Character, Some('a'), Set(Modifier.Ctrl, Modifier.Shift)))
   }
+
+  // ===Terminal focus reporting (CSI ?1004h/l, #1171): CSI I on focus-in, CSI O on focus-out.===
+
+  it should "decode CSI I as a FocusChanged(true) token" in {
+    decodeAll(csi("I")) shouldBe List(DecodedToken.FocusChanged(true))
+  }
+
+  it should "decode CSI O as a FocusChanged(false) token" in {
+    decodeAll(csi("O")) shouldBe List(DecodedToken.FocusChanged(false))
+  }
+
+  it should "decode a focus-out/focus-in pair back to back, distinctly from ordinary tokens" in {
+    val input = csi("O") ++ bytes("a") ++ csi("I")
+    decodeAll(input) shouldBe List(
+      DecodedToken.FocusChanged(false),
+      tok(InputKey.Character, Some('a')),
+      DecodedToken.FocusChanged(true)
+    )
+  }
