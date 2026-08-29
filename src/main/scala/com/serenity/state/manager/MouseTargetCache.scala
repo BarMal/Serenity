@@ -203,7 +203,12 @@ private[manager] object MouseTargetLayoutKey:
 private[serenity] object AuthoritativeUiScene:
 
   final private case class SceneFontKey(family: String, style: Int, size: Float)
-  final private case class SceneKey(layout: MouseTargetLayoutKey, paneFonts: List[(PaneId, SceneFontKey)])
+
+  final private case class SceneKey(
+      layout: MouseTargetLayoutKey,
+      paneFonts: List[(PaneId, SceneFontKey)],
+      cellMetrics: Option[CellMetrics]
+  )
 
   private val prepared = new LinkedHashMap[SceneKey, UiSceneSnapshot](16, 0.75f, true):
     override def removeEldestEntry(
@@ -211,11 +216,23 @@ private[serenity] object AuthoritativeUiScene:
     ): Boolean =
       size() > 64
 
+  /** `cellMetrics` is the "pixel" unit this scene's cell-based (non-measured) `TextLayoutSnapshot`s are built in --
+    * `None` (every caller but the render entry points below) keeps this scene's long-standing behaviour of re-deriving
+    * it from `codeFont`/each buffer's own font. A caller with its own notion of what a pixel means here -- `Renderer`,
+    * rendering for a surface with no real `FontRenderContext` to measure against (TUI's `TerminalRenderSurface`, where
+    * a pixel is defined to be exactly one terminal cell) -- passes that explicitly instead, so the snapshot this scene
+    * hands back for painting (and for mouse hit-testing, which shares it) is expressed in the same unit the caller's
+    * cursor-positioning math actually uses. `Some` here also forces `TextLayoutSnapshot`'s cell (non-measured) layout
+    * path unconditionally: such a caller has no font rendering to measure with at all (#1105), so the font's own
+    * measured-vs-cell auto-detection -- which can trip on a "monospaced" font's own rendering-stack quirks, independent
+    * of whether the caller can draw a measured run -- must not override it (#1215).
+    */
   def forState(
     state: AppState,
     viewportSize: ViewportSize,
     codeFont: Font,
-    textFont: Font
+    textFont: Font,
+    cellMetrics: Option[CellMetrics] = None
   ): UiSceneSnapshot = synchronized {
     val paneFonts = state.persisted.layout.orderedPaneIds.flatMap { paneId =>
       state.persisted.layout.editorPanes
@@ -227,14 +244,14 @@ private[serenity] object AuthoritativeUiScene:
           paneId -> SceneFontKey(font.getFamily, font.getStyle, font.getSize2D)
         }
     }
-    val key = SceneKey(MouseTargetLayoutKey.from(state, viewportSize), paneFonts)
+    val key = SceneKey(MouseTargetLayoutKey.from(state, viewportSize), paneFonts, cellMetrics)
     Option(prepared.get(key)).getOrElse {
       val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val base   = UiSceneSnapshot.from(state, layout, viewportSize)
       // Pane rects are measured in the screen grid's cells, and that grid is the code font's, whatever font a
       // buffer draws with. Sizing a document-font pane from its own cells makes the snapshot wrap at a width the
       // pane does not have, so its rows run off the right edge instead of wrapping.
-      val gridMetrics = CellMetrics.fromFont(codeFont)
+      val gridMetrics = cellMetrics.getOrElse(CellMetrics.fromFont(codeFont))
       val snapshots = base.paneLayouts.flatMap {
         case (paneId, paneLayout) =>
           for
@@ -243,7 +260,7 @@ private[serenity] object AuthoritativeUiScene:
             buffer   <- state.persisted.buffers.get(bufferId)
           yield
             val font        = if buffer.usesTextFont then textFont else codeFont
-            val fontMetrics = CellMetrics.fromFont(font)
+            val fontMetrics = cellMetrics.getOrElse(CellMetrics.fromFont(font))
             val width       = paneLayout.contentRect.width * gridMetrics.charWidth
             val heightPx    = paneLayout.contentRect.height * gridMetrics.lineHeight
             val baseViewport = LayoutEngine
@@ -284,7 +301,9 @@ private[serenity] object AuthoritativeUiScene:
               buffer.copy(viewport = viewport),
               width,
               font,
-              wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
+              wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
+              cellMetricsOverride = Some(fontMetrics),
+              forceCellLayout = cellMetrics.isDefined
             )
       }
       val scene = base.withTextSnapshots(snapshots)

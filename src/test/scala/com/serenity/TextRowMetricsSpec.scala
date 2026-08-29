@@ -40,6 +40,15 @@ class TextRowMetricsSpec extends AnyFlatSpec with Matchers:
     rows.cursorTopPx(1) should be >= metrics.toPixelY(rect.y)
   }
 
+  // -- #1215: a terminal cell grid's row height IS the pixel unit (rowLineHeightPx == 1), so the optical lift meant
+  // to nudge a real sub-pixel font's cursor cannot cost a whole row (or more) there. --
+  it should "not lift a cell-grid cursor at all once the row has no spare pixels (a 1px == 1 terminal row grid)" in {
+    val oneRowPerCell = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+    val rows          = TextRowMetrics(rect, oneRowPerCell, rowLineHeightPx = 1, usesMeasuredLayout = false)
+
+    rows.cursorTopPx(3) shouldBe rows.lineTopPx(3)
+  }
+
   it should "enforce viewport and content bounds for visible rows" in {
     val rows = TextRowMetrics(rect, metrics, rowLineHeightPx = 24, usesMeasuredLayout = true)
 

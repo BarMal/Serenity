@@ -37,5 +37,12 @@ final case class TextRowMetrics(
     if usesMeasuredLayout then lineTopPx(visualRow)
     else math.max(contentTopPx, lineTopPx(visualRow) - cursorOpticalLiftPx)
 
+  /** A small nudge that lifts a cell-grid cursor's top edge slightly above its row's own top, for a real sub-pixel font
+    * (a monospaced code font, say 16px tall) where a couple of spare pixels make the caret look better centred. The
+    * `2`-pixel floor below assumes a row several pixels tall to spare; on a grid whose row *is* the pixel unit (TUI's
+    * `CellMetricsOne`, `rowLineHeightPx == 1`), that same floor would lift the cursor a full row or more off its real
+    * position, so the lift is capped to never exceed half the row -- vanishing entirely once a row has no pixels to
+    * spare.
+    */
   private def cursorOpticalLiftPx: Int =
-    math.max(2, math.round(rowLineHeightPx.toFloat * 0.125f))
+    math.min(rowLineHeightPx / 2, math.max(2, math.round(rowLineHeightPx.toFloat * 0.125f)))

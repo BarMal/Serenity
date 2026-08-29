@@ -50,41 +50,64 @@ object TextLayoutSnapshot:
   def gridWrapWidthPx(gridColumns: Int, fontConfig: FontLoader.FontConfig): Int =
     gridColumns * CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).charWidth
 
+  /** `cellMetrics` is the unit every non-measured (cell-based) layout call below expresses its "pixel" positions in --
+    * defaulting to the font's own natural cell size (`CellMetrics.fromFont(font)`, GUI's long-standing behaviour) so
+    * every caller that does not pass one keeps today's exact numbers. A caller with its own notion of what a "pixel"
+    * means here (TUI's `TerminalRenderSurface`, where 1 pixel is defined to be exactly 1 terminal cell) passes that
+    * explicitly instead of leaving this module to silently re-derive the real AWT font's metrics, which is what let
+    * TUI's `CellMetricsOne` go unhonoured end-to-end (#1215).
+    */
   def caretXsForText(
     text: String,
     font: Font,
-    fontRenderContext: FontRenderContext = defaultFontRenderContext()
+    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
+    cellMetricsOverride: Option[CellMetrics] = None,
+    forceCellLayout: Boolean = false
   ): Vector[Float] =
-    val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
-    caretXs(text, font, fontRenderContext, measuredLayout)
+    val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
+    val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
+    caretXs(text, font, fontRenderContext, measuredLayout, cellMetrics)
 
   def visualLineForText(
     text: String,
     bufferLine: Int,
     font: Font,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
-    startColumn: Int = 0
+    startColumn: Int = 0,
+    cellMetricsOverride: Option[CellMetrics] = None
   ): TextVisualLine =
+    val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
-    shapeSegment(text, bufferLine, startColumn, startColumn + text.length, font, fontRenderContext, measuredLayout)
+    shapeSegment(
+      text,
+      bufferLine,
+      startColumn,
+      startColumn + text.length,
+      font,
+      fontRenderContext,
+      measuredLayout,
+      cellMetrics
+    )
 
   def leftColumnForCursorVisibility(
     lineText: String,
     cursorColumn: Int,
     visibleWidthPx: Int,
     font: Font,
-    fontRenderContext: FontRenderContext = defaultFontRenderContext()
+    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
+    cellMetricsOverride: Option[CellMetrics] = None
   ): Int =
     if lineText.isEmpty || visibleWidthPx <= 0 then 0
     else
+      val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
       val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
       val safeColumn     = cursorColumn.max(0).min(lineText.length)
       if !measuredLayout then
-        val charWidth      = math.max(1, CellMetrics.fromFont(font).charWidth)
+        val charWidth      = math.max(1, cellMetrics.charWidth)
         val visibleColumns = math.max(1, visibleWidthPx / charWidth)
         math.max(0, safeColumn - visibleColumns + 1)
       else
-        val xs            = caretXs(lineText, font, fontRenderContext, measuredLayout)
+        val xs            = caretXs(lineText, font, fontRenderContext, measuredLayout, cellMetrics)
         val cursorXPx     = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
         xs.zipWithIndex.takeWhile { case (x, _) => x <= targetLeftXPx }.map(_._2).lastOption.getOrElse(0)
@@ -95,12 +118,22 @@ object TextLayoutSnapshot:
     panelWidthPx: Int,
     font: Font,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
-    wordWrapEnabled: Boolean = true
+    wordWrapEnabled: Boolean = true,
+    cellMetricsOverride: Option[CellMetrics] = None
   ): Int =
     if !wordWrapEnabled then 0
     else
+      val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
       val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
-      wrapLogicalLine(lineText, 0, math.max(1, panelWidthPx), font, fontRenderContext, measuredLayout).zipWithIndex
+      wrapLogicalLine(
+        lineText,
+        0,
+        math.max(1, panelWidthPx),
+        font,
+        fontRenderContext,
+        measuredLayout,
+        cellMetrics
+      ).zipWithIndex
         .collectFirst {
           case (line, index) if cursorColumn >= line.startColumn && cursorColumn <= line.endColumn => index
         }
@@ -113,8 +146,10 @@ object TextLayoutSnapshot:
     font: Font,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     baseColumn: Int = 0,
-    maxVisualLines: Int = Int.MaxValue
+    maxVisualLines: Int = Int.MaxValue,
+    cellMetricsOverride: Option[CellMetrics] = None
   ): Vector[TextVisualLine] =
+    val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
     wrapLogicalLine(
       text,
@@ -123,23 +158,43 @@ object TextLayoutSnapshot:
       font,
       fontRenderContext,
       measuredLayout,
+      cellMetrics,
       baseColumn,
       maxVisualLines
     )
 
+  /** `forceCellLayout` bypasses the font-driven measured-vs-cell auto-detection (`shouldUseMeasuredLayout`) entirely,
+    * always taking the cell path. A caller with no real font rendering to measure against at all -- a terminal surface
+    * reporting no `FontRenderContext` (#1105) -- needs this: `shouldUseMeasuredLayout`'s fractional-advance-drift probe
+    * measures the font with a manufactured default `FontRenderContext` regardless of whether the eventual surface can
+    * draw a measured run, so a "monospaced" logical font whose headless/host font-substitution isn't pixel-perfect can
+    * still trip the drift check and route TUI onto the measured path -- silently discarding the caller's `cellMetrics`
+    * override, since the measured path never consults it (#1215).
+    */
   def fromBuffer(
     buffer: Buffer,
     panelWidthPx: Int,
     font: Font,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
-    wordWrapEnabled: Boolean = true
+    wordWrapEnabled: Boolean = true,
+    cellMetricsOverride: Option[CellMetrics] = None,
+    forceCellLayout: Boolean = false
   ): TextLayoutSnapshot =
+    val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout =
-      shouldUseMeasuredLayout(font, fontRenderContext)
+      !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
+    // The non-measured (cell) path draws every row on `cellMetrics`' own grid (see `TextRowMetrics`'s non-measured
+    // `lineTopPx`), so its line height/ascent must come from that same caller-supplied unit rather than the real
+    // font's metrics -- otherwise a caller whose "pixel" is coarser or finer than the font's actual line height (TUI's
+    // CellMetricsOne, 1 pixel == 1 terminal row) gets a snapshot describing rows in a scale nothing downstream uses.
     val lineHeightPx =
-      math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble).toInt)
+      if measuredLayout then
+        math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble).toInt)
+      else math.max(1, cellMetrics.lineHeight)
     val ascentPx =
-      math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getAscent.toDouble).toInt)
+      if measuredLayout then
+        math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getAscent.toDouble).toInt)
+      else math.max(0, cellMetrics.ascent)
     val totalLines = buffer.document.content.lineCount
     val richDocument =
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
@@ -153,6 +208,7 @@ object TextLayoutSnapshot:
         font,
         fontRenderContext,
         measuredLayout,
+        cellMetrics,
         visualLineLimit,
         richDocument,
         wordWrapEnabled
@@ -175,6 +231,7 @@ object TextLayoutSnapshot:
     font: Font,
     frc: FontRenderContext,
     measuredLayout: Boolean,
+    cellMetrics: CellMetrics,
     visualLineLimit: Int,
     richDocument: Option[RichTextDocument],
     wordWrapEnabled: Boolean
@@ -202,6 +259,7 @@ object TextLayoutSnapshot:
                   font,
                   frc,
                   measuredLayout,
+                  cellMetrics,
                   startColumn,
                   remainingVisualLines
                 )
@@ -214,7 +272,8 @@ object TextLayoutSnapshot:
                     startColumn + visibleSlice.length,
                     font,
                     frc,
-                    measuredLayout
+                    measuredLayout,
+                    cellMetrics
                   )
                 )
             val aligned = applyParagraphAlignment(wrapped, lineIndex, panelWidthPx, richDocument)
@@ -238,23 +297,26 @@ object TextLayoutSnapshot:
     font: Font,
     frc: FontRenderContext,
     measuredLayout: Boolean,
+    cellMetrics: CellMetrics,
     baseColumn: Int = 0,
     maxVisualLines: Int = Int.MaxValue
   ): Vector[TextVisualLine] =
     if maxVisualLines <= 0 then Vector.empty
-    else if line.isEmpty then Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, font, frc, measuredLayout))
+    else if line.isEmpty then
+      Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, font, frc, measuredLayout, cellMetrics))
     else
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= line.length || acc.length >= maxVisualLines then acc
         else
           val remaining        = line.substring(startColumn)
-          val fittingLength    = fittingSegmentLength(remaining, panelWidthPx, font, frc, measuredLayout)
+          val fittingLength    = fittingSegmentLength(remaining, panelWidthPx, font, frc, measuredLayout, cellMetrics)
           val segmentLength    = wordBoundarySegmentLength(remaining, fittingLength)
           val endColumnInSlice = startColumn + segmentLength
           val segment          = line.substring(startColumn, endColumnInSlice)
           val segmentStart     = baseColumn + startColumn
           val segmentEnd       = baseColumn + endColumnInSlice
-          val visualLine       = shapeSegment(segment, bufferLine, segmentStart, segmentEnd, font, frc, measuredLayout)
+          val visualLine =
+            shapeSegment(segment, bufferLine, segmentStart, segmentEnd, font, frc, measuredLayout, cellMetrics)
           loop(endColumnInSlice, acc :+ visualLine)
 
       loop(0, Vector.empty)
@@ -264,27 +326,29 @@ object TextLayoutSnapshot:
     panelWidthPx: Int,
     font: Font,
     frc: FontRenderContext,
-    measuredLayout: Boolean
+    measuredLayout: Boolean,
+    cellMetrics: CellMetrics
   ): Int =
     if !measuredLayout then
-      val charWidth = math.max(1, CellMetrics.fromFont(font).charWidth)
+      val charWidth = math.max(1, cellMetrics.charWidth)
       math.max(1, math.min(text.length, panelWidthPx / charWidth))
-    else fittingMeasuredSegmentLength(text, panelWidthPx, font, frc, measuredLayout)
+    else fittingMeasuredSegmentLength(text, panelWidthPx, font, frc, measuredLayout, cellMetrics)
 
   private def fittingMeasuredSegmentLength(
     text: String,
     panelWidthPx: Int,
     font: Font,
     frc: FontRenderContext,
-    measuredLayout: Boolean
+    measuredLayout: Boolean,
+    cellMetrics: CellMetrics
   ): Int =
-    val cellWidth    = math.max(1, CellMetrics.fromFont(font).charWidth)
+    val cellWidth    = math.max(1, cellMetrics.charWidth)
     val initialLimit = math.min(text.length, math.max(16, panelWidthPx / cellWidth + 32))
 
     @annotation.tailrec
     def loop(limit: Int): Int =
       val candidate = text.take(limit)
-      val carets    = caretXs(candidate, font, frc, measuredLayout)
+      val carets    = caretXs(candidate, font, frc, measuredLayout, cellMetrics)
       val maxFitting =
         carets.zipWithIndex.takeWhile { case (x, _) => x <= panelWidthPx.toFloat }.map(_._2).lastOption.getOrElse(0)
       val candidateExhausted = limit >= text.length
@@ -307,9 +371,10 @@ object TextLayoutSnapshot:
     endColumn: Int,
     font: Font,
     frc: FontRenderContext,
-    measuredLayout: Boolean
+    measuredLayout: Boolean,
+    cellMetrics: CellMetrics
   ): TextVisualLine =
-    val xs              = caretXs(text, font, frc, measuredLayout)
+    val xs              = caretXs(text, font, frc, measuredLayout, cellMetrics)
     val boundaryOffsets = graphemeBoundaryOffsets(text)
     val caretStops = boundaryOffsets.map { offset =>
       TextCaretStop(startColumn + offset, xs.lift(offset).getOrElse(xs.lastOption.getOrElse(0.0f)))
@@ -364,10 +429,16 @@ object TextLayoutSnapshot:
         xOffsetPx = offsetPx
       )
 
-  private def caretXs(text: String, font: Font, frc: FontRenderContext, measuredLayout: Boolean): Vector[Float] =
+  private def caretXs(
+    text: String,
+    font: Font,
+    frc: FontRenderContext,
+    measuredLayout: Boolean,
+    cellMetrics: CellMetrics
+  ): Vector[Float] =
     if text.isEmpty then Vector(0.0f)
     else if !measuredLayout then
-      val charWidth = CellMetrics.fromFont(font).charWidth.toFloat
+      val charWidth = cellMetrics.charWidth.toFloat
       Vector.tabulate(text.length + 1)(index => index * charWidth)
     else
       val attributed = AttributedString(text)
@@ -400,9 +471,14 @@ object TextLayoutSnapshot:
     val sampleText = "iiiiiiiiiiii"
     if sampleText.isEmpty then false
     else
-      val measuredXs      = caretXs(sampleText, font, frc, measuredLayout = true)
+      // Whether this font itself has fractional-advance drift is a property of the font, independent of whatever
+      // "pixel" unit a caller's cellMetrics defines -- so this always measures against the font's own natural cell
+      // size, not a caller override (which would otherwise make every font look like it drifts under TUI's
+      // CellMetricsOne).
+      val fontCellMetrics = CellMetrics.fromFont(font)
+      val measuredXs      = caretXs(sampleText, font, frc, measuredLayout = true, fontCellMetrics)
       val measuredAdvance = measuredXs.lastOption.getOrElse(0.0f)
-      val cellAdvance     = CellMetrics.fromFont(font).charWidth.toFloat * sampleText.length
+      val cellAdvance     = fontCellMetrics.charWidth.toFloat * sampleText.length
       math.abs(measuredAdvance - cellAdvance) > 0.5f
 
   private def normalizeCollapsedCarets(rawXs: Vector[Float]): Vector[Float] =

@@ -312,6 +312,106 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     writer.toString shouldBe ""
   }
 
+  // -- #1215 (remainder): TUI cell metrics must be honoured end-to-end, not re-derived from the real AWT font ---------
+
+  "Renderer.renderWithCursorOverlay (surface-generic)" should
+    "place the CUP escape at the cursor's real cell column on a line longer than a few characters" in {
+      val (rs, writer) = surface(width = 80, height = 24)
+      val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+      val cellMetrics  = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+      val paneId       = PaneId(0)
+      val bufferId     = BufferId(1)
+      val cursorColumn = 15
+      val baseBuffer   = Buffer.fromString(bufferId, "Hello, cursor tracking world!")
+      val buffer = baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(0, cursorColumn))))
+      val state = AppState.initial.copy(
+        persisted = AppState.initial.persisted.copy(
+          config = AppState.initial.persisted.config
+            .withCursorMode(CursorMode.Blink)
+            .withLineNumbers(false)
+            .withGutter(false)
+            .withPaneHeaders(false),
+          buffers = Map(buffer.id -> buffer),
+          bufferOrder = List(buffer.id),
+          layout = AppState.initial.persisted.layout.copy(
+            editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+            activeEditorPaneId = Some(paneId),
+            paneOrder = List(paneId)
+          ),
+          focus = Focus.EditorPane(paneId),
+          theme = Theme.light
+        )
+      )
+
+      Renderer.renderWithCursorOverlay(
+        state,
+        rs,
+        ViewportSize(80, 24),
+        font,
+        font,
+        font,
+        cellMetrics,
+        cellMetrics,
+        None
+      )
+
+      val out = writer.toString
+      // CUP is row+1;col+1: with CellMetricsOne (1 pixel == 1 cell) honoured end-to-end, column 15 must land at
+      // screen column 16, not at the ~7x-inflated (and then edge-clamped) column a re-derived `CellMetrics.fromFont`
+      // (charWidth=7 for this font in this environment) would produce.
+      out should include(s"$esc[1;16H")
+    }
+
+  it should "place the CUP escape at the cursor's real cell row across multiple lines" in {
+    val (rs, writer) = surface(width = 80, height = 24)
+    val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val cellMetrics  = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+    val paneId       = PaneId(0)
+    val bufferId     = BufferId(1)
+    val cursorLine   = 3
+    val cursorColumn = 5
+    val text         = (0 until 6).map(n => s"line number $n").mkString("\n")
+    val baseBuffer   = Buffer.fromString(bufferId, text)
+    val buffer =
+      baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(cursorLine, cursorColumn))))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        config = AppState.initial.persisted.config
+          .withCursorMode(CursorMode.Blink)
+          .withLineNumbers(false)
+          .withGutter(false)
+          .withPaneHeaders(false),
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+          activeEditorPaneId = Some(paneId),
+          paneOrder = List(paneId)
+        ),
+        focus = Focus.EditorPane(paneId),
+        theme = Theme.light
+      )
+    )
+
+    Renderer.renderWithCursorOverlay(
+      state,
+      rs,
+      ViewportSize(80, 24),
+      font,
+      font,
+      font,
+      cellMetrics,
+      cellMetrics,
+      None
+    )
+
+    val out = writer.toString
+    // Row 3 (0-indexed) must land at screen row 4 -- not row 2, which is what a hard-coded 2px "optical lift"
+    // designed for a real sub-pixel font's line height produces once it is applied inside a 1px == 1 terminal-row
+    // grid (CellMetricsOne's lineHeight=1).
+    out should include(s"$esc[4;6H")
+  }
+
   private def editorState(cursorMode: CursorMode): AppState =
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
