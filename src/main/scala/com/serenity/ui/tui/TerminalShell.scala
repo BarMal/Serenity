@@ -112,19 +112,24 @@ object TerminalShell:
     *
     * That same source also turned up something #1109 didn't know to look for: xterm does define a query/response for
     * both resources -- `XTQMODKEYS` (`CSI ? Pp m`) and `XTQFMTKEYS` (`CSI ? Pp g`), each answered with an `XTMODKEYS`/
-    * `XTFMTKEYS`-shaped reply carrying the resource's current value. That is a real query/response mechanism the way
-    * kitty's `CSI ? u` is, so in principle [[ModifyOtherKeys]] no longer has to be an inherently-unconfirmable tier.
-    *
-    * Caution, here be imagine dragons: this codebase does not send that query or parse its reply --
-    * [[negotiateKeyboardProtocol]] only pushes the enable sequences and never confirms xterm actually accepted them, so
-    * nothing above changes in practice yet. A terminal that ignores both negotiations entirely (today's Tier 3, #1108's
-    * existing legacy decoding) therefore remains indistinguishable from one that silently accepted the
-    * `ModifyOtherKeys` request but never sends a CSI-u sequence -- this field is still a ceiling on fidelity, not a
-    * guarantee. Wiring `XTQMODKEYS`/`XTQFMTKEYS` into the negotiation ladder to close that gap is a real follow-up, not
-    * attempted here.
+    * `XTFMTKEYS`-shaped reply (`CSI > Pp ; Pv m` / `CSI > Pp ; Pv f`) carrying the resource's current value. That is a
+    * real query/response mechanism the way kitty's `CSI ? u` is, so [[negotiateKeyboardProtocol]] uses it: after
+    * pushing the `modifyOtherKeys`/`formatOtherKeys` enable sequences, it sends `XTQMODKEYS`/`XTQFMTKEYS` and waits
+    * (bounded by [[NegotiationDeadlineMillis]]) for xterm to echo back `Pv = 2` and `Pv = 1` respectively. Only then is
+    * [[ModifyOtherKeys]] reported -- a terminal that never replies, or replies with different values, is
+    * indistinguishable from one that ignored the negotiation outright, and settles on [[Legacy]] instead, with the
+    * enable sequences explicitly reverted so no half-applied state lingers past negotiation.
     */
   enum KeyboardProtocolTier:
     case Kitty, ModifyOtherKeys
+
+    /** Neither negotiation confirmed: the kitty `CSI ? u` query drew no matching response, and the
+      * `modifyOtherKeys`/`formatOtherKeys` enable sequences were not confirmed by `XTQMODKEYS`/`XTQFMTKEYS` either (no
+      * reply, or a reply reporting different values) -- so they were reverted rather than left assumed-active. Today's
+      * uncontested fallback: CSI-u sequences are never expected to arrive, and `TerminalInputDecoder` decodes
+      * everything as legacy bytes.
+      */
+    case Legacy
 
   private val KittyQuery: String             = "[?u"
   private val KittyPushFlags: String         = "[>3u" // 1 (disambiguate) | 2 (report event types)
@@ -133,6 +138,19 @@ object TerminalShell:
   private val ModifyOtherKeysDisable: String = "[>4;0m"
   private val FormatOtherKeysEnable: String  = "[>4;1f"
   private val FormatOtherKeysDisable: String = "[>4;0f"
+  private val XtqModKeysQuery: String        = "[?4m" // XTQMODKEYS: query the current modifyOtherKeys value.
+  private val XtqFmtKeysQuery: String        = "[?4g" // XTQFMTKEYS: query the current formatOtherKeys value.
+
+  /** The `Pp` resource id both `XTMODKEYS`/`XTQMODKEYS` and `XTFMTKEYS`/`XTQFMTKEYS` address for
+    * `modifyOtherKeys`/`formatOtherKeys` (xterm's `ctlseqs.txt`, resource table shared by both controls).
+    */
+  private val ModifyOtherKeysResource: Int = 4
+
+  /** The `Pv` values a confirming `XTMODKEYS`/`XTFMTKEYS` reply must carry for [[negotiateKeyboardProtocol]] to trust
+    * that xterm actually applied what [[ModifyOtherKeysEnable]]/[[FormatOtherKeysEnable]] requested.
+    */
+  private val ConfirmedModifyOtherKeysValue: Int = 2
+  private val ConfirmedFormatOtherKeysValue: Int = 1
 
   /** Terminal focus reporting (#1171): the standard xterm private mode that makes the terminal send `CSI I`/`CSI O` on
     * focus-in/focus-out, decoded by [[TerminalInputDecoder]] and routed to `AppRuntime.run`'s `registerFocusCallback`
@@ -142,8 +160,10 @@ object TerminalShell:
   private[tui] val FocusReportingEnable: String  = "[?1004h"
   private[tui] val FocusReportingDisable: String = "[?1004l"
 
-  /** How long [[acquire]] waits for a kitty `CSI ? flags u` response before falling back to `modifyOtherKeys`.
-    * Comfortably above a local pty round-trip, comfortably below a perceptible startup stall.
+  /** How long [[acquire]] waits for a kitty `CSI ? flags u` response before falling back to `modifyOtherKeys`, and
+    * separately how long it waits for the `XTQMODKEYS`/`XTQFMTKEYS` confirmation replies before falling further back to
+    * [[KeyboardProtocolTier.Legacy]]. Comfortably above a local pty round-trip, comfortably below a perceptible startup
+    * stall -- applied per phase, so a terminal that answers neither negotiation adds at most two of these to startup.
     */
   private val NegotiationDeadlineMillis: Long = 100L
 
@@ -187,37 +207,53 @@ object TerminalShell:
 
   /** Runs the tiered negotiation ladder the #1109 issue calls for: query kitty support first (bounded by
     * [[NegotiationDeadlineMillis]] so an unsupporting terminal, which sends no response at all, can't stall startup);
-    * push kitty's enhancement flags if it answered, otherwise fall back to `modifyOtherKeys`.
+    * push kitty's enhancement flags if it answered. Otherwise, push `modifyOtherKeys`/`formatOtherKeys` and confirm
+    * xterm actually applied them via `XTQMODKEYS`/`XTQFMTKEYS` (again bounded by [[NegotiationDeadlineMillis]]) before
+    * reporting [[KeyboardProtocolTier.ModifyOtherKeys]] -- falling back further to [[KeyboardProtocolTier.Legacy]], and
+    * reverting the enable sequences, when that confirmation doesn't arrive (#1194's follow-up: this tier was previously
+    * assumed from the enable write succeeding, never confirmed from the terminal's own reply).
     *
-    * Reads the query response directly off `terminal.reader()` -- the same `NonBlockingReader` [[TerminalInputHandler]]
-    * later starts its own read loop over -- which is safe only because this runs to completion before that loop starts
-    * (raw mode is entered, negotiation happens, and only then does the caller construct the input handler).
+    * Reads every query response directly off `terminal.reader()` -- the same `NonBlockingReader`
+    * [[TerminalInputHandler]] later starts its own read loop over -- which is safe only because this runs to completion
+    * before that loop starts (raw mode is entered, negotiation happens, and only then does the caller construct the
+    * input handler).
     *
-    * Known limitation (tmux pass-through): tmux's `extended-keys` setting controls whether it forwards a kitty response
-    * to the client application at all; this negotiation cannot distinguish "tmux ate the query" from "the terminal
-    * underneath doesn't support kitty", so a `ModifyOtherKeys` (or effectively Tier 3) result under tmux may undersell
+    * Known limitation (tmux pass-through): tmux's `extended-keys` setting controls whether it forwards a kitty (or
+    * `XTQMODKEYS`/`XTQFMTKEYS`) response to the client application at all; this negotiation cannot distinguish "tmux
+    * ate the query" from "the terminal underneath doesn't support it", so a `Legacy` result under tmux may undersell
     * what the terminal underneath actually supports. Not verified against a real tmux session here -- flagged rather
     * than guessed at.
     *
     * @return
-    *   the negotiated tier, plus any bytes read off the reader while probing that were not part of a matched kitty
-    *   response (see [[TerminalShell]]'s `pendingInputPrefix` doc) -- always empty when the probe matched, since a
-    *   matched response's bytes are legitimately consumed protocol traffic, not stray input.
+    *   the negotiated tier, plus any bytes read off the reader while probing that were not part of a matched response
+    *   (see [[TerminalShell]]'s `pendingInputPrefix` doc) -- accumulated across both negotiation phases when both run,
+    *   and always empty for a phase whose probe matched, since a matched response's bytes are legitimately consumed
+    *   protocol traffic, not stray input.
     */
   private def negotiateKeyboardProtocol(terminal: Terminal): (KeyboardProtocolTier, Array[Byte]) =
     val writer = terminal.writer()
     writer.write(KittyQuery)
     writer.flush()
-    val (matched, strayBytes) = awaitKittyResponse(terminal.reader(), NegotiationDeadlineMillis)
-    if matched then
+    val (kittyMatched, kittyStray) = awaitKittyResponse(terminal.reader(), NegotiationDeadlineMillis)
+    if kittyMatched then
       writer.write(KittyPushFlags)
       writer.flush()
-      (KeyboardProtocolTier.Kitty, strayBytes)
+      (KeyboardProtocolTier.Kitty, kittyStray)
     else
       writer.write(ModifyOtherKeysEnable)
       writer.write(FormatOtherKeysEnable)
+      writer.write(XtqModKeysQuery)
+      writer.write(XtqFmtKeysQuery)
       writer.flush()
-      (KeyboardProtocolTier.ModifyOtherKeys, strayBytes)
+      val (confirmed, confirmStray) =
+        awaitModifyOtherKeysConfirmation(terminal.reader(), NegotiationDeadlineMillis)
+      val strayBytes = kittyStray ++ confirmStray
+      if confirmed then (KeyboardProtocolTier.ModifyOtherKeys, strayBytes)
+      else
+        writer.write(ModifyOtherKeysDisable)
+        writer.write(FormatOtherKeysDisable)
+        writer.flush()
+        (KeyboardProtocolTier.Legacy, strayBytes)
 
   /** A minimal state machine over the expected `ESC [ ? digits u` response, bounded by an overall deadline so a
     * terminal that never responds can't hang startup. Every byte read is accumulated (re-encoded to UTF-8 via
@@ -251,6 +287,68 @@ object TerminalShell:
     val matched = loop(0, deadlineMillis)
     (matched, if matched then Array.emptyByteArray else consumed.result())
 
+  /** A minimal state machine over the expected `XTMODKEYS`/`XTFMTKEYS` confirmation replies -- `ESC [ > 4 ; 2 m` and
+    * `ESC [ > 4 ; 1 f`, in either order, possibly interleaved -- bounded by a single shared deadline so a terminal that
+    * answers one, both, or neither can't hang startup either way. As with [[awaitKittyResponse]], every byte read is
+    * accumulated so a byte that doesn't fit either expected shape -- most plausibly a real keystroke racing the
+    * negotiation window -- can be handed back to the caller instead of silently dropped; a byte that breaks the current
+    * partial match only resets the match state, never the accumulated bytes.
+    *
+    * @return
+    *   whether *both* the modifyOtherKeys and formatOtherKeys replies were seen and reported exactly the requested
+    *   values ([[ConfirmedModifyOtherKeysValue]] / [[ConfirmedFormatOtherKeysValue]]) -- a reply reporting some other
+    *   value means xterm did not end up in the state requested, which is exactly what this confirmation exists to
+    *   catch, so that also counts as unconfirmed.
+    */
+  private def awaitModifyOtherKeysConfirmation(
+    reader: NonBlockingReader,
+    deadlineMillis: Long
+  ): (Boolean, Array[Byte]) =
+    val consumed = Array.newBuilder[Byte]
+
+    @annotation.tailrec
+    def loop(
+      state: Int,
+      resourceDigits: String,
+      valueDigits: String,
+      sawModKeys: Boolean,
+      sawFmtKeys: Boolean,
+      remaining: Long
+    ): (Boolean, Boolean) =
+      if (sawModKeys && sawFmtKeys) || remaining <= 0 then (sawModKeys, sawFmtKeys)
+      else
+        val start = System.currentTimeMillis()
+        val ch    = reader.read(remaining)
+        val spent = math.max(1L, System.currentTimeMillis() - start)
+        if ch == NonBlockingReader.EOF || ch == NonBlockingReader.READ_EXPIRED then (sawModKeys, sawFmtKeys)
+        else
+          consumed ++= TerminalInputHandler.toUtf8Bytes(ch)
+          val isDigit = ch >= '0'.toInt && ch <= '9'.toInt
+          state match
+            case 0 => loop(if ch == 0x1b then 1 else 0, "", "", sawModKeys, sawFmtKeys, remaining - spent)
+            case 1 => loop(if ch == '['.toInt then 2 else 0, "", "", sawModKeys, sawFmtKeys, remaining - spent)
+            case 2 => loop(if ch == '>'.toInt then 3 else 0, "", "", sawModKeys, sawFmtKeys, remaining - spent)
+            case 3 if isDigit =>
+              loop(3, resourceDigits + ch.toChar, valueDigits, sawModKeys, sawFmtKeys, remaining - spent)
+            case 3 if ch == ';'.toInt => loop(4, resourceDigits, "", sawModKeys, sawFmtKeys, remaining - spent)
+            case 4 if isDigit =>
+              loop(4, resourceDigits, valueDigits + ch.toChar, sawModKeys, sawFmtKeys, remaining - spent)
+            case 4 if ch == 'm'.toInt || ch == 'f'.toInt =>
+              val resource = resourceDigits.toIntOption
+              val value    = valueDigits.toIntOption
+              val isModKeysUnit = ch == 'm'.toInt && resource.contains(ModifyOtherKeysResource) && value.contains(
+                ConfirmedModifyOtherKeysValue
+              )
+              val isFmtKeysUnit = ch == 'f'.toInt && resource.contains(ModifyOtherKeysResource) && value.contains(
+                ConfirmedFormatOtherKeysValue
+              )
+              loop(0, "", "", sawModKeys || isModKeysUnit, sawFmtKeys || isFmtKeysUnit, remaining - spent)
+            case _ => loop(0, "", "", sawModKeys, sawFmtKeys, remaining - spent)
+
+    val (sawModKeys, sawFmtKeys) = loop(0, "", "", sawModKeys = false, sawFmtKeys = false, deadlineMillis)
+    val confirmed                = sawModKeys && sawFmtKeys
+    (confirmed, if confirmed then Array.emptyByteArray else consumed.result())
+
   private def disableKeyboardProtocol(terminal: Terminal, tier: KeyboardProtocolTier): Unit =
     val writer = terminal.writer()
     tier match
@@ -258,3 +356,5 @@ object TerminalShell:
       case KeyboardProtocolTier.ModifyOtherKeys =>
         writer.write(ModifyOtherKeysDisable)
         writer.write(FormatOtherKeysDisable)
+      // Already reverted at negotiation time when confirmation failed -- nothing left to disable on exit.
+      case KeyboardProtocolTier.Legacy => ()
