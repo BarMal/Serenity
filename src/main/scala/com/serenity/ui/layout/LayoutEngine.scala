@@ -317,7 +317,9 @@ object LayoutEngine:
       }
       .groupMap(_._1)(_._2)
       .view
-      .mapValues(rects => rects.reduce(unionRects))
+      // groupMap guarantees every value list is non-empty, so reduceOption always yields Some here;
+      // flatMap over that Option keeps the reduce total instead of reaching for the partial `.reduce`.
+      .flatMap { case (position, rects) => rects.reduceOption(unionRects).map(position -> _) }
       .toMap
     PinnedPanelLayout(panelRects, surfaceRects)
 
@@ -472,7 +474,9 @@ object LayoutEngine:
           case _ =>
             acc
     }
-    val panelSizes = panelsByPosition.view.mapValues(_.map(_._2).max).toMap
+    // Each entry in panelsByPosition is built by appending, so a key is only ever present with a
+    // non-empty list -- Int.MinValue is never the reported result.
+    val panelSizes = panelsByPosition.view.mapValues(_.map(_._2).foldLeft(Int.MinValue)(_ max _)).toMap
     val verticalSizes = calculatePinnedAxisSizes(
       panelSizes.get(PanelPosition.Top),
       panelSizes.get(PanelPosition.Bottom),
@@ -668,7 +672,7 @@ object LayoutEngine:
     // Find the maximum line count across all buffers to determine width needed
     val maxLines =
       if state.persisted.buffers.isEmpty then 10
-      else state.persisted.buffers.values.map(_.document.content.lineCount).max
+      else state.persisted.buffers.values.map(_.document.content.lineCount).foldLeft(Int.MinValue)(_ max _)
 
     math.max(3, maxLines.toString.length + 1) // +1 for spacing, minimum 3 chars
 
@@ -1310,9 +1314,8 @@ object LayoutEngine:
 
         if paneCount == 0 then Map.empty
         else if paneCount == 1 then
-          // Single pane uses full editor area
-          val paneId = paneIds.head
-          Map(paneId -> editorRect)
+          // Single pane uses full editor area. paneCount == 1 guarantees headOption is Some here.
+          paneIds.headOption.fold(Map.empty[PaneId, LayoutRect])(paneId => Map(paneId -> editorRect))
         else
           state.persisted.layout.splitDirection match
             case PaneSplitDirection.Horizontal =>

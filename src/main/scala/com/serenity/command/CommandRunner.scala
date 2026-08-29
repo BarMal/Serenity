@@ -200,30 +200,31 @@ final case class CommandRunner(
 
   def exitSubmenuToPreview: CommandRunner =
     activeSubmenu match
-      case Some(submenu) if submenu.parentGroupId.nonEmpty =>
-        val parentId    = submenu.parentGroupId.get
-        val parentItems = submenuItems(parentId)
-        val parentIndex =
-          parentItems.indexWhere(_.id == submenu.groupId) match
-            case -1    => submenuSelections.getOrElse(parentId, 0)
-            case index => index
-        copy(
-          submenuSelections =
-            submenuSelections + (submenu.groupId -> submenu.selectedIndex) + (parentId -> parentIndex),
-          activeSubmenu = Some(
-            CommandRunnerSubmenuState(
-              parentId,
-              selectedIndex = parentIndex,
-              parentGroupId = submenu.ancestorGroupIds.lastOption,
-              ancestorGroupIds = submenu.ancestorGroupIds.dropRight(1)
-            )
-          )
-        )
       case Some(submenu) =>
-        copy(
-          submenuSelections = submenuSelections + (submenu.groupId -> submenu.selectedIndex),
-          activeSubmenu = None
-        )
+        submenu.parentGroupId match
+          case Some(parentId) =>
+            val parentItems = submenuItems(parentId)
+            val parentIndex =
+              parentItems.indexWhere(_.id == submenu.groupId) match
+                case -1    => submenuSelections.getOrElse(parentId, 0)
+                case index => index
+            copy(
+              submenuSelections =
+                submenuSelections + (submenu.groupId -> submenu.selectedIndex) + (parentId -> parentIndex),
+              activeSubmenu = Some(
+                CommandRunnerSubmenuState(
+                  parentId,
+                  selectedIndex = parentIndex,
+                  parentGroupId = submenu.ancestorGroupIds.lastOption,
+                  ancestorGroupIds = submenu.ancestorGroupIds.dropRight(1)
+                )
+              )
+            )
+          case None =>
+            copy(
+              submenuSelections = submenuSelections + (submenu.groupId -> submenu.selectedIndex),
+              activeSubmenu = None
+            )
       case None =>
         copy(activeSubmenu = None)
 

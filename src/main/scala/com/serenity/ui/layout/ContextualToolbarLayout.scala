@@ -204,8 +204,7 @@ object ContextualToolbarLayout:
       val nextGroupId = ContextualToolbar.formattingGroupId(item)
       segments match
         case init :+ last
-            if last.nonEmpty &&
-              ContextualToolbar.formattingGroupId(last.head) == nextGroupId &&
+            if last.headOption.exists(head => ContextualToolbar.formattingGroupId(head) == nextGroupId) &&
               nextGroupId.nonEmpty =>
           init :+ (last :+ item)
         case _ =>

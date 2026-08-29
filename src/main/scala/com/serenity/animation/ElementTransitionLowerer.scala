@@ -134,10 +134,12 @@ object ElementTransitionLowerer:
   private def tandemOffsetFor(direction: TransitionDirection, keys: Iterable[CharacterKey]): CharacterKey => Int =
     if keys.isEmpty then _ => 0
     else
-      val minCol = keys.map(_.column).min
-      val maxCol = keys.map(_.column).max
-      val minRow = keys.map(_.line).min
-      val maxRow = keys.map(_.line).max
+      // keys is non-empty here (guarded by the isEmpty check above), so these folds always see
+      // at least one element and the Int.MaxValue/MinValue seeds are never the reported result.
+      val minCol = keys.map(_.column).foldLeft(Int.MaxValue)(_ min _)
+      val maxCol = keys.map(_.column).foldLeft(Int.MinValue)(_ max _)
+      val minRow = keys.map(_.line).foldLeft(Int.MaxValue)(_ min _)
+      val maxRow = keys.map(_.line).foldLeft(Int.MinValue)(_ max _)
 
       direction match
         case TransitionDirection.RightToLeft =>

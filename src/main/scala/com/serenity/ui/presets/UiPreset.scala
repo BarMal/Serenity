@@ -577,8 +577,9 @@ object UiPreset:
       paneId -> basePane.copy(id = paneId, bufferId = visibleBufferIds.lift(index))
     }.toMap
     val nextActivePaneId = targetPaneIds.headOption
+    // state.runtime.nextPaneId.value is always present, so folding from it as the seed always yields the true max.
     val nextPaneId = PaneId(
-      (state.runtime.nextPaneId.value :: targetPaneIds.map(_.value + 1)).max
+      targetPaneIds.map(_.value + 1).foldLeft(state.runtime.nextPaneId.value)(_ max _)
     )
     val nextFocus = state.persisted.focus match
       case Focus.EditorPane(paneId) if targetPaneIds.contains(paneId) =>
