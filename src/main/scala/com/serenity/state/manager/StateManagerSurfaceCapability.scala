@@ -10,10 +10,15 @@ import com.serenity.ui.layout.*
 final private[manager] class StateManagerSurfaceCapability(
     stateRef: cats.effect.Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
-    dependencies: SurfaceCapabilityPort
+    operations: StateManagerOperationBoundary
 )(using balance: com.serenity.rope.Balance):
 
-  import dependencies.*
+  private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+    operations.validateAndUpdateState(newState, fallbackState)
+
+  private def applyAnimationHooks(previousState: AppState): IO[Unit] =
+    operations.enqueueAnimationHooks(previousState)
+
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.show(content, at, state).state, state))
 
