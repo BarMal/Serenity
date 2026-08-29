@@ -4,12 +4,12 @@ import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.io.{FileManager, FileUtils, StorageLocation}
+import com.serenity.rope.*
 import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
-import com.serenity.text.TextEditing
 import com.serenity.ui.layout.LayoutEngine
 import org.typelevel.log4cats.Logger
 
@@ -299,7 +299,7 @@ final private[manager] class StateManagerWorkflowCapability(
                       workflow.findText.length,
                       workflow.replacementText.length
                     )
-                  val newCursor = cursorPositionForOffset(updatedContent, cursorOffset)
+                  val newCursor = updatedContent.offsetToCursorPosition(cursorOffset)
                   val updatedFindState =
                     refreshedFindState(updatedContent, workflow.findText, requestedIndex = 0)
                   val updatedBuffer = buffer.copy(
@@ -373,7 +373,7 @@ final private[manager] class StateManagerWorkflowCapability(
                     .flatMap(_.insert(startOffset, workflow.replacementText))
                     .getOrElse(buffer.document.content)
                   val cursorOffset = startOffset + workflow.replacementText.length
-                  val newCursor    = cursorPositionForOffset(updatedContent, cursorOffset)
+                  val newCursor    = updatedContent.offsetToCursorPosition(cursorOffset)
                   val updatedFindState =
                     refreshedFindStateAfterOffset(updatedContent, workflow.findText, cursorOffset)
                   val replacementSelection =
@@ -747,7 +747,7 @@ final private[manager] class StateManagerWorkflowCapability(
     val results = content
       .searchAll(findText)
       .filter(offset => isWholeGraphemeMatch(content, offset, findText.length))
-      .map(offset => cursorPositionForOffset(content, offset))
+      .map(offset => content.offsetToCursorPosition(offset))
       .map(cursor => FindResult(cursor.line, cursor.column))
     val resultSet = FindResultSet.normalized(findText, results, requestedIndex)
     Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet))
@@ -836,26 +836,13 @@ final private[manager] class StateManagerWorkflowCapability(
   private def offsetForCursor(content: com.serenity.rope.Rope, cursor: CursorPosition): Int =
     content.lineColumnToOffset(cursor.line, cursor.column)
 
+  // Routed through the canonical Rope-based `offsetToCursorPosition` rather than a hand-rolled character walk,
+  // so the string-backed replace path can never drift from the rope-backed one (see #1061).
   private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
-    val clamped = math.max(0, math.min(offset, text.length))
-    text.take(clamped).foldLeft(CursorPosition(0, 0)) { (cursor, char) =>
-      if char == '\n' then CursorPosition(cursor.line + 1, 0)
-      else cursor.copy(column = cursor.column + 1)
-    }
-
-  private def cursorPositionForOffset(content: com.serenity.rope.Rope, offset: Int): CursorPosition =
-    val (line, column) = content.offsetToLineColumn(offset)
-    CursorPosition(line, column)
+    com.serenity.rope.Rope(text).offsetToCursorPosition(offset)
 
   private def isWholeGraphemeMatch(content: com.serenity.rope.Rope, offset: Int, length: Int): Boolean =
-    TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, offset + length)
-
-  final private case class RopeCharacterSource(content: com.serenity.rope.Rope) extends TextEditing.CharacterSource:
-    override def length: Int =
-      content.weight
-
-    override def charAt(index: Int): Char =
-      content.index(index).getOrElse('\u0000')
+    content.isWholeGraphemeRange(offset, offset + length)
 
   protected def replaceWorkflowSurface(
     state: AppState,

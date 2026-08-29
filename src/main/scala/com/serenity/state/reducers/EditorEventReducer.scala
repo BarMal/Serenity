@@ -3,9 +3,8 @@ package com.serenity.state.reducers
 import com.serenity.animation.*
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
-import com.serenity.rope.Rope
+import com.serenity.rope.*
 import com.serenity.state.models.*
-import com.serenity.text.TextEditing
 
 object EditorEventReducer:
   private val TabInsertion = "    "
@@ -239,7 +238,7 @@ object EditorEventReducer:
     backwardGraphemeDeletionRange(buffer.document.content, offset).map {
       case (start, end) =>
         val newContent = deleteOrUnchanged(buffer.document.content, start, end)
-        val newCursor  = offsetToCursorPosition(newContent, start)
+        val newCursor  = newContent.offsetToCursorPosition(start)
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
           editing = buffer.editing.copy(
@@ -267,7 +266,7 @@ object EditorEventReducer:
     forwardGraphemeDeletionRange(buffer.document.content, offset).map {
       case (start, end) =>
         val newContent = deleteOrUnchanged(buffer.document.content, start, end)
-        val newCursor  = offsetToCursorPosition(newContent, start)
+        val newCursor  = newContent.offsetToCursorPosition(start)
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
           editing = buffer.editing.copy(
@@ -290,12 +289,12 @@ object EditorEventReducer:
 
   private def wordBackwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[(Buffer, MultiCursorEdit)] =
     val offset = lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
-    val start  = previousWordBoundary(buffer.document.content, offset)
+    val start  = buffer.document.content.previousWordBoundary(offset)
     Option.when(start < offset)(deleteOffsetRange(buffer, start, offset, start))
 
   private def wordForwardDeletion(buffer: Buffer, cursor: CursorPosition): Option[(Buffer, MultiCursorEdit)] =
     val offset = lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
-    val end    = nextWordBoundary(buffer.document.content, offset)
+    val end    = buffer.document.content.nextWordBoundary(offset)
     Option.when(offset < end)(deleteOffsetRange(buffer, offset, end, offset))
 
   private def insertAtCursor(
@@ -510,12 +509,14 @@ object EditorEventReducer:
       )
 
     event match
-      case MoveLeft      => navigate(cursor => moveCursorLeft(cursor, buffer.document.content))
-      case MoveRight     => navigate(cursor => moveCursorRight(cursor, buffer.document.content))
-      case MoveWordLeft  => navigate(cursor => wordBoundaryFrom(buffer, cursor, previousWordBoundary))
-      case MoveWordRight => navigate(cursor => wordBoundaryFrom(buffer, cursor, nextWordBoundary))
-      case MoveToStart   => navigate(_.copy(column = 0))
-      case MoveToEnd     => navigate(cursor => cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
+      case MoveLeft  => navigate(cursor => moveCursorLeft(cursor, buffer.document.content))
+      case MoveRight => navigate(cursor => moveCursorRight(cursor, buffer.document.content))
+      case MoveWordLeft =>
+        navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.previousWordBoundary(offset)))
+      case MoveWordRight =>
+        navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.nextWordBoundary(offset)))
+      case MoveToStart => navigate(_.copy(column = 0))
+      case MoveToEnd   => navigate(cursor => cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
       case MoveToStartOfFile => navigate(_ => OriginCursor)
 
       case PageUp =>
@@ -787,7 +788,7 @@ object EditorEventReducer:
     insertedText: String
   ): (Buffer, List[MultiCursorEdit]) =
     val insertionOffsets =
-      multiCursorEntries(buffer).map(entry => graphemeBoundaryAfterOrAt(buffer.document.content, entry.offset))
+      multiCursorEntries(buffer).map(entry => buffer.document.content.graphemeBoundaryAfterOrAt(entry.offset))
     val edits = insertionOffsets.zipWithIndex.map {
       case (offset, index) =>
         MultiCursorEdit(index, offset, offset, insertedText)
@@ -816,10 +817,10 @@ object EditorEventReducer:
     val edits = entries.zipWithIndex.flatMap {
       case (entry, index) =>
         if backward then
-          val start = previousWordBoundary(buffer.document.content, entry.offset)
+          val start = buffer.document.content.previousWordBoundary(entry.offset)
           Option.when(start < entry.offset)(MultiCursorEdit(index, start, entry.offset, ""))
         else
-          val end = nextWordBoundary(buffer.document.content, entry.offset)
+          val end = buffer.document.content.nextWordBoundary(entry.offset)
           Option.when(entry.offset < end)(MultiCursorEdit(index, entry.offset, end, ""))
     }
     applyMergedDeletionEdits(buffer, entries.map(_.offset), edits)
@@ -951,7 +952,7 @@ object EditorEventReducer:
           else if line < totalLines - 1 then line - deletedBefore
           else line - targetLines.count(_ <= line)
         val clampedLine = math.max(0, math.min(targetLine, maxFinalLine))
-        offsetToCursorPosition(updatedContent, lineColumnToOffset(updatedContent, clampedLine, 0))
+        updatedContent.offsetToCursorPosition(lineColumnToOffset(updatedContent, clampedLine, 0))
       }.distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
@@ -1009,7 +1010,7 @@ object EditorEventReducer:
         offsets
       }
       val finalCursors = finalOffsets.toList
-        .map(offset => offsetToCursorPosition(updatedContent, offset))
+        .map(offset => updatedContent.offsetToCursorPosition(offset))
         .distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
@@ -1050,7 +1051,7 @@ object EditorEventReducer:
       }
       val finalOffsets = initialOffsets.map(offset => remapOffsetAfterDeletions(offset, mergedRanges))
       val finalCursors = finalOffsets
-        .map(offset => offsetToCursorPosition(updatedContent, offset))
+        .map(offset => updatedContent.offsetToCursorPosition(offset))
         .distinct
       val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
       val baseBuffer = buffer.copy(
@@ -1292,7 +1293,7 @@ object EditorEventReducer:
     cursorOffset: Int
   ): (Buffer, MultiCursorEdit) =
     val newContent = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
-    val newCursor  = offsetToCursorPosition(newContent, cursorOffset)
+    val newCursor  = newContent.offsetToCursorPosition(cursorOffset)
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
       editing = buffer.editing.copy(
@@ -1314,53 +1315,24 @@ object EditorEventReducer:
     )
     (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
-  private def offsetToCursorPosition(content: Rope, offset: Int): CursorPosition =
-    val (line, column) = content.offsetToLineColumn(offset)
-    CursorPosition(line, column)
-
-  private def previousWordBoundary(content: Rope, offset: Int): Int =
-    TextEditing.previousWordBoundary(RopeCharacterSource(content), offset)
-
-  private def nextWordBoundary(content: Rope, offset: Int): Int =
-    TextEditing.nextWordBoundary(RopeCharacterSource(content), offset)
-
-  private def previousGraphemeBoundary(content: Rope, offset: Int): Int =
-    TextEditing.previousGraphemeBoundary(RopeCharacterSource(content), offset)
-
-  private def nextGraphemeBoundary(content: Rope, offset: Int): Int =
-    TextEditing.nextGraphemeBoundary(RopeCharacterSource(content), offset)
-
-  private def graphemeBoundaryBeforeOrAt(content: Rope, offset: Int): Int =
-    TextEditing.graphemeBoundaryBeforeOrAt(RopeCharacterSource(content), offset)
-
-  private def graphemeBoundaryAfterOrAt(content: Rope, offset: Int): Int =
-    TextEditing.graphemeBoundaryAfterOrAt(RopeCharacterSource(content), offset)
-
   private def backwardGraphemeDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
-    val beforeOrAt = graphemeBoundaryBeforeOrAt(content, offset)
-    val afterOrAt  = graphemeBoundaryAfterOrAt(content, offset)
+    val beforeOrAt = content.graphemeBoundaryBeforeOrAt(offset)
+    val afterOrAt  = content.graphemeBoundaryAfterOrAt(offset)
     if beforeOrAt < offset && offset < afterOrAt then Some(beforeOrAt -> afterOrAt)
     else
-      val start = previousGraphemeBoundary(content, offset)
+      val start = content.previousGraphemeBoundary(offset)
       Option.when(start < offset)(start -> offset)
 
   private def forwardGraphemeDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
-    val beforeOrAt = graphemeBoundaryBeforeOrAt(content, offset)
-    val afterOrAt  = graphemeBoundaryAfterOrAt(content, offset)
+    val beforeOrAt = content.graphemeBoundaryBeforeOrAt(offset)
+    val afterOrAt  = content.graphemeBoundaryAfterOrAt(offset)
     if beforeOrAt < offset && offset < afterOrAt then Some(beforeOrAt -> afterOrAt)
     else
-      val end = nextGraphemeBoundary(content, offset)
+      val end = content.nextGraphemeBoundary(offset)
       Option.when(offset < end)(offset -> end)
 
-  final private case class RopeCharacterSource(content: Rope) extends TextEditing.CharacterSource:
-    override def length: Int =
-      content.weight
-
-    override def charAt(index: Int): Char =
-      content.index(index).getOrElse('\u0000')
-
   private def isWholeGraphemeMatch(content: Rope, offset: Int, length: Int): Boolean =
-    TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, offset + length)
+    content.isWholeGraphemeRange(offset, offset + length)
 
   private def findModalForBuffer(buffer: Buffer): Modal =
     buffer.findState match
@@ -1372,14 +1344,14 @@ object EditorEventReducer:
 
   private def moveCursorLeft(cursor: CursorPosition, content: Rope): CursorPosition =
     val offset = lineColumnToOffset(content, cursor.line, cursor.column)
-    val target = previousGraphemeBoundary(content, offset)
-    if target < offset then offsetToCursorPosition(content, target)
+    val target = content.previousGraphemeBoundary(offset)
+    if target < offset then content.offsetToCursorPosition(target)
     else cursor
 
   private def moveCursorRight(cursor: CursorPosition, content: Rope): CursorPosition =
     val offset = lineColumnToOffset(content, cursor.line, cursor.column)
-    val target = nextGraphemeBoundary(content, offset)
-    if offset < target then offsetToCursorPosition(content, target)
+    val target = content.nextGraphemeBoundary(offset)
+    if offset < target then content.offsetToCursorPosition(target)
     else cursor
 
   private def moveMultiCursorVertical(
@@ -1620,7 +1592,7 @@ object EditorEventReducer:
 
   private def wordBoundaryFrom(buffer: Buffer, from: CursorPosition, boundary: (Rope, Int) => Int): CursorPosition =
     val offset = lineColumnToOffset(buffer.document.content, from.line, from.column)
-    offsetToCursorPosition(buffer.document.content, boundary(buffer.document.content, offset))
+    buffer.document.content.offsetToCursorPosition(boundary(buffer.document.content, offset))
 
   private def verticalTarget(currentState: AppState, geometry: EditorGeometry, direction: Int)(
     buffer: Buffer,
@@ -1725,19 +1697,18 @@ object EditorEventReducer:
         val endOffset   = selectionEndOffset(selection, buffer.document.content)
         (
           deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
-          offsetToCursorPosition(buffer.document.content, startOffset),
+          buffer.document.content.offsetToCursorPosition(startOffset),
           startOffset,
           endOffset
         )
       case None =>
         val startOffset =
-          graphemeBoundaryAfterOrAt(
-            buffer.document.content,
+          buffer.document.content.graphemeBoundaryAfterOrAt(
             lineColumnToOffset(buffer.document.content, cursor.line, cursor.column)
           )
         (
           buffer.document.content,
-          offsetToCursorPosition(buffer.document.content, startOffset),
+          buffer.document.content.offsetToCursorPosition(startOffset),
           startOffset,
           startOffset
         )
@@ -1778,7 +1749,7 @@ object EditorEventReducer:
     val startOffset = selectionStartOffset(selection, buffer.document.content)
     val endOffset   = selectionEndOffset(selection, buffer.document.content)
     val newContent  = deleteOrUnchanged(buffer.document.content, startOffset, endOffset)
-    val newCursor   = offsetToCursorPosition(newContent, startOffset)
+    val newCursor   = newContent.offsetToCursorPosition(startOffset)
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
       editing = buffer.editing.copy(
@@ -1835,10 +1806,10 @@ object EditorEventReducer:
       .reverse
 
   private def selectionStartOffset(selection: Selection, content: Rope): Int =
-    graphemeBoundaryBeforeOrAt(content, lineColumnToOffset(content, selection.start.line, selection.start.column))
+    content.graphemeBoundaryBeforeOrAt(lineColumnToOffset(content, selection.start.line, selection.start.column))
 
   private def selectionEndOffset(selection: Selection, content: Rope): Int =
-    graphemeBoundaryAfterOrAt(content, lineColumnToOffset(content, selection.end.line, selection.end.column))
+    content.graphemeBoundaryAfterOrAt(lineColumnToOffset(content, selection.end.line, selection.end.column))
 
   private def richTextDocumentAfterEdit(
     buffer: Buffer,

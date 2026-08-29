@@ -76,3 +76,33 @@ class TextEditingSpec extends AnyFlatSpec with Matchers:
         }
     }
   }
+
+  it should "step over a surrogate-pair grapheme sitting at the very start of the string" in {
+    val text = "🙂b" // emoji, then 'b' -- no character before the pair
+
+    TextEditing.nextGraphemeBoundary(text, 0) shouldBe 2
+    TextEditing.previousGraphemeBoundary(text, 2) shouldBe 0
+  }
+
+  it should "step over a surrogate-pair grapheme sitting at the very end of the string" in {
+    val text = "a🙂" // 'a', then emoji -- no character after the pair
+
+    TextEditing.nextGraphemeBoundary(text, 1) shouldBe 3
+    TextEditing.previousGraphemeBoundary(text, 3) shouldBe 1
+  }
+
+  it should "treat a lone unpaired high surrogate at the end of the string as its own code unit" in {
+    // Built at runtime (not as a string literal): an unpaired high surrogate in a string-literal token
+    // is rejected by scalafix's parser even though it compiles and is exactly what this scans for.
+    val text = "a" + '\uD83D'.toString // unpaired high surrogate, nothing follows it
+
+    TextEditing.nextGraphemeBoundary(text, 1) shouldBe 2
+    TextEditing.previousGraphemeBoundary(text, 2) shouldBe 1
+  }
+
+  it should "treat a lone unpaired low surrogate at the start of the string as its own code unit" in {
+    val text = '\uDE42'.toString + "b" // unpaired low surrogate, nothing precedes it
+
+    TextEditing.nextGraphemeBoundary(text, 0) shouldBe 1
+    TextEditing.previousGraphemeBoundary(text, 1) shouldBe 0
+  }

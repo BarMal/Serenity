@@ -1,7 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Rope
+import com.serenity.rope.*
 import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 
@@ -531,12 +531,7 @@ object ModalEventReducer:
         case None          => state
 
   private def isWholeGraphemeMatch(content: Rope, offset: Int, length: Int): Boolean =
-    TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, offset + length)
-
-  final private case class RopeCharacterSource(content: Rope) extends TextEditing.CharacterSource:
-    override def length: Int = content.weight
-
-    override def charAt(index: Int): Char = content.index(index).getOrElse('\u0000')
+    content.isWholeGraphemeRange(offset, offset + length)
 
   private def applyFindMatch(
     state: AppState,
