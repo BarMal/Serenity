@@ -1,5 +1,6 @@
 package com.serenity.document
 
+import com.serenity.state.models.given
 import com.serenity.state.models.{CursorPosition, DocumentComment}
 import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
 
@@ -49,14 +50,14 @@ object DocumentNavigation:
   private def commentTitle(text: String): String =
     text.linesIterator.find(_.trim.nonEmpty).map(_.trim).getOrElse("Untitled")
 
+  private def symbolPosition(symbol: Symbol): CursorPosition =
+    CursorPosition(symbol.location.line, symbol.location.column)
+
   private def isAfter(symbol: Symbol, cursor: CursorPosition): Boolean =
-    symbol.location.line > cursor.line ||
-      (symbol.location.line == cursor.line && symbol.location.column > cursor.column)
+    summon[Ordering[CursorPosition]].gt(symbolPosition(symbol), cursor)
 
   private def isBefore(symbol: Symbol, cursor: CursorPosition): Boolean =
-    symbol.location.line < cursor.line ||
-      (symbol.location.line == cursor.line && symbol.location.column < cursor.column)
+    summon[Ordering[CursorPosition]].lt(symbolPosition(symbol), cursor)
 
   private def isAtOrBefore(symbol: Symbol, cursor: CursorPosition): Boolean =
-    symbol.location.line < cursor.line ||
-      (symbol.location.line == cursor.line && symbol.location.column <= cursor.column)
+    summon[Ordering[CursorPosition]].lteq(symbolPosition(symbol), cursor)

@@ -573,7 +573,7 @@ object ModalEventReducer:
       case None => state
 
   private def activeBuffer(state: AppState): Option[Buffer] =
-    activeBufferId(state).flatMap(state.persisted.buffers.get)
+    Focused.bufferOf(state)
 
   private def activeBufferId(state: AppState): Option[BufferId] =
     state.persisted.layout.activeEditorPaneId.flatMap(paneId =>
@@ -594,27 +594,18 @@ object ModalEventReducer:
     )
 
   private def jumpToLine(state: AppState, targetLine: Int): AppState =
-    state.persisted.layout.activeEditorPaneId match
-      case Some(paneId) =>
-        state.persisted.layout.editorPanes.get(paneId) match
-          case Some(pane) =>
-            pane.bufferId.flatMap(state.persisted.buffers.get) match
-              case Some(buffer) =>
-                val halfVisible = buffer.viewport.visibleLines / 2
-                val newTopLine  = math.max(0, targetLine - halfVisible)
-                val updatedBuffer = buffer.copy(
-                  editing = buffer.editing.copy(cursors = List(CursorPosition(targetLine, 0))),
-                  viewport = buffer.viewport.copy(topLine = newTopLine)
-                )
-                val dismissed = state.dismissTopModal
-                dismissed.copy(
-                  persisted =
-                    dismissed.persisted.copy(buffers = dismissed.persisted.buffers + (buffer.id -> updatedBuffer))
-                )
-              case None =>
-                state.dismissTopModal
-          case None =>
-            state.dismissTopModal
+    state.persisted.layout.activeEditorPaneId.flatMap(paneId => Focused.bufferOf(state, paneId)) match
+      case Some(buffer) =>
+        val halfVisible = buffer.viewport.visibleLines / 2
+        val newTopLine  = math.max(0, targetLine - halfVisible)
+        val updatedBuffer = buffer.copy(
+          editing = buffer.editing.copy(cursors = List(CursorPosition(targetLine, 0))),
+          viewport = buffer.viewport.copy(topLine = newTopLine)
+        )
+        val dismissed = state.dismissTopModal
+        dismissed.copy(
+          persisted = dismissed.persisted.copy(buffers = dismissed.persisted.buffers + (buffer.id -> updatedBuffer))
+        )
       case None =>
         state.dismissTopModal
 

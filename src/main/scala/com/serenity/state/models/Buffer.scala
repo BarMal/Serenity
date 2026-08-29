@@ -26,30 +26,27 @@ enum TypographyRole:
       case Prose | MarkdownSource | MarkdownPreview | Mixed => true
       case Code | Ui                                        => false
 
-final case class Selection(anchor: CursorPosition, focus: CursorPosition):
+/** An anchor/focus pair with an order-independent `start`/`end` and containment check, shared by every buffer range
+  * that tracks "where the user started" separately from "where they are now" (`#1053`). Both derive from the same
+  * [[CursorPosition]] `Ordering` that `DocumentNavigation` compares positions with (`#1065`).
+  */
+trait DirectedRange:
+  def anchor: CursorPosition
+  def focus: CursorPosition
 
   def start: CursorPosition =
-    if anchor.line < focus.line || (anchor.line == focus.line && anchor.column <= focus.column) then anchor
-    else focus
-
-  def end: CursorPosition =
-    if start == anchor then focus else anchor
-
-final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: String):
-
-  def start: CursorPosition =
-    if anchor.line < focus.line || (anchor.line == focus.line && anchor.column <= focus.column) then anchor
-    else focus
+    if summon[Ordering[CursorPosition]].lteq(anchor, focus) then anchor else focus
 
   def end: CursorPosition =
     if start == anchor then focus else anchor
 
   def contains(cursor: CursorPosition): Boolean =
-    val afterStart =
-      cursor.line > start.line || (cursor.line == start.line && cursor.column >= start.column)
-    val beforeEnd =
-      cursor.line < end.line || (cursor.line == end.line && cursor.column <= end.column)
-    afterStart && beforeEnd
+    val ordering = summon[Ordering[CursorPosition]]
+    ordering.lteq(start, cursor) && ordering.lteq(cursor, end)
+
+final case class Selection(anchor: CursorPosition, focus: CursorPosition) extends DirectedRange
+
+final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: String) extends DirectedRange
 
 final case class VerticalCursorState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
 
@@ -207,6 +204,35 @@ final case class Buffer(
   /** True when closing this buffer may lose user-authored content. */
   def hasUnsavedChanges: Boolean =
     document.isDirty || (document.filePath.isEmpty && !document.isNewEmpty)
+
+  /** The buffer state after an edit lands: swaps in the new content, marks the document dirty, replaces the cursor list
+    * while clearing selection state, resets preferred-column/X tracking to the new primary cursor, and drops stale
+    * multi-cursor vertical state. `documentComments` and `richTextDocument` default to their current, unadjusted values
+    * -- pass the caller's remapped ones when the edit needs to carry them forward.
+    *
+    * Centralises the five near-identical post-edit `copy` blocks in `EditorEventReducer` (`#1072`), which had already
+    * drifted: the merged-deletion path silently kept a stale `richTextDocument` (and stale `multiCursorVerticalStates`)
+    * that every other edit path cleared or updated. Both are now handled uniformly.
+    */
+  def withEditedContent(
+    content: Rope,
+    cursors: List[CursorPosition],
+    documentComments: List[DocumentComment] = annotations.documentComments,
+    richTextDocument: Option[RichTextDocument] = richText.richTextDocument
+  ): Buffer =
+    copy(
+      document = document.copy(content = content, isDirty = true, isNewEmpty = false),
+      editing = editing.copy(
+        cursors = cursors,
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(cursors.primaryCursor.column),
+        preferredXPx = None,
+        multiCursorVerticalStates = Nil
+      ),
+      annotations = annotations.copy(documentComments = documentComments),
+      richText = richText.copy(richTextDocument = richTextDocument)
+    )
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =

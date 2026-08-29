@@ -5,6 +5,7 @@ import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.Focused
 import com.serenity.ui.layout.*
 
 /** State the event pipeline exposes for selecting, activating, navigating, and resizing pinned/expanded panels. */
@@ -291,7 +292,7 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
   private def navigateActiveEditorToLocation(state: AppState, location: Location): AppState =
     state.persisted.layout.activeEditorPaneId match
       case Some(paneId) =>
-        state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.persisted.buffers.get) match
+        Focused.bufferOf(state, paneId) match
           case Some(buffer) =>
             val line =
               math.max(0, math.min(location.line, math.max(0, buffer.document.content.lineCount - 1)))

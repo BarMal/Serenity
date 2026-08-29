@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEventReducer, SystemEventReducer}
+import com.serenity.state.reducers.{AppEventReducer, Focused, SystemEventReducer}
 import com.serenity.ui.layout.ViewportSize
 
 final private[manager] class StateManagerViewportCapability(
@@ -23,16 +23,11 @@ final private[manager] class StateManagerViewportCapability(
 
   def ensureCursorVisible(paneId: PaneId): IO[Unit] =
     stateRef.update { state =>
-      state.persisted.layout.editorPanes.get(paneId) match
-        case Some(pane) =>
-          pane.bufferId.flatMap(state.persisted.buffers.get) match
-            case Some(buffer) =>
-              val cursor        = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
-              val updatedBuffer = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
-              state.copy(persisted =
-                state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer))
-              )
-            case None => state
+      Focused.bufferOf(state, paneId) match
+        case Some(buffer) =>
+          val cursor        = buffer.editing.cursors.primaryCursor
+          val updatedBuffer = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer)))
         case None => state
     }
 

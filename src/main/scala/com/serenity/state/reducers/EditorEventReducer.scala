@@ -850,21 +850,11 @@ object EditorEventReducer:
         if targetSet.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
         else cursor
       }.distinct
-      val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
-      val baseBuffer = buffer.copy(
-        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
-        editing = buffer.editing.copy(
-          cursors = finalCursors,
-          selection = None,
-          selections = Nil,
-          preferredColumn = Some(primaryCursor.column),
-          preferredXPx = None,
-          multiCursorVerticalStates = Nil
-        ),
-        annotations = buffer.annotations.copy(
-          documentComments =
-            adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
-        )
+      val baseBuffer = buffer.withEditedContent(
+        content = updatedContent,
+        cursors = finalCursors,
+        documentComments =
+          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
       )
       val (animatedBuffer, delta) = addInsertionAnimations(baseBuffer, currentState, edits)
       (animatedBuffer, edits, delta)
@@ -892,21 +882,11 @@ object EditorEventReducer:
       val finalCursors = buffer.editing.cursors
         .map(cursor => cursor.copy(column = math.max(0, cursor.column - removals.getOrElse(cursor.line, 0))))
         .distinct
-      val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
-      val baseBuffer = buffer.copy(
-        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
-        editing = buffer.editing.copy(
-          cursors = finalCursors,
-          selection = None,
-          selections = Nil,
-          preferredColumn = Some(primaryCursor.column),
-          preferredXPx = None,
-          multiCursorVerticalStates = Nil
-        ),
-        annotations = buffer.annotations.copy(
-          documentComments =
-            adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
-        )
+      val baseBuffer = buffer.withEditedContent(
+        content = updatedContent,
+        cursors = finalCursors,
+        documentComments =
+          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
       )
       (baseBuffer, edits)
 
@@ -954,21 +934,11 @@ object EditorEventReducer:
         val clampedLine = math.max(0, math.min(targetLine, maxFinalLine))
         updatedContent.offsetToCursorPosition(lineColumnToOffset(updatedContent, clampedLine, 0))
       }.distinct
-      val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
-      val baseBuffer = buffer.copy(
-        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
-        editing = buffer.editing.copy(
-          cursors = finalCursors,
-          selection = None,
-          selections = Nil,
-          preferredColumn = Some(primaryCursor.column),
-          preferredXPx = None,
-          multiCursorVerticalStates = Nil
-        ),
-        annotations = buffer.annotations.copy(
-          documentComments =
-            adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
-        )
+      val baseBuffer = buffer.withEditedContent(
+        content = updatedContent,
+        cursors = finalCursors,
+        documentComments =
+          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
       )
       (baseBuffer, edits)
 
@@ -1012,25 +982,21 @@ object EditorEventReducer:
       val finalCursors = finalOffsets.toList
         .map(offset => updatedContent.offsetToCursorPosition(offset))
         .distinct
-      val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
-      val baseBuffer = buffer.copy(
-        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
-        editing = buffer.editing.copy(
-          cursors = finalCursors,
-          selection = None,
-          selections = Nil,
-          preferredColumn = Some(primaryCursor.column),
-          preferredXPx = None,
-          multiCursorVerticalStates = Nil
-        ),
-        annotations = buffer.annotations.copy(
-          documentComments =
-            adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
-        ),
-        richText = buffer.richText.copy(richTextDocument = updatedRichTextDocument)
+      val baseBuffer = buffer.withEditedContent(
+        content = updatedContent,
+        cursors = finalCursors,
+        documentComments =
+          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits),
+        richTextDocument = updatedRichTextDocument
       )
       (baseBuffer, edits)
 
+  /** Merged-range sibling of [[applyTrackedEdits]] -- deletion-only, so no `insertedText` bookkeeping, but the content
+    * and `richTextDocument` folds mirror it exactly: both need each range applied against the content (and rich-text
+    * document) left by the previous one, not the pre-edit buffer. Previously this path silently dropped
+    * `richTextDocument` updates entirely (`#1072`) -- the rich text would desync from the plain-text content on any
+    * multi-cursor word/grapheme deletion that merged overlapping ranges.
+    */
   private def applyMergedDeletionEdits(
     buffer: Buffer,
     initialOffsets: List[Int],
@@ -1039,12 +1005,23 @@ object EditorEventReducer:
     if edits.isEmpty then (buffer, Nil)
     else
       val mergedRanges = mergeOverlappingDeletionRanges(edits.map(edit => (edit.start, edit.end)))
-      val updatedContent = mergedRanges
-        .sortBy { case (start, end) => (-start, -end) }
-        .foldLeft(buffer.document.content) {
-          case (content, (start, end)) =>
-            deleteOrUnchanged(content, start, end)
-        }
+      val (updatedContent, updatedRichTextDocument) =
+        mergedRanges
+          .sortBy { case (start, end) => (-start, -end) }
+          .foldLeft((buffer.document.content, buffer.richText.richTextDocument)) {
+            case ((content, document), (start, end)) =>
+              val nextContent = deleteOrUnchanged(content, start, end)
+              val nextDocument = richTextDocumentAfterEdit(
+                buffer.copy(
+                  document = buffer.document.copy(content = content),
+                  richText = buffer.richText.copy(richTextDocument = document)
+                ),
+                start,
+                end,
+                ""
+              )
+              (nextContent, nextDocument)
+          }
       val mergedEdits = mergedRanges.zipWithIndex.map {
         case ((start, end), index) =>
           MultiCursorEdit(index, start, end, "")
@@ -1053,24 +1030,16 @@ object EditorEventReducer:
       val finalCursors = finalOffsets
         .map(offset => updatedContent.offsetToCursorPosition(offset))
         .distinct
-      val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
-      val baseBuffer = buffer.copy(
-        document = buffer.document.copy(content = updatedContent, isDirty = true, isNewEmpty = false),
-        editing = buffer.editing.copy(
-          cursors = finalCursors,
-          selection = None,
-          selections = Nil,
-          preferredColumn = Some(primaryCursor.column),
-          preferredXPx = None
+      val baseBuffer = buffer.withEditedContent(
+        content = updatedContent,
+        cursors = finalCursors,
+        documentComments = adjustDocumentComments(
+          buffer.annotations.documentComments,
+          buffer.document.content,
+          updatedContent,
+          mergedEdits
         ),
-        annotations = buffer.annotations.copy(
-          documentComments = adjustDocumentComments(
-            buffer.annotations.documentComments,
-            buffer.document.content,
-            updatedContent,
-            mergedEdits
-          )
-        )
+        richTextDocument = updatedRichTextDocument
       )
       (baseBuffer, mergedEdits)
 
@@ -1184,7 +1153,7 @@ object EditorEventReducer:
       .map(move)
       .distinct
       .sortBy(cursor => (cursor.line, cursor.column))
-    val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
+    val primaryCursor = finalCursors.primaryCursor
     val baseBuffer = buffer.copy(
       editing = buffer.editing.copy(
         cursors = finalCursors,
@@ -1223,7 +1192,7 @@ object EditorEventReducer:
     val visibleCursors = sortedStates
       .map(_.cursor)
       .distinct
-    val primaryCursor = visibleCursors.headOption.getOrElse(CursorPosition(0, 0))
+    val primaryCursor = visibleCursors.primaryCursor
     val baseBuffer = buffer.copy(
       editing = buffer.editing.copy(
         cursors = visibleCursors,
@@ -1253,7 +1222,7 @@ object EditorEventReducer:
       }
       .distinct
       .sortBy(cursor => (cursor.line, cursor.column))
-    val primaryCursor = finalCursors.headOption.getOrElse(CursorPosition(0, 0))
+    val primaryCursor = finalCursors.primaryCursor
     val newTopLine =
       if direction < 0 then math.max(0, buffer.viewport.topLine - visLines)
       else math.min(buffer.viewport.topLine + visLines, math.max(0, totalLines - visLines))
@@ -1859,7 +1828,7 @@ object EditorEventReducer:
       .map(_.focus)
       .distinct
       .sortBy(cursor => (cursor.line, cursor.column))
-    val primaryCursor = cursors.headOption.getOrElse(CursorPosition(0, 0))
+    val primaryCursor = cursors.primaryCursor
     val baseBuffer = buffer.copy(
       editing = buffer.editing.copy(
         cursors = cursors,
