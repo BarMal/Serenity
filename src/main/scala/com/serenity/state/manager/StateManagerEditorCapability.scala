@@ -4,8 +4,6 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.animation.CharacterKey
-import com.serenity.keystroke.events.Direction
-import com.serenity.lsp.LspEffect
 import com.serenity.rope.Rope
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
@@ -15,7 +13,6 @@ final private[manager] class StateManagerEditorCapability(
     stateRef: cats.effect.Ref[IO, AppState],
     lspQueue: LspEffectQueue,
     bufferAnimationsRef: cats.effect.Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
-    operations: StateManagerOperationBoundary,
     animations: AnimationChoreography
 )(using balance: com.serenity.rope.Balance):
 
@@ -153,24 +150,6 @@ final private[manager] class StateManagerEditorCapability(
           lspQueue.enqueueDocumentChange(uri, languageId, text)
       })
 
-  def closeBuffer(bufferId: BufferId): IO[Unit] =
-    stateRef
-      .modify { state =>
-        val closingBuffer = state.persisted.buffers.get(bufferId)
-        val newState      = EditorState.removeBuffer(state, bufferId)
-        (newState, closingBuffer)
-      }
-      .flatMap {
-        case Some(buffer) =>
-          (buffer.document.filePath, buffer.document.language) match
-            case (Some(path), Some(languageId)) =>
-              lspQueue.enqueue(LspEffect.FileClosed(path.toUri.toString, languageId))
-            case _ =>
-              IO.unit
-        case None =>
-          IO.unit
-      }
-
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
     stateRef.modify { state =>
       insertPane(
@@ -193,135 +172,8 @@ final private[manager] class StateManagerEditorCapability(
       else state
     }
 
-  def closePane(paneId: PaneId): IO[Unit] =
-    stateRef.update { state =>
-      val updated = EditorState.removePane(state, paneId)
-      if state.persisted.layout.editorPanes.size == 1 && state.persisted.layout.editorPanes.contains(paneId) then
-        operations.ensureCommandRunnerSurface(updated)
-      else updated
-    }
-
-  def setBufferForPane(paneId: PaneId, bufferId: BufferId): IO[Unit] =
-    stateRef.update { state =>
-      state.persisted.layout.editorPanes.get(paneId) match
-        case Some(pane) =>
-          val updatedPane = pane.copy(bufferId = Some(bufferId))
-          val stateWithBuffer = state.copy(
-            persisted = state.persisted.copy(
-              layout = state.persisted.layout.copy(
-                editorPanes = state.persisted.layout.editorPanes + (paneId -> updatedPane)
-              )
-            )
-          )
-          LayoutEngine.syncViewportDimensions(
-            stateWithBuffer,
-            stateWithBuffer.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
-          )
-        case None => state
-    }
-
-  def setCursorPosition(paneId: PaneId, line: Int, column: Int): IO[Unit] =
-    stateRef.update { state =>
-      state.persisted.layout.editorPanes.get(paneId) match
-        case Some(pane) =>
-          pane.bufferId.flatMap(state.persisted.buffers.get) match
-            case Some(buffer) =>
-              val newCursor = CursorPosition(line, column)
-              val updatedBuffer = buffer.copy(
-                editing = buffer.editing.copy(
-                  cursors = List(newCursor),
-                  preferredColumn = Some(column),
-                  preferredXPx = None,
-                  multiCursorVerticalStates = Nil
-                )
-              )
-              state.copy(persisted =
-                state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer))
-              )
-            case None => state
-        case None => state
-    }
-
-  def setViewport(paneId: PaneId, viewport: Viewport): IO[Unit] =
-    stateRef.update { state =>
-      state.persisted.layout.editorPanes.get(paneId) match
-        case Some(pane) =>
-          pane.bufferId.flatMap(state.persisted.buffers.get) match
-            case Some(buffer) =>
-              val updatedBuffer = buffer.copy(viewport = viewport)
-              state.copy(persisted =
-                state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer))
-              )
-            case None => state
-        case None => state
-    }
-
-  def setPaneProperties(paneId: PaneId, update: EditorPane => EditorPane): IO[Unit] =
-    stateRef.update { state =>
-      state.persisted.layout.editorPanes.get(paneId) match
-        case Some(pane) =>
-          state.copy(
-            persisted = state.persisted.copy(
-              layout = state.persisted.layout.copy(
-                editorPanes = state.persisted.layout.editorPanes + (paneId -> update(pane))
-              )
-            )
-          )
-        case None => state
-    }
-
-  def createPaneAfter(afterPaneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
-    stateRef.modify(state => insertPane(state, Some(afterPaneId), bufferId, SplitAxis.Horizontal))
-
   def getTabOrder(): IO[List[PaneId]] =
     stateRef.get.map(_.persisted.layout.orderedPaneIds)
-
-  def splitPaneHorizontal(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
-    splitPane(paneId, bufferId, SplitAxis.Horizontal)
-
-  def splitPaneVertical(paneId: PaneId, bufferId: Option[BufferId] = None): IO[PaneId] =
-    splitPane(paneId, bufferId, SplitAxis.Vertical)
-
-  def resizePaneSplit(splitId: WorkspaceNodeId, ratio: Double): IO[Unit] =
-    stateRef.update { state =>
-      state.persisted.layout.effectiveWorkspaceTree
-        .flatMap(_.resize(splitId, ratio))
-        .map(tree =>
-          state.copy(persisted =
-            state.persisted
-              .copy(layout = state.persisted.layout.copy(workspaceTree = Some(tree), paneOrder = tree.paneIds))
-          )
-        )
-        .getOrElse(state)
-    }
-
-  def focusPaneInDirection(direction: Direction): IO[Unit] =
-    stateRef.update { state =>
-      val currentPaneId =
-        state.persisted.focus match
-          case Focus.EditorPane(paneId) => Some(paneId)
-          case _                        => state.persisted.layout.activeEditorPaneId
-      val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
-      val layout       = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-      currentPaneId
-        .flatMap(LayoutEngine.directionalPaneNeighbor(state, layout, _, direction))
-        .map { paneId =>
-          state.copy(
-            persisted = state.persisted.copy(
-              layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId)),
-              focus = Focus.EditorPane(paneId)
-            )
-          )
-        }
-        .getOrElse(state)
-    }
-
-  private def splitPane(
-    paneId: PaneId,
-    bufferId: Option[BufferId],
-    splitAxis: SplitAxis
-  ): IO[PaneId] =
-    stateRef.modify(state => insertPane(state, Some(paneId), bufferId, splitAxis))
 
   private def insertPane(
     state: AppState,
