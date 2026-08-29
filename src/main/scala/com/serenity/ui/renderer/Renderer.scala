@@ -199,9 +199,9 @@ object Renderer:
     * flushed image, and the frame shape/cursor-blink state it was painted for. Reused only when a later frame's modal
     * layer is clean (see [[DamageProducer]]'s `modalOnlyContentChange`) *and* still matches both fields -- a viewport
     * resize or a blink toggle invalidates the cache even though neither is `AppState`, so a stale buffer is never
-    * composited over a frame it no longer matches. One slot, not keyed by frame-buffer identity, because exactly one
-    * modal is ever open at a time and the cached image is just a source for `drawImage`, independent of which of the
-    * (possibly pooled) frame buffers it gets composited onto.
+    * composited over a frame it no longer matches. One slot per surface, not keyed by frame-buffer identity, because
+    * exactly one modal is ever open at a time on a given surface and the cached image is just a source for `drawImage`,
+    * independent of which of the (possibly pooled) frame buffers it gets composited onto.
     */
   final private case class CachedModalLayer(
       image: BufferedImage,
@@ -210,7 +210,14 @@ object Renderer:
       cursorVisible: Boolean
   )
 
-  private val modalLayerBufferRef = new AtomicReference[Option[CachedModalLayer]](None)
+  /** Keyed by the [[RenderSurface]] a frame was painted onto, exactly like [[bufferScreen]] above and for the same
+    * reason: a single JVM-wide slot would let one surface's cached modal image leak into another surface's frame --
+    * harmless in production (there is only ever one real window) but a real hazard for any other concurrently running
+    * render session in the same process, tests included, since `Renderer` is a singleton every suite shares. A
+    * `WeakHashMap` (rather than the `AtomicReference` this used to be) lets a surface's entry disappear once nothing
+    * else references it, instead of pinning every `RenderSurface` a process ever rendered to for its whole lifetime.
+    */
+  private val modalLayerBuffers = new java.util.WeakHashMap[RenderSurface, CachedModalLayer]()
 
   /** What [[paintPanelLayer]] cached the last time it painted a given pinned/expanded/floating panel into its own
     * buffer (#1100 stage 3): the [[CachedModalLayer]] pattern generalised to every panel kind that reads pixels back
@@ -228,7 +235,12 @@ object Renderer:
       frameRect: LayoutRect
   )
 
-  private val panelLayerBufferRef = new AtomicReference[Map[SurfaceId, CachedPanelLayer]](Map.empty)
+  /** Keyed by [[RenderSurface]] first and [[SurfaceId]] second, for the same cross-surface-leak reason as
+    * [[modalLayerBuffers]] -- a bare `Map[SurfaceId, CachedPanelLayer]` shared process-wide let any two independently
+    * rendered surfaces that happen to reuse the same `SurfaceId` (unremarkable: tests across many specs all use
+    * `SurfaceId("outline")`) stomp on each other's cached panel image.
+    */
+  private val panelLayerBuffers = new java.util.WeakHashMap[RenderSurface, Map[SurfaceId, CachedPanelLayer]]()
 
   /** Folds `damage` into every buffer identity already being tracked for `output`'s screen (every identity, if there is
     * no output to scope by), via [[DamageAccumulator.accumulateBuffers]] -- called unconditionally on every frame,
@@ -1169,7 +1181,7 @@ object Renderer:
       Layer(ModalLayerId, zOrder = 4, LayerEffect.identity, modalDamage)
     )
     val dirtyLayerIds = LayerCompositor.dirtyLayers(layers).map(_.id).toSet
-    forgetStalePanelLayerBuffers(state, scene)
+    forgetStalePanelLayerBuffers(state, scene, context.surface)
     val paintByLayer: Map[LayerId, () => Unit] = Map(
       ChromeLayerId -> { () =>
         renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
@@ -1222,9 +1234,9 @@ object Renderer:
       case Some(support) =>
         scene.modalBackdrop match
           case None =>
-            modalLayerBufferRef.set(None)
+            modalLayerBuffers.synchronized { val _ = modalLayerBuffers.remove(context.surface) }
           case Some(_) =>
-            val cached = modalLayerBufferRef.get()
+            val cached = modalLayerBuffers.synchronized(Option(modalLayerBuffers.get(context.surface)))
             val reusable = !isDirty && cached.exists { c =>
               c.viewportWidth == context.surface.viewportWidth &&
               c.viewportHeight == context.surface.viewportHeight &&
@@ -1238,16 +1250,15 @@ object Renderer:
               renderModalLayer(state, context.copy(surface = layerSurface), scene)
               layerSurface.flush()
               capturedRef.get().foreach { image =>
-                modalLayerBufferRef.set(
-                  Some(
-                    CachedModalLayer(
-                      image,
-                      context.surface.viewportWidth,
-                      context.surface.viewportHeight,
-                      context.cursorVisible
-                    )
-                  )
+                val newlyCached = CachedModalLayer(
+                  image,
+                  context.surface.viewportWidth,
+                  context.surface.viewportHeight,
+                  context.cursorVisible
                 )
+                modalLayerBuffers.synchronized {
+                  val _ = modalLayerBuffers.put(context.surface, newlyCached)
+                }
                 context.surface.pixels.drawImage(
                   image,
                   0,
@@ -1302,7 +1313,8 @@ object Renderer:
     context.surface.layerBuffers match
       case None => paintPanel(context)
       case Some(support) =>
-        val cached = panelLayerBufferRef.get().get(surfaceId)
+        val cached =
+          panelLayerBuffers.synchronized(Option(panelLayerBuffers.get(context.surface))).flatMap(_.get(surfaceId))
         val reusable = !isDirty && cached.exists { c =>
           c.viewportWidth == context.surface.viewportWidth &&
           c.viewportHeight == context.surface.viewportHeight &&
@@ -1317,32 +1329,36 @@ object Renderer:
           paintPanel(context.copy(surface = layerSurface))
           layerSurface.flush()
           capturedRef.get().foreach { image =>
-            panelLayerBufferRef.updateAndGet(
-              _.updated(
-                surfaceId,
-                CachedPanelLayer(
-                  image,
-                  context.surface.viewportWidth,
-                  context.surface.viewportHeight,
-                  context.cursorVisible,
-                  frameRect
-                )
-              )
+            val newlyCached = CachedPanelLayer(
+              image,
+              context.surface.viewportWidth,
+              context.surface.viewportHeight,
+              context.cursorVisible,
+              frameRect
             )
+            panelLayerBuffers.synchronized {
+              val current =
+                Option(panelLayerBuffers.get(context.surface)).getOrElse(Map.empty[SurfaceId, CachedPanelLayer])
+              val _ = panelLayerBuffers.put(context.surface, current.updated(surfaceId, newlyCached))
+            }
             context.surface.pixels.drawImage(image, 0, 0, context.surface.viewportWidth, context.surface.viewportHeight)
           }
 
-  /** Drop cached panel buffers for surfaces no longer on screen this frame -- a dismissed panel's cache would otherwise
-    * sit in [[panelLayerBufferRef]] forever (a `WeakHashMap` isn't used here since [[SurfaceId]] is a plain value, not
-    * a pixel buffer whose lifetime this module needs to track).
+  /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry in
+    * [[panelLayerBuffers]] -- a dismissed panel's cache would otherwise sit in that inner `Map[SurfaceId, _]` forever
+    * (a `WeakHashMap` reclaims the outer, per-surface entry once a `RenderSurface` is no longer referenced, but
+    * [[SurfaceId]] is a plain value, not a pixel buffer whose lifetime this module can track that way).
     */
-  private def forgetStalePanelLayerBuffers(state: AppState, scene: UiSceneSnapshot): Unit =
+  private def forgetStalePanelLayerBuffers(state: AppState, scene: UiSceneSnapshot, surface: RenderSurface): Unit =
     val pinnedAndExpandedIds = pinnedAndExpandedSurfaces(state).map(_.id).toSet
     val overlays             = OverlayViewModel.fromState(state, scene)
     val floatingIds =
       (overlays.aboveCursor.toList ++ overlays.belowCursorStack).flatMap(_.surfaceId).toSet
     val activeIds = pinnedAndExpandedIds ++ floatingIds
-    val _         = panelLayerBufferRef.updateAndGet(_.filter { case (id, _) => activeIds.contains(id) })
+    panelLayerBuffers.synchronized {
+      val current = Option(panelLayerBuffers.get(surface)).getOrElse(Map.empty[SurfaceId, CachedPanelLayer])
+      val _       = panelLayerBuffers.put(surface, current.filter { case (id, _) => activeIds.contains(id) })
+    }
 
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *

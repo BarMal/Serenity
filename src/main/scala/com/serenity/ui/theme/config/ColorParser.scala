@@ -4,13 +4,15 @@ import java.awt.Color
 
 import scala.util.Try
 
+import com.serenity.ui.theme.ColorFormat.withAlpha
+
 object ColorParser:
 
   /** `color` with alpha zeroed out, otherwise identical -- the starting/ending point for every fade-in/fade-out
     * animation that needs a transparent variant of a theme color.
     */
   def transparent(color: Color): Color =
-    new Color(color.getRed, color.getGreen, color.getBlue, 0)
+    color.withAlpha(0)
 
   def parseColor(colorStr: String): Either[String, Color] =
     colorStr.trim match

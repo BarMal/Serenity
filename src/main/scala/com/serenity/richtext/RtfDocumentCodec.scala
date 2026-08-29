@@ -10,6 +10,7 @@ import javax.swing.text.rtf.RTFEditorKit
 
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
+import com.serenity.ui.theme.ColorFormat
 
 /** Reads and writes RTF documents through Serenity's native rich text model. */
 object RtfDocumentCodec:
@@ -172,7 +173,7 @@ object RtfDocumentCodec:
   private def colorToHex(color: Color): Option[String] =
     Option(color)
       .filterNot(_ == Color.BLACK)
-      .map(color => f"#${color.getRed}%02x${color.getGreen}%02x${color.getBlue}%02x")
+      .map(color => ColorFormat.toHex(color, withAlpha = false))
 
   private def hexToColor(value: String): Option[Color] =
     val normalized = value.stripPrefix("#")

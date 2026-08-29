@@ -12,6 +12,7 @@ import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
+import com.serenity.ui.theme.ColorFormat
 import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValueType}
 
 /** Manages loading and saving application configuration */
@@ -750,8 +751,7 @@ object ConfigManager:
     )
 
   private def formatColor(color: java.awt.Color): String =
-    val rgb = f"#${color.getRed}%02X${color.getGreen}%02X${color.getBlue}%02X"
-    if color.getAlpha == 255 then rgb else f"$rgb${color.getAlpha}%02X"
+    ColorFormat.toHex(color, withAlpha = true)
 
   private def hoconString(value: String): String =
     val safe = value.nonEmpty && value.forall(char => char.isLetterOrDigit || "_./-".contains(char))
