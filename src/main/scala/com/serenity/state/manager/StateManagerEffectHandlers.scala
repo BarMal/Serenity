@@ -16,11 +16,11 @@ import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.*
 import com.serenity.richtext.*
+import com.serenity.rope.*
 import com.serenity.session.SessionSaveTrigger
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
-import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
@@ -2248,32 +2248,18 @@ final private[manager] class StateManagerEffectHandlers(
     val startOffset = buffer.document.content.lineColumnToOffset(selection.start.line, selection.start.column)
     val endOffset   = buffer.document.content.lineColumnToOffset(selection.end.line, selection.end.column)
     if startOffset >= endOffset then
-      val cursor = offsetToCursorPosition(buffer, graphemeBoundaryAfterOrAt(buffer, startOffset))
+      val cursor =
+        buffer.document.content.offsetToCursorPosition(buffer.document.content.graphemeBoundaryAfterOrAt(startOffset))
       cursor -> cursor
     else
-      offsetToCursorPosition(buffer, graphemeBoundaryBeforeOrAt(buffer, startOffset)) ->
-        offsetToCursorPosition(buffer, graphemeBoundaryAfterOrAt(buffer, endOffset))
+      buffer.document.content.offsetToCursorPosition(
+        buffer.document.content.graphemeBoundaryBeforeOrAt(startOffset)
+      ) ->
+        buffer.document.content.offsetToCursorPosition(buffer.document.content.graphemeBoundaryAfterOrAt(endOffset))
 
   private def snapCursorAfterGrapheme(buffer: Buffer, cursor: CursorPosition): CursorPosition =
     val offset = buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
-    offsetToCursorPosition(buffer, graphemeBoundaryAfterOrAt(buffer, offset))
-
-  private def offsetToCursorPosition(buffer: Buffer, offset: Int): CursorPosition =
-    val (line, column) = buffer.document.content.offsetToLineColumn(offset)
-    CursorPosition(line, column)
-
-  private def graphemeBoundaryBeforeOrAt(buffer: Buffer, offset: Int): Int =
-    TextEditing.graphemeBoundaryBeforeOrAt(RopeCharacterSource(buffer.document.content), offset)
-
-  private def graphemeBoundaryAfterOrAt(buffer: Buffer, offset: Int): Int =
-    TextEditing.graphemeBoundaryAfterOrAt(RopeCharacterSource(buffer.document.content), offset)
-
-  final private case class RopeCharacterSource(content: com.serenity.rope.Rope) extends TextEditing.CharacterSource:
-    override def length: Int =
-      content.weight
-
-    override def charAt(index: Int): Char =
-      content.index(index).getOrElse('\u0000')
+    buffer.document.content.offsetToCursorPosition(buffer.document.content.graphemeBoundaryAfterOrAt(offset))
 
   private def deleteDocumentComment(state: AppState): IO[Unit] =
     activeEditorBuffer(state) match
@@ -2484,17 +2470,11 @@ final private[manager] class StateManagerEffectHandlers(
     else
       buffer.document.content
         .searchAll(query)
-        .filter(offset =>
-          TextEditing.isWholeGraphemeRange(RopeCharacterSource(buffer.document.content), offset, offset + query.length)
-        )
-        .map(offset => cursorPositionForOffset(buffer.document.content, offset))
+        .filter(offset => buffer.document.content.isWholeGraphemeRange(offset, offset + query.length))
+        .map(offset => buffer.document.content.offsetToCursorPosition(offset))
 
   private def toFindResult(cursor: CursorPosition): FindResult =
     FindResult(cursor.line, cursor.column)
-
-  private def cursorPositionForOffset(content: com.serenity.rope.Rope, offset: Int): CursorPosition =
-    val (line, column) = content.offsetToLineColumn(offset)
-    CursorPosition(line, column)
 
   protected def toggleThemeEffect(state: AppState): IO[Unit] =
     val targetThemeName =

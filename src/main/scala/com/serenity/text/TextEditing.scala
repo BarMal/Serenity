@@ -112,24 +112,21 @@ object TextEditing:
         case _ =>
           CharacterClass.Punctuation
 
+  private def isSurrogatePair(high: Char, low: Char): Boolean =
+    Character.isHighSurrogate(high) && Character.isLowSurrogate(low)
+
   private def codePointAt(source: CharacterSource, index: Int): Int =
     val first = source.charAt(index)
-    if Character.isHighSurrogate(first) && index + 1 < source.length then
-      val second = source.charAt(index + 1)
-      if Character.isLowSurrogate(second) then Character.toCodePoint(first, second)
-      else first.toInt
+    if index + 1 < source.length && isSurrogatePair(first, source.charAt(index + 1)) then
+      Character.toCodePoint(first, source.charAt(index + 1))
     else first.toInt
 
   private def previousCodePointStart(source: CharacterSource, idx: Int): Int =
-    if idx >= 2 && Character.isLowSurrogate(source.charAt(idx - 1)) &&
-        Character.isHighSurrogate(source.charAt(idx - 2))
-    then idx - 2
+    if idx >= 2 && isSurrogatePair(source.charAt(idx - 2), source.charAt(idx - 1)) then idx - 2
     else math.max(0, idx - 1)
 
   private def nextCodePointEnd(source: CharacterSource, idx: Int): Int =
-    if idx + 1 < source.length && Character.isHighSurrogate(source.charAt(idx)) &&
-        Character.isLowSurrogate(source.charAt(idx + 1))
-    then idx + 2
+    if idx + 1 < source.length && isSurrogatePair(source.charAt(idx), source.charAt(idx + 1)) then idx + 2
     else math.min(source.length, idx + 1)
 
   @annotation.tailrec
