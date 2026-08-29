@@ -24,6 +24,16 @@ object EditorEventReducer:
   private def deleteOrUnchanged(content: Rope, start: Int, end: Int): Rope =
     content.delete(start, end).getOrElse(content)
 
+  /** Replaces the primary (first) cursor while leaving every other live cursor untouched -- the shape every
+    * single-cursor edit below needs, since `cursors` is a plain `List` rather than a type that proves non-emptiness.
+    * `cursors` is invariantly non-empty (every buffer keeps at least one cursor), so the `Nil` arm below never fires in
+    * practice; it exists only so this is total rather than partial on an empty list.
+    */
+  private def replacePrimaryCursor(newPrimary: CursorPosition, cursors: List[CursorPosition]): List[CursorPosition] =
+    cursors match
+      case _ :: rest => newPrimary :: rest
+      case Nil       => List(newPrimary)
+
   def reducer(paneId: PaneId)(using balance: com.serenity.rope.Balance): Reducer[TextEntryEvent] =
     Reducer.instance((event, state) => reduce(event, paneId, state))
 
@@ -233,7 +243,7 @@ object EditorEventReducer:
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
           editing = buffer.editing.copy(
-            cursors = newCursor :: buffer.editing.cursors.tail,
+            cursors = replacePrimaryCursor(newCursor, buffer.editing.cursors),
             selection = None,
             preferredColumn = Some(newCursor.column),
             preferredXPx = None
@@ -261,7 +271,7 @@ object EditorEventReducer:
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
           editing = buffer.editing.copy(
-            cursors = newCursor :: buffer.editing.cursors.tail,
+            cursors = replacePrimaryCursor(newCursor, buffer.editing.cursors),
             preferredColumn = Some(newCursor.column),
             preferredXPx = None
           ),
@@ -1286,7 +1296,7 @@ object EditorEventReducer:
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
       editing = buffer.editing.copy(
-        cursors = newCursor :: buffer.editing.cursors.tail,
+        cursors = replacePrimaryCursor(newCursor, buffer.editing.cursors),
         selection = None,
         selections = Nil,
         preferredColumn = Some(newCursor.column),
@@ -1518,27 +1528,32 @@ object EditorEventReducer:
         else if plan.kind == TransitionKind.Fade then
           state.persisted.config.scaledCharacterAnimation match
             case Some(animConfig) =>
-              if insertedCells.size == 1 then
-                val (key, cell) = insertedCells.head
-                val delta = Map(
-                  key -> AnimatedCell.parametricForeground(cell.char, cell.startColor, cell.endColor, animConfig.steps)
-                )
-                (buffer, delta)
-              else
-                val staggeredCells = insertedCells
-                  .groupBy { case (key, _) => key.line }
-                  .valuesIterator
-                  .flatMap(lineCells =>
-                    FlowAnimationBuilder.build(
-                      cells = lineCells,
-                      direction = FlowDirection.ByColumn,
-                      sweep = SweepDirection.Forward,
-                      steps = animConfig.steps,
-                      staggerFrames = 1
+              insertedCells.headOption match
+                case Some((key, cell)) if insertedCells.size == 1 =>
+                  val delta = Map(
+                    key -> AnimatedCell.parametricForeground(
+                      cell.char,
+                      cell.startColor,
+                      cell.endColor,
+                      animConfig.steps
                     )
                   )
-                  .toMap
-                (buffer, staggeredCells)
+                  (buffer, delta)
+                case _ =>
+                  val staggeredCells = insertedCells
+                    .groupBy { case (key, _) => key.line }
+                    .valuesIterator
+                    .flatMap(lineCells =>
+                      FlowAnimationBuilder.build(
+                        cells = lineCells,
+                        direction = FlowDirection.ByColumn,
+                        sweep = SweepDirection.Forward,
+                        steps = animConfig.steps,
+                        staggerFrames = 1
+                      )
+                    )
+                    .toMap
+                  (buffer, staggeredCells)
             case None =>
               (buffer, Map.empty)
         else
@@ -1646,7 +1661,7 @@ object EditorEventReducer:
         val landed = target(current, from)
         current.copy(
           editing = current.editing.copy(
-            cursors = landed.cursor :: current.editing.cursors.tail,
+            cursors = replacePrimaryCursor(landed.cursor, current.editing.cursors),
             selection = None,
             preferredColumn = Some(landed.preferredColumn),
             preferredXPx = landed.preferredXPx
@@ -1679,7 +1694,7 @@ object EditorEventReducer:
     val selectionAnchor = buffer.primarySelection.map(_.anchor).getOrElse(anchor)
     buffer.copy(
       editing = buffer.editing.copy(
-        cursors = focus :: buffer.editing.cursors.tail,
+        cursors = replacePrimaryCursor(focus, buffer.editing.cursors),
         selection = Some(Selection(selectionAnchor, focus)),
         selections = Nil,
         preferredColumn = preferredColumn,
@@ -1735,7 +1750,7 @@ object EditorEventReducer:
       buffer.copy(
         document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
         editing = buffer.editing.copy(
-          cursors = newCursor :: buffer.editing.cursors.tail,
+          cursors = replacePrimaryCursor(newCursor, buffer.editing.cursors),
           selection = None,
           selections = Nil,
           preferredColumn = Some(newCursor.column),
@@ -1767,7 +1782,7 @@ object EditorEventReducer:
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
       editing = buffer.editing.copy(
-        cursors = newCursor :: buffer.editing.cursors.tail,
+        cursors = replacePrimaryCursor(newCursor, buffer.editing.cursors),
         selection = None,
         selections = Nil,
         preferredColumn = Some(newCursor.column),

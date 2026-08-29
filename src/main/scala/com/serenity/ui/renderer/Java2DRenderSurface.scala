@@ -264,13 +264,13 @@ class Java2DRenderSurface(
           val weight      = 1.0f / (size * size)
           val data        = Array.fill(size * size)(weight)
           val kernel      = new Kernel(size, size, data)
-          val op          = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null)
+          val op          = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, Java2DRenderSurface.defaultRenderingHints)
           val src         = image.getSubimage(region.xPx, region.yPx, region.widthPx, region.heightPx)
-          val blurred     = op.filter(src, null)
+          val blurred     = op.filter(src, Java2DRenderSurface.compatibleDestImage(op, src))
           val rawGraphics = image.createGraphics()
           try
             activeClip.foreach(rawGraphics.clip)
-            rawGraphics.drawImage(blurred, region.xPx, region.yPx, null)
+            rawGraphics.drawImage(blurred, region.xPx, region.yPx, Java2DRenderSurface.NoOpImageObserver)
           finally rawGraphics.dispose()
         }
 
@@ -283,7 +283,14 @@ class Java2DRenderSurface(
     val counts = sampledColors.foldLeft(Map.empty[Int, Int]) { (accumulator, color) =>
       accumulator.updated(color, accumulator.getOrElse(color, 0) + 1)
     }
-    new Color(counts.maxBy(_._2)._1, true)
+    // `image` is always at least 1x1 (`deviceImageDimension` floors both dimensions to 1), so `counts` is never
+    // empty in practice; the (0, 0) starting pair only matters as a total fallback for that impossible case, in
+    // place of the exception a bare `.maxBy` would throw on an empty map.
+    val (dominantColor, _) = counts.foldLeft((0, 0)) {
+      case (best @ (_, bestCount), (color, count)) =>
+        if count > bestCount then (color, count) else best
+    }
+    new Color(dominantColor, true)
 
   /** Standard Porter-Duff SRC_OVER, matching what `Graphics2D`'s default composite computes for opaque-source draws
     * onto a `TYPE_INT_ARGB` destination -- reimplemented here so `applyGlow` can blend directly on a raw pixel array
@@ -357,7 +364,7 @@ class Java2DRenderSurface(
     val backgroundG = background.getGreen
     val backgroundB = background.getBlue
 
-    val basePixels   = image.getRGB(0, 0, width, height, null, 0, width)
+    val basePixels   = image.getRGB(0, 0, width, height, new Array[Int](width * height), 0, width)
     val sourcePixels = new Array[Int](width * height)
     val sourceMask   = new Array[Boolean](width * height)
 
@@ -375,7 +382,7 @@ class Java2DRenderSurface(
     val source = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
     source.setRGB(0, 0, width, height, sourcePixels, 0, width)
 
-    val blurred = new ConvolveOp(
+    val glowOp = new ConvolveOp(
       new Kernel(
         5,
         5,
@@ -383,9 +390,10 @@ class Java2DRenderSurface(
           1f).map(_ / 128f)
       ),
       ConvolveOp.EDGE_NO_OP,
-      null
-    ).filter(source, null)
-    val blurredPixels = blurred.getRGB(0, 0, width, height, null, 0, width)
+      Java2DRenderSurface.defaultRenderingHints
+    )
+    val blurred       = glowOp.filter(source, Java2DRenderSurface.compatibleDestImage(glowOp, source))
+    val blurredPixels = blurred.getRGB(0, 0, width, height, new Array[Int](width * height), 0, width)
 
     val result = basePixels.clone()
 
@@ -514,7 +522,7 @@ class Java2DRenderSurface(
     val ph        = height * metrics.lineHeight
     val savedClip = g.getClip
     g.clipRect(px, py, pw, ph)
-    g.drawImage(image, px, py, pw, ph, null)
+    g.drawImage(image, px, py, pw, ph, Java2DRenderSurface.NoOpImageObserver)
     g.setClip(savedClip)
 
   def hideCursor(): Unit = ()
@@ -532,6 +540,26 @@ object Java2DRenderSurface:
 
   final private[serenity] case class DeviceScale(x: Double, y: Double)
   final private[serenity] case class DeviceRegion(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)
+
+  /** `Graphics2D.drawImage`'s `ImageObserver` callback exists for images that may still be loading asynchronously (e.g.
+    * from a URL); every image this class ever draws is an already-fully-materialised `BufferedImage`, so the callback
+    * can never fire and a `null` observer (Java's usual shorthand for "don't call me back") is equivalent to this
+    * no-op. Returning `false` tells the (never-invoked) caller not to bother scheduling further notifications.
+    */
+  private[serenity] val NoOpImageObserver: ImageObserver = (_, _, _, _, _, _) => false
+
+  /** Equivalent to passing `null` for `ConvolveOp`'s `RenderingHints` parameter -- per its Javadoc, `RenderingHints`
+    * constructed from a `null` (or here, empty) map behaves identically to Java2D's default rendering-hint choices.
+    */
+  private[serenity] def defaultRenderingHints: RenderingHints = new RenderingHints(java.util.Map.of())
+
+  /** Equivalent to passing `null` as `BufferedImageOp#filter`'s destination image -- per its Javadoc, a `null`
+    * destination causes the op to allocate one via `createCompatibleDestImage(src, null)`; this calls that directly
+    * with `src`'s own color model instead of leaving Java2D to infer it, which is what `null` would resolve to for
+    * every filter this class uses (`ConvolveOp`, which does not override `createCompatibleDestImage`).
+    */
+  private[serenity] def compatibleDestImage(op: BufferedImageOp, src: BufferedImage): BufferedImage =
+    op.createCompatibleDestImage(src, src.getColorModel())
 
   def forFrame(
     metrics: CellMetrics,
@@ -630,7 +658,7 @@ object Java2DRenderSurface:
     )
     seed.foreach { seedImage =>
       val seedGraphics = image.createGraphics()
-      try seedGraphics.drawImage(seedImage, 0, 0, null)
+      try seedGraphics.drawImage(seedImage, 0, 0, NoOpImageObserver)
       finally seedGraphics.dispose()
     }
     new Java2DRenderSurface(
