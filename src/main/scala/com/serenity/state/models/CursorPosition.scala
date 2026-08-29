@@ -14,6 +14,19 @@ final case class CursorPosition(line: Int, column: Int):
   def moveDown: CursorPosition  = copy(line = line + 1)
   def moveUp: CursorPosition    = copy(line = Math.max(0, line - 1))
 
+/** Line-then-column ordering, the single comparison every hand-rolled `isBefore`/`isAfter`/`isAtOrBefore` and
+  * `DirectedRange` start/end/contains check used to reimplement separately (`#1065`, `#1053`).
+  */
+given Ordering[CursorPosition] = Ordering.by(cursor => (cursor.line, cursor.column))
+
+extension (cursors: List[CursorPosition])
+
+  /** The primary (first) cursor, or the document origin for a cursor-less list. Centralises the
+    * `cursors.headOption.getOrElse(CursorPosition(0, 0))` fallback repeated across the editor reducer and viewport
+    * capability (`#1066`).
+    */
+  def primaryCursor: CursorPosition = cursors.headOption.getOrElse(CursorPosition(0, 0))
+
 extension (rope: Rope)
 
   /** Rope offset -> logical `CursorPosition`, via `Rope.offsetToLineColumn`. The single canonical conversion for every
