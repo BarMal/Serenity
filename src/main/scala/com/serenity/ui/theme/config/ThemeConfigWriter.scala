@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
-import com.serenity.ui.theme.{SyntaxElement, Theme, ThemeColor}
+import com.serenity.ui.theme.{ColorFormat, SyntaxElement, Theme, ThemeColor}
 
 object ThemeConfigWriter:
 
@@ -135,7 +135,7 @@ object ThemeConfigWriter:
        |$pad}""".stripMargin
 
   private def hex(color: Color): String =
-    f"#${color.getRed}%02X${color.getGreen}%02X${color.getBlue}%02X"
+    ColorFormat.toHex(color, withAlpha = false)
 
   private def escape(value: String): String =
     value.replace("\\", "\\\\").replace("\"", "\\\"")

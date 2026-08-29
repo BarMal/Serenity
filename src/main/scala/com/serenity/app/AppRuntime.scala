@@ -20,6 +20,7 @@ import com.serenity.state.manager.*
 import com.serenity.state.models.{AppState, BufferId, Damage, Focus}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
+import com.serenity.ui.theme.ColorFormat.withAlpha
 import fs2.Stream
 import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.{Logger, LoggerFactory}
@@ -522,7 +523,7 @@ object AppRuntime:
           i <- breathIndex.updateAndGet(i => (i + 1) % 48)
           c     = state.persisted.config.cursorColors.activeOr(state.persisted.theme.cursor)
           alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
-        yield (true, Some(new Color(c.getRed, c.getGreen, c.getBlue, alpha)))
+        yield (true, Some(c.withAlpha(alpha)))
 
   private[serenity] def recoverIdleCursorRenderFailure(
     error: Throwable,

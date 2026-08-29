@@ -33,13 +33,8 @@ class LspConnection private (
       deferred <- Deferred[IO, Either[Throwable, Json]]
       _        <- pendingRef.update(_ + (id -> deferred))
       result <-
-        val cleanup = pendingRef.update(_ - id)
-        val request = Json.obj(
-          "jsonrpc" -> io.circe.Json.fromString("2.0"),
-          "id"      -> io.circe.Json.fromLong(id),
-          "method"  -> io.circe.Json.fromString(method),
-          "params"  -> params
-        )
+        val cleanup      = pendingRef.update(_ - id)
+        val request      = LspProtocol.request(id, method, params)
         val timeoutError = LspConnection.LspRequestTimeout(languageId, method, timeout)
 
         (sendQueue.offer(Some(request)) >> deferred.get.flatMap(IO.fromEither))
@@ -49,17 +44,7 @@ class LspConnection private (
     yield result
 
   def sendNotification(method: String, params: Json): IO[Unit] =
-    sendQueue
-      .offer(
-        Some(
-          Json.obj(
-            "jsonrpc" -> io.circe.Json.fromString("2.0"),
-            "method"  -> io.circe.Json.fromString(method),
-            "params"  -> params
-          )
-        )
-      )
-      .void
+    sendQueue.offer(Some(LspProtocol.notification(method, params))).void
 
   def processIncoming(onDiagnostics: (String, List[Diagnostic]) => IO[Unit]): IO[Unit] =
     Stream
