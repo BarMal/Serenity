@@ -53,7 +53,11 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     result.breadcrumb should include("Document Writing")
   }
 
-  it should "use Back for one level and Escape to dismiss at every depth" in {
+  // Rewritten for issue #1059: Backspace navigating up a level (the previous version of this test) was exactly the
+  // overloaded-Backspace bug the page-stack migration fixes. Backspace now only ever deletes text -- it is a no-op
+  // with nothing to delete, and never navigates -- while Escape uniformly does "up one level, or close" at every
+  // depth, ending in a full dismiss once there is nothing left to pop.
+  it should "make Backspace a no-op with no text to delete, and Escape go up one level at a time to dismiss" in {
     val opened = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .openSettings
@@ -64,10 +68,17 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
     opened.activeSubmenu.map(_.groupId) shouldBe Some("settings-navigation")
 
-    val back = CommandRunnerReducer.reduce(RunnerDeleteBackward, stateFor(opened), registry)
+    val afterBackspace = CommandRunnerReducer.reduce(RunnerDeleteBackward, stateFor(opened), registry)
+    runnerFrom(afterBackspace.state).activeSubmenu.map(_.groupId) shouldBe Some("settings-navigation")
+
+    val back = CommandRunnerReducer.reduce(Escape, stateFor(opened), registry)
     runnerFrom(back.state).activeSubmenu.map(_.groupId) shouldBe Some("settings-document-writing")
 
-    val dismissed = CommandRunnerReducer.reduce(Escape, back.state, registry)
+    val backToRoot = CommandRunnerReducer.reduce(Escape, back.state, registry)
+    runnerFrom(backToRoot.state).activeSubmenu shouldBe None
+    runnerFrom(backToRoot.state).isActive shouldBe true
+
+    val dismissed = CommandRunnerReducer.reduce(Escape, backToRoot.state, registry)
     dismissed.state.commandRunnerSurface shouldBe None
     dismissed.state.commandRunnerSubmenuSurface shouldBe None
   }

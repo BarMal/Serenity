@@ -370,6 +370,12 @@ final case class CommandRunner(
               parentItems.indexWhere(_.id == submenu.groupId) match
                 case -1    => submenuSelections.getOrElse(parentId, 0)
                 case index => index
+            // `submenu.ancestorGroupIds` still includes `parentId` itself (it's the chain *above and including* the
+            // page we're leaving) -- drop it first, then `parentGroupId` is whatever's left at the end. Using
+            // `submenu.ancestorGroupIds.lastOption` directly here (the pre-drop list) made the revealed page's own
+            // `parentGroupId` self-referential -- a real bug, caught by exercising two consecutive pops at depth 2+
+            // once Escape started delegating to this method for every depth uniformly (issue #1059).
+            val revealedAncestorGroupIds = submenu.ancestorGroupIds.dropRight(1)
             copy(
               submenuSelections =
                 submenuSelections + (submenu.groupId -> submenu.selectedIndex) + (parentId -> parentIndex),
@@ -377,8 +383,8 @@ final case class CommandRunner(
                 CommandRunnerSubmenuState(
                   parentId,
                   selectedIndex = parentIndex,
-                  parentGroupId = submenu.ancestorGroupIds.lastOption,
-                  ancestorGroupIds = submenu.ancestorGroupIds.dropRight(1)
+                  parentGroupId = revealedAncestorGroupIds.lastOption,
+                  ancestorGroupIds = revealedAncestorGroupIds
                 )
               ),
               activeSettingsSurface = activeSettingsSurface
@@ -447,10 +453,11 @@ final case class CommandRunner(
       current ++ groupPaths(groupId, childGroups).map(group.id :: _)
     }
 
-  // Same rationale as settingsSurfaceItems above: focusedSubmenuItems and submenuBreadcrumbLabels are read by
-  // CommandRunnerReducer-driven states (see CommandRunnerReducerSpec), which does not yet route every activeSubmenu
-  // write through the migrated mutators -- e.g. it builds CommandRunnerSubmenuState directly in places -- so
-  // activeSettingsSurface is not reliably populated there yet. Left reading activeSubmenu.
+  // Same rationale as settingsSurfaceItems above: focusedSubmenuItems and submenuBreadcrumbLabels are called from
+  // `SurfaceContentResolver`/`CommandRunnerMouseHitTesting`, unmigrated this turn, and several existing specs build
+  // `CommandRunner` values with `activeSubmenu` set directly rather than through the migrated mutators -- so
+  // `activeSettingsSurface` isn't reliably populated for every state these readers see yet. Left reading
+  // `activeSubmenu`; `CommandRunnerReducer` itself no longer constructs `activeSubmenu` directly (issue #1059).
   def focusedSubmenuItems: List[CommandSurfaceItem] =
     activeSubmenu.toList.flatMap(submenu => submenu.filteredItems(submenuItems(submenu.groupId)))
 
@@ -527,6 +534,174 @@ final case class CommandRunner(
             this
       case None =>
         this
+
+  /** Sets the currently-edited item's draft text, beginning a fresh edit of `itemId` if nothing (or a different item)
+    * was being edited. Used for both starting an edit from a single keystroke and continuing one (`RunnerInsertChar`),
+    * so it always writes `itemId` rather than assuming the previous one still applies.
+    */
+  def withSubmenuEditingItem(itemId: String, text: String): CommandRunner =
+    activeSubmenu match
+      case Some(submenu) =>
+        copy(
+          activeSubmenu = Some(submenu.copy(editingItemId = Some(itemId), editingText = text)),
+          activeSettingsSurface = activeSettingsSurface.map(surface =>
+            surface.copy(current =
+              SettingsPage.Editing(
+                groupId = submenu.groupId,
+                itemId = itemId,
+                draftText = text,
+                searchTerm = surface.current.searchTerm
+              )
+            )
+          )
+        )
+      case None =>
+        this
+
+  /** Replaces the currently-edited item's draft text in place (word-delete, not character Backspace -- see
+    * `deleteSubmenuTextBackward` for that). A no-op when nothing is being edited.
+    */
+  def withSubmenuEditingText(text: String): CommandRunner =
+    activeSubmenu match
+      case Some(submenu) if submenu.editingItemId.nonEmpty =>
+        copy(
+          activeSubmenu = Some(submenu.copy(editingText = text)),
+          activeSettingsSurface = activeSettingsSurface.map(surface =>
+            surface.current match
+              case editing: SettingsPage.Editing => surface.copy(current = editing.copy(draftText = text))
+              case _                             => surface
+          )
+        )
+      case _ =>
+        this
+
+  /** Cancels an in-progress edit without touching any pending recording/conflict state or navigating -- Escape's
+    * "cancel this edit, stay on this page" behavior. Contrast `clearSubmenuEditingAndRecording`, which also clears
+    * recording state (used once a value has actually been submitted or a recording finished).
+    */
+  def cancelSubmenuEditingText: CommandRunner =
+    activeSubmenu match
+      case Some(submenu) =>
+        copy(
+          activeSubmenu = Some(submenu.copy(editingItemId = None, editingText = "")),
+          activeSettingsSurface = activeSettingsSurface.map(surface =>
+            surface.copy(current =
+              SettingsPage.Group(submenu.groupId, submenu.selectedIndex, surface.current.searchTerm)
+            )
+          )
+        )
+      case None =>
+        this
+
+  /** Clears all in-progress editing/recording sub-state for the current submenu item -- an unconditional version of
+    * `normalizeSubmenuEditMode`'s conditional clear, used once a value has been submitted, a conflict resolved, or a
+    * recording finished. Always rebuilds the current page as a Group. Leaves `statusMessage` for the caller, since
+    * callers disagree on what it should become afterward (`None`, or a freshly computed warning).
+    */
+  def clearSubmenuEditingAndRecording: CommandRunner =
+    activeSubmenu match
+      case Some(submenu) =>
+        copy(
+          activeSubmenu = Some(
+            submenu.copy(
+              editingItemId = None,
+              editingText = "",
+              recordingItemId = None,
+              pendingRecordedBinding = None,
+              pendingGlobalHotkeyConflict = None,
+              pendingFocusedKeymapConflict = None
+            )
+          ),
+          activeSettingsSurface = activeSettingsSurface.map(surface =>
+            surface.copy(current =
+              SettingsPage.Group(submenu.groupId, submenu.selectedIndex, surface.current.searchTerm)
+            )
+          )
+        )
+      case None =>
+        this
+
+  /** Begins recording a keybinding for `itemId`: an edit with empty draft text, tagged with a fresh `RecordingState`.
+    */
+  def beginSubmenuRecording(itemId: String): CommandRunner =
+    activeSubmenu match
+      case Some(submenu) =>
+        copy(
+          activeSubmenu =
+            Some(submenu.copy(editingItemId = Some(itemId), editingText = "", recordingItemId = Some(itemId))),
+          activeSettingsSurface = activeSettingsSurface.map(surface =>
+            surface.copy(current =
+              SettingsPage.Editing(
+                groupId = submenu.groupId,
+                itemId = itemId,
+                draftText = "",
+                searchTerm = surface.current.searchTerm,
+                recording = Some(RecordingState(itemId))
+              )
+            )
+          )
+        )
+      case None =>
+        this
+
+  /** Stashes a just-recorded keystroke as pending, awaiting a possible double-tap within the recorder's time window. */
+  def withPendingRecordedBinding(info: KeyStrokeInfo, recordedAtMillis: Long): CommandRunner =
+    activeSubmenu match
+      case Some(submenu) =>
+        copy(
+          activeSubmenu = Some(submenu.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))),
+          activeSettingsSurface = activeSettingsSurface.map(surface =>
+            surface.current match
+              case editing: SettingsPage.Editing =>
+                val recording = editing.recording.getOrElse(RecordingState(editing.itemId))
+                surface.copy(current =
+                  editing.copy(recording =
+                    Some(recording.copy(pendingRecordedBinding = Some(info -> recordedAtMillis)))
+                  )
+                )
+              case _ => surface
+          )
+        )
+      case None =>
+        this
+
+  /** Deletes one character from the current settings page's text -- an in-progress edit's draft, or (when not editing)
+    * a group's local search -- via `SettingsSurfaceState.deleteBackward`, keeping `activeSubmenu` in sync. A no-op when
+    * there is no text to delete; never navigates the stack. This replaces Backspace's old fallback to
+    * `exitSubmenuToPreview` once text was already empty (issue #1059).
+    */
+  def deleteSubmenuTextBackward: CommandRunner =
+    activeSettingsSurface match
+      case Some(surface) =>
+        surface.current match
+          case page: SettingsPage.Group if page.searchTerm.nonEmpty =>
+            copy(
+              activeSubmenu = activeSubmenu.map(s => s.copy(searchTerm = s.searchTerm.dropRight(1))),
+              activeSettingsSurface = Some(SettingsSurfaceState.deleteBackward(surface)),
+              statusMessage = None
+            )
+          case page: SettingsPage.Editing if page.draftText.nonEmpty =>
+            copy(
+              activeSubmenu = activeSubmenu.map(s => s.copy(editingText = s.editingText.dropRight(1))),
+              activeSettingsSurface = Some(SettingsSurfaceState.deleteBackward(surface)),
+              statusMessage = None
+            )
+          case _ =>
+            this
+      case None =>
+        this
+
+  /** Selects an item within the ghost-preview panel for `groupId` without fully entering navigation -- a fresh,
+    * ancestor-less single-page stack at `index`, mirroring the direct `CommandRunnerSubmenuState` construction this
+    * replaces.
+    */
+  def selectPreviewSubmenuItem(groupId: String, index: Int): CommandRunner =
+    copy(
+      previewedGroupId = Some(groupId),
+      activeSubmenu = Some(CommandRunnerSubmenuState(groupId, selectedIndex = index)),
+      activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group(groupId, index))),
+      submenuSelections = submenuSelections + (groupId -> index)
+    )
 
   def enterSelectedSubmenuGroup: CommandRunner =
     activeSubmenu match

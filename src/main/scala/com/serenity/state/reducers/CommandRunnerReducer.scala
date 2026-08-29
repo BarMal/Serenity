@@ -46,10 +46,17 @@ object CommandRunnerReducer:
     event match
       case RunnerDismiss =>
         if submenuRecording(state) then ReducerResult.noEffects(clearSubmenuRecording(state))
-        else if currentRunner(state).exists(_.isSettingsSurface) then ReducerResult.noEffects(deactivate(state))
         else if submenuEditing(state) then ReducerResult.noEffects(clearSubmenuEditMode(state))
         else if submenuSearching(state) then ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch("")))
-        else if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
+        else if submenuHasFocus(state) then
+          // Escape always means "up one level, or close if there is no level left" (issue #1059) --
+          // `SettingsSurfaceState.escape`'s two outcomes are exactly what `exitSubmenuToPreview` already computes via
+          // its own `activeSettingsSurface.flatMap(_.pop)`: `Popped` pops with a re-pointed parent, `CloseSurface`
+          // clears to the root (not the whole runner -- "closing the settings surface" per `SettingsSurfaceState`'s
+          // own doc, not closing the overlay). One call covers both outcomes for both the settings-tab and
+          // dedicated-Settings entry points alike, with no more branching on `isSettingsSurface` -- that branch used
+          // to preempt this one and always fully deactivate regardless of depth, which was the bug.
+          ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
         else if rootEditing(state) then ReducerResult.noEffects(clearRootEditMode(state))
         else ReducerResult.noEffects(deactivate(state))
 
@@ -143,11 +150,7 @@ object CommandRunnerReducer:
                         ReducerResult.noEffects(
                           replaceRunner(
                             state,
-                            r =>
-                              r.copy(
-                                activeSubmenu = r.activeSubmenu
-                                  .map(s => s.copy(editingItemId = Some(item.id), editingText = nextText))
-                              ).copy(statusMessage = None)
+                            r => r.withSubmenuEditingItem(item.id, nextText).copy(statusMessage = None)
                           )
                         )
                       case None =>
@@ -198,24 +201,11 @@ object CommandRunnerReducer:
 
       case RunnerDeleteBackward =>
         if submenuHasFocus(state) then
-          currentRunner(state).flatMap(_.activeSubmenu) match
-            case Some(submenu) if submenu.editingItemId.nonEmpty && submenu.editingText.nonEmpty =>
-              ReducerResult.noEffects(
-                replaceRunner(
-                  state,
-                  r =>
-                    r.copy(
-                      activeSubmenu = r.activeSubmenu.map(s => s.copy(editingText = s.editingText.dropRight(1))),
-                      statusMessage = None
-                    )
-                )
-              )
-            case Some(submenu) if submenu.searchTerm.nonEmpty =>
-              ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm.dropRight(1))))
-            case Some(_) =>
-              ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
-            case _ =>
-              ReducerResult.noEffects(state)
+          // Backspace always means "delete one character of the current page's text", via
+          // `SettingsSurfaceState.deleteBackward` -- never a navigation, and a no-op when there is no text to delete
+          // (issue #1059's fix: this used to fall through to `exitSubmenuToPreview`, silently navigating up a level
+          // on an empty-text Backspace).
+          ReducerResult.noEffects(replaceRunner(state, _.deleteSubmenuTextBackward))
         else
           currentRunner(state).flatMap(_.editingItemId) match
             case Some(_) =>
@@ -254,11 +244,8 @@ object CommandRunnerReducer:
                 replaceRunner(
                   state,
                   r =>
-                    r.copy(
-                      activeSubmenu =
-                        r.activeSubmenu.map(s => s.copy(editingText = TextEditing.deleteWordBackward(s.editingText))),
-                      statusMessage = None
-                    )
+                    r.withSubmenuEditingText(TextEditing.deleteWordBackward(submenu.editingText))
+                      .copy(statusMessage = None)
                 )
               )
             case Some(submenu) if submenu.searchTerm.nonEmpty =>
@@ -297,11 +284,8 @@ object CommandRunnerReducer:
                 replaceRunner(
                   state,
                   r =>
-                    r.copy(
-                      activeSubmenu =
-                        r.activeSubmenu.map(s => s.copy(editingText = TextEditing.deleteWordForward(s.editingText))),
-                      statusMessage = None
-                    )
+                    r.withSubmenuEditingText(TextEditing.deleteWordForward(submenu.editingText))
+                      .copy(statusMessage = None)
                 )
               )
             case Some(submenu) if submenu.searchTerm.nonEmpty =>
@@ -373,15 +357,7 @@ object CommandRunnerReducer:
           .map(surface => state.copy(persisted = state.persisted.copy(focus = Focus.Surface(surface.id))))
           .getOrElse(state)
         ReducerResult.noEffects(
-          replaceRunner(
-            submenuFocusedState,
-            runner =>
-              runner.copy(
-                previewedGroupId = Some(groupId),
-                activeSubmenu = Some(CommandRunnerSubmenuState(groupId, selectedIndex = index)),
-                submenuSelections = runner.submenuSelections + (groupId -> index)
-              )
-          )
+          replaceRunner(submenuFocusedState, _.selectPreviewSubmenuItem(groupId, index))
         )
 
       case RunnerSelectCategory(category) =>
@@ -515,14 +491,7 @@ object CommandRunnerReducer:
     currentRunner(state).flatMap(_.editingItemId).nonEmpty
 
   private def clearSubmenuEditMode(state: AppState): AppState =
-    replaceRunner(
-      state,
-      runner =>
-        runner.copy(
-          activeSubmenu = runner.activeSubmenu.map(_.copy(editingItemId = None, editingText = "")),
-          statusMessage = None
-        )
-    )
+    replaceRunner(state, runner => runner.cancelSubmenuEditingText.copy(statusMessage = None))
 
   private def clearRootEditMode(state: AppState): AppState =
     replaceRunner(state, _.copy(editingItemId = None, editingText = "", statusMessage = None))
@@ -558,16 +527,7 @@ object CommandRunnerReducer:
                   replaceRunner(
                     state,
                     r =>
-                      r.copy(
-                        activeSubmenu = r.activeSubmenu.map(
-                          _.copy(
-                            editingItemId = Some(item.id),
-                            editingText = "",
-                            recordingItemId = Some(item.id)
-                          )
-                        ),
-                        statusMessage = Some("Press a key or shortcut to assign")
-                      )
+                      r.beginSubmenuRecording(item.id).copy(statusMessage = Some("Press a key or shortcut to assign"))
                   )
                 )
               case Some(_: CommandSurfaceItem.InputItem) if submenu.editingItemId.isEmpty =>
@@ -578,20 +538,7 @@ object CommandRunnerReducer:
                     ReducerResult(
                       state = replaceRunner(
                         state,
-                        r =>
-                          r.copy(
-                            activeSubmenu = r.activeSubmenu.map(
-                              _.copy(
-                                editingItemId = None,
-                                editingText = "",
-                                recordingItemId = None,
-                                pendingRecordedBinding = None,
-                                pendingGlobalHotkeyConflict = None,
-                                pendingFocusedKeymapConflict = None
-                              )
-                            ),
-                            statusMessage = None
-                          )
+                        r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)
                       ),
                       effects = List(
                         AppEffect.ExecuteCommand(
@@ -611,19 +558,7 @@ object CommandRunnerReducer:
                     ReducerResult(
                       state = replaceRunner(
                         state,
-                        r =>
-                          r.copy(
-                            activeSubmenu = r.activeSubmenu.map(
-                              _.copy(
-                                editingItemId = None,
-                                editingText = "",
-                                recordingItemId = None,
-                                pendingRecordedBinding = None,
-                                pendingFocusedKeymapConflict = None
-                              )
-                            ),
-                            statusMessage = None
-                          )
+                        r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)
                       ),
                       effects = List(
                         AppEffect.ExecuteCommand(
@@ -643,20 +578,7 @@ object CommandRunnerReducer:
                     ReducerResult(
                       state = replaceRunner(
                         state,
-                        r =>
-                          r.copy(
-                            activeSubmenu = r.activeSubmenu.map(
-                              _.copy(
-                                editingItemId = None,
-                                editingText = "",
-                                recordingItemId = None,
-                                pendingRecordedBinding = None,
-                                pendingGlobalHotkeyConflict = None,
-                                pendingFocusedKeymapConflict = None
-                              )
-                            ),
-                            statusMessage = None
-                          )
+                        r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)
                       ),
                       effects =
                         List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
@@ -719,12 +641,11 @@ object CommandRunnerReducer:
                           replaceRunner(
                             state,
                             current =>
-                              current.copy(
-                                activeSubmenu = current.activeSubmenu.map(
-                                  _.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))
-                                ),
-                                statusMessage = Some("Press the same key again within 200ms to record a double tap")
-                              )
+                              current
+                                .withPendingRecordedBinding(info, recordedAtMillis)
+                                .copy(statusMessage =
+                                  Some("Press the same key again within 200ms to record a double tap")
+                                )
                           ),
                           List(AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis))
                         )
@@ -771,19 +692,8 @@ object CommandRunnerReducer:
           state = replaceRunner(
             state,
             current =>
-              current.copy(
-                activeSubmenu = current.activeSubmenu.map(
-                  _.copy(
-                    editingItemId = None,
-                    editingText = "",
-                    recordingItemId = None,
-                    pendingRecordedBinding = None,
-                    pendingGlobalHotkeyConflict = None,
-                    pendingFocusedKeymapConflict = None
-                  )
-                ),
-                statusMessage = bareModifierFidelityWarning(current, trigger, binding)
-              )
+              current.clearSubmenuEditingAndRecording
+                .copy(statusMessage = bareModifierFidelityWarning(current, trigger, binding))
           ),
           effects = List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
         )
@@ -816,23 +726,7 @@ object CommandRunnerReducer:
     currentRunner(state).exists(_.activeSubmenu.exists(_.recordingItemId.nonEmpty))
 
   private def clearSubmenuRecording(state: AppState): AppState =
-    replaceRunner(
-      state,
-      runner =>
-        runner.copy(
-          activeSubmenu = runner.activeSubmenu.map(
-            _.copy(
-              editingItemId = None,
-              editingText = "",
-              recordingItemId = None,
-              pendingRecordedBinding = None,
-              pendingGlobalHotkeyConflict = None,
-              pendingFocusedKeymapConflict = None
-            )
-          ),
-          statusMessage = None
-        )
-    )
+    replaceRunner(state, runner => runner.clearSubmenuEditingAndRecording.copy(statusMessage = None))
 
   private def replaceRunner(state: AppState, update: CommandRunner => CommandRunner): AppState =
     state.commandRunnerSurface match

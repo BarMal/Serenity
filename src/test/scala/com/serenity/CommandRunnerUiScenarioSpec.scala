@@ -92,7 +92,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
       runnerFrom(driver.state.unsafeRunSync()).selectedIndex shouldBe 0
     }
 
-  it should "open the dedicated settings surface, search and persist an edit, then dismiss in one action" in {
+  it should "open the dedicated settings surface, search and persist an edit, then dismiss one level at a time" in {
     val driver = UiScenarioDriver.create("dedicated-settings-surface").unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     "open settings".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
@@ -108,7 +108,12 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(Enter).unsafeRunSync()
 
     driver.state.unsafeRunSync().persisted.config.surfaceConfig.blurRadius shouldBe 0.5f
-    driver.dispatch(Escape).unsafeRunSync()
+
+    // issue #1059: Escape now pops one settings level at a time here too, matching the settings-tab-in-palette path
+    // -- the dedicated Settings surface previously fully closed on a single Escape regardless of depth, which was
+    // the bug. Dismissing entirely now takes one Escape per remaining page, so dispatch until it actually closes.
+    while driver.state.unsafeRunSync().commandRunnerSurface.isDefined do driver.dispatch(Escape).unsafeRunSync()
+
     driver.advanceToSettled().unsafeRunSync() shouldBe true
     driver.state.unsafeRunSync().commandRunnerSurface shouldBe None
   }

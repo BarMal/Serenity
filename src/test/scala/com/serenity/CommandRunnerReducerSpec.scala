@@ -973,6 +973,61 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  // issue #1059: Escape now uniformly pops one settings level at a time regardless of entry point (the settings
+  // category tab inside the palette, exercised here, vs. the dedicated Settings surface, exercised in
+  // SettingsSurfaceSpec) -- no more branching on `isSettingsSurface` to always fully deactivate instead of popping.
+  it should "pop one settings level at a time on Escape, matching the dedicated Settings surface" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
+
+    val presetOptions      = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
+    val typographySelected = CommandRunnerReducer.reduce(RunnerSelectSubmenuItem(5), presetOptions, registry).state
+    val typography         = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry).state
+    runnerFrom(typography).activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-fonts")
+
+    val backOnce = CommandRunnerReducer.reduce(Escape, typography, registry)
+    runnerFrom(backOnce.state).activeSubmenu.map(_.groupId) shouldBe Some("settings-preset-edit")
+
+    val backTwice = CommandRunnerReducer.reduce(Escape, backOnce.state, registry)
+    runnerFrom(backTwice.state).activeSubmenu.map(_.groupId) shouldBe Some("settings-ui-presets")
+
+    val backToRoot = CommandRunnerReducer.reduce(Escape, backTwice.state, registry)
+    val rootRunner = runnerFrom(backToRoot.state)
+    rootRunner.activeSubmenu shouldBe None
+    rootRunner.isActive shouldBe true // the palette itself stays open -- this Escape only closed the submenu stack
+  }
+
+  // issue #1059: Backspace only ever deletes text now -- it never falls back to navigating up a level once text is
+  // already empty, which is the bug this migration fixes (see the rewritten SettingsSurfaceSpec test of the same
+  // shape for the dedicated Settings surface).
+  it should "be a no-op on backspace when there is no text to delete, never navigating up a level" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-animation", "animation-steps")
+    val before   = runnerFrom(state).activeSubmenu
+
+    before.flatMap(_.editingItemId) shouldBe None
+    before.map(_.searchTerm) shouldBe Some("")
+
+    val result = CommandRunnerReducer.reduce(RunnerDeleteBackward, state, registry)
+
+    runnerFrom(result.state).activeSubmenu shouldBe before
+  }
+
+  it should "delete a character from the submenu search term via backspace, never navigating up" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-language", "lang-plain-text")
+    val searched = List('j', 'a', 'v').foldLeft(state) { (s, char) =>
+      CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state
+    }
+    runnerFrom(searched).activeSubmenu.map(_.searchTerm) shouldBe Some("jav")
+
+    val afterBackspace = CommandRunnerReducer.reduce(RunnerDeleteBackward, searched, registry)
+    val runner         = runnerFrom(afterBackspace.state)
+
+    runner.activeSubmenu.map(_.searchTerm) shouldBe Some("ja")
+    runner.activeSubmenu.map(_.groupId) shouldBe Some("settings-language")
+  }
+
   it should "preserve preset submenu ancestry when entering a nested settings group from search results" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry

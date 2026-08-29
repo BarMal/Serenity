@@ -99,37 +99,42 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('9')).unsafeRunSync()
     currentRunner(stateManager).activeSubmenu.flatMap(_.editingItemId) shouldBe Some("animation-duration")
 
+    // Escape #1: cancels the in-progress edit, staying on the same (child) submenu page.
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterFirstEscape = stateManager.getCurrentState.unsafeRunSync()
     afterFirstEscape.commandRunnerSurface shouldBe defined
     afterFirstEscape.commandRunnerSubmenuSurface shouldBe defined
     afterFirstEscape.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
     currentRunner(stateManager).activeSubmenu.flatMap(_.editingItemId) shouldBe None
+    currentRunner(stateManager).activeSubmenu.map(_.groupId) shouldBe Some("settings-animation")
 
+    // Escape #2: pops from the child submenu ("settings-animation") to its parent -- still a submenu page, so focus
+    // stays on the submenu surface.
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterSecondEscape = stateManager.getCurrentState.unsafeRunSync()
     afterSecondEscape.commandRunnerSurface shouldBe defined
     afterSecondEscape.commandRunnerSubmenuSurface shouldBe defined
     afterSecondEscape.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    currentRunner(stateManager).activeSubmenu.flatMap(_.parentGroupId) shouldBe None
 
+    // Escape #3: pops the parent (a top-level group, with no ancestor of its own) -- issue #1059's fix: this now
+    // correctly clears the settings-surface stack in a single step. (The pre-fix `exitSubmenuToPreview` computed a
+    // self-referential `parentGroupId` for a revealed top-level page, which used to take one extra, spurious Escape
+    // to actually leave -- this test previously encoded that bug as 5 total escapes to fully dismiss; it's 4 now.)
+    // Focus returns to the main command-runner surface.
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterThirdEscape = stateManager.getCurrentState.unsafeRunSync()
     afterThirdEscape.commandRunnerSurface shouldBe defined
-    afterThirdEscape.commandRunnerSubmenuSurface shouldBe defined
-    afterThirdEscape.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    afterThirdEscape.persisted.focus shouldBe Focus.Surface(afterThirdEscape.commandRunnerSurface.get.id)
+    currentRunner(stateManager).activeSubmenu shouldBe None
 
+    // Escape #4: nothing left to pop, dismisses the whole command runner.
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterFourthEscape = stateManager.getCurrentState.unsafeRunSync()
-    afterFourthEscape.commandRunnerSurface shouldBe defined
-    afterFourthEscape.commandRunnerSubmenuSurface shouldBe defined
-    afterFourthEscape.persisted.focus shouldBe Focus.Surface(afterFourthEscape.commandRunnerSurface.get.id)
-
-    stateManager.applyEvent(Escape).unsafeRunSync()
-    val afterFifthEscape = stateManager.getCurrentState.unsafeRunSync()
-    afterFifthEscape.commandRunnerSurface shouldBe None
-    afterFifthEscape.commandRunnerSubmenuSurface shouldBe None
-    afterFifthEscape.persisted.focus should not be Focus.Surface(SurfaceId("command-runner"))
-    afterFifthEscape.persisted.focus should not be Focus.Surface(SurfaceId("command-runner-submenu"))
+    afterFourthEscape.commandRunnerSurface shouldBe None
+    afterFourthEscape.commandRunnerSubmenuSurface shouldBe None
+    afterFourthEscape.persisted.focus should not be Focus.Surface(SurfaceId("command-runner"))
+    afterFourthEscape.persisted.focus should not be Focus.Surface(SurfaceId("command-runner-submenu"))
   }
 
   it should "close the runner even if focus has leaked back to the editor while the runner remains visible" in {

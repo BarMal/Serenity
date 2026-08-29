@@ -306,6 +306,187 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     runner.settingsSurfaceBreadcrumbLabels shouldBe List("Settings", "Surface Appearance")
   }
 
+  // The mutators below are new this turn, added to let CommandRunnerReducer eliminate every direct
+  // CommandRunnerSubmenuState/activeSubmenu construction of its own (issue #1059) -- see the migration report for
+  // where each replaces reducer code that used to hand-build activeSubmenu without touching activeSettingsSurface.
+
+  "withSubmenuEditingItem" should "begin editing a specific item with the given text" in {
+    val level2 = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+
+    val editing = level2.withSubmenuEditingItem("blur-radius", "1")
+
+    editing.activeSettingsSurface.map(_.current) shouldBe Some(
+      SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "blur-radius", draftText = "1")
+    )
+    editing.activeSubmenu.map(s => s.editingItemId -> s.editingText) shouldBe Some(Some("blur-radius") -> "1")
+  }
+
+  it should "continue (replace) the edit when called again for the same item" in {
+    val started = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+      .withSubmenuEditingItem("blur-radius", "1")
+
+    val continued = started.withSubmenuEditingItem("blur-radius", "12")
+
+    continued.activeSettingsSurface.map(_.current) shouldBe Some(
+      SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "blur-radius", draftText = "12")
+    )
+  }
+
+  it should "be a no-op with no active submenu" in {
+    val runner = opened
+    runner.withSubmenuEditingItem("blur-radius", "1") shouldBe runner
+  }
+
+  "withSubmenuEditingText" should "replace the currently-edited item's draft text" in {
+    val editing = editingBlurRadius
+
+    val updated = editing.withSubmenuEditingText("12")
+
+    updated.activeSettingsSurface.map(_.current) shouldBe Some(
+      SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "blur-radius", draftText = "12")
+    )
+    updated.activeSubmenu.map(_.editingText) shouldBe Some("12")
+  }
+
+  it should "be a no-op when nothing is being edited" in {
+    val level2 = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+
+    level2.withSubmenuEditingText("x") shouldBe level2
+  }
+
+  "cancelSubmenuEditingText" should "cancel an in-progress edit, reverting to a Group page" in {
+    val editing = editingBlurRadius
+
+    val cancelled = editing.cancelSubmenuEditingText
+
+    cancelled.activeSettingsSurface.map(_.current) shouldBe Some(SettingsPage.Group("settings-surface-appearance", 4))
+    cancelled.activeSubmenu.map(s => s.editingItemId -> s.editingText) shouldBe Some(None -> "")
+  }
+
+  "beginSubmenuRecording" should "begin an Editing page tagged with a fresh RecordingState" in {
+    val level2 = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+
+    val recording = level2.beginSubmenuRecording("blur-radius")
+
+    recording.activeSettingsSurface.map(_.current) shouldBe Some(
+      SettingsPage.Editing(
+        groupId = "settings-surface-appearance",
+        itemId = "blur-radius",
+        draftText = "",
+        recording = Some(RecordingState("blur-radius"))
+      )
+    )
+    recording.activeSubmenu.map(s => (s.editingItemId, s.editingText, s.recordingItemId)) shouldBe
+      Some((Some("blur-radius"), "", Some("blur-radius")))
+  }
+
+  "withPendingRecordedBinding" should "stash a pending keystroke on the current Editing page's RecordingState" in {
+    val level2 = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+    val recording = level2.beginSubmenuRecording("blur-radius")
+    val info      = com.serenity.keystroke.KeyStrokeInfo(com.serenity.keystroke.InputKey.Ctrl, None, Set.empty)
+
+    val pending = recording.withPendingRecordedBinding(info, 100L)
+
+    pending.activeSettingsSurface.map(_.current) shouldBe Some(
+      SettingsPage.Editing(
+        groupId = "settings-surface-appearance",
+        itemId = "blur-radius",
+        draftText = "",
+        recording = Some(RecordingState("blur-radius", pendingRecordedBinding = Some(info -> 100L)))
+      )
+    )
+    pending.activeSubmenu.flatMap(_.pendingRecordedBinding) shouldBe Some(info -> 100L)
+  }
+
+  "clearSubmenuEditingAndRecording" should "clear all editing/recording sub-state, reverting to a Group page" in {
+    val level2 = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+    val info      = com.serenity.keystroke.KeyStrokeInfo(com.serenity.keystroke.InputKey.Ctrl, None, Set.empty)
+    val recording = level2.beginSubmenuRecording("blur-radius").withPendingRecordedBinding(info, 100L)
+
+    val cleared = recording.clearSubmenuEditingAndRecording
+
+    cleared.activeSettingsSurface.map(_.current) shouldBe Some(SettingsPage.Group("settings-surface-appearance", 0))
+    cleared.activeSubmenu.map(s =>
+      (s.editingItemId, s.editingText, s.recordingItemId, s.pendingRecordedBinding)
+    ) shouldBe Some((None, "", None, None))
+  }
+
+  "deleteSubmenuTextBackward" should "delete one character of an Editing page's draft text" in {
+    val editing = editingBlurRadius.withSubmenuEditingItem("blur-radius", "12")
+
+    val deleted = editing.deleteSubmenuTextBackward
+
+    deleted.activeSettingsSurface.map(_.current) shouldBe Some(
+      SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "blur-radius", draftText = "1")
+    )
+    deleted.activeSubmenu.map(_.editingText) shouldBe Some("1")
+  }
+
+  it should "delete one character of a Group page's search term" in {
+    val searched = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+      .updateSubmenuSearch("blur")
+
+    val deleted = searched.deleteSubmenuTextBackward
+
+    deleted.activeSettingsSurface.map(_.current) shouldBe Some(
+      SettingsPage.Group("settings-surface-appearance", 0, "blu")
+    )
+    deleted.activeSubmenu.map(_.searchTerm) shouldBe Some("blu")
+  }
+
+  it should "be a no-op with no text to delete -- never navigating the stack (issue #1059)" in {
+    val level2 = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+
+    level2.deleteSubmenuTextBackward shouldBe level2
+  }
+
+  it should "be a no-op with no activeSettingsSurface" in {
+    val runner = opened
+    runner.deleteSubmenuTextBackward shouldBe runner
+  }
+
+  "selectPreviewSubmenuItem" should "start a fresh, ancestor-less single-page stack at the given index" in {
+    val selected = opened.selectPreviewSubmenuItem("settings-surface-appearance", 2)
+
+    selected.activeSettingsSurface shouldBe Some(
+      SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance", 2))
+    )
+    selected.activeSubmenu shouldBe Some(CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 2))
+    selected.previewedGroupId shouldBe Some("settings-surface-appearance")
+  }
+
   "activeSettingsSurface" should "always be defined exactly when activeSubmenu is, across the full migrated surface" in {
     given CommandRegistry = registry
     val steps: List[CommandRunner => CommandRunner] = List(
