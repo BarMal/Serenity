@@ -1,5 +1,6 @@
 package com.serenity.ui.renderer
 
+import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
@@ -193,6 +194,23 @@ object Renderer:
     */
   private val screenDamage  = new java.util.WeakHashMap[ScreenIdentity, Damage]()
   private val screenPaneIds = new java.util.WeakHashMap[ScreenIdentity, Set[PaneId]]()
+
+  /** What [[paintModalLayer]] cached the last time it painted the modal layer into its own buffer (#1100 stage 2): the
+    * flushed image, and the frame shape/cursor-blink state it was painted for. Reused only when a later frame's modal
+    * layer is clean (see [[DamageProducer]]'s `modalOnlyContentChange`) *and* still matches both fields -- a viewport
+    * resize or a blink toggle invalidates the cache even though neither is `AppState`, so a stale buffer is never
+    * composited over a frame it no longer matches. One slot, not keyed by frame-buffer identity, because exactly one
+    * modal is ever open at a time and the cached image is just a source for `drawImage`, independent of which of the
+    * (possibly pooled) frame buffers it gets composited onto.
+    */
+  final private case class CachedModalLayer(
+      image: BufferedImage,
+      viewportWidth: Int,
+      viewportHeight: Int,
+      cursorVisible: Boolean
+  )
+
+  private val modalLayerBufferRef = new AtomicReference[Option[CachedModalLayer]](None)
 
   /** Folds `damage` into every buffer identity already being tracked for `output`'s screen (every identity, if there is
     * no output to scope by), via [[DamageAccumulator.accumulateBuffers]] -- called unconditionally on every frame,
@@ -1069,12 +1087,11 @@ object Renderer:
   private val ModalLayerId          = LayerId("modal")
 
   /** Paint one frame's editor content as an explicit, z-ordered stack of layers rather than a hard-coded sequence of
-    * calls -- the compositing seam #1100 introduces. `Renderer` still paints every layer directly into the shared
-    * `context.surface` (no layer owns a buffer of its own yet), so [[LayerCompositor.orderedForComposite]] resolving to
-    * today's existing paint order is the whole of what changes visually here: nothing. Every layer shares this frame's
-    * own `damage`, since nothing upstream reports damage scoped to an individual pinned panel, floating overlay or
-    * modal yet -- that per-layer damage, and the per-layer buffers needed to safely skip a layer whose damage is empty,
-    * is the follow-up this issue's staging plan defers.
+    * calls -- the compositing seam #1100 introduces. Every layer except the modal still paints directly into the shared
+    * `context.surface` (no buffer of its own), so for those, [[LayerCompositor.orderedForComposite]] resolving to
+    * today's existing paint order is the whole of what changes visually: nothing. The modal layer is the first to own a
+    * real per-surface buffer and consume [[LayerCompositor.dirtyLayers]] (#1100 stage 2) -- see [[paintModalLayer]] for
+    * why it, specifically, is safe to cache and skip while the others aren't yet.
     */
   private def paintFrameLayers(
     state: AppState,
@@ -1084,13 +1101,16 @@ object Renderer:
     framePlan: Option[FramePlan],
     damage: Damage
   ): Unit =
+    val modalSurfaceId = currentModalSurfaceId(state)
+    val modalDamage    = modalSurfaceId.fold(Damage.Nothing: Damage)(id => Damage.narrowToSurface(damage, id))
     val layers = List(
       Layer(ChromeLayerId, zOrder = 0, LayerEffect.identity, damage),
       Layer(EditorContentLayerId, zOrder = 1, LayerEffect.identity, damage),
       Layer(PinnedPanelsLayerId, zOrder = 2, LayerEffect.identity, damage),
       Layer(FloatingPanelsLayerId, zOrder = 3, LayerEffect.identity, damage),
-      Layer(ModalLayerId, zOrder = 4, LayerEffect.identity, damage)
+      Layer(ModalLayerId, zOrder = 4, LayerEffect.identity, modalDamage)
     )
+    val dirtyLayerIds = LayerCompositor.dirtyLayers(layers).map(_.id).toSet
     val paintByLayer: Map[LayerId, () => Unit] = Map(
       ChromeLayerId -> { () =>
         renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
@@ -1107,9 +1127,76 @@ object Renderer:
       },
       PinnedPanelsLayerId   -> { () => renderPinnedPanels(state, context, scene) },
       FloatingPanelsLayerId -> { () => renderFloatingPanels(state, context, scene) },
-      ModalLayerId          -> { () => renderModalLayer(state, context, scene) }
+      ModalLayerId          -> { () => paintModalLayer(state, context, scene, dirtyLayerIds.contains(ModalLayerId)) }
     )
     LayerCompositor.orderedForComposite(layers).foreach(layer => paintByLayer(layer.id)())
+
+  /** The `SurfaceId` of the surface currently presented as [[SurfacePresentation.Modal]], if any -- at most one is ever
+    * open at a time. `None` means the modal layer has nothing to paint this frame, matching `renderModalLayer`'s own
+    * `scene.modalBackdrop.foreach` no-op.
+    */
+  private def currentModalSurfaceId(state: AppState): Option[SurfaceId] =
+    state.runtime.uiSurfaces.collectFirst { case UiSurface(id, _, SurfacePresentation.Modal, _) => id }
+
+  /** Paint the modal layer, reusing its last-painted buffer instead of repainting when it's safe to: the surface
+    * supports [[LayerBufferSupport]] (GUI/Java2D only -- a `TerminalRenderSurface` reports `layerBuffers = None` and
+    * this falls straight through to `renderModalLayer`, painting directly into the shared surface every frame exactly
+    * as before this stage, since a terminal has no sub-cell buffering concept to give the modal its own buffer with),
+    * the modal is actually present this frame (`scene.modalBackdrop` is defined), the layer is clean (`isDirty` is
+    * false, i.e. `DamageProducer`'s `modalOnlyContentChange` carve-out held for this transition), and the cached image
+    * still matches this frame's viewport size and cursor-blink state.
+    *
+    * Painting `renderModalLayer` into a fresh, fully-transparent [[LayerBufferSupport.newLayerSurface]] instead of
+    * `context.surface` directly, then compositing the result back at full opacity, is pixel-identical to painting
+    * directly -- see [[Java2DRenderSurface.newLayerSurface]]'s doc comment for why, and for the one correctness
+    * precondition (`renderModalLayer` never reads pixels back off the surface it paints onto) that keeps this safe for
+    * the modal specifically while pinned/expanded panels (which do, via `blurRegion`) aren't yet covered.
+    */
+  private def paintModalLayer(
+    state: AppState,
+    context: RenderContext,
+    scene: UiSceneSnapshot,
+    isDirty: Boolean
+  ): Unit =
+    context.surface.layerBuffers match
+      case None => renderModalLayer(state, context, scene)
+      case Some(support) =>
+        scene.modalBackdrop match
+          case None =>
+            modalLayerBufferRef.set(None)
+          case Some(_) =>
+            val cached = modalLayerBufferRef.get()
+            val reusable = !isDirty && cached.exists { c =>
+              c.viewportWidth == context.surface.viewportWidth &&
+              c.viewportHeight == context.surface.viewportHeight &&
+              c.cursorVisible == context.cursorVisible
+            }
+            if reusable then
+              cached.foreach(c => context.surface.pixels.drawImage(c.image, 0, 0, c.viewportWidth, c.viewportHeight))
+            else
+              val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
+              val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)))
+              renderModalLayer(state, context.copy(surface = layerSurface), scene)
+              layerSurface.flush()
+              capturedRef.get().foreach { image =>
+                modalLayerBufferRef.set(
+                  Some(
+                    CachedModalLayer(
+                      image,
+                      context.surface.viewportWidth,
+                      context.surface.viewportHeight,
+                      context.cursorVisible
+                    )
+                  )
+                )
+                context.surface.pixels.drawImage(
+                  image,
+                  0,
+                  0,
+                  context.surface.viewportWidth,
+                  context.surface.viewportHeight
+                )
+              }
 
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *

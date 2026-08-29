@@ -34,12 +34,34 @@ class Java2DRenderSurface(
     with TextDrawing
     with PixelDrawing
     with Effects
-    with RoundedRectDrawing:
+    with RoundedRectDrawing
+    with LayerBufferSupport:
   def text: TextDrawing                                 = this
   def pixels: PixelDrawing                              = this
   override def effects: Option[Effects]                 = Some(this)
   override def roundedRects: Option[RoundedRectDrawing] = Some(this)
-  private val g: Graphics2D                             = image.createGraphics()
+  override def layerBuffers: Option[LayerBufferSupport] = Some(this)
+
+  /** A fresh, fully transparent surface with this surface's own metrics/font/logical-size/device-scale -- derived
+    * entirely from values this surface already computed, not from a `JPanel` (see [[Java2DRenderSurface.forLayer]] for
+    * why that matters). Painting the same content into it at the same cell coordinates as painting directly into this
+    * surface, then compositing the flushed image back on top of this surface at full opacity, is pixel-identical to
+    * painting directly here -- standard "paint onto transparent, then composite over" associativity for `SRC_OVER` --
+    * as long as the caller never reads this surface's own pixels back while painting the layer (no `blurRegion`, no
+    * shadow sampling): `Renderer`'s modal layer, the first consumer of this seam, satisfies that.
+    */
+  override def newLayerSurface(onFlush: BufferedImage => Unit): RenderSurface =
+    Java2DRenderSurface.forLayer(
+      metrics,
+      baseFontRef.get(),
+      effectiveLogicalWidthPx,
+      effectiveLogicalHeightPx,
+      deviceScaleX,
+      deviceScaleY,
+      onFlush
+    )
+
+  private val g: Graphics2D = image.createGraphics()
   private val effectiveLogicalWidthPx =
     if logicalWidthPx > 0 then logicalWidthPx else image.getWidth
   private val effectiveLogicalHeightPx =
@@ -562,6 +584,40 @@ object Java2DRenderSurface:
       logicalHeightPx = logicalHeight,
       deviceScaleX = scale.x,
       deviceScaleY = scale.y
+    )
+
+  /** Build a layer surface from numbers alone -- no `JPanel` required, unlike [[forFrame]]/[[forImage]]. Stage 1 of
+    * #1100 flagged those two as "tied to a Swing `JPanel` for device-scale/logical-size derivation" as the open design
+    * problem blocking per-surface buffering; this resolves it by deriving the same inputs from an existing
+    * [[Java2DRenderSurface]] that already computed them (see [[Java2DRenderSurface.newLayerSurface]]) instead of from a
+    * canvas. The resulting image starts fully transparent (`TYPE_INT_ARGB`'s zero value), and is never reused across
+    * calls (`contentPersists = false`) -- each call to [[LayerBufferSupport.newLayerSurface]] hands back a brand-new
+    * buffer for its caller to composite and then own the lifetime of.
+    */
+  def forLayer(
+    metrics: CellMetrics,
+    font: Font,
+    logicalWidthPx: Int,
+    logicalHeightPx: Int,
+    deviceScaleX: Double,
+    deviceScaleY: Double,
+    onFlush: BufferedImage => Unit
+  ): Java2DRenderSurface =
+    val image = new BufferedImage(
+      deviceImageDimension(logicalWidthPx, deviceScaleX),
+      deviceImageDimension(logicalHeightPx, deviceScaleY),
+      BufferedImage.TYPE_INT_ARGB
+    )
+    new Java2DRenderSurface(
+      image,
+      metrics,
+      font,
+      onFlush,
+      logicalWidthPx = logicalWidthPx,
+      logicalHeightPx = logicalHeightPx,
+      deviceScaleX = deviceScaleX,
+      deviceScaleY = deviceScaleY,
+      contentPersists = false
     )
 
   private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
