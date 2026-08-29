@@ -175,10 +175,12 @@ final case class CommandRunner(
     submenuSelections: Map[String, Int] = Map.empty,
     previewedGroupId: Option[String] = None,
     activeSubmenu: Option[CommandRunnerSubmenuState] = None,
-    // The page-stack replacement for `activeSubmenu` (issue #1059). Written alongside `activeSubmenu` by the methods
-    // that have been migrated onto it so far; nothing reads it yet (`CommandRunnerReducer`/`SurfaceContentResolver`
-    // still read `activeSubmenu`), and methods not yet migrated leave it as-is rather than keeping it in sync -- see
-    // the migration notes on those methods below.
+    // The page-stack replacement for `activeSubmenu` (issue #1059). Every method that touches `activeSubmenu` now
+    // keeps this in sync as a faithful mirror -- `activeSettingsSurface.isDefined == activeSubmenu.isDefined`, its
+    // `current`/`ancestors` track `activeSubmenu`'s `groupId`/`selectedIndex`/`searchTerm`/`ancestorGroupIds` -- so the
+    // two never drift regardless of which methods a caller chains. `CommandRunnerReducer`/`SurfaceContentResolver`
+    // still read only `activeSubmenu`; `activeSubmenu` stays authoritative (and is not deleted) until they're migrated
+    // too.
     activeSettingsSurface: Option[SettingsSurfaceState] = None,
     statusMessage: Option[String] = None,
     uiPresetPreviews: List[UiPreset.Preview] = Nil,
@@ -232,6 +234,7 @@ final case class CommandRunner(
       filteredCommands = filtered,
       previewedGroupId = None,
       activeSubmenu = None,
+      activeSettingsSurface = None,
       recordingItemId = None,
       statusMessage = None
     )
@@ -270,6 +273,13 @@ final case class CommandRunner(
       statusMessage = None
     )
 
+  // settingsSurfaceItems/settingsSurfaceSelectedIndex/settingsSurfaceBreadcrumbLabels stay sourced from
+  // `activeSubmenu`, not `activeSettingsSurface`, deliberately: `SurfaceContentResolver` and
+  // `CommandRunnerMouseHitTesting` call these, and both remain unmigrated this turn, still authoritative on
+  // `activeSubmenu` alone. Flipping the source here would silently change their observable output for any
+  // `CommandRunner` value built by setting `activeSubmenu` directly (as several existing specs do) rather than
+  // through the migrated mutators above -- see the deviation note in the migration report. These stay unchanged
+  // until the resolver migration (next turn) makes the flip safe.
   def settingsSurfaceItems: List[CommandSurfaceItem] =
     activeSubmenu match
       case Some(submenu)               => submenu.filteredItems(submenuItems(submenu.groupId))
@@ -291,7 +301,7 @@ final case class CommandRunner(
     copy(previewedGroupId = Some(groupId))
 
   def clearGroupPreview: CommandRunner =
-    copy(previewedGroupId = None, activeSubmenu = None)
+    copy(previewedGroupId = None, activeSubmenu = None, activeSettingsSurface = None)
 
   def enterSelectedGroup: CommandRunner =
     selectedItem match
@@ -437,6 +447,10 @@ final case class CommandRunner(
       current ++ groupPaths(groupId, childGroups).map(group.id :: _)
     }
 
+  // Same rationale as settingsSurfaceItems above: focusedSubmenuItems and submenuBreadcrumbLabels are read by
+  // CommandRunnerReducer-driven states (see CommandRunnerReducerSpec), which does not yet route every activeSubmenu
+  // write through the migrated mutators -- e.g. it builds CommandRunnerSubmenuState directly in places -- so
+  // activeSettingsSurface is not reliably populated there yet. Left reading activeSubmenu.
   def focusedSubmenuItems: List[CommandSurfaceItem] =
     activeSubmenu.toList.flatMap(submenu => submenu.filteredItems(submenuItems(submenu.groupId)))
 
@@ -558,7 +572,8 @@ final case class CommandRunner(
       activeCategory = category,
       selectedIndex = 0,
       previewedGroupId = None,
-      activeSubmenu = None
+      activeSubmenu = None,
+      activeSettingsSurface = None
     ).updateSearchTerm("").syncEditMode
 
   def switchCategory(delta: Int)(using registry: CommandRegistry): CommandRunner =
@@ -608,6 +623,11 @@ final case class CommandRunner(
                 pendingGlobalHotkeyConflict = None,
                 pendingFocusedKeymapConflict = None
               )
+            ),
+            // As with moveSubmenuSelection: setting an index directly always exits edit mode, so this is always
+            // rebuilt as a Group.
+            activeSettingsSurface = activeSettingsSurface.map(surface =>
+              surface.copy(current = SettingsPage.Group(submenu.groupId, index, surface.current.searchTerm))
             )
           )
         else this
@@ -670,6 +690,7 @@ final case class CommandRunner(
       submenuSelections = Map.empty,
       previewedGroupId = None,
       activeSubmenu = None,
+      activeSettingsSurface = None,
       uiPresetPreviews = Nil,
       editingPresetName = None
     )

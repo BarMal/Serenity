@@ -12,9 +12,19 @@ import org.scalatest.matchers.should.Matchers
   * behavior change. `CommandRunnerReducer`/`SurfaceContentResolver` are not touched or exercised here -- they still
   * read only `activeSubmenu`, unchanged.
   *
-  * Setup chains below use only the nine migrated methods (`moveSubmenuSelection` in particular, rather than
-  * `withSelectedFocusedSubmenuIndex`) whenever a scenario needs `activeSettingsSurface` to be trustworthy --
-  * `withSelectedFocusedSubmenuIndex` is not migrated this turn, so it would silently leave the new field stale.
+  * Every *writer* of `activeSubmenu` now keeps `activeSettingsSurface` in sync as a faithful mirror (see the final
+  * "always be defined exactly when activeSubmenu is" case for the full-surface consistency check), so setup chains
+  * below are free to use whichever method reads most naturally for the scenario.
+  *
+  * Deviation: `settingsSurfaceItems`/`settingsSurfaceSelectedIndex`/`settingsSurfaceBreadcrumbLabels`/
+  * `focusedSubmenuItems`/`submenuBreadcrumbLabels` -- the *readers* -- were deliberately left sourced from
+  * `activeSubmenu`, not switched to `activeSettingsSurface`, even though they were in this turn's migration list.
+  * `SurfaceContentResolver` and `CommandRunnerMouseHitTesting` call several of these, and neither is migrated this
+  * turn; both existing specs (`SettingsSurfaceSpec`, `SurfaceContentResolverSpec`) and `CommandRunnerReducerSpec` build
+  * `CommandRunner` values by setting `activeSubmenu` directly (bypassing the migrated mutators), so switching these
+  * readers to `activeSettingsSurface` desyncs them from a field that's `None` in those states and breaks rendering --
+  * confirmed by two real spec failures during this migration, reverted here. They stay on `activeSubmenu` until the
+  * resolver migration (a later turn) makes the flip safe; the cases below just confirm their behavior is unchanged.
   */
 class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matchers:
 
@@ -166,6 +176,162 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
 
     adjusted.activeSettingsSurface shouldBe level2.activeSettingsSurface
     adjusted.optionSelections should not be level2.optionSelections
+  }
+
+  "withSelectedFocusedSubmenuIndex" should "set the current page's index directly, mirroring moveSubmenuSelection" in {
+    val level1 = opened.withSelectedItem("settings-appearance-motion").enterSelectedGroup
+
+    val moved = level1.withSelectedFocusedSubmenuIndex(3)
+
+    moved.activeSettingsSurface shouldBe Some(SettingsSurfaceState(SettingsPage.Group("settings-appearance-motion", 3)))
+    moved.activeSubmenu.map(_.selectedIndex) shouldBe Some(3)
+  }
+
+  it should "drop an Editing page back to Group" in {
+    val editing = editingBlurRadius
+
+    val moved = editing.withSelectedFocusedSubmenuIndex(2)
+
+    moved.activeSettingsSurface.map(_.current) shouldBe Some(SettingsPage.Group("settings-surface-appearance", 2))
+  }
+
+  "clearGroupPreview" should "close the whole settings-surface stack" in {
+    val level1 = opened.withSelectedItem("settings-appearance-motion").enterSelectedGroup
+
+    val cleared = level1.clearGroupPreview
+
+    cleared.activeSettingsSurface shouldBe None
+    cleared.previewedGroupId shouldBe None
+  }
+
+  "deactivate" should "clear the settings-surface stack along with everything else" in {
+    val active = editingBlurRadius
+
+    val deactivated = active.deactivate
+
+    deactivated.activeSettingsSurface shouldBe None
+    deactivated.activeSubmenu shouldBe None
+  }
+
+  "withActiveCategory" should "close the settings-surface stack when switching categories" in {
+    given CommandRegistry = registry
+    val level1            = opened.withSelectedItem("settings-appearance-motion").enterSelectedGroup
+
+    val switched = level1.withActiveCategory(CommandCategory.File)
+
+    switched.activeSettingsSurface shouldBe None
+    switched.activeSubmenu shouldBe None
+  }
+
+  "updateSearchTerm" should "close the settings-surface stack" in {
+    given CommandRegistry = registry
+    val level1            = opened.withSelectedItem("settings-appearance-motion").enterSelectedGroup
+
+    val searched = level1.updateSearchTerm("foo")
+
+    searched.activeSettingsSurface shouldBe None
+    searched.activeSubmenu shouldBe None
+  }
+
+  // The five reader methods below (focusedSubmenuItems, settingsSurfaceItems, settingsSurfaceSelectedIndex,
+  // settingsSurfaceBreadcrumbLabels, submenuBreadcrumbLabels) are asserted here to confirm they are UNCHANGED --
+  // still sourced from activeSubmenu -- per the class doc's deviation note. These are not new assertions about
+  // activeSettingsSurface; they exist so a future accidental re-flip of these readers fails a test here rather than
+  // silently breaking SurfaceContentResolver/CommandRunnerMouseHitTesting rendering, as it did twice during this
+  // migration before being caught and reverted.
+
+  "focusedSubmenuItems" should "stay sourced from activeSubmenu, unfiltered" in {
+    val level1 = opened.withSelectedItem("settings-appearance-motion").enterSelectedGroup
+
+    level1.focusedSubmenuItems.map(_.id) shouldBe level1.submenuItems("settings-appearance-motion").map(_.id)
+  }
+
+  it should "stay sourced from activeSubmenu, applying its search filter" in {
+    val searched = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .updateSubmenuSearch("appearance")
+
+    searched.focusedSubmenuItems shouldBe searched.activeSubmenu
+      .map(_.filteredItems(searched.submenuItems("settings-appearance-motion")))
+      .getOrElse(Nil)
+    searched.focusedSubmenuItems.map(_.id) should contain("settings-surface-appearance")
+  }
+
+  "settingsSurfaceItems" should "stay sourced from activeSubmenu once inside a group" in {
+    val level1 = opened.withSelectedItem("settings-appearance-motion").enterSelectedGroup
+
+    level1.settingsSurfaceItems.map(_.id) shouldBe level1.submenuItems("settings-appearance-motion").map(_.id)
+  }
+
+  "settingsSurfaceSelectedIndex" should "stay sourced from activeSubmenu.selectedIndex, including while editing" in {
+    val editing = editingBlurRadius
+
+    editing.settingsSurfaceSelectedIndex shouldBe 4
+    editing.settingsSurfaceSelectedIndex shouldBe editing.activeSubmenu.map(_.selectedIndex).getOrElse(-1)
+  }
+
+  "settingsSurfaceBreadcrumbLabels" should "stay sourced from activeSubmenu" in {
+    val level2 = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+
+    level2.settingsSurfaceBreadcrumbLabels shouldBe List("Settings", "Appearance & Motion", "Surface Appearance")
+  }
+
+  "submenuBreadcrumbLabels" should "stay sourced from activeSubmenu.ancestorGroupIds" in {
+    val level2 = opened
+      .withSelectedItem("settings-appearance-motion")
+      .enterSelectedGroup
+      .moveSubmenuSelection(1)
+      .enterSelectedSubmenuGroup
+
+    level2.submenuBreadcrumbLabels("settings-surface-appearance") shouldBe List(
+      "Appearance & Motion",
+      "Surface Appearance"
+    )
+  }
+
+  it should "not require activeSettingsSurface at all -- a directly-constructed activeSubmenu still renders" in {
+    // Mirrors how SettingsSurfaceSpec/SurfaceContentResolverSpec/CommandRunnerReducerSpec build states: setting
+    // activeSubmenu via a raw copy, bypassing every migrated mutator, leaving activeSettingsSurface at its default
+    // None. This is exactly the shape that broke when these readers were briefly switched to activeSettingsSurface.
+    val runner = opened.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance")))
+
+    runner.activeSettingsSurface shouldBe None
+    runner.settingsSurfaceItems.map(_.id) shouldBe runner.submenuItems("settings-surface-appearance").map(_.id)
+    runner.settingsSurfaceSelectedIndex shouldBe 0
+    runner.settingsSurfaceBreadcrumbLabels shouldBe List("Settings", "Surface Appearance")
+  }
+
+  "activeSettingsSurface" should "always be defined exactly when activeSubmenu is, across the full migrated surface" in {
+    given CommandRegistry = registry
+    val steps: List[CommandRunner => CommandRunner] = List(
+      _.withSelectedItem("settings-appearance-motion"),
+      _.enterSelectedGroup,
+      _.withSelectedFocusedSubmenuIndex(1),
+      _.enterSelectedSubmenuGroup,
+      _.moveSubmenuSelection(4),
+      _.beginSubmenuEditMode,
+      _.normalizeSubmenuEditMode,
+      _.updateSubmenuSearch("blur"),
+      _.exitSubmenuToPreview,
+      _.clearGroupPreview,
+      _.openSettings,
+      _.withSelectedItem("settings-appearance-motion"),
+      _.enterSelectedGroup,
+      _.updateSearchTerm("q"),
+      _.withActiveCategory(CommandCategory.Settings),
+      _.deactivate
+    )
+
+    steps.foldLeft(opened) { (runner, step) =>
+      val next = step(runner)
+      next.activeSettingsSurface.isDefined shouldBe next.activeSubmenu.isDefined
+      next
+    }
   }
 
   /** Navigates to Appearance & Motion > Surface Appearance > blur-radius (index 4 of 5) and begins editing it -- the
