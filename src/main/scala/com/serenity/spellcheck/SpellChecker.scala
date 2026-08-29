@@ -40,7 +40,10 @@ object SpellChecker:
       replacements: Map[String, List[String]],
       failures: List[String],
       iconv: List[(String, String)],
-      oconv: List[(String, String)]
+      oconv: List[(String, String)],
+      compoundRules: List[String],
+      compoundMin: Int,
+      compoundWordFlags: Map[String, Set[String]]
   )
 
   /** Immutable, already-loaded dictionary data that pure analysis (`analyzeText`, `refreshDiagnostics`) consumes.
@@ -48,13 +51,21 @@ object SpellChecker:
     *
     * `iconv`/`oconv` are the merged Hunspell ICONV/OCONV conversion tables (issue #1182) across every loaded
     * dictionary, applied respectively to words before dictionary lookup and to REP-based suggestions before display.
+    *
+    * `compoundRules`/`compoundMin`/`compoundWordFlags` (issue #1187) back Hunspell COMPOUNDRULE matching: the raw
+    * `COMPOUNDRULE` pattern strings, the merged `COMPOUNDMIN` (minimum compound-member length, default 3), and every
+    * dictionary word's flags keyed by its normalized text -- the same shape `matchesCompoundRule` needs to recognize an
+    * unmatched word as a valid compound without re-reading the filesystem.
     */
   final case class DictionaryContext(
       words: Set[String],
       replacements: Map[String, List[String]],
       failures: List[String],
       iconv: List[(String, String)] = Nil,
-      oconv: List[(String, String)] = Nil
+      oconv: List[(String, String)] = Nil,
+      compoundRules: List[String] = Nil,
+      compoundMin: Int = 3,
+      compoundWordFlags: Map[String, Set[String]] = Map.empty
   )
 
   /** The result of one explicit dictionary-discovery pass: the loaded words/replacements/failures plus the on-disk
@@ -79,15 +90,48 @@ object SpellChecker:
       replacements: Map[String, List[String]],
       needAffixFlag: Option[String],
       iconv: List[(String, String)],
-      oconv: List[(String, String)]
+      oconv: List[(String, String)],
+      compoundRules: List[String],
+      compoundMin: Int,
+      circumfixFlag: Option[String]
   )
 
   private object HunspellAffixRules:
-    val empty: HunspellAffixRules =
-      HunspellAffixRules(HunspellFlagMode.Simple, Map.empty, Map.empty, Map.empty, Map.empty, None, Nil, Nil)
 
-  final private case class HunspellAffixRule(strip: String, append: String, condition: String, combineable: Boolean)
+    val empty: HunspellAffixRules =
+      HunspellAffixRules(
+        HunspellFlagMode.Simple,
+        Map.empty,
+        Map.empty,
+        Map.empty,
+        Map.empty,
+        None,
+        Nil,
+        Nil,
+        Nil,
+        3,
+        None
+      )
+
+  /** `continuationFlags` (issue #1187) are the flags attached after '/' in a PFX/SFX rule's append field --
+    * hunspell(5)'s continuation classes, granted to the derived word for further affixation. Only CIRCUMFIX consumes
+    * them here (see `expandHunspellEntry`); every other rule ignores them exactly as before, so a dictionary using
+    * continuation classes for anything else sees no behavior change.
+    */
+  final private case class HunspellAffixRule(
+      strip: String,
+      append: String,
+      condition: String,
+      combineable: Boolean,
+      continuationFlags: Set[String]
+  )
+
   final private case class HunspellEntry(word: String, flags: Set[String])
+
+  private enum CompoundQuantifier:
+    case Exactly, ZeroOrOne, ZeroOrMore
+
+  final private case class CompoundToken(flag: String, quantifier: CompoundQuantifier)
 
   private val BuiltInDictionaries: Map[String, Set[String]] = Map(
     "en" -> Set(
@@ -160,7 +204,7 @@ object SpellChecker:
               // ICONV (#1182): normalize input character variants (ligatures, alternate quote glyphs, ...) to the
               // form the dictionary was built from before checking membership -- exactly what hunspell itself does
               // before matching checked text against the dictionary.
-              .filterNot(match_ => isAccepted(applyConversionTable(match_.matched, dictionary.iconv), dictionary.words))
+              .filterNot(match_ => isAccepted(applyConversionTable(match_.matched, dictionary.iconv), dictionary))
               .map { match_ =>
                 val word          = match_.matched
                 val convertedWord = applyConversionTable(word, dictionary.iconv)
@@ -296,7 +340,10 @@ object SpellChecker:
       replacements = externalReplacements,
       failures = failures.distinct,
       iconv = externalResults.flatMap(_.iconv).distinct,
-      oconv = externalResults.flatMap(_.oconv).distinct
+      oconv = externalResults.flatMap(_.oconv).distinct,
+      compoundRules = externalResults.flatMap(_.compoundRules).distinct,
+      compoundMin = externalResults.map(_.compoundMin).foldLeft(3)(math.min),
+      compoundWordFlags = mergeCompoundWordFlags(externalResults.map(_.compoundWordFlags))
     )
     DictionarySnapshot(context, SpellCheckConfig.discoverDictionaryFingerprints(normalized))
 
@@ -320,9 +367,27 @@ object SpellChecker:
 
   private def readDictionary(path: Path): DictionaryLoadResult =
     if !Files.exists(path) then
-      DictionaryLoadResult(Set.empty, Map.empty, List(s"Dictionary file does not exist: $path"), Nil, Nil)
+      DictionaryLoadResult(
+        Set.empty,
+        Map.empty,
+        List(s"Dictionary file does not exist: $path"),
+        Nil,
+        Nil,
+        Nil,
+        3,
+        Map.empty
+      )
     else if Files.isDirectory(path) then
-      DictionaryLoadResult(Set.empty, Map.empty, List(s"Dictionary path is a directory: $path"), Nil, Nil)
+      DictionaryLoadResult(
+        Set.empty,
+        Map.empty,
+        List(s"Dictionary path is a directory: $path"),
+        Nil,
+        Nil,
+        Nil,
+        3,
+        Map.empty
+      )
     else
       try
         val affixPath      = affixPathFor(path)
@@ -342,7 +407,23 @@ object SpellChecker:
           .map(normalizeWord)
           .toSet
 
-        DictionaryLoadResult(words, affixRules.replacements, unsupportedAff, affixRules.iconv, affixRules.oconv)
+        // COMPOUNDRULE (#1187) matches compound candidates against dictionary entries' own flags, keyed by their
+        // normalized text -- computed only when the affix file actually declares compounding, since it is otherwise
+        // unused.
+        val compoundWordFlags =
+          if affixRules.compoundRules.isEmpty then Map.empty[String, Set[String]]
+          else entries.groupMapReduce(entry => normalizeWord(entry.word))(_.flags)(_ ++ _)
+
+        DictionaryLoadResult(
+          words,
+          affixRules.replacements,
+          unsupportedAff,
+          affixRules.iconv,
+          affixRules.oconv,
+          affixRules.compoundRules,
+          affixRules.compoundMin,
+          compoundWordFlags
+        )
       catch
         case NonFatal(error) =>
           DictionaryLoadResult(
@@ -350,7 +431,10 @@ object SpellChecker:
             Map.empty,
             List(s"Could not load dictionary $path: ${error.getMessage}"),
             Nil,
-            Nil
+            Nil,
+            Nil,
+            3,
+            Map.empty
           )
 
   private def affixPathFor(dictionaryPath: Path): Option[Path] =
@@ -377,28 +461,44 @@ object SpellChecker:
   private def parseAffixRules(lines: List[String]): HunspellAffixRules =
     val flagMode      = parseFlagMode(lines)
     val flagAliases   = parseFlagAliases(lines, flagMode)
-    val prefixRules   = parseAffixRules(lines, "PFX")
-    val suffixRules   = parseAffixRules(lines, "SFX")
+    val prefixRules   = parseAffixRules(lines, "PFX", flagMode)
+    val suffixRules   = parseAffixRules(lines, "SFX", flagMode)
     val replacements  = parseReplacements(lines)
     val needAffixFlag = parseNeedAffixFlag(lines)
     val iconv         = parseConversionTable(lines, "ICONV")
     val oconv         = parseConversionTable(lines, "OCONV")
-    HunspellAffixRules(flagMode, flagAliases, prefixRules, suffixRules, replacements, needAffixFlag, iconv, oconv)
+    val compoundRules = parseCompoundRules(lines)
+    val compoundMin   = parseCompoundMin(lines)
+    val circumfixFlag = parseCircumfixFlag(lines)
+    HunspellAffixRules(
+      flagMode,
+      flagAliases,
+      prefixRules,
+      suffixRules,
+      replacements,
+      needAffixFlag,
+      iconv,
+      oconv,
+      compoundRules,
+      compoundMin,
+      circumfixFlag
+    )
 
-  /** Directives from the Hunspell affix format that this handwritten parser does not implement (compounding,
-    * morphological generation, and similar). Rather than silently ignoring them -- which would mis-flag words that rely
-    * on them -- their presence is surfaced as an explicit dictionary-load diagnostic. See the PR description for why
-    * this project carries a partial parser instead of a dependency on Lucene's Hunspell implementation.
+  /** Directives from the Hunspell affix format that this handwritten parser does not implement (the free-form
+    * COMPOUNDFLAG compounding mechanism, morphological generation, and similar). Rather than silently ignoring them --
+    * which would mis-flag words that rely on them -- their presence is surfaced as an explicit dictionary-load
+    * diagnostic. See the PR description for why this project carries a partial parser instead of a dependency on
+    * Lucene's Hunspell implementation.
     *
-    * ICONV/OCONV and NEEDAFFIX (issue #1182) are implemented and intentionally absent from this set -- see
-    * `parseConversionTable` and `parseNeedAffixFlag`. The compounding family (COMPOUND*, SYLLABLENUM, ONLYINCOMPOUND,
-    * CHECKCOMPOUND*, SIMPLIFIEDTRIPLE) and CIRCUMFIX remain unsupported and are deferred to a follow-up issue -- see
-    * the PR description for why.
+    * ICONV/OCONV and NEEDAFFIX (issue #1182), and COMPOUNDRULE/COMPOUNDMIN and CIRCUMFIX (issue #1187), are implemented
+    * and intentionally absent from this set -- see `parseConversionTable`/`parseNeedAffixFlag` and
+    * `parseCompoundRules`/`parseCompoundMin`/`parseCircumfixFlag`. COMPOUNDFLAG/COMPOUNDBEGIN/COMPOUNDMIDDLE/
+    * COMPOUNDLAST (Hunspell's free-form dictionary word-segmentation compounding, as opposed to COMPOUNDRULE's explicit
+    * flag grammar) and the CHECKCOMPOUND family (plus SIMPLIFIEDTRIPLE) validation directives remain unsupported and
+    * are deferred to a follow-up issue -- see the PR description for why.
     */
   private val UnsupportedAffixDirectives = Set(
     "COMPOUNDFLAG",
-    "COMPOUNDRULE",
-    "COMPOUNDMIN",
     "COMPOUNDBEGIN",
     "COMPOUNDMIDDLE",
     "COMPOUNDLAST",
@@ -412,7 +512,6 @@ object SpellChecker:
     "CHECKCOMPOUNDTRIPLE",
     "CHECKCOMPOUNDPATTERN",
     "SIMPLIFIEDTRIPLE",
-    "CIRCUMFIX",
     "PSEUDOROOT",
     "FORBIDDENWORD",
     "WARN",
@@ -450,17 +549,25 @@ object SpellChecker:
       }
       .getOrElse(HunspellFlagMode.Simple)
 
-  private def parseAffixRules(lines: List[String], kind: String): Map[String, List[HunspellAffixRule]] =
+  private def parseAffixRules(
+    lines: List[String],
+    kind: String,
+    flagMode: HunspellFlagMode
+  ): Map[String, List[HunspellAffixRule]] =
     val combinability = parseAffixRuleCombinability(lines, kind)
     lines.foldLeft(Map.empty[String, List[HunspellAffixRule]]) { (rules, line) =>
       val columns = line.split("\\s+").toList
       columns match
-        case ruleKind :: flag :: strip :: append :: condition :: _ if ruleKind == kind =>
+        case ruleKind :: flag :: strip :: appendField :: condition :: _ if ruleKind == kind =>
+          val (appendText, continuationFlags) = appendField.split("/", 2) match
+            case Array(text, continuation) => text        -> parseHunspellFlagList(continuation, flagMode)
+            case _                         => appendField -> Set.empty[String]
           val rule = HunspellAffixRule(
             strip = zeroAsEmpty(strip),
-            append = zeroAsEmpty(append.takeWhile(_ != '/')),
+            append = zeroAsEmpty(appendText),
             condition = condition,
-            combineable = combinability.getOrElse(flag, false)
+            combineable = combinability.getOrElse(flag, false),
+            continuationFlags = continuationFlags
           )
           rules.updated(flag, rules.getOrElse(flag, Nil) :+ rule)
         case _ => rules
@@ -530,6 +637,126 @@ object SpellChecker:
   private def applyConversionTable(word: String, table: List[(String, String)]): String =
     table.foldLeft(word) { case (converted, (from, to)) => converted.replace(from, to) }
 
+  /** `CIRCUMFIX <flag>` (hunspell(5)): the flag that, when carried in a PFX/SFX rule's continuation class, marks that
+    * rule as usable only paired with its circumfix counterpart -- see `expandHunspellEntry`.
+    */
+  private def parseCircumfixFlag(lines: List[String]): Option[String] =
+    lines
+      .collectFirst {
+        case line if line.startsWith("CIRCUMFIX ") => line.stripPrefix("CIRCUMFIX ").trim
+      }
+      .filter(_.nonEmpty)
+
+  /** `COMPOUNDMIN <num>` (hunspell(5)): the minimum length, in characters, of a word usable as a compound member.
+    * Defaults to 3, hunspell's own documented default, when absent.
+    */
+  private def parseCompoundMin(lines: List[String]): Int =
+    lines
+      .collectFirst {
+        case line if line.startsWith("COMPOUNDMIN ") => line.stripPrefix("COMPOUNDMIN ").trim.toIntOption
+      }
+      .flatten
+      .getOrElse(3)
+
+  /** `COMPOUNDRULE` (hunspell(5)): one `COMPOUNDRULE count` header (skipped here -- its all-digit body distinguishes it
+    * from a pattern line) followed by `count` `COMPOUNDRULE pattern` lines, each a small regex-like grammar over
+    * compound flags (`tokenizeCompoundPattern` parses the grammar itself; the raw pattern strings are kept here and
+    * re-tokenized by the pure, filesystem-free matching path so this stays a plain `List[String]` that
+    * `DictionaryContext` -- a public type -- can carry without exposing `CompoundToken`).
+    */
+  private def parseCompoundRules(lines: List[String]): List[String] =
+    lines.flatMap { line =>
+      line.split("\\s+").toList match
+        case "COMPOUNDRULE" :: pattern :: Nil if !pattern.forall(_.isDigit) => Some(pattern)
+        case _                                                              => None
+    }
+
+  /** Parses one COMPOUNDRULE pattern into flag/quantifier tokens. A flag is either a single character (Simple flag
+    * mode) or a parenthesized group (`(XX)`/`(1234)`, mandatory for Long/Num flag modes per hunspell(5): "With long and
+    * numerical flag types, use only parenthesized flags"), optionally followed by `*` (0 or more) or `?` (0 or 1); a
+    * flag with neither suffix matches exactly once.
+    */
+  private def tokenizeCompoundPattern(pattern: String): List[CompoundToken] =
+    def loop(remaining: String, acc: List[CompoundToken]): List[CompoundToken] =
+      if remaining.isEmpty then acc.reverse
+      else
+        val (flag, afterFlag) =
+          if remaining.head == '(' then
+            val closeIndex = remaining.indexOf(')')
+            if closeIndex < 0 then (remaining.drop(1), "")
+            else (remaining.substring(1, closeIndex), remaining.substring(closeIndex + 1))
+          else (remaining.head.toString, remaining.tail)
+        val (quantifier, rest) = afterFlag.headOption match
+          case Some('*') => (CompoundQuantifier.ZeroOrMore, afterFlag.drop(1))
+          case Some('?') => (CompoundQuantifier.ZeroOrOne, afterFlag.drop(1))
+          case _         => (CompoundQuantifier.Exactly, afterFlag)
+        loop(rest, CompoundToken(flag, quantifier) :: acc)
+    loop(pattern, Nil)
+
+  /** Every dictionary word (from `compoundWordFlags`) that `remaining` starts with, is at least `compoundMin`
+    * characters long, and carries `flag` -- paired with what remains of the candidate compound after removing it. Real
+    * dictionary words are never empty, so this always strictly shortens `remaining`, which is what guarantees
+    * `compoundMatches`/`compoundStarMatches` below terminate.
+    */
+  private def compoundMemberCandidates(
+    flag: String,
+    remaining: String,
+    compoundWordFlags: Map[String, Set[String]],
+    compoundMin: Int
+  ): List[String] =
+    compoundWordFlags.iterator.collect {
+      case (word, flags) if word.length >= compoundMin && flags.contains(flag) && remaining.startsWith(word) =>
+        remaining.drop(word.length)
+    }.toList
+
+  /** Matches `remaining` against a COMPOUNDRULE pattern's tokens, recursively segmenting it into dictionary words
+    * flagged for each token in turn; succeeds only when every token is satisfied and the entire candidate is consumed.
+    * Mirrors hunspell(5)'s own description: pattern matching and word segmentation happen together, not as separate
+    * phases, since which segmentation is valid depends on which flags the pattern still needs.
+    */
+  private def compoundMatches(
+    tokens: List[CompoundToken],
+    remaining: String,
+    compoundWordFlags: Map[String, Set[String]],
+    compoundMin: Int
+  ): Boolean =
+    tokens match
+      case Nil => remaining.isEmpty
+      case token :: rest =>
+        token.quantifier match
+          case CompoundQuantifier.Exactly =>
+            compoundMemberCandidates(token.flag, remaining, compoundWordFlags, compoundMin)
+              .exists(next => compoundMatches(rest, next, compoundWordFlags, compoundMin))
+          case CompoundQuantifier.ZeroOrOne =>
+            compoundMatches(rest, remaining, compoundWordFlags, compoundMin) ||
+            compoundMemberCandidates(token.flag, remaining, compoundWordFlags, compoundMin)
+              .exists(next => compoundMatches(rest, next, compoundWordFlags, compoundMin))
+          case CompoundQuantifier.ZeroOrMore =>
+            compoundStarMatches(token, rest, remaining, compoundWordFlags, compoundMin)
+
+  private def compoundStarMatches(
+    token: CompoundToken,
+    rest: List[CompoundToken],
+    remaining: String,
+    compoundWordFlags: Map[String, Set[String]],
+    compoundMin: Int
+  ): Boolean =
+    compoundMatches(rest, remaining, compoundWordFlags, compoundMin) ||
+      compoundMemberCandidates(token.flag, remaining, compoundWordFlags, compoundMin)
+        .exists(next => compoundStarMatches(token, rest, next, compoundWordFlags, compoundMin))
+
+  private def matchesCompoundRule(word: String, dictionary: DictionaryContext): Boolean =
+    dictionary.compoundRules.nonEmpty && dictionary.compoundRules.exists { pattern =>
+      compoundMatches(tokenizeCompoundPattern(pattern), word, dictionary.compoundWordFlags, dictionary.compoundMin)
+    }
+
+  private def mergeCompoundWordFlags(maps: List[Map[String, Set[String]]]): Map[String, Set[String]] =
+    maps.foldLeft(Map.empty[String, Set[String]]) { (merged, wordFlags) =>
+      wordFlags.foldLeft(merged) {
+        case (acc, (word, flags)) => acc.updated(word, acc.getOrElse(word, Set.empty) ++ flags)
+      }
+    }
+
   private def parseHunspellDictionaryEntry(line: String, affixRules: HunspellAffixRules): Option[HunspellEntry] =
     val withoutMorphology = line.takeWhile(char => !char.isWhitespace)
     val word              = withoutMorphology.takeWhile(_ != '/').trim
@@ -556,19 +783,53 @@ object SpellChecker:
   private def expandHunspellEntry(entry: HunspellEntry, affixRules: HunspellAffixRules): Set[String] =
     val prefixRules = entry.flags.flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
     val suffixRules = entry.flags.flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
-    val prefixes    = prefixRules.flatMap(applyPrefix(entry.word, _))
-    val suffixes    = suffixRules.flatMap(applySuffix(entry.word, _))
+
+    def isCircumfix(rule: HunspellAffixRule): Boolean =
+      affixRules.circumfixFlag.exists(rule.continuationFlags.contains)
+    def circumfixPairValid(prefixRule: HunspellAffixRule, suffixRule: HunspellAffixRule): Boolean =
+      isCircumfix(prefixRule) == isCircumfix(suffixRule)
+
+    // CIRCUMFIX (#1187, hunspell(5)): an affix whose continuation class carries the CIRCUMFIX flag may never
+    // surface on its own -- only paired with a counterpart that is itself CIRCUMFIX-flagged.
+    val prefixes = prefixRules.filterNot(isCircumfix).flatMap(applyPrefix(entry.word, _))
+    val suffixes = suffixRules.filterNot(isCircumfix).flatMap(applySuffix(entry.word, _))
+
     val combined =
       for
         prefixRule <- prefixRules if prefixRule.combineable
-        suffixRule <- suffixRules if suffixRule.combineable
+        suffixRule <- suffixRules if suffixRule.combineable && circumfixPairValid(prefixRule, suffixRule)
         suffixed   <- applySuffix(entry.word, suffixRule)
         combined   <- applyPrefix(suffixed, prefixRule)
       yield combined
+
+    // CIRCUMFIX continuation chaining: the canonical Hungarian superlative ("legnagyobb") only reaches its prefix
+    // via the suffix's continuation class -- the bare root never carries the prefix's own flag directly (see the
+    // circumfix.aff fixture in hunspell's own test suite) -- so a CIRCUMFIX-flagged affix also looks for its
+    // counterpart among the flags the *other* affix's continuation class grants, applying only when that
+    // counterpart is itself CIRCUMFIX-flagged.
+    val suffixThenPrefix: Set[String] =
+      suffixRules.filter(isCircumfix).flatMap { suffixRule =>
+        applySuffix(entry.word, suffixRule).toList.flatMap { suffixed =>
+          suffixRule.continuationFlags
+            .flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
+            .filter(isCircumfix)
+            .flatMap(prefixRule => applyPrefix(suffixed, prefixRule))
+        }
+      }
+    val prefixThenSuffix: Set[String] =
+      prefixRules.filter(isCircumfix).flatMap { prefixRule =>
+        applyPrefix(entry.word, prefixRule).toList.flatMap { prefixed =>
+          prefixRule.continuationFlags
+            .flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
+            .filter(isCircumfix)
+            .flatMap(suffixRule => applySuffix(prefixed, suffixRule))
+        }
+      }
+
     // NEEDAFFIX (#1182): a root flagged with the configured NEEDAFFIX flag is a "virtual stem" -- valid only
     // affixed, per hunspell(5) -- so the bare word is dropped here while its affixed forms above are kept.
     val standalone = if affixRules.needAffixFlag.exists(entry.flags.contains) then Set.empty else Set(entry.word)
-    standalone ++ prefixes ++ suffixes ++ combined
+    standalone ++ prefixes ++ suffixes ++ combined ++ suffixThenPrefix ++ prefixThenSuffix
 
   private def applyPrefix(word: String, rule: HunspellAffixRule): Option[String] =
     Option.when(word.startsWith(rule.strip) && prefixConditionMatches(word, rule.condition)) {
@@ -622,9 +883,9 @@ object SpellChecker:
       }
     }
 
-  private def isAccepted(word: String, dictionary: Set[String]): Boolean =
+  private def isAccepted(word: String, dictionary: DictionaryContext): Boolean =
     val normalized = normalizeWord(word)
-    normalized.length < 3 || dictionary.contains(normalized)
+    normalized.length < 3 || dictionary.words.contains(normalized) || matchesCompoundRule(normalized, dictionary)
 
   private def normalizeWord(word: String): String =
     word.toLowerCase(Locale.ROOT)
