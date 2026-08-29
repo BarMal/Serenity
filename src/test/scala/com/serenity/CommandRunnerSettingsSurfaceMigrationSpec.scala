@@ -9,22 +9,19 @@ import org.scalatest.matchers.should.Matchers
   * #1059's page stack), migrated alongside their pre-existing `activeSubmenu` behavior. Every case below asserts the
   * new field's shape and, where useful, cross-checks it against the old field it mirrors -- both are still written by
   * these methods (see the field's doc on `CommandRunner`), so this is a faithfulness check on the re-platforming, not a
-  * behavior change. `CommandRunnerReducer`/`SurfaceContentResolver` are not touched or exercised here -- they still
-  * read only `activeSubmenu`, unchanged.
+  * behavior change.
   *
   * Every *writer* of `activeSubmenu` now keeps `activeSettingsSurface` in sync as a faithful mirror (see the final
   * "always be defined exactly when activeSubmenu is" case for the full-surface consistency check), so setup chains
   * below are free to use whichever method reads most naturally for the scenario.
   *
-  * Deviation: `settingsSurfaceItems`/`settingsSurfaceSelectedIndex`/`settingsSurfaceBreadcrumbLabels`/
-  * `focusedSubmenuItems`/`submenuBreadcrumbLabels` -- the *readers* -- were deliberately left sourced from
-  * `activeSubmenu`, not switched to `activeSettingsSurface`, even though they were in this turn's migration list.
-  * `SurfaceContentResolver` and `CommandRunnerMouseHitTesting` call several of these, and neither is migrated this
-  * turn; both existing specs (`SettingsSurfaceSpec`, `SurfaceContentResolverSpec`) and `CommandRunnerReducerSpec` build
-  * `CommandRunner` values by setting `activeSubmenu` directly (bypassing the migrated mutators), so switching these
-  * readers to `activeSettingsSurface` desyncs them from a field that's `None` in those states and breaks rendering --
-  * confirmed by two real spec failures during this migration, reverted here. They stay on `activeSubmenu` until the
-  * resolver migration (a later turn) makes the flip safe; the cases below just confirm their behavior is unchanged.
+  * The five *reader* methods (`settingsSurfaceItems`/`settingsSurfaceSelectedIndex`/`settingsSurfaceBreadcrumbLabels`/
+  * `focusedSubmenuItems`/`submenuBreadcrumbLabels`) now read `activeSettingsSurface` too: `SurfaceContentResolver`
+  * routes every settings render through the single-list resolver and `CommandRunnerMouseHitTesting` hit-tests it the
+  * same way, so a state built only by setting `activeSubmenu` directly (bypassing the migrated mutators) no longer
+  * renders or hit-tests correctly -- see the "no longer reflect a directly-constructed activeSubmenu" case below, and
+  * the matching `activeSettingsSurface` now added wherever `SettingsSurfaceSpec`/`SurfaceContentResolverSpec` build
+  * such states by hand.
   */
 class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matchers:
 
@@ -234,19 +231,19 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
   }
 
   // The five reader methods below (focusedSubmenuItems, settingsSurfaceItems, settingsSurfaceSelectedIndex,
-  // settingsSurfaceBreadcrumbLabels, submenuBreadcrumbLabels) are asserted here to confirm they are UNCHANGED --
-  // still sourced from activeSubmenu -- per the class doc's deviation note. These are not new assertions about
-  // activeSettingsSurface; they exist so a future accidental re-flip of these readers fails a test here rather than
-  // silently breaking SurfaceContentResolver/CommandRunnerMouseHitTesting rendering, as it did twice during this
-  // migration before being caught and reverted.
+  // settingsSurfaceBreadcrumbLabels, submenuBreadcrumbLabels) now read activeSettingsSurface, flipped this turn
+  // (issue #1059) once SurfaceContentResolver/CommandRunnerMouseHitTesting routed every settings render/hit-test
+  // through it instead of constructing a second submenu surface. States built via the migrated mutators (as every
+  // case below except the last one is) keep both fields in sync, so these mostly cross-check against equivalent
+  // activeSubmenu-derived expectations to confirm the flip didn't change observable behavior for real navigation.
 
-  "focusedSubmenuItems" should "stay sourced from activeSubmenu, unfiltered" in {
+  "focusedSubmenuItems" should "read through activeSettingsSurface, unfiltered" in {
     val level1 = opened.withSelectedItem("settings-appearance-motion").enterSelectedGroup
 
     level1.focusedSubmenuItems.map(_.id) shouldBe level1.submenuItems("settings-appearance-motion").map(_.id)
   }
 
-  it should "stay sourced from activeSubmenu, applying its search filter" in {
+  it should "read through activeSettingsSurface, applying its search filter" in {
     val searched = opened
       .withSelectedItem("settings-appearance-motion")
       .enterSelectedGroup
@@ -258,20 +255,20 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     searched.focusedSubmenuItems.map(_.id) should contain("settings-surface-appearance")
   }
 
-  "settingsSurfaceItems" should "stay sourced from activeSubmenu once inside a group" in {
+  "settingsSurfaceItems" should "read through activeSettingsSurface once inside a group" in {
     val level1 = opened.withSelectedItem("settings-appearance-motion").enterSelectedGroup
 
     level1.settingsSurfaceItems.map(_.id) shouldBe level1.submenuItems("settings-appearance-motion").map(_.id)
   }
 
-  "settingsSurfaceSelectedIndex" should "stay sourced from activeSubmenu.selectedIndex, including while editing" in {
+  "settingsSurfaceSelectedIndex" should "read through activeSettingsSurface, recovering an Editing page's index by item id" in {
     val editing = editingBlurRadius
 
     editing.settingsSurfaceSelectedIndex shouldBe 4
     editing.settingsSurfaceSelectedIndex shouldBe editing.activeSubmenu.map(_.selectedIndex).getOrElse(-1)
   }
 
-  "settingsSurfaceBreadcrumbLabels" should "stay sourced from activeSubmenu" in {
+  "settingsSurfaceBreadcrumbLabels" should "read through activeSettingsSurface" in {
     val level2 = opened
       .withSelectedItem("settings-appearance-motion")
       .enterSelectedGroup
@@ -281,7 +278,7 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     level2.settingsSurfaceBreadcrumbLabels shouldBe List("Settings", "Appearance & Motion", "Surface Appearance")
   }
 
-  "submenuBreadcrumbLabels" should "stay sourced from activeSubmenu.ancestorGroupIds" in {
+  "submenuBreadcrumbLabels" should "read through activeSettingsSurface.ancestors, reversed back to root-first" in {
     val level2 = opened
       .withSelectedItem("settings-appearance-motion")
       .enterSelectedGroup
@@ -294,16 +291,17 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     )
   }
 
-  it should "not require activeSettingsSurface at all -- a directly-constructed activeSubmenu still renders" in {
-    // Mirrors how SettingsSurfaceSpec/SurfaceContentResolverSpec/CommandRunnerReducerSpec build states: setting
+  it should "no longer reflect a directly-constructed activeSubmenu missing a matching activeSettingsSurface" in {
+    // Mirrors how SettingsSurfaceSpec/SurfaceContentResolverSpec used to build states before this turn's flip: setting
     // activeSubmenu via a raw copy, bypassing every migrated mutator, leaving activeSettingsSurface at its default
-    // None. This is exactly the shape that broke when these readers were briefly switched to activeSettingsSurface.
+    // None. Those specs now build a matching activeSettingsSurface alongside activeSubmenu; this pins down why --
+    // without it, these readers fall back to their root-level (no active group) behavior.
     val runner = opened.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance")))
 
     runner.activeSettingsSurface shouldBe None
-    runner.settingsSurfaceItems.map(_.id) shouldBe runner.submenuItems("settings-surface-appearance").map(_.id)
-    runner.settingsSurfaceSelectedIndex shouldBe 0
-    runner.settingsSurfaceBreadcrumbLabels shouldBe List("Settings", "Surface Appearance")
+    runner.settingsSurfaceItems shouldBe runner.settingsGroups
+    runner.settingsSurfaceSelectedIndex shouldBe runner.selectedIndex
+    runner.settingsSurfaceBreadcrumbLabels shouldBe List("Settings")
   }
 
   // The mutators below are new this turn, added to let CommandRunnerReducer eliminate every direct

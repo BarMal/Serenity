@@ -120,12 +120,25 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "describe the selected group, option, and input action in its footer" in {
-    val root   = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val option = root.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance")))
-    val input =
-      option.copy(activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 4)))
+    val root = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    // activeSettingsSurface is kept in sync with activeSubmenu on each step below now that
+    // settingsSurfaceItems/settingsSurfaceSelectedIndex read this field (issue #1059).
+    val option = root.copy(
+      activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance")),
+      activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance")))
+    )
+    val input = option.copy(
+      activeSubmenu = Some(CommandRunnerSubmenuState("settings-surface-appearance", selectedIndex = 4)),
+      activeSettingsSurface =
+        Some(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance", selectedIndex = 4)))
+    )
     val editing = input.copy(
-      activeSubmenu = input.activeSubmenu.map(_.copy(editingItemId = Some("blur-radius"), editingText = "1"))
+      activeSubmenu = input.activeSubmenu.map(_.copy(editingItemId = Some("blur-radius"), editingText = "1")),
+      activeSettingsSurface = Some(
+        SettingsSurfaceState(
+          SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "blur-radius", draftText = "1")
+        )
+      )
     )
 
     footerText(root) should include("Open")

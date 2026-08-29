@@ -406,6 +406,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     surface.alphaCalls.filter(_ < baseAlpha) should not be empty
   }
 
+  // issue #1059: a settings leaf reached via search now renders its drilled-in navigation on the one command-runner
+  // surface (no second floating submenu surface, and no live "search: ..." echo left showing once entered).
   it should "render a direct settings leaf while keeping editor cursors steady" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -428,7 +430,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
           editorPanes = Map(paneId -> pane),
           activeEditorPaneId = Some(paneId)
         ),
-        focus = Focus.Surface(SurfaceId("command-runner-submenu")),
+        focus = Focus.Surface(SurfaceId("command-runner")),
         theme = Theme.light
       ),
       runtime = initialState.runtime.copy(
@@ -436,11 +438,6 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
           UiSurface(
             SurfaceId("command-runner"),
             SurfaceContent.CommandPalette(runner),
-            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
-          ),
-          UiSurface(
-            SurfaceId("command-runner-submenu"),
-            SurfaceContent.CommandPaletteSubmenu(runner, "settings-language", previewOnly = false),
             SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
           )
         )
@@ -454,16 +451,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val submenuRect = layout.belowCursorOverlayStack
-      .collectFirst { case (SurfaceId("command-runner-submenu"), rect) => rect }
-      .getOrElse(fail("Expected command-runner submenu overlay"))
+      .collectFirst { case (SurfaceId("command-runner"), rect) => rect }
+      .getOrElse(fail("Expected command-runner overlay"))
     val submenuText = (submenuRect.y until submenuRect.bottom).map(visibleSurface.getRow).mkString("\n")
 
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
 
-    visibleCursors should have size 4
-    hiddenCursors should have size 3
-    hiddenCursors.map(_.xPx) shouldBe visibleCursors.take(3).map(_.xPx)
+    visibleCursors.map(_.xPx) shouldBe hiddenCursors.map(_.xPx)
     submenuText should include("Current Buffer Language")
     submenuText should not include "search: lang-markdown"
     submenuText should include("Markdown")

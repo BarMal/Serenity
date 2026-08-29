@@ -273,25 +273,21 @@ final case class CommandRunner(
       statusMessage = None
     )
 
-  // settingsSurfaceItems/settingsSurfaceSelectedIndex/settingsSurfaceBreadcrumbLabels stay sourced from
-  // `activeSubmenu`, not `activeSettingsSurface`, deliberately: `SurfaceContentResolver` and
-  // `CommandRunnerMouseHitTesting` call these, and both remain unmigrated this turn, still authoritative on
-  // `activeSubmenu` alone. Flipping the source here would silently change their observable output for any
-  // `CommandRunner` value built by setting `activeSubmenu` directly (as several existing specs do) rather than
-  // through the migrated mutators above -- see the deviation note in the migration report. These stay unchanged
-  // until the resolver migration (next turn) makes the flip safe.
+  // Flipped to activeSettingsSurface now that SurfaceContentResolver/CommandRunnerMouseHitTesting are migrated
+  // (issue #1059) -- both now read through these five methods for a settings group rendered/hit-tested on the one
+  // command-runner surface, and no longer construct a second submenu surface that would desync from activeSubmenu.
   def settingsSurfaceItems: List[CommandSurfaceItem] =
-    activeSubmenu match
-      case Some(submenu)               => submenu.filteredItems(submenuItems(submenu.groupId))
+    activeSettingsSurface match
+      case Some(surface)               => filteredPageItems(surface.current, submenuItems(surface.current.groupId))
       case None if searchTerm.nonEmpty => matchingSettingsResults(searchTerm)
       case None                        => settingsGroups
 
   def settingsSurfaceSelectedIndex: Int =
-    activeSubmenu.map(_.selectedIndex).getOrElse(selectedIndex)
+    activeSettingsSurface.map(surface => pageSelectedIndex(surface.current)).getOrElse(selectedIndex)
 
   def settingsSurfaceBreadcrumbLabels: List[String] =
-    activeSubmenu match
-      case Some(submenu) => "Settings" :: submenuBreadcrumbLabels(submenu.groupId)
+    activeSettingsSurface match
+      case Some(surface) => "Settings" :: submenuBreadcrumbLabels(surface.current.groupId)
       case None          => List("Settings")
 
   def updateSettingsSearch(term: String)(using registry: CommandRegistry): CommandRunner =
@@ -440,6 +436,24 @@ final case class CommandRunner(
   private def ancestorPagesFor(ancestorIds: List[String]): List[SettingsPage] =
     ancestorIds.reverse.map(id => SettingsPage.Group(id, submenuSelections.getOrElse(id, 0)))
 
+  /** `CommandRunnerSubmenuState.filteredItems`'s counterpart for a `SettingsPage`, using its `searchTerm` extension so
+    * it filters identically whether the page is `Group` or `Editing`.
+    */
+  private def filteredPageItems(page: SettingsPage, items: List[CommandSurfaceItem]): List[CommandSurfaceItem] =
+    val lowerTerm = page.searchTerm.trim.toLowerCase
+    if lowerTerm.isEmpty then items
+    else items.filter(_.searchText.toLowerCase.contains(lowerTerm))
+
+  /** The list index a page corresponds to. `Group` carries one directly; `Editing` doesn't (it names its item by id,
+    * not position), so it's recovered by looking the item up in the same filtered list `beginSubmenuEditMode` read it
+    * from -- mirroring how `enterSelectedGroup` recovers a search-jump's index via `indexWhere(_.id == ...).max(0)`.
+    */
+  private def pageSelectedIndex(page: SettingsPage): Int =
+    page match
+      case group: SettingsPage.Group => group.selectedIndex
+      case editing: SettingsPage.Editing =>
+        filteredPageItems(editing, submenuItems(editing.groupId)).indexWhere(_.id == editing.itemId).max(0)
+
   private def groupPaths(
     groupId: String,
     groups: List[CommandSurfaceItem.GroupItem]
@@ -453,18 +467,17 @@ final case class CommandRunner(
       current ++ groupPaths(groupId, childGroups).map(group.id :: _)
     }
 
-  // Same rationale as settingsSurfaceItems above: focusedSubmenuItems and submenuBreadcrumbLabels are called from
-  // `SurfaceContentResolver`/`CommandRunnerMouseHitTesting`, unmigrated this turn, and several existing specs build
-  // `CommandRunner` values with `activeSubmenu` set directly rather than through the migrated mutators -- so
-  // `activeSettingsSurface` isn't reliably populated for every state these readers see yet. Left reading
-  // `activeSubmenu`; `CommandRunnerReducer` itself no longer constructs `activeSubmenu` directly (issue #1059).
+  // Flipped alongside settingsSurfaceItems above (issue #1059).
   def focusedSubmenuItems: List[CommandSurfaceItem] =
-    activeSubmenu.toList.flatMap(submenu => submenu.filteredItems(submenuItems(submenu.groupId)))
+    activeSettingsSurface.toList.flatMap(surface =>
+      filteredPageItems(surface.current, submenuItems(surface.current.groupId))
+    )
 
   def submenuBreadcrumbLabels(groupId: String): List[String] =
-    activeSubmenu match
-      case Some(submenu) if submenu.groupId == groupId && submenu.ancestorGroupIds.nonEmpty =>
-        (submenu.ancestorGroupIds :+ groupId).flatMap(id => submenuGroup(id).map(_.label))
+    activeSettingsSurface match
+      case Some(surface) if surface.current.groupId == groupId && surface.ancestors.nonEmpty =>
+        // `ancestors` is nearest-first; the old `ancestorGroupIds` it mirrors is root-first, so reverse it back.
+        (surface.ancestors.reverse.map(_.groupId) :+ groupId).flatMap(id => submenuGroup(id).map(_.label))
       case _ =>
         submenuGroup(groupId).map(_.label).toList
 

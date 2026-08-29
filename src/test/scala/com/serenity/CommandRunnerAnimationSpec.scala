@@ -361,74 +361,32 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
   }
 
-  it should "animate the submenu preview when settings browsing opens a child panel" in {
+  // issue #1059: the ghost-preview submenu used to be a second floating UiSurface with its own enter/exit surface
+  // animation (the four tests this replaces: animating it in, restarting on a changed preview, restarting on
+  // becoming the focused submenu, and ghosting it out on dismiss). A hovered-but-not-entered settings group now
+  // previews its children inline in the one command-runner surface's own content (SurfaceContentResolver's capped,
+  // expand-in-place group preview) -- there is no second surface anymore, so there is no surface-level lifecycle
+  // left to animate or ghost here; any redraw is just the existing per-cell content animation on the one surface,
+  // already covered by the palette's other row-content animation specs.
+  it should "never create a second submenu surface while browsing, previewing, or entering settings groups" in {
     val sm = createStateManager()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     openSettingsCategory(sm)
-
-    val state   = sm.getCurrentState.unsafeRunSync()
-    val submenu = state.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
-
-    state.runtime.surfaceAnimations.get(submenu.id) shouldBe defined
-    state.runtime.surfaceAnimations(submenu.id).phase shouldBe SurfacePhase.Visible
-  }
-
-  it should "restart the submenu animation when the preview changes to another settings group" in {
-    val sm = createStateManager()
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    openSettingsCategory(sm)
-
-    val firstState   = sm.getCurrentState.unsafeRunSync()
-    val firstSubmenu = firstState.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
-    advanceSurfaceAnimations(sm)
-
-    sm.getCurrentState.unsafeRunSync().runtime.surfaceAnimations.get(firstSubmenu.id) shouldBe None
+    sm.getCurrentState.unsafeRunSync().commandRunnerSubmenuSurface shouldBe None
 
     sm.applyEvent(MoveDown).unsafeRunSync()
-    val updatedState   = sm.getCurrentState.unsafeRunSync()
-    val updatedSubmenu = updatedState.commandRunnerSubmenuSurface.getOrElse(fail("Expected updated submenu preview"))
-
-    updatedSubmenu.id shouldBe firstSubmenu.id
-    updatedSubmenu.content should not be firstSubmenu.content
-    updatedState.runtime.surfaceAnimations.get(updatedSubmenu.id) shouldBe defined
-    updatedState.runtime.surfaceAnimations(updatedSubmenu.id).phase shouldBe SurfacePhase.Visible
-  }
-
-  it should "restart the submenu animation when a preview becomes the focused submenu" in {
-    val sm = createStateManager()
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    openSettingsCategory(sm)
-
-    val previewState   = sm.getCurrentState.unsafeRunSync()
-    val previewSubmenu = previewState.commandRunnerSubmenuSurface.getOrElse(fail("Expected submenu preview surface"))
-    advanceSurfaceAnimations(sm)
-
-    sm.getCurrentState.unsafeRunSync().runtime.surfaceAnimations.get(previewSubmenu.id) shouldBe None
+    sm.getCurrentState.unsafeRunSync().commandRunnerSubmenuSurface shouldBe None
 
     sm.applyEvent(Enter).unsafeRunSync()
-    val focusedState   = sm.getCurrentState.unsafeRunSync()
-    val focusedSubmenu = focusedState.commandRunnerSubmenuSurface.getOrElse(fail("Expected focused submenu surface"))
-
-    focusedSubmenu.id shouldBe previewSubmenu.id
-    focusedSubmenu.content should not be previewSubmenu.content
-    focusedState.runtime.surfaceAnimations.get(focusedSubmenu.id) shouldBe defined
-    focusedState.runtime.surfaceAnimations(focusedSubmenu.id).phase shouldBe SurfacePhase.Visible
-  }
-
-  it should "add a ghost overlay when the submenu preview is dismissed" in {
-    val sm = createStateManager()
-    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    openSettingsCategory(sm)
-    advanceToVisible(sm)
+    sm.getCurrentState.unsafeRunSync().commandRunnerSubmenuSurface shouldBe None
 
     sm.applyEvent(TabKey).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
-
     state.commandRunnerSubmenuSurface shouldBe None
     state.runtime.uiSurfaces.exists {
       case UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.CommandPaletteSubmenu(_, _, _), _), _, _) => true
       case _                                                                                                 => false
-    } shouldBe true
+    } shouldBe false
   }
 
   private def advanceToVisible(sm: StateManager): Unit =
@@ -436,9 +394,6 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val surfId  = state0.commandRunnerSurface.get.id
     val fadeLen = state0.runtime.surfaceAnimations.get(surfId).map(_.bufferFadeLength).getOrElse(0)
     (1 to (fadeLen + 1)).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
-
-  private def advanceSurfaceAnimations(sm: StateManager): Unit =
-    (1 to 60).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
 
   private def openSettingsCategory(sm: StateManager): Unit =
     (1 to 5).foreach(_ => sm.applyEvent(TabKey).unsafeRunSync())

@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier, Modifier}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
-import com.serenity.ui.layout.Layout
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -782,7 +782,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
   }
 
-  it should "open a preview submenu for the selected expandable settings row without moving focus" in {
+  // issue #1059: a hovered-but-not-entered expandable settings row used to preview its children on a second floating
+  // surface without moving focus. It previews inline in the same list now (SurfaceContentResolver's capped,
+  // expand-in-place group preview) -- still without moving focus, but with no second surface at all.
+  it should "preview an expandable settings row's children inline without moving focus" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -802,14 +805,32 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       runtime = Runtime(uiSurfaces = List(surface))
     )
 
-    val previewed = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), state, registry)
+    val previewed       = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), state, registry)
+    val previewedRunner = runnerFrom(previewed.state)
 
     previewed.state.commandRunnerSurface shouldBe defined
-    previewed.state.commandRunnerSubmenuSurface shouldBe defined
+    previewed.state.commandRunnerSubmenuSurface shouldBe None
     previewed.state.persisted.focus shouldBe Focus.Surface(surface.id)
+
+    val selectedGroup = previewedRunner.selectedItem
+      .collect { case group: CommandSurfaceItem.GroupItem => group }
+      .getOrElse(fail("Expected the second row to be an expandable settings group"))
+    selectedGroup.children should not be empty
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(previewedRunner),
+      LayoutRect(0, 0, 90, 30),
+      SurfaceRenderMode.Floating
+    )
+    val selectedRowIndex = resolved.rows.indexWhere(_.selected)
+    selectedRowIndex should be >= 0
+    resolved.rows.lift(selectedRowIndex + 1).map(_.leadingPadding) shouldBe Some(2)
   }
 
-  it should "focus the submenu on enter and return to the parent runner on escape" in {
+  // issue #1059: entering a settings group used to move focus to a second floating submenu surface; it now stays on
+  // the one command-runner surface throughout (activeSubmenu is the signal, not a focus/surface change), and Escape
+  // pops back out rather than "returning to a parent surface" that no longer exists.
+  it should "enter the settings group on submit and pop back out on escape, staying on the one surface" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -832,14 +853,16 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
 
     entered.state.commandRunnerSurface shouldBe defined
-    entered.state.commandRunnerSubmenuSurface shouldBe defined
-    entered.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    entered.state.commandRunnerSubmenuSurface shouldBe None
+    entered.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
+    runnerFrom(entered.state).activeSubmenu shouldBe defined
 
     val exited = CommandRunnerReducer.reduce(RunnerDismiss, entered.state, registry)
 
     exited.state.commandRunnerSurface shouldBe defined
-    exited.state.commandRunnerSubmenuSurface shouldBe defined
+    exited.state.commandRunnerSubmenuSurface shouldBe None
     exited.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
+    runnerFrom(exited.state).activeSubmenu shouldBe None
   }
 
   it should "exit submenu edit mode on escape before leaving the submenu" in {
@@ -859,8 +882,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
     runner.activeSubmenu.flatMap(_.editingItemId) shouldBe None
     runner.activeSubmenu.map(_.editingText) shouldBe Some("")
-    escaped.state.commandRunnerSubmenuSurface shouldBe defined
-    escaped.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    escaped.state.commandRunnerSubmenuSurface shouldBe None
+    escaped.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
   }
 
   it should "preserve submenu selection when exiting to the parent and re-entering the same group" in {
@@ -1111,8 +1134,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val runner  = runnerFrom(cleared.state)
 
     runner.activeSubmenu.map(_.searchTerm) shouldBe Some("")
-    cleared.state.commandRunnerSubmenuSurface shouldBe defined
-    cleared.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    cleared.state.commandRunnerSubmenuSurface shouldBe None
+    cleared.state.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner"))
   }
 
   it should "discard in-progress submenu edit text when exiting and re-entering the group" in {
@@ -1156,6 +1179,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       group.children.indexWhere(_.id == itemId) match
         case -1    => 0
         case index => index
+    // issue #1059: a drilled-in settings group renders on the one command-runner surface now -- no more second
+    // floating submenu surface or a separate focus target for it.
     val runner = baseRunner.enterSelectedGroup
       .copy(activeSubmenu = Some(com.serenity.command.CommandRunnerSubmenuState(groupId, selectedIndex = groupIndex)))
     val surface = UiSurface(
@@ -1163,18 +1188,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.CommandPalette(runner),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
-    val submenuSurface = UiSurface(
-      SurfaceId("command-runner-submenu"),
-      SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly = false),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
     AppState(
       persisted = Persisted(
         layout = Layout.empty,
         buffers = Map.empty,
-        focus = Focus.Surface(submenuSurface.id)
+        focus = Focus.Surface(surface.id)
       ),
-      runtime = Runtime(uiSurfaces = List(surface, submenuSurface))
+      runtime = Runtime(uiSurfaces = List(surface))
     )
 
   private def settingsGroupSearchTerm(groupId: String): String =

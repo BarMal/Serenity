@@ -56,7 +56,9 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     }
     currentRunner(stateManager).activeCategory shouldBe category
 
-  "Command runner focus ownership" should "keep submenu navigation inside the command-runner domain" in {
+  // issue #1059: a drilled-in settings group renders on the one command-runner surface now, so there is no second
+  // surface for focus to move to -- it stays on "command-runner" throughout.
+  "Command runner focus ownership" should "keep submenu navigation on the one command-runner surface" in {
     val stateManager = createStateManager()
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
@@ -64,16 +66,17 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     moveRootSelectionTo(stateManager, "settings-appearance-motion")
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.Surface(
-      SurfaceId("command-runner-submenu")
-    )
+    val enteredState  = stateManager.getCurrentState.unsafeRunSync()
+    val mainSurfaceId = enteredState.commandRunnerSurface.getOrElse(fail("Expected command runner surface")).id
+    enteredState.commandRunnerSubmenuSurface shouldBe None
+    enteredState.persisted.focus shouldBe Focus.Surface(mainSurfaceId)
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe defined
-    updatedState.commandRunnerSubmenuSurface shouldBe defined
-    updatedState.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    updatedState.commandRunnerSubmenuSurface shouldBe None
+    updatedState.persisted.focus shouldBe Focus.Surface(mainSurfaceId)
     currentRunner(stateManager).activeSubmenu.map(_.selectedIndex) shouldBe Some(1)
   }
 
@@ -99,22 +102,23 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(InsertChar('9')).unsafeRunSync()
     currentRunner(stateManager).activeSubmenu.flatMap(_.editingItemId) shouldBe Some("animation-duration")
 
-    // Escape #1: cancels the in-progress edit, staying on the same (child) submenu page.
+    // Escape #1: cancels the in-progress edit, staying on the same (child) submenu page -- and, since issue #1059,
+    // on the one command-runner surface (no second surface to move focus to anymore).
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterFirstEscape = stateManager.getCurrentState.unsafeRunSync()
+    val mainSurfaceId    = afterFirstEscape.commandRunnerSurface.getOrElse(fail("Expected command runner surface")).id
     afterFirstEscape.commandRunnerSurface shouldBe defined
-    afterFirstEscape.commandRunnerSubmenuSurface shouldBe defined
-    afterFirstEscape.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    afterFirstEscape.commandRunnerSubmenuSurface shouldBe None
+    afterFirstEscape.persisted.focus shouldBe Focus.Surface(mainSurfaceId)
     currentRunner(stateManager).activeSubmenu.flatMap(_.editingItemId) shouldBe None
     currentRunner(stateManager).activeSubmenu.map(_.groupId) shouldBe Some("settings-animation")
 
-    // Escape #2: pops from the child submenu ("settings-animation") to its parent -- still a submenu page, so focus
-    // stays on the submenu surface.
+    // Escape #2: pops from the child submenu ("settings-animation") to its parent -- still on the one surface.
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterSecondEscape = stateManager.getCurrentState.unsafeRunSync()
     afterSecondEscape.commandRunnerSurface shouldBe defined
-    afterSecondEscape.commandRunnerSubmenuSurface shouldBe defined
-    afterSecondEscape.persisted.focus shouldBe Focus.Surface(SurfaceId("command-runner-submenu"))
+    afterSecondEscape.commandRunnerSubmenuSurface shouldBe None
+    afterSecondEscape.persisted.focus shouldBe Focus.Surface(mainSurfaceId)
     currentRunner(stateManager).activeSubmenu.flatMap(_.parentGroupId) shouldBe None
 
     // Escape #3: pops the parent (a top-level group, with no ancestor of its own) -- issue #1059's fix: this now

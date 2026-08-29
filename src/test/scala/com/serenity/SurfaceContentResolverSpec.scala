@@ -349,6 +349,13 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
             parentGroupId = Some("settings-preset-edit"),
             ancestorGroupIds = List("settings-ui-presets", "settings-preset-edit")
           )
+        ),
+        // Kept in sync with activeSubmenu above now that submenuBreadcrumbLabels reads this field (issue #1059).
+        activeSettingsSurface = Some(
+          SettingsSurfaceState(
+            SettingsPage.Group("settings-preset-fonts"),
+            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+          )
         )
       )
 

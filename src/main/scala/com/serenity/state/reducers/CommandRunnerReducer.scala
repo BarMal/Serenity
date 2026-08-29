@@ -477,9 +477,13 @@ object CommandRunnerReducer:
       case _: CommandSurfaceItem.GroupItem | _: CommandSurfaceItem.SettingSearchItem => true
       case _                                                                         => false
 
+  /** Both entry points now render a drilled-in settings group on the one `CommandPalette` surface (issue #1059), so
+    * `activeSubmenu` being defined is the whole signal -- there is no more second surface to focus, and
+    * `isSettingsSurface` no longer needs distinguishing here since the two paths behave identically once inside a
+    * group.
+    */
   private def submenuHasFocus(state: AppState): Boolean =
-    state.persisted.focus == Focus.Surface(SubmenuSurfaceId) ||
-      currentRunner(state).exists(runner => runner.isSettingsSurface && runner.activeSubmenu.nonEmpty)
+    currentRunner(state).exists(_.activeSubmenu.nonEmpty)
 
   private def submenuEditing(state: AppState): Boolean =
     currentRunner(state).flatMap(_.activeSubmenu.flatMap(_.editingItemId)).nonEmpty
@@ -742,36 +746,25 @@ object CommandRunnerReducer:
               case other =>
                 List(other)
             }
-            syncSubmenuSurface(state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)), updatedRunner)
+            clearSubmenuSurface(state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)))
           case _ =>
             state
       case None =>
         state
 
-  private def syncSubmenuSurface(state: AppState, runner: CommandRunner): AppState =
+  /** Settings navigation -- both the settings-tab-in-palette and the dedicated Settings surface -- now renders entirely
+    * through `SurfaceContentResolver.resolveSettingsSurface` on the one `CommandPalette` surface (issue #1059's "one
+    * consistent settings experience"): capped group-preview rows expand in place in that single list instead of a
+    * second floating surface. `previewOrFocusedGroupId`/`SurfaceContent.CommandPaletteSubmenu` were only ever driven by
+    * Settings-category preview/navigation (`updatePreviewForSelection`'s `previewGroup` call is gated on
+    * `activeCategory == Settings`, and `activeSubmenu` only ever holds settings navigation) -- so there is nothing left
+    * that should spawn a second `UiSurface`; every `replaceRunner` call now just makes sure any leftover one from
+    * before this migration is gone and focus sits on the main surface.
+    */
+  private def clearSubmenuSurface(state: AppState): AppState =
     val baseSurfaces  = state.runtime.uiSurfaces.filterNot(_.id == SubmenuSurfaceId)
     val mainSurfaceId = state.commandRunnerSurface.map(_.id).getOrElse(SurfaceId("command-runner"))
-    if runner.isSettingsSurface then
-      state.copy(
-        runtime = state.runtime.copy(uiSurfaces = baseSurfaces),
-        persisted = state.persisted.copy(focus = Focus.Surface(mainSurfaceId))
-      )
-    else
-      runner.previewOrFocusedGroupId match
-        case Some(groupId) =>
-          val submenuSurface = UiSurface(
-            id = SubmenuSurfaceId,
-            content = SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly = runner.activeSubmenu.isEmpty),
-            presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-          )
-          state.copy(
-            runtime = state.runtime.copy(uiSurfaces = baseSurfaces :+ submenuSurface),
-            persisted = state.persisted.copy(focus =
-              if runner.activeSubmenu.isDefined then Focus.Surface(SubmenuSurfaceId) else Focus.Surface(mainSurfaceId)
-            )
-          )
-        case None =>
-          state.copy(
-            runtime = state.runtime.copy(uiSurfaces = baseSurfaces),
-            persisted = state.persisted.copy(focus = Focus.Surface(mainSurfaceId))
-          )
+    state.copy(
+      runtime = state.runtime.copy(uiSurfaces = baseSurfaces),
+      persisted = state.persisted.copy(focus = Focus.Surface(mainSurfaceId))
+    )
