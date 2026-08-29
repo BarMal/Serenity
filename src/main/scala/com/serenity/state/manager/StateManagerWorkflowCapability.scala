@@ -34,7 +34,7 @@ final private[manager] class StateManagerWorkflowCapability(
 
   private def createNewEmptyBuffer(): IO[BufferId] = editor.createNewEmptyBuffer()
 
-  private def createPane(bufferId: Option[BufferId] = None): IO[PaneId] = editor.createPane(bufferId)
+  private def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
 
   private def switchToPane(paneId: PaneId): IO[Unit] = editor.switchToPane(paneId)
 
