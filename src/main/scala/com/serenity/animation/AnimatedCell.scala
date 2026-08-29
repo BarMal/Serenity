@@ -47,13 +47,13 @@ final case class AnimatedCell(
   def advance(): AnimatedCell =
     if cycling then
       copy(
-        foregroundSteps = if foregroundSteps.isEmpty then List.empty else foregroundSteps.tail :+ foregroundSteps.head,
-        backgroundSteps = if backgroundSteps.isEmpty then List.empty else backgroundSteps.tail :+ backgroundSteps.head
+        foregroundSteps = AnimatedCell.rotate(foregroundSteps),
+        backgroundSteps = AnimatedCell.rotate(backgroundSteps)
       )
     else
       copy(
-        foregroundSteps = if foregroundSteps.isEmpty then List.empty else foregroundSteps.tail,
-        backgroundSteps = if backgroundSteps.isEmpty then List.empty else backgroundSteps.tail,
+        foregroundSteps = foregroundSteps.drop(1),
+        backgroundSteps = backgroundSteps.drop(1),
         foregroundAnimation = foregroundAnimation.map(_.advance),
         backgroundAnimation = backgroundAnimation.map(_.advance)
       )
@@ -67,6 +67,12 @@ final case class AnimatedCell(
     )
 
 object AnimatedCell:
+
+  /** Moves the head element to the tail; an empty list is returned unchanged. */
+  private def rotate(steps: List[Color]): List[Color] =
+    steps match
+      case Nil          => List.empty
+      case head :: tail => tail :+ head
 
   def fromForegroundInterpolation(
     char: Char,
