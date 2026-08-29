@@ -187,5 +187,5 @@ private[manager] object StateManagerRuntime:
       markdownPreviewWindow = markdownPreviewWindow,
       fileManager = new FileManager(),
       sessionManager = sessionManager,
-      sessionPersistence = new SessionPersistence(sessionManager, policy, logger)
+      sessionPersistence = new SessionPersistence(sessionManager, policy)
     )

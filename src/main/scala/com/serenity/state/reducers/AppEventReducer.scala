@@ -107,7 +107,7 @@ object AppEventReducer:
                 stateWithId.runtime.copy(uiSurfaces = upsertSurface(stateWithId.runtime.uiSurfaces, surface))
               )
 
-  private def closeTabState(state: AppState, registry: CommandRegistry)(using com.serenity.rope.Balance): AppState =
+  private def closeTabState(state: AppState, registry: CommandRegistry): AppState =
     val closedState = EditorState.closeFocusedTab(state)
     if closedState.persisted.layout.activeEditorPaneId.isDefined then closedState
     else toggleCommandRunner(closedState, registry)

@@ -352,8 +352,8 @@ object CharacterRenderer:
     styledTexts: List[com.serenity.ui.theme.StyledText],
     theme: Theme,
     screenAnimations: AnimationState,
-    bufferLine: Int = 0,
-    bufferStartColumn: Int = 0
+    bufferLine: Int,
+    bufferStartColumn: Int
   ): Unit =
     styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
@@ -374,7 +374,7 @@ object CharacterRenderer:
         )
       }
       collectedRuns.endX
-    }
+    }: Unit
 
   private def withStyle(surface: RenderSurface, style: TextStyle)(render: => Unit): Unit =
     surface.enableStyle(style)

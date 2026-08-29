@@ -1,5 +1,7 @@
 package com.serenity.lsp
 
+import scala.annotation.unused
+
 import cats.effect.std.Supervisor
 import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
@@ -36,7 +38,7 @@ object LspManager:
       * instead of reusing a stale one. No-op by default -- only the real, cache-backed provider needs to do anything
       * here.
       */
-    def evictResolution(languageId: LanguageId, fileUri: String): IO[Unit] = IO.unit
+    def evictResolution(@unused languageId: LanguageId, @unused fileUri: String): IO[Unit] = IO.unit
 
   def run(
     effects: Stream[IO, LspEffect],

@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import scala.annotation.unused
+
 import cats.effect.{IO, Ref}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
@@ -45,7 +47,7 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
             case _ => IO.unit
         }
 
-  def applyUndo(prevState: AppState): IO[Unit] =
+  def applyUndo(@unused prevState: AppState): IO[Unit] =
     undoRef.get.flatMap { undo =>
       val flushed = undo.flushPendingGroup
       flushed.undoStack match
@@ -69,7 +71,7 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
           }
     }
 
-  def applyRedo(prevState: AppState): IO[Unit] =
+  def applyRedo(@unused prevState: AppState): IO[Unit] =
     undoRef.get.flatMap { undo =>
       undo.redoStack match
         case Nil => IO.unit

@@ -281,7 +281,7 @@ final case class Command private (
     label: String,
     description: String,
     intent: CommandIntent,
-    category: CommandCategory = CommandCategory.Edit
+    category: CommandCategory
 )
 
 object Command:
@@ -300,7 +300,7 @@ object Command:
       .split("[-_ ]+")
       .toList
       .filter(_.nonEmpty)
-      .map(word => word.head.toUpper + word.drop(1))
+      .map(word => s"${word.head.toUpper}${word.drop(1)}")
       .mkString(" ")
 
 final case class CommandOption(

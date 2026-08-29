@@ -1,6 +1,7 @@
 package com.serenity.ui.fonts
 
-import java.awt.{Font, GraphicsEnvironment, Toolkit}
+import java.awt.image.BufferedImage
+import java.awt.{Font, GraphicsEnvironment}
 
 import cats.effect.IO
 import com.serenity.state.models.TypographyRole
@@ -102,10 +103,10 @@ object FontLoader:
 
     baseFontIO.map(applyFontFeatures(_, config.enableLigatures))
 
-  def loadTextFont(config: FontConfig)(using Logger[IO]): IO[Font] =
+  def loadTextFont(config: FontConfig): IO[Font] =
     IO.pure(previewTextFont(config))
 
-  def loadUiFont(config: FontConfig)(using Logger[IO]): IO[Font] =
+  def loadUiFont(config: FontConfig): IO[Font] =
     IO.pure(previewUiFont(config))
 
   def previewCodeFont(config: FontConfig): Font =
@@ -161,7 +162,7 @@ object FontLoader:
   private lazy val availableSystemFontFamilies: List[String] =
     GraphicsEnvironment.getLocalGraphicsEnvironment.getAvailableFontFamilyNames.toList.sorted
 
-  private def loadBundledMonospace(size: Float)(using Logger[IO]): IO[Font] =
+  private def loadBundledMonospace(size: Float): IO[Font] =
     IO.pure(bundledMonospace(size).getOrElse(defaultSystemMonospace(size)))
 
   private def bundledMonospace(size: Float): Option[Font] =
@@ -202,11 +203,15 @@ object FontLoader:
 
   private def isMonospaced(font: Font): Boolean =
     try
-      val metrics = Toolkit.getDefaultToolkit.getFontMetrics(font)
-      val iWidth  = metrics.charWidth('i')
-      val mWidth  = metrics.charWidth('m')
-      val wWidth  = metrics.charWidth('W')
-      iWidth == mWidth && mWidth == wWidth
+      val probeImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+      val graphics   = probeImage.createGraphics()
+      try
+        val metrics = graphics.getFontMetrics(font)
+        val iWidth  = metrics.charWidth('i')
+        val mWidth  = metrics.charWidth('m')
+        val wWidth  = metrics.charWidth('W')
+        iWidth == mWidth && mWidth == wWidth
+      finally graphics.dispose()
     catch case _: Exception => false
 
   private def applyFontFeatures(font: Font, enableLigatures: Boolean): Font =

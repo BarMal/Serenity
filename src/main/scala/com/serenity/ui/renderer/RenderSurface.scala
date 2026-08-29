@@ -2,6 +2,8 @@ package com.serenity.ui.renderer
 
 import java.awt.Color
 
+import scala.annotation.unused
+
 import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.theme.TextStyle
 
@@ -39,7 +41,7 @@ trait RenderSurface:
     * The default clears everything, which is why callers must check [[persistentContentKey]] first: a surface without a
     * persistent key preserves nothing, so its caller has to redraw the content it would otherwise have skipped.
     */
-  def clearViewportExcept(color: Color, preserved: List[PixelRect]): Unit =
+  def clearViewportExcept(color: Color, @unused preserved: List[PixelRect]): Unit =
     clearViewport(color)
 
   def putString(x: Int, y: Int, s: String): Unit

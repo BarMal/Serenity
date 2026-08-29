@@ -106,16 +106,13 @@ final private[manager] class StateManagerEffectHandlers(
       interpretExplorerEffect,
       interpretWorkflowEffect,
       interpretLspQueueEffect,
-      animationEffects.interpret
+      animationEffects.interpret,
+      scheduleCommandRunnerBindingExpiry
     )
   )
 
   private[manager] def interpretEffect(effect: AppEffect): IO[Unit] =
-    effect match
-      case AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis) =>
-        scheduleCommandRunnerBindingExpiry(recordedAtMillis)
-      case _ =>
-        behavior.interpret(effect)
+    behavior.interpret(effect)
 
   private def scheduleCommandRunnerBindingExpiry(recordedAtMillis: Long): IO[Unit] =
     (IO.sleep(DoubleTapWindow) >>

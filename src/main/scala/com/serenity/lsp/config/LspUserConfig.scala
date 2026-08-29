@@ -1,7 +1,6 @@
 package com.serenity.lsp.config
 
 import pureconfig.ConfigReader
-import pureconfig.generic.derivation.default.*
 
 final case class LspServerOverride(
     command: Option[String],

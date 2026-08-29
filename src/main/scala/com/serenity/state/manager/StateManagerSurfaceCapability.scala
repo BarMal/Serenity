@@ -11,7 +11,7 @@ final private[manager] class StateManagerSurfaceCapability(
     stateRef: cats.effect.Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     operations: StateManagerOperationBoundary
-)(using balance: com.serenity.rope.Balance):
+):
 
   private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     operations.validateAndUpdateState(newState, fallbackState)

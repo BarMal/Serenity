@@ -300,7 +300,7 @@ object TextOverlayRenderer:
       case OverlayRowLayout.Plain =>
         if rowView.row.segments.nonEmpty then
           renderInlineSegments(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
-        else if rowView.useMeasuredCursor && shouldUseMeasuredCursor(font, surface) then
+        else if rowView.useMeasuredCursor && shouldUseMeasuredCursor(surface) then
           renderMeasuredPlainRow(
             surface,
             x,
@@ -325,7 +325,7 @@ object TextOverlayRenderer:
       rowView.row.cursorColumn
         .flatMap(cursorColumn => cursorPlacement(rowView.row, x, width, cursorColumn, rowView.useMeasuredCursor))
         .foreach { placement =>
-          if placement.useMeasured && shouldUseMeasuredCursor(font, surface) then
+          if placement.useMeasured && shouldUseMeasuredCursor(surface) then
             renderMeasuredCursor(
               surface,
               placement.x,
@@ -973,7 +973,7 @@ object TextOverlayRenderer:
   // -- the font-only checks previously OR'd in here never had the chance to matter on a real surface, only on a
   // cell-only one, where they were exactly the bug: they could force the measured (dropped) path even with no
   // FontRenderContext to measure against.
-  private def shouldUseMeasuredCursor(font: java.awt.Font, surface: RenderSurface): Boolean =
+  private def shouldUseMeasuredCursor(surface: RenderSurface): Boolean =
     surface.text.fontRenderContext.nonEmpty
 
   private def renderMeasuredPlainRow(
