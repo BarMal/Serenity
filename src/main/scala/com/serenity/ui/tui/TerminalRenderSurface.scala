@@ -106,7 +106,7 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   def flush(): Unit =
     val next  = screenBuffer.snapshot
     val ansi  = TerminalAnsiDiff.emit(previousFrameRef.getAndSet(Some(next)), next)
-    val caret = caretEscape()
+    val caret = caretEscape(forceReassert = ansi.nonEmpty)
     if ansi.nonEmpty || caret.nonEmpty then
       writer.write(TerminalRenderSurface.BeginSyncUpdate)
       writer.write(ansi)
@@ -117,11 +117,20 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   /** The caret escape for this flush, or `""` when the caret's presented/hidden state hasn't changed since the last
     * flush that actually emitted one -- an unmoved, already-visible caret costs nothing on a content-unchanged flush,
     * same as the content diff itself.
+    *
+    * `forceReassert` (issue #1215) overrides that dedup whenever this same flush's content diff (`ansi`) is non-empty:
+    * `TerminalAnsiDiff`'s own `CUP` writes leave the terminal's real cursor wherever the diff's last cell was drawn,
+    * entirely independent of where the caret logically belongs -- a content-only flush (an animation tick, a status-bar
+    * refresh, anything that doesn't itself move the caret) would otherwise silently drag the visible cursor away with
+    * nothing here to pull it back, since the dedup only ever compared the caret's own target against its last-emitted
+    * value. Re-asserting the caret on every content-changing flush costs nothing on a genuinely idle frame (`ansi`
+    * empty keeps the old dedup exactly as before) and is what actually keeps the terminal's cursor pinned to the caret
+    * instead of wherever content last happened to land.
     */
-  private def caretEscape(): String =
+  private def caretEscape(forceReassert: Boolean): String =
     val current  = caretRef.get()
     val previous = lastEmittedCaretRef.getAndSet(Some(current))
-    if previous.contains(current) then ""
+    if !forceReassert && previous.contains(current) then ""
     else
       current match
         case Some(caret) =>

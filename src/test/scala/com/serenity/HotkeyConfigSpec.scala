@@ -44,6 +44,30 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     config.bindingsFor(HotkeyAction.Find).map(_.render) shouldBe List("ctrl+alt+f")
   }
 
+  // Issue #1213: a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way AWT does for a focused
+  // Swing window -- macOS's own Terminal.app/iTerm2 intercept Cmd+Q as their own "quit the terminal" shortcut before
+  // it ever reaches a running program's stdin -- so TUI mode rewrites any hotkey still at its macOS default to the
+  // Ctrl-based binding every terminal actually forwards, regardless of the host OS `HotkeyConfig.defaultBindings`
+  // would otherwise pick.
+  it should "rewrite an unmodified macOS default to its terminal-safe Ctrl binding" in {
+    val config = HotkeyConfig.forOs("Mac OS X").forTerminalUse
+
+    config.bindingsFor(HotkeyAction.Quit).map(_.render) shouldBe List("ctrl+q", "eof")
+    config.bindingsFor(HotkeyAction.Save).map(_.render) shouldBe List("ctrl+s")
+  }
+
+  it should "leave a real user override of a macOS default untouched by the terminal-safe rewrite" in {
+    val config = HotkeyConfig.forOs("Mac OS X").withBinding(HotkeyAction.Quit, "meta+shift+q").forTerminalUse
+
+    config.bindingsFor(HotkeyAction.Quit).map(_.render) shouldBe List("meta+shift+q")
+  }
+
+  it should "leave already Ctrl-based (Linux/Windows) defaults unchanged by the terminal-safe rewrite" in {
+    val config = HotkeyConfig.forOs("Linux").forTerminalUse
+
+    config.bindings shouldBe HotkeyConfig.forOs("Linux").bindings
+  }
+
   it should "report conflicting bindings during validation" in {
     val bindings = Map(
       HotkeyAction.Find    -> HotkeyConfig.defaultBindingsFor("Linux")(HotkeyAction.Find),

@@ -219,6 +219,26 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     writer.toString should include(s"$esc[?25l")
   }
 
+  // Issue #1215: a real TUI session's cursor drifted to a fixed, wrong screen position and stayed there instead of
+  // tracking the caret. `TerminalAnsiDiff`'s own CUP writes leave the terminal's real cursor wherever a content
+  // diff's last cell was drawn -- entirely independent of the caret -- so a flush whose content changed (an
+  // animation tick, a status-bar refresh, anything that doesn't itself move the caret) must still re-assert the
+  // caret's own CUP even though the caret's logical target didn't change, or the terminal's visible cursor is left
+  // wherever that unrelated content write dragged it.
+  it should "reassert the caret's CUP on a later flush where unrelated content changed but the caret itself did not" in {
+    val (rs, writer) = surface()
+    rs.hardwareCursor.get.present(3, 2, HardwareCursorStyle(HardwareCursorShape.Block, blinking = true))
+    rs.flush()
+    writer.getBuffer.setLength(0)
+
+    rs.putString(7, 4, "x") // content elsewhere on screen changes; the caret's own target is untouched
+    rs.flush()
+
+    val out = writer.toString
+    out should include(s"$esc[3;4H")                       // CUP is row+1;col+1 -- row=2,col=3, still the caret's cell
+    out.indexOf("x") should be < out.indexOf(s"$esc[3;4H") // the caret CUP lands after the content write, last word
+  }
+
   "Renderer.renderWithCursorOverlay (surface-generic)" should
     "delegate the caret to the terminal's own cursor instead of painting it as cell content, in blink mode" in {
       val (rs, writer) = surface(width = 80, height = 24)
