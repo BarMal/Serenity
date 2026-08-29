@@ -6,7 +6,7 @@ import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.rope.Rope
-import com.serenity.text.TextEditing
+import com.serenity.text.{TextEditing, TextStatistics}
 import com.serenity.ui.layout.{Layout, SplitAxis, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.theme.Theme
 
@@ -342,6 +342,48 @@ final case class AppState(
           buffer   <- persisted.buffers.get(bufferId)
           cursor   <- buffer.editing.cursors.headOption
         yield formatCursorInfoBarText(mode, cursor, buffer)
+
+  /** The active editor pane's buffer, if any -- the shared lookup `wordCountStatusText` and its helpers build on. */
+  private def activeBuffer: Option[Buffer] =
+    for
+      paneId   <- persisted.layout.activeEditorPaneId
+      pane     <- persisted.layout.editorPanes.get(paneId)
+      bufferId <- pane.bufferId
+      buffer   <- persisted.buffers.get(bufferId)
+    yield buffer
+
+  /** Whole-buffer word/character counts and reading time for the active editor pane, read in O(1) from the buffer's
+    * `Rope` -- see `Rope.wordCount`/`Rope.nonWhitespaceCount` for how those stay current without a per-edit rescan.
+    */
+  def activeBufferTextStatistics: Option[TextStatistics] =
+    activeBuffer.map(buffer => TextStatistics.of(buffer.document.content))
+
+  /** Word/character counts for the active pane's current selection, or `None` when there is no non-empty selection. */
+  def activeSelectionTextStatistics: Option[TextStatistics] =
+    for
+      buffer    <- activeBuffer
+      selection <- buffer.primarySelection
+      if selection.start != selection.end
+      content     = buffer.document.content
+      startOffset = content.lineColumnToOffset(selection.start.line, selection.start.column)
+      endOffset   = content.lineColumnToOffset(selection.end.line, selection.end.column)
+      if endOffset > startOffset
+    yield TextStatistics.ofString(content.sliceString(startOffset, endOffset))
+
+  /** Status-bar text for the word/character-count and reading-time display (#1203), or `None` when the feature is off
+    * (`surfaceConfig.showWordCount`) or there is no active buffer. Selection-scoped when a non-empty selection is
+    * active, whole-buffer otherwise -- mirrors `cursorInfoBarText`'s shape for the status-bar convention.
+    */
+  def wordCountStatusText: Option[String] =
+    if !persisted.config.surfaceConfig.showWordCount then None
+    else
+      activeBufferTextStatistics.map { total =>
+        activeSelectionTextStatistics match
+          case Some(selection) =>
+            s"${selection.wordCount} of ${total.wordCount} words selected, ${selection.characterCount} chars"
+          case None =>
+            s"${total.wordCount} words, ${total.characterCount} chars, ~${total.readingTimeMinutes} min read"
+      }
 
   private def formatCursorInfoBarText(mode: CursorInfoBarMode, cursor: CursorPosition, buffer: Buffer): String =
     val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"

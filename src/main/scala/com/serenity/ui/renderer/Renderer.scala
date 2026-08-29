@@ -3215,9 +3215,13 @@ object Renderer:
         CharacterRenderer.renderString(surface, rect.x, middleRow, text.take(math.max(0, rect.width)))
 
   private def buildGutterContent(state: AppState): String =
-    if state.persisted.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom then
-      state.cursorInfoBarText.map(text => s" $text ").getOrElse(legacyGutterContent(state))
-    else legacyGutterContent(state)
+    val base =
+      if state.persisted.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom then
+        state.cursorInfoBarText.map(text => s" $text ").getOrElse(legacyGutterContent(state))
+      else legacyGutterContent(state)
+    // Opt-in (`surfaceConfig.showWordCount`, off by default): appended as its own segment rather than folded into
+    // `legacyGutterContent`/`cursorInfoBarText`, both of which existing callers assert on as exact strings.
+    state.wordCountStatusText.fold(base)(segment => s" ${base.trim} | $segment ")
 
   private def legacyGutterContent(state: AppState): String =
     state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get) match
