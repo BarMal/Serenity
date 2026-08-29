@@ -77,16 +77,27 @@ object Theme:
 
   /** Relative luminance contrast ratio defined by WCAG 2.x. */
   def contrastRatio(foreground: Color, background: Color): Double =
-    val foregroundLuminance = relativeLuminance(foreground)
-    val backgroundLuminance = relativeLuminance(background)
+    val foregroundLuminance = luminance(foreground)
+    val backgroundLuminance = luminance(background)
     (foregroundLuminance.max(backgroundLuminance) + 0.05) / (foregroundLuminance.min(backgroundLuminance) + 0.05)
 
-  private def relativeLuminance(color: Color): Double =
+  /** WCAG 2.x relative luminance in `[0, 1]` -- sRGB gamma-linearized, Rec.709-weighted. This is the one canonical
+    * luminance formula for the app (#1054): anywhere that needs to compare colors by perceived brightness -- contrast
+    * ratios here, or light/dark chrome decisions elsewhere -- should call this rather than approximate it locally,
+    * since differently-shaped approximations can disagree on whether the same color reads as light or dark.
+    */
+  def luminance(color: Color): Double =
     def linear(channel: Int): Double =
       val normalized = channel / 255.0
       if normalized <= 0.04045 then normalized / 12.92 else math.pow((normalized + 0.055) / 1.055, 2.4)
 
     (0.2126 * linear(color.getRed)) + (0.7152 * linear(color.getGreen)) + (0.0722 * linear(color.getBlue))
+
+  /** The luminance at which a color's WCAG contrast ratio to black equals its contrast ratio to white -- the standard
+    * threshold for picking a black-or-white (or dark-mode-or-light-mode) foreground against a background of that
+    * luminance. Solves `(L + 0.05) / 0.05 == 1.05 / (L + 0.05)` for `L`.
+    */
+  val EqualContrastLuminanceThreshold: Double = math.sqrt(1.05 * 0.05) - 0.05
 
   def dark: Theme = DefaultThemes.defaultDark.copy(name = "dark")
 

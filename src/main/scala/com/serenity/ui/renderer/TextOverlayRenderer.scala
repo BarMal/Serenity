@@ -4,6 +4,7 @@ import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.ui.layout.*
+import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme
 
 object TextOverlayRenderer:
@@ -272,12 +273,12 @@ object TextOverlayRenderer:
     val baseBg  = defaultBackground.getOrElse(theme.panel.background)
     val rowBackground =
       rowView.row.backgroundColor
-        .map(color => withAlpha(color, baseBg.getAlpha))
-        .getOrElse(if rowView.row.selected then withAlpha(theme.highlighted.background, baseBg.getAlpha) else baseBg)
+        .map(_.withAlpha(baseBg.getAlpha))
+        .getOrElse(if rowView.row.selected then theme.highlighted.background.withAlpha(baseBg.getAlpha) else baseBg)
     val rowForeground =
       rowView.row.foregroundColor
-        .map(color => withAlpha(color, baseFg.getAlpha))
-        .getOrElse(if rowView.row.selected then withAlpha(theme.highlighted.foreground, baseFg.getAlpha) else baseFg)
+        .map(_.withAlpha(baseFg.getAlpha))
+        .getOrElse(if rowView.row.selected then theme.highlighted.foreground.withAlpha(baseFg.getAlpha) else baseFg)
     val rowLeftXPx  = cellMetrics.toPixelX(x)
     val rowRightXPx = cellMetrics.toPixelX(x + width)
 
@@ -925,19 +926,19 @@ object TextOverlayRenderer:
     if width > 0 then
       val segmentBackground =
         segment.backgroundColor
-          .map(color => withAlpha(color, defaultBackground.getAlpha))
+          .map(_.withAlpha(defaultBackground.getAlpha))
           .getOrElse(
-            if segment.selected then withAlpha(theme.highlighted.background, defaultBackground.getAlpha)
-            else if segment.tone == OverlayTone.Error then withAlpha(theme.error.background, defaultBackground.getAlpha)
+            if segment.selected then theme.highlighted.background.withAlpha(defaultBackground.getAlpha)
+            else if segment.tone == OverlayTone.Error then theme.error.background.withAlpha(defaultBackground.getAlpha)
             else defaultBackground
           )
       val segmentForeground =
         segment.foregroundColor
-          .map(color => withAlpha(color, defaultForeground.getAlpha))
+          .map(_.withAlpha(defaultForeground.getAlpha))
           .getOrElse(
-            if segment.selected then withAlpha(theme.highlighted.foreground, defaultForeground.getAlpha)
-            else if segment.tone == OverlayTone.Muted then withAlpha(theme.muted, defaultForeground.getAlpha)
-            else if segment.tone == OverlayTone.Error then withAlpha(theme.error.foreground, defaultForeground.getAlpha)
+            if segment.selected then theme.highlighted.foreground.withAlpha(defaultForeground.getAlpha)
+            else if segment.tone == OverlayTone.Muted then theme.muted.withAlpha(defaultForeground.getAlpha)
+            else if segment.tone == OverlayTone.Error then theme.error.foreground.withAlpha(defaultForeground.getAlpha)
             else defaultForeground
           )
       surface.setForegroundColor(segmentForeground)
@@ -962,10 +963,6 @@ object TextOverlayRenderer:
         segmentText.take(math.max(0, width - iconWidth - iconGap))
       )
       if segment.fontFamily.nonEmpty then surface.text.setFont(font)
-
-  private def withAlpha(color: Color, alpha: Int): Color =
-    if color.getAlpha == alpha then color
-    else new Color(color.getRed, color.getGreen, color.getBlue, alpha)
 
   // #1105: drawRunPx is a no-op on a surface with no FontRenderContext (a terminal), so the measured path can never be
   // taken there regardless of what the font alone would call for (ligatures, proportional advances, ...). Every real

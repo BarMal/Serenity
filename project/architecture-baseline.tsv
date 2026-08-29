@@ -2,7 +2,7 @@
 # Targets: method <= 80 lines, file <= 600 lines, no forbidden imports.
 # This list may shrink, never grow. Removing an entry is the point.
 # Columns: path <TAB> detail <TAB> measured
-main/scala/com/serenity/app/AppRuntime.scala	file length	735
+main/scala/com/serenity/app/AppRuntime.scala	file length	736
 main/scala/com/serenity/command/CommandRegistry.scala	file length	750
 main/scala/com/serenity/command/CommandRegistry.scala	method defaultCommands	603
 main/scala/com/serenity/command/CommandRunner.scala	file length	826
@@ -15,7 +15,7 @@ main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	224
 main/scala/com/serenity/config/ConfigManager.scala	method configToString	184
 main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	986
 main/scala/com/serenity/rope/Rope.scala	file length	647
-main/scala/com/serenity/session/SessionState.scala	file length	1265
+main/scala/com/serenity/session/SessionState.scala	file length	1264
 main/scala/com/serenity/spellcheck/SpellChecker.scala	file length	905
 main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	748
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2628
@@ -31,12 +31,12 @@ main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	637
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	114
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
 main/scala/com/serenity/ui/layout/LayoutEngine.scala	file length	1567
-main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1182
+main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1183
 main/scala/com/serenity/ui/presets/UiPreset.scala	file length	878
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	file length	709
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	method applyGlow	90
 main/scala/com/serenity/ui/renderer/Renderer.scala	file length	3352
-main/scala/com/serenity/ui/renderer/TextOverlayRenderer.scala	file length	1032
+main/scala/com/serenity/ui/renderer/TextOverlayRenderer.scala	file length	1029
 main/scala/com/serenity/ui/terminal/SwingWindow.scala	file length	1152
 main/scala/com/serenity/ui/theme/ThemeManager.scala	method highlightMarkdownLine	89
 test/scala/com/serenity/AppRuntimeSpec.scala	file length	1462

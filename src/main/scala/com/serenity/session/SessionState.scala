@@ -24,7 +24,7 @@ import com.serenity.ui.layout.{
 }
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.presets.UiPreset.given
-import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.{ColorFormat, Theme}
 import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.given
@@ -1154,8 +1154,7 @@ private def parseColor(value: String): Option[Color] =
     }
 
 private def formatColor(color: Color): String =
-  val rgb = f"#${color.getRed}%02X${color.getGreen}%02X${color.getBlue}%02X"
-  if color.getAlpha == 255 then rgb else f"$rgb${color.getAlpha}%02X"
+  ColorFormat.toHex(color, withAlpha = true)
 
 given Encoder[SessionState] = deriveEncoder
 
