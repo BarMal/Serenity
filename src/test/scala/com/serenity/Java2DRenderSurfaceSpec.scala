@@ -114,6 +114,51 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     (new Color(flushedRef.get().get.getRGB(5, 5), true)).getAlpha shouldBe 0
   }
 
+  "Java2DRenderSurface.forLayer" should "start as a pixel copy of the given seed image instead of transparent" in {
+    val metrics      = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font         = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val seed         = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB)
+    val seedGraphics = seed.createGraphics()
+    seedGraphics.setColor(Color.RED)
+    seedGraphics.fillRect(0, 0, 20, 20)
+    seedGraphics.dispose()
+
+    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
+    val layer = Java2DRenderSurface.forLayer(
+      metrics,
+      font,
+      logicalWidthPx = 20,
+      logicalHeightPx = 20,
+      deviceScaleX = 1.0,
+      deviceScaleY = 1.0,
+      onFlush = image => flushedRef.set(Some(image)),
+      seed = Some(seed)
+    )
+    layer.flush()
+
+    new Color(flushedRef.get().get.getRGB(5, 5), true) shouldBe Color.RED
+  }
+
+  "Java2DRenderSurface.newSeededLayerSurface" should "seed the layer from this surface's own current pixels" in {
+    val image   = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.BLUE)
+    surface.flush()
+
+    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
+    val layer = surface.layerBuffers
+      .getOrElse(fail("expected layer buffer support"))
+      .newSeededLayerSurface(image => flushedRef.set(Some(image)))
+    layer.viewportWidth shouldBe surface.viewportWidth
+    layer.viewportHeight shouldBe surface.viewportHeight
+    layer.flush()
+
+    new Color(flushedRef.get().get.getRGB(5, 5), true) shouldBe Color.BLUE
+  }
+
   "Java2DRenderSurface.layerBuffers" should "expose a capability that builds a same-shaped layer surface" in {
     val image   = new BufferedImage(80, 60, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)

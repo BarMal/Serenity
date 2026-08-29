@@ -74,6 +74,17 @@ trait LayerBufferSupport:
     */
   def newLayerSurface(onFlush: BufferedImage => Unit): RenderSurface
 
+  /** Like [[newLayerSurface]], but the returned buffer starts as a snapshot of this surface's own current pixels
+    * instead of fully transparent -- for a layer whose paint step reads pixels back off the surface it paints onto
+    * (`Effects.blurRegion`, sampling the background behind a translucent panel) and so cannot start transparent:
+    * blurring a fully transparent surroundings would blur nothing. Painting into the snapshot and compositing the
+    * finished buffer back at full opacity is pixel-identical to painting directly onto this surface -- everywhere the
+    * layer's own paint step didn't touch is untouched pixel-for-pixel to begin with, and everywhere `blurRegion` reads
+    * is exactly the same background it would read painting live, because the snapshot *is* this surface's live pixels
+    * at the moment it was taken (#1100 stage 3).
+    */
+  def newSeededLayerSurface(onFlush: BufferedImage => Unit): RenderSurface
+
 /** A caret shape a real terminal's own cursor can be styled as via DECSCUSR (`CSI Ps SP q`). */
 enum HardwareCursorShape:
   case Block, Underline, Bar
