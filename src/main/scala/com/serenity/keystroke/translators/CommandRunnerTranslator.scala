@@ -2,7 +2,7 @@ package com.serenity.keystroke.translators
 
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 
 class CommandRunnerTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[CommandRunnerEvent]:
 
@@ -13,6 +13,6 @@ class CommandRunnerTranslator(appConfig: AppConfig = AppConfig.default) extends 
 
   private val commandRunnerCharacterConverter: PartialFunction[KeyStrokeInfo, CommandRunnerEvent] = {
     case KeyStrokeInfo(InputKey.Character, Some(char), modifiers)
-        if modifiers.isEmpty || modifiers == Set(Modifier.Shift) =>
+        if TextCharacterConverters.isPlainOrShiftOnly(modifiers) =>
       RunnerInsertChar(char)
   }

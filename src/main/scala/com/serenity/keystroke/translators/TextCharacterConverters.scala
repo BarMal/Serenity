@@ -22,3 +22,9 @@ object TextCharacterConverters:
 
   private def isAcceptableForTextEntry(modifiers: Set[Modifier]): Boolean =
     !modifiers.contains(Modifier.Ctrl) && modifiers.subsetOf(Set(Modifier.Shift, Modifier.Alt))
+
+  /** Guard shared by translators whose printable-character conversion is unmodified or shift-only, unlike the wider
+    * [[isAcceptableForTextEntry]] used for free text entry (which also allows Alt).
+    */
+  def isPlainOrShiftOnly(modifiers: Set[Modifier]): Boolean =
+    modifiers.isEmpty || modifiers == Set(Modifier.Shift)

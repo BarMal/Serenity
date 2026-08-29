@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.SingleLineFormTranslator
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -22,4 +22,22 @@ class SingleLineFormTranslatorSpec extends AnyFlatSpec with Matchers:
   it should "preserve single-character entry and dismissal semantics" in {
     translator.translate(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty)) shouldBe ModalInsertChar('a')
     translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe ModalDismiss
+  }
+
+  it should "insert a shift-only character" in {
+    translator.translate(
+      KeyStrokeInfo(InputKey.Character, Some('A'), Set(Modifier.Shift))
+    ) shouldBe ModalInsertChar('A')
+  }
+
+  it should "not insert a ctrl-modified character" in {
+    translator.translate(
+      KeyStrokeInfo(InputKey.Character, Some('a'), Set(Modifier.Ctrl))
+    ) should not be a[ModalInsertChar]
+  }
+
+  it should "not insert an alt-modified character" in {
+    translator.translate(
+      KeyStrokeInfo(InputKey.Character, Some('a'), Set(Modifier.Alt))
+    ) should not be a[ModalInsertChar]
   }

@@ -2,7 +2,7 @@ package com.serenity.keystroke.translators
 
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 
 class SingleLineFormTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[ModalInputEvent]:
 
@@ -13,6 +13,6 @@ class SingleLineFormTranslator(appConfig: AppConfig = AppConfig.default) extends
 
   private val singleLineFormCharacterConverter: PartialFunction[KeyStrokeInfo, ModalInputEvent] = {
     case KeyStrokeInfo(InputKey.Character, Some(char), modifiers)
-        if modifiers.isEmpty || modifiers == Set(Modifier.Shift) =>
+        if TextCharacterConverters.isPlainOrShiftOnly(modifiers) =>
       ModalInsertChar(char)
   }
