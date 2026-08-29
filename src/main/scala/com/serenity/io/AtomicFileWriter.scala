@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardCopyOption}
 
 import scala.util.control.NonFatal
+import scala.util.{Failure, Try}
 
 import cats.effect.IO
 
@@ -68,7 +69,11 @@ object AtomicFileWriter:
     val target    = path.toAbsolutePath.normalize
     val directory = Option(target.getParent).getOrElse(target)
 
-    try
+    // This is the synchronous boundary both writeBytes (via IO.blocking, which converts a thrown
+    // exception into a failed IO) and ConfigManager.saveConfig (plain try/catch) rely on -- so it must
+    // keep raising on failure. Try#get raises for us instead of a literal `throw`, and Try already only
+    // catches NonFatal, matching the two catch clauses this replaces.
+    Try {
       val _         = fileSystem.createDirectories(directory)
       val prefix    = s".${target.getFileName.toString}."
       val temporary = fileSystem.createTempFile(directory, prefix, ".tmp")
@@ -82,9 +87,10 @@ object AtomicFileWriter:
           case _: AtomicMoveNotSupportedException =>
             val _ = fileSystem.moveReplacing(temporary, target)
       finally deleteQuietly(temporary, fileSystem)
-    catch
-      case error: AtomicFileWriteException => throw error
-      case NonFatal(error)                 => throw AtomicFileWriteException(path, error)
+    }.recoverWith {
+      case error: AtomicFileWriteException => Failure(error)
+      case NonFatal(error)                 => Failure(AtomicFileWriteException(path, error))
+    }.get
 
   private def deleteQuietly(path: Path, fileSystem: AtomicFileSystem): Unit =
     try fileSystem.deleteIfExists(path): Unit
