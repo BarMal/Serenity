@@ -7,7 +7,7 @@ import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspR
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
-import com.serenity.ui.layout.DirtyLineDiff
+import com.serenity.ui.layout.{DirtyLineDiff, PanelPosition}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -313,12 +313,58 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
-  it should "report Everything when an existing surface's content or position changes" in {
+  it should "report Everything when an existing floating surface's content or position changes" in {
+    val surface = UiSurface(
+      SurfaceId("palette"),
+      SurfaceContent.Comments(Nil),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val bare   = stateWithContent("alpha")
+    val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
+    val after = before.copy(runtime =
+      before.runtime.copy(uiSurfaces = List(surface.copy(content = SurfaceContent.Diagnostics(Nil))))
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+  }
+
+  it should "report Damage.Surface scoped to the modal when only its own content changes" in {
     val surface = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
     val bare    = stateWithContent("alpha")
     val before  = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
     val after = before.copy(runtime =
       before.runtime.copy(uiSurfaces = List(surface.copy(content = SurfaceContent.Diagnostics(Nil))))
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Surface(SurfaceId("palette"))
+  }
+
+  it should "report Everything when the modal changes alongside another surface" in {
+    val modal = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
+    val pinned = UiSurface(
+      SurfaceId("outline"),
+      SurfaceContent.Outline(Nil),
+      SurfacePresentation.Pinned(PanelPosition.Left, 20)
+    )
+    val bare   = stateWithContent("alpha")
+    val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(modal, pinned)))
+    val after = before.copy(runtime =
+      before.runtime.copy(uiSurfaces =
+        List(modal.copy(content = SurfaceContent.Diagnostics(Nil)), pinned.copy(dismissOnMove = true))
+      )
+    )
+
+    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
+  }
+
+  it should "report Everything when a surface's presentation changes away from Modal" in {
+    val surface = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
+    val bare    = stateWithContent("alpha")
+    val before  = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
+    val after = before.copy(runtime =
+      before.runtime.copy(uiSurfaces =
+        List(surface.copy(presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)))
+      )
     )
 
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything

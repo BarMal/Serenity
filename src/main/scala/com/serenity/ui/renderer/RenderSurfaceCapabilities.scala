@@ -57,6 +57,23 @@ trait Effects:
     */
   def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long = System.nanoTime() / 50000000L): Unit
 
+/** A fresh, independently-paintable surface shaped exactly like the surface this capability came from -- same cell
+  * metrics, font, logical size and device scale -- for a layer (a pinned panel, a modal, a floating overlay) to own its
+  * own persisted buffer instead of painting straight into the shared frame surface (#1100 stage 2). Genuinely optional:
+  * a surface with no natural notion of an offscreen sub-buffer (a cell-addressed terminal, which has no sub-cell pixel
+  * buffering the same way a raster surface does) simply has no capability to expose, so [[RenderSurface.layerBuffers]]
+  * exposes this as an `Option` and callers fall back to painting the layer directly into the shared surface, same as
+  * before this capability existed.
+  */
+trait LayerBufferSupport:
+
+  /** A new surface painting into a blank, fully transparent buffer the same shape as the surface this capability came
+    * from. `onFlush` receives the finished image once the caller's `flush()` completes -- compositing it onto the frame
+    * surface (e.g. via `RenderSurface.pixels.drawImage`) is the caller's job, not this surface's; a layer surface never
+    * publishes itself anywhere on its own.
+    */
+  def newLayerSurface(onFlush: BufferedImage => Unit): RenderSurface
+
 /** A caret shape a real terminal's own cursor can be styled as via DECSCUSR (`CSI Ps SP q`). */
 enum HardwareCursorShape:
   case Block, Underline, Bar

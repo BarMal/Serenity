@@ -66,6 +66,17 @@ object Damage:
       case _                                          => false
     }
 
+  /** Whether `damage` affects the independently-composited surface `surfaceId` -- `Everything` always does (it dirties
+    * every target, surfaces included), a `Surface(surfaceId)` leaf does, and nothing else does (buffer/pane/chrome
+    * damage has no bearing on a surface's own cached content). Used by a per-surface layer buffer -- see
+    * `LayerCompositor`/`Renderer`'s modal layer -- to decide whether it may reuse what it last painted instead of
+    * repainting.
+    */
+  def narrowToSurface(damage: Damage, surfaceId: SurfaceId): Damage =
+    if isEverything(damage) then Everything
+    else if flatten(damage).contains(Surface(surfaceId)) then Surface(surfaceId)
+    else Nothing
+
   private def flatten(damage: Damage): Set[Damage] =
     damage match
       case Nothing         => Set.empty
