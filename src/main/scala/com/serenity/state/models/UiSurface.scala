@@ -177,12 +177,22 @@ enum SurfacePresentation:
   case Pinned(position: PanelPosition, size: Int)
   case Expanded(originalPosition: PanelPosition, originalSize: Int)
 
+/** Whether the above-cursor comment lens is a passive, read-only display or the existing always-editable draft state
+  * (#1222). `ReadOnly` is only reachable by clicking a highlighted comment range in floating display mode; a further
+  * click inside the lens body transitions it to `Editable`. Every keyboard-invoked open (the `comment-lens` command)
+  * still opens directly into `Editable`, unchanged from before this mode existed.
+  */
+enum CommentLensMode:
+  case ReadOnly
+  case Editable
+
 /** Focused draft state for editing an authored document comment from the above-cursor lens. */
 final case class CommentLensState(
     comment: RenderedComment,
     draft: String,
     cursor: Int,
-    target: Option[DocumentComment]
+    target: Option[DocumentComment],
+    mode: CommentLensMode = CommentLensMode.Editable
 ):
   def clampedCursor: Int =
     math.max(0, math.min(cursor, draft.length))

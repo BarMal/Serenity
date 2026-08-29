@@ -18,13 +18,21 @@ object CommentRendering:
       comment <- authoredCommentAt(buffer, cursor).orElse(commentAtLine(buffer, cursor.line))
     yield comment
 
-  /** Opens the above-cursor Comment Lens for the comment at the active editor's cursor, replacing any existing one. */
+  /** Opens the above-cursor Comment Lens for the comment at the active editor's cursor, replacing any existing one,
+    * directly in the always-editable state -- the keyboard-invoked `comment-lens` command's unchanged behaviour.
+    */
   def openLensAtCursor(state: AppState): AppState =
+    openLensAtCursor(state, CommentLensMode.Editable)
+
+  /** As [[openLensAtCursor]], but lets the caller pick the opened lens's display mode. Floating display mode's
+    * click-to-open (see `MouseHitTesting`) opens `ReadOnly`; every other caller keeps passing `Editable`.
+    */
+  def openLensAtCursor(state: AppState, mode: CommentLensMode): AppState =
     activeEditorComment(state) match
       case Some((cursor, lens)) =>
         val surface = UiSurface(
           id = SurfaceId("comment-lens"),
-          content = SurfaceContent.CommentLens(lens),
+          content = SurfaceContent.CommentLens(lens.copy(mode = mode)),
           presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
         )
         state

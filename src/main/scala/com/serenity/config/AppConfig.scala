@@ -163,6 +163,32 @@ object CursorInfoBarPlacement:
       case _ =>
         None
 
+/** Selects how a buffer's `DocumentComment`s become visible (#1222).
+  *
+  * `Floating`: comments stay hidden until a highlighted range is clicked, opening the existing above-cursor lens
+  * read-only first (a further click on its body enters edit) -- fully implemented.
+  *
+  * `Margin`: every comment for the visible buffer would render persistently in a side margin, with click-to-navigate
+  * vs. click-in-body-to-edit routing. Reserved for a follow-up (see #1222) -- the margin layout/rendering does not
+  * exist yet, so selecting it currently only turns off the `Floating` click-to-open behaviour without replacing it.
+  */
+enum CommentDisplayMode:
+  case Floating
+  case Margin
+
+  def configKey: String =
+    this match
+      case Floating => "floating"
+      case Margin   => "margin"
+
+object CommentDisplayMode:
+
+  def fromConfigKey(value: String): Option[CommentDisplayMode] =
+    value.trim.toLowerCase match
+      case "floating" => Some(CommentDisplayMode.Floating)
+      case "margin"   => Some(CommentDisplayMode.Margin)
+      case _          => None
+
 enum WindowChromeMode(val configKey: String):
   case Auto         extends WindowChromeMode("auto")
   case Native       extends WindowChromeMode("native")
@@ -929,6 +955,10 @@ final case class SurfaceConfig(
     // Opt-in (like `cursorInfoBarMode`): the status bar's default text (position/language/file) is covered by
     // exact-string assertions elsewhere, so this ships off and callers turn it on explicitly (#1203).
     showWordCount: Boolean = false,
+    // Opt-in like `showWordCount`/`cursorInfoBarMode`: existing click/mouse-hit-testing and comment-lens behaviour
+    // is covered by exact-state assertions elsewhere, so this defaults to the smaller, non-disruptive mode and
+    // callers opt into margin mode explicitly once it ships (#1222).
+    commentDisplayMode: CommentDisplayMode = CommentDisplayMode.Floating,
     wordWrapEnabled: Boolean = true,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
@@ -1720,6 +1750,10 @@ final case class AppConfig(
   /** Show or hide the word/character-count and reading-time segment in the status bar (#1203). */
   def withWordCount(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(showWordCount = enabled))
+
+  /** Selects how document comments become visible: floating on-demand lens or persistent margin (#1222). */
+  def withCommentDisplayMode(mode: CommentDisplayMode): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(commentDisplayMode = mode))
 
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
