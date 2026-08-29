@@ -113,27 +113,29 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     new MouseAdapter:
       override def mousePressed(e: MouseEvent): Unit =
         val currentMetrics = metrics()
+        val pos            = buildMouseEvent(e, currentMetrics)
         enqueueMouse(
           MousePress(
-            currentMetrics.toCol(e.getX),
-            currentMetrics.toRow(e.getY),
-            pixelX = Some(e.getX),
-            pixelY = Some(e.getY),
-            shiftDown = e.isShiftDown,
+            pos.col,
+            pos.row,
+            pixelX = pos.pixelX,
+            pixelY = pos.pixelY,
+            shiftDown = pos.shiftDown,
             button = mouseButton(e)
           )
         )
 
       override def mouseClicked(e: MouseEvent): Unit =
         val currentMetrics = metrics()
+        val pos            = buildMouseEvent(e, currentMetrics)
         enqueueMouse(
           MouseClick(
-            currentMetrics.toCol(e.getX),
-            currentMetrics.toRow(e.getY),
-            pixelX = Some(e.getX),
-            pixelY = Some(e.getY),
+            pos.col,
+            pos.row,
+            pixelX = pos.pixelX,
+            pixelY = pos.pixelY,
             clickCount = e.getClickCount,
-            shiftDown = e.isShiftDown,
+            shiftDown = pos.shiftDown,
             button = mouseButton(e),
             renderMetrics = Some(MouseRenderMetrics(currentMetrics, uiMetrics()))
           )
@@ -143,26 +145,26 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   component.addMouseMotionListener(
     new MouseMotionAdapter:
       override def mouseMoved(e: MouseEvent): Unit =
-        val currentMetrics = metrics()
+        val pos = buildMouseEvent(e, metrics())
         enqueueMouse(
           MouseMove(
-            currentMetrics.toCol(e.getX),
-            currentMetrics.toRow(e.getY),
-            pixelX = Some(e.getX),
-            pixelY = Some(e.getY),
-            shiftDown = e.isShiftDown
+            pos.col,
+            pos.row,
+            pixelX = pos.pixelX,
+            pixelY = pos.pixelY,
+            shiftDown = pos.shiftDown
           )
         )
 
       override def mouseDragged(e: MouseEvent): Unit =
-        val currentMetrics = metrics()
+        val pos = buildMouseEvent(e, metrics())
         enqueueMouse(
           MouseDrag(
-            currentMetrics.toCol(e.getX),
-            currentMetrics.toRow(e.getY),
-            pixelX = Some(e.getX),
-            pixelY = Some(e.getY),
-            shiftDown = e.isShiftDown,
+            pos.col,
+            pos.row,
+            pixelX = pos.pixelX,
+            pixelY = pos.pixelY,
+            shiftDown = pos.shiftDown,
             button = dragButton(e)
           )
         )
@@ -192,6 +194,26 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
         inputQueue.poll()
       }
     )(input => Option(input).getOrElse(QueuedShutdown))
+
+  /** Cell coordinates and shared fields (pixel position, shift state) common to every mouse event, converted from a raw
+    * AWT MouseEvent via the current CellMetrics.
+    */
+  final private case class MouseCellPosition(
+      col: Int,
+      row: Int,
+      pixelX: Option[Int],
+      pixelY: Option[Int],
+      shiftDown: Boolean
+  )
+
+  private def buildMouseEvent(e: MouseEvent, currentMetrics: CellMetrics): MouseCellPosition =
+    MouseCellPosition(
+      col = currentMetrics.toCol(e.getX),
+      row = currentMetrics.toRow(e.getY),
+      pixelX = Some(e.getX),
+      pixelY = Some(e.getY),
+      shiftDown = e.isShiftDown
+    )
 
   private def mouseButton(e: MouseEvent): MouseButton =
     e.getButton match

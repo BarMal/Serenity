@@ -3,7 +3,7 @@ package com.serenity.keystroke.translators
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.PeekInputEvent
 import com.serenity.keystroke.events.PeekInputEvent.*
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 
 class PeekOverlayTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[PeekInputEvent]:
 
@@ -15,6 +15,6 @@ class PeekOverlayTranslator(appConfig: AppConfig = AppConfig.default) extends Tr
 
   private val peekCharacterConverter: PartialFunction[KeyStrokeInfo, PeekInputEvent] = {
     case KeyStrokeInfo(InputKey.Character, Some(_), modifiers)
-        if modifiers.isEmpty || modifiers == Set(Modifier.Shift) =>
+        if TextCharacterConverters.isPlainOrShiftOnly(modifiers) =>
       OtherInput
   }

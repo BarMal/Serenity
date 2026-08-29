@@ -122,6 +122,71 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "convert pixel coordinates to cell coordinates and propagate shift-down for every mouse handler" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val mouse     = component.getMouseListeners.head
+    val motion    = component.getMouseMotionListeners.head
+
+    mouse.mousePressed(
+      java.awt.event.MouseEvent(
+        component,
+        java.awt.event.MouseEvent.MOUSE_PRESSED,
+        1L,
+        InputEvent.SHIFT_DOWN_MASK,
+        24,
+        48,
+        1,
+        false
+      )
+    )
+    mouse.mouseClicked(
+      java.awt.event.MouseEvent(
+        component,
+        java.awt.event.MouseEvent.MOUSE_CLICKED,
+        2L,
+        InputEvent.SHIFT_DOWN_MASK,
+        32,
+        64,
+        1,
+        false
+      )
+    )
+    motion.mouseMoved(
+      java.awt.event
+        .MouseEvent(component, java.awt.event.MouseEvent.MOUSE_MOVED, 3L, InputEvent.SHIFT_DOWN_MASK, 40, 80, 0, false)
+    )
+    motion.mouseDragged(
+      java.awt.event.MouseEvent(
+        component,
+        java.awt.event.MouseEvent.MOUSE_DRAGGED,
+        4L,
+        InputEvent.SHIFT_DOWN_MASK,
+        48,
+        96,
+        0,
+        false
+      )
+    )
+
+    handler.eventStream.take(4).compile.toList.unsafeRunSync() shouldBe List(
+      MousePress(3, 3, Some(24), Some(48), shiftDown = true, button = MouseButton.Other),
+      MouseClick(
+        4,
+        4,
+        Some(32),
+        Some(64),
+        clickCount = 1,
+        shiftDown = true,
+        button = MouseButton.Other,
+        renderMetrics = Some(MouseRenderMetrics(CellMetrics(8, 16, 13), CellMetrics(8, 16, 13)))
+      ),
+      MouseMove(5, 5, Some(40), Some(80), shiftDown = true),
+      MouseDrag(6, 6, Some(48), Some(96), shiftDown = true, button = MouseButton.Other)
+    )
+  }
+
   it should "enqueue callbacks without waiting for event processing" in {
     val component = new JPanel()
     val program = for
