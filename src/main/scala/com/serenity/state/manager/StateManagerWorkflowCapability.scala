@@ -2,20 +2,59 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path, Paths}
 
-import cats.effect.IO
-import com.serenity.io.{FileUtils, StorageLocation}
+import cats.effect.{Deferred, IO, Ref}
+import com.serenity.io.{FileManager, FileUtils, StorageLocation}
+import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
-import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
+import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.LayoutEngine
+import org.typelevel.log4cats.Logger
 
 final private[manager] class StateManagerWorkflowCapability(
-    dependencies: WorkflowCapabilityPort
+    stateRef: Ref[IO, AppState],
+    undoRef: Ref[IO, UndoState],
+    quitSignal: Deferred[IO, Unit],
+    logger: Logger[IO],
+    fileDialog: Option[com.serenity.io.FileDialog],
+    fileManager: FileManager,
+    sessionPersistence: SessionPersistence,
+    sessionManager: SessionManager,
+    operations: StateManagerOperationBoundary,
+    editor: StateManagerEditorCapability,
+    filePersistence: StateManagerFilePersistence
 )(using balance: com.serenity.rope.Balance):
 
-  import dependencies.*
+  private def updateState(update: AppState => AppState): IO[Unit] = stateRef.update(update)
+
+  private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+    operations.validateAndUpdateState(newState, fallbackState)
+
+  private def createNewEmptyBuffer(): IO[BufferId] = editor.createNewEmptyBuffer()
+
+  private def createPane(bufferId: Option[BufferId] = None): IO[PaneId] = editor.createPane(bufferId)
+
+  private def switchToPane(paneId: PaneId): IO[Unit] = editor.switchToPane(paneId)
+
+  private def loadSession(): IO[Option[AppState]] = sessionManager.loadSession()
+
+  private def ensureCommandRunnerSurface(state: AppState): AppState = operations.ensureCommandRunnerSurface(state)
+
+  private def trackRecentFile(current: List[Path], path: Path): List[Path] =
+    (path :: current.filterNot(_ == path)).take(20)
+
+  private def saveBufferEffect(bufferId: BufferId): IO[Unit] =
+    filePersistence.saveExistingBuffer(bufferId).handleErrorWith {
+      case error: com.serenity.richtext.LossyRichTextOverwriteException =>
+        stateRef.get.flatMap(current => showSaveAsWorkflow(current, bufferId, error.getMessage))
+      case error =>
+        logger.error(error)(s"[FILE] Failed to save buffer $bufferId")
+    }
+
+  private def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
+    filePersistence.saveBufferAs(bufferId, path)
 
   private[manager] def openFileWorkflowModal(
     mode: FileWorkflowMode,

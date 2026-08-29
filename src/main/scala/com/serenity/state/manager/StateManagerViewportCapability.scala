@@ -9,10 +9,17 @@ final private[manager] class StateManagerViewportCapability(
     stateRef: cats.effect.Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     deviceTextScaleProvider: IO[Double],
-    dependencies: ViewportCapabilityPort
+    events: StateManagerEventPipeline,
+    effects: StateManagerEffectHandlers
 )(using balance: com.serenity.rope.Balance):
 
-  import dependencies.*
+  private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+    events.validateAndUpdateState(newState, fallbackState)
+
+  private def updateFontConfig(
+    update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
+  ): IO[Unit] =
+    effects.updateFontConfig(update)
 
   def ensureCursorVisible(paneId: PaneId): IO[Unit] =
     stateRef.update { state =>

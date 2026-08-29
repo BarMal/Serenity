@@ -65,17 +65,16 @@ final private[manager] class StateManagerFileFacade(
 
 final private[manager] class StateManagerFileCapability(
     stateRef: Ref[IO, AppState],
-    dependencies: FileCapabilityPort
+    editor: StateManagerEditorCapability,
+    effects: StateManagerEffectHandlers
 )(using balance: com.serenity.rope.Balance):
-
-  import dependencies.*
 
   private lazy val fileFacade = new StateManagerFileFacade(
     stateRef,
-    directLoadFileEffect,
-    saveBufferEffect,
-    saveBufferAsEffect,
-    closeBuffer
+    effects.directLoadFileEffect,
+    effects.saveBufferEffect,
+    effects.saveBufferAsEffect,
+    editor.closeBuffer
   )
 
   def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =

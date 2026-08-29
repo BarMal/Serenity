@@ -26,18 +26,6 @@ import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.Logger
 
-/** File and close-workflow operations used by the file capability. */
-private[manager] trait FileCapabilityPort:
-  def closeBuffer(bufferId: BufferId): IO[Unit]
-  def directLoadFileEffect(path: Path): IO[Unit]
-  def saveBufferEffect(bufferId: BufferId): IO[Unit]
-  def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
-
-/** Surface transitions owned by the surface capability. */
-private[manager] trait SurfaceCapabilityPort:
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
-  def applyAnimationHooks(previousState: AppState): IO[Unit]
-
 /** Runtime-owned services used while interpreting command effects. */
 private[manager] trait EffectRuntimePort:
   def stateRef: Ref[IO, AppState]
@@ -371,45 +359,6 @@ private[manager] trait EffectModalWorkflowPort:
   def restoreStartupSession(): IO[Unit]
   def activeEditorBufferId(state: AppState): Option[BufferId]
 
-/** Operations used by editor façade methods. */
-private[manager] trait EditorCapabilityPort:
-  def stateRef: Ref[IO, AppState]
-  def lspQueue: LspEffectQueue
-  def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]]
-  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
-  def createNewEmptyBuffer(): IO[BufferId]
-  def closeBuffer(bufferId: BufferId): IO[Unit]
-  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
-  def switchToPane(paneId: PaneId): IO[Unit]
-  def ensureCommandRunnerSurface(state: AppState): AppState
-  def advanceSurfaceAnimations(state: AppState): AppState
-
-/** Operations used by the viewport capability. */
-private[manager] trait ViewportCapabilityPort:
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
-  def updateFontConfig(update: FontConfig => FontConfig): IO[Unit]
-
-/** Operations used by file/session workflow planning. */
-private[manager] trait WorkflowCapabilityPort:
-  def stateRef: Ref[IO, AppState]
-  def undoRef: Ref[IO, UndoState]
-  def quitSignal: Deferred[IO, Unit]
-  def logger: Logger[IO]
-  def fileDialog: Option[com.serenity.io.FileDialog]
-  def fileManager: FileManager
-  def sessionPersistence: SessionPersistence
-  def trackRecentFile(current: List[Path], path: Path): List[Path] =
-    (path :: current.filterNot(_ == path)).take(20)
-  def updateState(update: AppState => AppState): IO[Unit]
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
-  def createNewEmptyBuffer(): IO[BufferId]
-  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
-  def switchToPane(paneId: PaneId): IO[Unit]
-  def loadSession(): IO[Option[AppState]]
-  def ensureCommandRunnerSurface(state: AppState): AppState
-  def saveBufferEffect(bufferId: BufferId): IO[Unit]
-  def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit]
-
 /** State and analysis ownership required while routing editor events. */
 private[manager] trait EventStatePort:
   def stateRef: Ref[IO, AppState]
@@ -500,6 +449,15 @@ private[manager] class StateManagerComposition(
       runtimeLspQueue
     )
 
+  // Stateless facade over stateRef/bufferAnimationsRef -- shared by `editor` (which the old
+  // EditorCapabilityPort routed through `events` for no functional reason, the only edge in the
+  // effects -> workflow -> editor -> events -> effects cycle that forced deferred `def` port wiring)
+  // and by `events`, which builds its own copy from the same refs. Constructing it here breaks that
+  // cycle so every component below can be built directly, in dependency order, with plain `val`s.
+  private val animations = new AnimationChoreography(new AnimationChoreographyPort:
+    val stateRef            = runtimeStateRef
+    val bufferAnimationsRef = runtimeBufferAnimationsRef)
+
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = runtimeStateRef
     val themeNamesRef           = runtimeThemeNamesRef
@@ -524,6 +482,30 @@ private[manager] class StateManagerComposition(
       operations.validateAndUpdateState(newState, fallbackState)
     def scheduleDocumentAnalysis(): IO[Unit]                     = operations.scheduleDocumentAnalysis()
     def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
+
+  private val surfaces = new StateManagerSurfaceCapability(stateRef, logger, operations)
+
+  private val editor = new StateManagerEditorCapability(
+    runtimeStateRef,
+    runtimeLspQueue,
+    runtimeBufferAnimationsRef,
+    operations,
+    animations
+  )
+
+  private val workflow = new StateManagerWorkflowCapability(
+    runtimeStateRef,
+    runtimeUndoRef,
+    runtimeQuitSignal,
+    runtimeLogger,
+    runtimeFileDialog,
+    runtimeFileManager,
+    runtimeSessionPersistence,
+    sessionManager,
+    operations,
+    editor,
+    filePersistence
+  )
 
   private val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = surfaces.showPeek(content, at)
@@ -576,65 +558,6 @@ private[manager] class StateManagerComposition(
     def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
     def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
 
-  private val filePort: FileCapabilityPort = new FileCapabilityPort:
-    def closeBuffer(bufferId: BufferId): IO[Unit]      = editor.closeBuffer(bufferId)
-    def directLoadFileEffect(path: Path): IO[Unit]     = effects.directLoadFileEffect(path)
-    def saveBufferEffect(bufferId: BufferId): IO[Unit] = effects.saveBufferEffect(bufferId)
-    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
-      effects.saveBufferAsEffect(bufferId, path)
-
-  private val editorPort: EditorCapabilityPort = new EditorCapabilityPort:
-    val stateRef            = runtimeStateRef
-    val lspQueue            = runtimeLspQueue
-    val bufferAnimationsRef = runtimeBufferAnimationsRef
-    def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-      editor.createBuffer(content, filePath)
-    def createNewEmptyBuffer(): IO[BufferId]               = editor.createNewEmptyBuffer()
-    def closeBuffer(bufferId: BufferId): IO[Unit]          = editor.closeBuffer(bufferId)
-    def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
-    def switchToPane(paneId: PaneId): IO[Unit]             = editor.switchToPane(paneId)
-    def ensureCommandRunnerSurface(state: AppState): AppState =
-      operations.ensureCommandRunnerSurface(state)
-    def advanceSurfaceAnimations(state: AppState): AppState = events.advanceSurfaceAnimations(state)
-
-  private val workflowPort: WorkflowCapabilityPort = new WorkflowCapabilityPort:
-    val stateRef                                            = runtimeStateRef
-    val undoRef                                             = runtimeUndoRef
-    val quitSignal                                          = runtimeQuitSignal
-    val logger                                              = runtimeLogger
-    val fileDialog                                          = runtimeFileDialog
-    val fileManager                                         = runtimeFileManager
-    val sessionPersistence                                  = runtimeSessionPersistence
-    def updateState(update: AppState => AppState): IO[Unit] = runtimeStateRef.update(update)
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      operations.validateAndUpdateState(newState, fallbackState)
-    def createNewEmptyBuffer(): IO[BufferId]               = editor.createNewEmptyBuffer()
-    def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
-    def switchToPane(paneId: PaneId): IO[Unit]             = editor.switchToPane(paneId)
-    def loadSession(): IO[Option[AppState]]                = sessionManager.loadSession()
-    def ensureCommandRunnerSurface(state: AppState): AppState =
-      operations.ensureCommandRunnerSurface(state)
-    def saveBufferEffect(bufferId: BufferId): IO[Unit] =
-      filePersistence.saveExistingBuffer(bufferId).handleErrorWith {
-        case error: com.serenity.richtext.LossyRichTextOverwriteException =>
-          runtimeStateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, error.getMessage))
-        case error =>
-          runtimeLogger.error(error)(s"[FILE] Failed to save buffer $bufferId")
-      }
-    def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] = filePersistence.saveBufferAs(bufferId, path)
-
-  private val surfacePort: SurfaceCapabilityPort = new SurfaceCapabilityPort:
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      operations.validateAndUpdateState(newState, fallbackState)
-    def applyAnimationHooks(previousState: AppState): IO[Unit] =
-      operations.enqueueAnimationHooks(previousState)
-
-  private val viewportPort: ViewportCapabilityPort = new ViewportCapabilityPort:
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      events.validateAndUpdateState(newState, fallbackState)
-    def updateFontConfig(update: FontConfig => FontConfig): IO[Unit] =
-      effects.updateFontConfig(update)
-
   private val eventStatePort: EventStatePort =
     new EventStatePort:
       val stateRef                 = runtimeStateRef
@@ -671,8 +594,6 @@ private[manager] class StateManagerComposition(
       def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
         surfaces.resizePinnedPanel(target, newSize)
 
-  private val workflow = new StateManagerWorkflowCapability(workflowPort)
-
   private val effects = new StateManagerEffectHandlers(
     effectRuntimePort,
     effectEditorPort,
@@ -684,11 +605,9 @@ private[manager] class StateManagerComposition(
 
   private val events =
     new StateManagerEventPipeline(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort, operations)
-  private val editor   = new StateManagerEditorCapability(editorPort)
-  private val surfaces = new StateManagerSurfaceCapability(stateRef, logger, surfacePort)
   private val viewport =
-    new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, viewportPort)
-  private val files = new StateManagerFileCapability(stateRef, filePort)
+    new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, events, effects)
+  private val files = new StateManagerFileCapability(stateRef, editor, effects)
 
   export editor.{focusPaneInDirection as _, resizePaneSplit as _, *}
   export events.applyEvent
