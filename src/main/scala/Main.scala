@@ -3,7 +3,7 @@ import cats.syntax.all.*
 import com.serenity.animation.WindowSitter
 import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, MotionFamily}
-import com.serenity.diagnostics.Trace
+import com.serenity.diagnostics.{Trace, TuiConsoleLogFilter}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
@@ -22,12 +22,21 @@ object Main extends IOApp:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   def run(args: List[String]): IO[ExitCode] =
+    // #1215: must run before the `given logger` below, which triggers logback's one-time console-appender setup on
+    // its first call -- `TuiConsoleLogFilter` reads this property per log event, but it still has to be set before
+    // the very first event a TUI launch could otherwise leak onto the terminal surface it is about to take over.
+    val launchOptionsForLogging = LaunchOptions.parse(args)
+    System.setProperty(
+      TuiConsoleLogFilter.EnabledProperty,
+      LaunchOptions.resolveTuiMode(launchOptionsForLogging).toString
+    )
+
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
 
     for
       _ <- Java2DPipeline.installSafeDefaults()
       _ <- IO(CrashReporter.install())
-      launchOptions = LaunchOptions.parse(args)
+      launchOptions = launchOptionsForLogging
       configResult <- ConfigManager.loadConfigResultIO()
       configLoad <- configResult.fold(
         error =>

@@ -30,6 +30,16 @@ object SpellChecker:
     */
   private[serenity] def dictionaryCacheSize: Int = DictionaryCache.size()
 
+  /** How many cache entries currently exist for `path`'s own normalized key -- 0 or 1, per this cache's own bounded-
+    * per-path contract. Exposed alongside `dictionaryCacheSize` so a test asserting that contract for one specific
+    * dictionary doesn't have to reason about `DictionaryCache`'s total size, which this process-wide cache shares with
+    * every other test suite exercising `loadDictionarySnapshot`/`check` concurrently in the same JVM (sbt/ ScalaTest's
+    * default cross-suite parallelism) -- a size-based assertion is vulnerable to unrelated suites adding their own
+    * (different-path) entries mid-test, while this stays scoped to the one path under test.
+    */
+  private[serenity] def dictionaryCacheEntryCount(path: Path): Int =
+    if DictionaryCache.containsKey(path.toAbsolutePath.normalize().toString) then 1 else 0
+
   final private case class DictionaryCacheEntry(
       fingerprints: List[SpellCheckDictionaryFingerprint],
       result: DictionaryLoadResult

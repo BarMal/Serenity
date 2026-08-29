@@ -31,20 +31,26 @@ final case class TextVisualLine(
   def nearestColumnForXPx(xPx: Float): Int =
     val stops = if xSortedCaretStops.nonEmpty then xSortedCaretStops else caretStops.sortBy(_.xPx)
 
-    @annotation.tailrec
-    def search(low: Int, high: Int): TextCaretStop =
-      if low > high then
-        (stops.lift(high), stops.lift(low)) match
-          case (Some(left), Some(right)) => closer(left, right, xPx)
-          case (Some(left), None)        => left
-          case (None, Some(right))       => right
-          case (None, None)              => stops.head
-      else
-        val middle = (low + high) >>> 1
-        if stops(middle).xPx < xPx then search(middle + 1, high)
-        else search(low, middle - 1)
+    stops.headOption match
+      case None => 0
+      case Some(firstStop) =>
+        @annotation.tailrec
+        def search(low: Int, high: Int): TextCaretStop =
+          if low > high then
+            // stops is non-empty here (headOption matched Some above), so the (None, None) case can only
+            // arise if both the low and high probes fell outside the array, which the binary search never
+            // does starting from a non-empty range -- firstStop is an unreachable-in-practice fallback.
+            (stops.lift(high), stops.lift(low)) match
+              case (Some(left), Some(right)) => closer(left, right, xPx)
+              case (Some(left), None)        => left
+              case (None, Some(right))       => right
+              case (None, None)              => firstStop
+          else
+            val middle = (low + high) >>> 1
+            if stops(middle).xPx < xPx then search(middle + 1, high)
+            else search(low, middle - 1)
 
-    if stops.isEmpty then 0 else search(0, stops.length - 1).column
+        search(0, stops.length - 1).column
 
   private def closer(first: TextCaretStop, second: TextCaretStop, xPx: Float): TextCaretStop =
     if math.abs(second.xPx - xPx) < math.abs(first.xPx - xPx) then second else first

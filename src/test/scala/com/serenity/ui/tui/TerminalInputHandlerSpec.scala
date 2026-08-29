@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.input.{InProcessClipboard, InputRouter, SystemClipboard}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -26,7 +27,14 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
 
   private val StreamTimeout = 10.seconds
   private val esc           = 0x1b.toByte
-  private val translator    = new TextEntryTranslator
+
+  // #1213: mirrors `TuiRuntime.run`'s own `HotkeyConfig.forTerminalUse` rewrite -- a real terminal cannot deliver
+  // Cmd/Meta as an ordinary keystroke the way AWT does for a focused Swing window, so TUI wiring never hands
+  // `TextEntryTranslator` a config still at its macOS/Cmd-conditioned hotkey defaults. Building the translator any
+  // other way here would test a translator no real TUI session ever actually uses.
+  private val translator = new TextEntryTranslator(
+    AppConfig.default.withHotkeyConfig(AppConfig.default.inputConfig.hotkeyConfig.forTerminalUse)
+  )
 
   private def bytes(s: String): Array[Byte] = s.getBytes(StandardCharsets.UTF_8)
   private def csi(s: String): Array[Byte]   = esc +: bytes(s"[$s")

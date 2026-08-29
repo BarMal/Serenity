@@ -29,6 +29,8 @@ object SystemClipboard:
       Sync[F]
         .blocking {
           val clipboard = Toolkit.getDefaultToolkit.getSystemClipboard
-          clipboard.setContents(StringSelection(text), null)
+          // No owner-notification behavior is needed here, so this is a no-op ClipboardOwner rather than
+          // the null the AWT API also accepts.
+          clipboard.setContents(StringSelection(text), (_, _) => ())
         }
         .handleErrorWith { case NonFatal(_) => Sync[F].unit }

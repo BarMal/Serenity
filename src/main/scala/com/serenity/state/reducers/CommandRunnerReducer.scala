@@ -58,125 +58,137 @@ object CommandRunnerReducer:
         else if currentRunner(state).exists(_.selectedItem.exists(entersGroupOnSubmit))
         then ReducerResult.noEffects(replaceRunner(state, _.enterSelectedGroup))
         else
-          currentRunner(state).flatMap(_.editingItemId) match
-            case Some(itemId) =>
-              val runner = currentRunner(state).get
-              runner.inputItems.find(_.id == itemId) match
-                case Some(item) =>
-                  item.parse(runner.editingText) match
-                    case Some(intent) =>
-                      val cmd = Command.typed(itemId, item.label, intent, CommandCategory.Settings)
-                      ReducerResult(
-                        state = replaceRunner(
-                          state,
-                          r => r.copy(editingItemId = None, editingText = "", statusMessage = None)
-                        ),
-                        effects = List(AppEffect.ExecuteCommand(cmd))
-                      )
-                    case None =>
-                      ReducerResult.noEffects(
-                        replaceRunner(
-                          state,
-                          _.copy(statusMessage = Some(invalidInputMessage(item, runner.editingText)))
-                        )
-                      )
-                case None =>
-                  ReducerResult.noEffects(state)
-
+          currentRunner(state) match
             case None =>
-              currentRunner(state).flatMap(_.selectedItem) match
-                case Some(_: CommandSurfaceItem.InputItem) =>
-                  ReducerResult.noEffects(state)
-                case Some(CommandSurfaceItem.CommandItem(command))
-                    if command.intent == CommandIntent.Settings(
-                      SettingsIntent.General(GeneralSettingsIntent.OpenSettings)
-                    ) =>
-                  ReducerResult.noEffects(replaceRunner(state, _.openSettings))
-                case Some(CommandSurfaceItem.CommandItem(command)) =>
-                  ReducerResult(
-                    state = deactivate(state),
-                    effects = List(AppEffect.ExecuteCommand(command))
-                  )
-                case Some(option: CommandSurfaceItem.OptionItem) =>
-                  option.selectedIntent match
-                    case Some(intent) =>
-                      ReducerResult(
-                        state = state,
-                        effects = List(
-                          AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category))
-                        )
-                      )
+              // Unreachable: `reduce` only dispatches here when currentRunner(state) is Some and
+              // active. Mirrors the fallback below for the no-selection case.
+              ReducerResult.noEffects(deactivate(state))
+            case Some(runner) =>
+              runner.editingItemId match
+                case Some(itemId) =>
+                  runner.inputItems.find(_.id == itemId) match
+                    case Some(item) =>
+                      item.parse(runner.editingText) match
+                        case Some(intent) =>
+                          val cmd = Command.typed(itemId, item.label, intent, CommandCategory.Settings)
+                          ReducerResult(
+                            state = replaceRunner(
+                              state,
+                              r => r.copy(editingItemId = None, editingText = "", statusMessage = None)
+                            ),
+                            effects = List(AppEffect.ExecuteCommand(cmd))
+                          )
+                        case None =>
+                          ReducerResult.noEffects(
+                            replaceRunner(
+                              state,
+                              _.copy(statusMessage = Some(invalidInputMessage(item, runner.editingText)))
+                            )
+                          )
                     case None =>
                       ReducerResult.noEffects(state)
-                case _ =>
-                  ReducerResult.noEffects(deactivate(state))
+
+                case None =>
+                  runner.selectedItem match
+                    case Some(_: CommandSurfaceItem.InputItem) =>
+                      ReducerResult.noEffects(state)
+                    case Some(CommandSurfaceItem.CommandItem(command))
+                        if command.intent == CommandIntent.Settings(
+                          SettingsIntent.General(GeneralSettingsIntent.OpenSettings)
+                        ) =>
+                      ReducerResult.noEffects(replaceRunner(state, _.openSettings))
+                    case Some(CommandSurfaceItem.CommandItem(command)) =>
+                      ReducerResult(
+                        state = deactivate(state),
+                        effects = List(AppEffect.ExecuteCommand(command))
+                      )
+                    case Some(option: CommandSurfaceItem.OptionItem) =>
+                      option.selectedIntent match
+                        case Some(intent) =>
+                          ReducerResult(
+                            state = state,
+                            effects = List(
+                              AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category))
+                            )
+                          )
+                        case None =>
+                          ReducerResult.noEffects(state)
+                    case _ =>
+                      ReducerResult.noEffects(deactivate(state))
 
       case RunnerInsertChar(char) =>
         if submenuHasFocus(state) then
-          currentRunner(state).flatMap(_.activeSubmenu) match
-            case Some(submenu) =>
-              val runner   = currentRunner(state).get
-              val allItems = runner.submenuItems(submenu.groupId)
-              val selectedInput =
-                submenu.selectedItemFromAll(allItems).collect {
-                  case input: CommandSurfaceItem.InputItem =>
-                    input
-                }
-              val activeInput = allItems
-                .collectFirst {
-                  case input: CommandSurfaceItem.InputItem if submenu.editingItemId.contains(input.id) => input
-                }
-                .orElse(selectedInput)
-              val currentText = Option.when(submenu.editingItemId.nonEmpty)(submenu.editingText).getOrElse("")
-              if activeInput.exists(_.accepts(currentText, char)) then
-                activeInput match
-                  case Some(item) =>
-                    val nextText =
-                      if submenu.editingItemId.contains(item.id) then submenu.editingText + char else char.toString
-                    ReducerResult.noEffects(
-                      replaceRunner(
-                        state,
-                        r =>
-                          r.copy(
-                            activeSubmenu =
-                              r.activeSubmenu.map(s => s.copy(editingItemId = Some(item.id), editingText = nextText))
-                          ).copy(statusMessage = None)
-                      )
-                    )
-                  case None =>
+          currentRunner(state) match
+            case Some(runner) =>
+              runner.activeSubmenu match
+                case Some(submenu) =>
+                  val allItems = runner.submenuItems(submenu.groupId)
+                  val selectedInput =
+                    submenu.selectedItemFromAll(allItems).collect {
+                      case input: CommandSurfaceItem.InputItem =>
+                        input
+                    }
+                  val activeInput = allItems
+                    .collectFirst {
+                      case input: CommandSurfaceItem.InputItem if submenu.editingItemId.contains(input.id) => input
+                    }
+                    .orElse(selectedInput)
+                  val currentText = Option.when(submenu.editingItemId.nonEmpty)(submenu.editingText).getOrElse("")
+                  if activeInput.exists(_.accepts(currentText, char)) then
+                    activeInput match
+                      case Some(item) =>
+                        val nextText =
+                          if submenu.editingItemId.contains(item.id) then submenu.editingText + char
+                          else char.toString
+                        ReducerResult.noEffects(
+                          replaceRunner(
+                            state,
+                            r =>
+                              r.copy(
+                                activeSubmenu = r.activeSubmenu
+                                  .map(s => s.copy(editingItemId = Some(item.id), editingText = nextText))
+                              ).copy(statusMessage = None)
+                          )
+                        )
+                      case None =>
+                        ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm + char)))
+                  else if submenu.editingItemId.isEmpty then
                     ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm + char)))
-              else if submenu.editingItemId.isEmpty then
-                ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(submenu.searchTerm + char)))
-              else ReducerResult.noEffects(state)
+                  else ReducerResult.noEffects(state)
+                case None =>
+                  ReducerResult.noEffects(state)
             case None =>
               ReducerResult.noEffects(state)
         else
-          currentRunner(state).flatMap(_.editingItemId) match
-            case Some(itemId) =>
-              val runner = currentRunner(state).get
-              val item   = runner.inputItems.find(_.id == itemId)
-              if item.exists(_.accepts(runner.editingText, char)) then
-                ReducerResult.noEffects(
-                  replaceRunner(state, r => r.copy(editingText = r.editingText + char, statusMessage = None))
-                )
-              else ReducerResult.noEffects(state)
-            case None =>
-              currentRunner(state).flatMap(_.selectedItem) match
-                case Some(item: CommandSurfaceItem.InputItem) =>
-                  if item.accepts("", char) then
+          currentRunner(state) match
+            case Some(runner) =>
+              runner.editingItemId match
+                case Some(itemId) =>
+                  val item = runner.inputItems.find(_.id == itemId)
+                  if item.exists(_.accepts(runner.editingText, char)) then
                     ReducerResult.noEffects(
-                      replaceRunner(
-                        state,
-                        runner =>
-                          runner.copy(editingItemId = Some(item.id), editingText = char.toString, statusMessage = None)
-                      )
+                      replaceRunner(state, r => r.copy(editingText = r.editingText + char, statusMessage = None))
                     )
                   else ReducerResult.noEffects(state)
-                case _ =>
-                  given CommandRegistry = registry
-                  ReducerResult.noEffects(
-                    replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm + char))
-                  )
+                case None =>
+                  runner.selectedItem match
+                    case Some(item: CommandSurfaceItem.InputItem) =>
+                      if item.accepts("", char) then
+                        ReducerResult.noEffects(
+                          replaceRunner(
+                            state,
+                            r =>
+                              r.copy(editingItemId = Some(item.id), editingText = char.toString, statusMessage = None)
+                          )
+                        )
+                      else ReducerResult.noEffects(state)
+                    case _ =>
+                      given CommandRegistry = registry
+                      ReducerResult.noEffects(
+                        replaceRunner(state, r => r.updateSearchTerm(r.searchTerm + char))
+                      )
+            case None =>
+              ReducerResult.noEffects(state)
 
       case RunnerRecordBinding(info, recordedAtMillis) =>
         recordBinding(state, info, recordedAtMillis)
@@ -531,138 +543,150 @@ object CommandRunnerReducer:
         runner.clearGroupPreview
 
   private def submitSubmenu(state: AppState): ReducerResult =
-    currentRunner(state).flatMap(_.activeSubmenu) match
-      case Some(submenu) =>
-        val runner = currentRunner(state).get
-        submenu.selectedItemFromAll(runner.submenuItems(submenu.groupId)) match
-          case Some(item: CommandSurfaceItem.InputItem) if submenu.editingItemId.isEmpty && item.acceptsBindingText =>
-            ReducerResult.noEffects(
-              replaceRunner(
-                state,
-                runner =>
-                  runner.copy(
-                    activeSubmenu = runner.activeSubmenu.map(
-                      _.copy(
-                        editingItemId = Some(item.id),
-                        editingText = "",
-                        recordingItemId = Some(item.id)
-                      )
-                    ),
-                    statusMessage = Some("Press a key or shortcut to assign")
-                  )
-              )
-            )
-          case Some(_: CommandSurfaceItem.InputItem) if submenu.editingItemId.isEmpty =>
+    currentRunner(state) match
+      case None =>
+        ReducerResult.noEffects(state)
+      case Some(runner) =>
+        runner.activeSubmenu match
+          case None =>
             ReducerResult.noEffects(state)
-          case Some(item: CommandSurfaceItem.InputItem) if submenu.pendingGlobalHotkeyConflict.nonEmpty =>
-            val (action, binding) = submenu.pendingGlobalHotkeyConflict.get
-            ReducerResult(
-              state = replaceRunner(
-                state,
-                r =>
-                  r.copy(
-                    activeSubmenu = r.activeSubmenu.map(
-                      _.copy(
-                        editingItemId = None,
-                        editingText = "",
-                        recordingItemId = None,
-                        pendingRecordedBinding = None,
-                        pendingGlobalHotkeyConflict = None,
-                        pendingFocusedKeymapConflict = None
-                      )
-                    ),
-                    statusMessage = None
-                  )
-              ),
-              effects = List(
-                AppEffect.ExecuteCommand(
-                  Command.typed(
-                    item.id,
-                    item.label,
-                    CommandIntent.Keybindings(KeybindingsIntent.ResolveGlobalHotkeyConflict(action, binding)),
-                    item.category
-                  )
-                )
-              )
-            )
-          case Some(item: CommandSurfaceItem.InputItem) if submenu.pendingFocusedKeymapConflict.nonEmpty =>
-            val (itemId, binding) = submenu.pendingFocusedKeymapConflict.get
-            ReducerResult(
-              state = replaceRunner(
-                state,
-                r =>
-                  r.copy(
-                    activeSubmenu = r.activeSubmenu.map(
-                      _.copy(
-                        editingItemId = None,
-                        editingText = "",
-                        recordingItemId = None,
-                        pendingRecordedBinding = None,
-                        pendingFocusedKeymapConflict = None
-                      )
-                    ),
-                    statusMessage = None
-                  )
-              ),
-              effects = List(
-                AppEffect.ExecuteCommand(
-                  Command.typed(
-                    item.id,
-                    item.label,
-                    CommandIntent.Keybindings(KeybindingsIntent.ResolveFocusedKeymapConflict(itemId, binding)),
-                    item.category
-                  )
-                )
-              )
-            )
-          case Some(item: CommandSurfaceItem.InputItem) =>
-            item.parse(submenu.editingText) match
-              case Some(intent) =>
-                ReducerResult(
-                  state = replaceRunner(
+          case Some(submenu) =>
+            submenu.selectedItemFromAll(runner.submenuItems(submenu.groupId)) match
+              case Some(item: CommandSurfaceItem.InputItem)
+                  if submenu.editingItemId.isEmpty && item.acceptsBindingText =>
+                ReducerResult.noEffects(
+                  replaceRunner(
                     state,
                     r =>
                       r.copy(
                         activeSubmenu = r.activeSubmenu.map(
                           _.copy(
-                            editingItemId = None,
+                            editingItemId = Some(item.id),
                             editingText = "",
-                            recordingItemId = None,
-                            pendingRecordedBinding = None,
-                            pendingGlobalHotkeyConflict = None,
-                            pendingFocusedKeymapConflict = None
+                            recordingItemId = Some(item.id)
                           )
                         ),
-                        statusMessage = None
+                        statusMessage = Some("Press a key or shortcut to assign")
                       )
-                  ),
-                  effects = List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
+                  )
                 )
-              case None =>
-                ReducerResult.noEffects(
-                  replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, submenu.editingText))))
-                )
-          case Some(option: CommandSurfaceItem.OptionItem) =>
-            option.selectedIntent match
-              case Some(intent) =>
-                ReducerResult(
-                  state = state,
-                  effects =
-                    List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category)))
-                )
-              case None =>
+              case Some(_: CommandSurfaceItem.InputItem) if submenu.editingItemId.isEmpty =>
                 ReducerResult.noEffects(state)
-          case Some(CommandSurfaceItem.CommandItem(command)) =>
-            ReducerResult(
-              state = deactivate(state),
-              effects = List(AppEffect.ExecuteCommand(command))
-            )
-          case Some(_: CommandSurfaceItem.GroupItem) =>
-            ReducerResult.noEffects(replaceRunner(state, _.enterSelectedSubmenuGroup))
-          case _ =>
-            ReducerResult.noEffects(state)
-      case None =>
-        ReducerResult.noEffects(state)
+              case Some(item: CommandSurfaceItem.InputItem) if submenu.pendingGlobalHotkeyConflict.nonEmpty =>
+                submenu.pendingGlobalHotkeyConflict.fold(ReducerResult.noEffects(state)) {
+                  case (action, binding) =>
+                    ReducerResult(
+                      state = replaceRunner(
+                        state,
+                        r =>
+                          r.copy(
+                            activeSubmenu = r.activeSubmenu.map(
+                              _.copy(
+                                editingItemId = None,
+                                editingText = "",
+                                recordingItemId = None,
+                                pendingRecordedBinding = None,
+                                pendingGlobalHotkeyConflict = None,
+                                pendingFocusedKeymapConflict = None
+                              )
+                            ),
+                            statusMessage = None
+                          )
+                      ),
+                      effects = List(
+                        AppEffect.ExecuteCommand(
+                          Command.typed(
+                            item.id,
+                            item.label,
+                            CommandIntent.Keybindings(KeybindingsIntent.ResolveGlobalHotkeyConflict(action, binding)),
+                            item.category
+                          )
+                        )
+                      )
+                    )
+                }
+              case Some(item: CommandSurfaceItem.InputItem) if submenu.pendingFocusedKeymapConflict.nonEmpty =>
+                submenu.pendingFocusedKeymapConflict.fold(ReducerResult.noEffects(state)) {
+                  case (itemId, binding) =>
+                    ReducerResult(
+                      state = replaceRunner(
+                        state,
+                        r =>
+                          r.copy(
+                            activeSubmenu = r.activeSubmenu.map(
+                              _.copy(
+                                editingItemId = None,
+                                editingText = "",
+                                recordingItemId = None,
+                                pendingRecordedBinding = None,
+                                pendingFocusedKeymapConflict = None
+                              )
+                            ),
+                            statusMessage = None
+                          )
+                      ),
+                      effects = List(
+                        AppEffect.ExecuteCommand(
+                          Command.typed(
+                            item.id,
+                            item.label,
+                            CommandIntent.Keybindings(KeybindingsIntent.ResolveFocusedKeymapConflict(itemId, binding)),
+                            item.category
+                          )
+                        )
+                      )
+                    )
+                }
+              case Some(item: CommandSurfaceItem.InputItem) =>
+                item.parse(submenu.editingText) match
+                  case Some(intent) =>
+                    ReducerResult(
+                      state = replaceRunner(
+                        state,
+                        r =>
+                          r.copy(
+                            activeSubmenu = r.activeSubmenu.map(
+                              _.copy(
+                                editingItemId = None,
+                                editingText = "",
+                                recordingItemId = None,
+                                pendingRecordedBinding = None,
+                                pendingGlobalHotkeyConflict = None,
+                                pendingFocusedKeymapConflict = None
+                              )
+                            ),
+                            statusMessage = None
+                          )
+                      ),
+                      effects =
+                        List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
+                    )
+                  case None =>
+                    ReducerResult.noEffects(
+                      replaceRunner(
+                        state,
+                        _.copy(statusMessage = Some(invalidInputMessage(item, submenu.editingText)))
+                      )
+                    )
+              case Some(option: CommandSurfaceItem.OptionItem) =>
+                option.selectedIntent match
+                  case Some(intent) =>
+                    ReducerResult(
+                      state = state,
+                      effects =
+                        List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category)))
+                    )
+                  case None =>
+                    ReducerResult.noEffects(state)
+              case Some(CommandSurfaceItem.CommandItem(command)) =>
+                ReducerResult(
+                  state = deactivate(state),
+                  effects = List(AppEffect.ExecuteCommand(command))
+                )
+              case Some(_: CommandSurfaceItem.GroupItem) =>
+                ReducerResult.noEffects(replaceRunner(state, _.enterSelectedSubmenuGroup))
+              case _ =>
+                ReducerResult.noEffects(state)
 
   private def invalidInputMessage(item: CommandSurfaceItem.InputItem, text: String): String =
     val value = if text.trim.isEmpty then "<empty>" else text
@@ -674,37 +698,44 @@ object CommandRunnerReducer:
     info: com.serenity.keystroke.KeyStrokeInfo,
     recordedAtMillis: Long
   ): ReducerResult =
-    currentRunner(state).flatMap(_.activeSubmenu) match
-      case Some(submenu) if submenu.recordingItemId.nonEmpty =>
-        val runner = currentRunner(state).get
-        runner.submenuItems(submenu.groupId).find(_.id == submenu.recordingItemId.get) match
-          case Some(item: CommandSurfaceItem.InputItem) =>
-            val pending = submenu.pendingRecordedBinding
-            pending match
-              case None =>
-                ReducerResult(
-                  replaceRunner(
-                    state,
-                    current =>
-                      current.copy(
-                        activeSubmenu = current.activeSubmenu.map(
-                          _.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))
-                        ),
-                        statusMessage = Some("Press the same key again within 200ms to record a double tap")
-                      )
-                  ),
-                  List(AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis))
-                )
-              case Some((first, firstAt))
-                  if recordedAtMillis >= firstAt &&
-                    recordedAtMillis - firstAt <= DoubleTapWindowMillis &&
-                    sameKeyStroke(first, info) =>
-                assignRecordedBinding(state, item, first)
-              case Some((first, _)) =>
-                assignRecordedBinding(state, item, first)
-          case _ => ReducerResult.noEffects(state)
-      case _ =>
+    currentRunner(state) match
+      case None =>
         ReducerResult.noEffects(state)
+      case Some(runner) =>
+        runner.activeSubmenu match
+          case None =>
+            ReducerResult.noEffects(state)
+          case Some(submenu) =>
+            submenu.recordingItemId match
+              case None =>
+                ReducerResult.noEffects(state)
+              case Some(recordingItemId) =>
+                runner.submenuItems(submenu.groupId).find(_.id == recordingItemId) match
+                  case Some(item: CommandSurfaceItem.InputItem) =>
+                    val pending = submenu.pendingRecordedBinding
+                    pending match
+                      case None =>
+                        ReducerResult(
+                          replaceRunner(
+                            state,
+                            current =>
+                              current.copy(
+                                activeSubmenu = current.activeSubmenu.map(
+                                  _.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))
+                                ),
+                                statusMessage = Some("Press the same key again within 200ms to record a double tap")
+                              )
+                          ),
+                          List(AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis))
+                        )
+                      case Some((first, firstAt))
+                          if recordedAtMillis >= firstAt &&
+                            recordedAtMillis - firstAt <= DoubleTapWindowMillis &&
+                            sameKeyStroke(first, info) =>
+                        assignRecordedBinding(state, item, first)
+                      case Some((first, _)) =>
+                        assignRecordedBinding(state, item, first)
+                  case _ => ReducerResult.noEffects(state)
 
   private def expireRecordedBinding(state: AppState, recordedAtMillis: Long): ReducerResult =
     currentRunner(state)

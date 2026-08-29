@@ -34,7 +34,7 @@ final private[manager] class StateManagerWorkflowCapability(
 
   private def createNewEmptyBuffer(): IO[BufferId] = editor.createNewEmptyBuffer()
 
-  private def createPane(bufferId: Option[BufferId] = None): IO[PaneId] = editor.createPane(bufferId)
+  private def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
 
   private def switchToPane(paneId: PaneId): IO[Unit] = editor.switchToPane(paneId)
 
@@ -721,7 +721,9 @@ final private[manager] class StateManagerWorkflowCapability(
     val cursorOffset = buffer.editing.cursors.headOption
       .map(cursor => offsetForCursor(buffer.document.content, cursor))
       .getOrElse(0)
-    matches.find(_ >= cursorOffset).getOrElse(matches.head)
+    // The only caller checks matches.isEmpty first, so matches is always non-empty here; 0 is an
+    // unreachable fallback rather than a real offset choice.
+    matches.find(_ >= cursorOffset).orElse(matches.headOption).getOrElse(0)
 
   private def scopedReplaceMatches(
     buffer: Buffer,

@@ -181,43 +181,45 @@ object TextLayoutSnapshot:
   ): Vector[TextVisualLine] =
     @annotation.tailrec
     def loop(lines: Vector[(Int, String)], acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
-      if lines.isEmpty || acc.length >= visualLineLimit then acc
+      if acc.length >= visualLineLimit then acc
       else
-        val (lineIndex, rawLine) = lines.head
-        val startColumn =
-          if wordWrapEnabled then 0
-          else math.min(buffer.viewport.leftColumn, rawLine.length)
-        val visibleSlice =
-          if wordWrapEnabled then rawLine.drop(startColumn)
-          else unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
-        val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
-        val wrapped =
-          if remainingVisualLines <= 0 then Vector.empty
-          else if wordWrapEnabled then
-            wrapLogicalLine(
-              visibleSlice,
-              lineIndex,
-              panelWidthPx,
-              font,
-              frc,
-              measuredLayout,
-              startColumn,
-              remainingVisualLines
-            )
-          else
-            Vector(
-              shapeSegment(
-                visibleSlice,
-                lineIndex,
-                startColumn,
-                startColumn + visibleSlice.length,
-                font,
-                frc,
-                measuredLayout
-              )
-            )
-        val aligned = applyParagraphAlignment(wrapped, lineIndex, panelWidthPx, richDocument)
-        loop(lines.tail, acc ++ aligned)
+        lines match
+          case (lineIndex, rawLine) +: rest =>
+            val startColumn =
+              if wordWrapEnabled then 0
+              else math.min(buffer.viewport.leftColumn, rawLine.length)
+            val visibleSlice =
+              if wordWrapEnabled then rawLine.drop(startColumn)
+              else unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
+            val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
+            val wrapped =
+              if remainingVisualLines <= 0 then Vector.empty
+              else if wordWrapEnabled then
+                wrapLogicalLine(
+                  visibleSlice,
+                  lineIndex,
+                  panelWidthPx,
+                  font,
+                  frc,
+                  measuredLayout,
+                  startColumn,
+                  remainingVisualLines
+                )
+              else
+                Vector(
+                  shapeSegment(
+                    visibleSlice,
+                    lineIndex,
+                    startColumn,
+                    startColumn + visibleSlice.length,
+                    font,
+                    frc,
+                    measuredLayout
+                  )
+                )
+            val aligned = applyParagraphAlignment(wrapped, lineIndex, panelWidthPx, richDocument)
+            loop(rest, acc ++ aligned)
+          case _ => acc
 
     val maxLogicalLines = math.min(math.max(0, totalLines - buffer.viewport.topLine), math.max(1, visualLineLimit))
     loop(

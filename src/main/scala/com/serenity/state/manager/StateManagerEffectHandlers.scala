@@ -191,11 +191,14 @@ final private[manager] class StateManagerEffectHandlers(
             None
       }
     val updatedSurfaces = state.runtime.uiSurfaces.map {
-      case current if updatedRunner.isDefined && commandRunnerSurfaceId.contains(current.id) =>
-        current.copy(content = SurfaceContent.CommandPalette(updatedRunner.get))
-      case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _)
-          if updatedRunner.isDefined =>
-        current.copy(content = SurfaceContent.CommandPaletteSubmenu(updatedRunner.get, groupId, previewOnly))
+      // When updatedRunner is None, .fold falls back to the surface unchanged -- the same outcome the
+      // original `if updatedRunner.isDefined` guard produced by skipping to the `case other => other` tail.
+      case current if commandRunnerSurfaceId.contains(current.id) =>
+        updatedRunner.fold(current)(runner => current.copy(content = SurfaceContent.CommandPalette(runner)))
+      case current @ UiSurface(_, SurfaceContent.CommandPaletteSubmenu(_, groupId, previewOnly), _, _) =>
+        updatedRunner.fold(current)(runner =>
+          current.copy(content = SurfaceContent.CommandPaletteSubmenu(runner, groupId, previewOnly))
+        )
       case current @ UiSurface(_, SurfaceContent.ContextualToolbar(toolbarState), _, _) =>
         current.copy(
           content = SurfaceContent.ContextualToolbar(
