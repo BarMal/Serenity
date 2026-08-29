@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.lsp.client.{LspFramer, LspProtocol}
-import com.serenity.lsp.model.DiagnosticSeverity
+import com.serenity.lsp.model.{DiagnosticSeverity, LspPosition, LspRange}
 import io.circe.Json
 import io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -307,4 +307,28 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     LspProtocol.parseCompletionItems(completionList) shouldBe Some(List("map", "mapValues"))
     LspProtocol.parseCompletionItems(arrayResponse) shouldBe Some(List("map", "mapValues"))
     LspProtocol.parseCompletionItems(emptyResponse) shouldBe Some(Nil)
+  }
+
+  it should "parse a range's 0-based start and end positions, including an all-zero range" in {
+    val json = Json.obj(
+      "range" -> Json.obj(
+        "start" -> Json.obj("line" -> 0.asJson, "character" -> 0.asJson),
+        "end"   -> Json.obj("line" -> 3.asJson, "character" -> 12.asJson)
+      )
+    )
+
+    LspProtocol.parseRange(json.hcursor) shouldBe Some(LspRange(LspPosition(0, 0), LspPosition(3, 12)))
+  }
+
+  it should "return None when the range is missing or a coordinate field is absent" in {
+    val noRange = Json.obj("uri" -> "file:///foo/Bar.scala".asJson)
+    LspProtocol.parseRange(noRange.hcursor) shouldBe None
+
+    val missingEndCharacter = Json.obj(
+      "range" -> Json.obj(
+        "start" -> Json.obj("line" -> 1.asJson, "character" -> 2.asJson),
+        "end"   -> Json.obj("line" -> 1.asJson)
+      )
+    )
+    LspProtocol.parseRange(missingEndCharacter.hcursor) shouldBe None
   }

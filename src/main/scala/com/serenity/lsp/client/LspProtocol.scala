@@ -1,8 +1,8 @@
 package com.serenity.lsp.client
 
 import com.serenity.lsp.model.*
-import io.circe.Json
 import io.circe.syntax.*
+import io.circe.{HCursor, Json}
 
 object LspProtocol:
 
@@ -141,15 +141,24 @@ object LspProtocol:
       parseLocation(result).orElse(result.asArray.flatMap(_.toList.view.flatMap(parseLocation).headOption))
     }
 
+  /** Parses the `range.start`/`range.end` line/character pair off `c`, the cursor for the object that holds the `range`
+    * field. LSP coordinates are 0-based.
+    */
+  def parseRange(c: HCursor): Option[LspRange] =
+    val range = c.downField("range")
+    for
+      startLine <- range.downField("start").downField("line").as[Int].toOption
+      startChar <- range.downField("start").downField("character").as[Int].toOption
+      endLine   <- range.downField("end").downField("line").as[Int].toOption
+      endChar   <- range.downField("end").downField("character").as[Int].toOption
+    yield LspRange(LspPosition(startLine, startChar), LspPosition(endLine, endChar))
+
   private def parseLocation(json: Json): Option[LspLocation] =
     val c = json.hcursor
     for
-      uri       <- c.downField("uri").as[String].toOption
-      startLine <- c.downField("range").downField("start").downField("line").as[Int].toOption
-      startChar <- c.downField("range").downField("start").downField("character").as[Int].toOption
-      endLine   <- c.downField("range").downField("end").downField("line").as[Int].toOption
-      endChar   <- c.downField("range").downField("end").downField("character").as[Int].toOption
-    yield LspLocation(uri, LspRange(LspPosition(startLine, startChar), LspPosition(endLine, endChar)))
+      uri   <- c.downField("uri").as[String].toOption
+      range <- parseRange(c)
+    yield LspLocation(uri, range)
 
   // ── PublishDiagnostics ──────────────────────────────────────────────────────
 
@@ -167,17 +176,14 @@ object LspProtocol:
   private def parseDiagnostic(json: Json): Option[Diagnostic] =
     val c = json.hcursor
     for
-      startLine <- c.downField("range").downField("start").downField("line").as[Int].toOption
-      startChar <- c.downField("range").downField("start").downField("character").as[Int].toOption
-      endLine   <- c.downField("range").downField("end").downField("line").as[Int].toOption
-      endChar   <- c.downField("range").downField("end").downField("character").as[Int].toOption
-      message   <- c.downField("message").as[String].toOption
+      range   <- parseRange(c)
+      message <- c.downField("message").as[String].toOption
     yield
       val severity = c.downField("severity").as[Int].toOption.flatMap(DiagnosticSeverity.fromCode)
       val source   = c.downField("source").as[String].toOption
       val code     = c.downField("code").as[String].orElse(c.downField("code").as[Int].map(_.toString)).toOption
       Diagnostic(
-        range = LspRange(LspPosition(startLine, startChar), LspPosition(endLine, endChar)),
+        range = range,
         severity = severity,
         message = message,
         source = source,
