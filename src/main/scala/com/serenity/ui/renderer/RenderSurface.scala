@@ -72,6 +72,13 @@ trait RenderSurface:
     */
   def hardwareCursor: Option[HardwareCursor] = None
 
+  /** Creating a fresh, independently-paintable buffer shaped like this surface, for a compositing layer to own instead
+    * of painting into this surface directly. `None` -- the default -- means callers must paint the layer straight into
+    * this surface, same as before this capability existed; only a raster surface with a real sub-buffer concept
+    * (`Java2DRenderSurface`) advertises it. See [[LayerBufferSupport]].
+    */
+  def layerBuffers: Option[LayerBufferSupport] = None
+
   def hideCursor(): Unit
   def viewportWidth: Int
   def viewportHeight: Int

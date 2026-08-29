@@ -263,14 +263,45 @@ object DamageProducer:
     * already covered by `paneChromeDamage`), so it needs no separate check. `focus` changing can retarget which
     * floating surface `OverlayViewModel.preferredFloatingSurface` selects, or its dim/active tint, without `uiSurfaces`
     * itself changing (tabbing between two already-open floating panels).
+    *
+    * [[uiSurfacesDamage]] carves out one narrower case: a transition that changes only the one surface presented as
+    * [[SurfacePresentation.Modal]], and nothing else about `uiSurfaces`, reports `Damage.Surface` scoped to that
+    * surface instead of `Everything` (#1100 stage 2). That's safe specifically for the modal layer because
+    * `Renderer.renderModalLayer` never reads pixels back off the frame surface it paints onto (no `blurRegion`, no
+    * shadow) -- unlike pinned/expanded panels, which do (`SurfaceMaterials.effectiveBlurRadius`), and floating panels,
+    * neither of which this carve-out touches; they keep reporting `Everything` on any change, same as before.
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
     if before.runtime.themeTransition != after.runtime.themeTransition ||
         before.runtime.surfaceAnimations != after.runtime.surfaceAnimations ||
-        before.runtime.uiSurfaces != after.runtime.uiSurfaces ||
         before.persisted.focus != after.persisted.focus
     then Damage.Everything
-    else Damage.Nothing
+    else uiSurfacesDamage(before, after)
+
+  private def uiSurfacesDamage(before: AppState, after: AppState): Damage =
+    if before.runtime.uiSurfaces == after.runtime.uiSurfaces then Damage.Nothing
+    else
+      modalOnlyContentChange(before, after) match
+        case Some(surfaceId) => Damage.Surface(surfaceId)
+        case None            => Damage.Everything
+
+  /** `Some(id)` when `uiSurfaces` differs only in the fields of the one surface identified by `id`, and that surface is
+    * presented as [[SurfacePresentation.Modal]] on both sides of the transition -- i.e. the modal didn't appear,
+    * disappear, or change presentation, and no other surface changed alongside it. Any broader difference (a surface
+    * added/removed, more than one surface changed, or the changed surface isn't a modal on both sides) reports `None`,
+    * which [[uiSurfacesDamage]] then treats the same blunt way as before this carve-out existed.
+    */
+  private def modalOnlyContentChange(before: AppState, after: AppState): Option[SurfaceId] =
+    val beforeById = before.runtime.uiSurfaces.map(surface => surface.id -> surface).toMap
+    val afterById  = after.runtime.uiSurfaces.map(surface => surface.id -> surface).toMap
+    if beforeById.keySet != afterById.keySet then None
+    else
+      beforeById.keySet.filter(id => beforeById(id) != afterById(id)).toList match
+        case List(onlyChangedId) =>
+          (beforeById(onlyChangedId).presentation, afterById(onlyChangedId).presentation) match
+            case (SurfacePresentation.Modal, SurfacePresentation.Modal) => Some(onlyChangedId)
+            case _                                                      => None
+        case _ => None
 
   /** Pane headers, gutter text and line numbers -- `Renderer.ChromeKey`'s `layout`/`gutterText`/`lineNumberRows`/
     * `headers` fields, keyed by `PaneId` rather than `BufferId`. `state.layout` keeps the same object reference across
