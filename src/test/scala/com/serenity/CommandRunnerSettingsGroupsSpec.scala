@@ -46,10 +46,12 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-workspace-layout").children.map(_.id) shouldBe List(
       "settings-panel-pins"
     )
+    // issue #1057: "settings-language" (Current Buffer Language) is gone -- buffer-language switching is a
+    // one-shot action, now an ordinary CommandRegistry command (`CommandRunnerOneShotActionsSpec`), not a settings
+    // group.
     groupById(groups, "settings-document-writing").children.map(_.id) shouldBe List(
       "settings-navigation",
       "settings-document-defaults",
-      "settings-language",
       "settings-rich-text",
       "settings-spellcheck"
     )
@@ -57,9 +59,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "default-document-mode",
       "markdown-view"
     )
-    groupById(groups, "settings-language").label shouldBe "Current Buffer Language"
-    groupById(groups, "settings-language").children.map(_.id) should contain("lang-plain-text")
-    groupById(groups, "settings-language").children.map(_.id) should not contain "default-document-mode"
     groupById(groups, "settings-spellcheck").children.map(_.id) should contain allOf (
       "spellcheck-enabled",
       "spellcheck-languages",
@@ -259,15 +258,10 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       editingPresetName = None
     )
 
+    // issue #1057: "settings-preset-theme-selection" (Theme Chooser/Creator/Toggle/Reload) is gone -- those are
+    // one-shot actions with no preset-scoped value of their own, now ordinary CommandRegistry commands.
     groupById(groups, "settings-preset-theme").children.map(_.id) shouldBe List(
-      "settings-preset-theme-selection",
       "settings-preset-surface-material"
-    )
-    groupById(groups, "settings-preset-theme-selection").children.map(_.id) shouldBe List(
-      "theme-chooser",
-      "theme-creator",
-      "toggle-theme",
-      "reload-theme"
     )
     groupById(groups, "settings-preset-surface-material").children.map(_.id) shouldBe List(
       "background-style",

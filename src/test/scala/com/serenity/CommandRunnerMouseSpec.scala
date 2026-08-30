@@ -1,10 +1,9 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandCategory, CommandRunner}
+import com.serenity.command.{CommandRunner, CommandSurfaceItem}
 import com.serenity.config.InterfaceDensity
 import com.serenity.keystroke.events.*
-import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
@@ -130,31 +129,19 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     after.commandRunnerSurface shouldBe None
   }
 
-  it should "switch categories when a category tab is clicked without submitting a command" in {
-    val stateManager = createStateManager("CommandRunnerMouseSpec")
-
-    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-
-    val before = stateManager.getCurrentState.unsafeRunSync()
-    val point  = commandRunnerCategoryPoint(before, categoryIndex = 1)
-
-    stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
-    runnerFrom(stateManager.getCurrentState.unsafeRunSync()).activeCategory shouldBe CommandCategory.File
-
-    stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
-
-    val after = stateManager.getCurrentState.unsafeRunSync()
-    after.commandRunnerSurface shouldBe defined
-    runnerFrom(after).activeCategory shouldBe CommandCategory.File
-  }
+  // issue #931: category tabs are retired -- there is no tab row left to click, so this test (and the mouse
+  // hit-testing it exercised, `commandPaletteCategoryAt`) is removed rather than adapted.
 
   // issue #1059: a drilled-in settings group renders on the one command-runner surface now (no second floating
   // submenu surface), so this hit-tests against that surface directly.
+  // issue #1057: previously entered the (now-removed) "settings-language" group via a "language" search; retargeted
+  // to "settings-cursor" (still present, 3 plain OptionItem children -- unlike "settings-ui-font", none of them is
+  // itself an expandable group, so there's no inline group-preview row competing for space in the capped floating
+  // surface height, issue #1045).
   it should "highlight the focused submenu row under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
-    openLanguageSubmenu(stateManager)
+    openCursorSubmenu(stateManager)
 
     val before = stateManager.getCurrentState.unsafeRunSync()
     val point  = commandRunnerItemPoint(before, 2)
@@ -172,40 +159,26 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   // here -- entering a group is only ever a direct click/submit on the group's own row, covered by "execute the
   // focused submenu row clicked under the pointer" below and the palette's ordinary row-click tests above.
 
+  // issue #1057: previously entered the (now-removed) "settings-language" group and clicked "Plain Text" to observe
+  // the buffer's language change. Retargeted to "settings-ui-font"'s nested font-family group -- still a real
+  // settings-tree submenu of CommandItems, and a click on one still executes it and closes the runner the same way.
+  // The specific family clicked isn't hardcoded (font availability is environment-dependent); the assertion is that
+  // clicking row 0 sets the UI font to whichever family renders there.
   it should "execute the focused submenu row clicked under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
-    stateManager
-      .updateState { state =>
-        val bufferId = state.persisted.layout.activeEditorPaneId
-          .flatMap(state.persisted.layout.editorPanes.get)
-          .flatMap(_.bufferId)
-          .getOrElse(fail("Expected focused buffer"))
-        state.copy(persisted =
-          state.persisted.copy(buffers =
-            state.persisted.buffers.updated(
-              bufferId,
-              state.persisted
-                .buffers(bufferId)
-                .copy(document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)))
-            )
-          )
-        )
-      }
-      .unsafeRunSync()
-    openLanguageSubmenu(stateManager)
+    openUiFontFamilySubmenu(stateManager)
 
-    val before = stateManager.getCurrentState.unsafeRunSync()
-    val point  = commandRunnerItemPoint(before, 0)
+    val before        = stateManager.getCurrentState.unsafeRunSync()
+    val expectedFamily = runnerFrom(before).focusedSubmenuItems.lift(0).collect {
+      case CommandSurfaceItem.CommandItem(command) => command.label
+    }.getOrElse(fail("Expected at least one UI font family"))
+    val point = commandRunnerItemPoint(before, 0)
 
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
-    val bufferId = after.persisted.layout.activeEditorPaneId
-      .flatMap(after.persisted.layout.editorPanes.get)
-      .flatMap(_.bufferId)
-      .getOrElse(fail("Expected focused buffer"))
-    after.persisted.buffers(bufferId).document.language shouldBe None
+    after.persisted.config.editorConfig.fontConfig.uiFontFamily shouldBe expectedFamily
     after.commandRunnerSurface shouldBe None
   }
 
@@ -214,19 +187,6 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   private def commandRunnerItemPoint(state: AppState, displayedItemRow: Int): Point =
     val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
     overlayItemPoint(state, surface.id, displayedItemRow)
-
-  private def commandRunnerCategoryPoint(state: AppState, categoryIndex: Int): Point =
-    val surface  = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
-    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
-    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val contract = EditorLayoutContract.from(state, viewport, layout)
-    val contentRect = contract
-      .overlayContentRect(surface.id)
-      .getOrElse(fail("Expected command runner content rect"))
-    val header = contract
-      .overlayHeaderRect(surface.id)
-      .getOrElse(fail("Expected command runner header rect"))
-    Point(contentRect.x + (contentRect.width * categoryIndex) / CommandCategory.values.length + 1, header.y)
 
   private def overlayItemPoint(state: AppState, surfaceId: SurfaceId, displayedItemRow: Int): Point =
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
@@ -292,10 +252,21 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   private def floatingMetrics(state: AppState): CellMetrics =
     CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
 
-  private def openLanguageSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
+  /** Enters "settings-cursor" (search "cursor" exact-matches its label; issue #1057 -- was "settings-language"). */
+  private def openCursorSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "language".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    "cursor".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+  /** Enters "settings-ui-font" (search "ui font" exact-matches its label), then descends one level further into its
+    * nested font-family group (selected by default -- it's that group's first child).
+    */
+  private def openUiFontFamilySubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
+    stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    "ui font".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   private def runnerFrom(state: AppState): CommandRunner =

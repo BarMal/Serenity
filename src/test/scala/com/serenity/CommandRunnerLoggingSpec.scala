@@ -11,6 +11,11 @@ import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
 
+  // issue #931: category tabs are retired, so switching `activeCategory` no longer changes what `visibleItems`
+  // shows (it's always every command, unfiltered) -- `selected` is just the first registered command now, not a
+  // settings group. The `category=Settings` field itself is untouched here (still a real, if now-inert, field on
+  // `CommandRunner`; retiring it entirely is tracked as follow-up cleanup, not part of this stage's dispatch
+  // migration).
   "StateManager.describeCommandRunnerEvent" should "describe browse mode with category and selected item" in {
     val registry          = CommandRegistry.withToggleUI
     given CommandRegistry = registry
@@ -21,7 +26,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     StateManager
       .describeCommandRunnerEvent(TabKey, runner)
       .shouldBe(
-        "event=TabKey mode=browse category=Settings selected=group:settings-workspace-layout"
+        "event=TabKey mode=browse category=Settings selected=command:open-settings"
       )
   }
 

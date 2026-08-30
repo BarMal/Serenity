@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
-import com.serenity.command.{CommandCategory, CommandRegistry, CommandSurfaceItem, SettingsSurfaceState}
+import com.serenity.command.{CommandRegistry, CommandRunnerSurface, CommandSurfaceItem, SettingsSurfaceState}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -67,71 +67,58 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
       val rowSlots = contract.overlayRowSlots(surface.id)
       surface.content match
         case SurfaceContent.CommandPalette(runner) =>
-          // A settings group drilled into from the palette's Settings tab now renders on this same surface too
-          // (issue #1059), so it hit-tests the same way as the dedicated Settings surface -- against
-          // settingsSurfaceItems/settingsSurfaceSelectedIndex -- whenever activeSettingsSurface is active, not only
-          // when isSettingsSurface.
-          if runner.isSettingsSurface || runner.activeSettingsSurface.nonEmpty then
-            val items = runner.settingsSurfaceItems
-            MouseHitTestGeometry
-              .overlayItemIndex(
-                event,
-                state,
-                layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
-                contentRect,
-                rowSlots,
-                items.length,
-                runner.settingsSurfaceSelectedIndex,
-                hasHeader = true,
-                hasFooter = true,
-                reservedContentRows = groupPreviewRowCount(items, runner.settingsSurfaceSelectedIndex),
-                itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
-                itemTargetRows =
-                  SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
-              )
-              .map { index =>
-                if runner.activeSettingsSurface.nonEmpty then RunnerSelectSubmenuItem(index)
-                else RunnerSelectVisibleItem(index)
-              }
-          else
-            commandPaletteCategoryAt(event, contentRect, contract.overlayHeaderRect(surface.id), runner.searchTerm)
-              .map(RunnerSelectCategory(_))
-              .orElse {
-                val items = runner.visibleItems
-                MouseHitTestGeometry
-                  .overlayItemIndex(
-                    event,
-                    state,
-                    layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
-                    contentRect,
-                    rowSlots,
-                    items.length,
-                    runner.selectedIndex,
-                    hasHeader = true,
-                    hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-                    reservedContentRows = groupPreviewRowCount(items, runner.selectedIndex),
-                    itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
-                    itemTargetRows =
-                      SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
-                  )
-                  .map(RunnerSelectVisibleItem(_))
-              }
+          // Dispatch on `CommandRunnerSurface` (issue #931, Stage 2): a settings group drilled into from the
+          // palette's old Settings tab renders on this same surface too (issue #1059), so `Settings(_)` hit-tests
+          // the same way as the dedicated Settings surface -- against settingsSurfaceItems/
+          // settingsSurfaceSelectedIndex -- covering both entry points exactly as the two conditions this replaced
+          // did.
+          runner.surface match
+            case CommandRunnerSurface.Settings(activeSettingsSurface) =>
+              val items = runner.settingsSurfaceItems
+              MouseHitTestGeometry
+                .overlayItemIndex(
+                  event,
+                  state,
+                  layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+                  contentRect,
+                  rowSlots,
+                  items.length,
+                  runner.settingsSurfaceSelectedIndex,
+                  hasHeader = true,
+                  hasFooter = true,
+                  reservedContentRows = groupPreviewRowCount(items, runner.settingsSurfaceSelectedIndex),
+                  itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+                  itemTargetRows =
+                    SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
+                )
+                .map { index =>
+                  if activeSettingsSurface.nonEmpty then RunnerSelectSubmenuItem(index)
+                  else RunnerSelectVisibleItem(index)
+                }
+            case CommandRunnerSurface.Palette(_) =>
+              // Category tabs are retired (issue #931): the header is just the live search box now, nothing there
+              // to hit-test as a tab click.
+              val items = runner.visibleItems
+              MouseHitTestGeometry
+                .overlayItemIndex(
+                  event,
+                  state,
+                  layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+                  contentRect,
+                  rowSlots,
+                  items.length,
+                  runner.selectedIndex,
+                  hasHeader = true,
+                  hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
+                  reservedContentRows = groupPreviewRowCount(items, runner.selectedIndex),
+                  itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+                  itemTargetRows =
+                    SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
+                )
+                .map(RunnerSelectVisibleItem(_))
         case _ =>
           None
     }
-
-  private def commandPaletteCategoryAt(
-    event: MouseInputEvent,
-    contentRect: LayoutRect,
-    headerRect: Option[LayoutRect],
-    searchTerm: String
-  ): Option[CommandCategory] =
-    val categories = CommandCategory.values.toList
-    val categoryIndex =
-      Option.when(searchTerm.isEmpty && headerRect.exists(_.contains(event.col, event.row))) {
-        ((event.col - contentRect.x) * categories.length) / contentRect.width.max(1)
-      }
-    categoryIndex.flatMap(categories.lift)
 
   /** How many rows `SurfaceContentResolver`'s capped, expand-in-place group preview reserves under the selected row
     * (issue #1059), so hit-testing lands on the right item despite those extra rows shifting everything after them.

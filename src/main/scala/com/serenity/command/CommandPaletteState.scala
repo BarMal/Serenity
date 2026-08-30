@@ -60,10 +60,21 @@ object CommandPaletteState:
     CommandPaletteState(filteredCommands = registry.getAllCommands)
 
 /** The command-runner overlay's top-level shape: either the palette or the settings surface, never both -- the
-  * dispatch this stage introduces in place of `CommandRunner.mode`/`isSettingsSurface`. Not yet read by anything;
-  * `CommandRunnerReducer`, `SurfaceContentResolver`, and `CommandRunnerMouseHitTesting` still dispatch on
-  * `CommandRunner.isSettingsSurface` until they are migrated onto this type in a later turn.
+  * dispatch `CommandRunnerReducer`, `SurfaceContentResolver`, and `CommandRunnerMouseHitTesting` fork on in place of
+  * `CommandRunner.mode`/`isSettingsSurface`/`activeSettingsSurface.isDefined` (issue #931, Stage 2).
+  *
+  * `Settings` carries `Option[SettingsSurfaceState]` rather than a bare `SettingsSurfaceState`: the settings surface
+  * has a real state with no page at all yet -- browsing the top-level settings groups before drilling into any of
+  * them (reached via `CommandRunner.isSettingsSurface` alone, `activeSettingsSurface = None`) -- and `SettingsPage`
+  * has no case for "no page", by design (see `SettingsSurfaceState`'s own doc: it always has a current page once it
+  * exists at all). `None` here is that settings-root state, distinct from the case where there is no settings surface
+  * showing at all (`Palette`).
+  *
+  * `CommandRunner.surface` is the only producer of this type today; the payloads it carries (`CommandPaletteState`,
+  * `activeSettingsSurface`) are still read off `CommandRunner`'s own fields underneath, not separate storage -- this
+  * stage migrates the *dispatch decision*, not the state representation itself (a larger change, out of scope here;
+  * see the PR notes).
   */
 enum CommandRunnerSurface:
   case Palette(state: CommandPaletteState)
-  case Settings(state: SettingsSurfaceState)
+  case Settings(surface: Option[SettingsSurfaceState])

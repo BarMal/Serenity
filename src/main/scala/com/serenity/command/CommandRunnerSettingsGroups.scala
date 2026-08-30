@@ -59,12 +59,16 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Pin, focus, expand, and unpin panels")
     )
+    // issue #1057: Next/Previous Bookmark, Navigate Back/Forward, etc. used to live here too, as fake "settings"
+    // that just executed a one-shot action with no persisted value. They are ordinary CommandRegistry commands now
+    // (already were, in fact -- this group's own construction just duplicated them), reachable only via the palette.
+    // The one item that stays: authoring a document comment's text is a real input, not a one-shot action.
     val navigationGroup = CommandSurfaceItem.GroupItem(
       id = "settings-navigation",
       label = "Navigation",
-      children = inputItems.filter(_.id == "document-comment") ++ CommandRunnerSettingsItems.navigationItems,
+      children = inputItems.filter(_.id == "document-comment"),
       category = CommandCategory.Settings,
-      hint = Some("Comments, bookmarks, headings, history")
+      hint = Some("Author a document comment")
     )
     val textDisplayGroup = CommandSurfaceItem.GroupItem(
       id = "settings-text-display",
@@ -220,13 +224,6 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("New document mode and previews")
     )
-    val languageGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-language",
-      label = "Current Buffer Language",
-      children = CommandRunnerSettingsItems.languageItems,
-      category = CommandCategory.Settings,
-      hint = Some("Set syntax mode for the active buffer")
-    )
     val spellCheckGroup = CommandSurfaceItem.GroupItem(
       id = "settings-spellcheck",
       label = "Spell Check",
@@ -246,7 +243,7 @@ object CommandRunnerSettingsGroups:
     val documentWritingGroup = CommandSurfaceItem.GroupItem(
       id = "settings-document-writing",
       label = "Document Writing",
-      children = List(navigationGroup, documentDefaultsGroup, languageGroup, richTextGroup, spellCheckGroup),
+      children = List(navigationGroup, documentDefaultsGroup, richTextGroup, spellCheckGroup),
       category = CommandCategory.Settings,
       hint = Some("Comments, previews, styling, and spelling")
     )
@@ -411,13 +408,6 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Default mode, Markdown view, spelling")
     )
-    val presetThemeSelectionGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-theme-selection",
-      label = "Theme Selection",
-      children = CommandRunnerSettingsItems.themeItems,
-      category = CommandCategory.Settings,
-      hint = Some("Choose, create, toggle, or reload themes")
-    )
     val presetSurfaceMaterialGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-surface-material",
       label = "Surface Material",
@@ -425,12 +415,15 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Background, material, and blur")
     )
+    // issue #1057: this used to also carry a "Theme Selection" child (Theme Chooser/Creator/Toggle/Reload) -- those
+    // are one-shot actions with no preset-scoped value of their own (choosing a theme is global, not per-preset), so
+    // they are ordinary CommandRegistry commands now, reachable only via the palette, not duplicated here.
     val presetThemeGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-theme",
       label = "Theme & Surface",
-      children = List(presetThemeSelectionGroup, presetSurfaceMaterialGroup),
+      children = List(presetSurfaceMaterialGroup),
       category = CommandCategory.Settings,
-      hint = Some("Theme, material, and background")
+      hint = Some("Material and background")
     )
     val presetEditingSections =
       List(activePanelsGroup, presetThemeGroup, presetAnimationsGroup, presetFontsGroup, presetDocumentDefaultsGroup)

@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.command.CommandSurfaceItem.CommandItem
+import com.serenity.lsp.config.LanguageId
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole}
 import com.serenity.ui.layout.PanelPosition
@@ -735,15 +736,31 @@ object CommandRegistry:
       CommandCategory.Project,
       label = "Cancel Project Task"
     )
-  ) ++ builtInPresetCommands
+  ) ++ builtInPresetCommands ++ languageCommands
 
-  // NOTE (issue #1057, Stage 2 of #931): buffer-language switchers (`lang-plain-text`, `lang-<id>`) still need
-  // registering here as ordinary commands -- deferred to the turn that also removes
-  // `CommandRunnerSettingsItems.languageItems`/the "Current Buffer Language" settings group. Registering them
-  // alongside that still-present settings-tree group gives two search targets sharing one id/name
-  // (`CommandRunnerFloatingRenderingSpec`/`CommandRunnerReducerSpec` caught this: an exact-match command now outranks
-  // the exact-match settings target it collides with, breaking "search settings, land on the settings leaf").
-  // `CommandRunnerOneShotActionsSpec` documents this as an intentionally red spec until that turn.
+  /** Buffer-language switchers -- previously only reachable as fake "settings" under the "Current Buffer Language"
+    * settings group (`CommandRunnerSettingsItems.languageItems`), even though picking one is a one-shot action with
+    * no persisted value of its own (issue #1057). Registered here, in the same commit that removes that settings-tree
+    * group (`CommandRunnerSettingsGroups.build`), so an exact-match command by this id/name is never simultaneously
+    * an exact-match settings-search target too -- that collision (two things named "lang-markdown") is what broke
+    * `CommandRunnerFloatingRenderingSpec`/`CommandRunnerReducerSpec` the first time this was tried standalone.
+    */
+  private def languageCommands: List[Command] =
+    Command.typed(
+      "lang-plain-text",
+      "Use plain text mode for the current buffer.",
+      CommandIntent.File(FileIntent.SetBufferLanguage(None)),
+      CommandCategory.Settings,
+      label = "Plain Text"
+    ) :: LanguageId.values.toList.sortBy(_.displayName).map { lang =>
+      Command.typed(
+        s"lang-${lang.id}",
+        s"Use ${lang.displayName} mode for the current buffer.",
+        CommandIntent.File(FileIntent.SetBufferLanguage(Some(lang))),
+        CommandCategory.Settings,
+        label = lang.displayName
+      )
+    }
 
   private def builtInPresetCommands: List[Command] =
     UiPreset.builtIns.map { preset =>

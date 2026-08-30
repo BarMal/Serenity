@@ -188,6 +188,18 @@ final case class CommandRunner(
 
   def isSettingsSurface: Boolean = mode == CommandRunnerMode.Settings
 
+  /** This runner's shape as the `CommandRunnerSurface` dispatch type (issue #931, Stage 2): `Settings` whenever
+    * either entry point (the dedicated Settings surface, or a group drilled into from the palette's old Settings
+    * category tab) has it showing settings navigation -- carrying `activeSettingsSurface` as-is, so `None` still
+    * means "at the settings root, no group entered" and `Some` means "drilled into a group" -- and `Palette`
+    * otherwise. Exactly the condition `SurfaceContentResolver`/`CommandRunnerMouseHitTesting` already forked on
+    * before this turn migrated them onto it; not yet backed by real separate storage (that is a larger change than
+    * this stage's dispatch migration -- see the PR notes).
+    */
+  def surface: CommandRunnerSurface =
+    if isSettingsSurface || activeSettingsSurface.isDefined then CommandRunnerSurface.Settings(activeSettingsSurface)
+    else CommandRunnerSurface.Palette(CommandPaletteState(searchTerm, selectedIndex, filteredCommands))
+
   def bindingFor(command: Command): Option[String] =
     commandBindings.get(command.name)
 
@@ -195,10 +207,10 @@ final case class CommandRunner(
     if isSettingsSurface then settingsSurfaceItems
     else
       val commandItems = filteredCommands.map(CommandSurfaceItem.CommandItem(_))
-      if searchTerm.isEmpty then
-        activeCategory match
-          case CommandCategory.Settings => settingsGroups ++ commandItems
-          case _                        => commandItems
+      // Category tabs are retired (issue #931): an empty query is just every command, no category to default to.
+      // Settings are still reachable here -- via search, below -- exactly as issue #931's "fold into text search"
+      // intends; there is just no longer a separate navigation mode for it.
+      if searchTerm.isEmpty then commandItems
       else
         val (strongCommandMatches, remainingCommandMatches) =
           commandItems.partition(item => CommandRunner.isStrongCommandMatch(item.command, searchTerm))
@@ -215,10 +227,12 @@ final case class CommandRunner(
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
 
-  /** Update search term and filter commands */
+  /** Update search term and filter commands. No longer scoped by `activeCategory` (issue #931: category tabs are
+    * retired) -- an empty term is every registered command.
+    */
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
     val filtered =
-      if term.isEmpty then registry.commandsForCategory(activeCategory)
+      if term.isEmpty then registry.getAllCommands
       else registry.searchCommands(term, maxResults = 50)
     copy(
       searchTerm = term,
@@ -715,7 +729,7 @@ final case class CommandRunner(
       isActive = true,
       searchTerm = "",
       selectedIndex = 0,
-      filteredCommands = registry.commandsForCategory(activeCategory),
+      filteredCommands = registry.getAllCommands,
       optionSelections = CommandRunner.defaultOptionSelections(config),
       inputItems = CommandRunner.buildInputItems(config),
       commandBindings = CommandRunner.commandBindings(config),

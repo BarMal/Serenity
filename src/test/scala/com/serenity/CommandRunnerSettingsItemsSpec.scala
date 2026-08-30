@@ -116,30 +116,6 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "hide panel actions for edges without pinned panels" in {
-    val noPanels = CommandRunnerSettingsItems.workspaceLayoutItems(Map.empty)
-    noPanels.map(_.id) should not contain "settings-panel-actions"
-    val topOnlyPanel = CommandRunnerSettingsItems.workspaceLayoutItems(Map("panel-outline-pin" -> 1))
-    topOnlyPanel.map(_.id) should not contain "settings-panel-actions"
-
-    val leftAndRightPanels = CommandRunnerSettingsItems.workspaceLayoutItems(
-      Map("panel-outline-pin" -> 4, "panel-diagnostics-pin" -> 2)
-    )
-    val panelActions = leftAndRightPanels
-      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-actions" => group }
-      .getOrElse(fail("missing panel actions group"))
-
-    panelActions.children.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe List(
-      "focus-left-panel",
-      "expand-left-panel",
-      "unpin-left-panel",
-      "focus-right-panel",
-      "expand-right-panel",
-      "unpin-right-panel",
-      "collapse-expanded-panel"
-    )
-  }
-
   it should "normalize preset previews for the combined preset picker" in {
     val picker = CommandRunnerSettingsItems.uiPresetSelectOptionItem(
       previews = List(
@@ -156,18 +132,19 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     picker.options.takeRight(2).map(_.hint) shouldBe List(Some("Saved workspace setup"), Some("Saved workspace setup"))
   }
 
-  it should "build language and theme command items as settings surface rows" in {
-    val themeIntents = CommandRunnerSettingsItems.themeItems.collect {
-      case CommandSurfaceItem.CommandItem(command) =>
-        command.intent
-    }
-    val languageIds = CommandRunnerSettingsItems.languageItems.map(_.id)
+  // issue #1057: `themeItems`/`languageItems` (this test's original subject) are removed -- theme and
+  // buffer-language one-shot actions are ordinary `CommandRegistry` commands now, covered by
+  // `CommandRunnerOneShotActionsSpec` instead.
 
-    themeIntents should contain allOf (
-      CommandIntent.Theme(ThemeIntent.OpenThemeChooser),
-      CommandIntent.Theme(ThemeIntent.ToggleTheme),
-      CommandIntent.Theme(ThemeIntent.ReloadTheme)
+  it should "never build panel-actions settings-tree duplicates, even with panels pinned on both edges" in {
+    // issue #1057: Focus/Expand/Unpin/Collapse used to appear here as a "Panel Actions" settings group once two
+    // edges had pinned panels -- that was a duplicate of ordinary CommandRegistry commands with no persisted value
+    // of its own. It never appears now, regardless of what's pinned.
+    val noPanels = CommandRunnerSettingsItems.workspaceLayoutItems(Map.empty)
+    noPanels.map(_.id) should not contain "settings-panel-actions"
+
+    val leftAndRightPanels = CommandRunnerSettingsItems.workspaceLayoutItems(
+      Map("panel-outline-pin" -> 4, "panel-diagnostics-pin" -> 2)
     )
-    languageIds.headOption shouldBe Some("lang-plain-text")
-    languageIds should contain("lang-scala")
+    leftAndRightPanels.map(_.id) should not contain "settings-panel-actions"
   }

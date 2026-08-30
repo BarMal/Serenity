@@ -441,6 +441,19 @@ object CommandRunnerReducer:
         case _                                     => None
     }
 
+  /** The drilled-in settings page, if `state`'s runner is on one -- `None` both when there's no settings surface at
+    * all (`CommandRunnerSurface.Palette`) and when there is one but nothing has been entered yet
+    * (`CommandRunnerSurface.Settings(None)`, the settings root). Dispatch through `CommandRunnerSurface` (issue
+    * #931, Stage 2) rather than reading `activeSettingsSurface` directly -- equivalent by construction (`surface`
+    * carries `activeSettingsSurface` as its `Settings` payload verbatim), but names the type this stage introduces
+    * as the seam these submenu-focus checks are really keyed on.
+    */
+  private def activeSubmenu(state: AppState): Option[SettingsSurfaceState] =
+    currentRunner(state).flatMap(_.surface match
+      case CommandRunnerSurface.Settings(surface) => surface
+      case CommandRunnerSurface.Palette(_)        => None
+    )
+
   /** Items that open a nested surface on submit rather than executing an action. */
   private def entersGroupOnSubmit(item: CommandSurfaceItem): Boolean =
     item match
@@ -448,18 +461,18 @@ object CommandRunnerReducer:
       case _                                                                         => false
 
   /** Both entry points now render a drilled-in settings group on the one `CommandPalette` surface (issue #1059), so
-    * `activeSettingsSurface` being defined is the whole signal -- there is no second surface to focus, and
+    * a drilled-in page being present is the whole signal -- there is no second surface to focus, and
     * `isSettingsSurface` no longer needs distinguishing here since the two paths behave identically once inside a
     * group.
     */
   private def submenuHasFocus(state: AppState): Boolean =
-    currentRunner(state).exists(_.activeSettingsSurface.nonEmpty)
+    activeSubmenu(state).nonEmpty
 
   private def submenuEditing(state: AppState): Boolean =
-    currentRunner(state).exists(_.activeSettingsSurface.exists(_.current.editingItemId.nonEmpty))
+    activeSubmenu(state).exists(_.current.editingItemId.nonEmpty)
 
   private def submenuSearching(state: AppState): Boolean =
-    currentRunner(state).exists(_.activeSettingsSurface.exists(_.current.searchTerm.nonEmpty))
+    activeSubmenu(state).exists(_.current.searchTerm.nonEmpty)
 
   private def rootEditing(state: AppState): Boolean =
     currentRunner(state).flatMap(_.editingItemId).nonEmpty
@@ -691,7 +704,7 @@ object CommandRunnerReducer:
     )
 
   private def submenuRecording(state: AppState): Boolean =
-    currentRunner(state).exists(_.activeSettingsSurface.exists(_.current.recording.nonEmpty))
+    activeSubmenu(state).exists(_.current.recording.nonEmpty)
 
   private def clearSubmenuRecording(state: AppState): AppState =
     replaceRunner(state, runner => runner.clearSubmenuEditingAndRecording.copy(statusMessage = None))

@@ -390,8 +390,11 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val fadeLen = state0.runtime.surfaceAnimations.get(surfId).map(_.bufferFadeLength).getOrElse(0)
     (1 to (fadeLen + 1)).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
 
+  // issue #931: category tabs are retired -- switching to a "Settings category" no longer browses settings groups.
+  // "Open Settings" is the first item in a freshly opened, unsearched palette, so running it (Enter) is the one
+  // remaining way to reach the dedicated Settings surface without a search.
   private def openSettingsCategory(sm: StateManager): Unit =
-    (1 to 5).foreach(_ => sm.applyEvent(TabKey).unsafeRunSync())
+    sm.applyEvent(Enter).unsafeRunSync()
 
   private def clearBufferAnimations(sm: StateManager): Unit =
     // Advance until all buffer animations are complete
