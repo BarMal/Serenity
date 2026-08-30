@@ -1028,6 +1028,69 @@ object LayoutEngine:
       case _ =>
         surfaceAnchor(surface).orElse(state.activeCursorPosition)
 
+  /** A panel's slot in a frozen cursor-peek stack: an id plus preferred size. Ordered-list-with-insertion shape
+    * (`List[FrozenPeekSlot]`, not a single surface) so [[resolveFrozenCursorPeekStack]] is already the general
+    * multi-panel case even though the cursor-peek prototype only ever passes one slot today.
+    */
+  final case class FrozenPeekSlot(id: SurfaceId, preferredWidth: Int, preferredHeight: Int)
+
+  final case class FrozenPeekPlacement(id: SurfaceId, rect: LayoutRect)
+
+  /** Resolves a frozen-anchor cursor-peek stack, box-layout style: each slot in `slots` is stacked in order starting
+    * from `anchorScreenPosition`, on the side `placement` prefers, falling back to the other side and then clamping
+    * within `contentRect` when neither side has room -- the same height-budget clamp [[stackBelowCursorSurfaces]]
+    * already uses for its own (live) stack, reused rather than inventing a second overflow mechanism. A slot with no
+    * height budget left is dropped from the result entirely rather than rendered at zero height.
+    *
+    * Deliberately distinct from [[floatingAnchor]]/[[calculateFloatingSurfaceRect]]: `anchorScreenPosition` is
+    * supplied once by the caller (captured from the cursor's *line* at summon time) rather than derived here from
+    * `AppState`/the active buffer, so this function never re-reads live cursor state -- callers that want the
+    * cursor-peek prototype's "frozen for the whole session, even across a reformat" behaviour resolve the anchor
+    * once and hold onto the result; callers of the existing floating surfaces keep re-deriving it every layout pass,
+    * unchanged.
+    */
+  def resolveFrozenCursorPeekStack(
+    slots: List[FrozenPeekSlot],
+    anchorScreenPosition: ScreenPosition,
+    contentRect: LayoutRect,
+    placement: SurfacePlacement,
+    gapRows: Int
+  ): List[FrozenPeekPlacement] =
+    if slots.isEmpty then Nil
+    else
+      val totalHeight     = slots.map(_.preferredHeight).sum + (gapRows * (slots.length - 1).max(0))
+      val preferredBelowY = anchorScreenPosition.y + 1 + gapRows
+      val preferredAboveY = anchorScreenPosition.y - gapRows - totalHeight
+      val fitsBelow       = preferredBelowY + totalHeight <= contentRect.bottom
+      val fitsAbove       = preferredAboveY >= contentRect.y
+
+      def clamped: Int =
+        math.max(
+          contentRect.y,
+          math.min(preferredBelowY, contentRect.bottom - math.min(totalHeight, contentRect.height))
+        )
+
+      val stackY = placement match
+        case SurfacePlacement.BelowCursor =>
+          if fitsBelow then preferredBelowY else if fitsAbove then preferredAboveY else clamped
+        case SurfacePlacement.AboveCursor =>
+          if fitsAbove then preferredAboveY else if fitsBelow then preferredBelowY else clamped
+
+      val (_, placed) = slots.foldLeft((stackY, List.empty[FrozenPeekPlacement])) {
+        case ((currentY, acc), slot) =>
+          val heightBudget   = math.max(0, contentRect.bottom - currentY)
+          val adjustedHeight = math.min(slot.preferredHeight, heightBudget)
+          val adjustedY      = if adjustedHeight == 0 then contentRect.bottom else currentY
+          val width          = math.min(slot.preferredWidth, contentRect.width)
+          val x = math.max(
+            contentRect.x,
+            math.min(anchorScreenPosition.x - (width / 2), contentRect.right - width)
+          )
+          val rect = LayoutRect(x = x, y = adjustedY, width = width, height = adjustedHeight)
+          (adjustedY + adjustedHeight + gapRows, acc :+ FrozenPeekPlacement(slot.id, rect))
+      }
+      placed.filter(_.rect.height > 0)
+
   private def stackBelowCursorSurfaces(
     surfaces: List[UiSurface],
     state: AppState,
