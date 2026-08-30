@@ -417,18 +417,17 @@ object CommandRunnerReducer:
         case _                                     => None
     }
 
-  /** The drilled-in settings page, if `state`'s runner is on one -- `None` both when there's no settings surface at
-    * all (`CommandRunnerSurface.Palette`) and when there is one but nothing has been entered yet
+  /** The drilled-in settings page, if `state`'s runner is on one -- `None` both when there's no settings surface at all
+    * (`CommandRunnerSurface.Palette`) and when there is one but nothing has been entered yet
     * (`CommandRunnerSurface.Settings(_, None)`, the settings root). Dispatch through `CommandRunnerSurface` (issue
     * #931, Stage 2) rather than reading `activeSettingsSurface` directly -- equivalent by construction (`surface`
-    * carries `activeSettingsSurface` as its `Settings` payload verbatim), but names the type this stage introduces
-    * as the seam these submenu-focus checks are really keyed on.
+    * carries `activeSettingsSurface` as its `Settings` payload verbatim), but names the type this stage introduces as
+    * the seam these submenu-focus checks are really keyed on.
     */
   private def activeSubmenu(state: AppState): Option[SettingsSurfaceState] =
     currentRunner(state).flatMap(_.surface match
       case CommandRunnerSurface.Settings(_, drilled) => drilled
-      case CommandRunnerSurface.Palette(_)           => None
-    )
+      case CommandRunnerSurface.Palette(_)           => None)
 
   /** Items that open a nested surface on submit rather than executing an action. */
   private def entersGroupOnSubmit(item: CommandSurfaceItem): Boolean =
@@ -436,10 +435,9 @@ object CommandRunnerReducer:
       case _: CommandSurfaceItem.GroupItem | _: CommandSurfaceItem.SettingSearchItem => true
       case _                                                                         => false
 
-  /** Both entry points now render a drilled-in settings group on the one `CommandPalette` surface (issue #1059), so
-    * a drilled-in page being present is the whole signal -- there is no second surface to focus, and
-    * `isSettingsSurface` no longer needs distinguishing here since the two paths behave identically once inside a
-    * group.
+  /** Both entry points now render a drilled-in settings group on the one `CommandPalette` surface (issue #1059), so a
+    * drilled-in page being present is the whole signal -- there is no second surface to focus, and `isSettingsSurface`
+    * no longer needs distinguishing here since the two paths behave identically once inside a group.
     */
   private def submenuHasFocus(state: AppState): Boolean =
     activeSubmenu(state).nonEmpty

@@ -170,10 +170,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
     val items    = base.submenuItems("settings-keymap")
     val runner = base.withDrilledSettingsSurface(
-        SettingsSurfaceState(
-          SettingsPage.Group("settings-keymap", items.indexWhere(_.id == "keymap-global-find"))
-        )
+      SettingsSurfaceState(
+        SettingsPage.Group("settings-keymap", items.indexWhere(_.id == "keymap-global-find"))
       )
+    )
     val activated = activeState(registry)
     val state = activated.copy(
       persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
@@ -198,15 +198,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
     val runner = base.withDrilledSettingsSurface(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(RecordingState("keymap-global-find"))
-          )
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(RecordingState("keymap-global-find"))
         )
       )
+    )
     val activated = activeState(registry)
     val state = activated.copy(
       persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
@@ -257,15 +257,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
     val runner = base.withDrilledSettingsSurface(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(RecordingState("keymap-global-find"))
-          )
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(RecordingState("keymap-global-find"))
         )
       )
+    )
     val activated = activeState(registry)
     val state = activated.copy(
       persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
@@ -303,20 +303,20 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
     val runner = base.withDrilledSettingsSurface(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(
-              RecordingState(
-                "keymap-global-find",
-                pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty) -> 1_000L)
-              )
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(
+            RecordingState(
+              "keymap-global-find",
+              pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty) -> 1_000L)
             )
           )
         )
       )
+    )
     val activated = activeState(registry)
     val state = activated.copy(
       persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
@@ -355,15 +355,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default, isTuiMode = isTuiMode, keyboardFidelityTier = keyboardFidelityTier)
       .openSettings
     val runner = base.withDrilledSettingsSurface(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(RecordingState("keymap-global-find"))
-          )
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(RecordingState("keymap-global-find"))
         )
       )
+    )
     AppState(
       persisted = Persisted(
         layout = Layout.empty,
@@ -448,20 +448,20 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
     val runner = base.withDrilledSettingsSurface(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(
-              RecordingState(
-                "keymap-global-find",
-                pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('j'), Set.empty) -> 2_000L)
-              )
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(
+            RecordingState(
+              "keymap-global-find",
+              pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('j'), Set.empty) -> 2_000L)
             )
           )
         )
       )
+    )
     val activated = activeState(registry)
     val state = activated.copy(
       persisted = activated.persisted.copy(focus = Focus.Surface(SurfaceId("command-runner"))),
@@ -876,11 +876,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       case CommandSurfaceItem.CommandItem(command) => command
     }
     val firstFamily = allFamilies.headOption.getOrElse(fail("no UI font families available"))
-    val needle       = firstFamily.label.take(2)
+    val needle      = firstFamily.label.take(2)
 
-    val searched = needle.foldLeft(entered) { (s, char) =>
-      CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state
-    }
+    val searched =
+      needle.foldLeft(entered)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)
     val runner = runnerFrom(searched)
 
     runner.activeSubmenuSearchTerm shouldBe Some(needle)

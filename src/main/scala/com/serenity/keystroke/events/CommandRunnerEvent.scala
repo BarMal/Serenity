@@ -40,10 +40,10 @@ object CommandRunnerEvent:
         case FocusIntent.Navigate(direction) => Some(RunnerNavigate(direction))
         // issue #931: category tabs are retired, so Tab/Shift+Tab (FocusIntent.NextGroup/PreviousGroup) no longer
         // have anything to cycle while the command runner is focused.
-        case FocusIntent.NextGroup           => None
-        case FocusIntent.PreviousGroup       => None
-        case FocusIntent.Submit              => Some(RunnerSubmit)
-        case FocusIntent.Dismiss             => Some(RunnerDismiss)
+        case FocusIntent.NextGroup     => None
+        case FocusIntent.PreviousGroup => None
+        case FocusIntent.Submit        => Some(RunnerSubmit)
+        case FocusIntent.Dismiss       => Some(RunnerDismiss)
 
   def fromEvent(event: Event): Option[CommandRunnerEvent] =
     event match

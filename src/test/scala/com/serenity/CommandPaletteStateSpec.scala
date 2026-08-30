@@ -34,7 +34,7 @@ class CommandPaletteStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "delegate to the registry's fuzzy search, resetting selection to the top" in {
-    val state = CommandPaletteState.activate(CommandRegistry.default).copy(selectedIndex = 3)
+    val state  = CommandPaletteState.activate(CommandRegistry.default).copy(selectedIndex = 3)
     val result = state.updateSearchTerm("save")
     result.searchTerm shouldBe "save"
     result.selectedIndex shouldBe 0

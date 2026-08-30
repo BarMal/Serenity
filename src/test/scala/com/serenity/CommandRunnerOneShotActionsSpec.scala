@@ -6,14 +6,14 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Every one-shot action issue #1057 found embedded in the settings tree (a "settings item" that executes an action
-  * rather than holding a persisted value) must be reachable as an ordinary `CommandRegistry` command. Three of the
-  * four locations (Navigation, Theme Selection, Panel Actions) turn out to already be registered as commands
-  * alongside their settings-tree duplicates -- those assertions are green today. The fourth (buffer-language
-  * switchers) is not, and is deliberately left red this turn: registering `lang-<id>` commands while
-  * `CommandRunnerSettingsItems.languageItems`'s identical ids are still live in the settings tree makes an
-  * exact-match command outrank the exact-match settings target it collides with, which broke two previously-passing
-  * specs (`CommandRunnerFloatingRenderingSpec`, `CommandRunnerReducerSpec`) when tried. The next turn registers them
-  * *and* removes the settings-tree group in the same commit, so the collision never exists in a committed state.
+  * rather than holding a persisted value) must be reachable as an ordinary `CommandRegistry` command. Three of the four
+  * locations (Navigation, Theme Selection, Panel Actions) turn out to already be registered as commands alongside their
+  * settings-tree duplicates -- those assertions are green today. The fourth (buffer-language switchers) is not, and is
+  * deliberately left red this turn: registering `lang-<id>` commands while `CommandRunnerSettingsItems.languageItems`'s
+  * identical ids are still live in the settings tree makes an exact-match command outrank the exact-match settings
+  * target it collides with, which broke two previously-passing specs (`CommandRunnerFloatingRenderingSpec`,
+  * `CommandRunnerReducerSpec`) when tried. The next turn registers them *and* removes the settings-tree group in the
+  * same commit, so the collision never exists in a committed state.
   */
 class CommandRunnerOneShotActionsSpec extends AnyFlatSpec with Matchers:
 
@@ -59,9 +59,7 @@ class CommandRunnerOneShotActionsSpec extends AnyFlatSpec with Matchers:
   // commands at all (only as settings-tree entries), so this is the one genuinely new registration this turn adds.
   it should "register every buffer-language switcher as a command (issue #1057)" in {
     commandNames should contain("lang-plain-text")
-    LanguageId.values.foreach { lang =>
-      commandNames should contain(s"lang-${lang.id}")
-    }
+    LanguageId.values.foreach(lang => commandNames should contain(s"lang-${lang.id}"))
   }
 
   it should "give each language command a SetBufferLanguage intent for its own language" in {

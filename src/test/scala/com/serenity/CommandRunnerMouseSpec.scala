@@ -169,10 +169,11 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
     openUiFontFamilySubmenu(stateManager)
 
-    val before        = stateManager.getCurrentState.unsafeRunSync()
-    val expectedFamily = runnerFrom(before).focusedSubmenuItems.lift(0).collect {
-      case CommandSurfaceItem.CommandItem(command) => command.label
-    }.getOrElse(fail("Expected at least one UI font family"))
+    val before = stateManager.getCurrentState.unsafeRunSync()
+    val expectedFamily = runnerFrom(before).focusedSubmenuItems
+      .lift(0)
+      .collect { case CommandSurfaceItem.CommandItem(command) => command.label }
+      .getOrElse(fail("Expected at least one UI font family"))
     val point = commandRunnerItemPoint(before, 0)
 
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()

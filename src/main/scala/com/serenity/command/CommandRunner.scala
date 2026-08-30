@@ -189,12 +189,12 @@ final case class CommandRunner(
     case CommandRunnerSurface.Settings(_, drilled) => drilled
     case CommandRunnerSurface.Palette(_)           => None
 
-  def searchTerm: String        = rootState.searchTerm
-  def selectedIndex: Int        = rootState.selectedIndex
+  def searchTerm: String              = rootState.searchTerm
+  def selectedIndex: Int              = rootState.selectedIndex
   def filteredCommands: List[Command] = rootState.filteredCommands
 
-  /** The active root's search/select state -- the palette's if `surface` is `Palette`, the settings surface's
-    * top-level one otherwise (regardless of whether a group is drilled into on top of it; see `CommandRunnerSurface`).
+  /** The active root's search/select state -- the palette's if `surface` is `Palette`, the settings surface's top-level
+    * one otherwise (regardless of whether a group is drilled into on top of it; see `CommandRunnerSurface`).
     */
   private def rootState: CommandPaletteState = surface match
     case CommandRunnerSurface.Palette(state)    => state
@@ -202,13 +202,13 @@ final case class CommandRunner(
 
   private def withRootSelectedIndex(index: Int): CommandRunner =
     val updatedSurface = surface match
-      case CommandRunnerSurface.Palette(state)          => CommandRunnerSurface.Palette(state.copy(selectedIndex = index))
+      case CommandRunnerSurface.Palette(state) => CommandRunnerSurface.Palette(state.copy(selectedIndex = index))
       case CommandRunnerSurface.Settings(root, drilled) =>
         CommandRunnerSurface.Settings(root.copy(selectedIndex = index), drilled)
     copy(surface = updatedSurface)
 
-  /** Replaces the drilled-in page, preserving the current root (whichever it is) and `drilled`'s own history -- the
-    * one place nearly every submenu-mutating method below bottoms out. Public: a couple of `StateManagerEffectHandlers`
+  /** Replaces the drilled-in page, preserving the current root (whichever it is) and `drilled`'s own history -- the one
+    * place nearly every submenu-mutating method below bottoms out. Public: a couple of `StateManagerEffectHandlers`
     * call sites (conflict messaging, focusing a just-created preset's editing group) need to set a drilled page
     * directly, the same way, from outside this class.
     */
@@ -243,8 +243,8 @@ final case class CommandRunner(
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
 
-  /** Update search term and filter commands. No longer scoped by category (issue #931: category tabs are retired) --
-    * an empty term is every registered command. Works for either root (the palette's or the settings surface's) --
+  /** Update search term and filter commands. No longer scoped by category (issue #931: category tabs are retired) -- an
+    * empty term is every registered command. Works for either root (the palette's or the settings surface's) --
     * whichever `surface` currently is -- and always clears any drilled-in page, since typing at the root always means
     * "search the root", never "keep editing a nested page" (that goes through `updateSubmenuSearch` instead).
     */
@@ -252,9 +252,9 @@ final case class CommandRunner(
     val filtered =
       if term.isEmpty then registry.getAllCommands
       else registry.searchCommands(term, maxResults = 50)
-    val updatedState  = CommandPaletteState(term, 0, filtered)
+    val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match
-      case CommandRunnerSurface.Palette(_)    => CommandRunnerSurface.Palette(updatedState)
+      case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
       case CommandRunnerSurface.Settings(_, _) => CommandRunnerSurface.Settings(updatedState, None)
     copy(surface = updatedSurface, recordingItemId = None, statusMessage = None)
 
@@ -288,11 +288,12 @@ final case class CommandRunner(
     */
   def settingsSurfaceItems: List[CommandSurfaceItem] =
     surface match
-      case CommandRunnerSurface.Settings(_, Some(drilled))                     =>
+      case CommandRunnerSurface.Settings(_, Some(drilled)) =>
         filteredPageItems(drilled.current, submenuItems(drilled.current.groupId))
-      case CommandRunnerSurface.Settings(root, None) if root.searchTerm.nonEmpty => matchingSettingsResults(root.searchTerm)
-      case CommandRunnerSurface.Settings(_, None)                              => settingsGroups
-      case CommandRunnerSurface.Palette(_)                                     => Nil
+      case CommandRunnerSurface.Settings(root, None) if root.searchTerm.nonEmpty =>
+        matchingSettingsResults(root.searchTerm)
+      case CommandRunnerSurface.Settings(_, None) => settingsGroups
+      case CommandRunnerSurface.Palette(_)        => Nil
 
   def settingsSurfaceSelectedIndex: Int =
     surface match
@@ -318,7 +319,10 @@ final case class CommandRunner(
           CommandRunnerSurface.Settings(
             root = rootState,
             drilled = Some(
-              SettingsSurfaceState(SettingsPage.Group(setting.targetGroupId, selectedIndex), ancestorPagesFor(ancestorIds))
+              SettingsSurfaceState(
+                SettingsPage.Group(setting.targetGroupId, selectedIndex),
+                ancestorPagesFor(ancestorIds)
+              )
             )
           )
         )
@@ -485,7 +489,8 @@ final case class CommandRunner(
             // dropping any Editing page that was there.
             surface = CommandRunnerSurface.Settings(
               root = rootState,
-              drilled = Some(surface.copy(current = SettingsPage.Group(groupId, wrappedIndex, surface.current.searchTerm)))
+              drilled =
+                Some(surface.copy(current = SettingsPage.Group(groupId, wrappedIndex, surface.current.searchTerm)))
             )
           )
       case None => this
@@ -1064,4 +1069,7 @@ object CommandRunner:
 
   /** Create command runner with specific commands for testing */
   def withCommands(commands: List[Command]): CommandRunner =
-    CommandRunner(isActive = false, surface = CommandRunnerSurface.Palette(CommandPaletteState(filteredCommands = commands)))
+    CommandRunner(
+      isActive = false,
+      surface = CommandRunnerSurface.Palette(CommandPaletteState(filteredCommands = commands))
+    )

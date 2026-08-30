@@ -249,7 +249,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         optionSelections = Map("interface-density" -> 1),
-        surface = CommandRunnerSurface.Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-interface-layout"))))
+        surface = CommandRunnerSurface
+          .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-interface-layout"))))
       )
 
     val row = SurfaceContentResolver
@@ -272,12 +273,14 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        surface = CommandRunnerSurface.Settings(drilled = Some(
-          SettingsSurfaceState(
-            SettingsPage.Group("settings-preset-fonts"),
-            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+        surface = CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Group("settings-preset-fonts"),
+              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+            )
           )
-        ))
+        )
       )
 
     val resolved = SurfaceContentResolver.resolve(
@@ -296,13 +299,14 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        surface = CommandRunnerSurface.Settings(drilled = Some(
-          SettingsSurfaceState(
-            SettingsPage.Group("settings-preset-fonts"),
-            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+        surface = CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Group("settings-preset-fonts"),
+              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+            )
           )
         )
-      )
       )
 
     val resolved = SurfaceContentResolver.resolve(
@@ -328,13 +332,14 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        surface = CommandRunnerSurface.Settings(drilled = Some(
-          SettingsSurfaceState(
-            SettingsPage.Group("settings-preset-theme"),
-            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+        surface = CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Group("settings-preset-theme"),
+              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+            )
           )
         )
-      )
       )
 
     val resolved = SurfaceContentResolver.resolve(
@@ -355,13 +360,14 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        surface = CommandRunnerSurface.Settings(drilled = Some(
-          SettingsSurfaceState(
-            SettingsPage.Group("settings-preset-document-defaults"),
-            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+        surface = CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Group("settings-preset-document-defaults"),
+              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+            )
           )
         )
-      )
       )
 
     val resolved = SurfaceContentResolver.resolve(
@@ -388,7 +394,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        surface = CommandRunnerSurface.Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
+        surface = CommandRunnerSurface
+          .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
       )
 
     val resolved = SurfaceContentResolver.resolve(
@@ -520,7 +527,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .copy(surface = CommandRunnerSurface.Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1)))))
+      .copy(surface =
+        CommandRunnerSurface
+          .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
+      )
     val items        = runner.submenuItems("settings-ui-presets")
     val preview      = SettingsSurfaceState.previewRows(items, 1)
     val previewCount = preview.rows.size + (if preview.overflowCount > 0 then 1 else 0)
@@ -578,7 +588,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val family = FontLoader.availableTextFamilies.head
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .copy(surface = CommandRunnerSurface.Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("text-font")))))
+      .copy(surface =
+        CommandRunnerSurface.Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("text-font"))))
+      )
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),

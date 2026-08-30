@@ -59,9 +59,9 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     val moves = (target - runner.selectedIndex + items.length) % items.length
     (1 to moves).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
 
-  /** Opens the dedicated Settings surface by running the "Open Settings" command -- the first item in a freshly
-    * opened, unsearched palette (issue #931: category tabs are retired, so switching to a "Settings category" no
-    * longer browses settings groups; `.openSettings` is the one remaining way to reach them without a search).
+  /** Opens the dedicated Settings surface by running the "Open Settings" command -- the first item in a freshly opened,
+    * unsearched palette (issue #931: category tabs are retired, so switching to a "Settings category" no longer browses
+    * settings groups; `.openSettings` is the one remaining way to reach them without a search).
     */
   private def openSettingsViaCommand(stateManager: StateManager): Unit =
     stateManager.applyEvent(Enter).unsafeRunSync()

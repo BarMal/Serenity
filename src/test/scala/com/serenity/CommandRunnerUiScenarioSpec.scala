@@ -132,15 +132,15 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
             )
             .openSettings
           val runner = activated.withDrilledSettingsSurface(
-              SettingsSurfaceState(
-                SettingsPage.Editing(
-                  groupId = "settings-keymap",
-                  itemId = "keymap-global-find",
-                  draftText = "",
-                  recording = Some(RecordingState("keymap-global-find"))
-                )
+            SettingsSurfaceState(
+              SettingsPage.Editing(
+                groupId = "settings-keymap",
+                itemId = "keymap-global-find",
+                draftText = "",
+                recording = Some(RecordingState("keymap-global-find"))
               )
             )
+          )
           // A dedicated settings surface (`isSettingsSurface`) renders its submenu view directly on the one
           // `CommandPalette` surface -- there is no second floating surface at all anymore (issue #1059).
           val surface = UiSurface(

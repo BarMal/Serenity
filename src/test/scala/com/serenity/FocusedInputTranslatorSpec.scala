@@ -114,15 +114,15 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .withDrilledSettingsSurface(
-          SettingsSurfaceState(
-            SettingsPage.Editing(
-              groupId = "keymap",
-              itemId = "keymap-global-find",
-              draftText = "",
-              recording = Some(RecordingState("keymap-global-find"))
-            )
+        SettingsSurfaceState(
+          SettingsPage.Editing(
+            groupId = "keymap",
+            itemId = "keymap-global-find",
+            draftText = "",
+            recording = Some(RecordingState("keymap-global-find"))
           )
         )
+      )
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -149,15 +149,15 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .withDrilledSettingsSurface(
-          SettingsSurfaceState(
-            SettingsPage.Editing(
-              groupId = "keymap",
-              itemId = "keymap-global-command_palette",
-              draftText = "",
-              recording = Some(RecordingState("keymap-global-command_palette"))
-            )
+        SettingsSurfaceState(
+          SettingsPage.Editing(
+            groupId = "keymap",
+            itemId = "keymap-global-command_palette",
+            draftText = "",
+            recording = Some(RecordingState("keymap-global-command_palette"))
           )
         )
+      )
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
