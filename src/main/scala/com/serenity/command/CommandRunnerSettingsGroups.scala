@@ -51,7 +51,8 @@ object CommandRunnerSettingsGroups:
     val contextualToolbarItem       = CommandRunnerSettingsItems.contextualToolbarOptionItem(optionSelections)
     val contextualToolbarDisplayItem =
       CommandRunnerSettingsItems.contextualToolbarDisplayModeOptionItem(optionSelections)
-    val keymapItems = inputItems.filter(_.id.startsWith("keymap-"))
+    val commandRunnerKeyHintsItem = CommandRunnerSettingsItems.commandRunnerKeyHintsOptionItem(optionSelections)
+    val keymapItems               = inputItems.filter(_.id.startsWith("keymap-"))
     val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-workspace-layout",
       label = "Panels & Workspace",
@@ -136,7 +137,7 @@ object CommandRunnerSettingsGroups:
     val interfaceLayoutGroup = CommandSurfaceItem.GroupItem(
       id = "settings-interface-layout",
       label = "Interface Layout",
-      children = List(interfaceDensityItem, windowChromeItem) ++ inputItems.filter(item =>
+      children = List(interfaceDensityItem, windowChromeItem, commandRunnerKeyHintsItem) ++ inputItems.filter(item =>
         item.id == "ui-element-gap" ||
           item.id == "ui-corner-radius" ||
           item.id == "ui-outline-thickness" ||
@@ -145,7 +146,7 @@ object CommandRunnerSettingsGroups:
           item.id == "command-runner-cursor-gap-rows"
       ),
       category = CommandCategory.Settings,
-      hint = Some("Density, spacing, window chrome, command rows")
+      hint = Some("Density, spacing, window chrome, command rows, key hints")
     )
     val renderingGroup = CommandSurfaceItem.GroupItem(
       id = "settings-rendering",

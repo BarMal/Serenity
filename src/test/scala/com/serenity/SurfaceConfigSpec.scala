@@ -59,6 +59,15 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     config.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.TextOnly)
   }
 
+  it should "default the command runner's persistent key-hint footer to on, and expose a with-helper to toggle it" in {
+    AppConfig.default.surfaceConfig.commandRunnerShowKeyHints.shouldBe(true)
+
+    val disabled = AppConfig.default.withCommandRunnerShowKeyHints(false)
+    disabled.surfaceConfig.commandRunnerShowKeyHints.shouldBe(false)
+
+    disabled.withCommandRunnerShowKeyHints(true).surfaceConfig.commandRunnerShowKeyHints.shouldBe(true)
+  }
+
   it should "apply accessibility motion overrides after independent family settings" in {
     val editor = MotionFamilyConfig(true, TransitionKind.TypedText, None, 0.5)
     val panels = MotionFamilyConfig(true, TransitionKind.OutlineThenContent, None, 1.5)

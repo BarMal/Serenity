@@ -110,6 +110,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       List(
         "interface-density",
         "window-chrome",
+        "command-runner-key-hints",
         "ui-element-gap",
         "ui-corner-radius",
         "ui-outline-thickness",

@@ -203,6 +203,7 @@ enum PanelChromeIntent:
   case SetFocusedTextBody(enabled: Boolean)
   case SetContextualToolbarEnabled(enabled: Boolean)
   case SetContextualToolbarDisplayMode(mode: ToolbarDisplayMode)
+  case SetCommandRunnerShowKeyHints(enabled: Boolean)
   case SetUiElementGap(gap: Double)
   case SetUiCornerRadiusPx(radius: Int)
   case SetUiOutlineThicknessPx(thickness: Int)

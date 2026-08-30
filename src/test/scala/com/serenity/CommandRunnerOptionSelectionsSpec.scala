@@ -18,6 +18,14 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("motion-accessibility") shouldBe 2
   }
 
+  it should "select the command runner key-hints footer state" in {
+    val enabled = CommandRunnerOptionSelections.default(AppConfig.default)
+    enabled("command-runner-key-hints") shouldBe 0
+
+    val disabled = CommandRunnerOptionSelections.default(AppConfig.default.withCommandRunnerShowKeyHints(false))
+    disabled("command-runner-key-hints") shouldBe 1
+  }
+
   "CommandRunnerOptionSelections" should "derive option indices from current app config" in {
     val codeFont = FontLoader.availableMonospaceFamilies.drop(1).headOption.getOrElse("missing-code-font")
     val textFont = FontLoader.availableTextFamilies.drop(1).headOption.getOrElse("missing-text-font")
@@ -94,6 +102,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("line-wrap") shouldBe 1
     selections("word-wrap") shouldBe 1
     selections("contextual-toolbar") shouldBe 1
+    selections("command-runner-key-hints") shouldBe 0
     selections("code-font") shouldBe FontLoader.availableMonospaceFamilies.indexOf(codeFont)
     selections("text-font") shouldBe FontLoader.availableTextFamilies.indexOf(textFont)
     selections("ui-font") shouldBe FontLoader.availableUiFamilies.indexOf(uiFont)
