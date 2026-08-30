@@ -61,3 +61,39 @@ class TerminalAnsiDiffSpec extends AnyFlatSpec with Matchers:
       s"$esc[1;1H${sgr(Color.RED, Color.BLACK)}a${sgr(Color.GREEN, Color.BLACK)}b$esc[0m"
     TerminalAnsiDiff.emit(Some(previous), next) shouldBe expected
   }
+
+  // A background Color with alpha 0 is the "use the terminal's own native background" sentinel: emit SGR 49 (reset to
+  // default background) instead of an explicit 24-bit truecolor fill, so a compositor's own transparency (e.g.
+  // kitty's background_opacity) can show through cells the app never paints an opaque color into.
+  it should "emit SGR 49 instead of an explicit truecolor fill for a fully transparent background" in {
+    val transparentBg = new Color(0, 0, 0, 0)
+    val previous      = TerminalFrame.blank(1, 1)
+    val next          = TerminalFrame(1, 1, Vector(Vector(cell('x', bg = transparentBg))))
+
+    val expected = s"$esc[1;1H$esc[0;38;2;255;255;255;49mx$esc[0m"
+    TerminalAnsiDiff.emit(Some(previous), next) shouldBe expected
+  }
+
+  it should "not emit SGR 49 for an ordinary opaque background" in {
+    val previous = TerminalFrame.blank(1, 1)
+    val next     = TerminalFrame(1, 1, Vector(Vector(cell('x'))))
+
+    val output = TerminalAnsiDiff.emit(Some(previous), next)
+    output should include("48;2;0;0;0")
+    output should not include ";49m"
+  }
+
+  it should "distinguish a transparent background from an opaque one with identical RGB when batching runs" in {
+    val opaqueBlack      = Color.BLACK
+    val transparentBlack = new Color(0, 0, 0, 0)
+    val previous         = TerminalFrame.blank(2, 1)
+    val next = TerminalFrame(
+      2,
+      1,
+      Vector(Vector(cell('a', bg = opaqueBlack), cell('b', bg = transparentBlack)))
+    )
+
+    val expected =
+      s"$esc[1;1H${sgr(Color.WHITE, opaqueBlack)}a$esc[0;38;2;255;255;255;49mb$esc[0m"
+    TerminalAnsiDiff.emit(Some(previous), next) shouldBe expected
+  }
