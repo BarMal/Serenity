@@ -9,7 +9,7 @@ main/scala/com/serenity/command/CommandRunner.scala	file length	1075
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	file length	806
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	method build	650
 main/scala/com/serenity/command/CommandRunnerSettingsItems.scala	file length	1074
-main/scala/com/serenity/config/AppConfig.scala	file length	2223
+main/scala/com/serenity/config/AppConfig.scala	file length	2262
 main/scala/com/serenity/config/ConfigManager.scala	file length	818
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	224
 main/scala/com/serenity/config/ConfigManager.scala	method configToString	184
@@ -21,7 +21,7 @@ main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2588
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	896
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	method submitReplaceNextEffect	85
-main/scala/com/serenity/state/models/AppState.scala	file length	862
+main/scala/com/serenity/state/models/AppState.scala	file length	883
 main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseItems	173
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	710
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceActive	360
@@ -31,8 +31,8 @@ main/scala/com/serenity/state/reducers/EditorEventReducer.scala	method reduceCur
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	623
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	114
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
-main/scala/com/serenity/ui/layout/LayoutEngine.scala	file length	1493
-main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1145
+main/scala/com/serenity/ui/layout/LayoutEngine.scala	file length	1604
+main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1149
 main/scala/com/serenity/ui/presets/UiPreset.scala	file length	878
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	file length	709
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	method applyGlow	90

@@ -121,6 +121,10 @@ object SurfaceContentResolver:
         resolveDirectoryTree(rect, mode, tree, selectedPath)
       case SurfaceContent.CommandPalette(runner) =>
         resolveCommandPalette(runner, rect, mode, itemGapRows, itemTargetRows, showKeyHints)
+      case SurfaceContent.CommandRunnerPeek(runner) =>
+        // Cursor-peek prototype: same rendering as CommandPalette, reused as-is (see UiSurface.scala's doc comment
+        // on why this is a distinct SurfaceContent case rather than the same one).
+        resolveCommandPalette(runner, rect, mode, itemGapRows, itemTargetRows, showKeyHints)
       case SurfaceContent.ModalWorkflow(modal) =>
         resolveModalWorkflow(modal, rect, mode)
       case SurfaceContent.Terminal(buffer, cursor) =>

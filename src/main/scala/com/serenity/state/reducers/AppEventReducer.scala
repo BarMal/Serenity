@@ -1,6 +1,8 @@
 package com.serenity.state.reducers
 
 import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.input.CursorPeekDetector
+import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
@@ -39,6 +41,15 @@ object AppEventReducer:
       case FileSearch =>
         ReducerResult.withEffect(state, AppEffect.Surface(SurfaceEffect.OpenFileSearch))
 
+      case CursorPeekModifierPressed(modifier, atMillis) =>
+        ReducerResult.noEffects(handleCursorPeekModifierPressed(state, registry, modifier, atMillis))
+
+      case CursorPeekModifierReleased(modifier, atMillis) =>
+        ReducerResult.noEffects(handleCursorPeekModifierReleased(state, modifier, atMillis))
+
+      case CursorPeekOtherKeyPressed =>
+        ReducerResult.noEffects(handleCursorPeekOtherKeyPressed(state))
+
   def rebalancePanes(state: AppState, focusedBufferId: Option[BufferId] = None): AppState =
     EditorState.rebalancePanes(state, focusedBufferId)
 
@@ -53,29 +64,150 @@ object AppEventReducer:
           )
           .popFocus
       case _ =>
-        val activatedRunner = CommandRunner.empty
-          .activate(registry, state.persisted.config, state.runtime.isTuiMode, state.runtime.keyboardFidelityTier)
-        val runnerWithPanelSelections = activatedRunner.copy(
-          optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+        openCommandRunner(state, registry)
+
+  private def openCommandRunner(state: AppState, registry: CommandRegistry): AppState =
+    val activatedRunner = CommandRunner.empty
+      .activate(registry, state.persisted.config, state.runtime.isTuiMode, state.runtime.keyboardFidelityTier)
+    val runnerWithPanelSelections = activatedRunner.copy(
+      optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+    )
+    val (stateWithId, surfaceId) =
+      state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
+    val surface = UiSurface(
+      id = surfaceId,
+      content = SurfaceContent.CommandPalette(runnerWithPanelSelections),
+      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+    )
+    val clearedSurfaces =
+      stateWithId.runtime.uiSurfaces.filterNot(current =>
+        isFileSearch(current.content) || isModalWorkflow(current.content)
+      )
+    stateWithId
+      .copy(
+        runtime = stateWithId.runtime.copy(
+          uiSurfaces = upsertSurface(clearedSurfaces, surface)
         )
-        val (stateWithId, surfaceId) =
-          state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
-        val surface = UiSurface(
-          id = surfaceId,
-          content = SurfaceContent.CommandPalette(runnerWithPanelSelections),
-          presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-        )
-        val clearedSurfaces =
-          stateWithId.runtime.uiSurfaces.filterNot(current =>
-            isFileSearch(current.content) || isModalWorkflow(current.content)
-          )
-        stateWithId
-          .copy(
-            runtime = stateWithId.runtime.copy(
-              uiSurfaces = upsertSurface(clearedSurfaces, surface)
-            )
-          )
-          .pushFocus(Focus.Surface(surfaceId))
+      )
+      .pushFocus(Focus.Surface(surfaceId))
+
+  // --- Cursor-peek prototype (issue: command-runner-cursor-peek-prototype) -----------------------------------
+  //
+  // Experimental, off by default (`SurfaceConfig.commandRunnerCursorPeekEnabled`). `SwingInputHandler` always emits
+  // the raw `CursorPeekModifierPressed`/`Released`/`OtherKeyPressed` events regardless of the flag -- like mouse-move
+  // events, the translator emits unconditionally and this reducer is where the flag actually gates behaviour: every
+  // handler below bails out to an unchanged `state` first when the flag is off, so disabling it is a true no-op, not
+  // just an unused code path.
+  //
+  // `state.runtime.cursorPeekAnchor` is the cursor position frozen at the moment a peek begins (`PeekBegin`), and is
+  // plain data -- reducers may not reach into `LayoutEngine` (`ArchitectureChecks.ForbiddenImports`). Resolving it to
+  // an actual on-screen position -- once, cached, never re-derived -- is `CursorPeekAnchorResolution`'s job
+  // (`state.manager`, which may use `LayoutEngine`); this reducer only ever clears `cursorPeekResolvedAnchor`
+  // alongside `cursorPeekAnchor`, never sets it.
+  //
+  // The peek surface itself (`SurfaceId.CursorPeek`, `SurfaceContent.CommandRunnerPeek`) is created on `PeekBegin`
+  // and removed on `PeekEnd`/`DoubleTapOpen` -- a distinct content case from `CommandPalette` (see UiSurface.scala's
+  // doc comment on why), and never pushed into focus: "look but don't touch," the editor keeps focus throughout.
+
+  private def cursorPeekEnabled(state: AppState): Boolean =
+    state.persisted.config.surfaceConfig.commandRunnerCursorPeekEnabled
+
+  private def peekModifier(state: AppState): Modifier =
+    state.persisted.config.surfaceConfig.commandRunnerCursorPeekModifier
+
+  private def beginCursorPeek(state: AppState, registry: CommandRegistry): AppState =
+    val activatedRunner = CommandRunner.empty
+      .activate(registry, state.persisted.config, state.runtime.isTuiMode, state.runtime.keyboardFidelityTier)
+    val peekSurface = UiSurface(
+      id = SurfaceId.CursorPeek,
+      content = SurfaceContent.CommandRunnerPeek(activatedRunner),
+      presentation = SurfacePresentation.Floating(
+        state.activeCursorPosition,
+        state.persisted.config.surfaceConfig.commandRunnerCursorPeekPlacement
+      )
+    )
+    state.copy(
+      runtime = state.runtime.copy(
+        cursorPeekAnchor = state.activeCursorPosition,
+        uiSurfaces = upsertSurface(state.runtime.uiSurfaces, peekSurface)
+      )
+    )
+
+  private def endCursorPeek(state: AppState): AppState =
+    state.copy(runtime =
+      state.runtime.copy(
+        cursorPeekAnchor = None,
+        cursorPeekResolvedAnchor = None,
+        uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == SurfaceId.CursorPeek)
+      )
+    )
+
+  private def handleCursorPeekModifierPressed(
+    state: AppState,
+    registry: CommandRegistry,
+    modifier: Modifier,
+    atMillis: Long
+  ): AppState =
+    if !cursorPeekEnabled(state) then state
+    else
+      CursorPeekDetector.modifierPressed(state.runtime.cursorPeekSession, modifier, peekModifier(state), atMillis) match
+        case CursorPeekDetector.Outcome.PeekBegin(next) =>
+          val begun = beginCursorPeek(state, registry)
+          begun.copy(runtime = begun.runtime.copy(cursorPeekSession = next))
+        case CursorPeekDetector.Outcome.DoubleTapOpen(next) =>
+          val ended = endCursorPeek(state)
+          openCommandRunnerFully(ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next)), registry)
+        case CursorPeekDetector.Outcome.PeekEnd(next) =>
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
+        case CursorPeekDetector.Outcome.Unchanged(next) =>
+          state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
+
+  private def handleCursorPeekModifierReleased(state: AppState, modifier: Modifier, atMillis: Long): AppState =
+    if !cursorPeekEnabled(state) then state
+    else
+      CursorPeekDetector.modifierReleased(
+        state.runtime.cursorPeekSession,
+        modifier,
+        peekModifier(state),
+        atMillis
+      ) match
+        case CursorPeekDetector.Outcome.PeekEnd(next) =>
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
+        case CursorPeekDetector.Outcome.Unchanged(next) =>
+          state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
+        // A release never begins a peek or opens the runner -- kept exhaustive rather than partial.
+        case CursorPeekDetector.Outcome.PeekBegin(next) =>
+          state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
+        case CursorPeekDetector.Outcome.DoubleTapOpen(next) =>
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
+
+  private def handleCursorPeekOtherKeyPressed(state: AppState): AppState =
+    if !cursorPeekEnabled(state) then state
+    else
+      CursorPeekDetector.otherKeyPressed(state.runtime.cursorPeekSession) match
+        case CursorPeekDetector.Outcome.PeekEnd(next) =>
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
+        case CursorPeekDetector.Outcome.Unchanged(next) =>
+          state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
+        // otherKeyPressed never begins a peek or opens the runner -- kept exhaustive rather than partial.
+        case CursorPeekDetector.Outcome.PeekBegin(next) =>
+          state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
+        case CursorPeekDetector.Outcome.DoubleTapOpen(next) =>
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
+
+  /** A double-tap always means "open fully", not toggle-close -- unlike `ToggleCommandRunner`, a second gesture that
+    * lands while the runner happens to already be open (e.g. opened some other way mid-peek) is just a no-op, never a
+    * close.
+    */
+  private def openCommandRunnerFully(state: AppState, registry: CommandRegistry): AppState =
+    state.commandRunnerSurface.flatMap(asCommandRunner) match
+      case Some((_, runner)) if runner.isActive => state
+      case _                                    => openCommandRunner(state, registry)
 
   private def toggleContextualToolbar(state: AppState): AppState =
     if !state.persisted.config.surfaceConfig.contextualToolbarEnabled then state

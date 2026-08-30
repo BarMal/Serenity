@@ -52,6 +52,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   sealed private trait QueuedInput
   final private case class QueuedKey(info: KeyStrokeInfo)     extends QueuedInput
   final private case class QueuedMouse(event: Event)          extends QueuedInput
+  final private case class QueuedRaw(event: Event)            extends QueuedInput
   final private case class QueuedMovement(slot: MovementSlot) extends QueuedInput
   private case object QueuedShutdown                          extends QueuedInput
 
@@ -67,6 +68,14 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
 
   private def enqueueMouse(event: Event): Unit =
     enqueue(QueuedMouse(event))
+
+  /** Cursor-peek prototype: raw bare-modifier press/release and non-modifier-key-pressed signals, always emitted
+    * regardless of `commandRunnerCursorPeekEnabled` -- like mouse-move events, the translator emits unconditionally and
+    * `AppEventReducer` (which has `AppState`/`AppConfig`) decides whether the flag makes them relevant. See
+    * `GlobalAppEvent.scala`'s `CursorPeekModifierPressed`/`CursorPeekModifierReleased`/`CursorPeekOtherKeyPressed`.
+    */
+  private def enqueueRaw(event: Event): Unit =
+    enqueue(QueuedRaw(event))
 
   private def enqueue(input: QueuedInput): Unit =
     if !shutdownFlag.get() then
@@ -106,8 +115,10 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       translateTyped(e).foreach(enqueueInput)
     override def keyPressed(e: KeyEvent): Unit =
       translatePressed(e).foreach(enqueueInput)
+      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierPressed(modifier, e.getWhen)))
     override def keyReleased(e: KeyEvent): Unit =
-      translateModifierReleased(e))
+      translateModifierReleased(e)
+      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierReleased(modifier, e.getWhen))))
 
   component.addMouseListener(
     new MouseAdapter:
@@ -177,6 +188,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     orderedInputStream.flatMap {
       case QueuedKey(info)      => inputRouter.eventStream(Stream.emit(info))
       case QueuedMouse(event)   => Stream.emit(event)
+      case QueuedRaw(event)     => Stream.emit(event)
       case QueuedMovement(slot) => Stream.emits(slot.claim.toList)
       case QueuedShutdown       => Stream.empty
     }
@@ -259,6 +271,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       case None if isModifierKey(e) => None
       case None =>
         pendingModifierTap.set(ModifierTapDetector.otherKeyPressed(pendingModifierTap.get))
+        enqueueRaw(CursorPeekOtherKeyPressed)
         val m = mods(e)
         e.getKeyCode match
           case VK_UP         => Some(KeyStrokeInfo(InputKey.ArrowUp, None, m))

@@ -247,6 +247,11 @@ final private[manager] class StateManagerEventPipeline(
       case NextTab                                       => reduced >> applyPaneFlowAnimation(SweepDirection.Backward)
       case PreviousTab                                   => reduced >> applyPaneFlowAnimation(SweepDirection.Forward)
       case ToggleContextualToolbar | NewTab | FileSearch => reduced
+      case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
+        // Resolving the frozen cursor anchor to a screen position needs LayoutEngine, which reducers may not touch
+        // (ArchitectureChecks.ForbiddenImports) -- done here, once, right after the reduce that may have set
+        // cursorPeekAnchor; CursorPeekAnchorResolution.resolve is a no-op unless exactly that just happened.
+        reduced >> stateRef.update(CursorPeekAnchorResolution.resolve)
 
   /** Bumps `markdownPreviewEditGeneration` synchronously for any buffer this event's dispatch changed the content of,
     * provided that buffer currently has a live markdown preview -- and schedules a debounced commit of that generation
