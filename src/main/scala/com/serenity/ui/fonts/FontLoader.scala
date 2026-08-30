@@ -76,6 +76,19 @@ object FontLoader:
   lazy val availableUiFamilies: List[String] =
     availableTextFamilies
 
+  /** The font families consulted when building the settings tree's font-family groups. `system` enumerates real fonts
+    * installed on the running machine via
+    * [[availableMonospaceFamilies]]/[[availableTextFamilies]]/[[availableUiFamilies]] -- tests that don't want their
+    * assertions to depend on what happens to be installed on the machine running them (e.g. a CI runner shipping an
+    * exotic font whose name collides with the search term under test) should build a [[FontFamilyCatalog]] of their own
+    * instead and pass it to `CommandRunnerSettingsGroups.build` / `CommandRunner`.
+    */
+  final case class FontFamilyCatalog(monospace: List[String], text: List[String], ui: List[String])
+
+  object FontFamilyCatalog:
+    def system: FontFamilyCatalog =
+      FontFamilyCatalog(availableMonospaceFamilies, availableTextFamilies, availableUiFamilies)
+
   /** Lists configured font roles whose requested families cannot be resolved by this runtime. */
   def missingFamilies(config: FontConfig): List[String] =
     List(
