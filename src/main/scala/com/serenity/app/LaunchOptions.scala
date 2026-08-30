@@ -6,27 +6,29 @@ final case class LaunchOptions(
     openPath: Option[Path] = None,
     eco: Boolean = false,
     tui: Boolean = false,
-    gui: Boolean = false
+    gui: Boolean = false,
+    alpha: Boolean = false
 )
 
 object LaunchOptions:
 
   def parse(args: List[String]): LaunchOptions =
-    val eco = args.contains("--eco")
-    val tui = args.contains("--tui")
-    val gui = args.contains("--gui")
-    // --eco/--tui/--gui are bare flags with no value, so they're stripped before the positional/--open/--file
+    val eco   = args.contains("--eco")
+    val tui   = args.contains("--tui")
+    val gui   = args.contains("--gui")
+    val alpha = args.contains("--alpha")
+    // --eco/--tui/--gui/--alpha are bare flags with no value, so they're stripped before the positional/--open/--file
     // matching below -- that logic only looks at the head of the list and shouldn't have to account for their
     // position.
-    args.filterNot(arg => arg == "--eco" || arg == "--tui" || arg == "--gui") match
+    args.filterNot(arg => arg == "--eco" || arg == "--tui" || arg == "--gui" || arg == "--alpha") match
       case "--open" :: path :: _ =>
-        LaunchOptions(openPath = Some(Path.of(path)), eco = eco, tui = tui, gui = gui)
+        LaunchOptions(openPath = Some(Path.of(path)), eco = eco, tui = tui, gui = gui, alpha = alpha)
       case "--file" :: path :: _ =>
-        LaunchOptions(openPath = Some(Path.of(path)), eco = eco, tui = tui, gui = gui)
+        LaunchOptions(openPath = Some(Path.of(path)), eco = eco, tui = tui, gui = gui, alpha = alpha)
       case path :: _ if !path.startsWith("-") =>
-        LaunchOptions(openPath = Some(Path.of(path)), eco = eco, tui = tui, gui = gui)
+        LaunchOptions(openPath = Some(Path.of(path)), eco = eco, tui = tui, gui = gui, alpha = alpha)
       case _ =>
-        LaunchOptions(eco = eco, tui = tui, gui = gui)
+        LaunchOptions(eco = eco, tui = tui, gui = gui, alpha = alpha)
 
   /** Whether this launch should use the terminal shell rather than Swing.
     *

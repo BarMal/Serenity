@@ -91,6 +91,42 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "default alpha to false" in {
+    LaunchOptions.parse(List("notes.md")).alpha shouldBe false
+  }
+
+  it should "recognise a bare --alpha flag" in {
+    LaunchOptions.parse(List("--alpha")).alpha shouldBe true
+  }
+
+  it should "recognise --alpha alongside an open path, regardless of order" in {
+    LaunchOptions.parse(List("--alpha", "notes.md")) shouldBe LaunchOptions(
+      openPath = Some(Path.of("notes.md")),
+      alpha = true
+    )
+    LaunchOptions.parse(List("notes.md", "--alpha")) shouldBe LaunchOptions(
+      openPath = Some(Path.of("notes.md")),
+      alpha = true
+    )
+  }
+
+  it should "recognise --alpha alongside --open" in {
+    LaunchOptions.parse(List("--alpha", "--open", "notes.md")) shouldBe LaunchOptions(
+      openPath = Some(Path.of("notes.md")),
+      alpha = true
+    )
+  }
+
+  it should "recognise --tui, --gui, --eco, and --alpha together" in {
+    LaunchOptions.parse(List("--tui", "--gui", "--eco", "--alpha", "notes.md")) shouldBe LaunchOptions(
+      openPath = Some(Path.of("notes.md")),
+      eco = true,
+      tui = true,
+      gui = true,
+      alpha = true
+    )
+  }
+
   "LaunchOptions.resolveTuiMode" should "force the GUI path when --gui is passed, even with no display" in {
     LaunchOptions.resolveTuiMode(
       LaunchOptions(gui = true),
