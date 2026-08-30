@@ -997,22 +997,25 @@ final private[manager] class StateManagerEffectHandlers(
     }))
 
   private def withFocusedKeymapConflict(runner: CommandRunner, itemId: String, binding: String): CommandRunner =
-    runner.copy(
-      activeSettingsSurface = runner.activeSettingsSurface.map(surface =>
-        surface.copy(current =
-          SettingsPage.Editing(
-            groupId = surface.current.groupId,
-            itemId = itemId,
-            draftText = binding,
-            searchTerm = surface.current.searchTerm,
-            recording = Some(RecordingState(itemId, pendingFocusedKeymapConflict = Some(itemId -> binding)))
+    runner.activeSettingsSurface match
+      case Some(surface) =>
+        runner
+          .withDrilledSettingsSurface(
+            surface.copy(current =
+              SettingsPage.Editing(
+                groupId = surface.current.groupId,
+                itemId = itemId,
+                draftText = binding,
+                searchTerm = surface.current.searchTerm,
+                recording = Some(RecordingState(itemId, pendingFocusedKeymapConflict = Some(itemId -> binding)))
+              )
+            )
           )
-        )
-      ),
-      statusMessage = Some(
-        "Binding is already assigned. Enter to unbind the other action, or Escape to preserve it."
-      )
-    )
+          .copy(statusMessage =
+            Some("Binding is already assigned. Enter to unbind the other action, or Escape to preserve it.")
+          )
+      case None =>
+        runner
 
   private def withGlobalKeymapConflictMessage(
     action: com.serenity.config.HotkeyAction,
@@ -1022,36 +1025,35 @@ final private[manager] class StateManagerEffectHandlers(
       case Some(surface) =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
-            state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-              case current if current.id == surface.id =>
-                current.copy(content =
-                  SurfaceContent.CommandPalette(
-                    runner.copy(
-                      activeSettingsSurface = runner.activeSettingsSurface.map(surface =>
-                        surface.copy(current =
-                          SettingsPage.Editing(
-                            groupId = surface.current.groupId,
-                            itemId = s"keymap-global-${action.configKey}",
-                            draftText = binding,
-                            searchTerm = surface.current.searchTerm,
-                            recording = Some(
-                              RecordingState(
-                                s"keymap-global-${action.configKey}",
-                                pendingGlobalHotkeyConflict = Some(action -> binding)
-                              )
-                            )
+            runner.activeSettingsSurface match
+              case Some(drilled) =>
+                val updatedRunner = runner
+                  .withDrilledSettingsSurface(
+                    drilled.copy(current =
+                      SettingsPage.Editing(
+                        groupId = drilled.current.groupId,
+                        itemId = s"keymap-global-${action.configKey}",
+                        draftText = binding,
+                        searchTerm = drilled.current.searchTerm,
+                        recording = Some(
+                          RecordingState(
+                            s"keymap-global-${action.configKey}",
+                            pendingGlobalHotkeyConflict = Some(action -> binding)
                           )
                         )
-                      ),
-                      statusMessage = Some(
-                        "Binding is already assigned. Enter to unbind the other action, or Escape to preserve it."
                       )
                     )
                   )
-                )
-              case current =>
-                current
-            }))
+                  .copy(statusMessage =
+                    Some("Binding is already assigned. Enter to unbind the other action, or Escape to preserve it.")
+                  )
+                state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
+                  case current if current.id == surface.id =>
+                    current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+                  case current =>
+                    current
+                }))
+              case None => state
           case _ => state
       case None => state
 
@@ -1502,19 +1504,20 @@ final private[manager] class StateManagerEffectHandlers(
         case Some(surface) =>
           surface.content match
             case SurfaceContent.CommandPalette(runner) =>
-              val updatedRunner = runner.copy(
-                activeSettingsSurface = Some(
+              val updatedRunner = runner
+                .withDrilledSettingsSurface(
                   SettingsSurfaceState(
                     SettingsPage.Group("settings-preset-edit"),
                     List(SettingsPage.Group("settings-ui-presets", 2))
                   )
-                ),
-                submenuSelections = runner.submenuSelections + ("settings-ui-presets" -> 2),
-                editingItemId = None,
-                editingText = "",
-                editingPresetName = Some(name.trim),
-                statusMessage = Some(statusMessage)
-              )
+                )
+                .copy(
+                  submenuSelections = runner.submenuSelections + ("settings-ui-presets" -> 2),
+                  editingItemId = None,
+                  editingText = "",
+                  editingPresetName = Some(name.trim),
+                  statusMessage = Some(statusMessage)
+                )
               val updatedSurfaces = state.runtime.uiSurfaces.map {
                 case current if current.id == surface.id =>
                   current.copy(content = SurfaceContent.CommandPalette(updatedRunner))

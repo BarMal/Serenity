@@ -32,14 +32,12 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
         val registry = CommandRegistry.withToggleUI
         val selected = CommandRunnerReducer.reduce(selectEvent, state, registry)
         applyReducerResult(selected, state) >>
-          (selectEvent match
-            case _: RunnerSelectCategory => IO.unit
-            case _ =>
-              stateRef.get.flatMap { selectedState =>
-                val submitted = CommandRunnerReducer.reduce(RunnerSubmit, selectedState, registry)
-                applyReducerResult(submitted, selectedState)
-              }
-          ).map(_ => true)
+          stateRef.get
+            .flatMap { selectedState =>
+              val submitted = CommandRunnerReducer.reduce(RunnerSubmit, selectedState, registry)
+              applyReducerResult(submitted, selectedState)
+            }
+            .map(_ => true)
       case None =>
         IO.pure(false)
 
@@ -73,7 +71,7 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
           // settingsSurfaceSelectedIndex -- covering both entry points exactly as the two conditions this replaced
           // did.
           runner.surface match
-            case CommandRunnerSurface.Settings(activeSettingsSurface) =>
+            case CommandRunnerSurface.Settings(_, drilled) =>
               val items = runner.settingsSurfaceItems
               MouseHitTestGeometry
                 .overlayItemIndex(
@@ -92,7 +90,7 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
                     SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
                 )
                 .map { index =>
-                  if activeSettingsSurface.nonEmpty then RunnerSelectSubmenuItem(index)
+                  if drilled.nonEmpty then RunnerSelectSubmenuItem(index)
                   else RunnerSelectVisibleItem(index)
                 }
             case CommandRunnerSurface.Palette(_) =>

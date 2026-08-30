@@ -201,15 +201,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     updated.filteredCommands.exists(_.name.contains("save")) shouldBe true
   }
 
-  // issue #931: category tabs are retired -- an empty query is every registered command now, regardless of
-  // `activeCategory` (that field is still there, but no longer filters anything; see the PR notes on follow-up
-  // cleanup).
+  // issue #931: category tabs -- and the `activeCategory` field they drove -- are retired outright, so an empty
+  // query is simply every registered command now.
   it should "show every command when search is empty, and switch to global search once typing begins" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.File)
 
     runner.visibleItems should not be empty
     runner.visibleItems.collect {
@@ -229,7 +227,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     val animationGroup = groupByIdRecursive(runner.settingsGroups, "settings-animation")
 
@@ -262,7 +259,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
-      .withActiveCategory(CommandCategory.Settings)
       .updateSearchTerm("animation")
 
     // Window-sitter settings now live inside Motion & Animation (consolidated from Interface Layout),
@@ -277,7 +273,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
-      .withActiveCategory(CommandCategory.Settings)
       .updateSearchTerm("\"ANIMATION-duration\"")
 
     runner.visibleItems.collect {
@@ -338,7 +333,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     val appearanceGroup = groupByIdRecursive(runner.settingsGroups, "settings-surface-appearance")
 
@@ -572,7 +566,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       )
     val runner = CommandRunner.empty
       .activate(registry, config)
-      .withActiveCategory(CommandCategory.Settings)
 
     val textDisplay = groupByIdRecursive(runner.settingsGroups, "settings-text-display")
     val options     = textDisplay.children.collect { case option: CommandSurfaceItem.OptionItem => option }
@@ -602,7 +595,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withCommandRunnerVisibleRows(Some(9)))
-      .withActiveCategory(CommandCategory.Settings)
 
     val interfaceGroup = groupByIdRecursive(runner.settingsGroups, "settings-interface-layout")
     val input = interfaceGroup.children
@@ -624,7 +616,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withRenderFpsTarget(RenderFpsTarget.Fps120))
-      .withActiveCategory(CommandCategory.Settings)
 
     val renderingGroup = groupByIdRecursive(runner.settingsGroups, "settings-rendering")
     val option = renderingGroup.children
@@ -643,7 +634,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     runner.settingsGroups shouldBe theSameInstanceAs(runner.settingsGroups)
   }
@@ -653,7 +643,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     runner.visibleItems shouldBe theSameInstanceAs(runner.visibleItems)
   }
@@ -663,7 +652,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.RichText))
-      .withActiveCategory(CommandCategory.Settings)
 
     val documentDefaultsGroup = groupByIdRecursive(runner.settingsGroups, "settings-document-defaults")
 
@@ -689,7 +677,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     val richTextGroup = groupByIdRecursive(runner.settingsGroups, "settings-rich-text")
     val inputs        = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
@@ -716,7 +703,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
           )
         )
       )
-      .withActiveCategory(CommandCategory.Settings)
 
     val spellGroup = groupByIdRecursive(runner.settingsGroups, "settings-spellcheck")
 
@@ -762,7 +748,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withUiPresetNames(List("Drafting", "Research Notes"))
-      .withActiveCategory(CommandCategory.Settings)
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
 
     presetGroup.children.map(_.id) shouldBe List(
@@ -972,7 +957,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .withUiPresetNames(List("Drafting", "Research Notes"))
       .copy(optionSelections = Map("ui-preset-built-in" -> 2, "ui-preset-custom" -> 1))
-      .withActiveCategory(CommandCategory.Settings)
 
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
     val presetPicker = descendants(presetGroup)

@@ -80,20 +80,14 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   // ── CommandRunner settings ───────────────────────────────────────────────
 
   "CommandRunner Settings category" should "include a cursor mode option item" in {
-    val runner = CommandRunner.empty.copy(
-      isActive = true,
-      activeCategory = CommandCategory.Settings
-    )
+    val runner = CommandRunner.empty.copy(isActive = true)
     settingsItems(runner).collect {
       case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
     } should not be empty
   }
 
   it should "offer Blink and Breathe choices on the cursor mode option" in {
-    val runner = CommandRunner.empty.copy(
-      isActive = true,
-      activeCategory = CommandCategory.Settings
-    )
+    val runner = CommandRunner.empty.copy(isActive = true)
     val item = settingsItems(runner).collectFirst {
       case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
     }.get
@@ -101,7 +95,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "map Blink option to SetCursorMode(Blink) intent" in {
-    val runner = CommandRunner.empty.copy(isActive = true, activeCategory = CommandCategory.Settings)
+    val runner = CommandRunner.empty.copy(isActive = true)
     val item = settingsItems(runner).collectFirst {
       case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
     }.get
@@ -111,7 +105,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "map Breathe option to SetCursorMode(Breathe) intent" in {
-    val runner = CommandRunner.empty.copy(isActive = true, activeCategory = CommandCategory.Settings)
+    val runner = CommandRunner.empty.copy(isActive = true)
     val item = settingsItems(runner).collectFirst {
       case o: CommandSurfaceItem.OptionItem if o.id == "cursor-mode" => o
     }.get

@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.{CommandCategory, CommandRegistry, CommandRunner, FileIntent}
+import com.serenity.command.{CommandRegistry, CommandRunner, FileIntent}
 import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -192,7 +192,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = CommandRegistry.default
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
+      .openSettings
       .enterSelectedGroup
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(

@@ -131,8 +131,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
               keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
             )
             .openSettings
-          val runner = activated.copy(
-            activeSettingsSurface = Some(
+          val runner = activated.withDrilledSettingsSurface(
               SettingsSurfaceState(
                 SettingsPage.Editing(
                   groupId = "settings-keymap",
@@ -142,7 +141,6 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
                 )
               )
             )
-          )
           // A dedicated settings surface (`isSettingsSurface`) renders its submenu view directly on the one
           // `CommandPalette` surface -- there is no second floating surface at all anymore (issue #1059).
           val surface = UiSurface(

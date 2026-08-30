@@ -2,7 +2,7 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import com.serenity.command.CommandRunner
+import com.serenity.command.{CommandPaletteState, CommandRunner, CommandRunnerSurface}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -39,9 +39,7 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
   "AppState" should "store non-editor UI directly as surfaces" in {
     val runner = CommandRunner(
       isActive = true,
-      searchTerm = "tog",
-      selectedIndex = 0,
-      filteredCommands = List.empty
+      surface = CommandRunnerSurface.Palette(CommandPaletteState(searchTerm = "tog"))
     )
     val surfaces = List(
       UiSurface(

@@ -368,7 +368,7 @@ object SurfaceContentResolver:
     // first regardless of `isActive`, preserving this resolver's existing precedence (a settings-mode runner that
     // has since been deactivated still renders through `resolveSettingsSurface`, not the inactive placeholder below).
     runner.surface match
-      case com.serenity.command.CommandRunnerSurface.Settings(_) =>
+      case _: com.serenity.command.CommandRunnerSurface.Settings =>
         resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows)
       case com.serenity.command.CommandRunnerSurface.Palette(_) if !runner.isActive =>
         ResolvedSurfaceContent(titleFor(mode, "commands"))

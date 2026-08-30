@@ -90,8 +90,7 @@ class SurfaceInputTranslationSpec extends AnyFlatSpec with Matchers:
         MoveDown           -> RunnerNavigate(Direction.Down),
         MoveLeft           -> RunnerNavigate(Direction.Left),
         MoveRight          -> RunnerNavigate(Direction.Right),
-        TabKey             -> RunnerNextCategory,
-        ReverseTabKey      -> RunnerPreviousCategory,
+        // issue #931: category tabs are retired -- Tab/Shift+Tab no longer translate to anything for the runner.
         Enter              -> RunnerSubmit,
         NewLine            -> RunnerSubmit,
         Escape             -> RunnerDismiss

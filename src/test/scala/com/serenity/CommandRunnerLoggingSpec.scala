@@ -11,22 +11,18 @@ import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
 
-  // issue #931: category tabs are retired, so switching `activeCategory` no longer changes what `visibleItems`
-  // shows (it's always every command, unfiltered) -- `selected` is just the first registered command now, not a
-  // settings group. The `category=Settings` field itself is untouched here (still a real, if now-inert, field on
-  // `CommandRunner`; retiring it entirely is tracked as follow-up cleanup, not part of this stage's dispatch
-  // migration).
-  "StateManager.describeCommandRunnerEvent" should "describe browse mode with category and selected item" in {
+  // issue #931: category tabs are retired -- there is no more category to name in this log line, just whether
+  // there's a live search (`mode=browse`/`mode=search`).
+  "StateManager.describeCommandRunnerEvent" should "describe browse mode with the selected item" in {
     val registry          = CommandRegistry.withToggleUI
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     StateManager
       .describeCommandRunnerEvent(TabKey, runner)
       .shouldBe(
-        "event=TabKey mode=browse category=Settings selected=command:open-settings"
+        "event=TabKey mode=browse selected=command:open-settings"
       )
   }
 
@@ -40,7 +36,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     val description = StateManager.describeCommandRunnerEvent(InsertChar('t'), runner)
 
     description.shouldBe(
-      "event=InsertChar mode=search category=All selected=command:toggle-bookmark"
+      "event=InsertChar mode=search selected=command:toggle-bookmark"
     )
     description should not include "query="
     description should not include "InsertChar(t)"

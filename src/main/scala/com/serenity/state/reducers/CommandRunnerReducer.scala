@@ -335,14 +335,6 @@ object CommandRunnerReducer:
       case RunnerSelectSubmenuItem(index) =>
         ReducerResult.noEffects(replaceRunner(state, _.withSelectedFocusedSubmenuIndex(index)))
 
-      case RunnerSelectCategory(category) =>
-        given CommandRegistry = registry
-        currentRunner(state) match
-          case Some(runner) if runner.searchTerm.isEmpty && !submenuHasFocus(state) =>
-            ReducerResult.noEffects(replaceRunner(state, _.withActiveCategory(category)))
-          case _ =>
-            ReducerResult.noEffects(state)
-
       case RunnerNavigate(Direction.Left) =>
         if submenuHasFocus(state) then
           currentRunner(state) match
@@ -409,22 +401,6 @@ object CommandRunnerReducer:
             case _ =>
               ReducerResult.noEffects(state)
 
-      case RunnerNextCategory =>
-        given CommandRegistry = registry
-        currentRunner(state) match
-          case Some(runner) if runner.searchTerm.isEmpty && !submenuHasFocus(state) =>
-            ReducerResult.noEffects(replaceRunner(state, _.switchCategory(1)))
-          case _ =>
-            ReducerResult.noEffects(state)
-
-      case RunnerPreviousCategory =>
-        given CommandRegistry = registry
-        currentRunner(state) match
-          case Some(runner) if runner.searchTerm.isEmpty && !submenuHasFocus(state) =>
-            ReducerResult.noEffects(replaceRunner(state, _.switchCategory(-1)))
-          case _ =>
-            ReducerResult.noEffects(state)
-
   private def deactivate(state: AppState): AppState =
     state
       .copy(runtime =
@@ -443,15 +419,15 @@ object CommandRunnerReducer:
 
   /** The drilled-in settings page, if `state`'s runner is on one -- `None` both when there's no settings surface at
     * all (`CommandRunnerSurface.Palette`) and when there is one but nothing has been entered yet
-    * (`CommandRunnerSurface.Settings(None)`, the settings root). Dispatch through `CommandRunnerSurface` (issue
+    * (`CommandRunnerSurface.Settings(_, None)`, the settings root). Dispatch through `CommandRunnerSurface` (issue
     * #931, Stage 2) rather than reading `activeSettingsSurface` directly -- equivalent by construction (`surface`
     * carries `activeSettingsSurface` as its `Settings` payload verbatim), but names the type this stage introduces
     * as the seam these submenu-focus checks are really keyed on.
     */
   private def activeSubmenu(state: AppState): Option[SettingsSurfaceState] =
     currentRunner(state).flatMap(_.surface match
-      case CommandRunnerSurface.Settings(surface) => surface
-      case CommandRunnerSurface.Palette(_)        => None
+      case CommandRunnerSurface.Settings(_, drilled) => drilled
+      case CommandRunnerSurface.Palette(_)           => None
     )
 
   /** Items that open a nested surface on submit rather than executing an action. */

@@ -120,18 +120,15 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
   it should "describe the selected group, option, and input action in its footer" in {
     val root = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val option = root.copy(
-      activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance")))
+    val option = root.withDrilledSettingsSurface(
+      SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance"))
     )
-    val input = option.copy(
-      activeSettingsSurface =
-        Some(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance", selectedIndex = 4)))
+    val input = option.withDrilledSettingsSurface(
+      SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance", selectedIndex = 4))
     )
-    val editing = input.copy(
-      activeSettingsSurface = Some(
-        SettingsSurfaceState(
-          SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "blur-radius", draftText = "1")
-        )
+    val editing = input.withDrilledSettingsSurface(
+      SettingsSurfaceState(
+        SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "blur-radius", draftText = "1")
       )
     )
 
