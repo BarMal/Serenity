@@ -245,6 +245,7 @@ object OverlayViewModel:
   private def itemGapRowsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Double =
     content match
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
+          com.serenity.state.models.SurfaceContent.CommandRunnerPeek(_) |
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
         state.persisted.config.surfaceConfig.commandRunnerItemGapRows
       case com.serenity.state.models.SurfaceContent.ContextualToolbar(_) =>

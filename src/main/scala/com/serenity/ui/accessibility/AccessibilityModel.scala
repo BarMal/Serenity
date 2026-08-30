@@ -400,6 +400,7 @@ object AccessibilitySnapshot:
     content match
       case SurfaceContent.StartPage(page)              => page.title
       case _: SurfaceContent.CommandPalette            => "Command runner"
+      case _: SurfaceContent.CommandRunnerPeek         => "Command runner preview"
       case SurfaceContent.ModalWorkflow(modal)         => modal.toString
       case SurfaceContent.CursorInfoBar(_)             => "Document status"
       case SurfaceContent.MarkdownPreview(_, title)    => s"Preview: $title"

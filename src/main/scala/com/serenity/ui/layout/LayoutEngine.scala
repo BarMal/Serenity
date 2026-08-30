@@ -700,6 +700,44 @@ object LayoutEngine:
     topYOverride: Option[Int],
     forcedHeight: Option[Int]
   ): Option[LayoutRect] =
+    surface.content match
+      case SurfaceContent.CommandRunnerPeek(_) =>
+        calculateFrozenCursorPeekRect(surface, contentRect, state)
+      case _ =>
+        calculateLiveFloatingSurfaceRect(surface, buffer, contentRect, state, topYOverride, forcedHeight)
+
+  /** The cursor-peek prototype's own rect resolution -- deliberately never calls [[floatingAnchor]] or
+    * `CursorLayout.calculateScreenPositionInContent`: `state.runtime.cursorPeekResolvedAnchor` was already resolved
+    * once, at render time, by `CursorPeekAnchorResolution` (state.manager), and is reused verbatim here on every
+    * subsequent paint rather than re-derived, so a reformat underneath an open peek cannot move it. Sizing
+    * (`calculateFloatingSurfaceWidth`/`calculateFloatingSurfaceHeight`) is still shared with the live path for a
+    * consistent look.
+    */
+  private def calculateFrozenCursorPeekRect(
+    surface: UiSurface,
+    contentRect: LayoutRect,
+    state: AppState
+  ): Option[LayoutRect] =
+    for
+      anchorScreenPosition <- state.runtime.cursorPeekResolvedAnchor
+      placement <- surface.presentation match
+        case SurfacePresentation.Floating(_, p) => Some(p)
+        case _                                  => None
+      preferredWidth  = calculateFloatingSurfaceWidth(contentRect.width)
+      preferredHeight = calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state)
+      gapRows         = wholeRowOrigin(floatingCursorGapRows(state, surface.content))
+      slot            = FrozenPeekSlot(surface.id, preferredWidth, preferredHeight)
+      placed <- resolveFrozenCursorPeekStack(List(slot), anchorScreenPosition, contentRect, placement, gapRows).headOption
+    yield placed.rect
+
+  private def calculateLiveFloatingSurfaceRect(
+    surface: UiSurface,
+    buffer: Buffer,
+    contentRect: LayoutRect,
+    state: AppState,
+    topYOverride: Option[Int],
+    forcedHeight: Option[Int]
+  ): Option[LayoutRect] =
     val borderCells = SurfaceFrameLayout.borderCellsFor(surface.content)
     val preferredWidth = surface.content match
       case SurfaceContent.ContextualToolbar(toolbarState) =>
@@ -965,6 +1003,11 @@ object LayoutEngine:
       case SurfaceContent.CommandPalette(runner) if runner.isSettingsSurface =>
         math.min(commandMaxHeight, math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1))
       case SurfaceContent.CommandPalette(_) =>
+        math.min(
+          commandMaxHeight,
+          math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)
+        )
+      case SurfaceContent.CommandRunnerPeek(_) =>
         math.min(
           commandMaxHeight,
           math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)
