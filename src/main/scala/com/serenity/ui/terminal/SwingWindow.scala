@@ -71,6 +71,12 @@ class SwingWindow(
     SwingWindow.perPixelTranslucencySupported
   private val shapeUpdateCoalescer = new SwingWindow.CoalescedEdtUpdate(() => updateShape())
 
+  /** Whether `canvas` should paint its own background as genuinely transparent this frame -- see
+    * [[SwingWindow.shouldPaintTransparentContent]]. Kept up to date by [[updateChromeTheme]], which already runs once
+    * per frame (`Main`'s `syncChromeTheme`), so no extra wiring is needed to keep this current.
+    */
+  private val contentTransparentRef = new AtomicBoolean(false)
+
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
 
   /** Register a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
@@ -87,8 +93,9 @@ class SwingWindow(
           publishCanvasResize(getSize())
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
-      g.setColor(Color.BLACK)
-      g.fillRect(0, 0, getWidth, getHeight)
+      val g2 = g.create().asInstanceOf[Graphics2D]
+      try SwingWindow.paintCanvasBackground(g2, getWidth, getHeight, contentTransparentRef.get())
+      finally g2.dispose()
       val published = publishedImagesRef.get()
       published.base.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
       published.overlay.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
@@ -565,6 +572,13 @@ class SwingWindow(
     onResizeCallbackRef.get().foreach(_.apply())
 
   def updateChromeTheme(theme: Theme): Unit =
+    contentTransparentRef.set(
+      SwingWindow.shouldPaintTransparentContent(
+        usesCustomChrome,
+        perPixelTranslucencySupported,
+        theme.background.getAlpha
+      )
+    )
     if usesCustomChrome then
       val palette = SwingWindow.ChromePalette.fromTheme(theme)
       chromePaletteRef.set(palette)
@@ -717,6 +731,36 @@ object SwingWindow:
   private[serenity] def perPixelTranslucencySupported: Boolean =
     GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice
       .isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSLUCENT)
+
+  /** A theme with an alpha-0 background (e.g. the built-in "Transparent" theme) should only make `canvas` paint its own
+    * background as genuinely see-through when the window can actually composite that against the desktop: custom chrome
+    * (the frame itself is undecorated with a transparent `Color` background, see `frame`'s construction) and per-pixel
+    * translucency support from the platform. Anywhere else -- native OS chrome, or a platform/window manager without
+    * translucency -- painting nothing would composite garbage (stale backbuffer pixels, or an opaque-but-undefined
+    * native surface) rather than the desktop, so that combination must fall back to an ordinary opaque paint instead.
+    */
+  private[serenity] def shouldPaintTransparentContent(
+    usesCustomChrome: Boolean,
+    perPixelTranslucencySupported: Boolean,
+    backgroundAlpha: Int
+  ): Boolean =
+    usesCustomChrome && perPixelTranslucencySupported && backgroundAlpha == 0
+
+  /** Paint `canvas`'s own background into `g` (sized `width` x `height`): genuinely transparent pixels when
+    * `transparent`, replacing whatever the backing buffer already held (`AlphaComposite.Src`, not the default
+    * `SrcOver`, so this actually clears stale opaque pixels rather than leaving a zero-alpha fill's no-op) -- otherwise
+    * an ordinary opaque black fill, the graceful fallback for when [[shouldPaintTransparentContent]] is false. `g`
+    * should be a scratch `Graphics2D` the caller disposes (`Graphics.create()`), since this permanently changes its
+    * composite.
+    */
+  private[serenity] def paintCanvasBackground(g: Graphics2D, width: Int, height: Int, transparent: Boolean): Unit =
+    if transparent then
+      g.setComposite(AlphaComposite.Src)
+      g.setColor(SwingWindow.Transparent)
+      g.fillRect(0, 0, width, height)
+    else
+      g.setColor(Color.BLACK)
+      g.fillRect(0, 0, width, height)
 
   private[serenity] def shouldUseCustomChrome(
     chromeMode: WindowChromeMode,

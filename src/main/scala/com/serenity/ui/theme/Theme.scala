@@ -75,11 +75,19 @@ final case class ThemeStatus(error: ThemeColor, warning: ThemeColor)
 
 object Theme:
 
-  /** Relative luminance contrast ratio defined by WCAG 2.x. */
+  /** Relative luminance contrast ratio defined by WCAG 2.x.
+    *
+    * A fully transparent color (alpha 0) is the "use the terminal/desktop's own backdrop" sentinel (#1240): its nominal
+    * RGB is never what actually ends up on screen, so computing a WCAG ratio against it would just be a meaningless
+    * number compared to an unknown real backdrop. Short-circuit to `Double.PositiveInfinity` -- "trivially satisfies
+    * any contrast requirement" -- instead of silently reporting a number that only pretends to mean something.
+    */
   def contrastRatio(foreground: Color, background: Color): Double =
-    val foregroundLuminance = luminance(foreground)
-    val backgroundLuminance = luminance(background)
-    (foregroundLuminance.max(backgroundLuminance) + 0.05) / (foregroundLuminance.min(backgroundLuminance) + 0.05)
+    if foreground.getAlpha == 0 || background.getAlpha == 0 then Double.PositiveInfinity
+    else
+      val foregroundLuminance = luminance(foreground)
+      val backgroundLuminance = luminance(background)
+      (foregroundLuminance.max(backgroundLuminance) + 0.05) / (foregroundLuminance.min(backgroundLuminance) + 0.05)
 
   /** WCAG 2.x relative luminance in `[0, 1]` -- sRGB gamma-linearized, Rec.709-weighted. This is the one canonical
     * luminance formula for the app (#1054): anywhere that needs to compare colors by perceived brightness -- contrast

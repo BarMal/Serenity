@@ -41,6 +41,17 @@ object ColorParser:
           val b = Integer.parseInt(cleanHex.substring(4, 6), 16)
           new Color(r, g, b)
         }.toEither.left.map(_.getMessage)
+      // #RRGGBBAA -- the alpha channel a theme's `background` field needs to carry the alpha-0 "use the terminal's
+      // own background" sentinel (#1240): the 6-digit form's `new Color(r, g, b)` always fixes alpha to 255, so a
+      // theme wanting a transparent background has no way to express that without this longer form.
+      case 8 =>
+        Try {
+          val r = Integer.parseInt(cleanHex.substring(0, 2), 16)
+          val g = Integer.parseInt(cleanHex.substring(2, 4), 16)
+          val b = Integer.parseInt(cleanHex.substring(4, 6), 16)
+          val a = Integer.parseInt(cleanHex.substring(6, 8), 16)
+          new Color(r, g, b, a)
+        }.toEither.left.map(_.getMessage)
       case _ => Left(s"Invalid hex color format: $hex")
 
   private def parseRgbColor(rgb: String): Either[String, Color] =

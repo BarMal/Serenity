@@ -129,3 +129,44 @@ object ThemeConfig:
         normal = Some(SyntaxElementConfig("#102A43", Some("#FDFDFD")))
       )
     )
+
+  /** A genuinely transparent background (`#00000000`, alpha 0 -- see `ColorParser`'s 8-digit hex support and
+    * `TerminalAnsiDiff.sgr`'s SGR 49 emission) for use with a terminal or window compositor's own transparency, e.g.
+    * kitty's `background_opacity`. Since the real backdrop behind the text is unknown and can't be assumed to be either
+    * light or dark, the foreground and accent colors below lean brighter and more saturated than
+    * `defaultDark`/`defaultLight` -- there is no guaranteed contrast baseline to rely on. Chrome surfaces that need
+    * their own reliable contrast (panel, menu, highlighted, error, warning) keep ordinary opaque backgrounds, so they
+    * stay legible regardless of what shows through behind the editor.
+    */
+  val transparent: ThemeConfig =
+    ThemeConfig(
+      name = "transparent",
+      ui = UiColors(
+        foreground = "#FFFFFF",
+        background = "#00000000",
+        cursor = "#FFD60A",
+        highlighted = UiTokenConfig(foreground = "#0B0F14", background = "#5DD8FF"),
+        menuItem = UiTokenConfig(foreground = "#FFFFFF", background = "#12161C"),
+        panel = UiTokenConfig(foreground = "#FFFFFF", background = "#12161C", alpha = Some(0.94)),
+        error = UiTokenConfig(foreground = "#FF5C5C", background = "#2B1215"),
+        warning = Some(UiTokenConfig(foreground = "#FFD166", background = "#2B2000")),
+        border = "#7DD3FC",
+        panelBorder = Some("#38BDF8"),
+        margin = Some("#00000000"),
+        muted = "#CBD5E1",
+        placeholder = "#94A3B8"
+      ),
+      syntax = SyntaxColors(
+        keyword = SyntaxElementConfig("#7DD3FC", None, StyleConfig(bold = true)),
+        string = SyntaxElementConfig("#5EEAD4", None),
+        comment = SyntaxElementConfig("#CBD5E1", None, StyleConfig(italic = true)),
+        number = SyntaxElementConfig("#FDBA74", None),
+        operator = SyntaxElementConfig("#FCA5A5", None),
+        identifier = SyntaxElementConfig("#FFFFFF", None),
+        typ = Some(SyntaxElementConfig("#D8B4FE", None, StyleConfig(bold = true))),
+        delimiter = Some(SyntaxElementConfig("#E2E8F0", None)),
+        whitespace = Some(SyntaxElementConfig("#00000000", None)),
+        error = Some(SyntaxElementConfig("#FF5C5C", Some("#2B1215"), StyleConfig(bold = true, underline = true))),
+        normal = Some(SyntaxElementConfig("#FFFFFF", None))
+      )
+    )

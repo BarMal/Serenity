@@ -506,6 +506,59 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     (0 until image.getHeight).exists(y => new Color(image.getRGB(82, y), true).getRed < 230) shouldBe true
   }
 
+  // A background Color with alpha 0 is the transparency sentinel (#1240): `clearViewport`/`fillRect`/`putString` must
+  // write genuinely zero-alpha pixels for it, not leave whatever opaque content a reused/pooled backing image already
+  // held -- the default SRC_OVER composite makes a zero-alpha fill a no-op, which would silently fail to clear stale
+  // opaque pixels from a previous frame.
+  "Java2DRenderSurface.clearViewport" should "write fully transparent pixels over previously-opaque content" in {
+    val image   = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.RED)
+    surface.flush()
+    new Color(image.getRGB(5, 5), true).getAlpha shouldBe 255
+
+    val reopened = new Java2DRenderSurface(image, metrics, font, _ => ())
+    reopened.clearViewport(new Color(0, 0, 0, 0))
+    reopened.flush()
+
+    new Color(image.getRGB(5, 5), true).getAlpha shouldBe 0
+  }
+
+  it should "leave an ordinary opaque clear fully opaque" in {
+    val image   = new BufferedImage(10, 10, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(Color.BLUE)
+    surface.flush()
+
+    new Color(image.getRGB(3, 3), true) shouldBe new Color(0, 0, 255, 255)
+  }
+
+  "Java2DRenderSurface.putString" should "clear a previously-opaque cell to transparent when the background is alpha 0" in {
+    val image   = new BufferedImage(40, 20, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.setBackgroundColor(Color.RED)
+    surface.putString(0, 0, "a")
+    surface.flush()
+    new Color(image.getRGB(2, 2), true).getAlpha shouldBe 255
+
+    val reopened = new Java2DRenderSurface(image, metrics, font, _ => ())
+    reopened.setForegroundColor(Color.WHITE)
+    reopened.setBackgroundColor(new Color(0, 0, 0, 0))
+    reopened.putString(0, 0, " ")
+    reopened.flush()
+
+    new Color(image.getRGB(2, 2), true).getAlpha shouldBe 0
+  }
+
   private def maxAlpha(image: BufferedImage): Int =
     (for
       y <- 0 until image.getHeight

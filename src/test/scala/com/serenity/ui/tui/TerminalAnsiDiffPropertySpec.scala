@@ -26,6 +26,12 @@ class TerminalAnsiDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyCh
       b <- Gen.choose(0, 255)
     yield new Color(r, g, b)
 
+  /** Background colors additionally cover the alpha-0 "use the terminal's native background" sentinel (SGR 49), on top
+    * of the ordinary opaque truecolor backgrounds `genColor` produces.
+    */
+  private val genBgColor: Gen[Color] =
+    Gen.frequency(9 -> genColor, 1 -> Gen.const(AnsiInterpreter.TransparentBackground))
+
   private val genStyle: Gen[TextStyle] =
     for
       bold      <- Gen.oneOf(true, false)
@@ -37,7 +43,7 @@ class TerminalAnsiDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyCh
     for
       char  <- Gen.oneOf('a' to 'z')
       fg    <- genColor
-      bg    <- genColor
+      bg    <- genBgColor
       style <- genStyle
     yield TerminalCell(char.toInt, fg, bg, style, CellSpan.Narrow)
 

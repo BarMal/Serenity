@@ -127,8 +127,7 @@ class Java2DRenderSurface(
     if boundedLeft < boundedRight && boundedTop < boundedBottom then
       val boundedWidth  = boundedRight - boundedLeft
       val boundedHeight = boundedBottom - boundedTop
-      g.setColor(bgRef.get())
-      g.fillRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
+      fillBackground(bgRef.get(), boundedLeft, boundedTop, boundedWidth, boundedHeight)
       if s.nonEmpty then
         val savedClip = g.getClip
         g.setColor(fgRef.get())
@@ -149,10 +148,27 @@ class Java2DRenderSurface(
   override def persistentContentKey: Option[SurfaceContentIdentity] =
     Option.when(contentPersists)(SurfaceContentIdentity(image))
 
+  /** Fill `px, py, pw, ph` with `color`, guaranteeing the pixels actually become exactly `color` -- including fully
+    * transparent (alpha 0, the "use the terminal/desktop's own backdrop" sentinel, #1240) -- rather than the no-op the
+    * default SRC_OVER composite gives a zero-alpha fill against a buffer that may already carry opaque pixels from a
+    * previous frame (this surface's backing image can be pooled/reused across frames, see `contentPersists`). Restores
+    * whatever composite (e.g. an active `setAlpha` translucency scale) was in effect before the fill, so this only
+    * affects the one fill call, never anything drawn after it.
+    */
+  private def fillBackground(color: Color, px: Int, py: Int, pw: Int, ph: Int): Unit =
+    if color.getAlpha == 0 then
+      val savedComposite = g.getComposite
+      g.setComposite(AlphaComposite.Src)
+      g.setColor(color)
+      g.fillRect(px, py, pw, ph)
+      g.setComposite(savedComposite)
+    else
+      g.setColor(color)
+      g.fillRect(px, py, pw, ph)
+
   override def clearViewport(color: Color): Unit =
     bgRef.set(color)
-    g.setColor(color)
-    g.fillRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
+    fillBackground(color, 0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
 
   override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)
@@ -165,8 +181,7 @@ class Java2DRenderSurface(
       val savedClip = g.getClip
       try
         g.clip(clearable)
-        g.setColor(color)
-        g.fillRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
+        fillBackground(color, 0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
       finally g.setClip(savedClip)
 
   def putString(x: Int, y: Int, s: String): Unit =
@@ -174,8 +189,7 @@ class Java2DRenderSurface(
       val px = metrics.toPixelX(x)
       val py = pixelYForRow(y)
       // Fill background for the whole string using nominal width
-      g.setColor(bgRef.get())
-      g.fillRect(px, py, s.length * metrics.charWidth, metrics.lineHeight)
+      fillBackground(bgRef.get(), px, py, s.length * metrics.charWidth, metrics.lineHeight)
       // Draw the foreground as one shaped string so font features like ligatures can apply.
       g.setColor(fgRef.get())
       g.drawString(s, px, py + metrics.ascent)
@@ -185,8 +199,7 @@ class Java2DRenderSurface(
     val py = pixelYForRow(y)
     val pw = width * metrics.charWidth
     val ph = height * metrics.lineHeight
-    g.setColor(bgRef.get())
-    g.fillRect(px, py, pw, ph)
+    fillBackground(bgRef.get(), px, py, pw, ph)
     if char != ' ' then
       g.setColor(fgRef.get())
       (0 until height).foreach { row =>

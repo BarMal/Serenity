@@ -68,12 +68,16 @@ object TerminalAnsiDiff:
   private def cup(x: Int, y: Int): String = s"$Esc[${y + 1};${x + 1}H"
 
   private def sgr(fg: Color, bg: Color, style: TextStyle): String =
+    // A background with alpha 0 is the "use the terminal's own native background" sentinel: emit SGR 49 (reset to
+    // default background) instead of an explicit 24-bit truecolor fill, so a compositor's own transparency (e.g.
+    // kitty's background_opacity) shows through cells the app never paints an opaque color into.
+    val bgAttr = if bg.getAlpha == 0 then "49" else s"48;2;${bg.getRed};${bg.getGreen};${bg.getBlue}"
     val attrs = List(
       Some("0"),
       Option.when(style.isBold)("1"),
       Option.when(style.isItalic)("3"),
       Option.when(style.isUnderlined)("4"),
       Some(s"38;2;${fg.getRed};${fg.getGreen};${fg.getBlue}"),
-      Some(s"48;2;${bg.getRed};${bg.getGreen};${bg.getBlue}")
+      Some(bgAttr)
     ).flatten
     s"$Esc[${attrs.mkString(";")}m"

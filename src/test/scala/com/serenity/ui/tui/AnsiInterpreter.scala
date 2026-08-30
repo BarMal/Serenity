@@ -14,6 +14,11 @@ object AnsiInterpreter:
 
   private val Esc: Char = 0x1b.toChar
 
+  /** The interpreted result of SGR 49 -- matches [[TerminalAnsiDiff]]'s alpha-0 "use the terminal's native background"
+    * sentinel exactly, so replaying an emitted diff reproduces a transparent background cell too.
+    */
+  private[tui] val TransparentBackground: Color = new Color(0, 0, 0, 0)
+
   final private case class CursorState(row: Int, col: Int, fg: Color, bg: Color, style: TextStyle)
 
   def apply(initial: TerminalFrame, ansi: String): TerminalFrame =
@@ -60,5 +65,8 @@ object AnsiInterpreter:
             loop(idx + 5, style, new Color(parts(idx + 2).toInt, parts(idx + 3).toInt, parts(idx + 4).toInt), bg)
           case "48" =>
             loop(idx + 5, style, fg, new Color(parts(idx + 2).toInt, parts(idx + 3).toInt, parts(idx + 4).toInt))
-          case _ => loop(idx + 1, style, fg, bg)
+          // SGR 49: reset to the terminal's own default background, mirroring TerminalAnsiDiff's alpha-0 sentinel --
+          // interpreted back as the same alpha-0 `Color` so a round trip through emit-then-replay reproduces it.
+          case "49" => loop(idx + 1, style, fg, AnsiInterpreter.TransparentBackground)
+          case _    => loop(idx + 1, style, fg, bg)
     loop(0, current, fg, bg)
