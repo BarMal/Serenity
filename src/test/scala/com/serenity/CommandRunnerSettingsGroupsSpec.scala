@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.AppConfig
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -248,6 +249,33 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-ligatures",
       "ui-font-size"
     )
+  }
+
+  // Windows Desktop Publish release-blocker: settings-tree search walks these font-family groups regardless of
+  // which CommandRegistry a caller scoped the palette to, so a test that stubs a deterministic FontFamilyCatalog
+  // (rather than depending on `FontLoader`'s live, machine-specific installed-font enumeration) is the only way to
+  // keep search-term assertions immune to whatever fonts happen to be installed on the machine running the test.
+  it should "build code/text/ui font groups from the supplied FontFamilyCatalog, not the live system fonts" in {
+    val config = AppConfig.default
+    val stubCatalog = FontLoader.FontFamilyCatalog(
+      monospace = List("Stub Mono One", "Stub Mono Two"),
+      text = List("Stub Text One", "Stub Text Two"),
+      ui = List("Stub Ui One", "Stub Ui Two")
+    )
+    val groups = CommandRunnerSettingsGroups.build(
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      uiPresetPreviews = Nil,
+      editingPresetName = None,
+      fontFamilies = stubCatalog
+    )
+
+    def familyLabels(groupId: String): List[String] =
+      groupById(groups, groupId).children.collect { case CommandSurfaceItem.CommandItem(command) => command.label }
+
+    familyLabels("code-font") shouldBe stubCatalog.monospace
+    familyLabels("text-font") shouldBe stubCatalog.text
+    familyLabels("ui-font") shouldBe stubCatalog.ui
   }
 
   it should "group preset theme controls by theme and surface material" in {

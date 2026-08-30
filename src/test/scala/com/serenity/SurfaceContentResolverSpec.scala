@@ -676,8 +676,20 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
   it should "render root search text and filtered language command results" in {
     val registry          = CommandRegistry(CommandRegistry.default.getAllCommands.filter(_.name.startsWith("lang-")))
     given CommandRegistry = registry
+    // Windows Desktop Publish release-blocker: `updateSearchTerm` searches the settings tree unconditionally (it
+    // isn't scoped by `registry` -- settings live outside CommandRegistry entirely, see CommandRunner.visibleItems),
+    // and that tree's font-family groups are built from whatever fonts are actually installed on the machine running
+    // this test. A real font whose family name happens to contain the search term below (Windows CI ships
+    // "Javanese Text") would otherwise leak two spurious rows into the assertion. A deterministic FontFamilyCatalog
+    // keeps this test's outcome independent of the host's installed fonts.
+    val deterministicFontFamilies = FontLoader.FontFamilyCatalog(
+      monospace = List("Deterministic Test Mono"),
+      text = List("Deterministic Test Sans"),
+      ui = List("Deterministic Test Sans")
+    )
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
+      .copy(fontFamilies = deterministicFontFamilies)
       .updateSearchTerm("java")
 
     val floating = SurfaceContentResolver.resolve(

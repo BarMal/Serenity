@@ -4,6 +4,7 @@ import java.util.Locale
 
 import com.serenity.config.*
 import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
 /** In-flight keybinding recording for a settings item, and any conflict it surfaced.
@@ -178,7 +179,11 @@ final case class CommandRunner(
     // Never carried by `config` (see `AppState.Runtime.keyboardFidelityTier`'s doc) -- callers pass it separately from
     // `state.runtime.keyboardFidelityTier`, mirroring `isTuiMode` above, so `CommandRunnerReducer.assignRecordedBinding`
     // can warn when a just-recorded binding can't actually fire at the currently negotiated tier (issue #1194).
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    // Defaults to real installed fonts (`FontLoader.FontFamilyCatalog.system`); tests that search the settings tree
+    // override this with a deterministic catalog so results don't depend on what's installed on the machine running
+    // them -- see `FontLoader.FontFamilyCatalog`'s doc.
+    fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system
 ):
 
   def isSettingsSurface: Boolean = surface match
@@ -277,7 +282,8 @@ final case class CommandRunner(
       inputItems = inputItems,
       uiPresetPreviews = uiPresetPreviews,
       editingPresetName = editingPresetName,
-      isTuiMode = isTuiMode
+      isTuiMode = isTuiMode,
+      fontFamilies = fontFamilies
     )
 
   def openSettings: CommandRunner =

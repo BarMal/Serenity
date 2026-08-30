@@ -38,6 +38,14 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
     families should contain(Font.SANS_SERIF)
   }
 
+  it should "build FontFamilyCatalog.system from the live monospace/text/ui family lists" in {
+    val catalog = FontLoader.FontFamilyCatalog.system
+
+    catalog.monospace shouldBe FontLoader.availableMonospaceFamilies
+    catalog.text shouldBe FontLoader.availableTextFamilies
+    catalog.ui shouldBe FontLoader.availableUiFamilies
+  }
+
   it should "load the configured code font family" in {
     val config = FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, fontSize = 12.0f)
     val font   = FontLoader.loadCodeFont(config).unsafeRunSync()

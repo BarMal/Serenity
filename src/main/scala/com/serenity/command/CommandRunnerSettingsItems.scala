@@ -941,34 +941,43 @@ object CommandRunnerSettingsItems:
       .distinctBy(_.name.toLowerCase)
       .sortBy(_.name.toLowerCase)
 
-  private[command] def codeFontGroupItem(optionSelections: Map[String, Int]): CommandSurfaceItem.GroupItem =
+  private[command] def codeFontGroupItem(
+    optionSelections: Map[String, Int],
+    availableFamilies: List[String] = FontLoader.availableMonospaceFamilies
+  ): CommandSurfaceItem.GroupItem =
     fontFamilyGroupItem(
       id = "code-font",
       label = "Code Font",
       selectedIndex = optionSelections.getOrElse("code-font", 0),
-      families = FontLoader.availableMonospaceFamilies,
+      families = availableFamilies,
       intent =
         commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetCodeFontFamily(commandIntentArg))),
       hint = "Used in code buffers"
     )
 
-  private[command] def textFontGroupItem(optionSelections: Map[String, Int]): CommandSurfaceItem.GroupItem =
+  private[command] def textFontGroupItem(
+    optionSelections: Map[String, Int],
+    availableFamilies: List[String] = FontLoader.availableTextFamilies
+  ): CommandSurfaceItem.GroupItem =
     fontFamilyGroupItem(
       id = "text-font",
       label = "Text Font",
       selectedIndex = optionSelections.getOrElse("text-font", 0),
-      families = FontLoader.availableTextFamilies,
+      families = availableFamilies,
       intent =
         commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontFamily(commandIntentArg))),
       hint = "Used in prose buffers"
     )
 
-  private[command] def uiFontGroupItem(optionSelections: Map[String, Int]): CommandSurfaceItem.GroupItem =
+  private[command] def uiFontGroupItem(
+    optionSelections: Map[String, Int],
+    availableFamilies: List[String] = FontLoader.availableUiFamilies
+  ): CommandSurfaceItem.GroupItem =
     fontFamilyGroupItem(
       id = "ui-font",
       label = "UI Font",
       selectedIndex = optionSelections.getOrElse("ui-font", 0),
-      families = FontLoader.availableUiFamilies,
+      families = availableFamilies,
       intent =
         commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiFontFamily(commandIntentArg))),
       hint = "Used in the app interface"

@@ -1,5 +1,6 @@
 package com.serenity.command
 
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
 /** Builds command-runner settings groups from schema rows and current option selections. */
@@ -16,7 +17,12 @@ object CommandRunnerSettingsGroups:
     inputItems: List[CommandSurfaceItem.InputItem],
     uiPresetPreviews: List[UiPreset.Preview],
     editingPresetName: Option[String],
-    isTuiMode: Boolean = false
+    isTuiMode: Boolean = false,
+    // Defaults to whatever's actually installed on the running machine; tests that search this tree pass a
+    // deterministic catalog instead so the result doesn't depend on the host's installed fonts (issue: Windows
+    // Desktop Publish release-blocker -- a Windows-only font whose family name happened to contain a search term
+    // used in a settings-search test).
+    fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system
   ): List[CommandSurfaceItem.GroupItem] =
     val cursorModeItem          = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
     val cursorInfoBarItem       = CommandRunnerSettingsItems.cursorInfoBarOptionItem(optionSelections)
@@ -171,7 +177,7 @@ object CommandRunnerSettingsGroups:
       id = "settings-code-font",
       label = "Code Font",
       children = List(
-        CommandRunnerSettingsItems.codeFontGroupItem(optionSelections),
+        CommandRunnerSettingsItems.codeFontGroupItem(optionSelections, fontFamilies.monospace),
         CommandRunnerSettingsItems.codeLigaturesOptionItem(optionSelections)
       ) ++ inputItems.filter(_.id == "code-font-size"),
       category = CommandCategory.Settings,
@@ -181,7 +187,7 @@ object CommandRunnerSettingsGroups:
       id = "settings-prose-font",
       label = "Prose Font",
       children = List(
-        CommandRunnerSettingsItems.textFontGroupItem(optionSelections),
+        CommandRunnerSettingsItems.textFontGroupItem(optionSelections, fontFamilies.text),
         CommandRunnerSettingsItems.textLigaturesOptionItem(optionSelections)
       ) ++ inputItems.filter(_.id == "text-font-size"),
       category = CommandCategory.Settings,
@@ -198,7 +204,7 @@ object CommandRunnerSettingsGroups:
       id = "settings-ui-font",
       label = "UI Font",
       children = List(
-        CommandRunnerSettingsItems.uiFontGroupItem(optionSelections),
+        CommandRunnerSettingsItems.uiFontGroupItem(optionSelections, fontFamilies.ui),
         CommandRunnerSettingsItems.uiLigaturesOptionItem(optionSelections)
       ) ++ inputItems.filter(_.id == "ui-font-size"),
       category = CommandCategory.Settings,
