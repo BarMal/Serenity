@@ -130,24 +130,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "describe category navigation and group opening in browse-mode footer help" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
-      .withSelectedItem("settings-workspace-layout")
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
-      LayoutRect(0, 0, 60, 10),
-      SurfaceRenderMode.Floating
-    )
-
-    resolved.footer.map(_.plainText) shouldBe Some(
-      s"↑↓ navigate • Tab categories • Enter open • Esc dismiss • ${runner.selectedIndex + 1}/${runner.visibleItems.length}"
-    )
-  }
+  // issue #931: category tabs are retired, along with browsing settings groups at the palette root by switching
+  // category -- this test's whole subject (a "Tab categories"/"Enter open" footer for that browse mode) no longer
+  // exists. Browsing settings groups without a search now goes through `resolveSettingsSurface` (`.openSettings`),
+  // covered by "should render nested submenu headers as breadcrumbs" and friends below.
 
   it should "resolve context menus into a selected command list" in {
     val save = Command.typed("save", "Save file", CommandIntent.File(FileIntent.SaveCurrentFile), label = "Save")
@@ -225,35 +211,12 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows.head.cursorColumn shouldBe Some("Review this value".length)
   }
 
-  it should "resolve browse mode into distributed category tabs and grouped settings rows without bracket markers" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
-      .withSelectedItem("settings-workspace-layout")
-
-    val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
-      LayoutRect(0, 0, 60, 10),
-      SurfaceRenderMode.Floating
-    )
-
-    val header = floating.header.getOrElse(fail("Expected category header"))
-    header.layout shouldBe OverlayRowLayout.Distributed
-    header.segments.map(_.text) shouldBe List("All", "File", "View", "Edit", "Project", "Settings")
-    header.segments.count(_.selected) shouldBe 1
-    header.segments.find(_.selected).map(_.text) shouldBe Some("Settings")
-
-    val optionRow = floating.rows.headOption.getOrElse(fail("Expected panels and workspace group row"))
-    optionRow.layout shouldBe OverlayRowLayout.Columns
-    optionRow.plainText shouldBe "Panels & Workspace"
-    optionRow.plainText should not include "["
-    optionRow.segments should have size 2
-    optionRow.segments.head.text shouldBe "Panels & Workspace"
-    optionRow.segments(1).text shouldBe "Pin, focus, expand, and unpin panels"
-    optionRow.segments(1).tone shouldBe OverlayTone.Normal
-  }
+  // issue #931: category tabs are retired -- the distributed tab row this asserted on doesn't exist any more (the
+  // header is always the live search box, `resolveCommandPalette`'s `Palette` branch). Browsing settings groups
+  // without a search still renders `Columns`-layout group rows with no bracket markers, unchanged -- just through
+  // `resolveSettingsSurface` (`.openSettings`) instead of the palette's old Settings category tab; see "should
+  // render nested submenu headers as breadcrumbs" and the other `resolveSettingsSurface` tests below for that
+  // coverage.
 
   it should "render direct settings search result rows with effective values and source scopes" in {
     val registry          = CommandRegistry.default
@@ -285,9 +248,9 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        activeCategory = CommandCategory.Settings,
         optionSelections = Map("interface-density" -> 1),
-        activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-interface-layout")))
+        surface = CommandRunnerSurface
+          .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-interface-layout"))))
       )
 
     val row = SurfaceContentResolver
@@ -310,11 +273,12 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        activeCategory = CommandCategory.Settings,
-        activeSettingsSurface = Some(
-          SettingsSurfaceState(
-            SettingsPage.Group("settings-preset-fonts"),
-            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+        surface = CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Group("settings-preset-fonts"),
+              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+            )
           )
         )
       )
@@ -335,11 +299,12 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        activeCategory = CommandCategory.Settings,
-        activeSettingsSurface = Some(
-          SettingsSurfaceState(
-            SettingsPage.Group("settings-preset-fonts"),
-            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+        surface = CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Group("settings-preset-fonts"),
+              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+            )
           )
         )
       )
@@ -360,15 +325,19 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.footer.map(_.plainText) shouldBe Some("Navigate • Open • Back • Dismiss • 1/3")
   }
 
-  it should "resolve preset theme submenu as grouped theme and surface rows" in {
+  // issue #1057: this used to also show a "Theme Selection" row -- Theme Chooser/Creator/Toggle/Reload were one-shot
+  // actions with no preset-scoped value of their own, so they are ordinary CommandRegistry commands now, not part
+  // of this settings subtree; only Surface Material remains.
+  it should "resolve preset theme submenu as a single surface material row" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        activeCategory = CommandCategory.Settings,
-        activeSettingsSurface = Some(
-          SettingsSurfaceState(
-            SettingsPage.Group("settings-preset-theme"),
-            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+        surface = CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Group("settings-preset-theme"),
+              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+            )
           )
         )
       )
@@ -380,23 +349,23 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     val groupRows = resolved.rows.filter(_.leadingPadding == 0)
-    groupRows.map(_.plainText) shouldBe List("Theme Selection", "Surface Material")
+    groupRows.map(_.plainText) shouldBe List("Surface Material")
     groupRows.map(_.segments.map(_.text)) shouldBe List(
-      List("Theme Selection", "Choose, create, toggle, or reload themes"),
       List("Surface Material", "Background, material, and blur")
     )
-    resolved.footer.map(_.plainText) shouldBe Some("Navigate • Open • Back • Dismiss • 1/2")
+    resolved.footer.map(_.plainText) shouldBe Some("Navigate • Open • Back • Dismiss • 1/1")
   }
 
   it should "resolve preset document defaults submenu as grouped document, preview, and spelling rows" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        activeCategory = CommandCategory.Settings,
-        activeSettingsSurface = Some(
-          SettingsSurfaceState(
-            SettingsPage.Group("settings-preset-document-defaults"),
-            List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+        surface = CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Group("settings-preset-document-defaults"),
+              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+            )
           )
         )
       )
@@ -425,8 +394,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
-        activeCategory = CommandCategory.Settings,
-        activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1)))
+        surface = CommandRunnerSurface
+          .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
       )
 
     val resolved = SurfaceContentResolver.resolve(
@@ -469,11 +438,15 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.footer.map(_.plainText) shouldBe Some("Invalid binding: ctrl")
   }
 
-  it should "scroll long submenus so the selected language stays visible" in {
-    val registry = CommandRegistry.default
+  // issue #1057: buffer-language switchers are ordinary CommandRegistry commands now (not a "settings-language"
+  // settings group), so this exercises the same long-list scroll-windowing mechanics through the palette's root
+  // rendering path instead -- a registry scoped to just the language commands keeps the fixture (and its literal
+  // row/footer text) otherwise identical to before.
+  it should "scroll a long root command list so the selected language stays visible" in {
+    val registry = CommandRegistry(CommandRegistry.default.getAllCommands.filter(_.name.startsWith("lang-")))
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-language", 10))))
+      .withSelectedVisibleIndex(10)
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -491,7 +464,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.rows.find(_.selected).map(_.plainText) shouldBe Some(
       "JavaScript - Use JavaScript mode for the current buffer."
     )
-    floating.footer.map(_.plainText) shouldBe Some("Navigate • Run • Back • Dismiss • 11/23")
+    floating.footer.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss • 11/23")
   }
 
   it should "derive command runner visible rows from the framed surface content contract" in {
@@ -554,7 +527,10 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
+      .copy(surface =
+        CommandRunnerSurface
+          .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
+      )
     val items        = runner.submenuItems("settings-ui-presets")
     val preview      = SettingsSurfaceState.previewRows(items, 1)
     val previewCount = preview.rows.size + (if preview.overflowCount > 0 then 1 else 0)
@@ -582,11 +558,14 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     floating.footer shouldBe defined
   }
 
-  it should "render focused submenu search text and filtered results" in {
-    val registry = CommandRegistry.default
+  // issue #1057/#931: same rationale as the scroll test above -- a language-only registry drives the palette's
+  // root search-rendering path (category tabs retired, so the header is always the live search box).
+  it should "render root search text and filtered language command results" in {
+    val registry          = CommandRegistry(CommandRegistry.default.getAllCommands.filter(_.name.startsWith("lang-")))
+    given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-language", 0, "java"))))
+      .updateSearchTerm("java")
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),
@@ -594,20 +573,24 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Floating
     )
 
-    floating.header.map(_.plainText) shouldBe Some("Settings > Current Buffer Language search: java")
+    floating.header.map(_.plainText) shouldBe Some("search: java")
+    // Every result here is CommandCategory.Settings, so each carries the quiet inline category tag search results
+    // get once category tabs are gone (issue #931) -- "[Settings] " prefixes every row.
     floating.rows.map(_.plainText) shouldBe List(
-      "Java - Use Java mode for the current buffer.",
-      "JavaScript - Use JavaScript mode for the current buffer."
+      "[Settings] Java - Use Java mode for the current buffer.",
+      "[Settings] JavaScript - Use JavaScript mode for the current buffer."
     )
     floating.rows.headOption.map(_.selected) shouldBe Some(true)
-    floating.footer.map(_.plainText) shouldBe Some("Navigate • Run • Back • Dismiss • 1/2")
+    floating.footer.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss • 1/2")
   }
 
   it should "mark font submenu labels with their preview font family" in {
     val family = FontLoader.availableTextFamilies.head
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("text-font"))))
+      .copy(surface =
+        CommandRunnerSurface.Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("text-font"))))
+      )
 
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),

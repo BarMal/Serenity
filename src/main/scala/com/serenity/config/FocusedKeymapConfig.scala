@@ -159,8 +159,6 @@ enum CommandRunnerKeyAction extends KeymapEventAction[CommandRunnerEvent]:
   case DeleteForward
   case DeleteWordBackward
   case DeleteWordForward
-  case NextCategory
-  case PreviousCategory
   case Submit
   case Dismiss
 
@@ -174,8 +172,6 @@ enum CommandRunnerKeyAction extends KeymapEventAction[CommandRunnerEvent]:
       case DeleteForward      => RunnerDeleteForward
       case DeleteWordBackward => RunnerDeleteWordBackward
       case DeleteWordForward  => RunnerDeleteWordForward
-      case NextCategory       => RunnerNextCategory
-      case PreviousCategory   => RunnerPreviousCategory
       case Submit             => RunnerSubmit
       case Dismiss            => RunnerDismiss
 
@@ -203,10 +199,6 @@ object CommandRunnerKeyAction:
     ),
     CommandRunnerKeyAction.DeleteWordForward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Ctrl))
-    ),
-    CommandRunnerKeyAction.NextCategory -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Tab, None, Set.empty)),
-    CommandRunnerKeyAction.PreviousCategory -> List(
-      HotkeyTrigger(com.serenity.keystroke.InputKey.ReverseTab, None, Set.empty)
     ),
     CommandRunnerKeyAction.Submit  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
     CommandRunnerKeyAction.Dismiss -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty))

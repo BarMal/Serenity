@@ -139,18 +139,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     closed.state.persisted.focus shouldBe Focus.EditorPane(PaneId(2))
   }
 
-  it should "select a category directly from palette interaction" in {
-    val registry = CommandRegistry.default
-    val state    = activeState(registry)
-
-    val selected = CommandRunnerReducer.reduce(RunnerSelectCategory(CommandCategory.File), state, registry)
-    val runner = selected.state.commandRunnerSurface
-      .collect { case UiSurface(_, SurfaceContent.CommandPalette(value), _, _) => value }
-      .getOrElse(fail("missing command runner"))
-
-    runner.activeCategory shouldBe CommandCategory.File
-    runner.filteredCommands.map(_.category).distinct shouldBe List(CommandCategory.File)
-  }
+  // issue #931: category tabs -- and the `RunnerSelectCategory` event only they ever produced -- are retired outright;
+  // there is nothing left for this test to exercise (see `CommandRunnerOneShotActionsSpec`/the PR notes for the
+  // broader cleanup).
 
   it should "delete the previous word from the search term" in {
     val registry = CommandRegistry.default
@@ -178,11 +169,9 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
     val items    = base.submenuItems("settings-keymap")
-    val runner = base.copy(
-      activeSettingsSurface = Some(
-        SettingsSurfaceState(
-          SettingsPage.Group("settings-keymap", items.indexWhere(_.id == "keymap-global-find"))
-        )
+    val runner = base.withDrilledSettingsSurface(
+      SettingsSurfaceState(
+        SettingsPage.Group("settings-keymap", items.indexWhere(_.id == "keymap-global-find"))
       )
     )
     val activated = activeState(registry)
@@ -208,15 +197,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "assign a recorded key and submit its setting intent" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val runner = base.copy(
-      activeSettingsSurface = Some(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(RecordingState("keymap-global-find"))
-          )
+    val runner = base.withDrilledSettingsSurface(
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(RecordingState("keymap-global-find"))
         )
       )
     )
@@ -269,15 +256,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "assign a modifier double tap when the matching second stroke arrives within 200ms" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val runner = base.copy(
-      activeSettingsSurface = Some(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(RecordingState("keymap-global-find"))
-          )
+    val runner = base.withDrilledSettingsSurface(
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(RecordingState("keymap-global-find"))
         )
       )
     )
@@ -317,18 +302,16 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "finalize a pending single key after the double-tap window expires" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val runner = base.copy(
-      activeSettingsSurface = Some(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(
-              RecordingState(
-                "keymap-global-find",
-                pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty) -> 1_000L)
-              )
+    val runner = base.withDrilledSettingsSurface(
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(
+            RecordingState(
+              "keymap-global-find",
+              pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty) -> 1_000L)
             )
           )
         )
@@ -371,15 +354,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val base = CommandRunner.empty
       .activate(registry, AppConfig.default, isTuiMode = isTuiMode, keyboardFidelityTier = keyboardFidelityTier)
       .openSettings
-    val runner = base.copy(
-      activeSettingsSurface = Some(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(RecordingState("keymap-global-find"))
-          )
+    val runner = base.withDrilledSettingsSurface(
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(RecordingState("keymap-global-find"))
         )
       )
     )
@@ -466,18 +447,16 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   it should "ignore an expiry event for a replaced pending recording" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val runner = base.copy(
-      activeSettingsSurface = Some(
-        SettingsSurfaceState(
-          SettingsPage.Editing(
-            groupId = "settings-keymap",
-            itemId = "keymap-global-find",
-            draftText = "",
-            recording = Some(
-              RecordingState(
-                "keymap-global-find",
-                pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('j'), Set.empty) -> 2_000L)
-              )
+    val runner = base.withDrilledSettingsSurface(
+      SettingsSurfaceState(
+        SettingsPage.Editing(
+          groupId = "settings-keymap",
+          itemId = "keymap-global-find",
+          draftText = "",
+          recording = Some(
+            RecordingState(
+              "keymap-global-find",
+              pendingRecordedBinding = Some(KeyStrokeInfo(InputKey.Character, Some('j'), Set.empty) -> 2_000L)
             )
           )
         )
@@ -503,60 +482,20 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     result.effects shouldBe Nil
   }
 
-  it should "switch categories with tab and reverse-tab while search is empty" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val state             = activeState(registry)
+  // issue #931: category tabs -- and the `activeCategory` field they drove -- are retired outright; Tab/Shift+Tab
+  // translate to nothing for the command runner now (`SurfaceInputTranslationSpec` covers that), so there is nothing
+  // left here to exercise.
 
-    val movedRight = CommandRunnerReducer.reduce(TabKey, state, registry)
-    val runnerAfterRight = movedRight.state.commandRunnerSurface
-      .flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(runner) => Some(runner)
-          case _                                     => None
-      }
-      .getOrElse(fail("Expected command runner surface"))
-
-    runnerAfterRight.activeCategory shouldBe CommandCategory.File
-
-    val movedLeft = CommandRunnerReducer.reduce(ReverseTabKey, movedRight.state, registry)
-    val runnerAfterLeft = movedLeft.state.commandRunnerSurface
-      .flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(runner) => Some(runner)
-          case _                                     => None
-      }
-      .getOrElse(fail("Expected command runner surface"))
-
-    runnerAfterLeft.activeCategory shouldBe CommandCategory.All
-  }
-
-  it should "leave the category unchanged when left and right are pressed on non-option rows" in {
+  it should "leave the state unchanged when left and right are pressed on non-option rows" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val state             = activeState(registry)
 
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), state, registry)
-    val runnerAfterRight = movedRight.state.commandRunnerSurface
-      .flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(runner) => Some(runner)
-          case _                                     => None
-      }
-      .getOrElse(fail("Expected command runner surface"))
-
-    runnerAfterRight.activeCategory shouldBe CommandCategory.All
+    movedRight.state shouldBe state
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
-    val runnerAfterLeft = movedLeft.state.commandRunnerSurface
-      .flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(runner) => Some(runner)
-          case _                                     => None
-      }
-      .getOrElse(fail("Expected command runner surface"))
-
-    runnerAfterLeft.activeCategory shouldBe CommandCategory.All
+    movedLeft.state shouldBe state
   }
 
   it should "open the exact settings leaf selected from search" in {
@@ -643,12 +582,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     openedRunner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("ui-preset-overwrite")
   }
 
-  it should "search globally even when opened on a narrower category" in {
+  // issue #931: category tabs are retired -- there is no category left to narrow by, so search is unconditionally
+  // global now (this was already true once typing began, before this migration; it's simply the only behavior left).
+  it should "search globally" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.File)
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -726,8 +666,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     // about the navigation path to reach it.
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
-      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance"))))
+      .openSettings
+      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance")))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -776,8 +716,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     // same note on the background-style test above.
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
-      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-interface-layout"))))
+      .openSettings
+      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-interface-layout")))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -807,12 +747,14 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   // issue #1059: a hovered-but-not-entered expandable settings row used to preview its children on a second floating
   // surface without moving focus. It previews inline in the same list now (SurfaceContentResolver's capped,
   // expand-in-place group preview) -- still without moving focus, but with no second surface at all.
+  // issue #931: category tabs are retired -- browsing settings groups with no search now only happens via the
+  // dedicated Settings surface (`.openSettings`), not by switching the palette's category.
   it should "preview an expandable settings row's children inline without moving focus" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
+      .openSettings
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -852,12 +794,13 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   // issue #1059: entering a settings group used to move focus to a second floating submenu surface; it now stays on
   // the one command-runner surface throughout (activeSettingsSurface is the signal, not a focus/surface change), and
   // Escape pops back out rather than "returning to a parent surface" that no longer exists.
+  // issue #931: category tabs are retired -- see the previous test's note on `.openSettings`.
   it should "enter the settings group on submit and pop back out on escape, staying on the one surface" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
+      .openSettings
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -920,41 +863,54 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("animation-steps")
   }
 
+  // issue #1057: this used to filter within the (now-removed) "settings-language" group. The underlying mechanism --
+  // typing filters a submenu's focused CommandItems, and submitting the (now singleton) filtered selection executes
+  // it -- is generic to any submenu of CommandItems, so this retargets to "ui-font"'s font-family group (still real,
+  // still present) instead, deriving the expected filtered content from the actual family list rather than
+  // hardcoding font names (which are environment-dependent).
   it should "filter focused submenu items while typing and submit the filtered selection" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-language", "lang-plain-text")
-
-    val searched = List('j', 'a', 'v', 'a').foldLeft(state) { (s, char) =>
-      CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state
+    val entered =
+      CommandRunnerReducer.reduce(RunnerSubmit, settingsStateOnItem("settings-ui-font", "ui-font"), registry).state
+    val allFamilies = runnerFrom(entered).focusedSubmenuItems.collect {
+      case CommandSurfaceItem.CommandItem(command) => command
     }
+    val firstFamily = allFamilies.headOption.getOrElse(fail("no UI font families available"))
+    val needle      = firstFamily.label.take(2)
+
+    val searched =
+      needle.foldLeft(entered)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)
     val runner = runnerFrom(searched)
 
-    runner.activeSubmenuSearchTerm shouldBe Some("java")
-    runner.focusedSubmenuItems.collect { case CommandSurfaceItem.CommandItem(command) => command.label } shouldBe List(
-      "Java",
-      "JavaScript"
-    )
+    runner.activeSubmenuSearchTerm shouldBe Some(needle)
+    val filtered = runner.focusedSubmenuItems.collect { case CommandSurfaceItem.CommandItem(command) => command }
+    filtered should not be empty
+    filtered.foreach(_.label.toLowerCase should include(needle.toLowerCase))
+    filtered.head shouldBe firstFamily
 
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry)
     submitted.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.File(FileIntent.SetBufferLanguage(Some(com.serenity.lsp.config.LanguageId.Java)))
+      firstFamily.intent
     )
   }
 
+  // issue #1057/#931: "settings-language" is gone and category-switching no longer affects what's shown (category
+  // tabs are retired), so this now searches straight from a fresh palette -- text search alone reaches settings
+  // regardless of any prior category, which is the whole point of #931's "fold into text search". "accessibility"
+  // exact-matches the still-present "Accessibility" settings group by label -- "markdown" was tried first, but
+  // collides with the newly-registered "lang-markdown" command's own label ("Markdown"), which now wins the exact
+  // match instead.
   it should "open an exact single-word setting search at its target" in {
     val registry = CommandRegistry.default
-    val settingsState = (1 to 5).foldLeft(activeState(registry)) { (state, _) =>
-      CommandRunnerReducer.reduce(RunnerNextCategory, state, registry).state
-    }
-    val searched = "markdown".foldLeft(settingsState) { (state, char) =>
+    val searched = "accessibility".foldLeft(activeState(registry)) { (state, char) =>
       CommandRunnerReducer.reduce(RunnerInsertChar(char), state, registry).state
     }
 
     val opened = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry)
     val runner = runnerFrom(opened.state)
 
-    runner.activeSubmenuGroupId shouldBe Some("settings-language")
-    runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("lang-markdown")
+    runner.activeSubmenuGroupId shouldBe Some("settings-accessibility")
+    runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("motion-accessibility")
     runner.activeSubmenuSearchTerm shouldBe Some("")
   }
 
@@ -1056,9 +1012,12 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runnerFrom(result.state).activeSettingsSurface shouldBe before
   }
 
+  // issue #1057: "settings-language" is gone -- retargeted to "settings-cursor", another still-present group; this
+  // mechanism (delete one character of the submenu's search text) is generic to any group's search box, independent
+  // of what's in it.
   it should "delete a character from the submenu search term via backspace, never navigating up" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-language", "lang-plain-text")
+    val state    = settingsStateOnItem("settings-cursor", "cursor-mode")
     val searched = List('j', 'a', 'v').foldLeft(state) { (s, char) =>
       CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state
     }
@@ -1068,7 +1027,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val runner         = runnerFrom(afterBackspace.state)
 
     runner.activeSubmenuSearchTerm shouldBe Some("ja")
-    runner.activeSubmenuGroupId shouldBe Some("settings-language")
+    runner.activeSubmenuGroupId shouldBe Some("settings-cursor")
   }
 
   it should "preserve preset submenu ancestry when entering a nested settings group from search results" in {
@@ -1076,7 +1035,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val searchedRunner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
+      .openSettings
       .updateSearchTerm("fonts")
     val runner = searchedRunner.withSelectedItem("settings-preset-fonts")
     val surface = UiSurface(
@@ -1141,9 +1100,10 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("ui-outline-thickness")
   }
 
+  // issue #1057: "settings-language" is gone -- retargeted to "settings-cursor" (see the backspace test above).
   it should "clear submenu search with escape before leaving the submenu" in {
     val registry = CommandRegistry.default
-    val searched = List('j', 'a').foldLeft(settingsStateOnItem("settings-language", "lang-plain-text")) { (s, char) =>
+    val searched = List('j', 'a').foldLeft(settingsStateOnItem("settings-cursor", "cursor-mode")) { (s, char) =>
       CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state
     }
 
@@ -1185,12 +1145,12 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       else config
     val searchedRunner = CommandRunner.empty
       .activate(registry, effectiveConfig)
-      .withActiveCategory(CommandCategory.Settings)
+      .openSettings
       .updateSearchTerm(settingsGroupSearchTerm(groupId))
     val selectedIndex = searchedRunner.visibleItems.indexWhere(_.id == groupId) match
       case -1    => 0
       case index => index
-    val baseRunner = searchedRunner.copy(selectedIndex = selectedIndex)
+    val baseRunner = searchedRunner.withSelectedVisibleIndex(selectedIndex)
     val group      = baseRunner.submenuGroup(groupId).getOrElse(fail(s"missing settings group $groupId"))
     val groupIndex =
       group.children.indexWhere(_.id == itemId) match
@@ -1199,7 +1159,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     // issue #1059: a drilled-in settings group renders on the one command-runner surface now -- no more second
     // floating submenu surface or a separate focus target for it.
     val runner = baseRunner.enterSelectedGroup
-      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group(groupId, groupIndex))))
+      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group(groupId, groupIndex)))
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),

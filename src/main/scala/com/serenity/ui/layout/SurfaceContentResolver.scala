@@ -362,89 +362,90 @@ object SurfaceContentResolver:
     itemGapRows: Double,
     itemTargetRows: Int
   ): ResolvedSurfaceContent =
-    if runner.isSettingsSurface then resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows)
-    else if !runner.isActive then ResolvedSurfaceContent(titleFor(mode, "commands"))
-    else if runner.activeSettingsSurface.isDefined then
-      // Drilled into a settings group from the palette's Settings tab -- `activeSettingsSurface` only ever holds
-      // settings navigation, so this renders through the same single-list resolver as the dedicated Settings
-      // surface rather than a second floating surface (issue #1059: "one consistent settings experience regardless
-      // of entry point").
-      resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows)
-    else
-      val header =
-        if runner.searchTerm.isEmpty then Some(categoryTabs(runner.activeCategory))
-        else
-          Some(
-            OverlayRow(
-              plainText = s"search: ${runner.searchTerm}",
-              cursorColumn = Some(s"search: ${runner.searchTerm}".length)
-            )
+    // Dispatch on `CommandRunnerSurface` (issue #931, Stage 2) rather than `isSettingsSurface`/
+    // `activeSettingsSurface.isDefined` directly -- `Settings(_)` covers both entry points exactly as those two
+    // conditions did (issue #1059: "one consistent settings experience regardless of entry point"), and is checked
+    // first regardless of `isActive`, preserving this resolver's existing precedence (a settings-mode runner that
+    // has since been deactivated still renders through `resolveSettingsSurface`, not the inactive placeholder below).
+    runner.surface match
+      case _: com.serenity.command.CommandRunnerSurface.Settings =>
+        resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows)
+      case com.serenity.command.CommandRunnerSurface.Palette(_) if !runner.isActive =>
+        ResolvedSurfaceContent(titleFor(mode, "commands"))
+      case com.serenity.command.CommandRunnerSurface.Palette(paletteState) =>
+        // Category tabs are retired (issue #931): the header is always the live search box now, empty or not,
+        // rather than switching to a category-switcher row when there's nothing typed yet.
+        val header = Some(
+          OverlayRow(
+            plainText = s"search: ${paletteState.searchTerm}",
+            cursorColumn = Some(s"search: ${paletteState.searchTerm}".length)
           )
-
-      val allItems = runner.visibleItems
-      // Same capped, expand-in-place group preview as resolveSettingsSurface, for a settings group still sitting in
-      // this mixed list (browsing the Settings tab before drilling into any group) -- issue #1059.
-      val groupPreview = groupPreviewRows(SettingsSurfaceState.previewRows(allItems, runner.selectedIndex))
-      val itemWindow = SurfaceFrameLayout
-        .forContent(rect, SurfaceContent.CommandPalette(runner))
-        .itemWindow(
-          itemCount = allItems.size,
-          selectedIndex = runner.selectedIndex,
-          hasHeader = true,
-          hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty,
-          reservedContentRows = groupPreview.size,
-          itemGapRows = itemGapRows,
-          itemTargetRows = itemTargetRows
         )
-      val windowItems           = itemWindow.slice(allItems)
-      val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
 
-      val rows = windowItems.zipWithIndex.flatMap {
-        case (item, index) =>
-          val selected = index == adjustedSelectedIndex
-          val row = item match
-            case CommandSurfaceItem.CommandItem(command) =>
-              val prefix =
-                if runner.searchTerm.isEmpty then ""
-                else s"[${categoryLabel(command.category)}] "
-              commandRow(command, selected, prefix, runner.bindingFor(command))
-            case option: CommandSurfaceItem.OptionItem =>
-              optionRow(option, selected)
-            case item: CommandSurfaceItem.InputItem =>
-              val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
-              inputRow(item, selected, editingText)
-            case item: CommandSurfaceItem.SettingSearchItem =>
-              settingSearchRow(item, selected)
-            case group: CommandSurfaceItem.GroupItem =>
-              val groupLabel =
-                if runner.searchTerm.nonEmpty then runner.settingsGroupBreadcrumbLabels(group.id).mkString(" > ")
-                else group.label
-              OverlayRow(
-                plainText = groupLabel,
-                selected = selected,
-                segments = List(
-                  OverlaySegment(groupLabel),
-                  OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Normal)
-                ).filterNot(_.text.isEmpty),
-                layout = OverlayRowLayout.Columns
-              )
-          if selected then row :: groupPreview else List(row)
-      }
-      val footer =
-        runner.statusMessage
-          .map(OverlayRow(_))
-          .orElse(
-            Option.when(allItems.nonEmpty)(
-              OverlayRow(commandPaletteFooter(runner, allItems.length))
-            )
+        val allItems = runner.visibleItems
+        // Same capped, expand-in-place group preview as resolveSettingsSurface, for a settings group still sitting
+        // in this mixed list (browsing the Settings tab before drilling into any group) -- issue #1059.
+        val groupPreview = groupPreviewRows(SettingsSurfaceState.previewRows(allItems, runner.selectedIndex))
+        val itemWindow = SurfaceFrameLayout
+          .forContent(rect, SurfaceContent.CommandPalette(runner))
+          .itemWindow(
+            itemCount = allItems.size,
+            selectedIndex = runner.selectedIndex,
+            hasHeader = true,
+            hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty,
+            reservedContentRows = groupPreview.size,
+            itemGapRows = itemGapRows,
+            itemTargetRows = itemTargetRows
           )
+        val windowItems           = itemWindow.slice(allItems)
+        val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
 
-      ResolvedSurfaceContent(
-        title = titleFor(mode, "commands"),
-        header = header,
-        rows = rows,
-        footer = footer
-      )
+        val rows = windowItems.zipWithIndex.flatMap {
+          case (item, index) =>
+            val selected = index == adjustedSelectedIndex
+            val row = item match
+              case CommandSurfaceItem.CommandItem(command) =>
+                val prefix =
+                  if runner.searchTerm.isEmpty then ""
+                  else s"[${categoryLabel(command.category)}] "
+                commandRow(command, selected, prefix, runner.bindingFor(command))
+              case option: CommandSurfaceItem.OptionItem =>
+                optionRow(option, selected)
+              case item: CommandSurfaceItem.InputItem =>
+                val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
+                inputRow(item, selected, editingText)
+              case item: CommandSurfaceItem.SettingSearchItem =>
+                settingSearchRow(item, selected)
+              case group: CommandSurfaceItem.GroupItem =>
+                val groupLabel =
+                  if runner.searchTerm.nonEmpty then runner.settingsGroupBreadcrumbLabels(group.id).mkString(" > ")
+                  else group.label
+                OverlayRow(
+                  plainText = groupLabel,
+                  selected = selected,
+                  segments = List(
+                    OverlaySegment(groupLabel),
+                    OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Normal)
+                  ).filterNot(_.text.isEmpty),
+                  layout = OverlayRowLayout.Columns
+                )
+            if selected then row :: groupPreview else List(row)
+        }
+        val footer =
+          runner.statusMessage
+            .map(OverlayRow(_))
+            .orElse(
+              Option.when(allItems.nonEmpty)(
+                OverlayRow(commandPaletteFooter(runner, allItems.length))
+              )
+            )
+
+        ResolvedSurfaceContent(
+          title = titleFor(mode, "commands"),
+          header = header,
+          rows = rows,
+          footer = footer
+        )
 
   private def resolveSettingsSurface(
     runner: com.serenity.command.CommandRunner,
@@ -557,12 +558,8 @@ object SurfaceContentResolver:
     val submitAction = runner.selectedItem match
       case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Enter open"
       case _                                                                                     => "Enter run"
-    val categoryAction = Option.when(runner.searchTerm.isEmpty)("Tab categories")
-    (List("↑↓ navigate") ++ categoryAction.toList ++ List(
-      submitAction,
-      "Esc dismiss",
-      s"${runner.selectedIndex + 1}/$itemCount"
-    ))
+    // Category tabs are retired (issue #931): no more "Tab categories" hint -- search is the only navigation mode.
+    List("↑↓ navigate", submitAction, "Esc dismiss", s"${runner.selectedIndex + 1}/$itemCount")
       .mkString(" • ")
 
   private def breadcrumbHeader(labels: List[String], searchTerm: Option[String]): OverlayRow =
@@ -586,26 +583,9 @@ object SurfaceContentResolver:
       segments = segments
     )
 
-  private def categoryTabs(activeCategory: CommandCategory): OverlayRow =
-    val categories = List(
-      CommandCategory.All,
-      CommandCategory.File,
-      CommandCategory.View,
-      CommandCategory.Edit,
-      CommandCategory.Project,
-      CommandCategory.Settings
-    )
-    OverlayRow(
-      plainText = categories.map(categoryLabel).mkString(" "),
-      segments = categories.map(category =>
-        OverlaySegment(
-          text = categoryLabel(category),
-          selected = category == activeCategory
-        )
-      ),
-      layout = OverlayRowLayout.Distributed
-    )
-
+  // issue #931: the tab-row renderer this fed (`categoryTabs`) is retired along with the category-switcher UI
+  // itself. `categoryLabel` survives -- it now only labels a search result's quiet inline category tag
+  // (`commandRow`'s `prefix`), not a clickable/switchable tab.
   private def categoryLabel(category: CommandCategory): String =
     category match
       case CommandCategory.All      => "All"

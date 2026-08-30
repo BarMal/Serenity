@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandCategory, CommandRunner}
+import com.serenity.command.CommandRunner
 import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
@@ -59,11 +59,13 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     val moves = (target - runner.selectedIndex + items.length) % items.length
     (1 to moves).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
 
-  private def moveToCategory(stateManager: StateManager, category: CommandCategory): Unit =
-    (1 to CommandCategory.values.length).foreach { _ =>
-      if currentRunner(stateManager).activeCategory != category then stateManager.applyEvent(TabKey).unsafeRunSync()
-    }
-    currentRunner(stateManager).activeCategory shouldBe category
+  /** Opens the dedicated Settings surface by running the "Open Settings" command -- the first item in a freshly opened,
+    * unsearched palette (issue #931: category tabs are retired, so switching to a "Settings category" no longer browses
+    * settings groups; `.openSettings` is the one remaining way to reach them without a search).
+    */
+  private def openSettingsViaCommand(stateManager: StateManager): Unit =
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    currentRunner(stateManager).isSettingsSurface shouldBe true
 
   // issue #1059: a drilled-in settings group renders on the one command-runner surface now, so there is no second
   // surface for focus to move to -- it stays on "command-runner" throughout.
@@ -71,7 +73,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    moveToCategory(stateManager, CommandCategory.Settings)
+    openSettingsViaCommand(stateManager)
     moveRootSelectionTo(stateManager, "settings-appearance-motion")
     stateManager.applyEvent(Enter).unsafeRunSync()
 
@@ -98,7 +100,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    (1 to 5).foreach(_ => stateManager.applyEvent(TabKey).unsafeRunSync())
+    openSettingsViaCommand(stateManager)
     (1 to 4).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
     moveSubmenuSelectionTo(stateManager, "settings-animation")

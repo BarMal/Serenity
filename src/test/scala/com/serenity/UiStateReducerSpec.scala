@@ -229,9 +229,9 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.CommandPalette(
         com.serenity.command.CommandRunner(
           isActive = true,
-          searchTerm = "open",
-          selectedIndex = 0,
-          filteredCommands = List.empty
+          surface = com.serenity.command.CommandRunnerSurface.Palette(
+            com.serenity.command.CommandPaletteState(searchTerm = "open")
+          )
         )
       ),
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)

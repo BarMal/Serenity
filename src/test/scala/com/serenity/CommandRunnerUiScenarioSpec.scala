@@ -131,15 +131,13 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
               keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
             )
             .openSettings
-          val runner = activated.copy(
-            activeSettingsSurface = Some(
-              SettingsSurfaceState(
-                SettingsPage.Editing(
-                  groupId = "settings-keymap",
-                  itemId = "keymap-global-find",
-                  draftText = "",
-                  recording = Some(RecordingState("keymap-global-find"))
-                )
+          val runner = activated.withDrilledSettingsSurface(
+            SettingsSurfaceState(
+              SettingsPage.Editing(
+                groupId = "settings-keymap",
+                itemId = "keymap-global-find",
+                draftText = "",
+                recording = Some(RecordingState("keymap-global-find"))
               )
             )
           )

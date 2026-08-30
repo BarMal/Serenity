@@ -1,6 +1,5 @@
 package com.serenity.keystroke.events
 
-import com.serenity.command.CommandCategory
 import com.serenity.keystroke.KeyStrokeInfo
 
 sealed trait CommandRunnerEvent
@@ -14,9 +13,6 @@ case object RunnerPaste                                                extends C
 final case class RunnerNavigate(direction: Direction)                  extends CommandRunnerEvent
 final case class RunnerSelectVisibleItem(index: Int)                   extends CommandRunnerEvent
 final case class RunnerSelectSubmenuItem(index: Int)                   extends CommandRunnerEvent
-final case class RunnerSelectCategory(category: CommandCategory)       extends CommandRunnerEvent
-case object RunnerNextCategory                                         extends CommandRunnerEvent
-case object RunnerPreviousCategory                                     extends CommandRunnerEvent
 case object RunnerSubmit                                               extends CommandRunnerEvent
 case object RunnerDismiss                                              extends CommandRunnerEvent
 final case class RunnerBindingRecordingExpired(recordedAtMillis: Long) extends CommandRunnerEvent
@@ -42,10 +38,12 @@ object CommandRunnerEvent:
         case FocusIntent.DeleteWordForward   => Some(RunnerDeleteWordForward)
         case FocusIntent.Paste               => Some(RunnerPaste)
         case FocusIntent.Navigate(direction) => Some(RunnerNavigate(direction))
-        case FocusIntent.NextGroup           => Some(RunnerNextCategory)
-        case FocusIntent.PreviousGroup       => Some(RunnerPreviousCategory)
-        case FocusIntent.Submit              => Some(RunnerSubmit)
-        case FocusIntent.Dismiss             => Some(RunnerDismiss)
+        // issue #931: category tabs are retired, so Tab/Shift+Tab (FocusIntent.NextGroup/PreviousGroup) no longer
+        // have anything to cycle while the command runner is focused.
+        case FocusIntent.NextGroup     => None
+        case FocusIntent.PreviousGroup => None
+        case FocusIntent.Submit        => Some(RunnerSubmit)
+        case FocusIntent.Dismiss       => Some(RunnerDismiss)
 
   def fromEvent(event: Event): Option[CommandRunnerEvent] =
     event match

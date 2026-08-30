@@ -116,13 +116,14 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     // Simulate the underlying item list changing so the edited item ("blur-radius") is no longer present -- this
     // isolates normalizeSubmenuEditMode's own reconciliation from moveSubmenuSelection (which already clears edit
     // state itself and so can't be used to set this up).
-    val stale = editing.copy(
-      activeSettingsSurface = editing.activeSettingsSurface.map(surface =>
-        surface.copy(current =
-          SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "no-such-item", draftText = "")
+    val stale = editing.activeSettingsSurface match
+      case Some(surface) =>
+        editing.withDrilledSettingsSurface(
+          surface.copy(current =
+            SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "no-such-item", draftText = "")
+          )
         )
-      )
-    )
+      case None => fail("expected a drilled settings surface")
 
     val normalized = stale.normalizeSubmenuEditMode
 
@@ -184,14 +185,8 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
     deactivated.activeSettingsSurface shouldBe None
   }
 
-  "withActiveCategory" should "close the settings-surface stack when switching categories" in {
-    given CommandRegistry = registry
-    val level1            = opened.withSelectedItem("settings-appearance-motion").enterSelectedGroup
-
-    val switched = level1.withActiveCategory(CommandCategory.File)
-
-    switched.activeSettingsSurface shouldBe None
-  }
+  // issue #931: `withActiveCategory` is retired along with category tabs -- there is no successor operation, so
+  // this test (switching categories closes the settings-surface stack) has nothing left to exercise.
 
   "updateSearchTerm" should "close the settings-surface stack" in {
     given CommandRegistry = registry

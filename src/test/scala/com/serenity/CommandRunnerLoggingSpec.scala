@@ -11,17 +11,18 @@ import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
 
-  "StateManager.describeCommandRunnerEvent" should "describe browse mode with category and selected item" in {
+  // issue #931: category tabs are retired -- there is no more category to name in this log line, just whether
+  // there's a live search (`mode=browse`/`mode=search`).
+  "StateManager.describeCommandRunnerEvent" should "describe browse mode with the selected item" in {
     val registry          = CommandRegistry.withToggleUI
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     StateManager
       .describeCommandRunnerEvent(TabKey, runner)
       .shouldBe(
-        "event=TabKey mode=browse category=Settings selected=group:settings-workspace-layout"
+        "event=TabKey mode=browse selected=command:open-settings"
       )
   }
 
@@ -35,7 +36,7 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     val description = StateManager.describeCommandRunnerEvent(InsertChar('t'), runner)
 
     description.shouldBe(
-      "event=InsertChar mode=search category=All selected=command:toggle-bookmark"
+      "event=InsertChar mode=search selected=command:toggle-bookmark"
     )
     description should not include "query="
     description should not include "InsertChar(t)"

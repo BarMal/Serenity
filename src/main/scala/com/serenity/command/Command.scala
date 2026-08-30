@@ -18,10 +18,6 @@ enum CommandCategory:
   case Project
   case Settings
 
-enum CommandRunnerMode:
-  case Palette
-  case Settings
-
 enum PanelKind:
   case Explorer
   case Outline

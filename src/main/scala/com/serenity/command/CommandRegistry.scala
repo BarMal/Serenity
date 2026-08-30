@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.command.CommandSurfaceItem.CommandItem
+import com.serenity.lsp.config.LanguageId
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole}
 import com.serenity.ui.layout.PanelPosition
@@ -735,7 +736,31 @@ object CommandRegistry:
       CommandCategory.Project,
       label = "Cancel Project Task"
     )
-  ) ++ builtInPresetCommands
+  ) ++ builtInPresetCommands ++ languageCommands
+
+  /** Buffer-language switchers -- previously only reachable as fake "settings" under the "Current Buffer Language"
+    * settings group (`CommandRunnerSettingsItems.languageItems`), even though picking one is a one-shot action with no
+    * persisted value of its own (issue #1057). Registered here, in the same commit that removes that settings-tree
+    * group (`CommandRunnerSettingsGroups.build`), so an exact-match command by this id/name is never simultaneously an
+    * exact-match settings-search target too -- that collision (two things named "lang-markdown") is what broke
+    * `CommandRunnerFloatingRenderingSpec`/`CommandRunnerReducerSpec` the first time this was tried standalone.
+    */
+  private def languageCommands: List[Command] =
+    Command.typed(
+      "lang-plain-text",
+      "Use plain text mode for the current buffer.",
+      CommandIntent.File(FileIntent.SetBufferLanguage(None)),
+      CommandCategory.Settings,
+      label = "Plain Text"
+    ) :: LanguageId.values.toList.sortBy(_.displayName).map { lang =>
+      Command.typed(
+        s"lang-${lang.id}",
+        s"Use ${lang.displayName} mode for the current buffer.",
+        CommandIntent.File(FileIntent.SetBufferLanguage(Some(lang))),
+        CommandCategory.Settings,
+        label = lang.displayName
+      )
+    }
 
   private def builtInPresetCommands: List[Command] =
     UiPreset.builtIns.map { preset =>

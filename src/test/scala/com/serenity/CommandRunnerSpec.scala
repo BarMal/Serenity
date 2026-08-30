@@ -201,18 +201,18 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     updated.filteredCommands.exists(_.name.contains("save")) shouldBe true
   }
 
-  it should "browse the active category when search is empty and switch to global search once typing begins" in {
+  // issue #931: category tabs -- and the `activeCategory` field they drove -- are retired outright, so an empty
+  // query is simply every registered command now.
+  it should "show every command when search is empty, and switch to global search once typing begins" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.File)
 
-    runner.activeCategory shouldBe CommandCategory.File
     runner.visibleItems should not be empty
     runner.visibleItems.collect {
       case CommandSurfaceItem.CommandItem(command) => command.category
-    }.distinct shouldBe List(CommandCategory.File)
+    }.distinct should contain(CommandCategory.Settings)
 
     val searched = runner.updateSearchTerm("theme")
     searched.searchTerm shouldBe "theme"
@@ -227,7 +227,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     val animationGroup = groupByIdRecursive(runner.settingsGroups, "settings-animation")
 
@@ -260,7 +259,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
-      .withActiveCategory(CommandCategory.Settings)
       .updateSearchTerm("animation")
 
     // Window-sitter settings now live inside Motion & Animation (consolidated from Interface Layout),
@@ -275,7 +273,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
-      .withActiveCategory(CommandCategory.Settings)
       .updateSearchTerm("\"ANIMATION-duration\"")
 
     runner.visibleItems.collect {
@@ -336,7 +333,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     val appearanceGroup = groupByIdRecursive(runner.settingsGroups, "settings-surface-appearance")
 
@@ -350,12 +346,16 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  // issue #931: category tabs are retired -- browsing settings groups with no search now only happens via the
+  // dedicated Settings surface (`.openSettings`), not by switching the palette's category. `visibleItems` still
+  // routes to `settingsSurfaceItems` once `isSettingsSurface` is true, so this fixture change is the only one
+  // needed.
   it should "group related settings into expandable submenu rows" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
+      .openSettings
 
     val groupItems = runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group }
 
@@ -390,10 +390,10 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "panel-diagnostics-pin",
       "panel-markdown-preview-pin"
     )
+    // issue #1057: "settings-language" (Current Buffer Language) is gone -- see CommandRunnerOneShotActionsSpec.
     group("settings-document-writing").children.map(_.id) shouldBe List(
       "settings-navigation",
       "settings-document-defaults",
-      "settings-language",
       "settings-rich-text",
       "settings-spellcheck"
     )
@@ -517,19 +517,17 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "default-document-mode",
       "markdown-view"
     )
-    nestedGroup("settings-language").label shouldBe "Current Buffer Language"
-    nestedGroup("settings-language").children.map(_.id) should contain(
-      "lang-plain-text"
-    )
   }
 
+  // issue #931: category tabs are retired -- see the "group related settings" test above for why this fixture uses
+  // `.openSettings` now.
   it should "surface workspace panel pins as dynamic option rows" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .copy(optionSelections = Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 4))
-      .withActiveCategory(CommandCategory.Settings)
+      .openSettings
 
     val workspace = runner.visibleItems
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-workspace-layout" => group }
@@ -568,7 +566,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       )
     val runner = CommandRunner.empty
       .activate(registry, config)
-      .withActiveCategory(CommandCategory.Settings)
 
     val textDisplay = groupByIdRecursive(runner.settingsGroups, "settings-text-display")
     val options     = textDisplay.children.collect { case option: CommandSurfaceItem.OptionItem => option }
@@ -598,7 +595,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withCommandRunnerVisibleRows(Some(9)))
-      .withActiveCategory(CommandCategory.Settings)
 
     val interfaceGroup = groupByIdRecursive(runner.settingsGroups, "settings-interface-layout")
     val input = interfaceGroup.children
@@ -620,7 +616,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withRenderFpsTarget(RenderFpsTarget.Fps120))
-      .withActiveCategory(CommandCategory.Settings)
 
     val renderingGroup = groupByIdRecursive(runner.settingsGroups, "settings-rendering")
     val option = renderingGroup.children
@@ -639,7 +634,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     runner.settingsGroups shouldBe theSameInstanceAs(runner.settingsGroups)
   }
@@ -649,7 +643,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     runner.visibleItems shouldBe theSameInstanceAs(runner.visibleItems)
   }
@@ -659,7 +652,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.RichText))
-      .withActiveCategory(CommandCategory.Settings)
 
     val documentDefaultsGroup = groupByIdRecursive(runner.settingsGroups, "settings-document-defaults")
 
@@ -685,7 +677,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
 
     val richTextGroup = groupByIdRecursive(runner.settingsGroups, "settings-rich-text")
     val inputs        = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
@@ -712,7 +703,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
           )
         )
       )
-      .withActiveCategory(CommandCategory.Settings)
 
     val spellGroup = groupByIdRecursive(runner.settingsGroups, "settings-spellcheck")
 
@@ -758,7 +748,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withUiPresetNames(List("Drafting", "Research Notes"))
-      .withActiveCategory(CommandCategory.Settings)
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
 
     presetGroup.children.map(_.id) shouldBe List(
@@ -893,15 +882,13 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "spellcheck-words"
     )
     descendants(documentDefaults).map(_.id) should not contain "lang-plain-text"
+    // issue #1057: this used to also carry a "settings-preset-theme-selection" child (Theme Chooser/Creator/Toggle/
+    // Reload) -- those are one-shot actions with no preset-scoped value of their own, now ordinary CommandRegistry
+    // commands (CommandRunnerOneShotActionsSpec), not part of this settings subtree.
     val theme = groupByIdRecursive(List(editPreset), "settings-preset-theme")
     theme.label shouldBe "Theme & Surface"
-    theme.children.map(_.id) shouldBe List("settings-preset-theme-selection", "settings-preset-surface-material")
+    theme.children.map(_.id) shouldBe List("settings-preset-surface-material")
     descendants(theme).map(_.id) should contain allOf ("background-style", "material-preset", "blur-radius")
-    descendants(theme).collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should contain allOf (
-      CommandIntent.Theme(ThemeIntent.OpenThemeChooser),
-      CommandIntent.Theme(ThemeIntent.ToggleTheme),
-      CommandIntent.Theme(ThemeIntent.ReloadTheme)
-    )
 
     val inputs = descendants(presetGroup).collect {
       case item: CommandSurfaceItem.InputItem if item.id.startsWith("ui-preset-") => item
@@ -949,16 +936,18 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     }
   }
 
-  it should "prioritize direct settings child matches over nested preset option matches" in {
+  // issue #1057: "lang-markdown" used to be a settings-tree search target (`settings-language`); it is an ordinary
+  // CommandRegistry command now, so an exact search for its own name finds the command directly, not a
+  // SettingSearchItem pointing into a settings group.
+  it should "find a buffer-language command by its exact name via search" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .updateSearchTerm("lang-markdown")
 
-    runner.visibleItems.collectFirst {
-      case item: CommandSurfaceItem.SettingSearchItem => (item.targetGroupId, item.targetItemId)
-    } shouldBe Some(("settings-language", "lang-markdown"))
+    runner.visibleItems.headOption.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe
+      Some("lang-markdown")
   }
 
   it should "preserve selected built-in and custom UI presets in the settings submenu" in {
@@ -968,7 +957,6 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default)
       .withUiPresetNames(List("Drafting", "Research Notes"))
       .copy(optionSelections = Map("ui-preset-built-in" -> 2, "ui-preset-custom" -> 1))
-      .withActiveCategory(CommandCategory.Settings)
 
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
     val presetPicker = descendants(presetGroup)

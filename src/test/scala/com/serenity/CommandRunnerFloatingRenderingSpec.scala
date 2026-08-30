@@ -205,7 +205,11 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     lowerOverlay.x shouldBe lowerContentRect.x
   }
 
-  it should "render category tabs in browse mode and show grouped settings rows" in {
+  // issue #931: category tabs are retired -- this used to also assert on a distributed tab row above the settings
+  // rows (`tabLine`) and on background variation across it (tab-highlighting). Neither exists any more; browsing
+  // settings groups with no search now only happens via `.openSettings`, whose header is a plain breadcrumb, not a
+  // tab row.
+  it should "show grouped settings rows in browse mode" in {
     val commands = List(
       Command.typed("open", "Open file", com.serenity.command.CommandIntent.File(FileIntent.OpenFile)),
       Command.typed(
@@ -218,7 +222,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
+      .openSettings
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
@@ -256,7 +260,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
-    val tabLine =
+    val headerLine =
       (commandContentRect.x until commandContentRect.right)
         .map(x => surface.getChar(x, commandContentRect.y))
         .mkString
@@ -267,21 +271,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
         .mkString
         .trim
 
-    tabLine should include("All")
-    tabLine should include("File")
-    tabLine should include("View")
-    tabLine should include("Edit")
-    tabLine should include("Settings")
-    tabLine should not include "["
-    tabLine.indexOf("Settings") should be > tabLine.length / 2
+    headerLine should include("Settings")
     optionLine should include("Panels & Workspace")
     optionLine should not include "["
 
-    val settingsBackgrounds =
-      (commandContentRect.x until commandContentRect.right)
-        .map(x => surface.getBg(x, commandContentRect.y))
-        .distinct
-    settingsBackgrounds.size should be > 1
     surface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor) should have size 1
   }
 
@@ -310,12 +303,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
   // keeping editor cursors steady relative to it); with that second surface gone, focus and content both live on
   // the one surface, so there is nothing left to dim relative to, but the "editor cursors stay steady regardless of
   // command-runner navigation" coverage still applies here.
+  // issue #931: category tabs are retired -- browsing settings groups with no search now only happens via the
+  // dedicated Settings surface (`.openSettings`), not by switching the palette's category.
   it should "keep every editor cursor visible but steady while browsing a settings group" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .withActiveCategory(CommandCategory.Settings)
+      .openSettings
       .enterSelectedGroup
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
@@ -361,12 +356,14 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   // issue #1059: a settings leaf reached via search now renders its drilled-in navigation on the one command-runner
   // surface (no second floating submenu surface, and no live "search: ..." echo left showing once entered).
+  // issue #1057: previously used a "lang-markdown" settings-tree search to reach the (now-removed) "Current Buffer
+  // Language" group; retargeted to "UI Outline Thickness", a still-present settings leaf inside "Interface Layout".
   it should "render a direct settings leaf while keeping editor cursors steady" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .updateSearchTerm("lang-markdown")
+      .updateSearchTerm("UI Outline Thickness")
       .enterSelectedGroup
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
@@ -412,9 +409,9 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
 
     visibleCursors.map(_.xPx) shouldBe hiddenCursors.map(_.xPx)
-    submenuText should include("Current Buffer Language")
-    submenuText should not include "search: lang-markdown"
-    submenuText should include("Markdown")
+    submenuText should include("Interface Layout")
+    submenuText should not include "search: UI Outline Thickness"
+    submenuText should include("UI Outline Thickness")
   }
 
   it should "fade the selected command highlight with the overlay row animation" in {

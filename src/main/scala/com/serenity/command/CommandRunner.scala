@@ -158,27 +158,22 @@ object SettingsSurfaceState:
 /** State for the command runner overlay */
 final case class CommandRunner(
     isActive: Boolean,
-    searchTerm: String,
-    selectedIndex: Int,
-    filteredCommands: List[Command],
-    activeCategory: CommandCategory = CommandCategory.All,
+    // The former mode-flag grab-bag (`mode`/`isSettingsSurface`, `searchTerm`, `selectedIndex`, `filteredCommands`,
+    // `activeCategory`, `activeSettingsSurface`) lives entirely inside `surface` now (issue #931, Stage 2) -- see
+    // `CommandRunnerSurface`'s own doc. `searchTerm`/`selectedIndex`/`filteredCommands`/`activeSettingsSurface`/
+    // `isSettingsSurface` survive below as read-only derived accessors so external readers are unaffected; there is
+    // no `activeCategory` accessor -- category browsing is retired outright, not migrated anywhere.
+    surface: CommandRunnerSurface = CommandRunnerSurface.Palette(),
     optionSelections: Map[String, Int] = Map.empty,
     inputItems: List[CommandSurfaceItem.InputItem] = List.empty,
     editingItemId: Option[String] = None,
     editingText: String = "",
     recordingItemId: Option[String] = None,
     submenuSelections: Map[String, Int] = Map.empty,
-    // Settings navigation -- both the settings-tab-in-palette and the dedicated Settings surface -- is an explicit
-    // page stack (issue #1059): `None` means no group is drilled into, `Some` carries the page on screen plus the
-    // pages to return to. Replaced the old flat `CommandRunnerSubmenuState`/`previewedGroupId` pair once
-    // `SurfaceContentResolver`/`CommandRunnerMouseHitTesting`/`CommandRunnerReducer` were all migrated to read and
-    // write only this field.
-    activeSettingsSurface: Option[SettingsSurfaceState] = None,
     statusMessage: Option[String] = None,
     uiPresetPreviews: List[UiPreset.Preview] = Nil,
     editingPresetName: Option[String] = None,
     commandBindings: Map[String, String] = Map.empty,
-    mode: CommandRunnerMode = CommandRunnerMode.Palette,
     isTuiMode: Boolean = false,
     // Never carried by `config` (see `AppState.Runtime.keyboardFidelityTier`'s doc) -- callers pass it separately from
     // `state.runtime.keyboardFidelityTier`, mirroring `isTuiMode` above, so `CommandRunnerReducer.assignRecordedBinding`
@@ -186,48 +181,82 @@ final case class CommandRunner(
     keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
 ):
 
-  def isSettingsSurface: Boolean = mode == CommandRunnerMode.Settings
+  def isSettingsSurface: Boolean = surface match
+    case _: CommandRunnerSurface.Settings => true
+    case _: CommandRunnerSurface.Palette  => false
+
+  def activeSettingsSurface: Option[SettingsSurfaceState] = surface match
+    case CommandRunnerSurface.Settings(_, drilled) => drilled
+    case CommandRunnerSurface.Palette(_)           => None
+
+  def searchTerm: String              = rootState.searchTerm
+  def selectedIndex: Int              = rootState.selectedIndex
+  def filteredCommands: List[Command] = rootState.filteredCommands
+
+  /** The active root's search/select state -- the palette's if `surface` is `Palette`, the settings surface's top-level
+    * one otherwise (regardless of whether a group is drilled into on top of it; see `CommandRunnerSurface`).
+    */
+  private def rootState: CommandPaletteState = surface match
+    case CommandRunnerSurface.Palette(state)    => state
+    case CommandRunnerSurface.Settings(root, _) => root
+
+  private def withRootSelectedIndex(index: Int): CommandRunner =
+    val updatedSurface = surface match
+      case CommandRunnerSurface.Palette(state) => CommandRunnerSurface.Palette(state.copy(selectedIndex = index))
+      case CommandRunnerSurface.Settings(root, drilled) =>
+        CommandRunnerSurface.Settings(root.copy(selectedIndex = index), drilled)
+    copy(surface = updatedSurface)
+
+  /** Replaces the drilled-in page, preserving the current root (whichever it is) and `drilled`'s own history -- the one
+    * place nearly every submenu-mutating method below bottoms out. Public: a couple of `StateManagerEffectHandlers`
+    * call sites (conflict messaging, focusing a just-created preset's editing group) need to set a drilled page
+    * directly, the same way, from outside this class.
+    */
+  def withDrilledSettingsSurface(updated: SettingsSurfaceState): CommandRunner =
+    copy(surface = CommandRunnerSurface.Settings(root = rootState, drilled = Some(updated)))
 
   def bindingFor(command: Command): Option[String] =
     commandBindings.get(command.name)
 
   lazy val visibleItems: List[CommandSurfaceItem] =
-    if isSettingsSurface then settingsSurfaceItems
-    else
-      val commandItems = filteredCommands.map(CommandSurfaceItem.CommandItem(_))
-      if searchTerm.isEmpty then
-        activeCategory match
-          case CommandCategory.Settings => settingsGroups ++ commandItems
-          case _                        => commandItems
-      else
-        val (strongCommandMatches, remainingCommandMatches) =
-          commandItems.partition(item => CommandRunner.isStrongCommandMatch(item.command, searchTerm))
-        val (exactCommandMatches, remainingStrongCommandMatches) =
-          strongCommandMatches.partition(item => CommandRunner.isExactCommandMatch(item.command, searchTerm))
-        val settingsMatches = matchingSettingsResults(searchTerm)
-        val (exactSettingsMatches, remainingSettingsMatches) =
-          settingsMatches.partition(item =>
-            CommandRunner.isExactSettingsTarget(item, CommandRunner.normalizedSearchTerm(searchTerm))
-          )
-        exactCommandMatches ++ exactSettingsMatches ++ remainingStrongCommandMatches ++ remainingSettingsMatches ++
-          remainingCommandMatches
+    surface match
+      case _: CommandRunnerSurface.Settings => settingsSurfaceItems
+      case CommandRunnerSurface.Palette(state) =>
+        val commandItems = state.filteredCommands.map(CommandSurfaceItem.CommandItem(_))
+        // Category tabs are retired (issue #931): an empty query is just every command, no category to default to.
+        // Settings are still reachable here -- via search, below -- exactly as issue #931's "fold into text search"
+        // intends; there is just no longer a separate navigation mode for it.
+        if state.searchTerm.isEmpty then commandItems
+        else
+          val (strongCommandMatches, remainingCommandMatches) =
+            commandItems.partition(item => CommandRunner.isStrongCommandMatch(item.command, state.searchTerm))
+          val (exactCommandMatches, remainingStrongCommandMatches) =
+            strongCommandMatches.partition(item => CommandRunner.isExactCommandMatch(item.command, state.searchTerm))
+          val settingsMatches = matchingSettingsResults(state.searchTerm)
+          val (exactSettingsMatches, remainingSettingsMatches) =
+            settingsMatches.partition(item =>
+              CommandRunner.isExactSettingsTarget(item, CommandRunner.normalizedSearchTerm(state.searchTerm))
+            )
+          exactCommandMatches ++ exactSettingsMatches ++ remainingStrongCommandMatches ++ remainingSettingsMatches ++
+            remainingCommandMatches
 
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
 
-  /** Update search term and filter commands */
+  /** Update search term and filter commands. No longer scoped by category (issue #931: category tabs are retired) -- an
+    * empty term is every registered command. Works for either root (the palette's or the settings surface's) --
+    * whichever `surface` currently is -- and always clears any drilled-in page, since typing at the root always means
+    * "search the root", never "keep editing a nested page" (that goes through `updateSubmenuSearch` instead).
+    */
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
     val filtered =
-      if term.isEmpty then registry.commandsForCategory(activeCategory)
+      if term.isEmpty then registry.getAllCommands
       else registry.searchCommands(term, maxResults = 50)
-    copy(
-      searchTerm = term,
-      selectedIndex = 0,
-      filteredCommands = filtered,
-      activeSettingsSurface = None,
-      recordingItemId = None,
-      statusMessage = None
-    )
+    val updatedState = CommandPaletteState(term, 0, filtered)
+    val updatedSurface = surface match
+      case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
+      case CommandRunnerSurface.Settings(_, _) => CommandRunnerSurface.Settings(updatedState, None)
+    copy(surface = updatedSurface, recordingItemId = None, statusMessage = None)
 
   /** Move selection up or down, with wrapping */
   def moveSelection(delta: Int): CommandRunner =
@@ -236,7 +265,7 @@ final case class CommandRunner(
     else
       val newIndex     = (selectedIndex + delta) % itemCount
       val wrappedIndex = if newIndex < 0 then itemCount + newIndex else newIndex
-      copy(selectedIndex = wrappedIndex).syncEditMode
+      withRootSelectedIndex(wrappedIndex).syncEditMode
 
   /** Get currently selected command */
   def selectedCommand: Option[Command] =
@@ -252,26 +281,25 @@ final case class CommandRunner(
     )
 
   def openSettings: CommandRunner =
-    copy(
-      mode = CommandRunnerMode.Settings,
-      activeCategory = CommandCategory.Settings,
-      searchTerm = "",
-      selectedIndex = 0,
-      activeSettingsSurface = None,
-      statusMessage = None
-    )
+    copy(surface = CommandRunnerSurface.Settings(), statusMessage = None)
 
   /** Both the Settings-tab-in-palette and dedicated Settings entry points render a settings group through these three
     * methods on the one `CommandPalette` surface (issue #1059) -- there is no second surface to desync from.
     */
   def settingsSurfaceItems: List[CommandSurfaceItem] =
-    activeSettingsSurface match
-      case Some(surface)               => filteredPageItems(surface.current, submenuItems(surface.current.groupId))
-      case None if searchTerm.nonEmpty => matchingSettingsResults(searchTerm)
-      case None                        => settingsGroups
+    surface match
+      case CommandRunnerSurface.Settings(_, Some(drilled)) =>
+        filteredPageItems(drilled.current, submenuItems(drilled.current.groupId))
+      case CommandRunnerSurface.Settings(root, None) if root.searchTerm.nonEmpty =>
+        matchingSettingsResults(root.searchTerm)
+      case CommandRunnerSurface.Settings(_, None) => settingsGroups
+      case CommandRunnerSurface.Palette(_)        => Nil
 
   def settingsSurfaceSelectedIndex: Int =
-    activeSettingsSurface.map(surface => pageSelectedIndex(surface.current)).getOrElse(selectedIndex)
+    surface match
+      case CommandRunnerSurface.Settings(_, Some(drilled)) => pageSelectedIndex(drilled.current)
+      case CommandRunnerSurface.Settings(root, None)       => root.selectedIndex
+      case CommandRunnerSurface.Palette(state)             => state.selectedIndex
 
   def settingsSurfaceBreadcrumbLabels: List[String] =
     activeSettingsSurface match
@@ -287,11 +315,14 @@ final case class CommandRunner(
         val items         = submenuItems(setting.targetGroupId)
         val selectedIndex = items.indexWhere(_.id == setting.targetItemId).max(0)
         val ancestorIds   = preferredAncestorGroupIds(setting.targetGroupId)
-        copy(
-          activeSettingsSurface = Some(
-            SettingsSurfaceState(
-              SettingsPage.Group(setting.targetGroupId, selectedIndex),
-              ancestorPagesFor(ancestorIds)
+        copy(surface =
+          CommandRunnerSurface.Settings(
+            root = rootState,
+            drilled = Some(
+              SettingsSurfaceState(
+                SettingsPage.Group(setting.targetGroupId, selectedIndex),
+                ancestorPagesFor(ancestorIds)
+              )
             )
           )
         )
@@ -305,10 +336,13 @@ final case class CommandRunner(
             case "settings-preset-create" => None
             case _                        => editingPresetName
         copy(
-          activeSettingsSurface = Some(
-            SettingsSurfaceState(
-              SettingsPage.Group(group.id, rememberedIndex, carriedSearchTerm),
-              ancestorPagesFor(ancestorIds)
+          surface = CommandRunnerSurface.Settings(
+            root = rootState,
+            drilled = Some(
+              SettingsSurfaceState(
+                SettingsPage.Group(group.id, rememberedIndex, carriedSearchTerm),
+                ancestorPagesFor(ancestorIds)
+              )
             )
           ),
           editingPresetName = editContext
@@ -320,6 +354,10 @@ final case class CommandRunner(
     * page carried from when it was pushed. Reading the parent id straight off `surface.ancestors.headOption` (rather
     * than a separately tracked `parentGroupId` field) makes the once-real self-referential-parent bug (see the
     * migration report) structurally impossible: there is no second copy of "what's my parent" left to drift.
+    *
+    * Popping the *last* level always lands on the settings-root view (`Settings(root, drilled = None)`), even if the
+    * group was reached via a `Palette` search rather than `CommandRunner.openSettings` -- see `CommandRunnerSurface`'s
+    * doc for why that's a deliberate simplification, not a bug.
     */
   def exitSubmenuToPreview: CommandRunner =
     activeSettingsSurface match
@@ -336,16 +374,18 @@ final case class CommandRunner(
             copy(
               submenuSelections =
                 submenuSelections + (groupId -> pageSelectedIndex(surface.current)) + (parentId -> parentIndex),
-              activeSettingsSurface =
-                surface.pop.map(popped => popped.copy(current = SettingsPage.Group(parentId, parentIndex)))
+              surface = CommandRunnerSurface.Settings(
+                root = rootState,
+                drilled = surface.pop.map(popped => popped.copy(current = SettingsPage.Group(parentId, parentIndex)))
+              )
             )
           case Nil =>
             copy(
               submenuSelections = submenuSelections + (groupId -> pageSelectedIndex(surface.current)),
-              activeSettingsSurface = None
+              surface = CommandRunnerSurface.Settings(root = rootState, drilled = None)
             )
       case None =>
-        copy(activeSettingsSurface = None)
+        this
 
   def submenuItems(groupId: String): List[CommandSurfaceItem] =
     submenuGroup(groupId).map(_.children).getOrElse(Nil)
@@ -447,8 +487,11 @@ final case class CommandRunner(
             submenuSelections = submenuSelections + (groupId -> wrappedIndex),
             // Moving selection always exits edit mode, so the new current page is always rebuilt as a Group,
             // dropping any Editing page that was there.
-            activeSettingsSurface =
-              Some(surface.copy(current = SettingsPage.Group(groupId, wrappedIndex, surface.current.searchTerm)))
+            surface = CommandRunnerSurface.Settings(
+              root = rootState,
+              drilled =
+                Some(surface.copy(current = SettingsPage.Group(groupId, wrappedIndex, surface.current.searchTerm)))
+            )
           )
       case None => this
 
@@ -459,15 +502,13 @@ final case class CommandRunner(
         val items   = filteredPageItems(surface.current, submenuItems(groupId))
         items.lift(pageSelectedIndex(surface.current)) match
           case Some(item: CommandSurfaceItem.InputItem) =>
-            copy(activeSettingsSurface =
-              Some(
-                surface.copy(current =
-                  SettingsPage.Editing(
-                    groupId = groupId,
-                    itemId = item.id,
-                    draftText = item.currentValue,
-                    searchTerm = surface.current.searchTerm
-                  )
+            withDrilledSettingsSurface(
+              surface.copy(current =
+                SettingsPage.Editing(
+                  groupId = groupId,
+                  itemId = item.id,
+                  draftText = item.currentValue,
+                  searchTerm = surface.current.searchTerm
                 )
               )
             )
@@ -483,15 +524,13 @@ final case class CommandRunner(
   def withSubmenuEditingItem(itemId: String, text: String): CommandRunner =
     activeSettingsSurface match
       case Some(surface) =>
-        copy(activeSettingsSurface =
-          Some(
-            surface.copy(current =
-              SettingsPage.Editing(
-                groupId = surface.current.groupId,
-                itemId = itemId,
-                draftText = text,
-                searchTerm = surface.current.searchTerm
-              )
+        withDrilledSettingsSurface(
+          surface.copy(current =
+            SettingsPage.Editing(
+              groupId = surface.current.groupId,
+              itemId = itemId,
+              draftText = text,
+              searchTerm = surface.current.searchTerm
             )
           )
         )
@@ -506,7 +545,7 @@ final case class CommandRunner(
       case Some(surface) =>
         surface.current match
           case editing: SettingsPage.Editing =>
-            copy(activeSettingsSurface = Some(surface.copy(current = editing.copy(draftText = text))))
+            withDrilledSettingsSurface(surface.copy(current = editing.copy(draftText = text)))
           case _ =>
             this
       case None =>
@@ -519,15 +558,9 @@ final case class CommandRunner(
   def cancelSubmenuEditingText: CommandRunner =
     activeSettingsSurface match
       case Some(surface) =>
-        copy(activeSettingsSurface =
-          Some(
-            surface.copy(current =
-              SettingsPage.Group(
-                surface.current.groupId,
-                pageSelectedIndex(surface.current),
-                surface.current.searchTerm
-              )
-            )
+        withDrilledSettingsSurface(
+          surface.copy(current =
+            SettingsPage.Group(surface.current.groupId, pageSelectedIndex(surface.current), surface.current.searchTerm)
           )
         )
       case None =>
@@ -541,15 +574,9 @@ final case class CommandRunner(
   def clearSubmenuEditingAndRecording: CommandRunner =
     activeSettingsSurface match
       case Some(surface) =>
-        copy(activeSettingsSurface =
-          Some(
-            surface.copy(current =
-              SettingsPage.Group(
-                surface.current.groupId,
-                pageSelectedIndex(surface.current),
-                surface.current.searchTerm
-              )
-            )
+        withDrilledSettingsSurface(
+          surface.copy(current =
+            SettingsPage.Group(surface.current.groupId, pageSelectedIndex(surface.current), surface.current.searchTerm)
           )
         )
       case None =>
@@ -560,16 +587,14 @@ final case class CommandRunner(
   def beginSubmenuRecording(itemId: String): CommandRunner =
     activeSettingsSurface match
       case Some(surface) =>
-        copy(activeSettingsSurface =
-          Some(
-            surface.copy(current =
-              SettingsPage.Editing(
-                groupId = surface.current.groupId,
-                itemId = itemId,
-                draftText = "",
-                searchTerm = surface.current.searchTerm,
-                recording = Some(RecordingState(itemId))
-              )
+        withDrilledSettingsSurface(
+          surface.copy(current =
+            SettingsPage.Editing(
+              groupId = surface.current.groupId,
+              itemId = itemId,
+              draftText = "",
+              searchTerm = surface.current.searchTerm,
+              recording = Some(RecordingState(itemId))
             )
           )
         )
@@ -583,13 +608,9 @@ final case class CommandRunner(
         surface.current match
           case editing: SettingsPage.Editing =>
             val recording = editing.recording.getOrElse(RecordingState(editing.itemId))
-            copy(activeSettingsSurface =
-              Some(
-                surface.copy(current =
-                  editing.copy(recording =
-                    Some(recording.copy(pendingRecordedBinding = Some(info -> recordedAtMillis)))
-                  )
-                )
+            withDrilledSettingsSurface(
+              surface.copy(current =
+                editing.copy(recording = Some(recording.copy(pendingRecordedBinding = Some(info -> recordedAtMillis))))
               )
             )
           case _ =>
@@ -607,7 +628,7 @@ final case class CommandRunner(
       case Some(surface) =>
         val updated = SettingsSurfaceState.deleteBackward(surface)
         if updated == surface then this
-        else copy(activeSettingsSurface = Some(updated), statusMessage = None)
+        else withDrilledSettingsSurface(updated).copy(statusMessage = None)
       case None =>
         this
 
@@ -622,7 +643,10 @@ final case class CommandRunner(
             copy(
               submenuSelections = submenuSelections + (groupId -> pageSelectedIndex(surface.current)),
               // A true push: the group we're leaving becomes the nearest ancestor of the group we're entering.
-              activeSettingsSurface = Some(surface.push(SettingsPage.Group(group.id, rememberedIndex)))
+              surface = CommandRunnerSurface.Settings(
+                root = rootState,
+                drilled = Some(surface.push(SettingsPage.Group(group.id, rememberedIndex)))
+              )
             )
           case _ =>
             this
@@ -645,26 +669,6 @@ final case class CommandRunner(
       case None =>
         this
 
-  def withActiveCategory(category: CommandCategory)(using registry: CommandRegistry): CommandRunner =
-    copy(
-      activeCategory = category,
-      selectedIndex = 0,
-      activeSettingsSurface = None
-    ).updateSearchTerm("").syncEditMode
-
-  def switchCategory(delta: Int)(using registry: CommandRegistry): CommandRunner =
-    val categories = List(
-      CommandCategory.All,
-      CommandCategory.File,
-      CommandCategory.View,
-      CommandCategory.Edit,
-      CommandCategory.Project,
-      CommandCategory.Settings
-    )
-    val currentIndex = categories.indexOf(activeCategory)
-    val newIndex     = (currentIndex + delta + categories.length) % categories.length
-    withActiveCategory(categories(newIndex))
-
   def adjustSelectedOption(delta: Int): CommandRunner =
     selectedItem match
       case Some(option: CommandSurfaceItem.OptionItem) =>
@@ -675,11 +679,11 @@ final case class CommandRunner(
 
   def withSelectedItem(itemId: String): CommandRunner =
     visibleItems.zipWithIndex.find(_._1.id == itemId) match
-      case Some((_, index)) => copy(selectedIndex = index).syncEditMode
+      case Some((_, index)) => withRootSelectedIndex(index).syncEditMode
       case None             => this
 
   def withSelectedVisibleIndex(index: Int): CommandRunner =
-    if visibleItems.indices.contains(index) then copy(selectedIndex = index).syncEditMode
+    if visibleItems.indices.contains(index) then withRootSelectedIndex(index).syncEditMode
     else this
 
   def withSelectedFocusedSubmenuIndex(index: Int): CommandRunner =
@@ -692,8 +696,10 @@ final case class CommandRunner(
             submenuSelections = submenuSelections + (groupId -> index),
             // As with moveSubmenuSelection: setting an index directly always exits edit mode, so this is always
             // rebuilt as a Group.
-            activeSettingsSurface =
-              Some(surface.copy(current = SettingsPage.Group(groupId, index, surface.current.searchTerm)))
+            surface = CommandRunnerSurface.Settings(
+              root = rootState,
+              drilled = Some(surface.copy(current = SettingsPage.Group(groupId, index, surface.current.searchTerm)))
+            )
           )
         else this
       case None =>
@@ -713,9 +719,7 @@ final case class CommandRunner(
   ): CommandRunner =
     copy(
       isActive = true,
-      searchTerm = "",
-      selectedIndex = 0,
-      filteredCommands = registry.commandsForCategory(activeCategory),
+      surface = CommandRunnerSurface.Palette(CommandPaletteState(filteredCommands = registry.getAllCommands)),
       optionSelections = CommandRunner.defaultOptionSelections(config),
       inputItems = CommandRunner.buildInputItems(config),
       commandBindings = CommandRunner.commandBindings(config),
@@ -743,17 +747,13 @@ final case class CommandRunner(
   def deactivate: CommandRunner =
     copy(
       isActive = false,
-      searchTerm = "",
-      selectedIndex = 0,
-      filteredCommands = List.empty,
-      activeCategory = CommandCategory.All,
+      surface = CommandRunnerSurface.Palette(),
       optionSelections = Map.empty,
       inputItems = List.empty,
       editingItemId = None,
       editingText = "",
       recordingItemId = None,
       submenuSelections = Map.empty,
-      activeSettingsSurface = None,
       uiPresetPreviews = Nil,
       editingPresetName = None
     )
@@ -782,11 +782,9 @@ final case class CommandRunner(
           case _: SettingsPage.Group => false
         if stillEditingAnExistingItem then this
         else
-          copy(activeSettingsSurface =
-            Some(
-              surface.copy(current =
-                SettingsPage.Group(groupId, pageSelectedIndex(surface.current), surface.current.searchTerm)
-              )
+          withDrilledSettingsSurface(
+            surface.copy(current =
+              SettingsPage.Group(groupId, pageSelectedIndex(surface.current), surface.current.searchTerm)
             )
           )
       case None =>
@@ -796,7 +794,7 @@ final case class CommandRunner(
     activeSettingsSurface match
       case Some(surface) =>
         // Searching always exits edit mode and resets the index, and is always scoped to a Group page.
-        copy(activeSettingsSurface = Some(surface.copy(current = SettingsPage.Group(surface.current.groupId, 0, term))))
+        withDrilledSettingsSurface(surface.copy(current = SettingsPage.Group(surface.current.groupId, 0, term)))
       case None =>
         this
 
@@ -950,8 +948,6 @@ final case class CommandRunner(
       editingPresetName = editingPresetName
     )
 
-  /** Store the focus that should be restored when runner closes */
-
 object CommandRunner:
 
   private val MaximumSettingSearchResults = 10
@@ -1069,17 +1065,11 @@ object CommandRunner:
     }
 
   /** Empty/inactive command runner */
-  def empty: CommandRunner = CommandRunner(
-    isActive = false,
-    searchTerm = "",
-    selectedIndex = 0,
-    filteredCommands = List.empty
-  )
+  def empty: CommandRunner = CommandRunner(isActive = false)
 
   /** Create command runner with specific commands for testing */
-  def withCommands(commands: List[Command]): CommandRunner = CommandRunner(
-    isActive = false,
-    searchTerm = "",
-    selectedIndex = 0,
-    filteredCommands = commands
-  )
+  def withCommands(commands: List[Command]): CommandRunner =
+    CommandRunner(
+      isActive = false,
+      surface = CommandRunnerSurface.Palette(CommandPaletteState(filteredCommands = commands))
+    )

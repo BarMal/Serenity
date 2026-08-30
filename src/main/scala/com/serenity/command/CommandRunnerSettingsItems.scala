@@ -2,7 +2,6 @@ package com.serenity.command
 
 import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterAction}
 import com.serenity.config.*
-import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
@@ -701,46 +700,6 @@ object CommandRunnerSettingsItems:
       hint = Some("Built-in and saved presets")
     )
 
-  private[command] val themeItems: List[CommandSurfaceItem] =
-    List(
-      CommandSurfaceItem.CommandItem(
-        Command.typed(
-          "theme-chooser",
-          "Choose a theme with live preview.",
-          CommandIntent.Theme(ThemeIntent.OpenThemeChooser),
-          CommandCategory.Settings,
-          label = "Theme Chooser"
-        )
-      ),
-      CommandSurfaceItem.CommandItem(
-        Command.typed(
-          "theme-creator",
-          "Create and save a custom theme with live colour previews.",
-          CommandIntent.Theme(ThemeIntent.OpenThemeCreator),
-          CommandCategory.Settings,
-          label = "Theme Creator"
-        )
-      ),
-      CommandSurfaceItem.CommandItem(
-        Command.typed(
-          "toggle-theme",
-          "Switch between the light and dark themes.",
-          CommandIntent.Theme(ThemeIntent.ToggleTheme),
-          CommandCategory.Settings,
-          label = "Toggle Theme"
-        )
-      ),
-      CommandSurfaceItem.CommandItem(
-        Command.typed(
-          "reload-theme",
-          "Reload the current theme configuration.",
-          CommandIntent.Theme(ThemeIntent.ReloadTheme),
-          CommandCategory.Settings,
-          label = "Reload Theme"
-        )
-      )
-    )
-
   private[command] def workspaceLayoutItems(optionSelections: Map[String, Int]): List[CommandSurfaceItem] =
     val panelDefinitions = List(
       ("Explorer", PanelKind.Explorer, "panel-explorer-pin"),
@@ -784,24 +743,6 @@ object CommandRunnerSettingsItems:
           )
         )
       }
-    val pinnedPositions = pinnedPanels.map(_.position).toSet
-    val edgeActionItems = List(PanelPosition.Left, PanelPosition.Right, PanelPosition.Bottom)
-      .filter(pinnedPositions)
-      .flatMap(panelActionItems)
-    val commandItems = edgeActionItems ++
-      Option
-        .when(edgeActionItems.nonEmpty)(
-          CommandSurfaceItem.CommandItem(
-            Command.typed(
-              "collapse-expanded-panel",
-              "Collapse the expanded panel back to its pinned position.",
-              CommandIntent.View(ViewIntent.CollapseExpandedPanel),
-              CommandCategory.View,
-              label = "Collapse Expanded Panel"
-            )
-          )
-        )
-        .toList
     val panelPinsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-panel-pins",
       label = "Panel Pins",
@@ -818,57 +759,13 @@ object CommandRunnerSettingsItems:
         hint = Some("Reorder panels on the same edge")
       )
     )
-    val panelActionsGroup = Option.when(commandItems.nonEmpty)(
-      CommandSurfaceItem.GroupItem(
-        id = "settings-panel-actions",
-        label = "Panel Actions",
-        children = commandItems,
-        category = CommandCategory.Settings,
-        hint = Some("Focus, expand, unpin, collapse")
-      )
-    )
-
-    panelPinsGroup :: panelOrderGroup.toList ::: panelActionsGroup.toList
+    // issue #1057: this used to also build a "Panel Actions" group here (Focus/Expand/Unpin per pinned edge, plus
+    // Collapse Expanded Panel) -- those are one-shot actions with no persisted value, already duplicated verbatim as
+    // ordinary CommandRegistry commands (`focus-left-panel` etc.), so they are reachable only via the palette now.
+    panelPinsGroup :: panelOrderGroup.toList
 
   private def commandId(label: String): String =
     label.toLowerCase.replaceAll("[^a-z0-9]+", "-").stripPrefix("-").stripSuffix("-")
-
-  private def panelActionItems(position: PanelPosition): List[CommandSurfaceItem.CommandItem] =
-    val label = position match
-      case PanelPosition.Left   => "Left"
-      case PanelPosition.Right  => "Right"
-      case PanelPosition.Bottom => "Bottom"
-      case PanelPosition.Top    => "Top"
-    val id = label.toLowerCase
-    List(
-      CommandSurfaceItem.CommandItem(
-        Command.typed(
-          s"focus-$id-panel",
-          s"Focus the $id pinned panel.",
-          CommandIntent.View(ViewIntent.FocusPanel(position)),
-          CommandCategory.View,
-          label = s"Focus $label Panel"
-        )
-      ),
-      CommandSurfaceItem.CommandItem(
-        Command.typed(
-          s"expand-$id-panel",
-          s"Expand the $id pinned panel.",
-          CommandIntent.View(ViewIntent.ExpandPanel(position)),
-          CommandCategory.View,
-          label = s"Expand $label Panel"
-        )
-      ),
-      CommandSurfaceItem.CommandItem(
-        Command.typed(
-          s"unpin-$id-panel",
-          s"Unpin the $id panel.",
-          CommandIntent.View(ViewIntent.UnpinPanel(position)),
-          CommandCategory.View,
-          label = s"Unpin $label Panel"
-        )
-      )
-    )
 
   final private case class PinnedPanelRow(label: String, kind: PanelKind, position: PanelPosition)
 
@@ -988,93 +885,9 @@ object CommandRunnerSettingsItems:
       hint = Some("Toolbar labels as icons, text, or both")
     )
 
-  private[command] val navigationItems: List[CommandSurfaceItem.CommandItem] =
-    List(
-      Command.typed(
-        "comment-lens",
-        "Show or hide the rendered comment at the cursor.",
-        CommandIntent.Comments(CommentsIntent.ToggleCommentLens),
-        CommandCategory.View,
-        label = "Comment Lens"
-      ),
-      Command.typed(
-        "add-document-comment",
-        "Add a document comment at the current cursor or selection.",
-        CommandIntent.Comments(CommentsIntent.AddDocumentComment("Comment")),
-        CommandCategory.Edit,
-        label = "Add Document Comment"
-      ),
-      Command.typed(
-        "delete-document-comment",
-        "Delete the document comment at the current cursor.",
-        CommandIntent.Comments(CommentsIntent.DeleteDocumentComment),
-        CommandCategory.Edit,
-        label = "Delete Document Comment"
-      ),
-      Command.typed(
-        "toggle-bookmark",
-        "Add or remove a bookmark at the current cursor.",
-        CommandIntent.Navigation(NavigationIntent.ToggleBookmark),
-        CommandCategory.View,
-        label = "Toggle Bookmark"
-      ),
-      Command.typed(
-        "next-bookmark",
-        "Go to the next bookmark.",
-        CommandIntent.Navigation(NavigationIntent.NextBookmark),
-        CommandCategory.View,
-        label = "Next Bookmark"
-      ),
-      Command.typed(
-        "previous-bookmark",
-        "Go to the previous bookmark.",
-        CommandIntent.Navigation(NavigationIntent.PreviousBookmark),
-        CommandCategory.View,
-        label = "Previous Bookmark"
-      ),
-      Command.typed(
-        "next-document-comment",
-        "Go to the next document comment.",
-        CommandIntent.Comments(CommentsIntent.NextDocumentComment),
-        CommandCategory.View,
-        label = "Next Document Comment"
-      ),
-      Command.typed(
-        "previous-document-comment",
-        "Go to the previous document comment.",
-        CommandIntent.Comments(CommentsIntent.PreviousDocumentComment),
-        CommandCategory.View,
-        label = "Previous Document Comment"
-      ),
-      Command.typed(
-        "next-document-symbol",
-        "Go to the next document symbol.",
-        CommandIntent.Navigation(NavigationIntent.NextDocumentSymbol),
-        CommandCategory.View,
-        label = "Next Document Symbol"
-      ),
-      Command.typed(
-        "previous-document-symbol",
-        "Go to the previous document symbol.",
-        CommandIntent.Navigation(NavigationIntent.PreviousDocumentSymbol),
-        CommandCategory.View,
-        label = "Previous Document Symbol"
-      ),
-      Command.typed(
-        "navigate-back",
-        "Go back to the previous document navigation point.",
-        CommandIntent.Navigation(NavigationIntent.NavigateBack),
-        CommandCategory.View,
-        label = "Navigate Back"
-      ),
-      Command.typed(
-        "navigate-forward",
-        "Go forward to the next document navigation point.",
-        CommandIntent.Navigation(NavigationIntent.NavigateForward),
-        CommandCategory.View,
-        label = "Navigate Forward"
-      )
-    ).map(CommandSurfaceItem.CommandItem(_))
+  // issue #1057: this list of Comment/Bookmark/Navigation one-shot actions used to feed the "Navigation" settings
+  // group (`CommandRunnerSettingsGroups.navigationGroup`). Removed -- each of these was already registered verbatim
+  // in `CommandRegistry.defaultCommands`, so nothing is lost; they are reachable only via the palette now.
 
   private def boundedOptionIndex(index: Int, options: List[CommandOption]): Int =
     if options.isEmpty then 0
@@ -1242,25 +1055,6 @@ object CommandRunnerSettingsItems:
       hint = Some("Enable or disable glyph ligatures")
     )
 
-  private[command] val languageItems: List[CommandSurfaceItem] =
-    val plainText = CommandSurfaceItem.CommandItem(
-      Command.typed(
-        "lang-plain-text",
-        "Use plain text mode for the current buffer.",
-        CommandIntent.File(FileIntent.SetBufferLanguage(None)),
-        CommandCategory.Settings,
-        label = "Plain Text"
-      )
-    )
-    val langItems = LanguageId.values.toList.sortBy(_.displayName).map { lang =>
-      CommandSurfaceItem.CommandItem(
-        Command.typed(
-          s"lang-${lang.id}",
-          s"Use ${lang.displayName} mode for the current buffer.",
-          CommandIntent.File(FileIntent.SetBufferLanguage(Some(lang))),
-          CommandCategory.Settings,
-          label = lang.displayName
-        )
-      )
-    }
-    plainText :: langItems
+  // issue #1057: this built the "Current Buffer Language" settings group's rows. Removed -- buffer-language
+  // switchers are one-shot actions with no persisted "current" value shown in their own row, and are now registered
+  // directly as `CommandRegistry.languageCommands`, reachable only via the palette.

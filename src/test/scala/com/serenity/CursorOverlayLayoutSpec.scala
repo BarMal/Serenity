@@ -112,9 +112,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
             SurfaceContent.CommandPalette(
               CommandRunner(
                 isActive = true,
-                searchTerm = "",
-                selectedIndex = 0,
-                filteredCommands = List.empty
+                surface = CommandRunnerSurface.Palette(
+                  CommandPaletteState(searchTerm = "", selectedIndex = 0, filteredCommands = List.empty)
+                )
               )
             ),
             SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
@@ -152,9 +152,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
             SurfaceContent.CommandPalette(
               CommandRunner(
                 isActive = true,
-                searchTerm = "",
-                selectedIndex = 0,
-                filteredCommands = List.empty
+                surface = CommandRunnerSurface.Palette(
+                  CommandPaletteState(searchTerm = "", selectedIndex = 0, filteredCommands = List.empty)
+                )
               )
             ),
             SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
@@ -182,7 +182,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
           UiSurface(
             SurfaceId("command-runner"),
             SurfaceContent.CommandPalette(
-              CommandRunner(isActive = true, searchTerm = "", selectedIndex = 0, filteredCommands = Nil)
+              CommandRunner(isActive = true, surface = CommandRunnerSurface.Palette(CommandPaletteState()))
             ),
             SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
           )
@@ -208,9 +208,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
             SurfaceContent.CommandPalette(
               CommandRunner(
                 isActive = true,
-                searchTerm = "",
-                selectedIndex = 0,
-                filteredCommands = List.empty
+                surface = CommandRunnerSurface.Palette(
+                  CommandPaletteState(searchTerm = "", selectedIndex = 0, filteredCommands = List.empty)
+                )
               )
             ),
             SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
@@ -240,9 +240,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
             SurfaceContent.CommandPalette(
               CommandRunner(
                 isActive = true,
-                searchTerm = "",
-                selectedIndex = 0,
-                filteredCommands = List.empty
+                surface = CommandRunnerSurface.Palette(
+                  CommandPaletteState(searchTerm = "", selectedIndex = 0, filteredCommands = List.empty)
+                )
               )
             ),
             SurfacePresentation.Floating(Some(staleAnchor), SurfacePlacement.BelowCursor)
@@ -288,9 +288,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
             SurfaceContent.CommandPalette(
               CommandRunner(
                 isActive = true,
-                searchTerm = "",
-                selectedIndex = 0,
-                filteredCommands = List.empty
+                surface = CommandRunnerSurface.Palette(
+                  CommandPaletteState(searchTerm = "", selectedIndex = 0, filteredCommands = List.empty)
+                )
               )
             ),
             SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
@@ -342,9 +342,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
             SurfaceContent.CommandPalette(
               CommandRunner(
                 isActive = true,
-                searchTerm = "",
-                selectedIndex = 0,
-                filteredCommands = List.empty
+                surface = CommandRunnerSurface.Palette(
+                  CommandPaletteState(searchTerm = "", selectedIndex = 0, filteredCommands = List.empty)
+                )
               )
             ),
             SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
@@ -373,9 +373,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
             SurfaceContent.CommandPalette(
               CommandRunner(
                 isActive = true,
-                searchTerm = "",
-                selectedIndex = 0,
-                filteredCommands = List.empty
+                surface = CommandRunnerSurface.Palette(
+                  CommandPaletteState(searchTerm = "", selectedIndex = 0, filteredCommands = List.empty)
+                )
               )
             ),
             SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)

@@ -113,15 +113,13 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   it should "route raw strokes to a binding recorder while a keymap submenu row is recording" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .copy(
-        activeSettingsSurface = Some(
-          SettingsSurfaceState(
-            SettingsPage.Editing(
-              groupId = "keymap",
-              itemId = "keymap-global-find",
-              draftText = "",
-              recording = Some(RecordingState("keymap-global-find"))
-            )
+      .withDrilledSettingsSurface(
+        SettingsSurfaceState(
+          SettingsPage.Editing(
+            groupId = "keymap",
+            itemId = "keymap-global-find",
+            draftText = "",
+            recording = Some(RecordingState("keymap-global-find"))
           )
         )
       )
@@ -150,15 +148,13 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   it should "route a modifier stroke to a keymap submenu recorder without deciding tap count" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .copy(
-        activeSettingsSurface = Some(
-          SettingsSurfaceState(
-            SettingsPage.Editing(
-              groupId = "keymap",
-              itemId = "keymap-global-command_palette",
-              draftText = "",
-              recording = Some(RecordingState("keymap-global-command_palette"))
-            )
+      .withDrilledSettingsSurface(
+        SettingsSurfaceState(
+          SettingsPage.Editing(
+            groupId = "keymap",
+            itemId = "keymap-global-command_palette",
+            draftText = "",
+            recording = Some(RecordingState("keymap-global-command_palette"))
           )
         )
       )
@@ -389,7 +385,9 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe ModalDismiss
   }
 
-  it should "route Tab and Shift+Tab to command-runner category navigation" in {
+  // issue #931: category tabs are retired -- Tab/Shift+Tab have nothing left to navigate while the command runner
+  // is focused, so they now fall through as unhandled rather than routing to a category-cycling event.
+  it should "leave Tab and Shift+Tab unhandled while the command runner is focused" in {
     val commandRunnerState = editorState.copy(
       persisted = editorState.persisted.copy(
         focus = Focus.Surface(SurfaceId("command-runner"))
@@ -406,14 +404,16 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
     )
     val translator = FocusedInputTranslator.forState(commandRunnerState)
 
-    translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty)) shouldBe RunnerNextCategory
-    translator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set.empty)) shouldBe RunnerPreviousCategory
+    translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty)) shouldBe
+      UnhandledEvent(KeyStrokeInfo(InputKey.Tab, None, Set.empty), translator)
+    translator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set.empty)) shouldBe
+      UnhandledEvent(KeyStrokeInfo(InputKey.ReverseTab, None, Set.empty), translator)
   }
 
   it should "treat a drilled-in settings group's focus as command-runner input rather than peek input" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .copy(activeSettingsSurface = Some(SettingsSurfaceState(SettingsPage.Group("settings-animation"))))
+      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-animation")))
     val submenuState = editorState.copy(
       persisted = editorState.persisted.copy(
         focus = Focus.Surface(SurfaceId("command-runner"))

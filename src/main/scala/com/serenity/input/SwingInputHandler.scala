@@ -269,8 +269,8 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
           case VK_DELETE     => Some(KeyStrokeInfo(InputKey.Delete, None, m))
           case VK_ENTER      => Some(KeyStrokeInfo(InputKey.Enter, None, m))
           case VK_TAB        =>
-            // Shift is encoded as ReverseTab; strip it from modifiers so translators
-            // only see Ctrl/Alt when deciding between NextTab / RunnerPreviousCategory etc.
+            // Shift is encoded as ReverseTab; strip it from modifiers so translators only see Ctrl/Alt when
+            // deciding between NextTab / ReverseTab-driven actions etc.
             val tabMods = m - Modifier.Shift
             if e.isShiftDown then Some(KeyStrokeInfo(InputKey.ReverseTab, None, tabMods))
             else Some(KeyStrokeInfo(InputKey.Tab, None, tabMods))

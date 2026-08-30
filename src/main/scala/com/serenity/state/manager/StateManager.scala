@@ -226,9 +226,10 @@ object StateManager:
     yield new StateManagerImpl(runtime, operations)
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
+    // issue #931: category tabs (and the `activeCategory` field they drove) are retired, so this no longer names a
+    // category -- just whether there's a live search.
     val modePart =
-      if runner.searchTerm.isEmpty then s"mode=browse category=${runner.activeCategory}"
-      else s"mode=search category=${runner.activeCategory}"
+      if runner.searchTerm.isEmpty then "mode=browse" else "mode=search"
     val selectedPart =
       runner.selectedItem match
         case Some(CommandSurfaceItem.CommandItem(command))    => s"selected=command:${command.name}"

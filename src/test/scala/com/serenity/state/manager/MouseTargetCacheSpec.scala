@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.awt.Font
 
-import com.serenity.command.{Command, CommandRegistry, CommandRunner}
+import com.serenity.command.{Command, CommandPaletteState, CommandRegistry, CommandRunner, CommandRunnerSurface}
 import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -317,7 +317,9 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
-      .copy(searchTerm = searchTerm, selectedIndex = selectedIndex)
+      .copy(surface =
+        CommandRunnerSurface.Palette(CommandPaletteState(searchTerm = searchTerm, selectedIndex = selectedIndex))
+      )
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),

@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.CommandRunner
+import com.serenity.command.{CommandPaletteState, CommandRunner, CommandRunnerSurface}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -36,9 +36,9 @@ class FloatingSurfaceSpec extends AnyFlatSpec with Matchers:
   "AppState.floatingSurfaces" should "return only floating ui surfaces" in {
     val runner = CommandRunner(
       isActive = true,
-      searchTerm = "tog",
-      selectedIndex = 0,
-      filteredCommands = List.empty
+      surface = CommandRunnerSurface.Palette(
+        CommandPaletteState(searchTerm = "tog", selectedIndex = 0, filteredCommands = List.empty)
+      )
     )
     val base = baseState()
     val state = base.copy(
