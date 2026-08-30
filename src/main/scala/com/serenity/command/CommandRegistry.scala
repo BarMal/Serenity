@@ -737,6 +737,14 @@ object CommandRegistry:
     )
   ) ++ builtInPresetCommands
 
+  // NOTE (issue #1057, Stage 2 of #931): buffer-language switchers (`lang-plain-text`, `lang-<id>`) still need
+  // registering here as ordinary commands -- deferred to the turn that also removes
+  // `CommandRunnerSettingsItems.languageItems`/the "Current Buffer Language" settings group. Registering them
+  // alongside that still-present settings-tree group gives two search targets sharing one id/name
+  // (`CommandRunnerFloatingRenderingSpec`/`CommandRunnerReducerSpec` caught this: an exact-match command now outranks
+  // the exact-match settings target it collides with, breaking "search settings, land on the settings leaf").
+  // `CommandRunnerOneShotActionsSpec` documents this as an intentionally red spec until that turn.
+
   private def builtInPresetCommands: List[Command] =
     UiPreset.builtIns.map { preset =>
       val preview = UiPreset.Preview.fromPreset(preset)
