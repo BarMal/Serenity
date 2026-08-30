@@ -132,7 +132,8 @@ object CharacterRenderer:
     bufferLine: Int = 0,
     bufferStartColumn: Int = 0,
     styledSegments: Option[List[StyledText]] = None,
-    lexStartState: LexState = LexState.Default
+    lexStartState: LexState = LexState.Default,
+    maxColumn: Option[Int] = None
   ): Unit =
     styledSegments match
       case Some(styledTexts) =>
@@ -144,7 +145,8 @@ object CharacterRenderer:
           theme,
           screenAnimations,
           bufferLine,
-          bufferStartColumn
+          bufferStartColumn,
+          maxColumn
         )
       case None if syntaxHighlightingEnabled =>
         val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language, lexStartState)
@@ -156,7 +158,8 @@ object CharacterRenderer:
           theme,
           screenAnimations,
           bufferLine,
-          bufferStartColumn
+          bufferStartColumn,
+          maxColumn
         )
       case None =>
         renderStringWithAnimationPlain(
@@ -167,7 +170,8 @@ object CharacterRenderer:
           theme,
           screenAnimations,
           bufferLine = bufferLine,
-          bufferStartColumn = bufferStartColumn
+          bufferStartColumn = bufferStartColumn,
+          maxColumn = maxColumn
         )
 
   def renderStringWithAnimationPlain(
@@ -179,10 +183,21 @@ object CharacterRenderer:
     screenAnimations: AnimationState,
     tabWidth: Int = 4,
     bufferLine: Int = 0,
-    bufferStartColumn: Int = 0
+    bufferStartColumn: Int = 0,
+    maxColumn: Option[Int] = None
   ): Unit =
     val collectedRuns = collectPlainRuns(x, content, tabWidth)
-    renderAnimatedRuns(surface, x, y, collectedRuns.runs, theme, screenAnimations, bufferLine, bufferStartColumn)
+    renderAnimatedRuns(
+      surface,
+      x,
+      y,
+      collectedRuns.runs,
+      theme,
+      screenAnimations,
+      bufferLine,
+      bufferStartColumn,
+      maxColumn
+    )
 
   /** Render a visual line using pixel-precision caret stops.
     *
@@ -353,7 +368,8 @@ object CharacterRenderer:
     theme: Theme,
     screenAnimations: AnimationState,
     bufferLine: Int,
-    bufferStartColumn: Int
+    bufferStartColumn: Int,
+    maxColumn: Option[Int]
   ): Unit =
     styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
@@ -370,7 +386,8 @@ object CharacterRenderer:
           segmentTheme,
           screenAnimations,
           bufferLine,
-          bufferStartColumn + (currentX - x)
+          bufferStartColumn + (currentX - x),
+          maxColumn
         )
       }
       collectedRuns.endX
@@ -449,14 +466,16 @@ object CharacterRenderer:
     theme: Theme,
     screenAnimations: AnimationState,
     bufferLine: Int,
-    bufferStartColumn: Int
+    bufferStartColumn: Int,
+    maxColumn: Option[Int]
   ): Unit =
+    val clippedRuns = runs.flatMap(clipRunToColumn(_, maxColumn))
     if screenAnimations.animations.isEmpty then
       surface.setForegroundColor(theme.foreground)
       surface.setBackgroundColor(theme.background)
-      runs.foreach(run => surface.putString(run.startX, y, run.content))
+      clippedRuns.foreach(run => surface.putString(run.startX, y, run.content))
     else
-      runs.foreach { run =>
+      clippedRuns.foreach { run =>
         val grouped =
           groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
         grouped.foreach {
@@ -466,6 +485,19 @@ object CharacterRenderer:
             surface.putString(startX, y, text)
         }
       }
+
+  /** Cell-grid runs are one character per column, so truncating a run's content by character count is exact here --
+    * unlike the measured pixel path (`clipRightXPx`), nothing needs sub-character precision. `None` (the common case:
+    * word wrap on, or no pane-width limit given) leaves every run untouched.
+    */
+  private def clipRunToColumn(run: TextRun, maxColumn: Option[Int]): Option[TextRun] =
+    maxColumn match
+      case None                               => Some(run)
+      case Some(limit) if run.startX >= limit => None
+      case Some(limit) =>
+        val allowedLength = limit - run.startX
+        if allowedLength >= run.content.length then Some(run)
+        else Some(run.copy(content = run.content.take(allowedLength)))
 
   private def groupRunByEffectiveColors(
     run: TextRun,
