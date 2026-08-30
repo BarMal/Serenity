@@ -777,10 +777,19 @@ object LayoutEngine:
         .filter(_.y == screenPosition.y)
         .map(selectionEnd => (screenPosition.x + selectionEnd.x) / 2)
         .getOrElse(screenPosition.x)
-      val overlayX = math.max(
-        contentRect.x,
-        math.min(horizontalAnchorX - (preferredWidth / 2), contentRect.right - preferredWidth)
-      )
+      val overlayX = surface.content match
+        // The command palette/settings surface is horizontally centered on screen, not cursor-anchored: unlike the
+        // contextual toolbar (anchored to a text selection) or other floating content, its width and content bear no
+        // relationship to the cursor's horizontal position, and cursor-anchoring left it pinned near whichever column
+        // the caret happened to be in -- often far from center, sometimes hard against an edge. Vertical placement
+        // (above/below the cursor, `overlayY` below) is unaffected.
+        case SurfaceContent.CommandPalette(_) =>
+          contentRect.x + math.max(0, (contentRect.width - preferredWidth) / 2)
+        case _ =>
+          math.max(
+            contentRect.x,
+            math.min(horizontalAnchorX - (preferredWidth / 2), contentRect.right - preferredWidth)
+          )
       val preferredAboveY = screenPosition.y - finalHeight - gapRows
       val preferredBelowY = toolbarSelectionEndScreenPosition(surface, buffer, contentRect, state)
         .map(_.y + 1 + gapRows)

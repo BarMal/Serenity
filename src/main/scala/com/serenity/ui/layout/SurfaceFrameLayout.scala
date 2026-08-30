@@ -146,8 +146,14 @@ final case class SurfaceFrameLayout(
     itemTargetRows: Int = 1,
     hasKeyHint: Boolean = false
   ): SurfaceItemWindow =
+    // `reservedContentRows` (the selected item's own expand-in-place preview, e.g. a settings group's capped child
+    // list) shares the same row budget sibling items compete for -- at high density/preview-row counts that budget
+    // can hit zero. Sibling rows are the ones allowed to disappear to make room for the preview; the selected item's
+    // own row must not, so a positive `itemCount` always keeps at least one row in the window.
     val maxRows =
-      visibleItemRows(hasHeader, hasFooter, reservedContentRows, itemGapRows, itemTargetRows, hasKeyHint)
+      if itemCount <= 0 then 0
+      else
+        math.max(1, visibleItemRows(hasHeader, hasFooter, reservedContentRows, itemGapRows, itemTargetRows, hasKeyHint))
     val offset =
       if itemCount <= maxRows then 0
       else
