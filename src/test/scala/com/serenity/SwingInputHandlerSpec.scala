@@ -10,6 +10,9 @@ import cats.effect.{Deferred, IO}
 import cats.syntax.parallel.*
 import com.serenity.input.{InputRouter, SwingInputHandler}
 import com.serenity.keystroke.events.{
+  CursorPeekModifierPressed,
+  CursorPeekModifierReleased,
+  CursorPeekOtherKeyPressed,
   Event,
   InsertChar,
   MouseButton,
@@ -302,4 +305,72 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     )
 
     handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(250.millis) shouldBe None
+  }
+
+  it should "always emit a raw CursorPeekModifierPressed for a bare modifier press, regardless of any pending double-tap hotkey" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val listener  = component.getKeyListeners.head
+    val now       = System.currentTimeMillis()
+
+    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_META, '\u0000'))
+
+    handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
+      Some(CursorPeekModifierPressed(Modifier.Meta, now))
+  }
+
+  it should "always emit a raw CursorPeekModifierReleased for a bare modifier release" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val listener  = component.getKeyListeners.head
+    val now       = System.currentTimeMillis()
+
+    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_META, '\u0000'))
+    listener.keyReleased(KeyEvent(component, KeyEvent.KEY_RELEASED, now + 5, 0, KeyEvent.VK_META, '\u0000'))
+
+    handler.eventStream.take(2).compile.toList.unsafeRunTimed(StreamObservationTimeout) shouldBe Some(
+      List(CursorPeekModifierPressed(Modifier.Meta, now), CursorPeekModifierReleased(Modifier.Meta, now + 5))
+    )
+  }
+
+  it should "emit raw modifier press/release events for any modifier, not only the cursor-peek prototype's own" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val listener  = component.getKeyListeners.head
+    val now       = System.currentTimeMillis()
+
+    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_CONTROL, '\u0000'))
+
+    handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
+      Some(CursorPeekModifierPressed(Modifier.Ctrl, now))
+  }
+
+  it should "emit a raw CursorPeekOtherKeyPressed for a non-modifier key press" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val listener  = component.getKeyListeners.head
+    val now       = System.currentTimeMillis()
+
+    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_A, 'a'))
+
+    handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
+      Some(CursorPeekOtherKeyPressed)
+  }
+
+  it should "not surface the new raw cursor-peek events on keyStrokeInfoStream" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val listener  = component.getKeyListeners.head
+    val now       = System.currentTimeMillis()
+
+    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_META, '\u0000'))
+    listener.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, now + 1, 0, KeyEvent.VK_UNDEFINED, 'z'))
+
+    handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
+      Some(KeyStrokeInfo(InputKey.Character, Some('z'), Set.empty))
   }
