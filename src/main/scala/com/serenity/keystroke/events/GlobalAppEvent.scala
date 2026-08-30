@@ -19,14 +19,13 @@ case object FileSearch              extends GlobalAppEvent // Ctrl+Shift+F
 /** Raw bare-modifier press/release, always emitted by `SwingInputHandler` for every modifier key regardless of the
   * cursor-peek prototype's `commandRunnerCursorPeekEnabled` flag -- like mouse-move events, the translator emits
   * unconditionally and `AppEventReducer` decides whether the flag makes them relevant. Entirely independent of
-  * `SwingInputHandler`'s existing `pendingModifierTap` (`ctrl+ctrl`-style hotkey) tracking, which these do not
-  * affect.
+  * `SwingInputHandler`'s existing `pendingModifierTap` (`ctrl+ctrl`-style hotkey) tracking, which these do not affect.
   */
 final case class CursorPeekModifierPressed(modifier: Modifier, atMillis: Long)  extends GlobalAppEvent
 final case class CursorPeekModifierReleased(modifier: Modifier, atMillis: Long) extends GlobalAppEvent
 
 /** Emitted alongside every non-modifier key press, matching `ModifierTapDetector.otherKeyPressed`'s existing
-  * cancellation trigger point in `SwingInputHandler.translatePressed`; cancels a pending cursor-peek gesture the
-  * same way a real key already cancels the existing bare-modifier hotkey tap.
+  * cancellation trigger point in `SwingInputHandler.translatePressed`; cancels a pending cursor-peek gesture the same
+  * way a real key already cancels the existing bare-modifier hotkey tap.
   */
 case object CursorPeekOtherKeyPressed extends GlobalAppEvent

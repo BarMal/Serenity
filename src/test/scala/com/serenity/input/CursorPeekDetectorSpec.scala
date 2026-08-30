@@ -6,15 +6,15 @@ import org.scalatest.matchers.should.Matchers
 
 /** Covers `CursorPeekDetector`'s hold-vs-double-tap-vs-neither classification for the *configured* peek modifier,
   * mirroring `ModifierTapDetectorSpec`'s press/release/window coverage (including the `bf5de9e0` auto-repeat guard,
-  * inherited by composition) plus cases specific to this detector: the optimistic peek on first press, upgrading a
-  * peek to a full open on a second tap within the window, ending a peek on release or an unrelated key press, and
-  * isolation from other modifiers' press/release traffic.
+  * inherited by composition) plus cases specific to this detector: the optimistic peek on first press, upgrading a peek
+  * to a full open on a second tap within the window, ending a peek on release or an unrelated key press, and isolation
+  * from other modifiers' press/release traffic.
   */
 class CursorPeekDetectorSpec extends AnyFlatSpec with Matchers:
 
   private val Window = ModifierTapDetector.WindowMillis
-  private val Peek    = Modifier.Meta
-  private val Other   = Modifier.Ctrl
+  private val Peek   = Modifier.Meta
+  private val Other  = Modifier.Ctrl
 
   private def press(state: CursorPeekState, modifier: Modifier, atMillis: Long) =
     CursorPeekDetector.modifierPressed(state, modifier, Peek, atMillis)
@@ -59,9 +59,9 @@ class CursorPeekDetectorSpec extends AnyFlatSpec with Matchers:
     }
 
   "releasing after a long, repeatedly auto-repeated hold" should "still signal the peek to end" in {
-    val CursorPeekDetector.Outcome.PeekBegin(s1)   = press(CursorPeekState.empty, Peek, 0L): @unchecked
-    val CursorPeekDetector.Outcome.Unchanged(s2)   = press(s1, Peek, 10_000L): @unchecked
-    val outcome                                    = release(s2, Peek, 10_050L)
+    val CursorPeekDetector.Outcome.PeekBegin(s1) = press(CursorPeekState.empty, Peek, 0L): @unchecked
+    val CursorPeekDetector.Outcome.Unchanged(s2) = press(s1, Peek, 10_000L): @unchecked
+    val outcome                                  = release(s2, Peek, 10_050L)
 
     outcome shouldBe a[CursorPeekDetector.Outcome.PeekEnd]
   }
@@ -98,10 +98,10 @@ class CursorPeekDetectorSpec extends AnyFlatSpec with Matchers:
 
   "interleaving a different modifier between the two taps of the configured modifier" should
     "not prevent the double-tap from firing" in {
-      val CursorPeekDetector.Outcome.PeekBegin(s1)  = press(CursorPeekState.empty, Peek, 0L): @unchecked
-      val CursorPeekDetector.Outcome.PeekEnd(s2)    = release(s1, Peek, 5L): @unchecked
-      val CursorPeekDetector.Outcome.Unchanged(s3)  = press(s2, Other, 10L): @unchecked
-      val outcome                                   = press(s3, Peek, 15L)
+      val CursorPeekDetector.Outcome.PeekBegin(s1) = press(CursorPeekState.empty, Peek, 0L): @unchecked
+      val CursorPeekDetector.Outcome.PeekEnd(s2)   = release(s1, Peek, 5L): @unchecked
+      val CursorPeekDetector.Outcome.Unchanged(s3) = press(s2, Other, 10L): @unchecked
+      val outcome                                  = press(s3, Peek, 15L)
 
       outcome shouldBe a[CursorPeekDetector.Outcome.DoubleTapOpen]
     }
@@ -126,8 +126,8 @@ class CursorPeekDetectorSpec extends AnyFlatSpec with Matchers:
   }
 
   "a double-tap open" should "reset tracking back to empty" in {
-    val CursorPeekDetector.Outcome.PeekBegin(s1)      = press(CursorPeekState.empty, Peek, 0L): @unchecked
-    val CursorPeekDetector.Outcome.PeekEnd(s2)        = release(s1, Peek, 5L): @unchecked
+    val CursorPeekDetector.Outcome.PeekBegin(s1)     = press(CursorPeekState.empty, Peek, 0L): @unchecked
+    val CursorPeekDetector.Outcome.PeekEnd(s2)       = release(s1, Peek, 5L): @unchecked
     val CursorPeekDetector.Outcome.DoubleTapOpen(s3) = press(s2, Peek, Window): @unchecked
 
     s3 shouldBe CursorPeekState.empty

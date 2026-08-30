@@ -70,8 +70,8 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     enqueue(QueuedMouse(event))
 
   /** Cursor-peek prototype: raw bare-modifier press/release and non-modifier-key-pressed signals, always emitted
-    * regardless of `commandRunnerCursorPeekEnabled` -- like mouse-move events, the translator emits unconditionally
-    * and `AppEventReducer` (which has `AppState`/`AppConfig`) decides whether the flag makes them relevant. See
+    * regardless of `commandRunnerCursorPeekEnabled` -- like mouse-move events, the translator emits unconditionally and
+    * `AppEventReducer` (which has `AppState`/`AppConfig`) decides whether the flag makes them relevant. See
     * `GlobalAppEvent.scala`'s `CursorPeekModifierPressed`/`CursorPeekModifierReleased`/`CursorPeekOtherKeyPressed`.
     */
   private def enqueueRaw(event: Event): Unit =
@@ -115,14 +115,10 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       translateTyped(e).foreach(enqueueInput)
     override def keyPressed(e: KeyEvent): Unit =
       translatePressed(e).foreach(enqueueInput)
-      modifierOf(e).foreach { (_, modifier) =>
-        enqueueRaw(CursorPeekModifierPressed(modifier, e.getWhen))
-      }
+      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierPressed(modifier, e.getWhen)))
     override def keyReleased(e: KeyEvent): Unit =
       translateModifierReleased(e)
-      modifierOf(e).foreach { (_, modifier) =>
-        enqueueRaw(CursorPeekModifierReleased(modifier, e.getWhen))
-      })
+      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierReleased(modifier, e.getWhen))))
 
   component.addMouseListener(
     new MouseAdapter:

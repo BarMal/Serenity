@@ -166,7 +166,12 @@ object AppEventReducer:
   private def handleCursorPeekModifierReleased(state: AppState, modifier: Modifier, atMillis: Long): AppState =
     if !cursorPeekEnabled(state) then state
     else
-      CursorPeekDetector.modifierReleased(state.runtime.cursorPeekSession, modifier, peekModifier(state), atMillis) match
+      CursorPeekDetector.modifierReleased(
+        state.runtime.cursorPeekSession,
+        modifier,
+        peekModifier(state),
+        atMillis
+      ) match
         case CursorPeekDetector.Outcome.PeekEnd(next) =>
           val ended = endCursorPeek(state)
           ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
@@ -196,8 +201,8 @@ object AppEventReducer:
           ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
 
   /** A double-tap always means "open fully", not toggle-close -- unlike `ToggleCommandRunner`, a second gesture that
-    * lands while the runner happens to already be open (e.g. opened some other way mid-peek) is just a no-op, never
-    * a close.
+    * lands while the runner happens to already be open (e.g. opened some other way mid-peek) is just a no-op, never a
+    * close.
     */
   private def openCommandRunnerFully(state: AppState, registry: CommandRegistry): AppState =
     state.commandRunnerSurface.flatMap(asCommandRunner) match

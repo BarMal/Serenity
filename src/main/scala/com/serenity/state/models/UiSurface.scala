@@ -13,8 +13,8 @@ object SurfaceId:
   /** Reserved id for the experimental command-runner cursor-peek prototype's single peek panel
     * (`SurfaceConfig.commandRunnerCursorPeekEnabled`) -- a fixed constant rather than an allocated id, since this
     * single-panel prototype only ever has the one peek surface at a time. `LayoutEngine.calculateFloatingSurfaceRect`
-    * checks for this id to route the surface through the frozen-anchor stack (`resolveFrozenCursorPeekStack`)
-    * instead of the live floating-anchor path every other floating surface uses.
+    * checks for this id to route the surface through the frozen-anchor stack (`resolveFrozenCursorPeekStack`) instead
+    * of the live floating-anchor path every other floating surface uses.
     */
   val CursorPeek: SurfaceId = SurfaceId("command-runner-cursor-peek")
 
@@ -217,13 +217,13 @@ enum SurfaceContent:
   case CommandPalette(runner: CommandRunner)
 
   /** The experimental command-runner cursor-peek prototype's single peek panel (`SurfaceId.CursorPeek`,
-    * `SurfaceConfig.commandRunnerCursorPeekEnabled`) -- deliberately a distinct content case from `CommandPalette`,
-    * not the same case reused with a different id: `AppState.commandRunnerSurface` matches *any* `CommandPalette`
-    * surface regardless of id, so reusing that case here would make the peek panel masquerade as "the command
-    * runner is already open" the moment it appears, breaking `AppEventReducer.openCommandRunnerFully`'s
-    * already-open check. Renders via the same `CommandPalette` machinery in `SurfaceContentResolver` and
-    * `LayoutEngine`'s frame sizing, just under this separate case, so no other command-runner-specific code path
-    * (focus routing, mouse hit-testing, keymap recording, ...) mistakes it for the real, interactive command runner.
+    * `SurfaceConfig.commandRunnerCursorPeekEnabled`) -- deliberately a distinct content case from `CommandPalette`, not
+    * the same case reused with a different id: `AppState.commandRunnerSurface` matches *any* `CommandPalette` surface
+    * regardless of id, so reusing that case here would make the peek panel masquerade as "the command runner is already
+    * open" the moment it appears, breaking `AppEventReducer.openCommandRunnerFully`'s already-open check. Renders via
+    * the same `CommandPalette` machinery in `SurfaceContentResolver` and `LayoutEngine`'s frame sizing, just under this
+    * separate case, so no other command-runner-specific code path (focus routing, mouse hit-testing, keymap recording,
+    * ...) mistakes it for the real, interactive command runner.
     */
   case CommandRunnerPeek(runner: CommandRunner)
   case ThemePicker(state: ThemePickerState)

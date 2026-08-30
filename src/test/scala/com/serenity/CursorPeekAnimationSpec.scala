@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{AppConfig, MotionPreset}
+import com.serenity.config.MotionPreset
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
@@ -13,9 +13,9 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Covers the cursor-peek prototype's settle-in/settle-out animation: reusing the existing command-runner open/close
-  * fade choreography (`AnimationChoreography.animatedCommandSurfaces`) for `SurfaceContent.CommandRunnerPeek`
-  * surfaces exactly as it already applies to `CommandPalette` ones, rather than inventing a second animation
-  * mechanism -- so it automatically respects `commandRunnerAnimation`/`MotionPreset.Reduced` with no new opt-out.
+  * fade choreography (`AnimationChoreography.animatedCommandSurfaces`) for `SurfaceContent.CommandRunnerPeek` surfaces
+  * exactly as it already applies to `CommandPalette` ones, rather than inventing a second animation mechanism -- so it
+  * automatically respects `commandRunnerAnimation`/`MotionPreset.Reduced` with no new opt-out.
   */
 class CursorPeekAnimationSpec extends AnyFlatSpec with Matchers:
 

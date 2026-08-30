@@ -727,7 +727,13 @@ object LayoutEngine:
       preferredHeight = calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state)
       gapRows         = wholeRowOrigin(floatingCursorGapRows(state, surface.content))
       slot            = FrozenPeekSlot(surface.id, preferredWidth, preferredHeight)
-      placed <- resolveFrozenCursorPeekStack(List(slot), anchorScreenPosition, contentRect, placement, gapRows).headOption
+      placed <- resolveFrozenCursorPeekStack(
+        List(slot),
+        anchorScreenPosition,
+        contentRect,
+        placement,
+        gapRows
+      ).headOption
     yield placed.rect
 
   private def calculateLiveFloatingSurfaceRect(
@@ -1085,12 +1091,11 @@ object LayoutEngine:
     * already uses for its own (live) stack, reused rather than inventing a second overflow mechanism. A slot with no
     * height budget left is dropped from the result entirely rather than rendered at zero height.
     *
-    * Deliberately distinct from [[floatingAnchor]]/[[calculateFloatingSurfaceRect]]: `anchorScreenPosition` is
-    * supplied once by the caller (captured from the cursor's *line* at summon time) rather than derived here from
-    * `AppState`/the active buffer, so this function never re-reads live cursor state -- callers that want the
-    * cursor-peek prototype's "frozen for the whole session, even across a reformat" behaviour resolve the anchor
-    * once and hold onto the result; callers of the existing floating surfaces keep re-deriving it every layout pass,
-    * unchanged.
+    * Deliberately distinct from [[floatingAnchor]]/[[calculateFloatingSurfaceRect]]: `anchorScreenPosition` is supplied
+    * once by the caller (captured from the cursor's *line* at summon time) rather than derived here from `AppState`/the
+    * active buffer, so this function never re-reads live cursor state -- callers that want the cursor-peek prototype's
+    * "frozen for the whole session, even across a reformat" behaviour resolve the anchor once and hold onto the result;
+    * callers of the existing floating surfaces keep re-deriving it every layout pass, unchanged.
     */
   def resolveFrozenCursorPeekStack(
     slots: List[FrozenPeekSlot],

@@ -12,9 +12,9 @@ import org.scalatest.matchers.should.Matchers
 
 /** End-to-end confirmation that the cursor-peek prototype actually produces something to paint: reducing a
   * `CursorPeekModifierPressed` (as `SwingInputHandler` would emit it), resolving the frozen anchor (as
-  * `StateManagerEventPipeline` does right after), and finally calling `LayoutEngine.calculateLayout` -- the exact
-  * entry point both the GUI `Renderer` and the TUI painter share, since neither has its own separate layout pass --
-  * yields a real, positioned rect for the peek surface in `belowCursorOverlayStack`/`aboveCursorOverlayStack`.
+  * `StateManagerEventPipeline` does right after), and finally calling `LayoutEngine.calculateLayout` -- the exact entry
+  * point both the GUI `Renderer` and the TUI painter share, since neither has its own separate layout pass -- yields a
+  * real, positioned rect for the peek surface in `belowCursorOverlayStack`/`aboveCursorOverlayStack`.
   */
 class CursorPeekEndToEndRenderSpec extends AnyFlatSpec with Matchers:
 
@@ -84,7 +84,7 @@ class CursorPeekEndToEndRenderSpec extends AnyFlatSpec with Matchers:
     val reResolved = CursorPeekAnchorResolution.resolve(reformatted)
 
     val secondLayout = LayoutEngine.calculateLayout(reResolved, ViewportSize(100, 30))
-    val secondRect    = peekRectIn(secondLayout).getOrElse(fail("expected a peek rect"))
+    val secondRect   = peekRectIn(secondLayout).getOrElse(fail("expected a peek rect"))
 
     secondRect shouldBe firstRect
   }

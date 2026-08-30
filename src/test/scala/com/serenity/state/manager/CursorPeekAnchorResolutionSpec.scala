@@ -8,8 +8,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** Covers `CursorPeekAnchorResolution.resolve`: the render-time (not reducer-time -- reducers may not reach
   * `LayoutEngine`) resolution of the cursor-peek prototype's frozen `CursorPosition` to an actual on-screen
-  * `ScreenPosition`, done once and cached rather than re-derived on every subsequent call -- the mechanism that lets
-  * a frozen peek anchor survive a reformat underneath it.
+  * `ScreenPosition`, done once and cached rather than re-derived on every subsequent call -- the mechanism that lets a
+  * frozen peek anchor survive a reformat underneath it.
   */
 class CursorPeekAnchorResolutionSpec extends AnyFlatSpec with Matchers:
 
@@ -34,7 +34,8 @@ class CursorPeekAnchorResolutionSpec extends AnyFlatSpec with Matchers:
     )
 
   "resolve" should "leave state untouched when no peek anchor is pending" in {
-    val state = AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(100, 30))))
+    val state =
+      AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(100, 30))))
 
     CursorPeekAnchorResolution.resolve(state) shouldBe state
   }
@@ -48,13 +49,14 @@ class CursorPeekAnchorResolutionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "never re-derive an already-resolved anchor, even if the underlying document changes" in {
-    val state    = stateWithBuffer("alpha\nbeta\ngamma", cursorLine = 1, cursorColumn = 2)
-    val resolved = CursorPeekAnchorResolution.resolve(state)
+    val state               = stateWithBuffer("alpha\nbeta\ngamma", cursorLine = 1, cursorColumn = 2)
+    val resolved            = CursorPeekAnchorResolution.resolve(state)
     val firstResolvedAnchor = resolved.runtime.cursorPeekResolvedAnchor.getOrElse(fail("expected a resolved anchor"))
 
     // Simulate a reformat: the buffer content underneath changes, but cursorPeekAnchor (the frozen logical
     // position) and cursorPeekResolvedAnchor (the frozen screen position) are left as they were.
-    val reformattedBuffer = Buffer.fromString(BufferId(1), "a much longer first line that reflows everything\nbeta\ngamma")
+    val reformattedBuffer =
+      Buffer.fromString(BufferId(1), "a much longer first line that reflows everything\nbeta\ngamma")
     val reformatted = resolved.copy(persisted =
       resolved.persisted.copy(buffers = resolved.persisted.buffers.updated(BufferId(1), reformattedBuffer))
     )
