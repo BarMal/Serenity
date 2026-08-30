@@ -1820,9 +1820,11 @@ object Renderer:
 
     val bufferSnapshot = preparedSnapshot.orElse(buffer.map(snapshotForBuffer(_, contentRect, state, context)))
     val markdownLensFrame =
-      buffer.collect {
-        case buf if isInlineMarkdownLens(buf, state) => markdownLensFrameFor(buf, bufferSnapshot.get)
-      }
+      for
+        buf  <- buffer
+        snap <- bufferSnapshot
+        if isInlineMarkdownLens(buf, state)
+      yield markdownLensFrameFor(buf, snap)
 
     buffer match
       case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
@@ -1830,43 +1832,46 @@ object Renderer:
       case Some(buf) if buf.document.content.weight == 0 =>
         renderEmptyPane(contentRect, state.persisted.theme, context)
       case Some(buf) =>
-        renderBufferContent(
-          buf,
-          contentRect,
-          state,
-          context,
-          bufferSnapshot.get,
-          markdownLensFrame,
-          annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty)),
-          dirtyRows
-        )
+        bufferSnapshot.fold(renderEmptyPane(contentRect, state.persisted.theme, context)) { snap =>
+          renderBufferContent(
+            buf,
+            contentRect,
+            state,
+            context,
+            snap,
+            markdownLensFrame,
+            annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty)),
+            dirtyRows
+          )
+        }
       case None =>
         renderEmptyPane(contentRect, state.persisted.theme, context)
 
     val cursorContext =
       if state.hasCommandRunnerDomain then context.copy(cursorVisible = true)
       else context
-    buffer.foreach { buf =>
-      if isInlineMarkdownLens(buf, state) then
-        renderMarkdownLensCursors(
-          buf,
-          contentRect,
-          state.persisted.theme,
-          state.persisted.config,
-          cursorContext,
-          bufferSnapshot.get,
-          markdownLensFrame.getOrElse(markdownLensFrameFor(buf, bufferSnapshot.get))
-        )
-      else
-        val _ = renderCursors(
-          buf,
-          contentRect,
-          state.persisted.theme,
-          state.persisted.config,
-          cursorContext,
-          bufferSnapshot.get
-        )
-    }
+    (buffer, bufferSnapshot) match
+      case (Some(buf), Some(snap)) =>
+        if isInlineMarkdownLens(buf, state) then
+          renderMarkdownLensCursors(
+            buf,
+            contentRect,
+            state.persisted.theme,
+            state.persisted.config,
+            cursorContext,
+            snap,
+            markdownLensFrame.getOrElse(markdownLensFrameFor(buf, snap))
+          )
+        else
+          val _ = renderCursors(
+            buf,
+            contentRect,
+            state.persisted.theme,
+            state.persisted.config,
+            cursorContext,
+            snap
+          )
+      case _ => ()
 
   private def renderBufferHeader(
     pane: EditorPane,
@@ -2070,15 +2075,16 @@ object Renderer:
             val lineAnims = context.bufferAnimations
               .getOrElse(buffer.id, com.serenity.animation.AnimationState.empty)
               .getLineAnimations(visualLine.bufferLine)
-            lineAnims
-              .filter((col, cell) => col >= stringEnd && cell.currentBackground.isDefined)
-              .foreach { (col, cell) =>
-                val bgScreenX = rect.x + visualLineCellOffset(visualLine, context) + (col - visualLine.startColumn)
-                if bgScreenX >= 0 && bgScreenX < rect.right then
-                  context.surface.setForegroundColor(state.persisted.theme.foreground)
-                  context.surface.setBackgroundColor(cell.currentBackground.get)
-                  context.surface.putString(bgScreenX, screenY, " ")
+            lineAnims.foreach { (col, cell) =>
+              cell.currentBackground.foreach { bg =>
+                if col >= stringEnd then
+                  val bgScreenX = rect.x + visualLineCellOffset(visualLine, context) + (col - visualLine.startColumn)
+                  if bgScreenX >= 0 && bgScreenX < rect.right then
+                    context.surface.setForegroundColor(state.persisted.theme.foreground)
+                    context.surface.setBackgroundColor(bg)
+                    context.surface.putString(bgScreenX, screenY, " ")
               }
+            }
     }
 
   private def visualLineFits(

@@ -46,7 +46,11 @@ object MarkdownPreviewWindow:
 
     override def paintComponent(g: Graphics): Unit =
       super.paintComponent(g)
-      imageRef.get().foreach(image => g.drawImage(image, 0, 0, getWidth, getHeight, null))
+      imageRef
+        .get()
+        .foreach(image =>
+          g.drawImage(image, 0, 0, getWidth, getHeight, com.serenity.ui.renderer.Java2DRenderSurface.NoOpImageObserver)
+        )
 
   private def runOnEdt(action: => Unit): IO[Unit] =
     IO.blocking {
