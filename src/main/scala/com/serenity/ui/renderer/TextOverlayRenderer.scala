@@ -126,7 +126,8 @@ object TextOverlayRenderer:
       overlay.header.nonEmpty,
       overlay.footer.nonEmpty,
       overlay.itemGapRows,
-      overlay.itemTargetRows
+      overlay.itemTargetRows,
+      overlay.keyHintRow.nonEmpty
     )
 
     overlay.contentRowSlots
@@ -134,6 +135,7 @@ object TextOverlayRenderer:
         val row = slot.kind match
           case SurfaceContentRowKind.Header      => overlay.header
           case SurfaceContentRowKind.Item(index) => overlay.rows.lift(index)
+          case SurfaceContentRowKind.KeyHint     => overlay.keyHintRow
           case SurfaceContentRowKind.Footer      => overlay.footer
         row.foreach { row =>
           val rowOffset        = slot.y - overlay.rect.y

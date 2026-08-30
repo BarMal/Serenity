@@ -93,6 +93,10 @@ object PinnedPanelRenderer:
           case SurfaceContentRowKind.Header      => panel.header
           case SurfaceContentRowKind.Item(index) => panel.rows.lift(index)
           case SurfaceContentRowKind.Footer      => panel.footer
+          // Pinned panels never populate a key-hint row today (issue #931, Stage 3's persistent footer is
+          // command-palette/settings-surface-only, and those never pin) -- `PinnedPanelViewModel.contentRowSlots`
+          // never asks `contentRowSlotsFor` for a `KeyHint` slot, so this is unreachable in practice.
+          case SurfaceContentRowKind.KeyHint => None
 
         maybeRow.foreach { row =>
           val padded = row.plainText.take(maxLineSize).padTo(maxLineSize, ' ')

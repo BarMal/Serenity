@@ -510,7 +510,8 @@ object EditorLayoutContract:
               geometryFrame,
               SurfaceRenderMode.Floating,
               itemGapRowsFor(originalContent, state),
-              itemTargetRowsFor(originalContent, state)
+              itemTargetRowsFor(originalContent, state),
+              showKeyHintsFor(originalContent, state)
             )
           case content =>
             SurfaceContentResolver.resolve(
@@ -518,9 +519,12 @@ object EditorLayoutContract:
               geometryFrame,
               SurfaceRenderMode.Floating,
               itemGapRowsFor(content, state),
-              itemTargetRowsFor(content, state)
+              itemTargetRowsFor(content, state),
+              showKeyHintsFor(content, state)
             )
-    Option.when(resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty)(
+    Option.when(
+      resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty || resolved.keyHintRow.nonEmpty
+    )(
       surfaceGeometry(
         surface.content,
         geometryFrame,
@@ -529,6 +533,11 @@ object EditorLayoutContract:
         itemTargetRowsFor(surface.content, state)
       )
     )
+
+  private def showKeyHintsFor(content: SurfaceContent, state: AppState): Boolean =
+    content match
+      case SurfaceContent.CommandPalette(_) => state.persisted.config.surfaceConfig.commandRunnerShowKeyHints
+      case _                                => false
 
   private def surfaceGeometry(
     content: SurfaceContent,
@@ -547,7 +556,8 @@ object EditorLayoutContract:
         resolved.header.nonEmpty,
         resolved.footer.nonEmpty,
         itemGapRows,
-        itemTargetRows
+        itemTargetRows,
+        resolved.keyHintRow.nonEmpty
       ),
       headerRect = Option.when(resolved.header.nonEmpty && contentRect.height > 0)(
         LayoutRect(contentRect.x, contentRect.y, contentRect.width, 1)

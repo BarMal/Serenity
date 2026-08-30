@@ -4,7 +4,14 @@ import java.awt.Color
 
 import scala.annotation.unused
 
-import com.serenity.command.{CommandCategory, CommandSurfaceItem, FontIntent, SettingsIntent, SettingsSurfaceState}
+import com.serenity.command.{
+  CommandCategory,
+  CommandSurfaceItem,
+  FontIntent,
+  SettingsIntent,
+  SettingsPage,
+  SettingsSurfaceState
+}
 import com.serenity.config.ToolbarDisplayMode
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
@@ -56,7 +63,11 @@ final case class ResolvedSurfaceContent(
     title: Option[String] = None,
     header: Option[OverlayRow] = None,
     rows: List[OverlayRow] = Nil,
-    footer: Option[OverlayRow] = None
+    footer: Option[OverlayRow] = None,
+    // Persistent key-hint chrome row (issue #931, Stage 3) -- distinct from `footer`, which stays the transient
+    // status-message slot. Only the command palette and settings surface ever populate this, and only when
+    // `resolve`'s `showKeyHints` is true; every other content kind leaves it `None`.
+    keyHintRow: Option[OverlayRow] = None
 )
 
 object SurfaceContentResolver:
@@ -66,7 +77,12 @@ object SurfaceContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode,
     itemGapRows: Double = 0.0,
-    itemTargetRows: Int = 1
+    itemTargetRows: Int = 1,
+    // Whether the command runner's persistent key-hint footer (issue #931, Stage 3) should be populated for
+    // `CommandPalette` content. Defaults to off so every caller that does not pass it explicitly -- including every
+    // pre-existing test -- keeps the pre-Stage-3 single dynamic-footer behaviour unchanged; production call sites
+    // pass `AppConfig.surfaceConfig.commandRunnerShowKeyHints` explicitly.
+    showKeyHints: Boolean = false
   ): ResolvedSurfaceContent =
     content match
       case SurfaceContent.StartPage(_) =>
@@ -104,7 +120,7 @@ object SurfaceContentResolver:
       case SurfaceContent.DirectoryTree(tree, selectedPath) =>
         resolveDirectoryTree(rect, mode, tree, selectedPath)
       case SurfaceContent.CommandPalette(runner) =>
-        resolveCommandPalette(runner, rect, mode, itemGapRows, itemTargetRows)
+        resolveCommandPalette(runner, rect, mode, itemGapRows, itemTargetRows, showKeyHints)
       case SurfaceContent.ModalWorkflow(modal) =>
         resolveModalWorkflow(modal, rect, mode)
       case SurfaceContent.Terminal(buffer, cursor) =>
@@ -360,7 +376,8 @@ object SurfaceContentResolver:
     rect: LayoutRect,
     mode: SurfaceRenderMode,
     itemGapRows: Double,
-    itemTargetRows: Int
+    itemTargetRows: Int,
+    showKeyHints: Boolean
   ): ResolvedSurfaceContent =
     // Dispatch on `CommandRunnerSurface` (issue #931, Stage 2) rather than `isSettingsSurface`/
     // `activeSettingsSurface.isDefined` directly -- `Settings(_)` covers both entry points exactly as those two
@@ -369,7 +386,7 @@ object SurfaceContentResolver:
     // has since been deactivated still renders through `resolveSettingsSurface`, not the inactive placeholder below).
     runner.surface match
       case _: com.serenity.command.CommandRunnerSurface.Settings =>
-        resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows)
+        resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows, showKeyHints)
       case com.serenity.command.CommandRunnerSurface.Palette(_) if !runner.isActive =>
         ResolvedSurfaceContent(titleFor(mode, "commands"))
       case com.serenity.command.CommandRunnerSurface.Palette(paletteState) =>
@@ -386,6 +403,9 @@ object SurfaceContentResolver:
         // Same capped, expand-in-place group preview as resolveSettingsSurface, for a settings group still sitting
         // in this mixed list (browsing the Settings tab before drilling into any group) -- issue #1059.
         val groupPreview = groupPreviewRows(SettingsSurfaceState.previewRows(allItems, runner.selectedIndex))
+        // The persistent key-hint row (issue #931, Stage 3) only ever shows when there is a list to navigate --
+        // mirrors the existing dynamic footer's own `allItems.nonEmpty` gate.
+        val hasKeyHint = showKeyHints && allItems.nonEmpty
         val itemWindow = SurfaceFrameLayout
           .forContent(rect, SurfaceContent.CommandPalette(runner))
           .itemWindow(
@@ -395,7 +415,8 @@ object SurfaceContentResolver:
             hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty,
             reservedContentRows = groupPreview.size,
             itemGapRows = itemGapRows,
-            itemTargetRows = itemTargetRows
+            itemTargetRows = itemTargetRows,
+            hasKeyHint = hasKeyHint
           )
         val windowItems           = itemWindow.slice(allItems)
         val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
@@ -431,27 +452,34 @@ object SurfaceContentResolver:
                 )
             if selected then row :: groupPreview else List(row)
         }
+        // With the persistent row on, `footer` reverts to being purely the transient status-message slot -- the
+        // dynamic hint text moves to `keyHintRow` and is no longer suppressed while a status message shows (issue
+        // #931, Stage 3). With it off, `footer` keeps doing both jobs exactly as before.
         val footer =
-          runner.statusMessage
-            .map(OverlayRow(_))
-            .orElse(
-              Option.when(allItems.nonEmpty)(
-                OverlayRow(commandPaletteFooter(runner, allItems.length))
+          if showKeyHints then runner.statusMessage.map(OverlayRow(_))
+          else
+            runner.statusMessage
+              .map(OverlayRow(_))
+              .orElse(
+                Option.when(allItems.nonEmpty)(
+                  OverlayRow(commandPaletteFooter(runner, allItems.length))
+                )
               )
-            )
 
         ResolvedSurfaceContent(
           title = titleFor(mode, "commands"),
           header = header,
           rows = rows,
-          footer = footer
+          footer = footer,
+          keyHintRow = Option.when(hasKeyHint)(OverlayRow(paletteKeyHintText))
         )
 
   private def resolveSettingsSurface(
     runner: com.serenity.command.CommandRunner,
     rect: LayoutRect,
     itemGapRows: Double,
-    itemTargetRows: Int
+    itemTargetRows: Int,
+    showKeyHints: Boolean
   ): ResolvedSurfaceContent =
     val items         = runner.settingsSurfaceItems
     val selectedIndex = runner.settingsSurfaceSelectedIndex
@@ -468,7 +496,8 @@ object SurfaceContentResolver:
         hasFooter = true,
         reservedContentRows = groupPreview.size,
         itemGapRows = itemGapRows,
-        itemTargetRows = itemTargetRows
+        itemTargetRows = itemTargetRows,
+        hasKeyHint = showKeyHints
       )
     val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(selectedIndex)
     val rows = itemWindow.slice(items).zipWithIndex.flatMap {
@@ -509,21 +538,50 @@ object SurfaceContentResolver:
     }
     val searchTerm     = runner.activeSettingsSurface.fold(runner.searchTerm)(_.current.searchTerm)
     val selectedAction = settingsSurfaceSelectedAction(runner, items.lift(selectedIndex))
+    // Same footer/keyHintRow split as the palette above: with the persistent row on, `footer` is status-message-only
+    // and the always-current "Navigate • ... • Back • Dismiss" hint moves to `keyHintRow` (issue #931, Stage 3).
+    val footer =
+      if showKeyHints then runner.statusMessage.map(OverlayRow(_))
+      else
+        runner.statusMessage
+          .map(OverlayRow(_))
+          .orElse(
+            Some(
+              OverlayRow(
+                s"Navigate • $selectedAction • Back • Dismiss • ${selectedIndex + 1}/${items.length.max(1)}"
+              )
+            )
+          )
     ResolvedSurfaceContent(
       title = Some("Settings"),
       header =
         Some(breadcrumbHeader(runner.settingsSurfaceBreadcrumbLabels, Option.when(searchTerm.nonEmpty)(searchTerm))),
       rows = rows,
-      footer = runner.statusMessage
-        .map(OverlayRow(_))
-        .orElse(
-          Some(
-            OverlayRow(
-              s"Navigate • $selectedAction • Back • Dismiss • ${selectedIndex + 1}/${items.length.max(1)}"
-            )
-          )
-        )
+      footer = footer,
+      keyHintRow = Option.when(showKeyHints)(OverlayRow(settingsSurfaceKeyHintText(runner)))
     )
+
+  /** Static key-hint text for the palette (issue #931, Stage 3) -- the palette's key semantics don't vary by selection
+    * the way the settings surface's do, so unlike `settingsSurfaceKeyHintText` this needs no runner state.
+    */
+  private def paletteKeyHintText: String =
+    "↑↓ navigate • Enter run • Esc dismiss"
+
+  /** Key-hint text for whichever settings-surface state is actually active, matching the real reducer semantics
+    * (`CommandRunnerReducer`) post Stage 1/2 rather than the dynamic footer's transient per-selection action word:
+    *   - recording a keybinding: only Escape does anything (cancels the recording)
+    *   - editing a value's text: typing edits it, Enter saves, Escape cancels the edit without navigating
+    *   - browsing a group's rows: arrow keys navigate, Enter opens/runs the selected row, Escape backs out one level,
+    *     and Left/Right cycle an `OptionItem` row's value in place
+    */
+  private def settingsSurfaceKeyHintText(runner: com.serenity.command.CommandRunner): String =
+    runner.activeSettingsSurface.map(_.current) match
+      case Some(editing: SettingsPage.Editing) if editing.recording.nonEmpty =>
+        "Esc cancel"
+      case Some(_: SettingsPage.Editing) =>
+        "Type to edit • Enter save • Esc cancel"
+      case _ =>
+        "↑↓ navigate • Enter open • Esc back • ←→ cycle option"
 
   /** Renders `SettingsSurfaceState.previewRows`' capped child labels as indented, de-emphasized rows, with a trailing
     * "+N more" row when there are more children than fit. `leadingPadding` indents the row at render time

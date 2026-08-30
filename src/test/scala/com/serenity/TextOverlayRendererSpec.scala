@@ -498,6 +498,28 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
     surface.getRow(3) should not include "1/1"
   }
 
+  it should "render a persistent key-hint row above the footer, distinct from both it and the item rows (issue #931, Stage 3)" in {
+    val surface = new MockRenderSurface(80, 9)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 30, 8),
+      header = Some(OverlayRow("header")),
+      rows = List(OverlayRow("one item")),
+      keyHintRow = Some(OverlayRow("Esc dismiss")),
+      footer = Some(OverlayRow("1/1"))
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getRow(1) should include("header")
+    surface.getRow(2) should include("one item")
+    surface.getRow(5) should include("Esc dismiss")
+    surface.getRow(6) should include("1/1")
+    surface.getRow(5) should not include "1/1"
+    surface.getRow(6) should not include "Esc dismiss"
+  }
+
   it should "truncate long selected column text from the end instead of dropping the leading characters" in {
     val surface = new MockRenderSurface(40, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
