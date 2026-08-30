@@ -2,7 +2,7 @@
 <configuration>
     <!-- Console appender. Denied entirely in TUI mode (issue #1215): stdout there is the terminal surface
          TerminalRenderSurface owns exclusively, and an ordinary console log line racing its ANSI writes corrupts
-         the display and drags the real cursor away -- see TuiConsoleLogFilter. -->
+         the display and drags the real cursor away, see TuiConsoleLogFilter. -->
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <filter class="com.serenity.diagnostics.TuiConsoleLogFilter" />
         <encoder>
