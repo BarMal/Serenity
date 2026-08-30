@@ -253,8 +253,11 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
   private def animatedCommandSurfaces(state: AppState): List[UiSurface] =
     state.runtime.uiSurfaces.filter {
       _.content match
-        case SurfaceContent.CommandPalette(_) => true
-        case _                                => false
+        // Cursor-peek prototype: reuses the exact same open/close fade choreography as CommandPalette (the settle-
+        // in/settle-out the design calls for), rather than a second animation mechanism -- so it inherits
+        // commandRunnerAnimation/MotionPreset.Reduced for free, with no new opt-out.
+        case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) => true
+        case _                                                                      => false
     }
 
   private def matchingExitingCommandGhost(surface: UiSurface, state: AppState): Option[UiSurface] =
