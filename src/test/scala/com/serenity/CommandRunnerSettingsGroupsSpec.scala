@@ -75,6 +75,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "window-chrome",
+      "command-runner-key-hints",
       "ui-element-gap",
       "ui-corner-radius",
       "ui-outline-thickness",

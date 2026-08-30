@@ -57,6 +57,7 @@ object CommandRunnerOptionSelections:
       "focused-text-body"          -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
       "contextual-toolbar"         -> enabledIndex(surfaceConfig.contextualToolbarEnabled),
       "contextual-toolbar-display" -> contextualToolbarDisplayModeIndex(surfaceConfig.contextualToolbarDisplayMode),
+      "command-runner-key-hints"   -> enabledIndex(surfaceConfig.commandRunnerShowKeyHints),
       "code-font"                  -> codeFontIndex(editorConfig.fontConfig.codeFontFamily),
       "text-font"                  -> textFontIndex(editorConfig.fontConfig.textFontFamily),
       "ui-font"                    -> uiFontIndex(editorConfig.fontConfig.uiFontFamily),

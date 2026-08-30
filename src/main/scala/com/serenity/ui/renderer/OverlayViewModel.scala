@@ -15,6 +15,7 @@ final case class TextOverlayView(
     header: Option[OverlayRow] = None,
     rows: List[OverlayRow] = Nil,
     footer: Option[OverlayRow] = None,
+    keyHintRow: Option[OverlayRow] = None,
     itemGapRows: Double = 0.0,
     itemTargetRows: Int = 1,
     verticalOffsetRows: Double = 0.0,
@@ -32,7 +33,8 @@ final case class TextOverlayView(
       header.nonEmpty,
       footer.nonEmpty,
       itemGapRows,
-      itemTargetRows
+      itemTargetRows,
+      keyHintRow.nonEmpty
     )
 
 final case class OverlayViews(
@@ -114,6 +116,7 @@ object OverlayViewModel:
             header = content.header,
             rows = content.rows,
             footer = content.footer,
+            keyHintRow = content.keyHintRow,
             itemGapRows = itemGapRowsFor(originalContent, state),
             itemTargetRows =
               SurfaceFrameLayout.itemTargetRowsFor(originalContent, state.persisted.config.interfaceDensity),
@@ -135,6 +138,7 @@ object OverlayViewModel:
               header = resolved.header,
               rows = resolved.rows,
               footer = resolved.footer,
+              keyHintRow = resolved.keyHintRow,
               itemGapRows = itemGapRowsFor(content, state),
               itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity),
               verticalOffsetRows = verticalOffsetRows,
@@ -209,11 +213,18 @@ object OverlayViewModel:
               rect,
               SurfaceRenderMode.Floating,
               itemGapRowsFor(content, state),
-              SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
+              SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity),
+              showKeyHintsFor(content, state)
             )
     Option.when(
-      resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty || isComposedContent(content)
+      resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty ||
+        resolved.keyHintRow.nonEmpty || isComposedContent(content)
     )(resolved)
+
+  private def showKeyHintsFor(content: com.serenity.state.models.SurfaceContent, state: AppState): Boolean =
+    content match
+      case SurfaceContent.CommandPalette(_) => state.persisted.config.surfaceConfig.commandRunnerShowKeyHints
+      case _                                => false
 
   private def isComposedContent(content: SurfaceContent): Boolean =
     content match

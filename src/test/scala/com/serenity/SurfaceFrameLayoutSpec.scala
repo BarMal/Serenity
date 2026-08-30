@@ -73,6 +73,36 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
       .shouldBe(9)
   }
 
+  it should "reserve a persistent key-hint row distinct from the header/footer chrome rows (issue #931, Stage 3)" in {
+    val frame = SurfaceFrameLayout(LayoutRect(0, 0, 40, 10))
+
+    frame.visibleItemRows(hasHeader = true, hasFooter = true, hasKeyHint = true).shouldBe(5)
+    frame.visibleItemRows(hasHeader = true, hasFooter = true, hasKeyHint = false).shouldBe(6)
+
+    SurfaceFrameLayout
+      .frameHeightForItemRows(itemRows = 4, hasHeader = true, hasFooter = true, hasKeyHint = true)
+      .shouldBe(9)
+
+    val slots =
+      SurfaceFrameLayout(LayoutRect(10, 4, 40, 8), borderCells = 0)
+        .contentRowSlots(itemCount = 5, hasHeader = true, hasFooter = true, hasKeyHint = true)
+    slots shouldBe List(
+      SurfaceContentRowSlot(SurfaceContentRowKind.Header, 4),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Item(0), 5),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Item(1), 6),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Item(2), 7),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Item(3), 8),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Item(4), 9),
+      SurfaceContentRowSlot(SurfaceContentRowKind.KeyHint, 10),
+      SurfaceContentRowSlot(SurfaceContentRowKind.Footer, 11)
+    )
+
+    // With no footer, the key-hint row sits at the very bottom instead of just above it.
+    SurfaceFrameLayout(LayoutRect(10, 4, 40, 8), borderCells = 0)
+      .contentRowSlots(itemCount = 5, hasHeader = true, hasFooter = false, hasKeyHint = true)
+      .lastOption shouldBe Some(SurfaceContentRowSlot(SurfaceContentRowKind.KeyHint, 11))
+  }
+
   it should "reserve blank rows between spaced items while keeping header and footer slots fixed" in {
     val frame = SurfaceFrameLayout(LayoutRect(10, 4, 40, 8), borderCells = 0)
 

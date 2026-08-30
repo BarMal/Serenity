@@ -17,6 +17,10 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    // The persistent key-hint footer (issue #931, Stage 3) defaults on and reserves a row, shifting which absolute
+    // item rows fit in the window -- disabled here since this test is about row hit-testing mechanics, not the
+    // footer feature, and every row math below assumes the pre-Stage-3 window size.
+    disableCommandRunnerKeyHints(stateManager)
 
     val before = stateManager.getCurrentState.unsafeRunSync()
     val point  = commandRunnerItemPoint(before, 2)
@@ -142,6 +146,8 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
     openCursorSubmenu(stateManager)
+    // See the equivalent comment on "highlight the command row under the pointer" above.
+    disableCommandRunnerKeyHints(stateManager)
 
     val before = stateManager.getCurrentState.unsafeRunSync()
     val point  = commandRunnerItemPoint(before, 2)
@@ -254,6 +260,14 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
 
   /** Enters "settings-cursor" (search "cursor" exact-matches its label; issue #1057 -- was "settings-language"). */
+  private def disableCommandRunnerKeyHints(stateManager: com.serenity.state.manager.StateManager): Unit =
+    stateManager
+      .updateState(state =>
+        state
+          .copy(persisted = state.persisted.copy(config = state.persisted.config.withCommandRunnerShowKeyHints(false)))
+      )
+      .unsafeRunSync()
+
   private def openCursorSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()

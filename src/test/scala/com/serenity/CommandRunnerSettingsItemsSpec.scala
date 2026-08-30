@@ -148,3 +148,19 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     )
     leftAndRightPanels.map(_.id) should not contain "settings-panel-actions"
   }
+
+  it should "build a command-runner key-hints option item toggling the persistent footer (issue #931, Stage 3)" in {
+    val onByDefault = CommandRunnerSettingsItems.commandRunnerKeyHintsOptionItem(Map.empty)
+    onByDefault.label shouldBe "Command Runner Key Hints"
+    onByDefault.selectedOption shouldBe "On"
+    onByDefault.selectedIntent shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(true)))
+    )
+
+    val explicitlyOff =
+      CommandRunnerSettingsItems.commandRunnerKeyHintsOptionItem(Map("command-runner-key-hints" -> 1))
+    explicitlyOff.selectedOption shouldBe "Off"
+    explicitlyOff.selectedIntent shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(false)))
+    )
+  }

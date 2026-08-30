@@ -979,6 +979,10 @@ final case class SurfaceConfig(
     commandRunnerVisibleRows: Option[Int] = None,
     commandRunnerItemGapRows: Double = 0.0,
     commandRunnerCursorGapRows: Option[Double] = None,
+    // Opt-out (unlike `showWordCount`/`commentDisplayMode`): the persistent key-hint footer (issue #931, Stage 3) is
+    // the discoverability fix the stage exists to deliver, so it ships on by default; callers who want the old
+    // dynamic-footer-only behaviour turn it off explicitly.
+    commandRunnerShowKeyHints: Boolean = true,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     renderDamageGranularity: RenderDamageGranularity = RenderDamageGranularity.Rows,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
@@ -1761,6 +1765,10 @@ final case class AppConfig(
 
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
+
+  /** Show or hide the command runner's persistent key-hint footer row (issue #931, Stage 3). */
+  def withCommandRunnerShowKeyHints(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerShowKeyHints = enabled))
 
   def withContextualToolbarEnabled(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(contextualToolbarEnabled = enabled))

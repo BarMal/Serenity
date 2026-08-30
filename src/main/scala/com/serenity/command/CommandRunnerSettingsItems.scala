@@ -885,6 +885,20 @@ object CommandRunnerSettingsItems:
       hint = Some("Toolbar labels as icons, text, or both")
     )
 
+  private[command] def commandRunnerKeyHintsOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "command-runner-key-hints",
+      label = "Command Runner Key Hints",
+      selectedIndex = optionSelections.getOrElse("command-runner-key-hints", 0),
+      enabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(true))),
+      disabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(false))),
+      hint = "Persistent key-binding footer in the palette and settings surface"
+    )
+
   // issue #1057: this list of Comment/Bookmark/Navigation one-shot actions used to feed the "Navigation" settings
   // group (`CommandRunnerSettingsGroups.navigationGroup`). Removed -- each of these was already registered verbatim
   // in `CommandRegistry.defaultCommands`, so nothing is lost; they are reachable only via the palette now.

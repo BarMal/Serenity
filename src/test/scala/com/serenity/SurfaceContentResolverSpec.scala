@@ -438,6 +438,119 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.footer.map(_.plainText) shouldBe Some("Invalid binding: ctrl")
   }
 
+  // issue #931, Stage 3: the persistent key-hint footer. `showKeyHints` defaults to `false` on `resolve` itself, so
+  // every test above (none of which pass it) keeps exercising the pre-Stage-3 single dynamic-footer path unchanged;
+  // these tests exercise the new path explicitly, the way production call sites always do (passing
+  // `AppConfig.surfaceConfig.commandRunnerShowKeyHints`).
+  it should "leave keyHintRow empty and the footer unchanged when showKeyHints is off" in {
+    val registry = CommandRegistry.default
+    val runner   = CommandRunner.empty.activate(registry, AppConfig.default)
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 60, 10),
+      SurfaceRenderMode.Floating,
+      showKeyHints = false
+    )
+
+    resolved.keyHintRow shouldBe None
+    resolved.footer.map(_.plainText) shouldBe defined
+  }
+
+  it should "render a persistent palette key-hint row that survives a status message, distinct from the footer" in {
+    val registry     = CommandRegistry.default
+    val plainRunner  = CommandRunner.empty.activate(registry, AppConfig.default)
+    val statusRunner = plainRunner.copy(statusMessage = Some("Invalid binding: ctrl"))
+
+    val plainResolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(plainRunner),
+      LayoutRect(0, 0, 60, 10),
+      SurfaceRenderMode.Floating,
+      showKeyHints = true
+    )
+    val statusResolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(statusRunner),
+      LayoutRect(0, 0, 60, 10),
+      SurfaceRenderMode.Floating,
+      showKeyHints = true
+    )
+
+    plainResolved.keyHintRow.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss")
+    plainResolved.footer shouldBe None
+
+    // The key hint stays put and the status message shows up separately as the footer -- neither slot suppresses
+    // the other now that the row is persistent chrome (issue #931, Stage 3).
+    statusResolved.keyHintRow.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss")
+    statusResolved.footer.map(_.plainText) shouldBe Some("Invalid binding: ctrl")
+  }
+
+  it should "render the settings-group-browsing key hint, distinct from the transient action-word footer" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(surface = CommandRunnerSurface.Settings(drilled = None))
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 90, 12),
+      SurfaceRenderMode.Floating,
+      showKeyHints = true
+    )
+
+    resolved.keyHintRow.map(_.plainText) shouldBe Some("↑↓ navigate • Enter open • Esc back • ←→ cycle option")
+    resolved.footer shouldBe None
+  }
+
+  it should "render the editing-value key hint while a settings input is mid-edit" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(surface =
+        CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Editing(groupId = "settings-interface-layout", itemId = "ui-element-gap", draftText = "3")
+            )
+          )
+        )
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 90, 12),
+      SurfaceRenderMode.Floating,
+      showKeyHints = true
+    )
+
+    resolved.keyHintRow.map(_.plainText) shouldBe Some("Type to edit • Enter save • Esc cancel")
+  }
+
+  it should "render the recording-a-keybinding key hint while a keybinding is mid-record" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(surface =
+        CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Editing(
+                groupId = "settings-keymap",
+                itemId = "keymap-command-runner-submit",
+                draftText = "",
+                recording = Some(RecordingState(itemId = "keymap-command-runner-submit"))
+              )
+            )
+          )
+        )
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 90, 12),
+      SurfaceRenderMode.Floating,
+      showKeyHints = true
+    )
+
+    resolved.keyHintRow.map(_.plainText) shouldBe Some("Esc cancel")
+  }
+
   // issue #1057: buffer-language switchers are ordinary CommandRegistry commands now (not a "settings-language"
   // settings group), so this exercises the same long-list scroll-windowing mechanics through the palette's root
   // rendering path instead -- a registry scoped to just the language commands keeps the fixture (and its literal

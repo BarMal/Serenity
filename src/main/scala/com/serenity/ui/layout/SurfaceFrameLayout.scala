@@ -72,7 +72,8 @@ object FloatingSurfaceGeometry:
     hasHeader: Boolean,
     hasFooter: Boolean,
     itemGapRows: Double,
-    itemTargetRows: Int = 1
+    itemTargetRows: Int = 1,
+    hasKeyHint: Boolean = false
   ): FloatingSurfaceGeometry =
     val frameRect = LogicalPixelRect(
       frame.x * metrics.charWidth.toDouble,
@@ -89,7 +90,9 @@ object FloatingSurfaceGeometry:
     )
     val itemStart = contentRect.y + (if hasHeader then metrics.lineHeight else 0)
     val usableHeight =
-      contentRect.height - (if hasHeader then metrics.lineHeight else 0) - (if hasFooter then metrics.lineHeight else 0)
+      contentRect.height - (if hasHeader then metrics.lineHeight else 0) - (if hasFooter then metrics.lineHeight
+                                                                            else 0) -
+        (if hasKeyHint then metrics.lineHeight else 0)
     val targetHeight = math.max(1, itemTargetRows) * metrics.lineHeight.toDouble
     val step         = targetHeight + rowOffsetPixels(itemGapRows, metrics)
     val visibleItems = visibleItemCount(usableHeight, targetHeight, rowOffsetPixels(itemGapRows, metrics))
@@ -120,10 +123,13 @@ final case class SurfaceFrameLayout(
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
     itemGapRows: Double = 0.0,
-    itemTargetRows: Int = 1
+    itemTargetRows: Int = 1,
+    hasKeyHint: Boolean = false
   ): Int =
-    val availableRows =
-      math.max(0, maxContentRows - SurfaceFrameLayout.contentChromeRows(hasHeader, hasFooter, reservedContentRows))
+    val availableRows = math.max(
+      0,
+      maxContentRows - SurfaceFrameLayout.contentChromeRows(hasHeader, hasFooter, reservedContentRows, hasKeyHint)
+    )
     FloatingSurfaceGeometry.visibleItemCount(
       availableRows.toDouble,
       itemHeight = math.max(1, itemTargetRows).toDouble,
@@ -137,9 +143,11 @@ final case class SurfaceFrameLayout(
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
     itemGapRows: Double = 0.0,
-    itemTargetRows: Int = 1
+    itemTargetRows: Int = 1,
+    hasKeyHint: Boolean = false
   ): SurfaceItemWindow =
-    val maxRows = visibleItemRows(hasHeader, hasFooter, reservedContentRows, itemGapRows, itemTargetRows)
+    val maxRows =
+      visibleItemRows(hasHeader, hasFooter, reservedContentRows, itemGapRows, itemTargetRows, hasKeyHint)
     val offset =
       if itemCount <= maxRows then 0
       else
@@ -155,10 +163,19 @@ final case class SurfaceFrameLayout(
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
     itemGapRows: Double = 0.0,
-    itemTargetRows: Int = 1
+    itemTargetRows: Int = 1,
+    hasKeyHint: Boolean = false
   ): Option[Int] =
-    val window =
-      itemWindow(itemCount, selectedIndex, hasHeader, hasFooter, reservedContentRows, itemGapRows, itemTargetRows)
+    val window = itemWindow(
+      itemCount,
+      selectedIndex,
+      hasHeader,
+      hasFooter,
+      reservedContentRows,
+      itemGapRows,
+      itemTargetRows,
+      hasKeyHint
+    )
     val itemRowBase = contentRect.y + (if hasHeader then 1 else 0)
     val itemRow     = row - itemRowBase
     val targetRows  = math.max(1, itemTargetRows)
@@ -173,9 +190,18 @@ final case class SurfaceFrameLayout(
     hasHeader: Boolean,
     hasFooter: Boolean,
     itemGapRows: Double = 0.0,
-    itemTargetRows: Int = 1
+    itemTargetRows: Int = 1,
+    hasKeyHint: Boolean = false
   ): List[SurfaceContentRowSlot] =
-    SurfaceFrameLayout.contentRowSlotsFor(contentRect, itemCount, hasHeader, hasFooter, itemGapRows, itemTargetRows)
+    SurfaceFrameLayout.contentRowSlotsFor(
+      contentRect,
+      itemCount,
+      hasHeader,
+      hasFooter,
+      itemGapRows,
+      itemTargetRows,
+      hasKeyHint
+    )
 
 final case class SurfaceItemWindow(offset: Int, rowCount: Int):
   def slice[A](items: List[A]): List[A] =
@@ -190,6 +216,7 @@ final case class SurfaceItemWindow(offset: Int, rowCount: Int):
 enum SurfaceContentRowKind:
   case Header
   case Item(index: Int)
+  case KeyHint
   case Footer
 
 final case class SurfaceContentRowSlot(kind: SurfaceContentRowKind, y: Int)
@@ -204,15 +231,17 @@ object SurfaceFrameLayout:
     hasHeader: Boolean,
     hasFooter: Boolean,
     itemGapRows: Double = 0.0,
-    itemTargetRows: Int = 1
+    itemTargetRows: Int = 1,
+    hasKeyHint: Boolean = false
   ): List[SurfaceContentRowSlot] =
     if content.height <= 0 then Nil
     else
-      val headerRows = if hasHeader then 1 else 0
-      val footerRows = if hasFooter then 1 else 0
-      val itemRows   = math.max(0, content.height - headerRows - footerRows)
-      val targetRows = math.max(1, itemTargetRows)
-      val itemHeight = targetRows + math.max(0.0, itemGapRows)
+      val headerRows  = if hasHeader then 1 else 0
+      val footerRows  = if hasFooter then 1 else 0
+      val keyHintRows = if hasKeyHint then 1 else 0
+      val itemRows    = math.max(0, content.height - headerRows - footerRows - keyHintRows)
+      val targetRows  = math.max(1, itemTargetRows)
+      val itemHeight  = targetRows + math.max(0.0, itemGapRows)
       val visibleItems = FloatingSurfaceGeometry.visibleItemCount(
         itemRows.toDouble,
         itemHeight = targetRows.toDouble,
@@ -228,12 +257,18 @@ object SurfaceFrameLayout:
       val headerSlots =
         if hasHeader then List(SurfaceContentRowSlot(SurfaceContentRowKind.Header, content.y))
         else Nil
+      // The key-hint row sits directly above the footer (or at the very bottom when there is no footer) -- it is
+      // persistent chrome, distinct from the transient status-message footer slot (issue #931, Stage 3).
+      val keyHintSlots =
+        if hasKeyHint && content.height > headerRows then
+          List(SurfaceContentRowSlot(SurfaceContentRowKind.KeyHint, content.bottom - 1 - footerRows))
+        else Nil
       val footerSlots =
         if hasFooter && content.height > headerRows then
           List(SurfaceContentRowSlot(SurfaceContentRowKind.Footer, content.bottom - 1))
         else Nil
 
-      headerSlots ++ itemSlots ++ footerSlots
+      headerSlots ++ itemSlots ++ keyHintSlots ++ footerSlots
 
   def borderCellsFor(content: SurfaceContent): Int =
     content match
@@ -246,19 +281,22 @@ object SurfaceFrameLayout:
   def contentChromeRows(
     hasHeader: Boolean,
     hasFooter: Boolean,
-    reservedContentRows: Int = 0
+    reservedContentRows: Int = 0,
+    hasKeyHint: Boolean = false
   ): Int =
     (if hasHeader then 1 else 0) +
       (if hasFooter then 1 else 0) +
+      (if hasKeyHint then 1 else 0) +
       math.max(0, reservedContentRows)
 
   def frameChromeRows(
     hasHeader: Boolean,
     hasFooter: Boolean,
     reservedContentRows: Int = 0,
-    borderCells: Int = DefaultBorderCells
+    borderCells: Int = DefaultBorderCells,
+    hasKeyHint: Boolean = false
   ): Int =
-    (math.max(0, borderCells) * 2) + contentChromeRows(hasHeader, hasFooter, reservedContentRows)
+    (math.max(0, borderCells) * 2) + contentChromeRows(hasHeader, hasFooter, reservedContentRows, hasKeyHint)
 
   def frameHeightForItemRows(
     itemRows: Int,
@@ -267,7 +305,8 @@ object SurfaceFrameLayout:
     reservedContentRows: Int = 0,
     borderCells: Int = DefaultBorderCells,
     itemGapRows: Double = 0.0,
-    itemTargetRows: Int = 1
+    itemTargetRows: Int = 1,
+    hasKeyHint: Boolean = false
   ): Int =
     val rows = math.max(0, itemRows)
     val gaps = math.ceil(math.max(0.0, rows - 1) * math.max(0.0, itemGapRows)).toInt
@@ -275,7 +314,8 @@ object SurfaceFrameLayout:
       hasHeader,
       hasFooter,
       reservedContentRows,
-      borderCells
+      borderCells,
+      hasKeyHint
     )
 
   /** Minimum physical height for pointer-operable surface controls at the selected density. */

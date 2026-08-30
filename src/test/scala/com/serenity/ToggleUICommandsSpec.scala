@@ -231,6 +231,53 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     finalState.commandRunnerSurface shouldBe None
   }
 
+  it should "set the command runner's persistent key-hint footer explicitly from a stateful option" in {
+    val stateManager = createStateManager()
+
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .commandRunnerShowKeyHints shouldBe true
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-key-hints-off",
+          "Set command runner key hints off",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(false))),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .commandRunnerShowKeyHints shouldBe false
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "command-runner-key-hints-on",
+          "Set command runner key hints on",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(true))),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .commandRunnerShowKeyHints shouldBe true
+  }
+
   it should "toggle word wrap from enabled to disabled" in {
     val stateManager = createStateManager()
 

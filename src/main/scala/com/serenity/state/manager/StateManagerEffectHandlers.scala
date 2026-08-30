@@ -844,6 +844,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateTextDisplayConfig(config => config.withContextualToolbarEnabled(enabled)).void
       case PanelChromeIntent.SetContextualToolbarDisplayMode(mode) =>
         updateTextDisplayConfig(config => config.withContextualToolbarDisplayMode(mode)).void
+      case PanelChromeIntent.SetCommandRunnerShowKeyHints(enabled) =>
+        updateAppearanceConfig(_.withCommandRunnerShowKeyHints(enabled)).void
       case PanelChromeIntent.SetUiElementGap(gap) =>
         updateAppearanceConfig(_.withUiElementGap(gap)).void
       case PanelChromeIntent.SetUiCornerRadiusPx(radius) =>
