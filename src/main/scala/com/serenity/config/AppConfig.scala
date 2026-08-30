@@ -6,8 +6,10 @@ import java.nio.file.{Files, Path, Paths}
 import scala.util.control.NonFatal
 
 import com.serenity.animation.*
+import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
+import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
 enum BackgroundStyle:
@@ -983,6 +985,17 @@ final case class SurfaceConfig(
     // the discoverability fix the stage exists to deliver, so it ships on by default; callers who want the old
     // dynamic-footer-only behaviour turn it off explicitly.
     commandRunnerShowKeyHints: Boolean = true,
+    // Experimental prototype (off by default, unlike `commandRunnerShowKeyHints`): holding or double-tapping a bare
+    // modifier peeks/opens the command runner near the cursor line. Ships disabled -- this is a single-panel spike,
+    // not the finished feature -- and callers opt in explicitly.
+    commandRunnerCursorPeekEnabled: Boolean = false,
+    // Configurable per-user given real risk of OS/WM collision with Super/Meta on Linux.
+    commandRunnerCursorPeekModifier: Modifier = Modifier.Meta,
+    // Hold-vs-double-tap threshold in milliseconds. Defaults to `ModifierTapDetector.WindowMillis` (200L) for
+    // consistency with the codebase's existing bare-modifier double-tap window (`ctrl+ctrl`-style hotkeys) rather
+    // than introducing a second magic number.
+    commandRunnerCursorPeekTapWindowMillis: Long = 200L,
+    commandRunnerCursorPeekPlacement: SurfacePlacement = SurfacePlacement.BelowCursor,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     renderDamageGranularity: RenderDamageGranularity = RenderDamageGranularity.Rows,
     editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
@@ -1007,6 +1020,8 @@ final case class SurfaceConfig(
       commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
       commandRunnerItemGapRows = AppConfig.clampCommandRunnerItemGapRows(commandRunnerItemGapRows),
       commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
+      commandRunnerCursorPeekTapWindowMillis =
+        AppConfig.clampCommandRunnerCursorPeekTapWindowMillis(commandRunnerCursorPeekTapWindowMillis),
       textAreaInsets = textAreaInsets.normalized,
       viewportSizing = viewportSizing.normalized
     )
@@ -1770,6 +1785,23 @@ final case class AppConfig(
   def withCommandRunnerShowKeyHints(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(commandRunnerShowKeyHints = enabled))
 
+  /** Enable or disable the experimental cursor-peek prototype (off by default). */
+  def withCommandRunnerCursorPeekEnabled(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerCursorPeekEnabled = enabled))
+
+  def withCommandRunnerCursorPeekModifier(modifier: Modifier): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerCursorPeekModifier = modifier))
+
+  def withCommandRunnerCursorPeekTapWindowMillis(millis: Long): AppConfig =
+    withSurfaceConfig(
+      surfaceConfig.copy(commandRunnerCursorPeekTapWindowMillis =
+        AppConfig.clampCommandRunnerCursorPeekTapWindowMillis(millis)
+      )
+    )
+
+  def withCommandRunnerCursorPeekPlacement(placement: SurfacePlacement): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(commandRunnerCursorPeekPlacement = placement))
+
   def withContextualToolbarEnabled(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(contextualToolbarEnabled = enabled))
 
@@ -2148,6 +2180,10 @@ object AppConfig:
   val MaxCommandRunnerItemGapRows: Double    = 8.0
   val MinCommandRunnerCursorGapRows: Double  = 0.0
   val MaxCommandRunnerCursorGapRows: Double  = 8.0
+  // Wide enough to allow a deliberately slow "hold" feel while still rejecting nonsensical (near-zero or
+  // multi-second) values; 200 (the default, matching `ModifierTapDetector.WindowMillis`) sits well inside it.
+  val MinCommandRunnerCursorPeekTapWindowMillis: Long = 50L
+  val MaxCommandRunnerCursorPeekTapWindowMillis: Long = 2000L
 
   def clampElementTransitionSpeedScale(scale: Double): Double =
     scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
@@ -2171,6 +2207,9 @@ object AppConfig:
   def clampCommandRunnerCursorGapRows(rows: Double): Double =
     if rows.isFinite then rows.max(MinCommandRunnerCursorGapRows).min(MaxCommandRunnerCursorGapRows)
     else MinCommandRunnerCursorGapRows
+
+  def clampCommandRunnerCursorPeekTapWindowMillis(millis: Long): Long =
+    millis.max(MinCommandRunnerCursorPeekTapWindowMillis).min(MaxCommandRunnerCursorPeekTapWindowMillis)
 
   def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
     animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))
