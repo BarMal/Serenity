@@ -247,6 +247,7 @@ final private[manager] class StateManagerEventPipeline(
       case NextTab                                       => reduced >> applyPaneFlowAnimation(SweepDirection.Backward)
       case PreviousTab                                   => reduced >> applyPaneFlowAnimation(SweepDirection.Forward)
       case ToggleContextualToolbar | NewTab | FileSearch => reduced
+      case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed => reduced
 
   /** Bumps `markdownPreviewEditGeneration` synchronously for any buffer this event's dispatch changed the content of,
     * provided that buffer currently has a live markdown preview -- and schedules a debounced commit of that generation

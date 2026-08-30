@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandRegistry, CommandSurfaceItem}
+import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -167,4 +168,80 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val movedForward = AppEventReducer.reduce(NextTab, movedBack, registry).state
     movedForward.focusedBufferId shouldBe Some(BufferId(1))
+  }
+
+  private def enabledState: AppState =
+    AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        config = AppState.initial.persisted.config.withCommandRunnerCursorPeekEnabled(true),
+        focus = Focus.EditorPane(PaneId(0))
+      )
+    )
+
+  "cursor-peek prototype (default off)" should "leave state entirely untouched when the flag is disabled" in {
+    val disabledState =
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
+
+    val result = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), disabledState, registry)
+
+    result.state shouldBe disabledState
+    result.effects shouldBe Nil
+  }
+
+  it should "begin a peek (freezing the cursor anchor) on the first bare press of the configured modifier when enabled" in {
+    val state = enabledState
+
+    val result = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry)
+
+    result.state.runtime.cursorPeekAnchor shouldBe state.activeCursorPosition
+    result.state.commandRunnerSurface shouldBe None
+  }
+
+  it should "clear the peek anchor when the modifier is released before a second tap" in {
+    val state = enabledState
+
+    val pressed  = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry).state
+    val released = AppEventReducer.reduce(CursorPeekModifierReleased(Modifier.Meta, 5L), pressed, registry).state
+
+    released.runtime.cursorPeekAnchor shouldBe None
+    released.commandRunnerSurface shouldBe None
+  }
+
+  it should "open the command runner fully -- reusing today's open mechanics -- on a double-tap within the window" in {
+    val state = enabledState
+
+    val pressed1 = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry).state
+    val released = AppEventReducer.reduce(CursorPeekModifierReleased(Modifier.Meta, 5L), pressed1, registry).state
+    val opened   = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 200L), released, registry).state
+
+    opened.commandRunnerSurface shouldBe defined
+    opened.persisted.focus shouldBe Focus.Surface(opened.commandRunnerSurface.get.id)
+    opened.runtime.cursorPeekAnchor shouldBe None
+  }
+
+  it should "ignore bare presses of a modifier other than the configured one" in {
+    val state = enabledState
+
+    val result = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Ctrl, 0L), state, registry)
+
+    result.state.runtime.cursorPeekAnchor shouldBe None
+    result.state.commandRunnerSurface shouldBe None
+  }
+
+  it should "cancel a pending peek when a non-modifier key is pressed" in {
+    val state = enabledState
+
+    val pressed   = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry).state
+    val cancelled = AppEventReducer.reduce(CursorPeekOtherKeyPressed, pressed, registry).state
+
+    cancelled.runtime.cursorPeekAnchor shouldBe None
+    cancelled.commandRunnerSurface shouldBe None
+  }
+
+  it should "not open the command runner from a modifier release event" in {
+    val state = enabledState
+
+    val result = AppEventReducer.reduce(CursorPeekModifierReleased(Modifier.Meta, 0L), state, registry)
+
+    result.state.commandRunnerSurface shouldBe None
   }
