@@ -188,22 +188,35 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     result.effects shouldBe Nil
   }
 
-  it should "begin a peek (freezing the cursor anchor) on the first bare press of the configured modifier when enabled" in {
+  it should "begin a peek (freezing the cursor anchor and showing a peek surface) on the first bare press when enabled" in {
     val state = enabledState
 
     val result = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry)
 
     result.state.runtime.cursorPeekAnchor shouldBe state.activeCursorPosition
     result.state.commandRunnerSurface shouldBe None
+    val peekSurface = result.state.runtime.uiSurfaces.find(_.id == SurfaceId.CursorPeek)
+    peekSurface shouldBe defined
+    peekSurface.map(_.content) should matchPattern { case Some(_: SurfaceContent.CommandRunnerPeek) => }
   }
 
-  it should "clear the peek anchor when the modifier is released before a second tap" in {
+  it should "not steal editor focus while a peek is showing" in {
+    val state = enabledState
+
+    val result = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry)
+
+    result.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
+  it should "clear the peek anchor and remove the peek surface when the modifier is released before a second tap" in {
     val state = enabledState
 
     val pressed  = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry).state
     val released = AppEventReducer.reduce(CursorPeekModifierReleased(Modifier.Meta, 5L), pressed, registry).state
 
     released.runtime.cursorPeekAnchor shouldBe None
+    released.runtime.cursorPeekResolvedAnchor shouldBe None
+    released.runtime.uiSurfaces.find(_.id == SurfaceId.CursorPeek) shouldBe None
     released.commandRunnerSurface shouldBe None
   }
 
@@ -217,6 +230,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     opened.commandRunnerSurface shouldBe defined
     opened.persisted.focus shouldBe Focus.Surface(opened.commandRunnerSurface.get.id)
     opened.runtime.cursorPeekAnchor shouldBe None
+    opened.runtime.uiSurfaces.find(_.id == SurfaceId.CursorPeek) shouldBe None
   }
 
   it should "ignore bare presses of a modifier other than the configured one" in {

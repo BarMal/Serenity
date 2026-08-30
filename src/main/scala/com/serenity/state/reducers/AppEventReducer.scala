@@ -100,15 +100,47 @@ object AppEventReducer:
   // just an unused code path.
   //
   // `state.runtime.cursorPeekAnchor` is the cursor position frozen at the moment a peek begins (`PeekBegin`), and is
-  // plain data -- reducers may not reach into `LayoutEngine` (`ArchitectureChecks.ForbiddenImports`), so resolving it
-  // to an actual on-screen position via `LayoutEngine.resolveFrozenCursorPeekStack` is layout/render work, not yet
-  // wired into this prototype stage (tracked as follow-up).
+  // plain data -- reducers may not reach into `LayoutEngine` (`ArchitectureChecks.ForbiddenImports`). Resolving it to
+  // an actual on-screen position -- once, cached, never re-derived -- is `CursorPeekAnchorResolution`'s job
+  // (`state.manager`, which may use `LayoutEngine`); this reducer only ever clears `cursorPeekResolvedAnchor`
+  // alongside `cursorPeekAnchor`, never sets it.
+  //
+  // The peek surface itself (`SurfaceId.CursorPeek`, `SurfaceContent.CommandRunnerPeek`) is created on `PeekBegin`
+  // and removed on `PeekEnd`/`DoubleTapOpen` -- a distinct content case from `CommandPalette` (see UiSurface.scala's
+  // doc comment on why), and never pushed into focus: "look but don't touch," the editor keeps focus throughout.
 
   private def cursorPeekEnabled(state: AppState): Boolean =
     state.persisted.config.surfaceConfig.commandRunnerCursorPeekEnabled
 
   private def peekModifier(state: AppState): Modifier =
     state.persisted.config.surfaceConfig.commandRunnerCursorPeekModifier
+
+  private def beginCursorPeek(state: AppState, registry: CommandRegistry): AppState =
+    val activatedRunner = CommandRunner.empty
+      .activate(registry, state.persisted.config, state.runtime.isTuiMode, state.runtime.keyboardFidelityTier)
+    val peekSurface = UiSurface(
+      id = SurfaceId.CursorPeek,
+      content = SurfaceContent.CommandRunnerPeek(activatedRunner),
+      presentation = SurfacePresentation.Floating(
+        state.activeCursorPosition,
+        state.persisted.config.surfaceConfig.commandRunnerCursorPeekPlacement
+      )
+    )
+    state.copy(
+      runtime = state.runtime.copy(
+        cursorPeekAnchor = state.activeCursorPosition,
+        uiSurfaces = upsertSurface(state.runtime.uiSurfaces, peekSurface)
+      )
+    )
+
+  private def endCursorPeek(state: AppState): AppState =
+    state.copy(runtime =
+      state.runtime.copy(
+        cursorPeekAnchor = None,
+        cursorPeekResolvedAnchor = None,
+        uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == SurfaceId.CursorPeek)
+      )
+    )
 
   private def handleCursorPeekModifierPressed(
     state: AppState,
@@ -120,14 +152,14 @@ object AppEventReducer:
     else
       CursorPeekDetector.modifierPressed(state.runtime.cursorPeekSession, modifier, peekModifier(state), atMillis) match
         case CursorPeekDetector.Outcome.PeekBegin(next) =>
-          state.copy(runtime =
-            state.runtime.copy(cursorPeekSession = next, cursorPeekAnchor = state.activeCursorPosition)
-          )
+          val begun = beginCursorPeek(state, registry)
+          begun.copy(runtime = begun.runtime.copy(cursorPeekSession = next))
         case CursorPeekDetector.Outcome.DoubleTapOpen(next) =>
-          val cleared = state.copy(runtime = state.runtime.copy(cursorPeekSession = next, cursorPeekAnchor = None))
-          openCommandRunnerFully(cleared, registry)
+          val ended = endCursorPeek(state)
+          openCommandRunnerFully(ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next)), registry)
         case CursorPeekDetector.Outcome.PeekEnd(next) =>
-          state.copy(runtime = state.runtime.copy(cursorPeekSession = next, cursorPeekAnchor = None))
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
         case CursorPeekDetector.Outcome.Unchanged(next) =>
           state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
 
@@ -136,28 +168,32 @@ object AppEventReducer:
     else
       CursorPeekDetector.modifierReleased(state.runtime.cursorPeekSession, modifier, peekModifier(state), atMillis) match
         case CursorPeekDetector.Outcome.PeekEnd(next) =>
-          state.copy(runtime = state.runtime.copy(cursorPeekSession = next, cursorPeekAnchor = None))
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
         case CursorPeekDetector.Outcome.Unchanged(next) =>
           state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
         // A release never begins a peek or opens the runner -- kept exhaustive rather than partial.
         case CursorPeekDetector.Outcome.PeekBegin(next) =>
           state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
         case CursorPeekDetector.Outcome.DoubleTapOpen(next) =>
-          state.copy(runtime = state.runtime.copy(cursorPeekSession = next, cursorPeekAnchor = None))
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
 
   private def handleCursorPeekOtherKeyPressed(state: AppState): AppState =
     if !cursorPeekEnabled(state) then state
     else
       CursorPeekDetector.otherKeyPressed(state.runtime.cursorPeekSession) match
         case CursorPeekDetector.Outcome.PeekEnd(next) =>
-          state.copy(runtime = state.runtime.copy(cursorPeekSession = next, cursorPeekAnchor = None))
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
         case CursorPeekDetector.Outcome.Unchanged(next) =>
           state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
         // otherKeyPressed never begins a peek or opens the runner -- kept exhaustive rather than partial.
         case CursorPeekDetector.Outcome.PeekBegin(next) =>
           state.copy(runtime = state.runtime.copy(cursorPeekSession = next))
         case CursorPeekDetector.Outcome.DoubleTapOpen(next) =>
-          state.copy(runtime = state.runtime.copy(cursorPeekSession = next, cursorPeekAnchor = None))
+          val ended = endCursorPeek(state)
+          ended.copy(runtime = ended.runtime.copy(cursorPeekSession = next))
 
   /** A double-tap always means "open fully", not toggle-close -- unlike `ToggleCommandRunner`, a second gesture that
     * lands while the runner happens to already be open (e.g. opened some other way mid-peek) is just a no-op, never
