@@ -133,7 +133,10 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.y shouldBe contentRect.y + 8
-    rect.x shouldBe contentRect.x
+    // Horizontally centered on screen, not cursor-anchored (bug fix): the palette's width and content bear no
+    // relationship to the cursor's column, so its x position is derived from `contentRect`, independent of the
+    // cursor's column (18) used to place this surface.
+    rect.x shouldBe contentRect.x + (contentRect.width - 72) / 2
     rect.width shouldBe 72
     rect.right should be < contentRect.right
     rect.bottom should be <= paneRect.bottom

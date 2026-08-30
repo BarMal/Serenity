@@ -111,7 +111,9 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     commandLine should include("Open")
     commandLine should include("Open file")
     overlay.width shouldBe 72
-    overlay.x shouldBe paneContentRect.x
+    // Horizontally centered on screen, not cursor-anchored (bug fix): the palette's width and content bear no
+    // relationship to the cursor's column.
+    overlay.x shouldBe paneContentRect.x + (paneContentRect.width - overlay.width) / 2
 
     surface.getBg(0, 0) shouldBe state.persisted.theme.highlighted.background
     surface.getBg(overlay.x, overlay.y) shouldBe state.persisted.theme.panel.background
@@ -202,7 +204,10 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     topOverlay.y shouldBe topContentRect.y + 2
     lowerOverlay.y shouldBe lowerContentRect.y + 22
     lowerOverlay.y should be > topOverlay.y
-    lowerOverlay.x shouldBe lowerContentRect.x
+    // Horizontally centered on screen, not cursor-anchored (bug fix): both cursors sit at column 0, but the palette's
+    // x position depends only on the content rect's width, not the cursor's row.
+    lowerOverlay.x shouldBe lowerContentRect.x + (lowerContentRect.width - lowerOverlay.width) / 2
+    lowerOverlay.x shouldBe topOverlay.x
   }
 
   // issue #931: category tabs are retired -- this used to also assert on a distributed tab row above the settings

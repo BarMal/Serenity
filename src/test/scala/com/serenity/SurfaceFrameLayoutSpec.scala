@@ -135,6 +135,40 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
       .rowCount shouldBe 4
   }
 
+  /** Bug: at the default Comfortable-density command-palette geometry (`itemTargetRows = 2`, a persistent key-hint row,
+    * header, and footer), a selected item's `reservedContentRows` (its expand-in-place group preview, capped at 4 by
+    * `CommandRunner.MaxPreviewRows`) can consume the *entire* remaining item budget -- `visibleItemRows` returns 0 --
+    * which previously zeroed the whole item window (`rowCount = 0`), rendering no rows at all, not even the selected
+    * item's own row. The window must always keep room for at least the selected item when there is one to show; only
+    * sibling rows should be sacrificed to the preview's space, never the selected row itself.
+    */
+  it should "never let a selected item's own row disappear when its preview needs the whole item budget" in {
+    val frame = SurfaceFrameLayout(LayoutRect(0, 0, 40, 10))
+
+    frame
+      .visibleItemRows(
+        hasHeader = true,
+        hasFooter = true,
+        reservedContentRows = 4,
+        itemTargetRows = 2,
+        hasKeyHint = true
+      )
+      .shouldBe(0)
+
+    val window = frame.itemWindow(
+      itemCount = 8,
+      selectedIndex = 1,
+      hasHeader = true,
+      hasFooter = true,
+      reservedContentRows = 4,
+      itemTargetRows = 2,
+      hasKeyHint = true
+    )
+
+    window.rowCount should be >= 1
+    window.slice((0 until 8).toList) should contain(1)
+  }
+
   it should "derive a centered item window from the framed surface content contract" in {
     val frame = SurfaceFrameLayout(LayoutRect(0, 0, 40, 8))
 

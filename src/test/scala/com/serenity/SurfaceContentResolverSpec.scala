@@ -295,6 +295,35 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     header.segments.map(_.selected) shouldBe List(true, true, true, false)
   }
 
+  /** Bug: selecting a settings-root group whose expand-in-place preview (`groupPreviewRows`, capped at
+    * `CommandRunner.MaxPreviewRows` = 4) needs the whole remaining item budget left `SurfaceFrameLayout.itemWindow`
+    * computing zero visible item rows -- `visibleItemRows` subtracts `reservedContentRows` from the same row budget
+    * shared with sibling items, and at the default Comfortable density (`itemTargetRows = 2` for `CommandPalette`,
+    * matching production's `itemTargetRowsFor`) plus the default-on persistent key-hint row
+    * (`commandRunnerShowKeyHints`, matching `showKeyHintsFor`), four or more preview rows exhausts the budget entirely,
+    * before the *selected* item's own row is accounted for. The whole settings list then rendered as no rows at all --
+    * not even the selected group -- rather than just dropping unselected sibling rows to make room. "Document Writing"
+    * (4 children: Navigation, Document Defaults, Rich Text, Spell Check) is the first settings-root group hit at this
+    * window size, with these (production-matching) rendering parameters.
+    */
+  it should "always render the selected settings-root group's own row, even when its preview needs the whole item budget" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(surface = CommandRunnerSurface.Settings(root = CommandPaletteState(selectedIndex = 1), drilled = None))
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 80, 10),
+      SurfaceRenderMode.Floating,
+      itemGapRows = 0.0,
+      itemTargetRows = 2,
+      showKeyHints = true
+    )
+
+    resolved.rows should not be empty
+    resolved.rows.find(_.selected).map(_.plainText) shouldBe Some("Document Writing")
+  }
+
   it should "resolve preset font submenu as grouped typography rows" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)

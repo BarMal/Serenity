@@ -614,6 +614,47 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     LayoutEngine.calculateLayout(state, ViewportSize(40, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(37)
   }
 
+  /** Bug: the command palette's horizontal position was cursor-anchored (`horizontalAnchorX` = the cursor's screen
+    * column), the same rule the contextual toolbar uses to hug a text selection. Unlike the toolbar, the palette's
+    * width and content have no relationship to the cursor's horizontal position -- cursor-anchoring left it pinned near
+    * whichever column the caret happened to be in, clamped hard against the right edge whenever that column was near
+    * the end of a long line, rather than centered on screen the way a command palette is expected to be. Vertical
+    * (above/below-cursor) placement is unaffected by this fix.
+    */
+  it should "horizontally center the command palette on screen regardless of the cursor's column" in {
+    val runner = com.serenity.command.CommandRunner.empty.activate(
+      com.serenity.command.CommandRegistry.default,
+      com.serenity.config.AppConfig.default
+    )
+    val farRightColumn = 120
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(runner),
+      SurfacePresentation.Floating(Some(CursorPosition(0, farRightColumn)), SurfacePlacement.BelowCursor)
+    )
+    val bufferId = BufferId(1)
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> Buffer.fromString(bufferId, "x" * 200)),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
+          activeEditorPaneId = Some(PaneId(0))
+        )
+      ),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
+    )
+
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(160, 30))
+    val overlayRect = layout.belowCursorOverlayRect.getOrElse(fail("Expected the command palette to render"))
+    val contentRect = layout.editorPanelRect
+
+    overlayRect.x shouldBe (contentRect.x + math.max(0, (contentRect.width - overlayRect.width) / 2))
+    // Confirm this genuinely differs from the old cursor-anchored position -- otherwise the assertion above would
+    // pass vacuously whenever centering and cursor-anchoring happen to coincide.
+    overlayRect.x should not be (farRightColumn - overlayRect.width / 2)
+  }
+
   it should "leave non-runner floating surfaces at their available width" in {
     val bufferId = BufferId(1)
     val surface = UiSurface(
