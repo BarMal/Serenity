@@ -36,7 +36,7 @@ main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1149
 main/scala/com/serenity/ui/presets/UiPreset.scala	file length	878
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	file length	709
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	method applyGlow	90
-main/scala/com/serenity/ui/renderer/Renderer.scala	file length	3374
+main/scala/com/serenity/ui/renderer/Renderer.scala	file length	3376
 main/scala/com/serenity/ui/renderer/TextOverlayRenderer.scala	file length	1047
 main/scala/com/serenity/ui/terminal/SwingWindow.scala	file length	1152
 main/scala/com/serenity/ui/theme/ThemeManager.scala	method highlightMarkdownLine	89

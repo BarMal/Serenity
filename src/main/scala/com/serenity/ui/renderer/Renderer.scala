@@ -2044,7 +2044,8 @@ object Renderer:
                 bufferLine = visualLine.bufferLine,
                 bufferStartColumn = visualLine.startColumn,
                 styledSegments = styledSegments,
-                lexStartState = lexStartState
+                lexStartState = lexStartState,
+                maxColumn = Some(rect.right)
               )
 
             renderDocumentCommentHighlights(
@@ -2595,7 +2596,8 @@ object Renderer:
                   syntaxHighlightingEnabled = false,
                   language = None,
                   bufferLine = visualLine.bufferLine,
-                  bufferStartColumn = visualLine.startColumn
+                  bufferStartColumn = visualLine.startColumn,
+                  maxColumn = Some(rect.right)
                 )
               renderSelectionHighlights(
                 context.surface,
