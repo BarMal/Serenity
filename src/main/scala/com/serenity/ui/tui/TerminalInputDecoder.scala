@@ -228,10 +228,16 @@ object TerminalInputDecoder:
     * kitty) or a kitty-annotated one (`CSI 5;1:3~`) both carry a second field the exact-match against `params` used to
     * miss entirely, silently falling through to [[InputKey.Unknown]] -- a distinct, pre-existing gap from the
     * double-fire bug, fixed here since it is the same root cause (this decoder ignoring what follows the key number).
+    *
+    * The modifier value in that same field (`CSI 1;5C` for Ctrl+Right, `CSI 1;6C` for Ctrl+Shift+Right, standard xterm
+    * `modifyCursorKeys`/`modifyOtherKeys` behavior, not kitty-specific) is decoded via [[modifiersOf]] and carried onto
+    * the resulting [[KeyStrokeInfo]] -- previously dropped here entirely (`Set.empty` regardless of `params`), which
+    * silently broke every Ctrl/Shift/Alt-modified arrow, Home/End and PageUp/PageDown stroke in the TUI (#1245).
     */
   private def decodeCsiKey(params: String, finalByte: Byte): List[DecodedToken] =
     if eventTypeOf(params) == 3 then Nil // Release of a plain key: not a keystroke of its own.
     else
+      val modifiers = modifiersOf(params)
       val key = finalByte.toChar match
         case 'A' => InputKey.ArrowUp
         case 'B' => InputKey.ArrowDown
@@ -261,7 +267,7 @@ object TerminalInputDecoder:
             case "24"      => InputKey.F12
             case _         => InputKey.Unknown
         case _ => InputKey.Unknown
-      List(DecodedToken.Key(KeyStrokeInfo(key, None, Set.empty)))
+      List(DecodedToken.Key(KeyStrokeInfo(key, None, modifiers)))
 
   /** Shared `keycode;modifiers[:eventType]` event-type extraction, used by both [[decodeCsiU]] and [[decodeCsiKey]] --
     * same wire position (the `;`-delimited field after the leading keycode/dummy-`1`, `:`-delimited sub-field after the
@@ -273,6 +279,17 @@ object TerminalInputDecoder:
     val fields    = params.split(";", -1)
     val modFields = fields.drop(1).headOption.getOrElse("").split(":", -1)
     modFields.drop(1).headOption.flatMap(_.toIntOption).getOrElse(1)
+
+  /** Shared modifier-value extraction from the same `...;modifiers[:event]` field [[eventTypeOf]] reads the event type
+    * out of, decoded via [[csiUModifiers]] -- used by both [[decodeCsiU]] (whose keycode field precedes it) and
+    * [[decodeCsiKey]] (whose legacy letter/tilde form carries the identical field once a terminal reports modified
+    * cursor/tilde keys, kitty-annotated or plain xterm `modifyCursorKeys` alike).
+    */
+  private def modifiersOf(params: String): Set[Modifier] =
+    val fields    = params.split(";", -1)
+    val modFields = fields.drop(1).headOption.getOrElse("").split(":", -1)
+    val modsValue = modFields.headOption.flatMap(_.toIntOption).filter(_ > 0).getOrElse(1)
+    csiUModifiers(modsValue)
 
   /** kitty-protocol private-use-area codepoints for a bare modifier key's own press/release, keyed by the [[Modifier]]
     * it double-taps as. `Super`/`Hyper`/`CapsLock`/`NumLock` have codepoints too (per the kitty spec) but no
@@ -299,10 +316,8 @@ object TerminalInputDecoder:
   private def decodeCsiU(params: String): List[DecodedToken] =
     val fields    = params.split(";", -1)
     val keycode   = fields.headOption.flatMap(_.split(":", -1).headOption).flatMap(_.toIntOption)
-    val modFields = fields.drop(1).headOption.getOrElse("").split(":", -1)
-    val modsValue = modFields.headOption.flatMap(_.toIntOption).filter(_ > 0).getOrElse(1)
     val eventType = eventTypeOf(params)
-    val modifiers = csiUModifiers(modsValue)
+    val modifiers = modifiersOf(params)
 
     keycode match
       case None => Nil

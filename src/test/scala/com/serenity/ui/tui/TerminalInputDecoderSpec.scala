@@ -84,7 +84,19 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "decode a modified tilde-form key (Shift+PageUp) despite the appended modifier field" in {
-    decodeAll(csi("5;2~")) shouldBe List(tok(InputKey.PageUp))
+    decodeAll(csi("5;2~")) shouldBe List(tok(InputKey.PageUp, mods = Set(Modifier.Shift)))
+  }
+
+  it should "decode Ctrl and Ctrl+Shift modified arrow keys, not just the bare CSI-letter form (#1245)" in {
+    decodeAll(csi("1;5C")) shouldBe List(tok(InputKey.ArrowRight, mods = Set(Modifier.Ctrl)))
+    decodeAll(csi("1;5D")) shouldBe List(tok(InputKey.ArrowLeft, mods = Set(Modifier.Ctrl)))
+    decodeAll(csi("1;6C")) shouldBe List(tok(InputKey.ArrowRight, mods = Set(Modifier.Ctrl, Modifier.Shift)))
+    decodeAll(csi("1;6D")) shouldBe List(tok(InputKey.ArrowLeft, mods = Set(Modifier.Ctrl, Modifier.Shift)))
+  }
+
+  it should "decode a modified Home/End CSI-letter sequence (Ctrl+Home)" in {
+    decodeAll(csi("1;5H")) shouldBe List(tok(InputKey.Home, mods = Set(Modifier.Ctrl)))
+    decodeAll(csi("1;5F")) shouldBe List(tok(InputKey.End, mods = Set(Modifier.Ctrl)))
   }
 
   it should "decode Home and End in both the xterm and VT220 forms" in {

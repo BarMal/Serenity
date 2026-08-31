@@ -23,6 +23,8 @@ case object MoveWordLeft                extends NavigationEvent
 case object MoveWordRight               extends NavigationEvent
 case object ExtendSelectionLeft         extends NavigationEvent
 case object ExtendSelectionRight        extends NavigationEvent
+case object ExtendSelectionWordLeft     extends NavigationEvent
+case object ExtendSelectionWordRight    extends NavigationEvent
 case object MoveToStart                 extends NavigationEvent
 case object MoveToEnd                   extends NavigationEvent
 case object SelectAll                   extends TextEntryEvent

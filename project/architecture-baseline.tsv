@@ -26,7 +26,7 @@ main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseIt
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	710
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceActive	360
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitSubmenu	101
-main/scala/com/serenity/state/reducers/EditorEventReducer.scala	file length	1846
+main/scala/com/serenity/state/reducers/EditorEventReducer.scala	file length	1855
 main/scala/com/serenity/state/reducers/EditorEventReducer.scala	method reduceCursorsNavigationEvent	82
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	623
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	114
@@ -50,7 +50,7 @@ test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1252
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
 test/scala/com/serenity/EditorEventReducerSpec.scala	file length	2255
 test/scala/com/serenity/FileHandlingSpec.scala	file length	625
-test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	645
+test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	661
 test/scala/com/serenity/LayoutContractSpec.scala	file length	963
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	678
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745

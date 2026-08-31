@@ -195,8 +195,8 @@ object EditorEventReducer:
 
   private def isExtendSelectionEvent(event: TextEntryEvent): Boolean =
     event match
-      case ExtendSelectionLeft | ExtendSelectionRight => true
-      case _                                          => false
+      case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionWordLeft | ExtendSelectionWordRight => true
+      case _                                                                                               => false
 
   private def invalidateFindState(state: AppState, bufferId: BufferId): AppState =
     state.persisted.buffers.get(bufferId) match
@@ -354,9 +354,10 @@ object EditorEventReducer:
     * scrolls the viewport to keep the new cursor visible where the multi-cursor form does not, and untangling whether
     * that asymmetry is deliberate is outside this change's scope.
     *
-    * `ExtendSelectionLeft`/`ExtendSelectionRight` stay single-representative-only, exactly as before `#994`: extending
-    * a selection has only ever operated on the buffer's first cursor regardless of how many cursors are live, via
-    * `isExtendSelectionEvent`'s pre-dispatch gate in `reduceTextEventForBuffer`.
+    * `ExtendSelectionLeft`/`ExtendSelectionRight`/`ExtendSelectionWordLeft`/`ExtendSelectionWordRight` stay
+    * single-representative-only, exactly as before `#994`: extending a selection has only ever operated on the buffer's
+    * first cursor regardless of how many cursors are live, via `isExtendSelectionEvent`'s pre-dispatch gate in
+    * `reduceTextEventForBuffer`.
     */
   private def reduceCursorsTextEvent(
     event: TextEntryEvent,
@@ -383,9 +384,11 @@ object EditorEventReducer:
         val buffer       = clearInFlightMultiCursorVerticalState(rawBuffer)
         val currentState = Focused.replaceBuffer(incomingState, buffer)
         event match
-          case ExtendSelectionLeft  => reduceSelectionExtension(buffer, head, currentState)(leftTarget)
-          case ExtendSelectionRight => reduceSelectionExtension(buffer, head, currentState)(rightTarget)
-          case _                    => ReducerResult.noEffects(currentState)
+          case ExtendSelectionLeft      => reduceSelectionExtension(buffer, head, currentState)(leftTarget)
+          case ExtendSelectionRight     => reduceSelectionExtension(buffer, head, currentState)(rightTarget)
+          case ExtendSelectionWordLeft  => reduceSelectionExtension(buffer, head, currentState)(wordLeftTarget)
+          case ExtendSelectionWordRight => reduceSelectionExtension(buffer, head, currentState)(wordRightTarget)
+          case _                        => ReducerResult.noEffects(currentState)
 
       case Some(head) =>
         val rawCursors   = rawBuffer.cursorList
@@ -1562,6 +1565,12 @@ object EditorEventReducer:
   private def wordBoundaryFrom(buffer: Buffer, from: CursorPosition, boundary: (Rope, Int) => Int): CursorPosition =
     val offset = lineColumnToOffset(buffer.document.content, from.line, from.column)
     buffer.document.content.offsetToCursorPosition(boundary(buffer.document.content, offset))
+
+  private def wordLeftTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.previousWordBoundary(offset)))
+
+  private def wordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.nextWordBoundary(offset)))
 
   private def verticalTarget(currentState: AppState, geometry: EditorGeometry, direction: Int)(
     buffer: Buffer,
