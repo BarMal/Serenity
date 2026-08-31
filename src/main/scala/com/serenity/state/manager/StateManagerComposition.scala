@@ -360,6 +360,7 @@ private[manager] trait EffectModalWorkflowPort:
   def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit]
   def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState
   def createStartupSession(): IO[Unit]
   def restoreStartupSession(): IO[Unit]
@@ -557,6 +558,8 @@ private[manager] class StateManagerComposition(
       workflow.submitReplaceWorkflowEffect(surfaceId)
     def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.submitCloseWorkflowEffect(surfaceId)
+    def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
+      workflow.createFileWorkflowDirectoriesEffect(surfaceId)
     def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
       workflow.restoreSessionIntoCurrentViewport(restoredState, currentState)
     def createStartupSession(): IO[Unit]                        = workflow.createStartupSession()

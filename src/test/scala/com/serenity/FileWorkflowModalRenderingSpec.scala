@@ -82,14 +82,18 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     pathLine should include("project")
     innerLines.exists(_.contains("/tmp/project/new/")) shouldBe true
     innerLines.exists(_.contains("Create directories: new / nested")) shouldBe true
-    overlay.x shouldBe contentRect.x
-    overlay.width shouldBe contentRect.width
+    // Centered, fixed-width like the command palette (issue #1253) -- no longer spans the full editor-pane width.
+    overlay.width shouldBe math.min(contentRect.width, 72)
+    overlay.x shouldBe (contentRect.x + math.max(0, (contentRect.width - overlay.width) / 2))
 
     val suggestionRowsHighlighted =
-      List(overlay.y + 4, overlay.y + 5).exists { y =>
+      List(overlay.y + 5, overlay.y + 6).exists { y =>
         surface.getBg(overlay.x + 1, y) == state.persisted.theme.highlighted.background
       }
     suggestionRowsHighlighted shouldBe true
+
+    val formatLine = (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 4)).mkString.trim
+    formatLine should include("Format:")
   }
 
   it should "paint file workflow status messages when a target cannot be opened" in {
@@ -143,8 +147,9 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
 
     innerLines.mkString(" ") should include("File not found:")
     innerLines.mkString(" ") should include("missing.scala")
-    overlay.x shouldBe contentRect.x
-    overlay.width shouldBe contentRect.width
+    // Centered, fixed-width like the command palette (issue #1253) -- no longer spans the full editor-pane width.
+    overlay.width shouldBe math.min(contentRect.width, 72)
+    overlay.x shouldBe (contentRect.x + math.max(0, (contentRect.width - overlay.width) / 2))
   }
 
   it should "dim the workspace behind a blocking modal without depending on motion settings" in {

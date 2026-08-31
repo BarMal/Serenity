@@ -1,15 +1,21 @@
 package com.serenity.ui.layout
 
+import com.serenity.config.{HotkeyTrigger, ModalKeyAction}
 import com.serenity.state.models.*
 
 /** Declarative composition plans for blocking workflow surfaces. */
 object ModalSurfaceComposition:
 
-  /** Resolve any modal workflow into one paint, hit-testing, and focus plan. */
+  /** Resolve any modal workflow into one paint, hit-testing, and focus plan. `modalBindings` sources the file
+    * workflow's keybinding-hints footer (issue #1253) from the app's actual, currently-configured `Modal` keymap group
+    * -- like `ShortcutsHelpContent` (#1250), never a hardcoded list -- and defaults to `ModalKeyAction.defaultBindings`
+    * for callers (mostly tests) that construct a plan without a live `AppConfig`.
+    */
   def forModal(
     modal: Modal,
     frameRect: LayoutRect,
-    targetRows: Int
+    targetRows: Int,
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings
   ): Option[ResolvedSurfaceComposition] =
     modal match
       case Modal.CloseWorkflow(workflow) => Some(close(workflow, frameRect, targetRows))
@@ -17,7 +23,7 @@ object ModalSurfaceComposition:
       case Modal.Find(query, results, currentIndex) =>
         Some(findPlan(query, results, currentIndex, frameRect))
       case Modal.Custom(name, input)       => Some(inputPlan(name, input, "custom-input", frameRect))
-      case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect))
+      case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings))
       case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows))
 
   /** Return the minimum frame height needed to show a modal workflow at the requested density. */
@@ -31,8 +37,11 @@ object ModalSurfaceComposition:
       case Modal.ReplaceWorkflow(workflow) =>
         val contentRows = 3 + actionRows * 2 + workflow.statusMessage.fold(0)(_ => 1)
         SurfaceFrameLayout.DefaultBorderCells * 2 + contentRows
-      case Modal.FileWorkflow(workflow) => math.max(8, math.min(12, workflow.suggestions.take(4).size + 6))
-      case Modal.CloseWorkflow(_)       => closeFrameHeight(actionRows)
+      case Modal.FileWorkflow(workflow) =>
+        // header + filename + path + format rows, plus up to 4 suggestions, plus a status/create-dir footer and the
+        // keybinding-hints footer (issue #1253).
+        math.max(9, math.min(14, workflow.suggestions.take(4).size + 8))
+      case Modal.CloseWorkflow(_) => closeFrameHeight(actionRows)
 
   private val actions: List[(CloseWorkflowChoice, String, SurfaceActionId, SurfaceFocusId)] = List(
     (CloseWorkflowChoice.Save, "Save", SurfaceActionId("close-save"), SurfaceFocusId("close-save")),
@@ -206,7 +215,8 @@ object ModalSurfaceComposition:
 
   private def filePlan(
     workflow: FileWorkflowState,
-    frameRect: LayoutRect
+    frameRect: LayoutRect,
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]
   ): ResolvedSurfaceComposition =
     val content   = SurfaceFrameLayout(frameRect).contentRect
     val bounds    = logicalRect(content.x, content.y, content.width, content.height)
@@ -250,6 +260,11 @@ object ModalSurfaceComposition:
       segments = OverlaySegment("Path ") :: pathSegments,
       layout = SurfacePaintLayout.Inline
     )
+    val formatLabel = workflow.detectedFileType.displayName
+    val formatText =
+      if workflow.wouldLoseFormatting then s"Format: $formatLabel (will lose rich formatting)"
+      else s"Format: $formatLabel"
+    val format = textBox(formatText, rowRect(bounds, 3, rowHeight))
     val suggestions = workflow.suggestions.take(4).zipWithIndex.map {
       case (suggestion, index) =>
         val suffix = if suggestion.isDirectory then "/" else ""
@@ -258,7 +273,7 @@ object ModalSurfaceComposition:
           SurfaceActionId(s"file-suggestion-$index"),
           SurfaceFocusId(s"file-suggestion-$index"),
           selected = index == workflow.selectedSuggestionIndex,
-          rowRect(bounds, index + 3, rowHeight)
+          rowRect(bounds, index + 4, rowHeight)
         )
     }
     val footer = workflow.statusMessage
@@ -266,8 +281,36 @@ object ModalSurfaceComposition:
         s"Create directories: ${workflow.missingPathSegments.mkString(" / ")}"
       })
       .toList
-      .map(message => textBox(message, rowRect(bounds, workflow.suggestions.take(4).size + 3, rowHeight)))
-    plan(bounds, header :: filename :: path :: suggestions ++ footer)
+      .map(message => textBox(message, rowRect(bounds, workflow.suggestions.take(4).size + 4, rowHeight)))
+    val keyHints = textBox(
+      fileWorkflowKeyHints(workflow, modalBindings),
+      rowRect(bounds, workflow.suggestions.take(4).size + 5, rowHeight)
+    )
+    plan(bounds, header :: filename :: path :: format :: suggestions ++ footer :+ keyHints)
+
+  /** Builds the file workflow's own current-action hint, in the same tone as `commandRunnerShowKeyHints` elsewhere in
+    * this file: sourced live from `modalBindings` (the app's actual, currently-configured `Modal` keymap group) rather
+    * than hardcoded, so it can never drift from what a user has rebound (issue #1253). "Create dir" only appears while
+    * it actually does something -- a save-as with missing directories to create.
+    */
+  private def fileWorkflowKeyHints(
+    workflow: FileWorkflowState,
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]
+  ): String =
+    val showCreateDirectory =
+      workflow.mode == FileWorkflowMode.SaveAs && workflow.missingPathSegments.nonEmpty
+    val actions = List(
+      "Submit"       -> ModalKeyAction.Submit,
+      "Cancel"       -> ModalKeyAction.Dismiss,
+      "Switch field" -> ModalKeyAction.NextField,
+      "Suggestions"  -> ModalKeyAction.NavigateDown
+    ) ++ Option.when(showCreateDirectory)("Create dir" -> ModalKeyAction.CreateDirectory)
+    actions
+      .flatMap {
+        case (label, action) =>
+          modalBindings.getOrElse(action, Nil).headOption.map(trigger => s"$label ${trigger.render}")
+      }
+      .mkString("  ")
 
   private def plan(bounds: LogicalPixelRect, boxes: List[SurfacePaintBox]): ResolvedSurfaceComposition =
     val clipped = boxes.flatMap(box => box.rect.intersection(bounds).map(rect => box.copy(rect = rect)))

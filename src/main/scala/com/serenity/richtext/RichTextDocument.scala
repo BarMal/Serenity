@@ -217,6 +217,17 @@ final case class RichTextDocument(paragraphs: List[RichTextParagraph]):
   private lazy val indexedParagraphs: Vector[RichTextParagraph] =
     paragraphs.toVector
 
+  /** Whether this document carries any formatting a plain-text or Markdown save would discard: a non-body paragraph
+    * role/alignment, or any run styled beyond [[RichTextStyle.empty]]. Used to decide whether saving at the
+    * currently-typed extension should warn about lost formatting (issue #1253).
+    */
+  def hasFormatting: Boolean =
+    paragraphs.exists { paragraph =>
+      paragraph.alignment != ParagraphAlignment.Left ||
+      paragraph.role != ParagraphRole.Body ||
+      paragraph.runs.exists(_.style != RichTextStyle.empty)
+    }
+
   /** Returns a paragraph by line index without repeatedly traversing the document list. */
   def paragraphAt(index: Int): Option[RichTextParagraph] =
     indexedParagraphs.lift(index)

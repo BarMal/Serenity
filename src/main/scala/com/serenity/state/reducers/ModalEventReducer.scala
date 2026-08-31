@@ -225,6 +225,16 @@ object ModalEventReducer:
             ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitFileWorkflow(surface.id)))
           case _ =>
             ReducerResult.noEffects(currentState)
+      case ModalCreateDirectory =>
+        currentModal(currentState) match
+          case Some((surface, Modal.FileWorkflow(workflow)))
+              if workflow.mode == FileWorkflowMode.SaveAs && workflow.missingPathSegments.nonEmpty =>
+            ReducerResult.withEffect(
+              currentState,
+              AppEffect.Workflow(WorkflowEffect.CreateFileWorkflowDirectories(surface.id))
+            )
+          case _ =>
+            ReducerResult.noEffects(currentState)
       case ModalClick(focusId, actionId) =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) =>

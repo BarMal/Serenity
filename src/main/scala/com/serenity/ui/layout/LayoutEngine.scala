@@ -752,7 +752,8 @@ object LayoutEngine:
           state,
           contentRect.width - (borderCells * 2)
         ) + (borderCells * 2)
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.ShortcutsHelp(_) =>
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.ShortcutsHelp(_) |
+          SurfaceContent.ModalWorkflow(Modal.FileWorkflow(_)) =>
         calculateFloatingSurfaceWidth(contentRect.width)
       case _ =>
         contentRect.width
@@ -784,7 +785,8 @@ object LayoutEngine:
         // horizontal position, and cursor-anchoring left it pinned near whichever column the caret happened to be in
         // -- often far from center, sometimes hard against an edge. Vertical placement (above/below the cursor,
         // `overlayY` below) is unaffected.
-        case SurfaceContent.CommandPalette(_) | SurfaceContent.ShortcutsHelp(_) =>
+        case SurfaceContent.CommandPalette(_) | SurfaceContent.ShortcutsHelp(_) |
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(_)) =>
           contentRect.x + math.max(0, (contentRect.width - preferredWidth) / 2)
         case _ =>
           math.max(

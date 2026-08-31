@@ -202,6 +202,50 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     plan.paintBoxes.filter(_.focusId.nonEmpty).map(_.rect) shouldBe plan.hitRegions.map(_.rect)
   }
 
+  it should "show the detected format next to the filename, and warn when it would lose rich formatting" in {
+    val richWorkflow = FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.txt",
+      bufferHasRichFormatting = true
+    )
+    val richPlan = planFor(Modal.FileWorkflow(richWorkflow))
+    richPlan.paintBoxes.flatMap(_.text) should contain("Format: Text (will lose rich formatting)")
+
+    val plainWorkflow = FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "notes.rtf")
+    val plainPlan     = planFor(Modal.FileWorkflow(plainWorkflow))
+    plainPlan.paintBoxes.flatMap(_.text) should contain("Format: Rich Text")
+    plainPlan.paintBoxes.flatMap(_.text).exists(_.contains("will lose")) shouldBe false
+  }
+
+  it should "render the file workflow's own key hints from the live modal keymap, including create-dir only when relevant" in {
+    import com.serenity.config.{HotkeyTrigger, ModalKeyAction}
+    import com.serenity.keystroke.InputKey
+    import com.serenity.keystroke.Modifier
+
+    val customBindings = ModalKeyAction.defaultBindings ++ Map(
+      ModalKeyAction.Submit          -> List(HotkeyTrigger(InputKey.Enter, None, Set.empty)),
+      ModalKeyAction.CreateDirectory -> List(HotkeyTrigger(InputKey.Character, Some('n'), Set(Modifier.Ctrl)))
+    )
+
+    val readyToCreate = FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.scala",
+      path = "/tmp/missing",
+      missingPathSegments = List("missing")
+    )
+    val withCreateHint = ModalSurfaceComposition
+      .forModal(Modal.FileWorkflow(readyToCreate), frame, targetRows = 1, customBindings)
+      .getOrElse(fail("expected file workflow composition"))
+    val hintLine = withCreateHint.paintBoxes.flatMap(_.text).find(_.contains("Submit")).getOrElse(fail("expected hint"))
+    hintLine should include("Create dir ctrl+n")
+
+    val noMissingDirs = FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "notes.scala")
+    val withoutCreateHint = ModalSurfaceComposition
+      .forModal(Modal.FileWorkflow(noMissingDirs), frame, targetRows = 1, customBindings)
+      .getOrElse(fail("expected file workflow composition"))
+    withoutCreateHint.paintBoxes.flatMap(_.text).exists(_.contains("Create dir")) shouldBe false
+  }
+
   it should "derive preferred frame height from each workflow composition" in {
     ModalSurfaceComposition.frameHeight(Modal.GotoLine(""), targetRows = 1) shouldBe 3
     ModalSurfaceComposition.frameHeight(Modal.Custom("rename", ""), targetRows = 1) shouldBe 4
@@ -224,5 +268,5 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
         )
       ),
       targetRows = 1
-    ) shouldBe 8
+    ) shouldBe 10
   }

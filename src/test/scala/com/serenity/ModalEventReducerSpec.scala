@@ -200,6 +200,62 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       case _                                                          => None) shouldBe Some(1)
   }
 
+  it should "emit CreateFileWorkflowDirectories only for a save-as workflow with missing directories" in {
+    val saveAsWithMissingDirs = UiSurface(
+      SurfaceId("save-as"),
+      SurfaceContent.ModalWorkflow(
+        Modal.FileWorkflow(
+          FileWorkflowState(
+            mode = FileWorkflowMode.SaveAs,
+            filename = "notes.scala",
+            path = "/tmp/project/new/nested",
+            missingPathSegments = List("new", "nested")
+          )
+        )
+      ),
+      SurfacePresentation.Modal
+    )
+    val readyState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(saveAsWithMissingDirs.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(saveAsWithMissingDirs))
+    )
+
+    val result = ModalEventReducer.reduce(ModalType.FileWorkflow, ModalCreateDirectory, readyState)
+    result.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.CreateFileWorkflowDirectories(SurfaceId("save-as")))
+    )
+
+    val openWithMissingDirs = UiSurface(
+      SurfaceId("open"),
+      SurfaceContent.ModalWorkflow(
+        Modal.FileWorkflow(
+          FileWorkflowState(
+            mode = FileWorkflowMode.Open,
+            path = "/tmp/project/new/nested",
+            missingPathSegments = List("new", "nested")
+          )
+        )
+      ),
+      SurfacePresentation.Modal
+    )
+    val openState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(openWithMissingDirs.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(openWithMissingDirs))
+    )
+    ModalEventReducer.reduce(ModalType.FileWorkflow, ModalCreateDirectory, openState).effects shouldBe Nil
+
+    val saveAsWithoutMissingDirs = UiSurface(
+      SurfaceId("save-as-clean"),
+      SurfaceContent.ModalWorkflow(Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.SaveAs))),
+      SurfacePresentation.Modal
+    )
+    val cleanState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(saveAsWithoutMissingDirs.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(saveAsWithoutMissingDirs))
+    )
+    ModalEventReducer.reduce(ModalType.FileWorkflow, ModalCreateDirectory, cleanState).effects shouldBe Nil
+  }
+
   it should "jump to the requested line and dismiss the goto line modal" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(0)

@@ -54,9 +54,10 @@ class StateManagerComponentPortsSpec extends AnyFlatSpec with Matchers:
         def refresh(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"refresh:$surfaceId")
         def refreshFind(request: com.serenity.state.models.FindSearchRequest): IO[Unit] =
           calls.update(_ :+ s"find:${request.query}")
-        def submitFile(surfaceId: SurfaceId): IO[Unit]    = calls.update(_ :+ s"file:$surfaceId")
-        def submitReplace(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"replace:$surfaceId")
-        def submitClose(surfaceId: SurfaceId): IO[Unit]   = calls.update(_ :+ s"close:$surfaceId"))
+        def submitFile(surfaceId: SurfaceId): IO[Unit]        = calls.update(_ :+ s"file:$surfaceId")
+        def submitReplace(surfaceId: SurfaceId): IO[Unit]     = calls.update(_ :+ s"replace:$surfaceId")
+        def submitClose(surfaceId: SurfaceId): IO[Unit]       = calls.update(_ :+ s"close:$surfaceId")
+        def createDirectories(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"create-dirs:$surfaceId"))
       _       <- handler.interpret(WorkflowEffect.RequestOpenFile)
       failure <- handler.interpret(WorkflowEffect.RequestSaveAs).attempt
       seen    <- calls.get

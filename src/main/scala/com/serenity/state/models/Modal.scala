@@ -1,5 +1,6 @@
 package com.serenity.state.models
 
+import com.serenity.io.{DocumentFormat, FileType}
 import com.serenity.text.TextEditing
 
 final case class FileWorkflowSuggestion(
@@ -148,6 +149,32 @@ sealed trait FileWorkflowState:
   def confirmCreateDirectories: Boolean
   def statusMessage: Option[String]
 
+  /** Whether the buffer this workflow was opened for currently carries rich formatting (marks, alignment, paragraph
+    * roles) -- captured once when the workflow modal opens (`openFileWorkflowModal`), not re-derived live, since the
+    * buffer being saved cannot change out from under an open save dialog. `false` for `Open` (nothing is being saved)
+    * and for a brand-new/never-imported buffer.
+    */
+  def bufferHasRichFormatting: Boolean
+
+  /** The format the currently-typed `filename` would save as, detected from its extension exactly like a completed save
+    * would (`FileType.fromExtension`). A filename with no extension -- notably a brand-new buffer's first Save As,
+    * which has no existing extension to inherit -- defaults to [[FileType.Text]] rather than `Unknown`, per issue
+    * #1253: a sensible default display rather than new persisted per-buffer state.
+    */
+  def detectedFileType: FileType =
+    val trimmed = filename.trim
+    trimmed.lastIndexOf('.') match
+      case dotIndex if dotIndex > 0 && dotIndex < trimmed.length - 1 =>
+        FileType.fromExtension(trimmed.substring(dotIndex + 1))
+      case _ =>
+        FileType.Text
+
+  /** True when saving at the currently-typed extension would discard this buffer's rich formatting -- the proactive
+    * counterpart to the reactive `LossyRichTextOverwriteException` catch in `saveBufferEffect` (issue #1253).
+    */
+  def wouldLoseFormatting: Boolean =
+    DocumentFormat.wouldLoseFormatting(bufferHasRichFormatting, detectedFileType)
+
   protected def rebuild(
     filename: String,
     path: String,
@@ -246,7 +273,8 @@ final case class OpenFileWorkflowState(
     selectedSuggestionIndex: Int = 0,
     missingPathSegments: List[String] = Nil,
     confirmCreateDirectories: Boolean = false,
-    statusMessage: Option[String] = None
+    statusMessage: Option[String] = None,
+    bufferHasRichFormatting: Boolean = false
 ) extends FileWorkflowState:
   val mode: FileWorkflowMode               = FileWorkflowMode.Open
   val operationLabel: String               = "open"
@@ -281,7 +309,8 @@ final case class SaveAsFileWorkflowState(
     selectedSuggestionIndex: Int = 0,
     missingPathSegments: List[String] = Nil,
     confirmCreateDirectories: Boolean = false,
-    statusMessage: Option[String] = None
+    statusMessage: Option[String] = None,
+    bufferHasRichFormatting: Boolean = false
 ) extends FileWorkflowState:
   val mode: FileWorkflowMode               = FileWorkflowMode.SaveAs
   val operationLabel: String               = "save-as"
@@ -319,7 +348,8 @@ object FileWorkflowState:
     selectedSuggestionIndex: Int = 0,
     missingPathSegments: List[String] = Nil,
     confirmCreateDirectories: Boolean = false,
-    statusMessage: Option[String] = None
+    statusMessage: Option[String] = None,
+    bufferHasRichFormatting: Boolean = false
   ): FileWorkflowState =
     mode match
       case FileWorkflowMode.Open =>
@@ -331,7 +361,8 @@ object FileWorkflowState:
           selectedSuggestionIndex = selectedSuggestionIndex,
           missingPathSegments = missingPathSegments,
           confirmCreateDirectories = confirmCreateDirectories,
-          statusMessage = statusMessage
+          statusMessage = statusMessage,
+          bufferHasRichFormatting = bufferHasRichFormatting
         )
       case FileWorkflowMode.SaveAs =>
         SaveAsFileWorkflowState(
@@ -342,7 +373,8 @@ object FileWorkflowState:
           selectedSuggestionIndex = selectedSuggestionIndex,
           missingPathSegments = missingPathSegments,
           confirmCreateDirectories = confirmCreateDirectories,
-          statusMessage = statusMessage
+          statusMessage = statusMessage,
+          bufferHasRichFormatting = bufferHasRichFormatting
         )
 
 enum Modal:

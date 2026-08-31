@@ -262,7 +262,8 @@ object OverlayViewModel:
         ModalSurfaceComposition.forModal(
           modal,
           rect,
-          SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
+          SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity),
+          state.persisted.config.inputConfig.focusedKeymapConfig.modal.bindings
         )
       case _ => None
 
