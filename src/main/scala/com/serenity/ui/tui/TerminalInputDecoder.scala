@@ -149,7 +149,7 @@ object TerminalInputDecoder:
         else if params.isEmpty && finalByte == FocusIn then Step.Complete(List(DecodedToken.FocusChanged(true)), j + 1)
         else if params.isEmpty && finalByte == FocusOut then
           Step.Complete(List(DecodedToken.FocusChanged(false)), j + 1)
-        else Step.Complete(List(decodeCsiKey(params, finalByte)), j + 1)
+        else Step.Complete(decodeCsiKey(params, finalByte), j + 1)
 
   @annotation.tailrec
   private def scanCsiEnd(bytes: Array[Byte], j: Int): Option[Int] =
@@ -208,37 +208,71 @@ object TerminalInputDecoder:
       else if isRelease then Some(MouseClick(col, row, clickCount = 1, shiftDown = shift, button = button))
       else Some(MousePress(col, row, shiftDown = shift, button = button))
 
-  private def decodeCsiKey(params: String, finalByte: Byte): DecodedToken =
-    val key = finalByte.toChar match
-      case 'A' => InputKey.ArrowUp
-      case 'B' => InputKey.ArrowDown
-      case 'C' => InputKey.ArrowRight
-      case 'D' => InputKey.ArrowLeft
-      case 'H' => InputKey.Home
-      case 'F' => InputKey.End
-      case 'Z' => InputKey.ReverseTab
-      case '~' =>
-        params match
-          case "1" | "7" => InputKey.Home
-          case "4" | "8" => InputKey.End
-          case "5"       => InputKey.PageUp
-          case "6"       => InputKey.PageDown
-          case "3"       => InputKey.Delete
-          case "11"      => InputKey.F1
-          case "12"      => InputKey.F2
-          case "13"      => InputKey.F3
-          case "14"      => InputKey.F4
-          case "15"      => InputKey.F5
-          case "17"      => InputKey.F6
-          case "18"      => InputKey.F7
-          case "19"      => InputKey.F8
-          case "20"      => InputKey.F9
-          case "21"      => InputKey.F10
-          case "23"      => InputKey.F11
-          case "24"      => InputKey.F12
-          case _         => InputKey.Unknown
-      case _ => InputKey.Unknown
-    DecodedToken.Key(KeyStrokeInfo(key, None, Set.empty))
+  /** Decodes the legacy CSI-letter (arrow keys, Home/End, Shift+Tab) and CSI-tilde (Home/End/PageUp/PageDown/Delete/
+    * F-keys) key forms. Under kitty's "disambiguate escape codes" enhancement these keep their classic final byte but
+    * gain the same `keycode;modifiers[:event]` shape `decodeCsiU` already handles for the CSI-u form -- e.g. `CSI
+    * 1;1:3A` for an Up-arrow release, `CSI 5;1:3~` for a PageUp release (kitty keyboard-protocol spec,
+    * `docs/keyboard-protocol.rst`: the "disambiguate escape codes" section gives `CSI 1;modifier [~ABCDEFHPQS]` as the
+    * legacy-letter shape once that flag is on, and the "report event types" section documents the `:event` subfield as
+    * appended to "the modifiers field" generally, with worked examples only for the `CSI u` form -- sw.kovidgoyal.net
+    * is blocked by this environment's egress proxy, so this was confirmed against github.com/kovidgoyal/kitty's raw doc
+    * source rather than the rendered page; applying the same modifier-field shape to the letter/tilde forms here is
+    * this decoder's own inference from that shared "modifiers field" wording, not a verbatim-quoted example).
+    *
+    * A release (`eventType == 3`) is dropped entirely, mirroring `decodeCsiU`'s `case None if eventType == 3 => Nil` --
+    * without this, a terminal that confirmed the kitty protocol reports a release for every plain arrow-key press too,
+    * and each one decoded to a second, spurious navigation stroke identical to the press.
+    *
+    * The CSI-tilde branch matches only the leading `;`-delimited field against the key-number table, rather than
+    * `params` whole: a modified tilde-form key (`CSI 5;2~` for Shift+PageUp, standard xterm behavior independent of
+    * kitty) or a kitty-annotated one (`CSI 5;1:3~`) both carry a second field the exact-match against `params` used to
+    * miss entirely, silently falling through to [[InputKey.Unknown]] -- a distinct, pre-existing gap from the
+    * double-fire bug, fixed here since it is the same root cause (this decoder ignoring what follows the key number).
+    */
+  private def decodeCsiKey(params: String, finalByte: Byte): List[DecodedToken] =
+    if eventTypeOf(params) == 3 then Nil // Release of a plain key: not a keystroke of its own.
+    else
+      val key = finalByte.toChar match
+        case 'A' => InputKey.ArrowUp
+        case 'B' => InputKey.ArrowDown
+        case 'C' => InputKey.ArrowRight
+        case 'D' => InputKey.ArrowLeft
+        case 'H' => InputKey.Home
+        case 'F' => InputKey.End
+        case 'Z' => InputKey.ReverseTab
+        case '~' =>
+          params.split(";", -1).headOption.getOrElse(params) match
+            case "1" | "7" => InputKey.Home
+            case "4" | "8" => InputKey.End
+            case "5"       => InputKey.PageUp
+            case "6"       => InputKey.PageDown
+            case "3"       => InputKey.Delete
+            case "11"      => InputKey.F1
+            case "12"      => InputKey.F2
+            case "13"      => InputKey.F3
+            case "14"      => InputKey.F4
+            case "15"      => InputKey.F5
+            case "17"      => InputKey.F6
+            case "18"      => InputKey.F7
+            case "19"      => InputKey.F8
+            case "20"      => InputKey.F9
+            case "21"      => InputKey.F10
+            case "23"      => InputKey.F11
+            case "24"      => InputKey.F12
+            case _         => InputKey.Unknown
+        case _ => InputKey.Unknown
+      List(DecodedToken.Key(KeyStrokeInfo(key, None, Set.empty)))
+
+  /** Shared `keycode;modifiers[:eventType]` event-type extraction, used by both [[decodeCsiU]] and [[decodeCsiKey]] --
+    * same wire position (the `;`-delimited field after the leading keycode/dummy-`1`, `:`-delimited sub-field after the
+    * modifier value), same meaning, same default (`1`, press) when the sub-field or the whole field is absent -- e.g. a
+    * bare legacy `CSI A` (`params` empty) or an un-annotated `CSI 1;5A` (Ctrl+Up, no kitty event-type reporting) both
+    * correctly default to a press.
+    */
+  private def eventTypeOf(params: String): Int =
+    val fields    = params.split(";", -1)
+    val modFields = fields.drop(1).headOption.getOrElse("").split(":", -1)
+    modFields.drop(1).headOption.flatMap(_.toIntOption).getOrElse(1)
 
   /** kitty-protocol private-use-area codepoints for a bare modifier key's own press/release, keyed by the [[Modifier]]
     * it double-taps as. `Super`/`Hyper`/`CapsLock`/`NumLock` have codepoints too (per the kitty spec) but no
@@ -267,7 +301,7 @@ object TerminalInputDecoder:
     val keycode   = fields.headOption.flatMap(_.split(":", -1).headOption).flatMap(_.toIntOption)
     val modFields = fields.drop(1).headOption.getOrElse("").split(":", -1)
     val modsValue = modFields.headOption.flatMap(_.toIntOption).filter(_ > 0).getOrElse(1)
-    val eventType = modFields.drop(1).headOption.flatMap(_.toIntOption).getOrElse(1)
+    val eventType = eventTypeOf(params)
     val modifiers = csiUModifiers(modsValue)
 
     keycode match
