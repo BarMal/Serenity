@@ -2756,7 +2756,7 @@ object Renderer:
             area = TextAreaPx(
               xPx = cellMetrics.toPixelX(rect.x).toFloat,
               yPx = yPx,
-              widthPx = rect.width * cellMetrics.charWidth,
+              widthPx = rect.width.toFloat * cellMetrics.charWidth,
               heightPx = lineHeightPx
             ),
             font = font,
@@ -2848,7 +2848,7 @@ object Renderer:
           area = TextAreaPx(
             xPx = 0.0f,
             yPx = yPx,
-            widthPx = viewportSize.width * cellMetrics.charWidth,
+            widthPx = viewportSize.width.toFloat * cellMetrics.charWidth,
             heightPx = lineHeightPx
           ),
           font = uiFont,
