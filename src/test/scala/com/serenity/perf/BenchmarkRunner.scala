@@ -125,7 +125,7 @@ object BenchmarkRunner:
       if AllocationTracked.contains(benchmark.name) then
         allocationBean
           .map { bean =>
-            val threadId = Thread.currentThread().getId
+            val threadId = Thread.currentThread().threadId()
             (0 until benchmark.iterations).map { _ =>
               val started   = bean.getThreadAllocatedBytes(threadId)
               val observed  = repeat(batch, benchmark.run)

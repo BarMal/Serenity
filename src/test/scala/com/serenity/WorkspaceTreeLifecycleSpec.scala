@@ -90,7 +90,7 @@ class WorkspaceTreeLifecycleSpec extends AnyFlatSpec with Matchers:
 
       resized.root match
         case split: WorkspaceNode.Split => split.ratio shouldBe WorkspaceTree.DefaultSplitRatio
-        case _: WorkspaceNode.Leaf      => fail("expected split root")
+        case _                          => fail("expected split root")
     }
 
   "WorkspaceTree.validationErrors" should "reject duplicate IDs and pane/tree mismatches" in {

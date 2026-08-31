@@ -276,7 +276,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       com.serenity.ui.layout.TextAreaPx(
         codeMetrics.toPixelX(contentRect.x).toFloat,
         codeMetrics.toPixelY(contentRect.y + contentRect.height / 2),
-        contentRect.width * codeMetrics.charWidth,
+        contentRect.width.toFloat * codeMetrics.charWidth,
         codeMetrics.lineHeight
       ),
       textFont,
