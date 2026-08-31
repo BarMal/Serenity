@@ -212,10 +212,13 @@ final private[manager] class StateManagerEventPipeline(
           case Focus.EditorPane(paneId) =>
             EditorGeometryProducer.forPane(prevState, paneId) match
               case Some(geometry) =>
-                validateAndUpdateState(
-                  EditorEventReducer.reduceVerticalNavigation(vertical, paneId, prevState, geometry).state,
-                  prevState
-                )
+                val reducedState =
+                  EditorEventReducer.reduceVerticalNavigation(vertical, paneId, prevState, geometry).state
+                // #1042 carved vertical nav out to dispatch here directly rather than through
+                // dispatchToFocusedHandler/EditorPaneComponent, which is the only place that otherwise applies this
+                // pass -- without it, MoveUp/MoveDown/ExtendSelectionUp/ExtendSelectionDown move the cursor but never
+                // scroll the viewport to follow it.
+                validateAndUpdateState(CursorViewport.ensureVisibleCursors(prevState, reducedState), prevState)
               case None => dispatchToFocusedHandler(vertical, prevState)
           case _ => dispatchToFocusedHandler(vertical, prevState)
 

@@ -163,6 +163,59 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     viewport.topLine should be > 0
   }
 
+  it should "scroll down when MoveDown carries the cursor beyond visible lines" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+
+    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+
+    // Get initial viewport settings
+    val initialState = stateManager.getCurrentState.unsafeRunSync()
+    val initialPane  = initialState.persisted.layout.editorPanes(paneId)
+    val visibleLines = initialPane.viewport.visibleLines
+
+    // Seed content with more lines than fit in the viewport, cursor left at the top.
+    val numLines = visibleLines + 5
+    for _ <- 0 until numLines do
+      stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
+      stateManager.applyEvent(NewLine).unsafeRunSync()
+    stateManager.applyEvent(MoveToStartOfFile).unsafeRunSync()
+
+    // Sanity-check the baseline: cursor and viewport are both back at the top before any MoveDown runs, so a
+    // pass below can only be explained by MoveDown itself scrolling the viewport -- not by scroll state NewLine
+    // left behind earlier in this test.
+    val afterMoveToStart = stateManager.getCurrentState.unsafeRunSync()
+    val bufferAtStart    = afterMoveToStart.persisted.buffers(bufferId)
+    bufferAtStart.editing.cursors.head.line shouldBe 0
+    bufferAtStart.viewport.topLine shouldBe 0
+
+    // Walk the cursor down one line at a time via the arrow-key event, the same path a real terminal's Down key
+    // takes (StateManagerEventPipeline's VerticalNavigationEvent branch), rather than NewLine's insertion path.
+    for _ <- 0 until numLines do stateManager.applyEvent(MoveDown).unsafeRunSync()
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    val finalPane  = finalState.persisted.layout.editorPanes(paneId)
+    val buffer     = finalPane.bufferId.flatMap(finalState.persisted.buffers.get).get
+    val cursor     = buffer.editing.cursors.head
+    val viewport   = buffer.viewport
+
+    // Cursor should be beyond the original visible area
+    cursor.line should be >= visibleLines
+
+    // Viewport should have scrolled to keep the cursor visible
+    cursor.line should be >= viewport.topLine
+    cursor.line should be < (viewport.topLine + viewport.visibleLines)
+
+    // Viewport top line should be > 0 since we scrolled
+    viewport.topLine should be > 0
+  }
+
   it should "scroll within a wrapped logical line to keep the cursor visible" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
