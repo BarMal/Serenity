@@ -2,17 +2,24 @@ package com.serenity.keystroke.events
 
 sealed trait ModalInputEvent
 
-final case class ModalInsertChar(char: Char)                           extends ModalInputEvent
-case object ModalDeleteBackward                                        extends ModalInputEvent
-case object ModalDeleteForward                                         extends ModalInputEvent
-case object ModalDeleteWordBackward                                    extends ModalInputEvent
-case object ModalDeleteWordForward                                     extends ModalInputEvent
-final case class ModalNavigate(direction: Direction)                   extends ModalInputEvent
-case object ModalNextField                                             extends ModalInputEvent
-case object ModalPreviousField                                         extends ModalInputEvent
-case object ModalSubmit                                                extends ModalInputEvent
-case object ModalFindNext                                              extends ModalInputEvent
-case object ModalDismiss                                               extends ModalInputEvent
+final case class ModalInsertChar(char: Char)         extends ModalInputEvent
+case object ModalDeleteBackward                      extends ModalInputEvent
+case object ModalDeleteForward                       extends ModalInputEvent
+case object ModalDeleteWordBackward                  extends ModalInputEvent
+case object ModalDeleteWordForward                   extends ModalInputEvent
+final case class ModalNavigate(direction: Direction) extends ModalInputEvent
+case object ModalNextField                           extends ModalInputEvent
+case object ModalPreviousField                       extends ModalInputEvent
+case object ModalSubmit                              extends ModalInputEvent
+case object ModalFindNext                            extends ModalInputEvent
+case object ModalDismiss                             extends ModalInputEvent
+
+/** Creates a file workflow's missing directories immediately, in one step (issue #1253) -- the explicit counterpart to
+  * submitting twice (`missingPathSegments` flagged, then `confirmCreateDirectories` on a second submit). Modal-only:
+  * reached solely via `ModalKeyAction.CreateDirectory`'s binding, never through the shared `FocusIntent` vocabulary
+  * other surfaces translate through.
+  */
+case object ModalCreateDirectory                                       extends ModalInputEvent
 final case class ModalClick(focusId: String, actionId: Option[String]) extends ModalInputEvent
 
 object ModalInputEvent:

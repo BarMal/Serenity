@@ -180,6 +180,14 @@ object DocumentFormat:
           preservesRichFormatting = true
         )
 
+  /** Whether saving a buffer that currently carries rich formatting at `targetFileType` would discard it -- the
+    * proactive counterpart to `LossyRichTextOverwriteException` (issue #1253): that exception fires only after a failed
+    * save, and only for a lossy *re-import*, whereas this covers any save whose target format can't represent
+    * marks/alignment/roles at all.
+    */
+  def wouldLoseFormatting(hasRichFormatting: Boolean, targetFileType: FileType): Boolean =
+    hasRichFormatting && !capabilities(targetFileType).preservesRichFormatting
+
   def capabilities(fileType: FileType): DocumentFormatCapabilities =
     fileType match
       case FileType.WordDocument =>

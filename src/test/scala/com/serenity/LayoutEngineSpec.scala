@@ -655,6 +655,38 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     overlayRect.x should not be (farRightColumn - overlayRect.width / 2)
   }
 
+  /** The file workflow dialog (issue #1253) gets the same fixed-width, centered treatment as the command palette and
+    * shortcuts-help panel, replacing its old full-editor-width, cursor-anchored layout.
+    */
+  it should "horizontally center and fix the width of the file workflow dialog like the command palette" in {
+    val farRightColumn = 120
+    val surface = UiSurface(
+      SurfaceId("file-workflow"),
+      SurfaceContent.ModalWorkflow(Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.SaveAs))),
+      SurfacePresentation.Floating(Some(CursorPosition(0, farRightColumn)), SurfacePlacement.BelowCursor)
+    )
+    val bufferId = BufferId(1)
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> Buffer.fromString(bufferId, "x" * 200)),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
+          activeEditorPaneId = Some(PaneId(0))
+        )
+      ),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
+    )
+
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(160, 30))
+    val overlayRect = layout.belowCursorOverlayRect.getOrElse(fail("Expected the file workflow dialog to render"))
+    val contentRect = layout.editorPanelRect
+
+    overlayRect.width shouldBe math.min(contentRect.width, 72)
+    overlayRect.x shouldBe (contentRect.x + math.max(0, (contentRect.width - overlayRect.width) / 2))
+    overlayRect.x should not be (farRightColumn - overlayRect.width / 2)
+  }
+
   it should "leave non-runner floating surfaces at their available width" in {
     val bufferId = BufferId(1)
     val surface = UiSurface(

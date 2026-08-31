@@ -63,11 +63,16 @@ final private[manager] class StateManagerWorkflowCapability(
     statusMessage: Option[String] = None
   ): IO[Unit] =
     val targetBufferId = bufferIdOverride.orElse(state.focusedBufferId)
-    val focusedPath    = targetBufferId.flatMap(id => state.persisted.buffers.get(id)).flatMap(_.document.filePath)
+    val targetBuffer   = targetBufferId.flatMap(id => state.persisted.buffers.get(id))
+    val focusedPath    = targetBuffer.flatMap(_.document.filePath)
     val filename = mode match
       case FileWorkflowMode.SaveAs =>
         focusedPath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("")
       case FileWorkflowMode.Open => ""
+    // Captured once at open time, not re-derived live: the buffer being saved cannot change out from under an open
+    // save dialog, and `Open` never saves anything so it stays false regardless (issue #1253).
+    val bufferHasRichFormatting =
+      mode == FileWorkflowMode.SaveAs && targetBuffer.flatMap(_.richText.richTextDocument).exists(_.hasFormatting)
 
     val pathIO =
       mode match
@@ -84,7 +89,8 @@ final private[manager] class StateManagerWorkflowCapability(
         mode = mode,
         filename = filename,
         path = basePath.toString,
-        statusMessage = statusMessage
+        statusMessage = statusMessage,
+        bufferHasRichFormatting = bufferHasRichFormatting
       )
       val predictedState = ModalStateReducer.show(Modal.FileWorkflow(workflow), state).state
       logger.info(
@@ -604,6 +610,21 @@ final private[manager] class StateManagerWorkflowCapability(
             }
       case None =>
         logger.debug("[FILE-WORKFLOW] No focused buffer available for save-as")
+
+  /** The explicit, single-step counterpart to submitting twice (Enter to flag `missingPathSegments`, Enter again to
+    * confirm): creates the missing directories -- as a side effect of performing the save itself, exactly like the
+    * confirmed double-submit path -- immediately, without a second submit (issue #1253).
+    */
+  private[manager] def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      fileWorkflowSurface(state, surfaceId) match
+        case Some((_, saveAsWorkflow: SaveAsFileWorkflowState)) if saveAsWorkflow.missingPathSegments.nonEmpty =>
+          saveAsWorkflow.updated(confirmCreateDirectories = true) match
+            case confirmed: SaveAsFileWorkflowState => completeSaveAsWorkflow(surfaceId, confirmed, state)
+            case _                                  => IO.unit
+        case _ =>
+          IO.unit
+    }
 
   private def saveFailureMessage(error: Throwable): String =
     s"Could not save: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}"

@@ -4,8 +4,15 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Enter, InsertChar, SaveFile, TabKey}
-import com.serenity.richtext.RichTextFidelity
+import com.serenity.keystroke.events.{Enter, InsertChar, ModalCreateDirectory, SaveAsFile, SaveFile, TabKey}
+import com.serenity.richtext.{
+  InlineMark,
+  RichTextDocument,
+  RichTextFidelity,
+  RichTextParagraph,
+  RichTextRun,
+  RichTextStyle
+}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -122,6 +129,86 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       Files.deleteIfExists(targetDir)
       Files.deleteIfExists(tempRoot.resolve("new"))
       Files.deleteIfExists(tempRoot)
+  }
+
+  it should "create missing directories and save in one step via the explicit create-directory action" in {
+    val tempRoot   = Files.createTempDirectory("workflow-save-explicit")
+    val targetDir  = tempRoot.resolve("new").resolve("nested")
+    val targetFile = targetDir.resolve("notes.scala")
+    val bufferId   = BufferId(0)
+    val bufferText = "object Notes"
+
+    try
+      val stateManager = createStateManager()
+      stateManager
+        .updateState { state =>
+          val existing = state.persisted.buffers(bufferId)
+          val buffer = existing
+            .copy(document = existing.document.copy(content = com.serenity.rope.Rope(bufferText), isDirty = true))
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+        }
+        .unsafeRunSync()
+
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.SaveAs,
+              filename = "notes.scala",
+              path = targetDir.toString
+            )
+          )
+        )
+        .unsafeRunSync()
+
+      stateManager.applyEvent(TabKey).unsafeRunSync()
+
+      val refreshed = currentWorkflow(stateManager)
+      refreshed.missingPathSegments shouldBe List("new", "nested")
+
+      // A single ModalCreateDirectory -- not a second submit -- both creates the directories and completes the save.
+      stateManager.applyEvent(ModalCreateDirectory).unsafeRunSync()
+
+      val updatedState = stateManager.getCurrentState.unsafeRunSync()
+      updatedState.modalSurface shouldBe None
+      Files.readString(targetFile) shouldBe bufferText
+      updatedState.persisted.buffers(bufferId).document.filePath shouldBe Some(targetFile)
+      updatedState.persisted.buffers(bufferId).document.isDirty shouldBe false
+    finally
+      Files.deleteIfExists(targetFile)
+      Files.deleteIfExists(targetDir)
+      Files.deleteIfExists(tempRoot.resolve("new"))
+      Files.deleteIfExists(tempRoot)
+  }
+
+  it should "carry the buffer's current rich formatting into the save-as workflow it opens" in {
+    val bufferId = BufferId(0)
+    val richDocument = RichTextDocument(
+      List(RichTextParagraph(List(RichTextRun("bold text", RichTextStyle(marks = Set(InlineMark.Bold))))))
+    )
+
+    val stateManager = createStateManager()
+    stateManager
+      .updateState { state =>
+        val existing = state.persisted.buffers(bufferId)
+        val buffer = existing.copy(
+          document = existing.document.copy(content = com.serenity.rope.Rope("bold text"), isDirty = true),
+          richText = existing.richText.copy(richTextDocument = Some(richDocument))
+        )
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+      }
+      .unsafeRunSync()
+
+    stateManager.applyEvent(SaveAsFile).unsafeRunSync()
+
+    val workflow = currentWorkflow(stateManager)
+    workflow shouldBe a[SaveAsFileWorkflowState]
+    workflow.bufferHasRichFormatting shouldBe true
+    // A brand-new/never-saved buffer's Save As has no filename to derive an extension from -- defaults to plain
+    // text rather than "Unknown" -- and plain text can't preserve rich formatting either, so the warning already
+    // applies at the default (empty) filename.
+    workflow.detectedFileType shouldBe com.serenity.io.FileType.Text
+    workflow.wouldLoseFormatting shouldBe true
   }
 
   it should "open a file from the workflow modal into a new focused buffer" in {

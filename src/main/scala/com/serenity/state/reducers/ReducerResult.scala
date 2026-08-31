@@ -39,6 +39,7 @@ enum WorkflowEffect:
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
   case SubmitCloseWorkflow(surfaceId: SurfaceId)
+  case CreateFileWorkflowDirectories(surfaceId: SurfaceId)
 
 enum LspQueueEffect:
   case Enqueue(effect: LspEffect)

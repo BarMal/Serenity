@@ -38,19 +38,21 @@ private[manager] trait WorkflowEffectPort:
   def submitFile(surfaceId: SurfaceId): IO[Unit]
   def submitReplace(surfaceId: SurfaceId): IO[Unit]
   def submitClose(surfaceId: SurfaceId): IO[Unit]
+  def createDirectories(surfaceId: SurfaceId): IO[Unit]
 
 /** Interprets workflow effects without editor, theme, file, or runtime dependencies. */
 final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
 
   def interpret(effect: WorkflowEffect): IO[Unit] =
     effect match
-      case WorkflowEffect.RequestOpenFile           => port.requestOpenFile
-      case WorkflowEffect.RequestSaveAs             => port.requestSaveAs
-      case WorkflowEffect.RefreshFileWorkflow(id)   => port.refresh(id)
-      case WorkflowEffect.RefreshFind(request)      => port.refreshFind(request)
-      case WorkflowEffect.SubmitFileWorkflow(id)    => port.submitFile(id)
-      case WorkflowEffect.SubmitReplaceWorkflow(id) => port.submitReplace(id)
-      case WorkflowEffect.SubmitCloseWorkflow(id)   => port.submitClose(id)
+      case WorkflowEffect.RequestOpenFile                   => port.requestOpenFile
+      case WorkflowEffect.RequestSaveAs                     => port.requestSaveAs
+      case WorkflowEffect.RefreshFileWorkflow(id)           => port.refresh(id)
+      case WorkflowEffect.RefreshFind(request)              => port.refreshFind(request)
+      case WorkflowEffect.SubmitFileWorkflow(id)            => port.submitFile(id)
+      case WorkflowEffect.SubmitReplaceWorkflow(id)         => port.submitReplace(id)
+      case WorkflowEffect.SubmitCloseWorkflow(id)           => port.submitClose(id)
+      case WorkflowEffect.CreateFileWorkflowDirectories(id) => port.createDirectories(id)
 
 /** Lifecycle operation required by lifecycle effects. */
 private[manager] trait LifecycleEffectPort:
@@ -86,7 +88,8 @@ final private[manager] class StateManagerEffectHandlers(
     def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
     def submitFile(surfaceId: SurfaceId): IO[Unit]        = submitFileWorkflowEffect(surfaceId)
     def submitReplace(surfaceId: SurfaceId): IO[Unit]     = submitReplaceWorkflowEffect(surfaceId)
-    def submitClose(surfaceId: SurfaceId): IO[Unit]       = submitCloseWorkflowEffect(surfaceId))
+    def submitClose(surfaceId: SurfaceId): IO[Unit]       = submitCloseWorkflowEffect(surfaceId)
+    def createDirectories(surfaceId: SurfaceId): IO[Unit] = createFileWorkflowDirectoriesEffect(surfaceId))
 
   private val lifecycleEffects = new LifecycleEffectHandler(
     new LifecycleEffectPort:
