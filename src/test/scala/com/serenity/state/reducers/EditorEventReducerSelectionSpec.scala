@@ -40,6 +40,43 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
     extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 3), CursorPosition(0, 1)))
   }
 
+  "ExtendSelectionWordLeft" should "anchor at the cursor and move the focus to the previous word boundary" in {
+    val extended = reduce(bufferOf("foo bar baz", CursorPosition(0, 11)), ExtendSelectionWordLeft)
+
+    extended.editing.cursors shouldBe List(CursorPosition(0, 8))
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 11), CursorPosition(0, 8)))
+  }
+
+  it should "keep the original anchor across repeated presses" in {
+    val extended =
+      reduce(bufferOf("foo bar baz", CursorPosition(0, 11)), ExtendSelectionWordLeft, ExtendSelectionWordLeft)
+
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 11), CursorPosition(0, 4)))
+  }
+
+  "ExtendSelectionWordRight" should "anchor at the cursor and move the focus to the next word boundary" in {
+    val extended = reduce(bufferOf("foo bar baz", CursorPosition(0, 0)), ExtendSelectionWordRight)
+
+    extended.editing.cursors shouldBe List(CursorPosition(0, 4))
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(0, 4)))
+  }
+
+  "Extending a selection by word" should "hold the anchor when the direction reverses" in {
+    val extended =
+      reduce(bufferOf("foo bar baz", CursorPosition(0, 4)), ExtendSelectionWordRight, ExtendSelectionWordLeft)
+
+    extended.editing.cursors shouldBe List(CursorPosition(0, 4))
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 4), CursorPosition(0, 4)))
+  }
+
+  it should "drop secondary selections rather than extending each of them" in {
+    val base = bufferOf("foo bar baz", CursorPosition(0, 4))
+    val multiSelected =
+      base.copy(editing = base.editing.copy(selections = List(Selection(CursorPosition(0, 8), CursorPosition(0, 11)))))
+
+    reduce(multiSelected, ExtendSelectionWordRight).editing.selections shouldBe Nil
+  }
+
   "ExtendSelectionDown" should "anchor at the cursor and move the focus onto the next line" in {
     val extended = reduce(bufferOf("abc\ndef", CursorPosition(0, 1)), ExtendSelectionDown)
 

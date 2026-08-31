@@ -46,6 +46,10 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
   case ExtendSelectionRight
   case ExtendSelectionUp
   case ExtendSelectionDown
+  case MoveWordLeft
+  case MoveWordRight
+  case ExtendSelectionWordLeft
+  case ExtendSelectionWordRight
   case MoveToStart
   case MoveToEnd
   case MoveToStartOfFile
@@ -72,20 +76,26 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
         com.serenity.keystroke.events.ExtendSelectionRight
       case ExtendSelectionUp   => com.serenity.keystroke.events.ExtendSelectionUp
       case ExtendSelectionDown => com.serenity.keystroke.events.ExtendSelectionDown
-      case MoveToStart         => com.serenity.keystroke.events.MoveToStart
-      case MoveToEnd           => com.serenity.keystroke.events.MoveToEnd
-      case MoveToStartOfFile   => com.serenity.keystroke.events.MoveToStartOfFile
-      case MoveToEndOfFile     => com.serenity.keystroke.events.MoveToEndOfFile
-      case PageUp              => com.serenity.keystroke.events.PageUp
-      case PageDown            => com.serenity.keystroke.events.PageDown
-      case DeleteBackward      => com.serenity.keystroke.events.DeleteBackward
-      case DeleteForward       => com.serenity.keystroke.events.DeleteForward
-      case DeleteWordBackward  => com.serenity.keystroke.events.DeleteWordBackward
-      case DeleteWordForward   => com.serenity.keystroke.events.DeleteWordForward
-      case Escape              => com.serenity.keystroke.events.Escape
-      case NewLine             => com.serenity.keystroke.events.NewLine
-      case Tab                 => com.serenity.keystroke.events.TabKey
-      case ReverseTab          => com.serenity.keystroke.events.ReverseTabKey
+      case MoveWordLeft        => com.serenity.keystroke.events.MoveWordLeft
+      case MoveWordRight       => com.serenity.keystroke.events.MoveWordRight
+      case ExtendSelectionWordLeft =>
+        com.serenity.keystroke.events.ExtendSelectionWordLeft
+      case ExtendSelectionWordRight =>
+        com.serenity.keystroke.events.ExtendSelectionWordRight
+      case MoveToStart        => com.serenity.keystroke.events.MoveToStart
+      case MoveToEnd          => com.serenity.keystroke.events.MoveToEnd
+      case MoveToStartOfFile  => com.serenity.keystroke.events.MoveToStartOfFile
+      case MoveToEndOfFile    => com.serenity.keystroke.events.MoveToEndOfFile
+      case PageUp             => com.serenity.keystroke.events.PageUp
+      case PageDown           => com.serenity.keystroke.events.PageDown
+      case DeleteBackward     => com.serenity.keystroke.events.DeleteBackward
+      case DeleteForward      => com.serenity.keystroke.events.DeleteForward
+      case DeleteWordBackward => com.serenity.keystroke.events.DeleteWordBackward
+      case DeleteWordForward  => com.serenity.keystroke.events.DeleteWordForward
+      case Escape             => com.serenity.keystroke.events.Escape
+      case NewLine            => com.serenity.keystroke.events.NewLine
+      case Tab                => com.serenity.keystroke.events.TabKey
+      case ReverseTab         => com.serenity.keystroke.events.ReverseTabKey
 
 object EditorKeyAction:
 
@@ -120,6 +130,34 @@ object EditorKeyAction:
         com.serenity.keystroke.InputKey.ArrowDown,
         None,
         Set(com.serenity.keystroke.Modifier.Shift)
+      )
+    ),
+    EditorKeyAction.MoveWordLeft -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowLeft,
+        None,
+        Set(com.serenity.keystroke.Modifier.Ctrl)
+      )
+    ),
+    EditorKeyAction.MoveWordRight -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowRight,
+        None,
+        Set(com.serenity.keystroke.Modifier.Ctrl)
+      )
+    ),
+    EditorKeyAction.ExtendSelectionWordLeft -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowLeft,
+        None,
+        Set(com.serenity.keystroke.Modifier.Ctrl, com.serenity.keystroke.Modifier.Shift)
+      )
+    ),
+    EditorKeyAction.ExtendSelectionWordRight -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.ArrowRight,
+        None,
+        Set(com.serenity.keystroke.Modifier.Ctrl, com.serenity.keystroke.Modifier.Shift)
       )
     ),
     EditorKeyAction.MoveToStart -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set.empty)),
