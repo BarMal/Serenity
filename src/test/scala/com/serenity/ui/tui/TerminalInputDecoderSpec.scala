@@ -41,6 +41,52 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
     decodeAll(csi("D")) shouldBe List(tok(InputKey.ArrowLeft))
   }
 
+  // ===Kitty-protocol "report event types" enhancement over the legacy CSI-letter/CSI-tilde key forms: a physical
+  // keystroke's release must not be reported as a second stroke, per the same rule `decodeCsiU` already applies to
+  // the CSI-u form (`CSI key-code;modifier:event <letter-or-tilde>`, kitty keyboard-protocol spec's "report event
+  // types" section -- see `decodeCsiKey`'s doc comment for the exact source).===
+
+  it should "decode a bare legacy CSI arrow-key sequence exactly as before (no modifier/event field present)" in {
+    decodeAll(csi("A")) shouldBe List(tok(InputKey.ArrowUp))
+    decodeAll(csi("B")) shouldBe List(tok(InputKey.ArrowDown))
+    decodeAll(csi("C")) shouldBe List(tok(InputKey.ArrowRight))
+    decodeAll(csi("D")) shouldBe List(tok(InputKey.ArrowLeft))
+  }
+
+  it should "drop a kitty-protocol release event for a CSI-letter arrow key, rather than emitting a second stroke" in {
+    decodeAll(csi("1;1:3A")) shouldBe Nil
+    decodeAll(csi("1;1:3B")) shouldBe Nil
+    decodeAll(csi("1;1:3C")) shouldBe Nil
+    decodeAll(csi("1;1:3D")) shouldBe Nil
+  }
+
+  it should "drop kitty-protocol release events for the other CSI-letter keys (Home/End/Shift+Tab)" in {
+    decodeAll(csi("1;1:3H")) shouldBe Nil
+    decodeAll(csi("1;1:3F")) shouldBe Nil
+    decodeAll(csi("1;1:3Z")) shouldBe Nil
+  }
+
+  it should "decode an explicit kitty-protocol press event for a CSI-letter arrow key normally" in {
+    decodeAll(csi("1;1:1A")) shouldBe List(tok(InputKey.ArrowUp))
+  }
+
+  it should "treat a kitty-protocol repeat event for a CSI-letter arrow key as an ordinary key stroke" in {
+    decodeAll(csi("1;1:2A")) shouldBe List(tok(InputKey.ArrowUp))
+  }
+
+  it should "decode a kitty-protocol arrow-key press immediately followed by its release as a single stroke" in {
+    val input = csi("1;1:1A") ++ csi("1;1:3A")
+    decodeAll(input) shouldBe List(tok(InputKey.ArrowUp))
+  }
+
+  it should "drop a kitty-protocol release event for a tilde-form key (PageUp), not just letter-form keys" in {
+    decodeAll(csi("5;1:3~")) shouldBe Nil
+  }
+
+  it should "decode a modified tilde-form key (Shift+PageUp) despite the appended modifier field" in {
+    decodeAll(csi("5;2~")) shouldBe List(tok(InputKey.PageUp))
+  }
+
   it should "decode Home and End in both the xterm and VT220 forms" in {
     decodeAll(csi("H")) shouldBe List(tok(InputKey.Home))
     decodeAll(csi("F")) shouldBe List(tok(InputKey.End))
