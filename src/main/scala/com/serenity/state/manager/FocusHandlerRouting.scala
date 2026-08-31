@@ -99,3 +99,6 @@ private[manager] object FocusHandlerRouting:
       // Cursor-peek prototype: never focused in practice (look-but-don't-touch), but routed as a read-only peek
       // overlay rather than left unhandled, matching every other passive preview content case above.
       case SurfaceContent.CommandRunnerPeek(_) => peekOverlay
+      // Shortcuts-help reference (issue #1247): `AppEventReducer.toggleShortcutsHelp` never pushes focus to it
+      // either, for the same "look but don't touch" reason -- routed here only so this table stays exhaustive.
+      case SurfaceContent.ShortcutsHelp(_) => peekOverlay

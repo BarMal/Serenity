@@ -244,12 +244,12 @@ final private[manager] class StateManagerEventPipeline(
     val registry = CommandRegistry.withToggleUI
     def reduced  = applyReducerResult(AppEventReducer.reduce(event, prevState, registry)(using balance), prevState)
     event match
-      case CloseTab                                      => beginCloseAction(CloseScope.Current, prevState)
-      case Quit                                          => beginCloseAction(CloseScope.Quit, prevState)
-      case ToggleCommandRunner                           => reduced >> hydrateCommandRunnerUiPresets
-      case NextTab                                       => reduced >> applyPaneFlowAnimation(SweepDirection.Backward)
-      case PreviousTab                                   => reduced >> applyPaneFlowAnimation(SweepDirection.Forward)
-      case ToggleContextualToolbar | NewTab | FileSearch => reduced
+      case CloseTab            => beginCloseAction(CloseScope.Current, prevState)
+      case Quit                => beginCloseAction(CloseScope.Quit, prevState)
+      case ToggleCommandRunner => reduced >> hydrateCommandRunnerUiPresets
+      case NextTab             => reduced >> applyPaneFlowAnimation(SweepDirection.Backward)
+      case PreviousTab         => reduced >> applyPaneFlowAnimation(SweepDirection.Forward)
+      case ToggleContextualToolbar | ToggleShortcutsHelp | NewTab | FileSearch                      => reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         // Resolving the frozen cursor anchor to a screen position needs LayoutEngine, which reducers may not touch
         // (ArchitectureChecks.ForbiddenImports) -- done here, once, right after the reduce that may have set

@@ -108,6 +108,7 @@ enum ViewIntent:
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
+  case ToggleShortcutsHelp
 
 enum ProjectIntent:
   case RunProjectTask(kind: ProjectTaskKind)

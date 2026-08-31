@@ -27,7 +27,8 @@ object TextHotkeyConverters:
     HotkeyAction.Find                     -> OpenFind,
     HotkeyAction.Replace                  -> OpenReplace,
     HotkeyAction.GoToLine                 -> OpenGotoLine,
-    HotkeyAction.SaveAs                   -> SaveAsFile
+    HotkeyAction.SaveAs                   -> SaveAsFile,
+    HotkeyAction.ToggleShortcutsHelp      -> ToggleShortcutsHelp
   )
 
   def hotkeyConverter(config: AppConfig = AppConfig.default): PartialFunction[KeyStrokeInfo, Event] =

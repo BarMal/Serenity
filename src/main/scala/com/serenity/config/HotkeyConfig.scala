@@ -26,6 +26,7 @@ enum HotkeyAction:
   case Replace
   case GoToLine
   case SaveAs
+  case ToggleShortcutsHelp
 
   def configKey: String =
     this match
@@ -50,6 +51,7 @@ enum HotkeyAction:
       case Replace                  => "replace"
       case GoToLine                 => "go_to_line"
       case SaveAs                   => "save_as"
+      case ToggleShortcutsHelp      => "toggle_shortcuts_help"
 
 final case class HotkeyTrigger(
     keyType: InputKey,
@@ -333,7 +335,11 @@ object HotkeyConfig:
       HotkeyAction.Find     -> List(primary('f')),
       HotkeyAction.Replace  -> List(if isMac then primary('f', alt = true) else primary('h')),
       HotkeyAction.GoToLine -> List(primary('g')),
-      HotkeyAction.SaveAs   -> List(primary('s', shift = true))
+      HotkeyAction.SaveAs   -> List(primary('s', shift = true)),
+      // Plain F1, not primary-modifier-gated: unlike the Cmd/Ctrl bindings above, F1 is delivered identically by
+      // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
+      // (issue #1213) and no per-OS branching here.
+      HotkeyAction.ToggleShortcutsHelp -> List(HotkeyTrigger(InputKey.F1, None, Set.empty))
     )
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =

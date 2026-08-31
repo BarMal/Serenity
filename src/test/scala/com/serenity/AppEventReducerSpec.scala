@@ -259,3 +259,58 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     result.state.commandRunnerSurface shouldBe None
   }
+
+  it should "open the shortcuts-help reference below the cursor without stealing editor focus" in {
+    val initialState =
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
+
+    val result  = AppEventReducer.reduce(ToggleShortcutsHelp, initialState, registry)
+    val surface = result.state.shortcutsHelpSurface.getOrElse(fail("Expected a shortcuts-help surface"))
+
+    surface.id shouldBe SurfaceId.ShortcutsHelp
+    surface.presentation shouldBe SurfacePresentation.Floating(
+      initialState.activeCursorPosition,
+      SurfacePlacement.BelowCursor
+    )
+    result.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    result.effects shouldBe Nil
+  }
+
+  it should "close the shortcuts-help reference on a second toggle" in {
+    val initialState =
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
+
+    val opened = AppEventReducer.reduce(ToggleShortcutsHelp, initialState, registry).state
+    opened.shortcutsHelpSurface shouldBe defined
+
+    val closed = AppEventReducer.reduce(ToggleShortcutsHelp, opened, registry).state
+
+    closed.shortcutsHelpSurface shouldBe None
+    closed.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
+  it should "populate the shortcuts-help reference from the app's real configured bindings" in {
+    val initialState = AppState.initial
+
+    val result  = AppEventReducer.reduce(ToggleShortcutsHelp, initialState, registry)
+    val surface = result.state.shortcutsHelpSurface.getOrElse(fail("Expected a shortcuts-help surface"))
+
+    surface.content shouldBe SurfaceContent.ShortcutsHelp(
+      com.serenity.state.models.ShortcutsHelpContent.build(initialState.persisted.config)
+    )
+  }
+
+  it should "not open the shortcuts-help reference while the start page is showing" in {
+    val base                  = AppState.initial
+    val (withId, startPageId) = base.allocateSurfaceId
+    val startPageSurface = UiSurface(
+      id = startPageId,
+      content = SurfaceContent.StartPage(StartupPage("Serenity")),
+      presentation = SurfacePresentation.Modal
+    )
+    val initialState = withId.copy(runtime = withId.runtime.copy(uiSurfaces = List(startPageSurface)))
+
+    val result = AppEventReducer.reduce(ToggleShortcutsHelp, initialState, registry)
+
+    result.state.shortcutsHelpSurface shouldBe None
+  }

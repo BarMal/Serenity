@@ -641,6 +641,8 @@ final private[manager] class StateManagerEffectHandlers(
         expandPinnedPanel(PanelTarget.ByPosition(position))
       case ViewIntent.CollapseExpandedPanel =>
         collapseExpandedPanel()
+      case ViewIntent.ToggleShortcutsHelp =>
+        enqueueEvent(com.serenity.keystroke.events.ToggleShortcutsHelp)
 
   private def interpretProjectIntent(intent: ProjectIntent, state: AppState): IO[Unit] =
     intent match

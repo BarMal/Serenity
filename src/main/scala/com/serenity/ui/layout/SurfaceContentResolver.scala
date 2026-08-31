@@ -135,6 +135,8 @@ object SurfaceContentResolver:
         resolveComments(rect, mode, symbols, activeLocation)
       case SurfaceContent.Diagnostics(issues, activeLocation) =>
         resolveDiagnostics(rect, mode, issues, activeLocation)
+      case SurfaceContent.ShortcutsHelp(groups) =>
+        resolveShortcutsHelp(rect, mode, groups)
       case SurfaceContent.ThemePicker(state) =>
         resolveThemePicker(state, rect, mode)
       case SurfaceContent.ThemeCreator(state) =>
@@ -903,6 +905,23 @@ object SurfaceContentResolver:
         List(OverlayRow(s"${issues.length} issues"), OverlayRow(s"$errorCount error"))
 
     ResolvedSurfaceContent(titleFor(mode, "diagnostics"), rows = shaped)
+
+  /** The toggleable keyboard-shortcuts reference (issue #1247). Deliberately not layout-kind-branched like
+    * `resolveOutline`/`resolveDiagnostics` above -- there is no "current" entry to highlight or compact down to a
+    * one-line summary, so every render mode gets the same group-then-entries listing, clipped to what `rect` fits.
+    */
+  private def resolveShortcutsHelp(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    groups: List[ShortcutHelpGroup]
+  ): ResolvedSurfaceContent =
+    val maxRows = math.max(1, rect.height - 2)
+    val rows = groups
+      .flatMap { group =>
+        OverlayRow(group.title) :: group.entries.map(entry => OverlayRow(s"${entry.label}: ${entry.keys}"))
+      }
+      .take(maxRows)
+    ResolvedSurfaceContent(titleFor(mode, "Keyboard Shortcuts"), rows = rows)
 
   private def resolveThemePicker(
     state: ThemePickerState,
