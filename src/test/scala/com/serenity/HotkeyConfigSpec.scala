@@ -184,6 +184,28 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "bind Toggle Shortcuts Help to plain F1 on every platform, unlike the primary-modifier-gated actions" in
+    List("Linux", "Windows", "Mac OS X").foreach { osName =>
+      val bindings = HotkeyConfig.defaultBindingsFor(osName)
+      bindings(HotkeyAction.ToggleShortcutsHelp).map(_.render) shouldBe List("f1")
+    }
+
+  it should "keep every default binding, including Toggle Shortcuts Help, conflict-free" in {
+    HotkeyConfig.validate(HotkeyConfig.defaultBindingsFor("Linux")) shouldBe Right(())
+    HotkeyConfig.defaultBindingsFor("Linux") should contain key HotkeyAction.ToggleShortcutsHelp
+  }
+
+  it should "round-trip the toggle_shortcuts_help config key" in {
+    val configFile = Files.createTempFile("serenity-toggle-shortcuts-help", ".conf")
+    Files.writeString(configFile, "hotkey.toggle_shortcuts_help = ctrl+alt+k\n")
+
+    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+
+    loaded.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleShortcutsHelp).map(_.render) shouldBe List(
+      "ctrl+alt+k"
+    )
+  }
+
   it should "round-trip multi-bindings for every serialized hotkey action" in {
     val configFile = Files.createTempFile("serenity-multi-hotkey-actions", ".conf")
     Files.writeString(

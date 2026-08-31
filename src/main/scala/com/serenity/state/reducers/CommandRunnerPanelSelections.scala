@@ -53,6 +53,7 @@ private[serenity] object CommandRunnerPanelSelections:
       case SurfaceContent.CommentLens(_)            => None
       case SurfaceContent.ModalWorkflow(_)          => None
       case SurfaceContent.Terminal(_, _)            => None
+      case SurfaceContent.ShortcutsHelp(_)          => None
       case SurfaceContent.GhostOverlay(_, _)        => None
 
   private def positionOf(surface: UiSurface): Option[PanelPosition] =

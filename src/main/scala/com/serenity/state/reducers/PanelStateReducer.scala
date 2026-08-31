@@ -200,7 +200,8 @@ object PanelStateReducer:
           SurfaceContent.ThemePicker(_) | SurfaceContent.ThemeCreator(_) | SurfaceContent.FileSearch(_) |
           SurfaceContent.ContextualToolbar(_) | SurfaceContent.ContextMenu(_) | SurfaceContent.CommentLens(_) |
           SurfaceContent.ModalWorkflow(_) | SurfaceContent.QuickInfo(_) | SurfaceContent.FilePreview(_, _) |
-          SurfaceContent.SymbolDefinition(_, _) | SurfaceContent.CursorInfoBar(_) | SurfaceContent.GhostOverlay(_, _) =>
+          SurfaceContent.SymbolDefinition(_, _) | SurfaceContent.CursorInfoBar(_) | SurfaceContent.GhostOverlay(_, _) |
+          SurfaceContent.ShortcutsHelp(_) =>
         None
 
   private def replaceSurface(surfaces: List[UiSurface], updated: UiSurface): List[UiSurface] =

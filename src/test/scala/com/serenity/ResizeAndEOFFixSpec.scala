@@ -125,8 +125,10 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
       translator.translate(KeyStrokeInfo(InputKey.Unknown, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
     val nullCharEvent =
       translator.translate(KeyStrokeInfo(InputKey.Character, None, Set.empty)).asInstanceOf[UnhandledEvent[?]]
+    // F2 rather than F1: F1 is now bound to Toggle Shortcuts Help (issue #1247), so it no longer round-trips to
+    // an UnhandledEvent -- F2 stays genuinely unbound and keeps this assertion's premise true.
     val nonSystemEvent = translator
-      .translate(KeyStrokeInfo(InputKey.F1, None, Set.empty))
+      .translate(KeyStrokeInfo(InputKey.F2, None, Set.empty))
       .asInstanceOf[UnhandledEvent[?]]
 
     isSystemEvent(unknownEvent) shouldBe true

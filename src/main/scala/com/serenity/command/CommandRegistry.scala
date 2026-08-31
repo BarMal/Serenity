@@ -583,6 +583,13 @@ object CommandRegistry:
       label = "Pin Diagnostics Panel"
     ),
     Command.typed(
+      "toggle-shortcuts-help",
+      "Show or hide a reference of the app's current keyboard shortcuts.",
+      CommandIntent.View(ViewIntent.ToggleShortcutsHelp),
+      CommandCategory.View,
+      label = "Toggle Shortcuts Help"
+    ),
+    Command.typed(
       "markdown-preview",
       "Open a rendered Markdown preview for the current buffer.",
       CommandIntent.View(ViewIntent.OpenMarkdownPreview),

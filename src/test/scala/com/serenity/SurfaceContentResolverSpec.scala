@@ -1214,4 +1214,43 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     resolved.rows.exists(_.plainText.contains("Ship")) shouldBe true
   }
 
+  it should "render the shortcuts-help reference as group headings followed by their entries" in {
+    val groups = List(
+      ShortcutHelpGroup("Global", List(ShortcutHelpEntry("Save", "ctrl+s"), ShortcutHelpEntry("Quit", "ctrl+q"))),
+      ShortcutHelpGroup("Editor", List(ShortcutHelpEntry("Move Left", "left")))
+    )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.ShortcutsHelp(groups),
+      LayoutRect(0, 0, 30, 20),
+      SurfaceRenderMode.Pinned
+    )
+
+    resolved.title shouldBe Some("Keyboard Shortcuts")
+    resolved.rows.map(_.plainText) shouldBe List(
+      "Global",
+      "Save: ctrl+s",
+      "Quit: ctrl+q",
+      "Editor",
+      "Move Left: left"
+    )
+  }
+
+  it should "clip the shortcuts-help reference to the rect it is given rather than overflow it" in {
+    val groups = List(
+      ShortcutHelpGroup(
+        "Global",
+        List.tabulate(10)(index => ShortcutHelpEntry(s"Action $index", s"key$index"))
+      )
+    )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.ShortcutsHelp(groups),
+      LayoutRect(0, 0, 30, 5),
+      SurfaceRenderMode.Pinned
+    )
+
+    resolved.rows.size shouldBe 3
+  }
+
 end SurfaceContentResolverSpec

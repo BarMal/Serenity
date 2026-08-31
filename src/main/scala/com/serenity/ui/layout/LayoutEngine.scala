@@ -752,7 +752,7 @@ object LayoutEngine:
           state,
           contentRect.width - (borderCells * 2)
         ) + (borderCells * 2)
-      case SurfaceContent.CommandPalette(_) =>
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.ShortcutsHelp(_) =>
         calculateFloatingSurfaceWidth(contentRect.width)
       case _ =>
         contentRect.width
@@ -778,12 +778,13 @@ object LayoutEngine:
         .map(selectionEnd => (screenPosition.x + selectionEnd.x) / 2)
         .getOrElse(screenPosition.x)
       val overlayX = surface.content match
-        // The command palette/settings surface is horizontally centered on screen, not cursor-anchored: unlike the
-        // contextual toolbar (anchored to a text selection) or other floating content, its width and content bear no
-        // relationship to the cursor's horizontal position, and cursor-anchoring left it pinned near whichever column
-        // the caret happened to be in -- often far from center, sometimes hard against an edge. Vertical placement
-        // (above/below the cursor, `overlayY` below) is unaffected.
-        case SurfaceContent.CommandPalette(_) =>
+        // The command palette/settings surface -- and the shortcuts-help reference (issue #1247), for the same
+        // reason -- is horizontally centered on screen, not cursor-anchored: unlike the contextual toolbar (anchored
+        // to a text selection) or other floating content, its width and content bear no relationship to the cursor's
+        // horizontal position, and cursor-anchoring left it pinned near whichever column the caret happened to be in
+        // -- often far from center, sometimes hard against an edge. Vertical placement (above/below the cursor,
+        // `overlayY` below) is unaffected.
+        case SurfaceContent.CommandPalette(_) | SurfaceContent.ShortcutsHelp(_) =>
           contentRect.x + math.max(0, (contentRect.width - preferredWidth) / 2)
         case _ =>
           math.max(
@@ -1063,6 +1064,10 @@ object LayoutEngine:
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
           SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
         math.min(8, math.max(4, maxHeight - 1))
+      case SurfaceContent.ShortcutsHelp(groups) =>
+        // Wants enough rows for every group heading plus its entries, but never more than the viewport allows --
+        // `resolveShortcutsHelp` clips to whatever height it is actually given.
+        math.min(maxHeight - 1, math.max(4, groups.map(g => g.entries.size + 1).sum + 2))
       case SurfaceContent.GhostOverlay(_, cachedRect) =>
         cachedRect.height
 

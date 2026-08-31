@@ -18,6 +18,12 @@ object SurfaceId:
     */
   val CursorPeek: SurfaceId = SurfaceId("command-runner-cursor-peek")
 
+  /** Reserved id for the toggleable keyboard-shortcuts reference (issue #1247) -- a fixed constant like [[CursorPeek]]
+    * rather than an allocated id, since at most one instance of this surface exists at a time and
+    * `AppEventReducer.toggleShortcutsHelp` looks it up by id to decide whether to open or close it.
+    */
+  val ShortcutsHelp: SurfaceId = SurfaceId("shortcuts-help")
+
 /** An executable option displayed on the startup launch surface. */
 enum StartupActionSection:
   case Session
@@ -176,6 +182,15 @@ final case class ContextMenu(
     val clampedIndex = if items.isEmpty then 0 else ((index % items.size) + items.size) % items.size
     copy(selectedIndex = clampedIndex)
 
+/** One bound key combination (or the handful bound to the same action) for one action, rendered for the shortcuts-help
+  * reference (issue #1247). `keys` is already display text (e.g. "ctrl+s"), produced by `ShortcutsHelpContent` from
+  * `HotkeyTrigger.render` -- this case class carries no live config so it stays a plain, renderer-friendly snapshot.
+  */
+final case class ShortcutHelpEntry(label: String, keys: String)
+
+/** One named section of the shortcuts-help reference, e.g. "Global" or "Editor". */
+final case class ShortcutHelpGroup(title: String, entries: List[ShortcutHelpEntry])
+
 enum SurfacePlacement:
   case AboveCursor
   case BelowCursor
@@ -238,6 +253,11 @@ enum SurfaceContent:
   case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None)
   case Comments(symbols: List[Symbol], activeLocation: Option[Location] = None)
   case Diagnostics(issues: List[Diagnostic], activeLocation: Option[Location] = None)
+
+  /** The toggleable keyboard-shortcuts reference (issue #1247) -- a snapshot of `ShortcutsHelpContent.build`, taken
+    * when `AppEventReducer.toggleShortcutsHelp` opens the surface, not re-derived on every render.
+    */
+  case ShortcutsHelp(groups: List[ShortcutHelpGroup])
 
   /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
   case GhostOverlay(originalContent: SurfaceContent, cachedRect: LayoutRect)

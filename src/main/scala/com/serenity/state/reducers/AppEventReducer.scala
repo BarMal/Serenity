@@ -26,6 +26,10 @@ object AppEventReducer:
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
         else ReducerResult.noEffects(toggleContextualToolbar(state))
 
+      case ToggleShortcutsHelp =>
+        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        else ReducerResult.noEffects(toggleShortcutsHelp(state))
+
       case NewTab =>
         ReducerResult.noEffects(EditorState.openNewTab(state))
 
@@ -236,6 +240,23 @@ object AppEventReducer:
               .copy(runtime =
                 stateWithId.runtime.copy(uiSurfaces = upsertSurface(stateWithId.runtime.uiSurfaces, surface))
               )
+
+  /** Opens or closes the shortcuts-help reference (issue #1247) at the fixed `SurfaceId.ShortcutsHelp` id, mirroring
+    * `endCursorPeek`/`beginCursorPeek`'s single-instance pattern. Deliberately never pushes focus -- like
+    * `SurfaceContent.CommandRunnerPeek`, this is a "look but don't touch" reference surface, so normal editing (and the
+    * command runner, if already open) keeps working unchanged while it is on screen.
+    */
+  private def toggleShortcutsHelp(state: AppState): AppState =
+    state.shortcutsHelpSurface match
+      case Some(surface) =>
+        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
+      case None =>
+        val surface = UiSurface(
+          id = SurfaceId.ShortcutsHelp,
+          content = SurfaceContent.ShortcutsHelp(ShortcutsHelpContent.build(state.persisted.config)),
+          presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+        )
+        state.copy(runtime = state.runtime.copy(uiSurfaces = upsertSurface(state.runtime.uiSurfaces, surface)))
 
   private def closeTabState(state: AppState, registry: CommandRegistry): AppState =
     val closedState = EditorState.closeFocusedTab(state)
