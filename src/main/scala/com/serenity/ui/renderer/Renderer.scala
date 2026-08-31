@@ -2060,6 +2060,18 @@ object Renderer:
               snapshot
             )
 
+            renderDiagnosticHighlights(
+              context.surface,
+              annotations.diagnosticsByLine.getOrElse(visualLine.bufferLine, Nil),
+              visualLine,
+              rect,
+              screenY,
+              lineTopPx,
+              state.persisted.theme,
+              context,
+              snapshot
+            )
+
             renderSelectionHighlights(
               context.surface,
               buffer,
@@ -2302,6 +2314,51 @@ object Renderer:
 
   private[serenity] def commentHighlightBackground(theme: Theme): Color =
     blend(theme.warning.background, theme.background, warningWeight = 0.45)
+
+  /** Word-level counterpart to the gutter "!" marker `renderDiagnosticIndicator` paints: each diagnostic's own `range`
+    * (an unknown word for spell-check, or an LSP diagnostic sharing the same `DiagnosticsState` pipeline) gets a
+    * background highlight so the flagged text itself is visible, not just its line. Works in both the measured (GUI)
+    * and cell-based (TUI) drawing paths via `renderTextRangeBackground`, the same helper
+    * `renderDocumentCommentHighlights` uses.
+    */
+  private def renderDiagnosticHighlights(
+    surface: RenderSurface,
+    lineDiagnostics: List[com.serenity.lsp.model.Diagnostic],
+    visualLine: TextVisualLine,
+    rect: LayoutRect,
+    screenY: Int,
+    lineTopPx: Int,
+    theme: Theme,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Unit =
+    lineDiagnostics.foreach { diagnostic =>
+      val start = CursorPosition(diagnostic.range.start.line, diagnostic.range.start.character)
+      val end   = CursorPosition(diagnostic.range.end.line, diagnostic.range.end.character)
+      columnsForRange(start, end, visualLine, markPoint = false).foreach {
+        case (diagStart, diagEnd) =>
+          renderTextRangeBackground(
+            surface,
+            visualLine,
+            rect,
+            screenY,
+            lineTopPx,
+            theme.foreground,
+            diagnosticHighlightBackground(theme, diagnostic.severity.map(_.code)),
+            context,
+            snapshot,
+            diagStart,
+            diagEnd
+          )
+      }
+    }
+
+  private[serenity] def diagnosticHighlightBackground(theme: Theme, severityCode: Option[Int]): Color =
+    val accent = severityCode match
+      case Some(1) => theme.error.background
+      case Some(2) => theme.warning.background
+      case _       => theme.muted
+    blend(accent, theme.background, warningWeight = 0.45)
 
   private def blend(foreground: Color, background: Color, warningWeight: Double): Color =
     val clampedWeight    = math.max(0.0, math.min(1.0, warningWeight))
