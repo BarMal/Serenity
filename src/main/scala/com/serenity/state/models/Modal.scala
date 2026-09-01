@@ -244,8 +244,8 @@ sealed trait FileWorkflowState:
       case FileWorkflowField.Format =>
         this
 
-  /** The fields Tab/Shift-Tab cycle through -- `Format` is only reachable here for `SaveAsFileWorkflowState`
-    * (Open has no format concept, and `Open`'s dialog never surfaces a format field to Tab into).
+  /** The fields Tab/Shift-Tab cycle through -- `Format` is only reachable here for `SaveAsFileWorkflowState` (Open has
+    * no format concept, and `Open`'s dialog never surfaces a format field to Tab into).
     */
   def cyclableFields: List[FileWorkflowField] = List(FileWorkflowField.Filename, FileWorkflowField.Path)
 

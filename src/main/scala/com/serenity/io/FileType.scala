@@ -120,11 +120,11 @@ object SaveFormat:
   val ordered: List[SaveFormat] = List(Text, Markdown, RichText, OpenDocumentText, WordOpenXml)
 
   def canonicalExtension(format: SaveFormat): String = format match
-    case SaveFormat.Text              => ".txt"
-    case SaveFormat.Markdown          => ".md"
-    case SaveFormat.RichText          => ".rtf"
-    case SaveFormat.OpenDocumentText  => ".odt"
-    case SaveFormat.WordOpenXml       => ".docx"
+    case SaveFormat.Text             => ".txt"
+    case SaveFormat.Markdown         => ".md"
+    case SaveFormat.RichText         => ".rtf"
+    case SaveFormat.OpenDocumentText => ".odt"
+    case SaveFormat.WordOpenXml      => ".docx"
 
   def displayName(format: SaveFormat): String = format match
     case SaveFormat.Text             => "Text"
@@ -134,8 +134,8 @@ object SaveFormat:
     case SaveFormat.WordOpenXml      => "Word"
 
   /** Maps a detected [[FileType]] back to the matching [[SaveFormat]]. `FileType.Text` and every format outside the
-    * cyclable five (e.g. `FileType.Scala`) fall back to `SaveFormat.Text`, matching `FileWorkflowState.detectedFileType`'s
-    * own default-to-Text behaviour for an unrecognized or absent extension.
+    * cyclable five (e.g. `FileType.Scala`) fall back to `SaveFormat.Text`, matching
+    * `FileWorkflowState.detectedFileType`'s own default-to-Text behaviour for an unrecognized or absent extension.
     */
   def fromFileType(fileType: FileType): SaveFormat = fileType match
     case FileType.Markdown            => SaveFormat.Markdown

@@ -76,8 +76,9 @@ final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
 
   def moveVertical(cursor: CursorPosition, direction: Int, preferredXPx: Float): Option[CursorPosition] =
     visualLines.zipWithIndex
-      .filter { case (line, _) =>
-        line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
+      .filter {
+        case (line, _) =>
+          line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
       }
       .lastOption
       .map { case (_, index) => index + direction }

@@ -8,12 +8,12 @@ import org.scalatest.matchers.should.Matchers
 /** Regression coverage for `Renderer.renderedLeftColumn` -- a private duplicate of
   * `LayoutEngine.clampLeftColumnForBuffer` (see [[LayoutEngineSpec]]) used to recompute the horizontal scroll clamp
   * whenever a buffer's own font measures a different `visibleColumns` than the code-font grid the pane was sized in.
-  * Both copies clamped the rightward scroll to `lineLength - visibleColumns`, one column short of what's needed to
-  * keep a cursor sitting exactly at end-of-line (`cursorColumn == lineLength`) inside the visible viewport.
+  * Both copies clamped the rightward scroll to `lineLength - visibleColumns`, one column short of what's needed to keep
+  * a cursor sitting exactly at end-of-line (`cursorColumn == lineLength`) inside the visible viewport.
   *
-  * `renderedLeftColumn` is private with no public entry point that isolates its formula from the rest of the
-  * rendering pipeline (font measurement, overscan padding, pixel clipping), so it is invoked here via reflection --
-  * the only way to pin down this specific duplicate's behaviour directly, the same way [[LayoutEngineSpec]] pins down
+  * `renderedLeftColumn` is private with no public entry point that isolates its formula from the rest of the rendering
+  * pipeline (font measurement, overscan padding, pixel clipping), so it is invoked here via reflection -- the only way
+  * to pin down this specific duplicate's behaviour directly, the same way [[LayoutEngineSpec]] pins down
   * `clampLeftColumnForBuffer`'s.
   */
 class RendererHorizontalScrollCursorVisibilitySpec extends AnyFlatSpec with Matchers:

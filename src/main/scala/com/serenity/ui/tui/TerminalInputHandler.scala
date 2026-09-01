@@ -140,11 +140,20 @@ object TerminalInputHandler:
       modifierTapState <- Ref.of[IO, ModifierTapState](ModifierTapState.empty)
       focusCallback    <- IO(new AtomicReference[Option[Boolean => Unit]](None))
       _                <- enableModes(terminal)
-      reader            = terminal.reader()
+      reader = terminal.reader()
       // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
       // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
       fiber <- rawReadLoop(reader, rawQueue).start.flatMap { rawFiber =>
-        readLoop(rawQueue, queue, latestMovement, remainder, modifierTapState, systemClipboard, seedBytes, focusCallback)
+        readLoop(
+          rawQueue,
+          queue,
+          latestMovement,
+          remainder,
+          modifierTapState,
+          systemClipboard,
+          seedBytes,
+          focusCallback
+        )
           .guarantee(rawFiber.cancel)
       }.start
     yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal), focusCallback)
@@ -261,7 +270,7 @@ object TerminalInputHandler:
     def drainAvailable(acc: Array[Byte]): IO[Array[Byte]] =
       rawQueue.tryTake.flatMap {
         case Some(ReadOutcome.Bytes(bs)) => drainAvailable(acc ++ bs)
-        case _                            => IO.pure(acc)
+        case _                           => IO.pure(acc)
       }
 
     def loop: IO[Unit] =

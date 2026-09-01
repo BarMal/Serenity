@@ -164,10 +164,12 @@ object TerminalShell:
     */
   private[tui] val FocusReportingEnable: String  = "[?1004h"
   private[tui] val FocusReportingDisable: String = "[?1004l"
+
   /** Disables the four input modes [[TerminalInputHandler]] enables: bracketed paste (2004), SGR mouse encoding (1006),
     * any-event mouse tracking (1003), and button-event mouse tracking (1002). Mirrored in
-    * [[TerminalInputHandler.shutdown]] so they are normally removed before [[TerminalShell.restore]] runs; also included
-    * in [[TerminalShell.restore]] itself as a fallback for crash paths where the input handler's shutdown never fires.
+    * [[TerminalInputHandler.shutdown]] so they are normally removed before [[TerminalShell.restore]] runs; also
+    * included in [[TerminalShell.restore]] itself as a fallback for crash paths where the input handler's shutdown
+    * never fires.
     */
   private[tui] val AllInputModesDisable: String = "[?2004l[?1006l[?1003l[?1002l"
 

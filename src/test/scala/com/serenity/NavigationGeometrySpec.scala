@@ -60,6 +60,7 @@ class NavigationGeometrySpec extends AnyFlatSpec with Matchers:
     widthPx = 50.0f,
     caretStops = (0 to 5).map(column => TextCaretStop(column, column.toFloat * 10.0f)).toVector
   )
+
   private val wrapLineB = TextVisualLine(
     bufferLine = 0,
     startColumn = 5,
@@ -68,6 +69,7 @@ class NavigationGeometrySpec extends AnyFlatSpec with Matchers:
     widthPx = 50.0f,
     caretStops = (5 to 10).map(column => TextCaretStop(column, (column - 5).toFloat * 10.0f)).toVector
   )
+
   private val nextBufferLine = TextVisualLine(
     bufferLine = 1,
     startColumn = 0,
@@ -76,6 +78,7 @@ class NavigationGeometrySpec extends AnyFlatSpec with Matchers:
     widthPx = 30.0f,
     caretStops = (0 to 3).map(column => TextCaretStop(column, column.toFloat * 10.0f)).toVector
   )
+
   private val wrapGeometry = NavigationGeometry(Vector(wrapLineA, wrapLineB, nextBufferLine))
 
   it should "resolve a cursor at a wrap boundary column to the later visual line's caret x" in {

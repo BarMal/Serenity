@@ -1,7 +1,8 @@
+import scala.concurrent.duration.Duration
+
 import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
-import scala.concurrent.duration.Duration
 import com.serenity.animation.WindowSitter
 import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, MotionFamily}
@@ -75,13 +76,13 @@ object Main extends IOApp:
     // appender is already suppressed by TuiConsoleLogFilter; this catches any direct System.err traffic that
     // bypasses the logging framework (CE3 stall checker, JVM internals). Crash info is preserved by CrashReporter.
     IO(System.setErr(new java.io.PrintStream(java.io.OutputStream.nullOutputStream()))) >>
-    TuiRuntime.run(
-      shell = TerminalShell.resource,
-      appConfig = appConfig,
-      openPath = launchOptions.openPath,
-      configPersistencePath = Some(ConfigManager.defaultConfigPath),
-      hasDisplay = LaunchOptions.isDisplayReachable(sys.env)
-    )
+      TuiRuntime.run(
+        shell = TerminalShell.resource,
+        appConfig = appConfig,
+        openPath = launchOptions.openPath,
+        configPersistencePath = Some(ConfigManager.defaultConfigPath),
+        hasDisplay = LaunchOptions.isDisplayReachable(sys.env)
+      )
 
   /** The GUI launch path: unchanged from before #1112 beyond being extracted into its own method. Constructs a
     * [[SwingWindow]] and closes `AppRuntime.run`'s capabilities over it; never touches [[TerminalShell]].
