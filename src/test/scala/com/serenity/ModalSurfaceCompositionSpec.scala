@@ -209,12 +209,44 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       bufferHasRichFormatting = true
     )
     val richPlan = planFor(Modal.FileWorkflow(richWorkflow))
-    richPlan.paintBoxes.flatMap(_.text) should contain("Format: Text (will lose rich formatting)")
+    richPlan.paintBoxes.flatMap(_.text) should contain("Format Text (will lose rich formatting)")
 
     val plainWorkflow = FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "notes.rtf")
     val plainPlan     = planFor(Modal.FileWorkflow(plainWorkflow))
-    plainPlan.paintBoxes.flatMap(_.text) should contain("Format: Rich Text")
+    plainPlan.paintBoxes.flatMap(_.text) should contain("Format Rich Text")
     plainPlan.paintBoxes.flatMap(_.text).exists(_.contains("will lose")) shouldBe false
+  }
+
+  it should "render the save-as format field as a selectable, cyclable input" in {
+    val activeWorkflow = FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.txt",
+      activeField = FileWorkflowField.Format
+    )
+    val activePlan = planFor(Modal.FileWorkflow(activeWorkflow))
+    activePlan.paintBoxes
+      .find(_.semanticLabel.contains("Format"))
+      .exists(_.selected) shouldBe true
+    activePlan.hitRegions.map(_.semanticLabel) should contain("Format")
+
+    val inactiveWorkflow = FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.txt",
+      activeField = FileWorkflowField.Filename
+    )
+    val inactivePlan = planFor(Modal.FileWorkflow(inactiveWorkflow))
+    inactivePlan.paintBoxes
+      .find(_.semanticLabel.contains("Format"))
+      .exists(_.selected) shouldBe false
+  }
+
+  it should "keep the open workflow's format label plain and non-selectable" in {
+    val workflow = FileWorkflowState(mode = FileWorkflowMode.Open, filename = "notes.txt")
+    val plan     = planFor(Modal.FileWorkflow(workflow))
+
+    plan.paintBoxes.flatMap(_.text) should contain("Format: Text")
+    plan.paintBoxes.find(_.text.contains("Format:")).flatMap(_.focusId) shouldBe None
+    plan.hitRegions.map(_.semanticLabel) should not contain "Format"
   }
 
   it should "render the file workflow's own key hints from the live modal keymap, including create-dir only when relevant" in {

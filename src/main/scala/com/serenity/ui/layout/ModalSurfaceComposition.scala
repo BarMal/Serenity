@@ -261,10 +261,25 @@ object ModalSurfaceComposition:
       layout = SurfacePaintLayout.Inline
     )
     val formatLabel = workflow.detectedFileType.displayName
-    val formatText =
-      if workflow.wouldLoseFormatting then s"Format: $formatLabel (will lose rich formatting)"
-      else s"Format: $formatLabel"
-    val format = textBox(formatText, rowRect(bounds, 3, rowHeight))
+    val formatValue =
+      if workflow.wouldLoseFormatting then s"$formatLabel (will lose rich formatting)" else formatLabel
+    val format = workflow match
+      case saveAsWorkflow: SaveAsFileWorkflowState =>
+        val formatSelected = saveAsWorkflow.activeField == FileWorkflowField.Format
+        inputBox(
+          "Format",
+          formatValue,
+          SurfaceFocusId("format"),
+          rowRect(bounds, 3, rowHeight),
+          selected = formatSelected,
+          cursorAtEnd = false,
+          segments = List(OverlaySegment("Format"), OverlaySegment(formatValue, selected = formatSelected)),
+          layout = SurfacePaintLayout.Split
+        )
+      case _: OpenFileWorkflowState =>
+        // Open has no format concept -- `activeField` can never be `Format` there (it's not in `cyclableFields`), but
+        // this stays a plain, non-selectable label rather than assuming that invariant.
+        textBox(s"Format: $formatValue", rowRect(bounds, 3, rowHeight))
     val suggestions = workflow.suggestions.take(4).zipWithIndex.map {
       case (suggestion, index) =>
         val suffix = if suggestion.isDirectory then "/" else ""
@@ -299,11 +314,16 @@ object ModalSurfaceComposition:
   ): String =
     val showCreateDirectory =
       workflow.mode == FileWorkflowMode.SaveAs && workflow.missingPathSegments.nonEmpty
+    val navigateLabel = workflow match
+      case saveAsWorkflow: SaveAsFileWorkflowState if saveAsWorkflow.activeField == FileWorkflowField.Format =>
+        "Cycle format"
+      case _ =>
+        "Suggestions"
     val actions = List(
       "Submit"       -> ModalKeyAction.Submit,
       "Cancel"       -> ModalKeyAction.Dismiss,
       "Switch field" -> ModalKeyAction.NextField,
-      "Suggestions"  -> ModalKeyAction.NavigateDown
+      navigateLabel  -> ModalKeyAction.NavigateDown
     ) ++ Option.when(showCreateDirectory)("Create dir" -> ModalKeyAction.CreateDirectory)
     actions
       .flatMap {

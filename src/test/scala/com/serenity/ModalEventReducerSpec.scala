@@ -620,7 +620,13 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val withPathFieldFocusResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, withFilename)
+    // SaveAs now cycles Filename -> Format -> Path, so it takes two tabs to reach Path.
+    val withFormatFieldFocusResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, withFilename)
+    withFormatFieldFocusResult.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
+    )
+    val withPathFieldFocusResult =
+      ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, withFormatFieldFocusResult.state)
     withPathFieldFocusResult.effects shouldBe List(
       AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
     )
@@ -743,6 +749,85 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
           )
         )
       )
+    )
+  }
+
+  it should "cycle the save-as format field with up/down when it is active" in {
+    val initialWorkflow = SaveAsFileWorkflowState(
+      filename = "notes.txt",
+      activeField = FileWorkflowField.Format
+    )
+    val initialState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
+    )
+
+    val down = ModalEventReducer.reduce(ModalType.FileWorkflow, ModalNavigate(Direction.Down), initialState).state
+    down.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow.cycleFormat(1)))
+    )
+
+    val up = ModalEventReducer.reduce(ModalType.FileWorkflow, ModalNavigate(Direction.Up), initialState).state
+    up.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow.cycleFormat(-1)))
+    )
+  }
+
+  it should "keep the existing suggestion-cycling behavior for up/down on other fields, and for open workflows" in {
+    val filenameActiveWorkflow = SaveAsFileWorkflowState(
+      filename = "notes",
+      activeField = FileWorkflowField.Filename,
+      suggestions = List(FileWorkflowSuggestion("notes.txt"), FileWorkflowSuggestion("notes.md"))
+    )
+    val filenameActiveState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(filenameActiveWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
+    )
+    val filenameActiveDown =
+      ModalEventReducer.reduce(ModalType.FileWorkflow, ModalNavigate(Direction.Down), filenameActiveState).state
+    filenameActiveDown.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.FileWorkflow(filenameActiveWorkflow.moveSuggestion(1)))
+    )
+
+    val openWorkflow = OpenFileWorkflowState(
+      path = "/tmp",
+      activeField = FileWorkflowField.Path,
+      suggestions = List(
+        FileWorkflowSuggestion("/tmp/alpha", isDirectory = true),
+        FileWorkflowSuggestion("/tmp/beta", isDirectory = true)
+      )
+    )
+    val openState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-workflow"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(openWorkflow)),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
+      )
+    )
+    val openDown = ModalEventReducer.reduce(ModalType.FileWorkflow, ModalNavigate(Direction.Down), openState).state
+    openDown.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.FileWorkflow(openWorkflow.moveSuggestion(1)))
     )
   }
 

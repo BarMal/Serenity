@@ -101,6 +101,49 @@ object FileType:
     case FileType.Shell   => "Shell"
     case FileType.Unknown => "Unknown"
 
+/** The formats `FileManager.saveBuffer` handles as genuinely distinct write paths -- a narrower, cyclable subset of
+  * [[FileType]] for the Save As dialog's format field.
+  */
+enum SaveFormat:
+  case Text
+  case Markdown
+  case RichText
+  case OpenDocumentText
+  case WordOpenXml
+
+  def canonicalExtension: String = SaveFormat.canonicalExtension(this)
+  def displayName: String        = SaveFormat.displayName(this)
+
+object SaveFormat:
+
+  /** Cycling order for the Save As dialog's format field. */
+  val ordered: List[SaveFormat] = List(Text, Markdown, RichText, OpenDocumentText, WordOpenXml)
+
+  def canonicalExtension(format: SaveFormat): String = format match
+    case SaveFormat.Text              => ".txt"
+    case SaveFormat.Markdown          => ".md"
+    case SaveFormat.RichText          => ".rtf"
+    case SaveFormat.OpenDocumentText  => ".odt"
+    case SaveFormat.WordOpenXml       => ".docx"
+
+  def displayName(format: SaveFormat): String = format match
+    case SaveFormat.Text             => "Text"
+    case SaveFormat.Markdown         => "Markdown"
+    case SaveFormat.RichText         => "Rich Text"
+    case SaveFormat.OpenDocumentText => "OpenDocument Text"
+    case SaveFormat.WordOpenXml      => "Word"
+
+  /** Maps a detected [[FileType]] back to the matching [[SaveFormat]]. `FileType.Text` and every format outside the
+    * cyclable five (e.g. `FileType.Scala`) fall back to `SaveFormat.Text`, matching `FileWorkflowState.detectedFileType`'s
+    * own default-to-Text behaviour for an unrecognized or absent extension.
+    */
+  def fromFileType(fileType: FileType): SaveFormat = fileType match
+    case FileType.Markdown            => SaveFormat.Markdown
+    case FileType.RichText            => SaveFormat.RichText
+    case FileType.OpenDocumentText    => SaveFormat.OpenDocumentText
+    case FileType.WordOpenXmlDocument => SaveFormat.WordOpenXml
+    case _                            => SaveFormat.Text
+
 enum DocumentFormat:
   case PlainText
   case Markdown

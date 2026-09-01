@@ -1,6 +1,6 @@
 package com.serenity.state.models
 
-import com.serenity.io.{DocumentFormat, FileType}
+import com.serenity.io.{DocumentFormat, FileType, SaveFormat}
 import com.serenity.text.TextEditing
 
 final case class FileWorkflowSuggestion(
@@ -14,6 +14,7 @@ enum FileWorkflowMode:
 
 enum FileWorkflowField:
   case Filename
+  case Format
   case Path
 
 enum ReplaceWorkflowField:
@@ -214,11 +215,13 @@ sealed trait FileWorkflowState:
     activeField match
       case FileWorkflowField.Filename => updated(filename = filename + char, statusMessage = None)
       case FileWorkflowField.Path     => updated(path = path + char, statusMessage = None)
+      case FileWorkflowField.Format   => this
 
   def deleteFromActiveField: FileWorkflowState =
     activeField match
       case FileWorkflowField.Filename => updated(filename = filename.dropRight(1), statusMessage = None)
       case FileWorkflowField.Path     => updated(path = path.dropRight(1), statusMessage = None)
+      case FileWorkflowField.Format   => this
 
   def deleteWordBackwardFromActiveField: FileWorkflowState =
     activeField match
@@ -226,6 +229,8 @@ sealed trait FileWorkflowState:
         updated(filename = TextEditing.deleteWordBackward(filename), statusMessage = None)
       case FileWorkflowField.Path =>
         updated(path = TextEditing.deleteWordBackward(path), statusMessage = None)
+      case FileWorkflowField.Format =>
+        this
 
   def deleteForwardFromActiveField: FileWorkflowState =
     this
@@ -236,9 +241,16 @@ sealed trait FileWorkflowState:
         updated(filename = TextEditing.deleteWordForward(filename), statusMessage = None)
       case FileWorkflowField.Path =>
         updated(path = TextEditing.deleteWordForward(path), statusMessage = None)
+      case FileWorkflowField.Format =>
+        this
+
+  /** The fields Tab/Shift-Tab cycle through -- `Format` is only reachable here for `SaveAsFileWorkflowState`
+    * (Open has no format concept, and `Open`'s dialog never surfaces a format field to Tab into).
+    */
+  def cyclableFields: List[FileWorkflowField] = List(FileWorkflowField.Filename, FileWorkflowField.Path)
 
   def switchField(delta: Int): FileWorkflowState =
-    val fields       = List(FileWorkflowField.Filename, FileWorkflowField.Path)
+    val fields       = cyclableFields
     val currentIndex = fields.indexOf(activeField)
     val rawIndex     = (currentIndex + delta) % fields.length
     val wrappedIndex = if rawIndex < 0 then fields.length + rawIndex else rawIndex
@@ -263,6 +275,8 @@ sealed trait FileWorkflowState:
             updated(path = normalizedValue, statusMessage = None)
           case FileWorkflowField.Filename =>
             updated(filename = normalizedValue, statusMessage = None)
+          case FileWorkflowField.Format =>
+            this
       case None => this
 
 final case class OpenFileWorkflowState(
@@ -316,6 +330,9 @@ final case class SaveAsFileWorkflowState(
   val operationLabel: String               = "save-as"
   val supportsFilenameSuggestions: Boolean = false
 
+  override def cyclableFields: List[FileWorkflowField] =
+    List(FileWorkflowField.Filename, FileWorkflowField.Format, FileWorkflowField.Path)
+
   protected def rebuild(
     filename: String,
     path: String,
@@ -336,6 +353,20 @@ final case class SaveAsFileWorkflowState(
       confirmCreateDirectories = confirmCreateDirectories,
       statusMessage = statusMessage
     )
+
+  /** Steps `filename`'s extension through `SaveFormat.ordered` by `delta` (with wraparound), starting from the format
+    * `detectedFileType` currently resolves to. Rewrites the extension in place -- replacing an existing one, or
+    * appending the new one if `filename` has none -- while preserving everything before it exactly.
+    */
+  def cycleFormat(delta: Int): SaveAsFileWorkflowState =
+    val formats      = SaveFormat.ordered
+    val currentIndex = formats.indexOf(SaveFormat.fromFileType(detectedFileType))
+    val rawIndex     = (currentIndex + delta) % formats.length
+    val wrappedIndex = if rawIndex < 0 then formats.length + rawIndex else rawIndex
+    val nextFormat   = formats(wrappedIndex)
+    val dotIndex     = filename.lastIndexOf('.')
+    val baseName     = if dotIndex > 0 then filename.substring(0, dotIndex) else filename
+    copy(filename = baseName + nextFormat.canonicalExtension, statusMessage = None)
 
 object FileWorkflowState:
 

@@ -209,12 +209,18 @@ object ModalEventReducer:
             ReducerResult.noEffects(currentState)
       case ModalNavigate(Direction.Up) =>
         currentModal(currentState) match
+          case Some((surface, Modal.FileWorkflow(workflow: SaveAsFileWorkflowState)))
+              if workflow.activeField == FileWorkflowField.Format =>
+            ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.cycleFormat(-1))))
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.moveSuggestion(-1))))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalNavigate(Direction.Down) =>
         currentModal(currentState) match
+          case Some((surface, Modal.FileWorkflow(workflow: SaveAsFileWorkflowState)))
+              if workflow.activeField == FileWorkflowField.Format =>
+            ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.cycleFormat(1))))
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.moveSuggestion(1))))
           case _ =>

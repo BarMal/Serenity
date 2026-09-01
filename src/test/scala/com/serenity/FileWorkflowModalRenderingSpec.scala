@@ -92,8 +92,11 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
       }
     suggestionRowsHighlighted shouldBe true
 
+    // Save As renders Format as a selectable input row (no colon), matching the Filename/Path pattern above it --
+    // Open (below) keeps the plain "Format:" label since it has no format concept.
     val formatLine = (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 4)).mkString.trim
-    formatLine should include("Format:")
+    formatLine should include("Format")
+    formatLine should include("Scala")
   }
 
   it should "paint file workflow status messages when a target cannot be opened" in {

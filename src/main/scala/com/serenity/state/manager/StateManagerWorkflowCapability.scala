@@ -445,10 +445,12 @@ final private[manager] class StateManagerWorkflowCapability(
             openWorkflow.activeField match
               case FileWorkflowField.Path     => pathSuggestions(openWorkflow.path)
               case FileWorkflowField.Filename => filenameSuggestions(openWorkflow)
+              case FileWorkflowField.Format   => IO.pure(Nil)
           case saveAsWorkflow: SaveAsFileWorkflowState =>
             saveAsWorkflow.activeField match
               case FileWorkflowField.Path     => pathSuggestions(saveAsWorkflow.path)
               case FileWorkflowField.Filename => IO.pure(Nil)
+              case FileWorkflowField.Format   => IO.pure(Nil)
         missingSegments <- missingDirectorySegments(directoryPath)
       yield workflow.updated(
         suggestions = suggestions,

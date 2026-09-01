@@ -70,13 +70,14 @@ class ModalComponentSpec extends AnyFlatSpec with Matchers:
 
     component.processEvent(TabKey, initial) match
       case ComponentResult.ReducerUpdate(result) =>
+        // SaveAs now cycles Filename -> Format -> Path, so a single tab lands on Format.
         result.state.modalSurface.map(_.content) shouldBe
           Some(
             SurfaceContent.ModalWorkflow(
               Modal.FileWorkflow(
                 FileWorkflowState(
                   mode = FileWorkflowMode.SaveAs,
-                  activeField = FileWorkflowField.Path
+                  activeField = FileWorkflowField.Format
                 )
               )
             )
