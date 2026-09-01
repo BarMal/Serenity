@@ -12,7 +12,7 @@ class Osc52ClipboardSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
   given Logger[IO]        = LoggerFactory[IO].getLogger(using LoggerName("Osc52ClipboardSpec"))
 
-  "Osc52Clipboard.writeText" should "send the OSC 52 sequence through the terminal writer" in {
+  "Osc52Clipboard.writeText" should "send the OSC 52 sequence through the terminal writer and mirror to fallback" in {
     val written   = Ref.unsafe[IO, List[String]](Nil)
     val fallback  = InProcessClipboard[IO].unsafeRunSync()
     val clipboard = Osc52Clipboard[IO](sequence => written.update(_ :+ sequence), fallback)
@@ -20,7 +20,7 @@ class Osc52ClipboardSpec extends AnyFlatSpec with Matchers:
     clipboard.writeText("hello").unsafeRunSync()
 
     written.get.unsafeRunSync() shouldBe List(Osc52.encode("hello").toOption.get)
-    fallback.readText.unsafeRunSync() shouldBe None
+    fallback.readText.unsafeRunSync() shouldBe Some("hello")
   }
 
   it should "fall back to the given clipboard, without writing, when the payload is oversized" in {

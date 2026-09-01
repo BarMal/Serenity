@@ -23,7 +23,7 @@ object Osc52Clipboard:
 
     override def writeText(text: String): F[Unit] =
       Osc52.encode(text, maxEncodedBytes) match
-        case Right(sequence) => write(sequence)
+        case Right(sequence) => write(sequence) >> fallback.writeText(text)
         case Left(Osc52.PayloadTooLarge(encodedBytes, maxBytes)) =>
           Logger[F].warn(
             s"[CLIPBOARD] OSC 52 payload too large ($encodedBytes > $maxBytes encoded bytes); falling back"
