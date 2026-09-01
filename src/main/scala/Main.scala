@@ -1,4 +1,7 @@
+import scala.concurrent.duration.Duration
+
 import cats.effect.*
+import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
 import com.serenity.animation.WindowSitter
 import com.serenity.app.*
@@ -18,6 +21,12 @@ import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 given Balance = Balance.default
 
 object Main extends IOApp:
+
+  // Hibernate/restore causes a wall-clock jump that makes every fiber appear stalled, flooding stderr
+  // with starvation warnings and corrupting the TUI display. An interactive editor has no latency SLA
+  // that the checker could meaningfully enforce, so disable it.
+  override def runtimeConfig: IORuntimeConfig =
+    super.runtimeConfig.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
 
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
@@ -63,13 +72,17 @@ object Main extends IOApp:
     logger: Logger[IO],
     loggerFactory: LoggerFactory[IO]
   ): IO[Unit] =
-    TuiRuntime.run(
-      shell = TerminalShell.resource,
-      appConfig = appConfig,
-      openPath = launchOptions.openPath,
-      configPersistencePath = Some(ConfigManager.defaultConfigPath),
-      hasDisplay = LaunchOptions.isDisplayReachable(sys.env)
-    )
+    // Silence raw System.err writes so they never corrupt the alternate-screen TUI surface. logback's console
+    // appender is already suppressed by TuiConsoleLogFilter; this catches any direct System.err traffic that
+    // bypasses the logging framework (CE3 stall checker, JVM internals). Crash info is preserved by CrashReporter.
+    IO(System.setErr(new java.io.PrintStream(java.io.OutputStream.nullOutputStream()))) >>
+      TuiRuntime.run(
+        shell = TerminalShell.resource,
+        appConfig = appConfig,
+        openPath = launchOptions.openPath,
+        configPersistencePath = Some(ConfigManager.defaultConfigPath),
+        hasDisplay = LaunchOptions.isDisplayReachable(sys.env)
+      )
 
   /** The GUI launch path: unchanged from before #1112 beyond being extracted into its own method. Constructs a
     * [[SwingWindow]] and closes `AppRuntime.run`'s capabilities over it; never touches [[TerminalShell]].

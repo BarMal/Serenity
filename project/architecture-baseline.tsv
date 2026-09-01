@@ -8,7 +8,7 @@ main/scala/com/serenity/command/CommandRegistry.scala	method defaultCommands	610
 main/scala/com/serenity/command/CommandRunner.scala	file length	1081
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	file length	806
 main/scala/com/serenity/command/CommandRunnerSettingsInputItems.scala	method build	650
-main/scala/com/serenity/command/CommandRunnerSettingsItems.scala	file length	1083
+main/scala/com/serenity/command/CommandRunnerSettingsItems.scala	file length	1093
 main/scala/com/serenity/config/AppConfig.scala	file length	2262
 main/scala/com/serenity/config/ConfigManager.scala	file length	818
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	224
@@ -18,8 +18,8 @@ main/scala/com/serenity/rope/Rope.scala	file length	647
 main/scala/com/serenity/session/SessionState.scala	file length	1264
 main/scala/com/serenity/spellcheck/SpellChecker.scala	file length	905
 main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	751
-main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2593
-main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	917
+main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2595
+main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	919
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	method submitReplaceNextEffect	85
 main/scala/com/serenity/state/models/AppState.scala	file length	889
 main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseItems	173
@@ -28,8 +28,8 @@ main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceA
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitSubmenu	101
 main/scala/com/serenity/state/reducers/EditorEventReducer.scala	file length	1855
 main/scala/com/serenity/state/reducers/EditorEventReducer.scala	method reduceCursorsNavigationEvent	82
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	633
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	124
+main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	639
+main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	130
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
 main/scala/com/serenity/ui/layout/LayoutEngine.scala	file length	1620
 main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1168
@@ -44,7 +44,7 @@ test/scala/com/serenity/AppRuntimeSpec.scala	file length	1462
 test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1871
 test/scala/com/serenity/CommandRunnerFloatingRenderingSpec.scala	file length	766
 test/scala/com/serenity/CommandRunnerReducerSpec.scala	file length	1458
-test/scala/com/serenity/CommandRunnerSpec.scala	file length	1100
+test/scala/com/serenity/CommandRunnerSpec.scala	file length	1103
 test/scala/com/serenity/ConfigManagerSpec.scala	file length	1337
 test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1252
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
@@ -52,9 +52,9 @@ test/scala/com/serenity/EditorEventReducerSpec.scala	file length	2255
 test/scala/com/serenity/FileHandlingSpec.scala	file length	625
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	661
 test/scala/com/serenity/LayoutContractSpec.scala	file length	963
-test/scala/com/serenity/LayoutEngineSpec.scala	file length	710
+test/scala/com/serenity/LayoutEngineSpec.scala	file length	735
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745
-test/scala/com/serenity/ModalEventReducerSpec.scala	file length	1058
+test/scala/com/serenity/ModalEventReducerSpec.scala	file length	1143
 test/scala/com/serenity/MouseClickSpec.scala	file length	1062
 test/scala/com/serenity/RendererMarkdownLensSpec.scala	file length	889
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	669

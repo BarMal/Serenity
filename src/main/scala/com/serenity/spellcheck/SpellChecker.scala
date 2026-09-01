@@ -228,7 +228,7 @@ object SpellChecker:
                     LspPosition(lineIndex, match_.start),
                     LspPosition(lineIndex, match_.end)
                   ),
-                  severity = Some(DiagnosticSeverity.Hint),
+                  severity = Some(DiagnosticSeverity.Warning),
                   message = diagnosticMessage(word, suggestions),
                   source = Some(Source),
                   code = Some("unknown-word")

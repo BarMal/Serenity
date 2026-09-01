@@ -51,6 +51,7 @@ object CommandRunnerSettingsGroups:
     val spellCheckItem              = CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections)
     val textScaleModeItem           = CommandRunnerSettingsItems.textScaleModeOptionItem(optionSelections)
     val lineNumbersItem             = CommandRunnerSettingsItems.lineNumbersOptionItem(optionSelections)
+    val wordCountItem               = CommandRunnerSettingsItems.wordCountOptionItem(optionSelections)
     val gutterItem                  = CommandRunnerSettingsItems.gutterOptionItem(optionSelections)
     val lineWrapItem                = CommandRunnerSettingsItems.lineWrapOptionItem(optionSelections)
     val focusedTextBodyItem         = CommandRunnerSettingsItems.focusedTextBodyOptionItem(optionSelections)
@@ -84,12 +85,13 @@ object CommandRunnerSettingsGroups:
         lineNumbersItem,
         gutterItem,
         lineWrapItem,
+        wordCountItem,
         focusedTextBodyItem,
         contextualToolbarItem,
         contextualToolbarDisplayItem
       ),
       category = CommandCategory.Settings,
-      hint = Some("Line numbers, gutter, wrap, focus, toolbar")
+      hint = Some("Line numbers, gutter, wrap, word count, focus, toolbar")
     )
     val motionInputIds = Set(
       "element-transition-speed-scale",

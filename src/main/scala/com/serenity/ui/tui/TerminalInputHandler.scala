@@ -134,33 +134,34 @@ object TerminalInputHandler:
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
+      rawQueue         <- Queue.unbounded[IO, ReadOutcome]
       latestMovement   <- Ref.of[IO, Option[MovementSlot]](None)
       remainder        <- Ref.of[IO, Array[Byte]](Array.emptyByteArray)
       modifierTapState <- Ref.of[IO, ModifierTapState](ModifierTapState.empty)
       focusCallback    <- IO(new AtomicReference[Option[Boolean => Unit]](None))
       _                <- enableModes(terminal)
-      fiber <- readLoop(
-        terminal.reader(),
-        queue,
-        latestMovement,
-        remainder,
-        modifierTapState,
-        systemClipboard,
-        seedBytes,
-        focusCallback
-      ).start
+      reader = terminal.reader()
+      // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
+      // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
+      fiber <- rawReadLoop(reader, rawQueue).start.flatMap { rawFiber =>
+        readLoop(
+          rawQueue,
+          queue,
+          latestMovement,
+          remainder,
+          modifierTapState,
+          systemClipboard,
+          seedBytes,
+          focusCallback
+        )
+          .guarantee(rawFiber.cancel)
+      }.start
     yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal), focusCallback)
 
   private enum ReadOutcome:
     case Bytes(value: Array[Byte])
     case Eof
     case Expired
-
-  private def read(reader: NonBlockingReader): IO[ReadOutcome] =
-    IO.interruptible(reader.read()).map(toOutcome)
-
-  private def readWithDeadline(reader: NonBlockingReader, deadline: FiniteDuration): IO[ReadOutcome] =
-    IO.interruptible(reader.read(deadline.toMillis)).map(toOutcome)
 
   private def toOutcome(read: Int): ReadOutcome =
     if read == NonBlockingReader.EOF then ReadOutcome.Eof
@@ -178,8 +179,19 @@ object TerminalInputHandler:
   private[tui] def toUtf8Bytes(ch: Int): Array[Byte] =
     if ch < 0x80 then Array(ch.toByte) else String.valueOf(ch.toChar).getBytes(StandardCharsets.UTF_8)
 
+  /** Runs on a dedicated fiber; reads raw chars from the JLine reader as fast as they arrive and stuffs each one into
+    * [[rawQueue]], so the CE3 compute pool is never blocked waiting for terminal I/O and the pty kernel buffer never
+    * fills during a slow dispatch cycle. [[readLoop]] consumes from [[rawQueue]] and can safely use [[Queue.tryTake]]
+    * for non-blocking drains without any risk of blocking the compute thread.
+    */
+  private def rawReadLoop(reader: NonBlockingReader, rawQueue: Queue[IO, ReadOutcome]): IO[Unit] =
+    IO.interruptible(reader.read()).map(toOutcome).flatMap {
+      case ReadOutcome.Eof => rawQueue.offer(ReadOutcome.Eof)
+      case outcome         => rawQueue.offer(outcome) >> rawReadLoop(reader, rawQueue)
+    }
+
   private def readLoop(
-    reader: NonBlockingReader,
+    rawQueue: Queue[IO, ReadOutcome],
     queue: Queue[IO, Option[QueuedInput]],
     latestMovement: Ref[IO, Option[MovementSlot]],
     remainder: Ref[IO, Array[Byte]],
@@ -251,25 +263,37 @@ object TerminalInputHandler:
       val result = TerminalInputDecoder.decode(buffer)
       processTokens(result.tokens) >> remainder.set(result.remainder)
 
+    // Drain any characters rawReadLoop has already buffered into rawQueue without blocking. After each blocking take,
+    // the dedicated reader fiber (rawReadLoop) has likely raced ahead and queued the next burst of characters; pulling
+    // them all here before yielding to the CE3 scheduler batches an entire burst into a single decode call, so fast
+    // typing never leaves characters stranded in the queue for a full scheduler quantum.
+    def drainAvailable(acc: Array[Byte]): IO[Array[Byte]] =
+      rawQueue.tryTake.flatMap {
+        case Some(ReadOutcome.Bytes(bs)) => drainAvailable(acc ++ bs)
+        case _                           => IO.pure(acc)
+      }
+
     def loop: IO[Unit] =
       remainder.get.flatMap { pending =>
         if pending.length == 1 && pending(0) == 0x1b.toByte then
-          readWithDeadline(reader, EscDisambiguationDeadline).flatMap {
-            case ReadOutcome.Expired =>
+          IO.race(IO.sleep(EscDisambiguationDeadline), rawQueue.take).flatMap {
+            case Left(_) =>
               processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray) >> loop
-            case ReadOutcome.Eof =>
+            case Right(ReadOutcome.Eof) =>
               processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
-            case ReadOutcome.Bytes(bs) =>
-              appendAndDecode(pending ++ bs) >> loop
+            case Right(ReadOutcome.Bytes(bs)) =>
+              drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
+            case Right(ReadOutcome.Expired) =>
+              loop // unreachable: rawReadLoop never enqueues Expired
           }
         else
-          read(reader).flatMap {
+          rawQueue.take.flatMap {
             case ReadOutcome.Eof =>
               processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
             case ReadOutcome.Bytes(bs) =>
-              appendAndDecode(pending ++ bs) >> loop
+              drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
             case ReadOutcome.Expired =>
-              loop // Unreachable: only readWithDeadline's call can expire.
+              loop // unreachable: rawReadLoop never enqueues Expired
           }
       }
 
