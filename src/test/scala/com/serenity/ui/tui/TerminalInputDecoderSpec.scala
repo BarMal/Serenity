@@ -99,6 +99,35 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
     decodeAll(csi("1;5F")) shouldBe List(tok(InputKey.End, mods = Set(Modifier.Ctrl)))
   }
 
+  it should "decode the F1-F4 CSI-letter form (kitty legacy-compat for modified F1-F4)" in {
+    decodeAll(csi("1;5P")) shouldBe List(tok(InputKey.F1, mods = Set(Modifier.Ctrl)))
+    decodeAll(csi("1;5Q")) shouldBe List(tok(InputKey.F2, mods = Set(Modifier.Ctrl)))
+    decodeAll(csi("1;5R")) shouldBe List(tok(InputKey.F3, mods = Set(Modifier.Ctrl)))
+    decodeAll(csi("1;5S")) shouldBe List(tok(InputKey.F4, mods = Set(Modifier.Ctrl)))
+  }
+
+  it should "decode Shift+F2 via the CSI-letter F1-F4 form" in {
+    decodeAll(csi("1;2Q")) shouldBe List(tok(InputKey.F2, mods = Set(Modifier.Shift)))
+  }
+
+  it should "decode Shift+Arrow via the CSI-letter form" in {
+    decodeAll(csi("1;2A")) shouldBe List(tok(InputKey.ArrowUp, mods = Set(Modifier.Shift)))
+    decodeAll(csi("1;2B")) shouldBe List(tok(InputKey.ArrowDown, mods = Set(Modifier.Shift)))
+    decodeAll(csi("1;2C")) shouldBe List(tok(InputKey.ArrowRight, mods = Set(Modifier.Shift)))
+    decodeAll(csi("1;2D")) shouldBe List(tok(InputKey.ArrowLeft, mods = Set(Modifier.Shift)))
+  }
+
+  it should "decode Alt+Arrow and Meta+Arrow via the CSI-letter form" in {
+    decodeAll(csi("1;3C")) shouldBe List(tok(InputKey.ArrowRight, mods = Set(Modifier.Alt)))
+    decodeAll(csi("1;33C")) shouldBe List(tok(InputKey.ArrowRight, mods = Set(Modifier.Meta)))
+  }
+
+  it should "decode modified tilde-form keys beyond Shift (Ctrl+PageUp, Alt+PageDown, Ctrl+Delete)" in {
+    decodeAll(csi("5;5~")) shouldBe List(tok(InputKey.PageUp, mods = Set(Modifier.Ctrl)))
+    decodeAll(csi("6;3~")) shouldBe List(tok(InputKey.PageDown, mods = Set(Modifier.Alt)))
+    decodeAll(csi("3;5~")) shouldBe List(tok(InputKey.Delete, mods = Set(Modifier.Ctrl)))
+  }
+
   it should "decode Home and End in both the xterm and VT220 forms" in {
     decodeAll(csi("H")) shouldBe List(tok(InputKey.Home))
     decodeAll(csi("F")) shouldBe List(tok(InputKey.End))
@@ -146,6 +175,13 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
     decodeAll(Array(0x1a.toByte)) shouldBe List(tok(InputKey.Character, Some('z'), Set(Modifier.Ctrl)))
   }
 
+  it should "decode Ctrl+\\, Ctrl+], Ctrl+^ and Ctrl+_ from control bytes 0x1c-0x1f" in {
+    decodeAll(Array(0x1c.toByte)) shouldBe List(tok(InputKey.Character, Some('\\'), Set(Modifier.Ctrl)))
+    decodeAll(Array(0x1d.toByte)) shouldBe List(tok(InputKey.Character, Some(']'), Set(Modifier.Ctrl)))
+    decodeAll(Array(0x1e.toByte)) shouldBe List(tok(InputKey.Character, Some('^'), Set(Modifier.Ctrl)))
+    decodeAll(Array(0x1f.toByte)) shouldBe List(tok(InputKey.Character, Some('_'), Set(Modifier.Ctrl)))
+  }
+
   it should "resolve the Ctrl+I / Tab and Ctrl+M / Enter legacy collisions to the named key" in {
     decodeAll(Array(0x09.toByte)) shouldBe List(tok(InputKey.Tab))
     decodeAll(Array(0x0d.toByte)) shouldBe List(tok(InputKey.Enter))
@@ -169,6 +205,23 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
 
   it should "resolve a lone ESC remainder to bare Escape via decodeFinal" in {
     TerminalInputDecoder.decodeFinal(Array(esc)) shouldBe List(tok(InputKey.Escape))
+  }
+
+  it should "leave ESC ESC as an incomplete remainder awaiting disambiguation (Alt+Escape vs Alt-prefixed sequence)" in {
+    val result = TerminalInputDecoder.decode(Array(esc, esc))
+    result.tokens shouldBe Nil
+    result.remainder shouldBe Array(esc, esc)
+  }
+
+  it should "resolve an ESC ESC remainder to Escape with Alt via decodeFinal" in {
+    TerminalInputDecoder.decodeFinal(Array(esc, esc)) shouldBe List(tok(InputKey.Escape, mods = Set(Modifier.Alt)))
+  }
+
+  it should "decode Alt+Escape followed immediately by another byte as Escape+Alt, then that byte separately" in {
+    decodeAll(Array(esc, esc) ++ bytes("a")) shouldBe List(
+      tok(InputKey.Escape, mods = Set(Modifier.Alt)),
+      tok(InputKey.Character, Some('a'))
+    )
   }
 
   it should "leave a partial CSI sequence as a remainder rather than misdecoding it" in {

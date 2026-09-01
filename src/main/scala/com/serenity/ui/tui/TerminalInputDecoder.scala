@@ -87,14 +87,17 @@ object TerminalInputDecoder:
     loop(0, Nil)
 
   /** Force-resolve whatever [[decode]] left as an incomplete `remainder`, for the two situations where no more bytes
-    * are coming: the ESC-disambiguation deadline expired (remainder is a lone `ESC`, resolved to [[InputKey.Escape]]),
-    * or the stream hit EOF with a genuinely truncated sequence (best-effort: an unterminated bracketed paste yields its
-    * text so far, anything else is dropped rather than guessed at).
+    * are coming: the ESC-disambiguation deadline expired (remainder is a lone `ESC`, resolved to [[InputKey.Escape]];
+    * or `ESC ESC`, Alt+Escape, resolved to [[InputKey.Escape]] with [[Modifier.Alt]]), or the stream hit EOF with a
+    * genuinely truncated sequence (best-effort: an unterminated bracketed paste yields its text so far, anything else
+    * is dropped rather than guessed at).
     */
   def decodeFinal(remainder: Array[Byte]): List[DecodedToken] =
     if remainder.isEmpty then Nil
     else if remainder.sameElements(Array(Esc)) then
       List(DecodedToken.Key(KeyStrokeInfo(InputKey.Escape, None, Set.empty)))
+    else if remainder.sameElements(Array(Esc, Esc)) then
+      List(DecodedToken.Key(KeyStrokeInfo(InputKey.Escape, None, Set(Modifier.Alt))))
     else if remainder.length >= PasteStartMarker.length && remainder
           .take(PasteStartMarker.length)
           .sameElements(PasteStartMarker)
@@ -246,6 +249,10 @@ object TerminalInputDecoder:
         case 'H' => InputKey.Home
         case 'F' => InputKey.End
         case 'Z' => InputKey.ReverseTab
+        case 'P' => InputKey.F1
+        case 'Q' => InputKey.F2
+        case 'R' => InputKey.F3
+        case 'S' => InputKey.F4
         case '~' =>
           params.split(";", -1).headOption.getOrElse(params) match
             case "1" | "7" => InputKey.Home
@@ -377,8 +384,18 @@ object TerminalInputDecoder:
         ),
         i + 1
       )
-    else if unsigned < 0x20 then
-      Step.Complete(Nil, i + 1) // Unrepresentable control byte (Ctrl+@, Ctrl+\, ...): dropped.
+    else if unsigned >= 0x1c && unsigned <= 0x1f then
+      // FS/GS/RS/US: Ctrl+\, Ctrl+], Ctrl+^, Ctrl+_ -- the ASCII control-code convention of control byte + 0x40.
+      Step.Complete(
+        List(DecodedToken.Key(KeyStrokeInfo(InputKey.Character, Some((unsigned + 0x40).toChar), Set(Modifier.Ctrl)))),
+        i + 1
+      )
+    else if unsigned == 0x1b then
+      // Only reachable via decodeEscape's Alt-prefix branch recursing here on a second ESC (Alt+Escape); a bare ESC
+      // never reaches decodePlain at the top level, since step() routes it to decodeEscape first.
+      if i + 1 >= bytes.length then Step.Incomplete // lone ESC awaiting disambiguation, same as the top-level case
+      else complete1(InputKey.Escape, i)
+    else if unsigned < 0x20 then Step.Complete(Nil, i + 1) // Unrepresentable control byte (Ctrl+@): dropped.
     else if unsigned < 0x80 then
       Step.Complete(List(DecodedToken.Key(KeyStrokeInfo(InputKey.Character, Some(unsigned.toChar), Set.empty))), i + 1)
     else decodeUtf8Char(bytes, i)
