@@ -708,3 +708,28 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(97)
   }
+
+  it should "keep an end-of-line cursor visible when scrolling horizontally with word wrap off" in {
+    val bufferId       = BufferId(1)
+    val lineContent    = "0123456789" * 20
+    val bufferBase     = Buffer.fromString(bufferId, lineContent)
+    val cursor         = CursorPosition(0, lineContent.length)
+    val panelRect      = LayoutRect(0, 0, 40, 10)
+    val visibleColumns = panelRect.width
+    // Simulate a prior scroll-to-cursor pass that already scrolled as far right as it can (leftColumn = cursorColumn
+    // - visibleColumns + 1, the same bound `maxForCursor` computes) -- reproducing the state the viewport is in right
+    // after the cursor lands at end-of-line. `updateBufferViewportDimensions` (e.g. on the next re-render/resize pass)
+    // must not then clamp that back down and clip the cursor out of view.
+    val scrolledViewport =
+      Viewport.default.copy(leftColumn = cursor.column - visibleColumns + 1, visibleColumns = visibleColumns)
+    val buffer =
+      bufferBase.copy(editing = bufferBase.editing.copy(cursors = List(cursor)), viewport = scrolledViewport)
+
+    val viewport = LayoutEngine.updateBufferViewportDimensions(buffer, panelRect, wordWrapEnabled = false)
+
+    withClue(
+      s"leftColumn=${viewport.leftColumn}, visibleColumns=${viewport.visibleColumns}, cursorColumn=${cursor.column}: "
+    ) {
+      (viewport.leftColumn + viewport.visibleColumns - 1) should be >= cursor.column
+    }
+  }

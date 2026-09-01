@@ -1233,7 +1233,7 @@ object LayoutEngine:
     val cursorColumn   = cursor.column.max(0)
     val lineLength     = buffer.document.content.getLine(cursor.line).map(_.length).getOrElse(cursorColumn)
     val maxForCursor   = math.max(0, cursorColumn - visibleColumns + 1)
-    val maxForLine     = math.max(0, lineLength - visibleColumns)
+    val maxForLine     = math.max(0, lineLength - visibleColumns + 1)
 
     viewport.leftColumn.max(0).min(maxForCursor).min(maxForLine)
 
