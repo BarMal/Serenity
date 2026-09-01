@@ -64,20 +64,21 @@ final case class EditorGeometry(navigation: NavigationGeometry, charWidthPx: Int
 final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
 
   def xPxForCursor(cursor: CursorPosition): Option[Float] =
-    visualLines.collectFirst {
-      case line
-          if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
-        line.xForColumn(cursor.column).getOrElse(line.widthPx)
-    }
+    visualLines
+      .filter(line =>
+        line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
+      )
+      .lastOption
+      .map(line => line.xForColumn(cursor.column).getOrElse(line.widthPx))
 
   def cursorForVisualRowAndXPx(row: Int, xPx: Float): Option[CursorPosition] =
     visualLines.lift(row).map(line => CursorPosition(line.bufferLine, line.nearestColumnForXPx(xPx)))
 
   def moveVertical(cursor: CursorPosition, direction: Int, preferredXPx: Float): Option[CursorPosition] =
     visualLines.zipWithIndex
-      .collectFirst {
-        case (line, index)
-            if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
-          index + direction
+      .filter { case (line, _) =>
+        line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
       }
+      .lastOption
+      .map { case (_, index) => index + direction }
       .flatMap(targetRow => cursorForVisualRowAndXPx(targetRow, preferredXPx))

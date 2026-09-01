@@ -47,3 +47,44 @@ class NavigationGeometrySpec extends AnyFlatSpec with Matchers:
   it should "resolve a cursor for a visual row and x position" in {
     geometry.cursorForVisualRowAndXPx(1, 20.0f) shouldBe Some(CursorPosition(1, 2))
   }
+
+  // A wrapped buffer line produces two adjacent visual lines that share a boundary column
+  // (`lineA.endColumn == lineB.startColumn == 5`). A cursor sitting exactly at that column is, by convention, the
+  // start of the *next* visual line (`lineB`) -- the wrap point resets x to 0, so `lineB`'s own caret stop for
+  // column 5 is 0.0f, distinct from `lineA`'s trailing caret stop for the same column (50.0f).
+  private val wrapLineA = TextVisualLine(
+    bufferLine = 0,
+    startColumn = 0,
+    endColumn = 5,
+    text = "aaaaa",
+    widthPx = 50.0f,
+    caretStops = (0 to 5).map(column => TextCaretStop(column, column.toFloat * 10.0f)).toVector
+  )
+  private val wrapLineB = TextVisualLine(
+    bufferLine = 0,
+    startColumn = 5,
+    endColumn = 10,
+    text = "bbbbb",
+    widthPx = 50.0f,
+    caretStops = (5 to 10).map(column => TextCaretStop(column, (column - 5).toFloat * 10.0f)).toVector
+  )
+  private val nextBufferLine = TextVisualLine(
+    bufferLine = 1,
+    startColumn = 0,
+    endColumn = 3,
+    text = "ccc",
+    widthPx = 30.0f,
+    caretStops = (0 to 3).map(column => TextCaretStop(column, column.toFloat * 10.0f)).toVector
+  )
+  private val wrapGeometry = NavigationGeometry(Vector(wrapLineA, wrapLineB, nextBufferLine))
+
+  it should "resolve a cursor at a wrap boundary column to the later visual line's caret x" in {
+    wrapGeometry.xPxForCursor(CursorPosition(0, 5)) shouldBe Some(0.0f)
+  }
+
+  it should "move down from a wrap boundary column using the later visual line's row" in {
+    // If the boundary column were matched against `wrapLineA` (row 0) instead of `wrapLineB` (row 1), moving down
+    // would land back on `wrapLineB` (row 1) rather than advancing to `nextBufferLine` (row 2).
+    wrapGeometry.moveVertical(CursorPosition(0, 5), direction = 1, preferredXPx = 0.0f) shouldBe
+      Some(CursorPosition(1, 0))
+  }
