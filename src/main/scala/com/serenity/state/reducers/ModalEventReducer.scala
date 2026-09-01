@@ -263,13 +263,13 @@ object ModalEventReducer:
     event match
       case ModalDismiss =>
         ReducerResult.noEffects(cancelCloseWorkflow(currentState))
-      case ModalNextField | ModalNavigate(Direction.Right) =>
+      case ModalNextField | ModalNavigate(Direction.Right) | ModalNavigate(Direction.Down) =>
         currentModal(currentState) match
           case Some((surface, Modal.CloseWorkflow(workflow))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.CloseWorkflow(workflow.moveChoice(1))))
           case _ =>
             ReducerResult.noEffects(currentState)
-      case ModalPreviousField | ModalNavigate(Direction.Left) =>
+      case ModalPreviousField | ModalNavigate(Direction.Left) | ModalNavigate(Direction.Up) =>
         currentModal(currentState) match
           case Some((surface, Modal.CloseWorkflow(workflow))) =>
             ReducerResult.noEffects(updateModal(currentState, surface, Modal.CloseWorkflow(workflow.moveChoice(-1))))
