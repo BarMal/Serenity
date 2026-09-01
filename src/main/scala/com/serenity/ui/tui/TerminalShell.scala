@@ -84,7 +84,12 @@ final class TerminalShell private (
   private[tui] def restore(): Unit =
     terminal.setAttributes(originalAttributes)
     TerminalShell.disableKeyboardProtocol(terminal, keyboardProtocolTier)
-    terminal.writer().write(TerminalShell.FocusReportingDisable)
+    val w = terminal.writer()
+    // Belt-and-suspenders: TerminalInputHandler.shutdown sends these too, but if it doesn't run
+    // (e.g. a CE3 runtime crash), restore() is the last line of defence -- mouse tracking and
+    // bracketed paste left active after exit_ca_mode corrupt the shell the user returns to.
+    w.write(TerminalShell.FocusReportingDisable)
+    w.write(TerminalShell.AllInputModesDisable)
     val _ = terminal.puts(Capability.cursor_normal)
     val _ = terminal.puts(Capability.exit_ca_mode)
     terminal.flush()
@@ -159,6 +164,12 @@ object TerminalShell:
     */
   private[tui] val FocusReportingEnable: String  = "[?1004h"
   private[tui] val FocusReportingDisable: String = "[?1004l"
+  /** Disables the four input modes [[TerminalInputHandler]] enables: bracketed paste (2004), SGR mouse encoding (1006),
+    * any-event mouse tracking (1003), and button-event mouse tracking (1002). Mirrored in
+    * [[TerminalInputHandler.shutdown]] so they are normally removed before [[TerminalShell.restore]] runs; also included
+    * in [[TerminalShell.restore]] itself as a fallback for crash paths where the input handler's shutdown never fires.
+    */
+  private[tui] val AllInputModesDisable: String = "[?2004l[?1006l[?1003l[?1002l"
 
   /** How long [[acquire]] waits for a kitty `CSI ? flags u` response before falling back to `modifyOtherKeys`, and
     * separately how long it waits for the `XTQMODKEYS`/`XTQFMTKEYS` confirmation replies before falling further back to
