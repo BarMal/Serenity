@@ -51,6 +51,7 @@ object CommandRunnerOptionSelections:
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "spellcheck-enabled"         -> spellCheckEnabledIndex(languageToolsConfig.spellCheck.enabled),
       "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
+      "show-word-count"            -> enabledIndex(surfaceConfig.showWordCount),
       "gutter"                     -> enabledIndex(surfaceConfig.showGutter),
       "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
       "word-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),

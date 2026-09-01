@@ -881,6 +881,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateTextDisplayConfig(_.withTextAreaTopInset(value)).void
       case PanelChromeIntent.SetTextAreaBottomInset(value) =>
         updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
+      case PanelChromeIntent.SetShowWordCount(enabled) =>
+        updateTextDisplayConfig(_.withWordCount(enabled)).void
 
   private def interpretSpellCheckIntent(intent: SpellCheckIntent): IO[Unit] =
     intent match

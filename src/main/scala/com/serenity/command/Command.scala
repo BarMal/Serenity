@@ -220,6 +220,7 @@ enum PanelChromeIntent:
   case SetTextAreaRightInset(value: Double)
   case SetTextAreaTopInset(value: Double)
   case SetTextAreaBottomInset(value: Double)
+  case SetShowWordCount(enabled: Boolean)
 
 enum SpellCheckIntent:
   case SetSpellCheckEnabled(enabled: Boolean)

@@ -806,6 +806,16 @@ object CommandRunnerSettingsItems:
       hint = "Show or hide line numbers"
     )
 
+  private[command] def wordCountOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "show-word-count",
+      label = "Word Count",
+      selectedIndex = optionSelections.getOrElse("show-word-count", 1),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetShowWordCount(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetShowWordCount(false))),
+      hint = "Show word count, character count, and reading time in the status bar"
+    )
+
   private[command] def gutterOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     enabledOptionItem(
       id = "gutter",

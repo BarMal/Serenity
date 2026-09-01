@@ -462,6 +462,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "line-numbers",
       "gutter",
       "line-wrap",
+      "show-word-count",
       "focused-text-body",
       "contextual-toolbar",
       "contextual-toolbar-display"
@@ -575,6 +576,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       "line-numbers"               -> "Off",
       "gutter"                     -> "Off",
       "line-wrap"                  -> "Off",
+      "show-word-count"            -> "Off",
       "focused-text-body"          -> "Off",
       "contextual-toolbar"         -> "Off",
       "contextual-toolbar-display" -> "Text Only"
@@ -583,6 +585,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(false))),
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(false))),
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(false))),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetShowWordCount(false))),
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(false))),
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(false))),
       CommandIntent.Settings(
