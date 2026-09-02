@@ -148,20 +148,23 @@ class SessionManager(
     */
   def sessionExists: IO[Boolean] =
     readIndex().flatMap { index =>
-      index.currentSessionId
+      val sessionFileName = index.currentSessionId
         .flatMap(sessionId => index.sessions.find(_.id == sessionId))
-        .flatMap(metadata => safeSessionPath(metadata.sessionFileName)) match
+        .map(_.sessionFileName)
+      IO.blocking(sessionFileName.flatMap(safeSessionPath)).flatMap {
         case Some(path) => IO.blocking(Files.exists(path))
         case None       => IO.pure(false)
+      }
     }
 
   /** Read the current session's saved theme name without restoring the full session.
     */
   def currentSessionThemeName: IO[Option[String]] =
     readIndex().flatMap { index =>
-      index.currentSessionId
+      val sessionFileName = index.currentSessionId
         .flatMap(sessionId => index.sessions.find(_.id == sessionId))
-        .flatMap(metadata => safeSessionPath(metadata.sessionFileName)) match
+        .map(_.sessionFileName)
+      IO.blocking(sessionFileName.flatMap(safeSessionPath)).flatMap {
         case Some(path) =>
           IO.blocking(Files.exists(path)).flatMap {
             case false => IO.pure(None)
@@ -174,6 +177,7 @@ class SessionManager(
                 )
           }
         case None => IO.pure(None)
+      }
     }
 
   /** Delete the current session.
@@ -186,7 +190,7 @@ class SessionManager(
     }
 
   private def loadSessionFile(sessionFileName: String)(using com.serenity.rope.Balance): IO[Option[AppState]] =
-    safeSessionPath(sessionFileName) match
+    IO.blocking(safeSessionPath(sessionFileName)).flatMap {
       case None => IO.pure(None)
       case Some(sessionFile) =>
         IO.blocking(Files.exists(sessionFile))
@@ -208,6 +212,7 @@ class SessionManager(
               yield Some(restored)
           }
           .handleErrorWith(recoverFailedSessionFile(sessionFile, _))
+    }
 
   private def recoverFailedSessionFile(sessionFile: Path, error: Throwable): IO[Option[AppState]] =
     quarantineSessionFile(sessionFile).attempt.flatMap {
@@ -247,13 +252,14 @@ class SessionManager(
   private def sanitizeIndex(index: SessionIndex): IO[SessionIndex] =
     index.sessions
       .traverse { metadata =>
-        safeSessionPath(metadata.sessionFileName) match
+        IO.blocking(safeSessionPath(metadata.sessionFileName)).flatMap {
           case Some(_) => IO.pure(Some(metadata))
           case None =>
             logger.error(
               s"[SESSION] Ignoring unsafe session path '${metadata.sessionFileName}' for ${metadata.id.value}"
             ) >>
               IO.pure(None)
+        }
       }
       .map { sessions =>
         val safeSessions = sessions.flatten
@@ -328,18 +334,20 @@ class SessionManager(
     persistUnsavedBuffers: Boolean = policy.persistUnsavedBuffers
   ): IO[Unit] =
     val sessionState = SessionState.fromAppState(appState, persistUnsaved = persistUnsavedBuffers)
-    safeSessionPath(sessionFileName) match
+    IO.blocking(safeSessionPath(sessionFileName)).flatMap {
       case None => IO.raiseError(new IllegalArgumentException(s"Unsafe session path: $sessionFileName"))
       case Some(sessionFile) =>
         writeUtf8(sessionFile, _root_.io.circe.syntax.EncoderOps(sessionState).asJson.spaces2)
+    }
 
   private def deleteSessionFile(sessionFileName: String): IO[Unit] =
-    safeSessionPath(sessionFileName) match
+    IO.blocking(safeSessionPath(sessionFileName)).flatMap {
       case None => IO.unit
       case Some(sessionFile) =>
         IO.blocking {
           if Files.exists(sessionFile) then Files.delete(sessionFile)
         }.handleErrorWith(error => logger.error(error)(s"[SESSION] Failed to delete session file $sessionFile"))
+    }
 
   private def writeUtf8(path: Path, value: String): IO[Unit] =
     AtomicFileWriter.writeString(path, value)
