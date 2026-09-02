@@ -11,7 +11,17 @@ import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.session.given
-import com.serenity.session.{SessionFindResult, SessionFindState, SessionState, SessionWorkspaceNode}
+import com.serenity.session.{
+  SessionBuffer,
+  SessionCursorPosition,
+  SessionEditorPane,
+  SessionFindResult,
+  SessionFindState,
+  SessionLayout,
+  SessionState,
+  SessionViewport,
+  SessionWorkspaceNode
+}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{
   Layout,
@@ -1432,4 +1442,36 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     rewrittenConfigObject("interfaceDensity") shouldBe Some(Json.fromString("spacious"))
     rewrittenConfigObject("materialPreset") shouldBe Some(Json.fromString("crystal"))
     rewrittenConfigObject("motionPreset") shouldBe Some(Json.fromString("expressive"))
+  }
+
+  it should "assign the first buffer to the active pane when all panes have no bufferId (old session format)" in {
+    val session = SessionState(
+      buffers = List(
+        SessionBuffer(
+          id = 0,
+          filePath = None,
+          isDirty = true,
+          language = None,
+          isNewEmpty = false,
+          cursors = List(SessionCursorPosition(0, 12)),
+          viewport = SessionViewport(0, 0, 80, 50),
+          unsavedContent = Some("Hello world!")
+        )
+      ),
+      layout = SessionLayout(
+        editorPanes = List(SessionEditorPane(id = 0, bufferId = None)),
+        activeEditorPaneId = Some(0)
+      ),
+      focus = None,
+      bufferOrder = Nil,
+      config = AppConfig.default,
+      themeName = "dark"
+    )
+
+    val restored = SessionState.toAppState(session, Theme.default)
+
+    val activePane = restored.persisted.layout.activeEditorPaneId
+      .flatMap(id => restored.persisted.layout.editorPanes.get(id))
+    activePane.flatMap(_.bufferId) shouldBe Some(BufferId(0))
+    restored.persisted.buffers(BufferId(0)).document.content.toString shouldBe "Hello world!"
   }

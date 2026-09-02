@@ -200,9 +200,23 @@ object SessionState:
     val bufferOrder =
       requestedBufferOrder ++ bufferMap.keys.toList.filterNot(requestedBufferOrder.contains).sortBy(_.value)
 
+    // Old or corrupted sessions written before bufferOrder was populated have bufferOrder:[] in the JSON
+    // alongside buffers with real content and all panes with bufferId:null. Assigning the first buffer
+    // to the active pane here prevents the editor from rendering blank after the startup page is removed.
+    // The sessionState.bufferOrder.isEmpty guard is deliberate: stale-reference recovery (bufferId cleared
+    // because the referenced id no longer exists) and empty-pane fallbacks (panes stripped from corrupt
+    // layout) must NOT trigger this path — only the specific case where the JSON never had a bufferOrder.
+    val repairedLayout =
+      if sessionState.bufferOrder.isEmpty && bufferOrder.nonEmpty && layout.editorPanes.values.forall(_.bufferId.isEmpty) then
+        val targetPaneId = layout.activeEditorPaneId.orElse(layout.paneOrder.headOption).getOrElse(PaneId(0))
+        layout.editorPanes.get(targetPaneId).fold(layout) { pane =>
+          layout.copy(editorPanes = layout.editorPanes.updated(targetPaneId, pane.copy(bufferId = bufferOrder.headOption)))
+        }
+      else layout
+
     AppState(
       persisted = Persisted(
-        layout = layout,
+        layout = repairedLayout,
         buffers = bufferMap,
         bufferOrder = bufferOrder,
         focus = focus,

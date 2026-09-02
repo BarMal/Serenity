@@ -122,3 +122,104 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
     program.unsafeRunSync()
   }
+
+  it should "place restore-session at index 2 when a session exists with no recent files" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupCommandsSpec")
+      _            <- stateManager.saveSession()
+      theme        = Theme.default
+      viewportSize = ViewportSize(80, 24)
+
+      initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      startPage = initialState.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+    yield
+      startPage.launchActions.map(_.id) should contain("restore-session")
+      startPage.launchActions(2).id shouldBe "restore-session"
+
+    program.unsafeRunSync()
+  }
+
+  it should "dismiss the startup page and restore session when Enter is pressed at the restore-session action" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupCommandsSpec")
+      _            <- stateManager.saveSession()
+      theme        = Theme.default
+      viewportSize = ViewportSize(80, 24)
+
+      _          <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      _          <- stateManager.applyEvent(MoveDown)
+      _          <- stateManager.applyEvent(MoveDown)
+      navState   <- stateManager.getCurrentState
+      startPage  = navState.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      _          = startPage.selectedIndex shouldBe 2
+      _          = startPage.selectedAction.map(_.id) shouldBe Some("restore-session")
+
+      _          <- stateManager.applyEvent(Enter)
+      finalState <- stateManager.getCurrentState
+    yield
+      finalState.startPageSurface shouldBe None
+      finalState.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
+
+    program.unsafeRunSync()
+  }
+
+  it should "dismiss the startup page and restore session when NewLine is pressed at the restore-session action" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    // NewLine is the event EditorInputTranslator produces for the Enter key (via the editor keymap binding),
+    // which is what the running app dispatches. Enter and NewLine both map to FocusIntent.Submit in
+    // SurfaceInput.intentOf, but production goes through NewLine — this test exercises that path.
+    val program = for
+      stateManager <- createStateManagerIO("StartupCommandsSpec")
+      _            <- stateManager.saveSession()
+      theme        = Theme.default
+      viewportSize = ViewportSize(80, 24)
+
+      _          <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      _          <- stateManager.applyEvent(MoveDown)
+      _          <- stateManager.applyEvent(MoveDown)
+      _          <- stateManager.applyEvent(NewLine)
+      finalState <- stateManager.getCurrentState
+    yield
+      finalState.startPageSurface shouldBe None
+      finalState.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
+
+    program.unsafeRunSync()
+  }
+
+  it should "restore the saved session content when the restore-session action is executed" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupCommandsSpec")
+
+      // Create a buffer with known content and save the session
+      savedState   <- stateManager.getCurrentState
+      savedBufferId = savedState.persisted.bufferOrder.head
+      _ <- stateManager.updateState(s =>
+             val buf = s.persisted.buffers(savedBufferId)
+             val updated = buf.copy(document = buf.document.copy(content = com.serenity.rope.Rope("restored content")))
+             s.copy(persisted = s.persisted.copy(buffers = s.persisted.buffers + (savedBufferId -> updated)))
+           )
+      _ <- stateManager.saveSession()
+
+      theme        = Theme.default
+      viewportSize = ViewportSize(80, 24)
+
+      _          <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      _          <- stateManager.applyEvent(MoveDown)
+      _          <- stateManager.applyEvent(MoveDown)
+      _          <- stateManager.applyEvent(Enter)
+      finalState <- stateManager.getCurrentState
+    yield
+      val restoredContent = finalState.persisted.buffers.values
+        .map(_.document.content.collect())
+        .find(_ == "restored content")
+      restoredContent shouldBe Some("restored content")
+
+    program.unsafeRunSync()
+  }
