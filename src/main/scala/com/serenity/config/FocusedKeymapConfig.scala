@@ -50,6 +50,8 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
   case MoveWordRight
   case ExtendSelectionWordLeft
   case ExtendSelectionWordRight
+  case ExtendSelectionToLineStart
+  case ExtendSelectionToLineEnd
   case MoveToStart
   case MoveToEnd
   case MoveToStartOfFile
@@ -82,6 +84,10 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
         com.serenity.keystroke.events.ExtendSelectionWordLeft
       case ExtendSelectionWordRight =>
         com.serenity.keystroke.events.ExtendSelectionWordRight
+      case ExtendSelectionToLineStart =>
+        com.serenity.keystroke.events.ExtendSelectionToLineStart
+      case ExtendSelectionToLineEnd =>
+        com.serenity.keystroke.events.ExtendSelectionToLineEnd
       case MoveToStart        => com.serenity.keystroke.events.MoveToStart
       case MoveToEnd          => com.serenity.keystroke.events.MoveToEnd
       case MoveToStartOfFile  => com.serenity.keystroke.events.MoveToStartOfFile
@@ -162,6 +168,20 @@ object EditorKeyAction:
     ),
     EditorKeyAction.MoveToStart -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set.empty)),
     EditorKeyAction.MoveToEnd   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set.empty)),
+    EditorKeyAction.ExtendSelectionToLineStart -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.Home,
+        None,
+        Set(com.serenity.keystroke.Modifier.Shift)
+      )
+    ),
+    EditorKeyAction.ExtendSelectionToLineEnd -> List(
+      HotkeyTrigger(
+        com.serenity.keystroke.InputKey.End,
+        None,
+        Set(com.serenity.keystroke.Modifier.Shift)
+      )
+    ),
     EditorKeyAction.MoveToStartOfFile -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set(com.serenity.keystroke.Modifier.Ctrl))
     ),
