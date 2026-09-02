@@ -1162,6 +1162,7 @@ object Renderer:
             uiMetrics
           )
         renderFloatingPanels(state, floatContext, scene, Damage.Everything)
+        paintModalLayer(state, floatContext, scene, isDirty = true)
         None
       case None =>
         val prepared = preparedSceneFor(surface)
