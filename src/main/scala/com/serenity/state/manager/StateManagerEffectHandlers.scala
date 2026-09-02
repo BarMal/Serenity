@@ -837,6 +837,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateTextDisplayConfig(config => config.withFocusedTextBody(!config.surfaceConfig.focusedTextBodyEnabled)).void
       case PanelChromeIntent.ToggleContextualToolbar =>
         enqueueEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
+      case PanelChromeIntent.TogglePaneHeaders =>
+        updateTextDisplayConfig(config => config.withPaneHeaders(!config.surfaceConfig.showPaneHeaders)).void
       case PanelChromeIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case PanelChromeIntent.SetGutter(enabled) =>
