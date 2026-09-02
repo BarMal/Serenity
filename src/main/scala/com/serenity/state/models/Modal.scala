@@ -282,7 +282,7 @@ sealed trait FileWorkflowState:
 final case class OpenFileWorkflowState(
     filename: String = "",
     path: String = "",
-    activeField: FileWorkflowField = FileWorkflowField.Filename,
+    activeField: FileWorkflowField = FileWorkflowField.Path,
     suggestions: List[FileWorkflowSuggestion] = Nil,
     selectedSuggestionIndex: Int = 0,
     missingPathSegments: List[String] = Nil,
@@ -293,6 +293,8 @@ final case class OpenFileWorkflowState(
   val mode: FileWorkflowMode               = FileWorkflowMode.Open
   val operationLabel: String               = "open"
   val supportsFilenameSuggestions: Boolean = true
+
+  override def cyclableFields: List[FileWorkflowField] = List(FileWorkflowField.Path)
 
   protected def rebuild(
     filename: String,
