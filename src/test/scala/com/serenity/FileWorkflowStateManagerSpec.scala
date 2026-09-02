@@ -4,7 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Enter, InsertChar, ModalCreateDirectory, SaveAsFile, SaveFile, TabKey}
+import com.serenity.keystroke.events.{Enter, InsertChar, ModalCreateDirectory, OpenFile, SaveAsFile, SaveFile, TabKey}
 import com.serenity.richtext.{
   InlineMark,
   RichTextDocument,
@@ -508,4 +508,115 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       )
       stateManager.getCurrentState.unsafeRunSync().persisted.buffers(BufferId(0)).document.isDirty shouldBe true
     finally Files.deleteIfExists(sourceFile)
+  }
+
+  it should "begin in the Path field when the open dialog is opened in TUI mode (no native dialog)" in {
+    val stateManager = createStateManager()
+    stateManager.applyEvent(OpenFile).unsafeRunSync()
+
+    val workflow = currentWorkflow(stateManager)
+    workflow shouldBe a[OpenFileWorkflowState]
+    workflow.activeField shouldBe FileWorkflowField.Path
+  }
+
+  it should "include readable files alongside directories in the open-dialog Path field suggestions" in {
+    val tempDir  = Files.createTempDirectory("open-path-dir-and-file")
+    val subDir   = Files.createDirectory(tempDir.resolve("documents"))
+    val textFile = Files.createTempFile(tempDir, "notes", ".txt")
+    Files.writeString(textFile, "hello")
+
+    try
+      val stateManager = createStateManager()
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.Open,
+              path = tempDir.toString,
+              activeField = FileWorkflowField.Path
+            )
+          )
+        )
+        .unsafeRunSync()
+
+      stateManager.applyEvent(InsertChar('/')).unsafeRunSync()
+
+      val workflow        = currentWorkflow(stateManager)
+      val suggestionPaths = workflow.suggestions.map(_.value)
+      suggestionPaths should contain(subDir.toString)
+      suggestionPaths should contain(textFile.toString)
+      workflow.suggestions.find(_.value == subDir.toString).map(_.isDirectory) shouldBe Some(true)
+      workflow.suggestions.find(_.value == textFile.toString).map(_.isDirectory) shouldBe Some(false)
+      workflow.suggestions.indexWhere(_.value == subDir.toString) should be <
+        workflow.suggestions.indexWhere(_.value == textFile.toString)
+    finally
+      Files.deleteIfExists(textFile)
+      Files.deleteIfExists(subDir)
+      Files.deleteIfExists(tempDir)
+  }
+
+  it should "open a file immediately when its path suggestion is accepted with Tab in the open dialog" in {
+    val tempDir  = Files.createTempDirectory("open-tab-file-path")
+    val textFile = Files.createTempFile(tempDir, "notes", ".txt")
+    Files.writeString(textFile, "tab-opened content")
+
+    try
+      val stateManager = createStateManager()
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.Open,
+              path = tempDir.toString,
+              activeField = FileWorkflowField.Path
+            )
+          )
+        )
+        .unsafeRunSync()
+
+      stateManager.applyEvent(InsertChar('/')).unsafeRunSync()
+
+      val beforeTab = currentWorkflow(stateManager)
+      beforeTab.suggestions.map(_.value) should contain(textFile.toString)
+
+      stateManager.applyEvent(TabKey).unsafeRunSync()
+
+      val finalState   = stateManager.getCurrentState.unsafeRunSync()
+      val openedBuffer = finalState.persisted.buffers.values.find(_.document.filePath.contains(textFile))
+      finalState.modalSurface shouldBe None
+      openedBuffer.map(_.document.content.collect()) shouldBe Some("tab-opened content")
+    finally
+      Files.deleteIfExists(textFile)
+      Files.deleteIfExists(tempDir)
+  }
+
+  it should "navigate into a directory when Enter is pressed on a path that resolves to a directory" in {
+    val tempDir = Files.createTempDirectory("open-enter-dir")
+    val subDir  = Files.createDirectory(tempDir.resolve("inner"))
+    val subFile = Files.createTempFile(subDir, "notes", ".txt")
+    Files.writeString(subFile, "inner content")
+
+    try
+      val stateManager = createStateManager()
+      stateManager
+        .showModal(
+          Modal.FileWorkflow(
+            FileWorkflowState(
+              mode = FileWorkflowMode.Open,
+              path = subDir.toString,
+              activeField = FileWorkflowField.Path
+            )
+          )
+        )
+        .unsafeRunSync()
+
+      stateManager.applyEvent(Enter).unsafeRunSync()
+
+      val workflow = currentWorkflow(stateManager)
+      workflow.statusMessage shouldBe None
+      workflow.path should startWith(subDir.toString)
+    finally
+      Files.deleteIfExists(subFile)
+      Files.deleteIfExists(subDir)
+      Files.deleteIfExists(tempDir)
   }

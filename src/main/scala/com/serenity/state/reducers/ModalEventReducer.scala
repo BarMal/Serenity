@@ -187,10 +187,21 @@ object ModalEventReducer:
       case ModalNextField =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) if workflow.suggestions.nonEmpty =>
-            ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.applySelectedSuggestion)),
-              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
-            )
+            val selectedSuggestion = workflow.suggestions.lift(workflow.selectedSuggestionIndex)
+            val isFileInPathField  =
+              workflow.mode == FileWorkflowMode.Open &&
+                workflow.activeField == FileWorkflowField.Path &&
+                selectedSuggestion.exists(!_.isDirectory)
+            if isFileInPathField then
+              ReducerResult.withEffect(
+                updateModal(currentState, surface, Modal.FileWorkflow(workflow.applySelectedSuggestion)),
+                AppEffect.Workflow(WorkflowEffect.SubmitFileWorkflow(surface.id))
+              )
+            else
+              ReducerResult.withEffect(
+                updateModal(currentState, surface, Modal.FileWorkflow(workflow.applySelectedSuggestion)),
+                AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
+              )
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.switchField(1))),

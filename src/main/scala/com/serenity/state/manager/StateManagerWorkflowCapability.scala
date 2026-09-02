@@ -85,10 +85,14 @@ final private[manager] class StateManagerWorkflowCapability(
           FileUtils.getCurrentDirectory
 
     pathIO.flatMap { basePath =>
+      val activeField = mode match
+        case FileWorkflowMode.Open   => FileWorkflowField.Path
+        case FileWorkflowMode.SaveAs => FileWorkflowField.Filename
       val workflow = FileWorkflowState(
         mode = mode,
         filename = filename,
         path = basePath.toString,
+        activeField = activeField,
         statusMessage = statusMessage,
         bufferHasRichFormatting = bufferHasRichFormatting
       )
@@ -97,7 +101,12 @@ final private[manager] class StateManagerWorkflowCapability(
         s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
           s"surfaceId=${predictedState.modalSurface.map(_.id).getOrElse("none")} focus=${predictedState.persisted.focus}"
       ) >>
-        updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state)
+        updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state) >>
+        IO.whenA(mode == FileWorkflowMode.Open)(
+          stateRef.get.flatMap(updated =>
+            updated.modalSurface.fold(IO.unit)(surface => refreshFileWorkflowEffect(surface.id))
+          )
+        )
     }
 
   private[manager] def showSaveAsWorkflow(state: AppState, bufferId: BufferId, statusMessage: String): IO[Unit] =
@@ -443,7 +452,7 @@ final private[manager] class StateManagerWorkflowCapability(
         suggestions <- workflow match
           case openWorkflow: OpenFileWorkflowState =>
             openWorkflow.activeField match
-              case FileWorkflowField.Path     => pathSuggestions(openWorkflow.path)
+              case FileWorkflowField.Path     => openPathSuggestions(openWorkflow.path)
               case FileWorkflowField.Filename => filenameSuggestions(openWorkflow)
               case FileWorkflowField.Format   => IO.pure(Nil)
           case saveAsWorkflow: SaveAsFileWorkflowState =>
@@ -479,6 +488,25 @@ final private[manager] class StateManagerWorkflowCapability(
       .filter(_.isDirectory)
       .filter(entry => prefix.isEmpty || entry.name.toLowerCase.startsWith(prefix.toLowerCase))
       .map(entry => FileWorkflowSuggestion(entry.path.toString, isDirectory = true))
+
+  protected def openPathSuggestions(pathInput: String): IO[List[FileWorkflowSuggestion]] =
+    for
+      currentDirectory <- FileUtils.getCurrentDirectory
+      basePathInput = if pathInput.trim.isEmpty then currentDirectory.toString else pathInput
+      resolvedPath    <- FileUtils.resolvePath(basePathInput)
+      isDirectoryPath <- IO.blocking(Files.exists(resolvedPath) && Files.isDirectory(resolvedPath))
+      endsWithSeparator = pathInput.endsWith("/") || pathInput.endsWith("\\")
+      baseDirectory =
+        if endsWithSeparator || isDirectoryPath then resolvedPath
+        else Option(resolvedPath.getParent).getOrElse(currentDirectory)
+      prefix =
+        if endsWithSeparator || isDirectoryPath then ""
+        else Option(resolvedPath.getFileName).map(_.toString).getOrElse("")
+      entries <- fileManager.listDirectory(baseDirectory)
+    yield entries
+      .filter(entry => prefix.isEmpty || entry.name.toLowerCase.startsWith(prefix.toLowerCase))
+      .filter(entry => entry.isDirectory || FileUtils.isReadableFile(entry.path))
+      .map(entry => FileWorkflowSuggestion(entry.path.toString, isDirectory = entry.isDirectory))
 
   protected def filenameSuggestions(workflow: OpenFileWorkflowState): IO[List[FileWorkflowSuggestion]] =
     for
@@ -531,11 +559,19 @@ final private[manager] class StateManagerWorkflowCapability(
         workflowTargetPath(workflow).flatMap { targetPath =>
           IO.blocking(FileUtils.isReadableFile(targetPath)).flatMap {
             case false =>
-              updateFileWorkflowSurface(
-                surfaceId,
-                workflow.updated(statusMessage = Some(s"File not found: $targetPath"))
-              ) >>
-                logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $targetPath")
+              IO.blocking(Files.isDirectory(targetPath)).flatMap {
+                case true =>
+                  updateFileWorkflowSurface(
+                    surfaceId,
+                    workflow.updated(path = targetPath.toString + java.io.File.separator, statusMessage = None)
+                  ) >> refreshFileWorkflowEffect(surfaceId)
+                case false =>
+                  updateFileWorkflowSurface(
+                    surfaceId,
+                    workflow.updated(statusMessage = Some(s"File not found: $targetPath"))
+                  ) >>
+                    logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $targetPath")
+              }
             case true =>
               stateRef
                 .modify { state =>
