@@ -37,4 +37,5 @@ object ModalStateReducer:
   private def isBlocking(modal: Modal): Boolean =
     modal match
       case _: Modal.CloseWorkflow => true
+      case _: Modal.FileWorkflow  => true
       case _                      => false
