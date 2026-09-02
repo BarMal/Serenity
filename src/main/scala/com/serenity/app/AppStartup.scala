@@ -14,6 +14,9 @@ import com.serenity.ui.theme.config.AppThemeManager
 
 object AppStartup:
 
+  /** `recentFiles` must already be filtered to existing, readable files -- `createStartPage` does no filesystem access
+    * of its own, so callers filter via `IO.blocking` before calling this.
+    */
   def createStartPage(sessionExists: Boolean, recentFiles: List[Path] = Nil): StartupPage =
     val statusMessage =
       if sessionExists then None
@@ -53,7 +56,6 @@ object AppStartup:
       )
     )
     val recentActions = recentFiles
-      .filter(path => Files.isRegularFile(path) && Files.isReadable(path))
       .map(path => path.toAbsolutePath.normalize())
       .distinct
       .take(5)
@@ -102,7 +104,10 @@ object AppStartup:
     for
       sessionExists <- stateManager.sessionExists
       recentFiles   <- stateManager.loadSession().map(_.fold(Nil)(_.persisted.recentFiles))
-      startPage = createStartPage(sessionExists, recentFiles)
+      readableRecentFiles <- IO.blocking(
+        recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
+      )
+      startPage = createStartPage(sessionExists, readableRecentFiles)
     yield
       val startPageSurfaceId = SurfaceId("surface-0")
       val base               = AppState.empty(appConfig)

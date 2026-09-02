@@ -67,7 +67,9 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     val second  = Files.createFile(root.resolve("second-notes.md"))
     val missing = root.resolve("missing.md")
 
-    val page = AppStartup.createStartPage(sessionExists = true, recentFiles = List(first, second, missing))
+    val readableRecentFiles =
+      List(first, second, missing).filter(path => Files.isRegularFile(path) && Files.isReadable(path))
+    val page = AppStartup.createStartPage(sessionExists = true, recentFiles = readableRecentFiles)
 
     val recents = page.actions.filter(_.id.startsWith("recent:"))
     recents.map(_.label) shouldBe List(first.toAbsolutePath.toString, second.toAbsolutePath.toString)

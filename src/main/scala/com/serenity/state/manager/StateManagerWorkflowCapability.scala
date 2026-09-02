@@ -887,18 +887,22 @@ final private[manager] class StateManagerWorkflowCapability(
   private[manager] def restoreStartupSession(): IO[Unit] =
     logger.info("[CMD] Session restore requested") >>
       loadSession().flatMap {
-        case Some(restoredState) =>
+        case Some(restoredState) if restoredState.persisted.bufferOrder.nonEmpty =>
           logger.info("[CMD] Session loaded successfully") >>
             updateState(current => restoreSessionIntoCurrentViewport(restoredState, current))
+        case Some(_) =>
+          logger.info("[CMD] Session loaded with no buffers - creating default session") >>
+            createDefaultStartupBuffer()
         case None =>
           logger.info("[CMD] No session found - creating default session") >>
-            updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
-            createNewEmptyBuffer().flatMap { bufferId =>
-              updateState(s =>
-                s.copy(persisted = s.persisted.copy(bufferOrder = s.persisted.bufferOrder :+ bufferId))
-              ) >>
-                createPane(Some(bufferId)).flatMap(paneId => switchToPane(paneId))
-            }
+            createDefaultStartupBuffer()
+      }
+
+  private def createDefaultStartupBuffer(): IO[Unit] =
+    updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
+      createNewEmptyBuffer().flatMap { bufferId =>
+        updateState(s => s.copy(persisted = s.persisted.copy(bufferOrder = s.persisted.bufferOrder :+ bufferId))) >>
+          createPane(Some(bufferId)).flatMap(paneId => switchToPane(paneId))
       }
 
   private[manager] def createStartupSession(): IO[Unit] =

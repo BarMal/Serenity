@@ -19,7 +19,7 @@ main/scala/com/serenity/session/SessionState.scala	file length	1296
 main/scala/com/serenity/spellcheck/SpellChecker.scala	file length	905
 main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	751
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2595
-main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	919
+main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	925
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	method submitReplaceNextEffect	85
 main/scala/com/serenity/state/models/AppState.scala	file length	889
 main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseItems	173

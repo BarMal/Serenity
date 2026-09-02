@@ -1,9 +1,14 @@
 package com.serenity
 
+import java.nio.file.Files
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
 import com.serenity.app.AppStartup
+import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.*
+import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
@@ -77,6 +82,59 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       _ = finalState.startPageSurface shouldBe None
       _ = finalState.persisted.layout.editorPanes.size shouldBe 1
       _ = finalState.persisted.buffers.size shouldBe 1
+    yield ()
+
+    program.unsafeRunSync()
+  }
+
+  it should "restore into a usable buffer, never a blank screen, when the saved session has zero buffers" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      sessionRoot <- IO.blocking(Files.createTempDirectory("startup-page-empty-session-restore"))
+      theme        = Theme.default
+      viewportSize = ViewportSize(80, 24)
+
+      // ---- First launch: fresh start, close everything without opening anything, save session. ----
+      firstManager <- StateManager.apply(
+        testLogger("StartupPageIntegrationSpec-empty-session-first"),
+        sessionRootOverride = Some(sessionRoot)
+      )
+      firstInitial <- AppStartup.initializeState(firstManager, theme, viewportSize)
+      _ = firstInitial.startPageSurface should be(defined)
+      _ = firstInitial.persisted.buffers shouldBe empty
+
+      // Save the session via the real "Save Session" command while zero buffers exist -- exactly what happens
+      // when a user closes every tab before quitting.
+      saveSessionCommand = CommandRegistry.default
+        .findCommand("save-session")
+        .getOrElse(fail("\"save-session\" command not registered in CommandRegistry.default"))
+      _ <- firstManager.executeCommand(saveSessionCommand)
+
+      // ---- Open again: a brand-new StateManager over the same session root, exactly like a fresh process launch. ----
+      secondManager <- StateManager.apply(
+        testLogger("StartupPageIntegrationSpec-empty-session-second"),
+        sessionRootOverride = Some(sessionRoot)
+      )
+      secondInitial <- AppStartup.initializeState(secondManager, theme, viewportSize)
+      _            = secondInitial.startPageSurface should be(defined)
+      startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      restoreIndex = startPage.launchActions.indexWhere(_.id == "restore-session")
+      _ = withClue("\"Restore previous session\" action should be offered once a session exists on disk") {
+        restoreIndex should be >= 0
+      }
+
+      // Navigate to "Restore previous session" and press Enter, exactly as the user does.
+      _          <- (0 until restoreIndex).toList.traverse_(_ => secondManager.applyEvent(MoveDown))
+      _          <- secondManager.applyEvent(Enter)
+      finalState <- secondManager.getCurrentState
+
+      // A zero-buffer restore must never leave a blank, unusable screen: the startup page must be gone and at
+      // least one buffer/pane must exist so the user has somewhere to type.
+      _ = finalState.startPageSurface shouldBe None
+      _ = finalState.persisted.buffers should not be empty
+      _ = finalState.persisted.bufferOrder should not be empty
+      _ = finalState.persisted.layout.editorPanes should not be empty
     yield ()
 
     program.unsafeRunSync()
