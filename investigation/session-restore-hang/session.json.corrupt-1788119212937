@@ -1,0 +1,921 @@
+{
+  "buffers" : [
+  ],
+  "layout" : {
+    "editorPanes" : [
+    ],
+    "activeEditorPaneId" : null,
+    "paneOrder" : [
+    ],
+    "splitDirection" : "Horizontal",
+    "workspaceTree" : null,
+    "maximizedWorkspaceNodeId" : null,
+    "dockedPanels" : [
+    ]
+  },
+  "focus" : null,
+  "bufferOrder" : [
+  ],
+  "config" : {
+    "characterAnimation" : {
+      "steps" : 15,
+      "totalDuration" : 240000000
+    },
+    "fontConfig" : {
+      "codeFontFamily" : "Monaspace Neon (Bundled)",
+      "textFontFamily" : "SansSerif",
+      "uiFontFamily" : "SansSerif",
+      "fontSize" : 12.0,
+      "textFontSize" : 12.0,
+      "uiFontSize" : 12.0,
+      "textScaleMode" : "auto",
+      "textScaleMultiplier" : 1.0,
+      "enableLigatures" : true,
+      "textLigatures" : true,
+      "uiLigatures" : false
+    },
+    "minimumPaneWidth" : 50,
+    "hotkeyConfig" : {
+      "find" : [
+        {
+          "keyType" : "Character",
+          "character" : "f",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "replace" : [
+        {
+          "keyType" : "Character",
+          "character" : "h",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "cut" : [
+        {
+          "keyType" : "Character",
+          "character" : "x",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "close_tab" : [
+        {
+          "keyType" : "Character",
+          "character" : "w",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "contextual_toolbar" : [
+        {
+          "keyType" : "Character",
+          "character" : "t",
+          "modifiers" : [
+            "Ctrl",
+            "Shift"
+          ]
+        }
+      ],
+      "toggle_syntax_highlighting" : [
+        {
+          "keyType" : "Character",
+          "character" : "h",
+          "modifiers" : [
+            "Ctrl",
+            "Shift"
+          ]
+        }
+      ],
+      "previous_tab" : [
+        {
+          "keyType" : "Tab",
+          "character" : null,
+          "modifiers" : [
+            "Ctrl",
+            "Shift"
+          ]
+        },
+        {
+          "keyType" : "ReverseTab",
+          "character" : null,
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "copy" : [
+        {
+          "keyType" : "Character",
+          "character" : "c",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "new_tab" : [
+        {
+          "keyType" : "Character",
+          "character" : "t",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "save" : [
+        {
+          "keyType" : "Character",
+          "character" : "s",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "file_search" : [
+        {
+          "keyType" : "Character",
+          "character" : "f",
+          "modifiers" : [
+            "Ctrl",
+            "Shift"
+          ]
+        }
+      ],
+      "select_all" : [
+        {
+          "keyType" : "Character",
+          "character" : "a",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "undo" : [
+        {
+          "keyType" : "Character",
+          "character" : "z",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "paste" : [
+        {
+          "keyType" : "Character",
+          "character" : "v",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "go_to_line" : [
+        {
+          "keyType" : "Character",
+          "character" : "g",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "save_as" : [
+        {
+          "keyType" : "Character",
+          "character" : "s",
+          "modifiers" : [
+            "Ctrl",
+            "Shift"
+          ]
+        }
+      ],
+      "redo" : [
+        {
+          "keyType" : "Character",
+          "character" : "y",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "quit" : [
+        {
+          "keyType" : "Character",
+          "character" : "q",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        },
+        {
+          "keyType" : "EOF",
+          "character" : null,
+          "modifiers" : [
+          ]
+        }
+      ],
+      "command_palette" : [
+        {
+          "keyType" : "Character",
+          "character" : "p",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "next_tab" : [
+        {
+          "keyType" : "Tab",
+          "character" : null,
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ],
+      "open_file" : [
+        {
+          "keyType" : "Character",
+          "character" : "o",
+          "modifiers" : [
+            "Ctrl"
+          ]
+        }
+      ]
+    },
+    "focusedKeymapConfig" : {
+      "editor" : {
+        "move_to_start" : [
+          {
+            "keyType" : "Home",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_word_forward" : [
+          {
+            "keyType" : "Delete",
+            "character" : null,
+            "modifiers" : [
+              "Ctrl"
+            ]
+          }
+        ],
+        "extend_selection_right" : [
+          {
+            "keyType" : "ArrowRight",
+            "character" : null,
+            "modifiers" : [
+              "Shift"
+            ]
+          }
+        ],
+        "page_down" : [
+          {
+            "keyType" : "PageDown",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "move_right" : [
+          {
+            "keyType" : "ArrowRight",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_backward" : [
+          {
+            "keyType" : "Backspace",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_word_backward" : [
+          {
+            "keyType" : "Backspace",
+            "character" : null,
+            "modifiers" : [
+              "Ctrl"
+            ]
+          }
+        ],
+        "move_left" : [
+          {
+            "keyType" : "ArrowLeft",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "reverse_tab" : [
+          {
+            "keyType" : "ReverseTab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "new_line" : [
+          {
+            "keyType" : "Enter",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "move_down" : [
+          {
+            "keyType" : "ArrowDown",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "extend_selection_left" : [
+          {
+            "keyType" : "ArrowLeft",
+            "character" : null,
+            "modifiers" : [
+              "Shift"
+            ]
+          }
+        ],
+        "move_to_start_of_file" : [
+          {
+            "keyType" : "Home",
+            "character" : null,
+            "modifiers" : [
+              "Ctrl"
+            ]
+          }
+        ],
+        "tab" : [
+          {
+            "keyType" : "Tab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "extend_selection_down" : [
+          {
+            "keyType" : "ArrowDown",
+            "character" : null,
+            "modifiers" : [
+              "Shift"
+            ]
+          }
+        ],
+        "delete_forward" : [
+          {
+            "keyType" : "Delete",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "escape" : [
+          {
+            "keyType" : "Escape",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "move_up" : [
+          {
+            "keyType" : "ArrowUp",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "page_up" : [
+          {
+            "keyType" : "PageUp",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "move_to_end" : [
+          {
+            "keyType" : "End",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "move_to_end_of_file" : [
+          {
+            "keyType" : "End",
+            "character" : null,
+            "modifiers" : [
+              "Ctrl"
+            ]
+          }
+        ],
+        "extend_selection_up" : [
+          {
+            "keyType" : "ArrowUp",
+            "character" : null,
+            "modifiers" : [
+              "Shift"
+            ]
+          }
+        ]
+      },
+      "commandRunner" : {
+        "navigate_down" : [
+          {
+            "keyType" : "ArrowDown",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_left" : [
+          {
+            "keyType" : "ArrowLeft",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_forward" : [
+          {
+            "keyType" : "Delete",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_right" : [
+          {
+            "keyType" : "ArrowRight",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_word_forward" : [
+          {
+            "keyType" : "Delete",
+            "character" : null,
+            "modifiers" : [
+              "Ctrl"
+            ]
+          }
+        ],
+        "submit" : [
+          {
+            "keyType" : "Enter",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_backward" : [
+          {
+            "keyType" : "Backspace",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_word_backward" : [
+          {
+            "keyType" : "Backspace",
+            "character" : null,
+            "modifiers" : [
+              "Ctrl"
+            ]
+          }
+        ],
+        "navigate_up" : [
+          {
+            "keyType" : "ArrowUp",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "dismiss" : [
+          {
+            "keyType" : "Escape",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "next_category" : [
+          {
+            "keyType" : "Tab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "previous_category" : [
+          {
+            "keyType" : "ReverseTab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ]
+      },
+      "modal" : {
+        "navigate_down" : [
+          {
+            "keyType" : "ArrowDown",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "previous_field" : [
+          {
+            "keyType" : "ReverseTab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_left" : [
+          {
+            "keyType" : "ArrowLeft",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_forward" : [
+          {
+            "keyType" : "Delete",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_right" : [
+          {
+            "keyType" : "ArrowRight",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_word_forward" : [
+          {
+            "keyType" : "Delete",
+            "character" : null,
+            "modifiers" : [
+              "Ctrl"
+            ]
+          }
+        ],
+        "submit" : [
+          {
+            "keyType" : "Enter",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_backward" : [
+          {
+            "keyType" : "Backspace",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "delete_word_backward" : [
+          {
+            "keyType" : "Backspace",
+            "character" : null,
+            "modifiers" : [
+              "Ctrl"
+            ]
+          }
+        ],
+        "next_field" : [
+          {
+            "keyType" : "Tab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_up" : [
+          {
+            "keyType" : "ArrowUp",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "dismiss" : [
+          {
+            "keyType" : "Escape",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ]
+      },
+      "panel" : {
+        "navigate_down" : [
+          {
+            "keyType" : "ArrowDown",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_left" : [
+          {
+            "keyType" : "ArrowLeft",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_right" : [
+          {
+            "keyType" : "ArrowRight",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "return_focus" : [
+          {
+            "keyType" : "Backspace",
+            "character" : null,
+            "modifiers" : [
+            ]
+          },
+          {
+            "keyType" : "Delete",
+            "character" : null,
+            "modifiers" : [
+            ]
+          },
+          {
+            "keyType" : "Tab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          },
+          {
+            "keyType" : "ReverseTab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          },
+          {
+            "keyType" : "Escape",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_up" : [
+          {
+            "keyType" : "ArrowUp",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "activate" : [
+          {
+            "keyType" : "Enter",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ]
+      },
+      "peek" : {
+        "navigate_down" : [
+          {
+            "keyType" : "ArrowDown",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "accept" : [
+          {
+            "keyType" : "Enter",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_left" : [
+          {
+            "keyType" : "ArrowLeft",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_right" : [
+          {
+            "keyType" : "ArrowRight",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "other_input" : [
+          {
+            "keyType" : "Backspace",
+            "character" : null,
+            "modifiers" : [
+            ]
+          },
+          {
+            "keyType" : "Delete",
+            "character" : null,
+            "modifiers" : [
+            ]
+          },
+          {
+            "keyType" : "Tab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          },
+          {
+            "keyType" : "ReverseTab",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "navigate_up" : [
+          {
+            "keyType" : "ArrowUp",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ],
+        "dismiss" : [
+          {
+            "keyType" : "Escape",
+            "character" : null,
+            "modifiers" : [
+            ]
+          }
+        ]
+      }
+    },
+    "syntaxHighlightingEnabled" : true,
+    "lspUserConfig" : {
+      "servers" : null
+    },
+    "spellCheck" : {
+      "enabled" : false,
+      "languages" : [
+        "en"
+      ],
+      "dictionaryPaths" : [
+      ],
+      "additionalWords" : [
+      ]
+    },
+    "cursorMode" : "blink",
+    "cursorColors" : {
+      "active" : null,
+      "inactive" : null
+    },
+    "cursorInfoBarMode" : "position",
+    "cursorInfoBarPlacement" : "floating",
+    "windowChromeMode" : "auto",
+    "preferredWindowSize" : null,
+    "markdownViewMode" : "source",
+    "defaultDocumentMode" : "rich-text",
+    "interfaceDensity" : "compact",
+    "uiElementGap" : 0.0,
+    "uiCornerRadiusPx" : 8,
+    "uiOutlineThicknessPx" : 2,
+    "showLineNumbers" : true,
+    "showGutter" : true,
+    "wordWrapEnabled" : false,
+    "blurRadius" : 0.18,
+    "backgroundStyle" : "Frosted",
+    "materialPreset" : "frosted",
+    "motionPreset" : "custom",
+    "elementTransitionSpeedScale" : 1.0,
+    "editorTextTransitionSpeedScale" : null,
+    "commandRunnerTransitionSpeedScale" : null,
+    "uiTransitionSpeedScale" : null,
+    "cursorTransitionSpeedScale" : null,
+    "commandRunnerAnimation" : {
+      "steps" : 12,
+      "totalDuration" : 160000000
+    },
+    "uiAnimation" : {
+      "steps" : 12,
+      "totalDuration" : 160000000
+    },
+    "commandRunnerVisibleRows" : null,
+    "commandRunnerItemGapRows" : 0.0,
+    "commandRunnerCursorGapRows" : null,
+    "renderFpsTarget" : "60",
+    "renderDamageGranularity" : "rows",
+    "editorInsertionTransitionKind" : "Fade",
+    "commandRunnerTransitionKind" : null,
+    "panelOpenTransitionKind" : null,
+    "panelCloseTransitionKind" : null,
+    "motionConfiguration" : {
+      "accessibility" : "standard",
+      "baseline" : "custom",
+      "families" : {
+        "cursor" : {
+          "enabled" : true,
+          "transitionKind" : "Fade",
+          "animation" : {
+            "steps" : 15,
+            "totalDuration" : 240000000
+          },
+          "speedScale" : 0.5,
+          "transitionOverrides" : {
+            
+          }
+        },
+        "ui_transitions" : {
+          "enabled" : true,
+          "transitionKind" : "Fade",
+          "animation" : {
+            "steps" : 15,
+            "totalDuration" : 240000000
+          },
+          "speedScale" : 0.5,
+          "transitionOverrides" : {
+            
+          }
+        },
+        "editor_text" : {
+          "enabled" : true,
+          "transitionKind" : "Fade",
+          "animation" : {
+            "steps" : 15,
+            "totalDuration" : 240000000
+          },
+          "speedScale" : 0.5,
+          "transitionOverrides" : {
+            
+          }
+        },
+        "pinned_panels" : {
+          "enabled" : true,
+          "transitionKind" : "OutlineThenContent",
+          "animation" : {
+            "steps" : 15,
+            "totalDuration" : 240000000
+          },
+          "speedScale" : 0.5,
+          "transitionOverrides" : {
+            "PanelOpen" : "OutlineThenContent",
+            "PanelClose" : "Fade"
+          }
+        },
+        "command_surfaces" : {
+          "enabled" : true,
+          "transitionKind" : "Fade",
+          "animation" : {
+            "steps" : 15,
+            "totalDuration" : 240000000
+          },
+          "speedScale" : 0.5,
+          "transitionOverrides" : {
+            
+          }
+        }
+      }
+    },
+    "textAreaInsets" : {
+      "left" : 0.22,
+      "right" : 0.22,
+      "top" : 0.0,
+      "bottom" : 0.0
+    }
+  },
+  "themeName" : "dark",
+  "recentFiles" : [
+  ],
+  "schemaVersion" : 2
+}

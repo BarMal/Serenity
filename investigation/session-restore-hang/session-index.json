@@ -1,0 +1,13 @@
+{
+  "sessions" : [
+    {
+      "id" : "current",
+      "displayName" : "Last Session",
+      "sessionFileName" : "session.json",
+      "createdAtEpochMillis" : 1782046618931,
+      "updatedAtEpochMillis" : 1788334899795,
+      "lastOpenedAtEpochMillis" : 1788334899795
+    }
+  ],
+  "currentSessionId" : "current"
+}
