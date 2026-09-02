@@ -1192,8 +1192,8 @@ given Decoder[SessionLayout] = Decoder.instance { cursor =>
 given Encoder[SessionFocus] = deriveEncoder
 given Decoder[SessionFocus] = deriveDecoder
 
-given Encoder[SessionBuffer]    = deriveEncoder
-given Decoder[SessionBuffer]    = deriveDecoder
+given Encoder[SessionBuffer] = deriveEncoder
+
 given Encoder[RichTextFidelity] = deriveEncoder
 given Decoder[RichTextFidelity] = deriveDecoder
 
@@ -1230,6 +1230,38 @@ given Decoder[SessionFindState] = Decoder.instance { cursor =>
     query = query,
     results = results.getOrElse(resultLines.getOrElse(Nil).map(line => SessionFindResult(line, 0))),
     currentIndex = currentIndex
+  )
+}
+
+given Decoder[SessionBuffer] = Decoder.instance { cursor =>
+  for
+    id               <- cursor.get[Int]("id")
+    filePath         <- cursor.get[Option[String]]("filePath")
+    isDirty          <- cursor.get[Boolean]("isDirty")
+    language         <- cursor.get[Option[String]]("language")
+    isNewEmpty       <- cursor.get[Boolean]("isNewEmpty")
+    cursors          <- cursor.get[List[SessionCursorPosition]]("cursors")
+    viewport         <- cursor.get[SessionViewport]("viewport")
+    unsavedContent   <- cursor.getOrElse[Option[String]]("unsavedContent")(None)
+    richTextDocument <- cursor.getOrElse[Option[RichTextDocument]]("richTextDocument")(None)
+    richTextFidelity <- cursor.getOrElse[Option[RichTextFidelity]]("richTextFidelity")(None)
+    findState        <- cursor.getOrElse[Option[SessionFindState]]("findState")(None)
+    bookmarks        <- cursor.getOrElse[List[SessionCursorPosition]]("bookmarks")(Nil)
+    documentComments <- cursor.getOrElse[List[SessionDocumentComment]]("documentComments")(Nil)
+  yield SessionBuffer(
+    id,
+    filePath,
+    isDirty,
+    language,
+    isNewEmpty,
+    cursors,
+    viewport,
+    unsavedContent,
+    richTextDocument,
+    richTextFidelity,
+    findState,
+    bookmarks,
+    documentComments
   )
 }
 

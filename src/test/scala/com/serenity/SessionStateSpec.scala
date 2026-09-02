@@ -11,7 +11,7 @@ import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.session.given
-import com.serenity.session.{SessionFindResult, SessionFindState, SessionState, SessionWorkspaceNode}
+import com.serenity.session.{SessionBuffer, SessionFindResult, SessionFindState, SessionState, SessionWorkspaceNode}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{
   Layout,
@@ -380,6 +380,35 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.map(com.serenity.session.SessionViewport.toViewport) shouldBe
       Some(Viewport(leftColumn = 1, topLine = 2, visibleColumns = 80, visibleLines = 24, topVisualLine = 0))
   }
+
+  it should "restore a legacy session buffer missing every field added since (bookmarks, documentComments, " +
+    "richTextDocument, richTextFidelity, findState, unsavedContent)" in {
+      val decoded = _root_.io.circe.parser
+        .parse(
+          """{"id":1,"filePath":null,"isDirty":false,"language":null,"isNewEmpty":false,
+          |"cursors":[{"line":0,"column":0}],
+          |"viewport":{"leftColumn":0,"topLine":0,"visibleColumns":80,"visibleLines":24}}""".stripMargin
+        )
+        .flatMap(_.as[SessionBuffer])
+
+      decoded shouldBe Right(
+        SessionBuffer(
+          id = 1,
+          filePath = None,
+          isDirty = false,
+          language = None,
+          isNewEmpty = false,
+          cursors = List(com.serenity.session.SessionCursorPosition(0, 0)),
+          viewport = com.serenity.session.SessionViewport(0, 0, 80, 24, 0),
+          unsavedContent = None,
+          richTextDocument = None,
+          richTextFidelity = None,
+          findState = None,
+          bookmarks = Nil,
+          documentComments = Nil
+        )
+      )
+    }
 
   it should "preserve config fields including blurRadius and backgroundStyle through JSON round trip" in {
     val appState = AppState.initial.copy(
