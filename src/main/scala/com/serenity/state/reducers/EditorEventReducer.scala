@@ -391,7 +391,7 @@ object EditorEventReducer:
           case ExtendSelectionWordLeft  => reduceSelectionExtension(buffer, head, currentState)(wordLeftTarget)
           case ExtendSelectionWordRight => reduceSelectionExtension(buffer, head, currentState)(wordRightTarget)
           case ExtendSelectionToLineStart =>
-            reduceSelectionExtension(buffer, head, currentState)(lineStartTarget)
+            reduceSelectionExtension(buffer, head, currentState)((_, from) => lineStartTarget(from))
           case ExtendSelectionToLineEnd =>
             reduceSelectionExtension(buffer, head, currentState)(lineEndTarget)
           case _ => ReducerResult.noEffects(currentState)
@@ -1581,7 +1581,7 @@ object EditorEventReducer:
   private def wordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
     horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.nextWordBoundary(offset)))
 
-  private def lineStartTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+  private def lineStartTarget(from: CursorPosition): CursorTarget =
     horizontalTarget(from.copy(column = 0))
 
   private def lineEndTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
