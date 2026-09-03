@@ -452,7 +452,15 @@ final private[manager] class StateManagerEffectHandlers(
         requestOpenFileDialog
       case FileIntent.OpenRecentFile(path) =>
         IO.blocking(java.nio.file.Files.isRegularFile(path) && java.nio.file.Files.isReadable(path)).flatMap {
-          case true  => directLoadFileEffect(path)
+          case true =>
+            // Dismiss the startup-page surface before loading, exactly like the native open-file dialog path
+            // (requestOpenFileDialog) and every other startup action (new/restore/default-buffer). This intent is
+            // only ever dispatched from the startup page's recent-file entries, so clearing uiSurfaces is safe here.
+            // Without it the StartPage surface lingers and Renderer's `state.startPageSurface` short-circuit keeps
+            // drawing the (now stale) splash over the editor: keystrokes reach the hidden buffer but nothing
+            // repaints, so the app looks completely frozen (issue: opening a recent file wedges the TUI).
+            updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
+              directLoadFileEffect(path)
           case false => logger.warn(s"[STARTUP] Recent file is unavailable: $path")
         }
       case FileIntent.OpenFileSearch =>
