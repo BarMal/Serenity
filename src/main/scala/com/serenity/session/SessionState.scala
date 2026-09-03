@@ -906,6 +906,7 @@ private def encodeSurfaceConfig(config: AppConfig): List[(String, Json)] =
     "showLineNumbers"                   -> config.surfaceConfig.showLineNumbers.asJson,
     "showGutter"                        -> config.surfaceConfig.showGutter.asJson,
     "wordWrapEnabled"                   -> config.surfaceConfig.wordWrapEnabled.asJson,
+    "visualLineCursorNavigation"        -> config.surfaceConfig.visualLineCursorNavigation.asJson,
     "blurRadius"                        -> config.surfaceConfig.blurRadius.asJson,
     "backgroundStyle"                   -> config.surfaceConfig.backgroundStyle.asJson,
     "materialPreset"                    -> config.surfaceConfig.materialPreset.asJson,
@@ -1028,6 +1029,9 @@ private def decodeSurfaceConfig(cursor: HCursor, defaultConfig: AppConfig): Deco
     showLineNumbers <- cursor.getOrElse[Boolean]("showLineNumbers")(defaultConfig.surfaceConfig.showLineNumbers)
     showGutter      <- cursor.getOrElse[Boolean]("showGutter")(defaultConfig.surfaceConfig.showGutter)
     wordWrapEnabled <- cursor.getOrElse[Boolean]("wordWrapEnabled")(true)
+    visualLineCursorNavigation <- cursor.getOrElse[Boolean]("visualLineCursorNavigation")(
+      defaultConfig.surfaceConfig.visualLineCursorNavigation
+    )
     blurRadius      <- cursor.getOrElse[Float]("blurRadius")(0.0f)
     backgroundStyle <- cursor.getOrElse[BackgroundStyle]("backgroundStyle")(BackgroundStyle.Frosted)
     materialPreset  <- cursor.getOrElse[MaterialPreset]("materialPreset")(MaterialPreset.Frosted)
@@ -1075,6 +1079,7 @@ private def decodeSurfaceConfig(cursor: HCursor, defaultConfig: AppConfig): Deco
     showLineNumbers = showLineNumbers,
     showGutter = showGutter,
     wordWrapEnabled = wordWrapEnabled,
+    visualLineCursorNavigation = visualLineCursorNavigation,
     blurRadius = blurRadius,
     backgroundStyle = backgroundStyle,
     materialPreset = materialPreset,

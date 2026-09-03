@@ -804,6 +804,36 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.windowChromeMode shouldBe AppConfig.default.windowChromeMode
   }
 
+  it should "default visualLineCursorNavigation to the app default when loading older JSON without the field" in {
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val jsonWithoutVisualLineCursorNavigation =
+      originalJson.mapObject(
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("visualLineCursorNavigation")))
+      )
+
+    val decoded = jsonWithoutVisualLineCursorNavigation.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.surfaceConfig.visualLineCursorNavigation shouldBe
+      AppConfig.default.surfaceConfig.visualLineCursorNavigation
+  }
+
+  it should "round-trip visualLineCursorNavigation disabled" in {
+    val original = SessionState.fromAppState(
+      AppState.initial.copy(persisted =
+        AppState.initial.persisted.copy(config = AppConfig.default.withVisualLineCursorNavigation(false))
+      )
+    )
+
+    val decoded = original.asJson.as[SessionState]
+
+    decoded.toOption.map(_.config.surfaceConfig.visualLineCursorNavigation) shouldBe Some(false)
+  }
+
   it should "round-trip native-themed window chrome" in {
     val original = SessionState.fromAppState(
       AppState.initial.copy(persisted =

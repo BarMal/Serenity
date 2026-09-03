@@ -962,6 +962,9 @@ final case class SurfaceConfig(
     // callers opt into margin mode explicitly once it ships (#1222).
     commentDisplayMode: CommentDisplayMode = CommentDisplayMode.Floating,
     wordWrapEnabled: Boolean = true,
+    // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
+    // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
+    visualLineCursorNavigation: Boolean = true,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
@@ -1181,6 +1184,8 @@ object SurfaceConfig:
       "render.damage.granularity",
       "display.word_wrap",
       "display.word.wrap",
+      "display.visual_line_navigation",
+      "display.visual.line.navigation",
       "display.pane_headers",
       "display.pane.headers",
       "display.focused_text_body",
@@ -1234,6 +1239,7 @@ object SurfaceConfig:
       "ui_render_fps"                        -> "ui.render.fps",
       "render_damage_granularity"            -> "render.damage_granularity",
       "display_word_wrap"                    -> "display.word_wrap",
+      "display_visual_line_navigation"       -> "display.visual_line_navigation",
       "display_pane_headers"                 -> "display.pane_headers",
       "display_focused_text_body"            -> "display.focused_text_body",
       "display_contextual_toolbar"           -> "display.contextual_toolbar",
@@ -1329,6 +1335,9 @@ object SurfaceConfig:
       Set("ui.motion.panel_close", "ui.motion.panel.close", "ui_motion_panel_close")
 
     val wordWrapKeys: Set[String] = Set("display.word_wrap", "display.word.wrap", "display_word_wrap")
+
+    val visualLineNavigationKeys: Set[String] =
+      Set("display.visual_line_navigation", "display.visual.line.navigation", "display_visual_line_navigation")
 
     val paneHeaderKeys: Set[String] =
       Set("display.pane_headers", "display.pane.headers", "display_pane_headers")
@@ -1449,6 +1458,8 @@ object SurfaceConfig:
       else if renderDamageGranularityKeys.contains(key) then
         RenderDamageGranularity.fromConfigKey(trimmed).map(config.withRenderDamageGranularity)
       else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
+      else if visualLineNavigationKeys.contains(key) then
+        parseBoolean(trimmed).map(config.withVisualLineCursorNavigation)
       else if paneHeaderKeys.contains(key) then parseBoolean(trimmed).map(config.withPaneHeaders)
       else if focusedTextBodyKeys.contains(key) then parseBoolean(trimmed).map(config.withFocusedTextBody)
       else if contextualToolbarKeys.contains(key) then parseBoolean(trimmed).map(config.withContextualToolbarEnabled)
@@ -1777,6 +1788,9 @@ final case class AppConfig(
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(wordWrapEnabled = enabled))
+
+  def withVisualLineCursorNavigation(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(visualLineCursorNavigation = enabled))
 
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))

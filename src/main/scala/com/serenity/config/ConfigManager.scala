@@ -417,6 +417,7 @@ object ConfigManager:
        |# monospaced buffers only, falling back to rows for proportional or ligature-shaped text
        |render.damage_granularity = ${config.surfaceConfig.renderDamageGranularity.configKey}
        |display.word_wrap = ${config.surfaceConfig.wordWrapEnabled}
+       |display.visual_line_navigation = ${config.surfaceConfig.visualLineCursorNavigation}
        |display.pane_headers = ${config.surfaceConfig.showPaneHeaders}
        |display.focused_text_body = ${config.surfaceConfig.focusedTextBodyEnabled}
        |display.contextual_toolbar = ${config.surfaceConfig.contextualToolbarEnabled}

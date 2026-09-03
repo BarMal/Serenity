@@ -839,6 +839,10 @@ final private[manager] class StateManagerEffectHandlers(
         enqueueEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
       case PanelChromeIntent.TogglePaneHeaders =>
         updateTextDisplayConfig(config => config.withPaneHeaders(!config.surfaceConfig.showPaneHeaders)).void
+      case PanelChromeIntent.ToggleVisualLineCursorNavigation =>
+        updateTextDisplayConfig(config =>
+          config.withVisualLineCursorNavigation(!config.surfaceConfig.visualLineCursorNavigation)
+        ).void
       case PanelChromeIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case PanelChromeIntent.SetGutter(enabled) =>
