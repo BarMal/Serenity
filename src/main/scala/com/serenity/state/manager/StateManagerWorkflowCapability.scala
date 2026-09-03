@@ -915,7 +915,9 @@ final private[manager] class StateManagerWorkflowCapability(
     val restored = restoredState.copy(
       runtime = restoredState.runtime.copy(
         uiSurfaces = List.empty,
-        viewportSize = currentState.runtime.viewportSize
+        viewportSize = currentState.runtime.viewportSize,
+        isTuiMode = currentState.runtime.isTuiMode,
+        keyboardFidelityTier = currentState.runtime.keyboardFidelityTier
       )
     )
     currentState.runtime.viewportSize
