@@ -140,6 +140,74 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
     program.unsafeRunSync()
   }
 
+  it should "dismiss the startup page (not leave it masking a hidden editor) when a recent file is opened" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      sessionRoot <- IO.blocking(Files.createTempDirectory("startup-page-open-recent"))
+      recentFile  <- IO.blocking(Files.createTempFile("startup-recent", ".md"))
+      _           <- IO.blocking(Files.writeString(recentFile, "recent file body"))
+      theme        = Theme.default
+      viewportSize = ViewportSize(80, 24)
+
+      // ---- First launch: open the file so it is tracked as a recent file, then save the session. ----
+      firstManager <- StateManager.apply(
+        testLogger("StartupPageIntegrationSpec-open-recent-first"),
+        sessionRootOverride = Some(sessionRoot)
+      )
+      _ <- AppStartup.initializeState(firstManager, theme, viewportSize)
+      openRecentSeed = com.serenity.command.Command.typed(
+        "open-recent-seed",
+        "Open the file so it is tracked as recent",
+        com.serenity.command.CommandIntent.File(com.serenity.command.FileIntent.OpenRecentFile(recentFile))
+      )
+      _ <- firstManager.executeCommand(openRecentSeed)
+      saveSessionCommand = CommandRegistry.default
+        .findCommand("save-session")
+        .getOrElse(fail("\"save-session\" command not registered in CommandRegistry.default"))
+      _ <- firstManager.executeCommand(saveSessionCommand)
+
+      // ---- Open again: a brand-new StateManager, exactly like a fresh process launch. The saved file is now
+      // offered as a "recent" entry on the startup page (the same entry the user selects). ----
+      secondManager <- StateManager.apply(
+        testLogger("StartupPageIntegrationSpec-open-recent-second"),
+        sessionRootOverride = Some(sessionRoot)
+      )
+      secondInitial <- AppStartup.initializeState(secondManager, theme, viewportSize)
+      _           = secondInitial.startPageSurface should be(defined)
+      startPage   = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      recentIndex = startPage.launchActions.indexWhere(_.id.startsWith("recent:"))
+      _ = withClue("the just-opened file should be offered as a recent action on the startup page") {
+        recentIndex should be >= 0
+      }
+
+      // Navigate to the recent-file entry and press Enter, exactly as the user does.
+      _         <- (0 until recentIndex).toList.traverse_(_ => secondManager.applyEvent(MoveDown))
+      _         <- secondManager.applyEvent(Enter)
+      afterOpen <- secondManager.getCurrentState
+
+      // The bug: opening a recent file left the StartPage surface in place, so Renderer's `startPageSurface`
+      // short-circuit kept drawing the splash over the editor -- keystrokes reached the hidden buffer but nothing
+      // repainted, so the whole app appeared frozen. The startup page must be gone after opening a recent file.
+      _ = withClue("startup page must be dismissed after opening a recent file, not left masking the editor") {
+        afterOpen.startPageSurface shouldBe None
+      }
+      _ = withClue("the recent file's content should be loaded into a buffer") {
+        afterOpen.persisted.buffers.values
+          .exists(_.document.content.toString.contains("recent file body")) shouldBe true
+      }
+
+      // And input must now reach the editor and change state -- the visible symptom of the fix.
+      _         <- secondManager.applyEvent(InsertChar('Z'))
+      afterType <- secondManager.getCurrentState
+      _ = withClue("typing after opening a recent file must modify the editor buffer") {
+        afterType.persisted.buffers.values.exists(_.document.content.toString.contains("Z")) shouldBe true
+      }
+    yield ()
+
+    program.unsafeRunSync()
+  }
+
   it should "dismiss startup page on Escape" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 

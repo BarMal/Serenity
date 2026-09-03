@@ -9,6 +9,7 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import com.serenity.app.AppStartup
 import com.serenity.command.CommandRegistry
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -98,5 +99,56 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
 
     // Bounded rather than unbounded: a hang in the restore pipeline must fail this test loudly, never wedge the
     // test run itself.
+    program.timeout(30.seconds).unsafeRunSync()
+  }
+
+  it should "preserve isTuiMode and keyboardFidelityTier from the current runtime after session restore" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      sessionRoot <- IO.blocking(Files.createTempDirectory("session-resume-runtime-fields"))
+      theme        = Theme.default
+      viewportSize = ViewportSize(80, 24)
+
+      // ---- First launch: create and save a session (no TUI mode -- Runtime is never persisted). ----
+      firstManager <- StateManager.apply(
+        testLogger("SessionResumeIntegrationSpec-runtime-first"),
+        sessionRootOverride = Some(sessionRoot)
+      )
+      firstInitial <- AppStartup.initializeState(firstManager, theme, viewportSize)
+      _ = firstInitial.startPageSurface should be(defined)
+      _ <- firstManager.applyEvent(Enter)
+      _ <- "hello".toList.traverse_(c => firstManager.applyEvent(InsertChar(c)))
+      saveSessionCommand = CommandRegistry.default
+        .findCommand("save-session")
+        .getOrElse(fail("\"save-session\" command not registered"))
+      _ <- firstManager.executeCommand(saveSessionCommand)
+
+      // ---- Second launch: TUI mode with ModifyOtherKeys tier -- both are "never persisted" and must survive restore. ----
+      secondManager <- StateManager.apply(
+        testLogger("SessionResumeIntegrationSpec-runtime-second"),
+        sessionRootOverride = Some(sessionRoot)
+      )
+      secondInitial <- AppStartup.initializeState(
+        secondManager,
+        theme,
+        viewportSize,
+        isTuiMode = true,
+        keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
+      )
+      startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      restoreIndex = startPage.launchActions.indexWhere(_.id == "restore-session")
+      _          <- (0 until restoreIndex).toList.traverse_(_ => secondManager.applyEvent(MoveDown))
+      _          <- secondManager.applyEvent(Enter)
+      finalState <- secondManager.getCurrentState
+
+      _ = withClue("isTuiMode must survive session restore") {
+        finalState.runtime.isTuiMode shouldBe true
+      }
+      _ = withClue("keyboardFidelityTier must survive session restore") {
+        finalState.runtime.keyboardFidelityTier shouldBe KeyboardFidelityTier.ModifyOtherKeys
+      }
+    yield ()
+
     program.timeout(30.seconds).unsafeRunSync()
   }
