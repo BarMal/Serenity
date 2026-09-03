@@ -27,15 +27,16 @@ class RendererBreatheCursorHardwareSpec extends AnyFlatSpec with Matchers:
 
   final private class FakeHardwareCursor extends HardwareCursor:
     private val presentCallsBuffer = scala.collection.mutable.ListBuffer.empty[(Int, Int, HardwareCursorStyle)]
-    private var hideCalls          = 0
+    private val hideCallsCounter   = new java.util.concurrent.atomic.AtomicInteger(0)
 
     def present(cellX: Int, cellY: Int, style: HardwareCursorStyle): Unit =
       presentCallsBuffer += ((cellX, cellY, style))
 
-    def hide(): Unit = hideCalls += 1
+    def hide(): Unit =
+      val _ = hideCallsCounter.incrementAndGet()
 
     def presentCallCount: Int = presentCallsBuffer.size
-    def hideCallCount: Int    = hideCalls
+    def hideCallCount: Int    = hideCallsCounter.get()
 
   private def breatheState(mode: CursorMode = CursorMode.Breathe): AppState =
     val buffer =
