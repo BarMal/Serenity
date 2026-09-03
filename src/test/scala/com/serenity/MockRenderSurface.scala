@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicReference
 import com.serenity.ui.layout.{CellMetrics, PixelRect, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{
   Effects,
+  HardwareCursor,
   PixelDrawing,
   RenderSurface,
   RoundedRectDrawing,
@@ -33,7 +34,8 @@ class MockRenderSurface(
     val width: Int,
     val height: Int,
     persistentContent: Boolean = false,
-    fontRenderContextOverride: Option[FontRenderContext] = Some(TextLayoutSnapshot.defaultFontRenderContext())
+    fontRenderContextOverride: Option[FontRenderContext] = Some(TextLayoutSnapshot.defaultFontRenderContext()),
+    hardwareCursorOverride: Option[HardwareCursor] = None
 ) extends RenderSurface
     with TextDrawing
     with PixelDrawing
@@ -44,6 +46,7 @@ class MockRenderSurface(
   def pixels: PixelDrawing                              = this
   override def effects: Option[Effects]                 = Some(this)
   override def roundedRects: Option[RoundedRectDrawing] = Some(this)
+  override def hardwareCursor: Option[HardwareCursor]   = hardwareCursorOverride
   final case class PixelTranslationCall(xPx: Double, yPx: Double)
   private val pixelTranslationCallsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
   private val currentPixelTranslation     = AtomicReference(PixelTranslationCall(0.0, 0.0))

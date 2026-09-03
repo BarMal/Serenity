@@ -103,6 +103,20 @@ object CommandRegistry:
       label = "Toggle Gutter"
     ),
     Command.typed(
+      "toggle-pane-headers",
+      "Show or hide pane header bars.",
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.TogglePaneHeaders)),
+      CommandCategory.View,
+      label = "Toggle Pane Headers"
+    ),
+    Command.typed(
+      "toggle-visual-line-navigation",
+      "Move Up/Down by visual row instead of jumping straight to the previous/next logical line under word wrap.",
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleVisualLineCursorNavigation)),
+      CommandCategory.View,
+      label = "Toggle Visual Line Navigation"
+    ),
+    Command.typed(
       "toggle-line-wrap",
       "Soft-wrap long logical lines to the editor width.",
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleWordWrap)),

@@ -429,6 +429,47 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     afterDownCursor shouldBe beforeCursor
   }
 
+  it should "jump straight to the previous logical line instead of stepping through visual rows when visual-line navigation is disabled" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+
+    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager
+      .updateState(s =>
+        s.copy(persisted = s.persisted.copy(config = s.persisted.config.withVisualLineCursorNavigation(false)))
+      )
+      .unsafeRunSync()
+
+    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), ViewportSize(80, 24))
+    val panelWidth = layout.editorPanelRect.width
+
+    // Two logical lines, each wrapping to 2 visual rows -- with visual-line navigation on (the existing "navigate
+    // across multiple buffer lines" test above), a single MoveUp from the end of line 1 only advances one visual row
+    // and stays on line 1. Word wrap itself is still on throughout; only visualLineCursorNavigation differs.
+    val firstLine = "x" * (panelWidth + 5)
+    firstLine.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(NewLine).unsafeRunSync()
+    val secondLine = "y" * (panelWidth + 3)
+    secondLine.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+
+    val beforeState  = stateManager.getCurrentState.unsafeRunSync()
+    val beforePane   = beforeState.persisted.layout.editorPanes(paneId)
+    val beforeBuffer = beforePane.bufferId.flatMap(beforeState.persisted.buffers.get).get
+    beforeBuffer.editing.cursors.head.line shouldBe 1
+
+    stateManager.applyEvent(MoveUp).unsafeRunSync()
+    val afterUpState  = stateManager.getCurrentState.unsafeRunSync()
+    val afterUpPane   = afterUpState.persisted.layout.editorPanes(paneId)
+    val afterUpBuffer = afterUpPane.bufferId.flatMap(afterUpState.persisted.buffers.get).get
+    afterUpBuffer.editing.cursors.head.line shouldBe 0
+  }
+
   it should "navigate across multiple buffer lines with wrapped content" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))

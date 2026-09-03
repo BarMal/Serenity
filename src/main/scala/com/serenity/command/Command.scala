@@ -188,7 +188,9 @@ enum MotionIntent:
 /** Cursor rendering mode and its info-bar presentation. */
 enum CursorIntent:
   case SetCursorMode(mode: CursorMode)
-  case SetCursorInfoBarMode(mode: CursorInfoBarMode)
+  case SetCursorInfoBarSegmentIncluded(segment: CursorInfoBarSegment, included: Boolean)
+  case MoveCursorInfoBarSegmentEarlier(segment: CursorInfoBarSegment)
+  case MoveCursorInfoBarSegmentLater(segment: CursorInfoBarSegment)
   case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)
 
 /** Panel/text-area chrome: line numbers, gutter, word wrap, toolbar, spacing, window chrome and sitter, insets. */
@@ -198,6 +200,8 @@ enum PanelChromeIntent:
   case ToggleWordWrap
   case ToggleFocusedTextBody
   case ToggleContextualToolbar
+  case TogglePaneHeaders
+  case ToggleVisualLineCursorNavigation
   case SetLineNumbers(enabled: Boolean)
   case SetGutter(enabled: Boolean)
   case SetWordWrap(enabled: Boolean)

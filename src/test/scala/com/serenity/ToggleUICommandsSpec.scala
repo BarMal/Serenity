@@ -135,6 +135,101 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     finalState.persisted.config.surfaceConfig.showGutter shouldBe true
   }
 
+  behavior of "Toggle Pane Headers Command"
+
+  it should "be found in command registry by search terms" in {
+    val registry = CommandRegistry.withToggleUI
+
+    val paneResults   = registry.searchCommands("pane")
+    val headerResults = registry.searchCommands("header")
+    val command       = registry.findCommand("toggle-pane-headers").get
+
+    paneResults.map(_.name) should contain("toggle-pane-headers")
+    headerResults.map(_.name) should contain("toggle-pane-headers")
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.TogglePaneHeaders))
+  }
+
+  it should "toggle pane headers from enabled to disabled" in {
+    val stateManager = createStateManager()
+
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.showPaneHeaders shouldBe true
+
+    executeCommandThroughRunner(stateManager, "toggle-pane-headers", "toggle-pane-headers")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.persisted.config.surfaceConfig.showPaneHeaders shouldBe false
+  }
+
+  it should "toggle pane headers from disabled to enabled" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .updateState(s => s.copy(persisted = s.persisted.copy(config = s.persisted.config.withPaneHeaders(false))))
+      .unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.showPaneHeaders shouldBe false
+
+    executeCommandThroughRunner(stateManager, "toggle-pane-headers", "toggle-pane-headers")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.persisted.config.surfaceConfig.showPaneHeaders shouldBe true
+  }
+
+  it should "have a descriptive command name and description" in {
+    val registry      = CommandRegistry.withToggleUI
+    val headerCommand = registry.findCommand("toggle-pane-headers").get
+
+    headerCommand.name shouldBe "toggle-pane-headers"
+    headerCommand.label shouldBe "Toggle Pane Headers"
+    headerCommand.description should include("pane header")
+  }
+
+  behavior of "Toggle Visual Line Navigation Command"
+
+  it should "be found in command registry by search terms" in {
+    val registry = CommandRegistry.withToggleUI
+
+    val visualResults = registry.searchCommands("visual")
+    val navResults    = registry.searchCommands("navigation")
+    val command       = registry.findCommand("toggle-visual-line-navigation").get
+
+    visualResults.map(_.name) should contain("toggle-visual-line-navigation")
+    navResults.map(_.name) should contain("toggle-visual-line-navigation")
+    command.intent shouldBe CommandIntent.Settings(
+      SettingsIntent.PanelChrome(PanelChromeIntent.ToggleVisualLineCursorNavigation)
+    )
+  }
+
+  it should "toggle visual line navigation from enabled to disabled" in {
+    val stateManager = createStateManager()
+
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .visualLineCursorNavigation shouldBe true
+
+    executeCommandThroughRunner(stateManager, "toggle-visual-line-navigation", "toggle-visual-line-navigation")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.persisted.config.surfaceConfig.visualLineCursorNavigation shouldBe false
+  }
+
+  it should "toggle visual line navigation from disabled to enabled" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .updateState(s =>
+        s.copy(persisted = s.persisted.copy(config = s.persisted.config.withVisualLineCursorNavigation(false)))
+      )
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "toggle-visual-line-navigation", "toggle-visual-line-navigation")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.persisted.config.surfaceConfig.visualLineCursorNavigation shouldBe true
+  }
+
   behavior of "Combined Toggle UI Command Integration"
 
   it should "allow toggling both line numbers and gutter independently" in {

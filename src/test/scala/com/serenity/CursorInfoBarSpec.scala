@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.{AppConfig, CursorInfoBarMode, CursorInfoBarPlacement}
+import com.serenity.config.{AppConfig, CursorInfoBarPlacement, CursorInfoBarSegment}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -18,7 +18,9 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
 
   private def editorState(
     cursor: CursorPosition = CursorPosition(0, 0),
-    config: AppConfig = AppConfig.default.withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+    config: AppConfig = AppConfig.default.withCursorInfoBarSegments(
+      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
+    )
   ): AppState =
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
@@ -43,13 +45,13 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
     val surface = state.cursorInfoBarSurface.getOrElse(fail("Expected cursor info bar surface"))
 
     surface.id shouldBe SurfaceId("cursor-info-bar")
-    surface.content shouldBe SurfaceContent.CursorInfoBar("Line 2, Col 3 | Plain Text | Unsaved")
+    surface.content shouldBe SurfaceContent.CursorInfoBar("Line 2, Col 3 | Unsaved")
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
   }
 
   it should "use the gutter instead of a pinned surface when configured for pinned placement" in {
     val config = AppConfig.default
-      .withCursorInfoBarMode(CursorInfoBarMode.Position)
+      .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
       .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
     val state = editorState(CursorPosition(1, 2), config)
 
@@ -59,7 +61,7 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "be disabled when the config mode is off" in {
-    val state = editorState(config = AppConfig.default.withCursorInfoBarMode(CursorInfoBarMode.Off))
+    val state = editorState(config = AppConfig.default.withCursorInfoBarSegments(Nil))
 
     state.cursorInfoBarSurface shouldBe None
   }
@@ -72,7 +74,7 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
 
   it should "reserve gutter space for a bottom pinned cursor info bar" in {
     val config = AppConfig.default
-      .withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+      .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title))
       .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
       .withGutter(false)
     val state  = editorState(config = config)
@@ -110,7 +112,7 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
 
   "PinnedPanelViewModel" should "exclude the gutter-backed pinned cursor info bar" in {
     val config = AppConfig.default
-      .withCursorInfoBarMode(CursorInfoBarMode.Position)
+      .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
       .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
     val state  = editorState(config = config)
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))

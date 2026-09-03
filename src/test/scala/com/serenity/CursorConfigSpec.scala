@@ -36,14 +36,14 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withCursorMode(CursorMode.Breathe)
       .withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
-      .withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+      .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title))
       .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
 
     config.cursorConfig.shouldBe(
       CursorConfig(
         mode = CursorMode.Breathe,
         colors = CursorColorConfig(Some(active), Some(inactive)),
-        infoBarMode = CursorInfoBarMode.Detailed,
+        infoBarSegments = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title),
         infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
       )
     )
@@ -51,7 +51,7 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
 
   it should "parse cursor config values centrally" in {
     CursorMode.fromConfigKey("breathing").shouldBe(Some(CursorMode.Breathe))
-    CursorInfoBarMode.fromConfigKey("minimal").shouldBe(Some(CursorInfoBarMode.Position))
+    CursorInfoBarSegment.parseList("minimal").shouldBe(Some(List(CursorInfoBarSegment.Position)))
     CursorInfoBarPlacement.fromConfigKey("bottom").shouldBe(Some(CursorInfoBarPlacement.PinnedBottom))
     CursorMode.fromConfigKey("unknown").shouldBe(None)
   }
@@ -83,7 +83,7 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
     modeConfig.cursorConfig.mode.shouldBe(CursorMode.Breathe)
     activeColorConfig.cursorConfig.colors.active.shouldBe(Some(active))
     inactiveColorConfig.cursorConfig.colors.inactive.shouldBe(Some(inactive))
-    infoBarModeConfig.cursorConfig.infoBarMode.shouldBe(CursorInfoBarMode.Position)
+    infoBarModeConfig.cursorConfig.infoBarSegments.shouldBe(List(CursorInfoBarSegment.Position))
     placementConfig.cursorConfig.infoBarPlacement.shouldBe(CursorInfoBarPlacement.PinnedBottom)
     CursorConfig.Schema
       .parse(AppConfig.default, "cursor.active.color", "")

@@ -164,3 +164,34 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(false)))
     )
   }
+
+  it should "expose 5 cursor info bar include/exclude toggles (#1261)" in {
+    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(Map.empty)
+
+    items.collect { case o: CommandSurfaceItem.OptionItem => o.id } shouldBe List(
+      "cursor-info-bar-title",
+      "cursor-info-bar-position",
+      "cursor-info-bar-word-count",
+      "cursor-info-bar-char-count",
+      "cursor-info-bar-reading-time"
+    )
+  }
+
+  it should "expose no cursor info bar reorder commands when fewer than 2 segments are included" in {
+    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(Map("cursor-info-bar-position" -> 0))
+
+    items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe Nil
+  }
+
+  it should "expose earlier/later reorder commands for each included cursor info bar segment once 2+ are included" in {
+    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(
+      Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0)
+    )
+
+    items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe List(
+      "move-cursor-info-bar-title-earlier",
+      "move-cursor-info-bar-title-later",
+      "move-cursor-info-bar-position-earlier",
+      "move-cursor-info-bar-position-later"
+    )
+  }

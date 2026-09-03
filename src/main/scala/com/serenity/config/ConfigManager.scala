@@ -393,7 +393,9 @@ object ConfigManager:
        |cursor.mode = ${config.cursorMode.configKey}
        |cursor.active.color = ${hoconString(config.cursorColors.active.map(formatColor).getOrElse(""))}
        |cursor.inactive.color = ${hoconString(config.cursorColors.inactive.map(formatColor).getOrElse(""))}
-       |"cursor.info_bar" = ${config.cursorInfoBarMode.configKey}
+       |# Comma-separated segment list (title, position, word_count, char_count, reading_time), or off/empty to hide
+       |"cursor.info_bar" = ${if config.cursorInfoBarSegments.isEmpty then "off"
+      else config.cursorInfoBarSegments.map(_.configKey).mkString(",")}
        |cursor.info_bar.placement = ${config.cursorInfoBarPlacement.configKey}
        |
        |# Interface density: compact, comfortable, spacious
@@ -417,6 +419,7 @@ object ConfigManager:
        |# monospaced buffers only, falling back to rows for proportional or ligature-shaped text
        |render.damage_granularity = ${config.surfaceConfig.renderDamageGranularity.configKey}
        |display.word_wrap = ${config.surfaceConfig.wordWrapEnabled}
+       |display.visual_line_navigation = ${config.surfaceConfig.visualLineCursorNavigation}
        |display.pane_headers = ${config.surfaceConfig.showPaneHeaders}
        |display.focused_text_body = ${config.surfaceConfig.focusedTextBodyEnabled}
        |display.contextual_toolbar = ${config.surfaceConfig.contextualToolbarEnabled}

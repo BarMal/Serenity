@@ -56,13 +56,13 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withCursorMode(CursorMode.Breathe)
       .withCursorColors(CursorColorConfig(Some(active), Some(inactive)))
-      .withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+      .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title))
       .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
 
     config.cursorConfig shouldBe CursorConfig(
       mode = CursorMode.Breathe,
       colors = CursorColorConfig(Some(active), Some(inactive)),
-      infoBarMode = CursorInfoBarMode.Detailed,
+      infoBarSegments = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title),
       infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
     )
   }

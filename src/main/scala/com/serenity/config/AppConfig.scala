@@ -126,29 +126,36 @@ object CursorMode:
       case "breathe" | "breathing" => Some(CursorMode.Breathe)
       case _                       => None
 
-enum CursorInfoBarMode:
-  case Off
-  case Position
-  case Detailed
+/** One piece of text the cursor info bar can show, in the order the user has chosen to include them. Replaces the old
+  * fixed Off/Position/Detailed presets (#1261) with an ordered, independently toggleable list.
+  *
+  * WritingSpeed (words typed per minute) is deliberately not a segment here: computing it needs edit-timestamp tracking
+  * that doesn't exist anywhere in the app yet, so it's out of scope for this change and left as a follow-up rather than
+  * half-built.
+  */
+enum CursorInfoBarSegment(val configKey: String):
+  case Title       extends CursorInfoBarSegment("title")
+  case Position    extends CursorInfoBarSegment("position")
+  case WordCount   extends CursorInfoBarSegment("word_count")
+  case CharCount   extends CursorInfoBarSegment("char_count")
+  case ReadingTime extends CursorInfoBarSegment("reading_time")
 
-  def configKey: String =
-    this match
-      case Off      => "off"
-      case Position => "position"
-      case Detailed => "detailed"
+object CursorInfoBarSegment:
 
-object CursorInfoBarMode:
+  def fromConfigKey(value: String): Option[CursorInfoBarSegment] =
+    values.find(_.configKey == value.trim.toLowerCase)
 
-  def fromConfigKey(value: String): Option[CursorInfoBarMode] =
+  /** Parses `cursor.info_bar`'s value: a comma-separated segment list (`"position,title"`), or one of the retired
+    * Off/Minimal/Detailed shorthands for config.conf files written before segments existed.
+    */
+  def parseList(value: String): Option[List[CursorInfoBarSegment]] =
     value.trim.toLowerCase match
-      case "off" | "false" | "disabled" =>
-        Some(CursorInfoBarMode.Off)
-      case "position" | "minimal" =>
-        Some(CursorInfoBarMode.Position)
-      case "detailed" | "full" =>
-        Some(CursorInfoBarMode.Detailed)
-      case _ =>
-        None
+      case "" | "off" | "false" | "disabled" => Some(Nil)
+      case "minimal"                         => Some(List(Position))
+      case "detailed" | "full"               => Some(List(Position, Title))
+      case trimmed =>
+        val parsed = trimmed.split(",").toList.map(_.trim).filter(_.nonEmpty).map(fromConfigKey)
+        Option.when(parsed.nonEmpty && parsed.forall(_.isDefined))(parsed.flatten)
 
 enum CursorInfoBarPlacement(val configKey: String):
   case Floating     extends CursorInfoBarPlacement("floating")
@@ -587,7 +594,7 @@ final case class CursorColorConfig(
 final case class CursorConfig(
     mode: CursorMode = CursorMode.Blink,
     colors: CursorColorConfig = CursorColorConfig(),
-    infoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
+    infoBarSegments: List[CursorInfoBarSegment] = Nil,
     infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating
 )
 
@@ -644,7 +651,7 @@ object CursorConfig:
           parseColor(trimmed)
             .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
       else if infoBarModeKeys.contains(key) then
-        CursorInfoBarMode.fromConfigKey(trimmed).map(config.withCursorInfoBarMode)
+        CursorInfoBarSegment.parseList(trimmed).map(config.withCursorInfoBarSegments)
       else if infoBarPlacementKeys.contains(key) then
         CursorInfoBarPlacement.fromConfigKey(trimmed).map(config.withCursorInfoBarPlacement)
       else None
@@ -962,6 +969,9 @@ final case class SurfaceConfig(
     // callers opt into margin mode explicitly once it ships (#1222).
     commentDisplayMode: CommentDisplayMode = CommentDisplayMode.Floating,
     wordWrapEnabled: Boolean = true,
+    // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
+    // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
+    visualLineCursorNavigation: Boolean = true,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
@@ -1181,6 +1191,8 @@ object SurfaceConfig:
       "render.damage.granularity",
       "display.word_wrap",
       "display.word.wrap",
+      "display.visual_line_navigation",
+      "display.visual.line.navigation",
       "display.pane_headers",
       "display.pane.headers",
       "display.focused_text_body",
@@ -1234,6 +1246,7 @@ object SurfaceConfig:
       "ui_render_fps"                        -> "ui.render.fps",
       "render_damage_granularity"            -> "render.damage_granularity",
       "display_word_wrap"                    -> "display.word_wrap",
+      "display_visual_line_navigation"       -> "display.visual_line_navigation",
       "display_pane_headers"                 -> "display.pane_headers",
       "display_focused_text_body"            -> "display.focused_text_body",
       "display_contextual_toolbar"           -> "display.contextual_toolbar",
@@ -1329,6 +1342,9 @@ object SurfaceConfig:
       Set("ui.motion.panel_close", "ui.motion.panel.close", "ui_motion_panel_close")
 
     val wordWrapKeys: Set[String] = Set("display.word_wrap", "display.word.wrap", "display_word_wrap")
+
+    val visualLineNavigationKeys: Set[String] =
+      Set("display.visual_line_navigation", "display.visual.line.navigation", "display_visual_line_navigation")
 
     val paneHeaderKeys: Set[String] =
       Set("display.pane_headers", "display.pane.headers", "display_pane_headers")
@@ -1449,6 +1465,8 @@ object SurfaceConfig:
       else if renderDamageGranularityKeys.contains(key) then
         RenderDamageGranularity.fromConfigKey(trimmed).map(config.withRenderDamageGranularity)
       else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
+      else if visualLineNavigationKeys.contains(key) then
+        parseBoolean(trimmed).map(config.withVisualLineCursorNavigation)
       else if paneHeaderKeys.contains(key) then parseBoolean(trimmed).map(config.withPaneHeaders)
       else if focusedTextBodyKeys.contains(key) then parseBoolean(trimmed).map(config.withFocusedTextBody)
       else if contextualToolbarKeys.contains(key) then parseBoolean(trimmed).map(config.withContextualToolbarEnabled)
@@ -1778,6 +1796,9 @@ final case class AppConfig(
   def withWordWrap(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(wordWrapEnabled = enabled))
 
+  def withVisualLineCursorNavigation(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(visualLineCursorNavigation = enabled))
+
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
 
@@ -2076,8 +2097,8 @@ final case class AppConfig(
   def cursorColors: CursorColorConfig =
     cursorConfig.colors
 
-  def cursorInfoBarMode: CursorInfoBarMode =
-    cursorConfig.infoBarMode
+  def cursorInfoBarSegments: List[CursorInfoBarSegment] =
+    cursorConfig.infoBarSegments
 
   def cursorInfoBarPlacement: CursorInfoBarPlacement =
     cursorConfig.infoBarPlacement
@@ -2091,8 +2112,8 @@ final case class AppConfig(
   def withCursorColors(colors: CursorColorConfig): AppConfig =
     withCursorConfig(cursorConfig.copy(colors = colors))
 
-  def withCursorInfoBarMode(mode: CursorInfoBarMode): AppConfig =
-    withCursorConfig(cursorConfig.copy(infoBarMode = mode))
+  def withCursorInfoBarSegments(segments: List[CursorInfoBarSegment]): AppConfig =
+    withCursorConfig(cursorConfig.copy(infoBarSegments = segments))
 
   def withCursorInfoBarPlacement(placement: CursorInfoBarPlacement): AppConfig =
     withCursorConfig(cursorConfig.copy(infoBarPlacement = placement))

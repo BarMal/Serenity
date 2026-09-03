@@ -417,7 +417,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-cursor").label shouldBe "Cursor"
     nestedGroup("settings-cursor").children.map(_.id) should contain allOf (
       "cursor-mode",
-      "cursor-info-bar",
+      "cursor-info-bar-title",
       "cursor-info-bar-placement"
     )
     nestedGroup("settings-surface-appearance").label shouldBe "Surface Appearance"

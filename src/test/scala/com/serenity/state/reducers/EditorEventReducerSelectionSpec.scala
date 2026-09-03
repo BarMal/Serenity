@@ -40,6 +40,34 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
     extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 3), CursorPosition(0, 1)))
   }
 
+  "ExtendSelectionToLineStart" should "anchor at the cursor and move the focus to the start of the line" in {
+    val extended = reduce(bufferOf("abcdef", CursorPosition(0, 4)), ExtendSelectionToLineStart)
+
+    extended.editing.cursors shouldBe List(CursorPosition(0, 0))
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 4), CursorPosition(0, 0)))
+  }
+
+  it should "keep the original anchor across repeated presses" in {
+    val extended =
+      reduce(bufferOf("abcdef", CursorPosition(0, 4)), ExtendSelectionToLineStart, ExtendSelectionToLineStart)
+
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 4), CursorPosition(0, 0)))
+  }
+
+  "ExtendSelectionToLineEnd" should "anchor at the cursor and move the focus to the end of the line" in {
+    val extended = reduce(bufferOf("abcdef", CursorPosition(0, 2)), ExtendSelectionToLineEnd)
+
+    extended.editing.cursors shouldBe List(CursorPosition(0, 6))
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(0, 6)))
+  }
+
+  it should "keep the original anchor across repeated presses" in {
+    val extended =
+      reduce(bufferOf("abcdef", CursorPosition(0, 2)), ExtendSelectionToLineEnd, ExtendSelectionToLineEnd)
+
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(0, 6)))
+  }
+
   "ExtendSelectionWordLeft" should "anchor at the cursor and move the focus to the previous word boundary" in {
     val extended = reduce(bufferOf("foo bar baz", CursorPosition(0, 11)), ExtendSelectionWordLeft)
 

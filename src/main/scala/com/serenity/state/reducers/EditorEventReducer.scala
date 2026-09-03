@@ -195,8 +195,10 @@ object EditorEventReducer:
 
   private def isExtendSelectionEvent(event: TextEntryEvent): Boolean =
     event match
-      case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionWordLeft | ExtendSelectionWordRight => true
-      case _                                                                                               => false
+      case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionWordLeft | ExtendSelectionWordRight |
+          ExtendSelectionToLineStart | ExtendSelectionToLineEnd =>
+        true
+      case _ => false
 
   private def invalidateFindState(state: AppState, bufferId: BufferId): AppState =
     state.persisted.buffers.get(bufferId) match
@@ -388,7 +390,11 @@ object EditorEventReducer:
           case ExtendSelectionRight     => reduceSelectionExtension(buffer, head, currentState)(rightTarget)
           case ExtendSelectionWordLeft  => reduceSelectionExtension(buffer, head, currentState)(wordLeftTarget)
           case ExtendSelectionWordRight => reduceSelectionExtension(buffer, head, currentState)(wordRightTarget)
-          case _                        => ReducerResult.noEffects(currentState)
+          case ExtendSelectionToLineStart =>
+            reduceSelectionExtension(buffer, head, currentState)(lineStartTarget)
+          case ExtendSelectionToLineEnd =>
+            reduceSelectionExtension(buffer, head, currentState)(lineEndTarget)
+          case _ => ReducerResult.noEffects(currentState)
 
       case Some(head) =>
         val rawCursors   = rawBuffer.cursorList
@@ -1335,8 +1341,11 @@ object EditorEventReducer:
     preferredXPx: Float,
     direction: Int
   ): CursorPosition =
+    val useVisualLineNavigation =
+      currentState.persisted.config.surfaceConfig.wordWrapEnabled &&
+        currentState.persisted.config.surfaceConfig.visualLineCursorNavigation
     measuredVerticalMoveBySnapshot(
-      currentState.persisted.config.surfaceConfig.wordWrapEnabled,
+      useVisualLineNavigation,
       cursor,
       geometry.navigation,
       preferredXPx,
@@ -1347,7 +1356,7 @@ object EditorEventReducer:
           cursor,
           buffer,
           geometry,
-          currentState.persisted.config.surfaceConfig.wordWrapEnabled,
+          useVisualLineNavigation,
           preferredColumn,
           direction
         )
@@ -1572,15 +1581,26 @@ object EditorEventReducer:
   private def wordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
     horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.nextWordBoundary(offset)))
 
+  private def lineStartTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(from.copy(column = 0))
+
+  private def lineEndTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
+    horizontalTarget(from.copy(column = findLineEnd(buffer.document.content, from.line)))
+
   private def verticalTarget(currentState: AppState, geometry: EditorGeometry, direction: Int)(
     buffer: Buffer,
     from: CursorPosition
   ): CursorTarget =
     val preferredColumn = buffer.editing.preferredColumn.getOrElse(from.column)
     val preferredXPx    = buffer.editing.preferredXPx.getOrElse(measuredCursorXPxFrom(geometry, from))
+    // Visual-row movement only makes sense with wrap on, and is independently toggleable on top of it (default on,
+    // matching wrap-follows-wrap behaviour before this setting existed).
+    val useVisualLineNavigation =
+      currentState.persisted.config.surfaceConfig.wordWrapEnabled &&
+        currentState.persisted.config.surfaceConfig.visualLineCursorNavigation
     val landed =
       measuredVerticalMoveBySnapshot(
-        currentState.persisted.config.surfaceConfig.wordWrapEnabled,
+        useVisualLineNavigation,
         from,
         geometry.navigation,
         preferredXPx,
@@ -1591,7 +1611,7 @@ object EditorEventReducer:
             from,
             buffer,
             geometry,
-            currentState.persisted.config.surfaceConfig.wordWrapEnabled,
+            useVisualLineNavigation,
             preferredColumn,
             direction
           )

@@ -204,15 +204,43 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       ) shouldBe Some("Text Only" -> List("Icon Only", "Text Only", "Icon + Text"))
   }
 
-  it should "expose cursor info bar mode in the appearance settings group" in {
-    val config = AppConfig.default.withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+  it should "expose cursor info bar segment toggles in the appearance settings group" in {
+    val config = AppConfig.default.withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
     val runner = CommandRunner.empty.activate(registry, config)
 
-    runner.optionSelections.get("cursor-info-bar") shouldBe Some(2)
+    runner.optionSelections.get("cursor-info-bar-position") shouldBe Some(0)
+    runner.optionSelections.get("cursor-info-bar-title") shouldBe Some(1)
     settingsGroup(runner, "settings-cursor").map(_.children.map(_.id)) should contain(
       List(
         "cursor-mode",
-        "cursor-info-bar",
+        "cursor-info-bar-title",
+        "cursor-info-bar-position",
+        "cursor-info-bar-word-count",
+        "cursor-info-bar-char-count",
+        "cursor-info-bar-reading-time",
+        "cursor-info-bar-placement"
+      )
+    )
+  }
+
+  it should "expose reorder commands once 2+ cursor info bar segments are included" in {
+    val config = AppConfig.default.withCursorInfoBarSegments(
+      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
+    )
+    val runner = CommandRunner.empty.activate(registry, config)
+
+    settingsGroup(runner, "settings-cursor").map(_.children.map(_.id)) should contain(
+      List(
+        "cursor-mode",
+        "cursor-info-bar-title",
+        "cursor-info-bar-position",
+        "cursor-info-bar-word-count",
+        "cursor-info-bar-char-count",
+        "cursor-info-bar-reading-time",
+        "move-cursor-info-bar-title-earlier",
+        "move-cursor-info-bar-title-later",
+        "move-cursor-info-bar-position-earlier",
+        "move-cursor-info-bar-position-later",
         "cursor-info-bar-placement"
       )
     )

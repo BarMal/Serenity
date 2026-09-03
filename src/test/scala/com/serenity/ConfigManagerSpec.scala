@@ -404,9 +404,9 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
+    config.cursorInfoBarSegments shouldBe List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
     config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
-    ConfigManager.configToString(config) should include("\"cursor.info_bar\" = detailed")
+    ConfigManager.configToString(config) should include("\"cursor.info_bar\" = position,title")
     ConfigManager.configToString(config) should include("cursor.info_bar.placement = pinned-bottom")
   }
 
