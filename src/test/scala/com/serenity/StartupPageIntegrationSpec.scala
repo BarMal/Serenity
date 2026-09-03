@@ -174,8 +174,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         sessionRootOverride = Some(sessionRoot)
       )
       secondInitial <- AppStartup.initializeState(secondManager, theme, viewportSize)
-      _         = secondInitial.startPageSurface should be(defined)
-      startPage = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      _           = secondInitial.startPageSurface should be(defined)
+      startPage   = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       recentIndex = startPage.launchActions.indexWhere(_.id.startsWith("recent:"))
       _ = withClue("the just-opened file should be offered as a recent action on the startup page") {
         recentIndex should be >= 0
@@ -193,7 +193,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         afterOpen.startPageSurface shouldBe None
       }
       _ = withClue("the recent file's content should be loaded into a buffer") {
-        afterOpen.persisted.buffers.values.exists(_.document.content.toString.contains("recent file body")) shouldBe true
+        afterOpen.persisted.buffers.values
+          .exists(_.document.content.toString.contains("recent file body")) shouldBe true
       }
 
       // And input must now reach the editor and change state -- the visible symptom of the fix.

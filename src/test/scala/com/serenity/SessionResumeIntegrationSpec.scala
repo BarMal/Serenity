@@ -9,10 +9,10 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import com.serenity.app.AppStartup
 import com.serenity.command.CommandRegistry
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -117,8 +117,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       )
       firstInitial <- AppStartup.initializeState(firstManager, theme, viewportSize)
       _ = firstInitial.startPageSurface should be(defined)
-      _        <- firstManager.applyEvent(Enter)
-      _        <- "hello".toList.traverse_(c => firstManager.applyEvent(InsertChar(c)))
+      _ <- firstManager.applyEvent(Enter)
+      _ <- "hello".toList.traverse_(c => firstManager.applyEvent(InsertChar(c)))
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered"))
