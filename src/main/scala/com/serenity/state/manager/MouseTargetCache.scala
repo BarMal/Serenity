@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.awt.Font
 import java.util.LinkedHashMap
 
-import com.serenity.config.{AppConfig, CursorInfoBarMode, CursorInfoBarPlacement, InterfaceDensity, TextAreaInsets}
+import com.serenity.config.{AppConfig, CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
@@ -69,7 +69,7 @@ final private[manager] case class MouseTargetLayoutKey(
     interfaceDensity: InterfaceDensity,
     uiElementGap: Double,
     showPaneHeaders: Boolean,
-    cursorInfoBarMode: CursorInfoBarMode,
+    cursorInfoBarSegments: List[CursorInfoBarSegment],
     cursorInfoBarPlacement: CursorInfoBarPlacement,
     commandRunnerVisibleRows: Option[Int],
     commandRunnerItemGapRows: Double,
@@ -147,7 +147,7 @@ private[manager] object MouseTargetLayoutKey:
       interfaceDensity = state.persisted.config.interfaceDensity,
       uiElementGap = state.persisted.config.uiElementGap,
       showPaneHeaders = state.persisted.config.surfaceConfig.showPaneHeaders,
-      cursorInfoBarMode = state.persisted.config.cursorInfoBarMode,
+      cursorInfoBarSegments = state.persisted.config.cursorInfoBarSegments,
       cursorInfoBarPlacement = state.persisted.config.cursorInfoBarPlacement,
       commandRunnerVisibleRows = state.persisted.config.surfaceConfig.commandRunnerVisibleRows,
       commandRunnerItemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,

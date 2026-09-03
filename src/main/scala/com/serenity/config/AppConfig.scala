@@ -126,29 +126,36 @@ object CursorMode:
       case "breathe" | "breathing" => Some(CursorMode.Breathe)
       case _                       => None
 
-enum CursorInfoBarMode:
-  case Off
-  case Position
-  case Detailed
+/** One piece of text the cursor info bar can show, in the order the user has chosen to include them. Replaces the old
+  * fixed Off/Position/Detailed presets (#1261) with an ordered, independently toggleable list.
+  *
+  * WritingSpeed (words typed per minute) is deliberately not a segment here: computing it needs edit-timestamp tracking
+  * that doesn't exist anywhere in the app yet, so it's out of scope for this change and left as a follow-up rather than
+  * half-built.
+  */
+enum CursorInfoBarSegment(val configKey: String):
+  case Title       extends CursorInfoBarSegment("title")
+  case Position    extends CursorInfoBarSegment("position")
+  case WordCount   extends CursorInfoBarSegment("word_count")
+  case CharCount   extends CursorInfoBarSegment("char_count")
+  case ReadingTime extends CursorInfoBarSegment("reading_time")
 
-  def configKey: String =
-    this match
-      case Off      => "off"
-      case Position => "position"
-      case Detailed => "detailed"
+object CursorInfoBarSegment:
 
-object CursorInfoBarMode:
+  def fromConfigKey(value: String): Option[CursorInfoBarSegment] =
+    values.find(_.configKey == value.trim.toLowerCase)
 
-  def fromConfigKey(value: String): Option[CursorInfoBarMode] =
+  /** Parses `cursor.info_bar`'s value: a comma-separated segment list (`"position,title"`), or one of the retired
+    * Off/Minimal/Detailed shorthands for config.conf files written before segments existed.
+    */
+  def parseList(value: String): Option[List[CursorInfoBarSegment]] =
     value.trim.toLowerCase match
-      case "off" | "false" | "disabled" =>
-        Some(CursorInfoBarMode.Off)
-      case "position" | "minimal" =>
-        Some(CursorInfoBarMode.Position)
-      case "detailed" | "full" =>
-        Some(CursorInfoBarMode.Detailed)
-      case _ =>
-        None
+      case "" | "off" | "false" | "disabled" => Some(Nil)
+      case "minimal"                         => Some(List(Position))
+      case "detailed" | "full"               => Some(List(Position, Title))
+      case trimmed =>
+        val parsed = trimmed.split(",").toList.map(_.trim).filter(_.nonEmpty).map(fromConfigKey)
+        Option.when(parsed.nonEmpty && parsed.forall(_.isDefined))(parsed.flatten)
 
 enum CursorInfoBarPlacement(val configKey: String):
   case Floating     extends CursorInfoBarPlacement("floating")
@@ -587,7 +594,7 @@ final case class CursorColorConfig(
 final case class CursorConfig(
     mode: CursorMode = CursorMode.Blink,
     colors: CursorColorConfig = CursorColorConfig(),
-    infoBarMode: CursorInfoBarMode = CursorInfoBarMode.Off,
+    infoBarSegments: List[CursorInfoBarSegment] = Nil,
     infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating
 )
 
@@ -644,7 +651,7 @@ object CursorConfig:
           parseColor(trimmed)
             .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
       else if infoBarModeKeys.contains(key) then
-        CursorInfoBarMode.fromConfigKey(trimmed).map(config.withCursorInfoBarMode)
+        CursorInfoBarSegment.parseList(trimmed).map(config.withCursorInfoBarSegments)
       else if infoBarPlacementKeys.contains(key) then
         CursorInfoBarPlacement.fromConfigKey(trimmed).map(config.withCursorInfoBarPlacement)
       else None
@@ -2090,8 +2097,8 @@ final case class AppConfig(
   def cursorColors: CursorColorConfig =
     cursorConfig.colors
 
-  def cursorInfoBarMode: CursorInfoBarMode =
-    cursorConfig.infoBarMode
+  def cursorInfoBarSegments: List[CursorInfoBarSegment] =
+    cursorConfig.infoBarSegments
 
   def cursorInfoBarPlacement: CursorInfoBarPlacement =
     cursorConfig.infoBarPlacement
@@ -2105,8 +2112,8 @@ final case class AppConfig(
   def withCursorColors(colors: CursorColorConfig): AppConfig =
     withCursorConfig(cursorConfig.copy(colors = colors))
 
-  def withCursorInfoBarMode(mode: CursorInfoBarMode): AppConfig =
-    withCursorConfig(cursorConfig.copy(infoBarMode = mode))
+  def withCursorInfoBarSegments(segments: List[CursorInfoBarSegment]): AppConfig =
+    withCursorConfig(cursorConfig.copy(infoBarSegments = segments))
 
   def withCursorInfoBarPlacement(placement: CursorInfoBarPlacement): AppConfig =
     withCursorConfig(cursorConfig.copy(infoBarPlacement = placement))

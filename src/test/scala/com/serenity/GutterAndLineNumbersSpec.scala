@@ -5,7 +5,7 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{CursorInfoBarMode, CursorInfoBarPlacement, InterfaceDensity}
+import com.serenity.config.{CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -452,7 +452,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config
-          .withCursorInfoBarMode(CursorInfoBarMode.Position)
+          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
           .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
           .withGutter(false),
         theme = Theme.light
@@ -483,7 +483,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config
-          .withCursorInfoBarMode(CursorInfoBarMode.Position)
+          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
           .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
           .withGutter(false),
         theme = Theme.light

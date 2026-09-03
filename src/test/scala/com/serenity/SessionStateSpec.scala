@@ -479,7 +479,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
               active = Some(Color(0x22, 0x44, 0x88)),
               inactive = Some(Color(0x88, 0x44, 0x22, 0x99))
             ),
-            infoBarMode = CursorInfoBarMode.Detailed,
+            infoBarSegments = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title),
             infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
           ),
           windowConfig = WindowConfig(
@@ -545,7 +545,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         active = Some(Color(0x22, 0x44, 0x88)),
         inactive = Some(Color(0x88, 0x44, 0x22, 0x99))
       ),
-      infoBarMode = CursorInfoBarMode.Detailed,
+      infoBarSegments = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title),
       infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
     )
     decoded.config.windowConfig shouldBe WindowConfig(
@@ -941,21 +941,44 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.uiOutlineThicknessPx shouldBe 2
   }
 
-  it should "default cursorInfoBarMode to Off when loading older JSON without the field" in {
+  it should "default cursorInfoBarSegments to empty when loading older JSON without the field" in {
     val originalJson = SessionState
       .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutCursorInfoBarMode =
+    val jsonWithoutCursorInfoBarSegments =
       originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("cursorInfoBarMode")))
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("cursorInfoBarSegments")))
       )
 
-    val decoded = jsonWithoutCursorInfoBarMode.as[SessionState]
+    val decoded = jsonWithoutCursorInfoBarSegments.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Off
+    decoded.toOption.get.config.cursorInfoBarSegments shouldBe Nil
+  }
+
+  it should "restore a legacy session that stored a single cursorInfoBarMode instead of a segment list" in {
+    val originalJson = SessionState
+      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
+      .asJson
+    val configObject =
+      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
+    val legacyJson =
+      originalJson.mapObject(
+        _.add(
+          "config",
+          _root_.io.circe.Json.fromJsonObject(
+            configObject.remove("cursorInfoBarSegments").add("cursorInfoBarMode", Json.fromString("detailed"))
+          )
+        )
+      )
+
+    val decoded = legacyJson.as[SessionState]
+
+    decoded.isRight shouldBe true
+    decoded.toOption.get.config.cursorInfoBarSegments shouldBe
+      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
   }
 
   it should "default cursorInfoBarPlacement to Floating when loading older JSON without the field" in {
@@ -1390,7 +1413,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   it should "decode a session file written by the current release using old toString enum spellings" in {
     val config = AppConfig.default
       .withCursorMode(CursorMode.Breathe)
-      .withCursorInfoBarMode(CursorInfoBarMode.Detailed)
+      .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title))
       .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
       .withWindowChromeMode(WindowChromeMode.NativeThemed)
       .withMarkdownViewMode(MarkdownViewMode.InlineLens)
@@ -1428,6 +1451,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     // `configKey` (e.g. "NativeThemed" instead of "native-themed"). This rebuilds that old shape from a
     // current-format encode so the fixture stays in sync with the schema instead of being hand-typed JSON.
     val legacyConfigObject = configObject
+      .remove("cursorInfoBarSegments")
       .add("cursorMode", Json.fromString("Breathe"))
       .add("cursorInfoBarMode", Json.fromString("Detailed"))
       .add("cursorInfoBarPlacement", Json.fromString("PinnedBottom"))
@@ -1453,7 +1477,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.cursorMode shouldBe CursorMode.Breathe
-    decoded.toOption.get.config.cursorInfoBarMode shouldBe CursorInfoBarMode.Detailed
+    decoded.toOption.get.config.cursorInfoBarSegments shouldBe
+      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
     decoded.toOption.get.config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
     decoded.toOption.get.config.windowChromeMode shouldBe WindowChromeMode.NativeThemed
     decoded.toOption.get.config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
@@ -1483,7 +1508,9 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       rewrittenJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
 
     rewrittenConfigObject("cursorMode") shouldBe Some(Json.fromString("breathe"))
-    rewrittenConfigObject("cursorInfoBarMode") shouldBe Some(Json.fromString("detailed"))
+    rewrittenConfigObject("cursorInfoBarSegments") shouldBe Some(
+      Json.arr(Json.fromString("position"), Json.fromString("title"))
+    )
     rewrittenConfigObject("cursorInfoBarPlacement") shouldBe Some(Json.fromString("pinned-bottom"))
     rewrittenConfigObject("windowChromeMode") shouldBe Some(Json.fromString("native-themed"))
     rewrittenConfigObject("markdownViewMode") shouldBe Some(Json.fromString("inline-lens"))

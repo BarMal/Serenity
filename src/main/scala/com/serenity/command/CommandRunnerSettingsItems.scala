@@ -251,28 +251,68 @@ object CommandRunnerSettingsItems:
       hint = Some("Cells applies to monospaced code buffers only")
     )
 
-  private[command] def cursorInfoBarOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
-      id = "cursor-info-bar",
-      label = "Cursor Info Bar",
-      options = List(
-        CommandOption(
-          "Off",
-          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarMode(CursorInfoBarMode.Off)))
-        ),
-        CommandOption(
-          "Position",
-          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarMode(CursorInfoBarMode.Position)))
-        ),
-        CommandOption(
-          "Detailed",
-          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarMode(CursorInfoBarMode.Detailed)))
-        )
-      ),
-      selectedIndex = optionSelections.getOrElse("cursor-info-bar", 0),
-      category = CommandCategory.Settings,
-      hint = Some("Off, position, or detailed")
+  /** One boolean include/exclude toggle per segment (mirroring `enabledOptionItem`'s On/Off shape), plus Move
+    * Earlier/Later commands for whichever segments are currently included -- the same discrete-move pattern
+    * `workspaceLayoutItems`' panel order group uses, rather than a drag gesture this keyboard-driven app has no
+    * mechanism for. Order isn't tracked by `optionSelections` (only inclusion is), so -- exactly like the panel-order
+    * group -- the move commands are offered whenever 2+ segments are included, not gated on their current order.
+    */
+  private[command] def cursorInfoBarSegmentItems(optionSelections: Map[String, Int]): List[CommandSurfaceItem] =
+    val segmentDefinitions = List(
+      (CursorInfoBarSegment.Title, "Title", "cursor-info-bar-title"),
+      (CursorInfoBarSegment.Position, "Position", "cursor-info-bar-position"),
+      (CursorInfoBarSegment.WordCount, "Word Count", "cursor-info-bar-word-count"),
+      (CursorInfoBarSegment.CharCount, "Char Count", "cursor-info-bar-char-count"),
+      (CursorInfoBarSegment.ReadingTime, "Reading Time", "cursor-info-bar-reading-time")
     )
+    // Menu label is prefixed "Info Bar: <segment>" to stay distinct in command-runner search from unrelated
+    // settings that happen to share the bare segment name -- "Word Count" already labels the status-bar toggle at
+    // `wordCountOptionItem`. Command descriptions/hints use the shorter segment name on its own instead.
+    val toggleItems = segmentDefinitions.map {
+      case (segment, shortLabel, optionId) =>
+        enabledOptionItem(
+          id = optionId,
+          label = s"Info Bar: $shortLabel",
+          selectedIndex = optionSelections.getOrElse(optionId, 1),
+          enabledIntent = CommandIntent.Settings(
+            SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarSegmentIncluded(segment, included = true))
+          ),
+          disabledIntent = CommandIntent.Settings(
+            SettingsIntent.Cursor(CursorIntent.SetCursorInfoBarSegmentIncluded(segment, included = false))
+          ),
+          hint = s"Include $shortLabel in the cursor info bar"
+        )
+    }
+    val includedSegments = segmentDefinitions.filter {
+      case (_, _, optionId) => optionSelections.getOrElse(optionId, 1) == 0
+    }
+    val orderItems =
+      if includedSegments.size < 2 then Nil
+      else
+        includedSegments.flatMap {
+          case (segment, shortLabel, _) =>
+            List(
+              CommandSurfaceItem.CommandItem(
+                Command.typed(
+                  s"move-cursor-info-bar-${segment.configKey}-earlier",
+                  s"Move the $shortLabel segment earlier in the cursor info bar.",
+                  CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentEarlier(segment))),
+                  CommandCategory.Settings,
+                  label = s"Move Info Bar $shortLabel Earlier"
+                )
+              ),
+              CommandSurfaceItem.CommandItem(
+                Command.typed(
+                  s"move-cursor-info-bar-${segment.configKey}-later",
+                  s"Move the $shortLabel segment later in the cursor info bar.",
+                  CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentLater(segment))),
+                  CommandCategory.Settings,
+                  label = s"Move Info Bar $shortLabel Later"
+                )
+              )
+            )
+        }
+    toggleItems ++ orderItems
 
   private[command] def cursorInfoBarPlacementOptionItem(
     optionSelections: Map[String, Int]

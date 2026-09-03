@@ -39,8 +39,20 @@ object CommandRunnerOptionSelections:
       "panel-close-transition" -> panelTransitionIndex(
         configuredTransitionKind(surfaceConfig, MotionFamily.PinnedPanels, TransitionScope.PanelClose)
       ),
-      "cursor-mode"                -> cursorModeIndex(cursorConfig.mode),
-      "cursor-info-bar"            -> cursorInfoBarModeIndex(cursorConfig.infoBarMode),
+      "cursor-mode"           -> cursorModeIndex(cursorConfig.mode),
+      "cursor-info-bar-title" -> enabledIndex(cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.Title)),
+      "cursor-info-bar-position" -> enabledIndex(
+        cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.Position)
+      ),
+      "cursor-info-bar-word-count" -> enabledIndex(
+        cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.WordCount)
+      ),
+      "cursor-info-bar-char-count" -> enabledIndex(
+        cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.CharCount)
+      ),
+      "cursor-info-bar-reading-time" -> enabledIndex(
+        cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.ReadingTime)
+      ),
       "cursor-info-bar-placement"  -> cursorInfoBarPlacementIndex(cursorConfig.infoBarPlacement),
       "background-style"           -> backgroundStyleIndex(surfaceConfig.backgroundStyle),
       "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
@@ -95,12 +107,6 @@ object CommandRunnerOptionSelections:
     mode match
       case CursorMode.Blink   => 0
       case CursorMode.Breathe => 1
-
-  private def cursorInfoBarModeIndex(mode: CursorInfoBarMode): Int =
-    mode match
-      case CursorInfoBarMode.Off      => 0
-      case CursorInfoBarMode.Position => 1
-      case CursorInfoBarMode.Detailed => 2
 
   private def cursorInfoBarPlacementIndex(placement: CursorInfoBarPlacement): Int =
     placement match

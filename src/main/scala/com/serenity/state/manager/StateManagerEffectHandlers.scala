@@ -8,7 +8,7 @@ import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
-import com.serenity.config.{DefaultDocumentMode, HotkeyTrigger, KeymapGroup, MarkdownViewMode}
+import com.serenity.config.{CursorInfoBarSegment, DefaultDocumentMode, HotkeyTrigger, KeymapGroup, MarkdownViewMode}
 import com.serenity.document.{CommentRendering, DocumentNavigation, DocumentOutline}
 import com.serenity.io.{FileEntry, FileUtils}
 import com.serenity.keystroke.events.ExplorerEvent
@@ -820,10 +820,39 @@ final private[manager] class StateManagerEffectHandlers(
     intent match
       case CursorIntent.SetCursorMode(mode) =>
         updateAppearanceConfig(_.withCursorMode(mode)).void
-      case CursorIntent.SetCursorInfoBarMode(mode) =>
-        updateAppearanceConfig(_.withCursorInfoBarMode(mode)).void
+      case CursorIntent.SetCursorInfoBarSegmentIncluded(segment, included) =>
+        updateAppearanceConfig { config =>
+          val current = config.cursorInfoBarSegments
+          val updated =
+            if included then if current.contains(segment) then current else current :+ segment
+            else current.filterNot(_ == segment)
+          config.withCursorInfoBarSegments(updated)
+        }.void
+      case CursorIntent.MoveCursorInfoBarSegmentEarlier(segment) =>
+        updateAppearanceConfig(config =>
+          config.withCursorInfoBarSegments(moveCursorInfoBarSegment(config.cursorInfoBarSegments, segment, -1))
+        ).void
+      case CursorIntent.MoveCursorInfoBarSegmentLater(segment) =>
+        updateAppearanceConfig(config =>
+          config.withCursorInfoBarSegments(moveCursorInfoBarSegment(config.cursorInfoBarSegments, segment, 1))
+        ).void
       case CursorIntent.SetCursorInfoBarPlacement(placement) =>
         updateAppearanceConfig(_.withCursorInfoBarPlacement(placement)).void
+
+  private def moveCursorInfoBarSegment(
+    segments: List[CursorInfoBarSegment],
+    segment: CursorInfoBarSegment,
+    delta: Int
+  ): List[CursorInfoBarSegment] =
+    val index  = segments.indexOf(segment)
+    val target = index + delta
+    if index < 0 || target < 0 || target >= segments.length then segments
+    else
+      segments.zipWithIndex.map {
+        case (_, `index`)  => segments(target)
+        case (_, `target`) => segments(index)
+        case (other, _)    => other
+      }
 
   private def interpretPanelChromeIntent(intent: PanelChromeIntent): IO[Unit] =
     intent match

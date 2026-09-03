@@ -25,7 +25,7 @@ object CommandRunnerSettingsGroups:
     fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system
   ): List[CommandSurfaceItem.GroupItem] =
     val cursorModeItem          = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
-    val cursorInfoBarItem       = CommandRunnerSettingsItems.cursorInfoBarOptionItem(optionSelections)
+    val cursorInfoBarItems      = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(optionSelections)
     val cursorInfoPlacement     = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
     val backgroundStyleItem     = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
     val interfaceDensityItem    = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
@@ -129,7 +129,7 @@ object CommandRunnerSettingsGroups:
     val cursorGroup = CommandSurfaceItem.GroupItem(
       id = "settings-cursor",
       label = "Cursor",
-      children = List(cursorModeItem, cursorInfoBarItem, cursorInfoPlacement),
+      children = List(cursorModeItem) ++ cursorInfoBarItems ++ List(cursorInfoPlacement),
       category = CommandCategory.Settings,
       hint = Some("Cursor style, info bar, placement")
     )
@@ -322,7 +322,7 @@ object CommandRunnerSettingsGroups:
       label = "Cursor Motion",
       children = List(cursorModeItem) ++
         inputItems.filter(_.id == "cursor-speed-scale") ++
-        List(cursorInfoBarItem, cursorInfoPlacement),
+        cursorInfoBarItems ++ List(cursorInfoPlacement),
       category = CommandCategory.Settings,
       hint = Some("Cursor style, speed, and info placement")
     )

@@ -51,7 +51,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       ),
       cursorConfig = CursorConfig(
         mode = CursorMode.Breathe,
-        infoBarMode = CursorInfoBarMode.Detailed,
+        infoBarSegments = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title),
         infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
       ),
       documentConfig = DocumentConfig(
@@ -88,7 +88,11 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("panel-open-transition") shouldBe 3
     selections("panel-close-transition") shouldBe 1
     selections("cursor-mode") shouldBe 1
-    selections("cursor-info-bar") shouldBe 2
+    selections("cursor-info-bar-title") shouldBe 0
+    selections("cursor-info-bar-position") shouldBe 0
+    selections("cursor-info-bar-word-count") shouldBe 1
+    selections("cursor-info-bar-char-count") shouldBe 1
+    selections("cursor-info-bar-reading-time") shouldBe 1
     selections("cursor-info-bar-placement") shouldBe 1
     selections("background-style") shouldBe 3
     selections("interface-density") shouldBe 0

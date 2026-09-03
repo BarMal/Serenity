@@ -169,7 +169,7 @@ object UiPreset:
           )
           .withDocumentConfig(source.documentConfig)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
-          .withCursorConfig(base.cursorConfig.copy(infoBarMode = source.cursorInfoBarMode))
+          .withCursorConfig(base.cursorConfig.copy(infoBarSegments = source.cursorInfoBarSegments))
       case "documentation" =>
         patchWorkflowChrome(withTypography, source)
           .withDocumentConfig(source.documentConfig)
@@ -189,7 +189,7 @@ object UiPreset:
       case "review" =>
         patchWorkflowChrome(withTypography, source)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
-          .withCursorConfig(base.cursorConfig.copy(infoBarMode = source.cursorInfoBarMode))
+          .withCursorConfig(base.cursorConfig.copy(infoBarSegments = source.cursorInfoBarSegments))
       case _ => base
 
   private def unknownJsonFields(raw: JsonObject, known: JsonObject): JsonObject =
@@ -305,7 +305,7 @@ object UiPreset:
             uiFontSize = 13.0f
           )
         )
-        .withCursorInfoBarMode(CursorInfoBarMode.Position),
+        .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position)),
       themeName = Theme.dark.name,
       pinnedPanels = Nil,
       targetEditorPaneCount = Some(1)
@@ -383,7 +383,7 @@ object UiPreset:
         .withMotionPreset(MotionPreset.Reduced)
         .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Comfortable)
-        .withCursorInfoBarMode(CursorInfoBarMode.Detailed),
+        .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)),
       themeName = Theme.dark.name,
       pinnedPanels = List(
         PinnedPanel(PanelPosition.Left, 30, PanelContentSnapshot.Outline(Nil)),

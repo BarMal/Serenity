@@ -120,7 +120,11 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-animation").children.map(_.id) should not contain "animation-steps"
     groupById(groups, "settings-cursor").children.map(_.id) shouldBe List(
       "cursor-mode",
-      "cursor-info-bar",
+      "cursor-info-bar-title",
+      "cursor-info-bar-position",
+      "cursor-info-bar-word-count",
+      "cursor-info-bar-char-count",
+      "cursor-info-bar-reading-time",
       "cursor-info-bar-placement"
     )
     groupById(groups, "settings-text-area").children.map(_.id) shouldBe List(
@@ -200,7 +204,11 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     groupById(groups, "settings-preset-cursor-motion").children.map(_.id) shouldBe List(
       "cursor-mode",
       "cursor-speed-scale",
-      "cursor-info-bar",
+      "cursor-info-bar-title",
+      "cursor-info-bar-position",
+      "cursor-info-bar-word-count",
+      "cursor-info-bar-char-count",
+      "cursor-info-bar-reading-time",
       "cursor-info-bar-placement"
     )
     groupById(groups, "settings-preset-text-entry-motion").children.map(_.id) should contain allOf (

@@ -624,8 +624,9 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
 given Encoder[CursorMode] = configKeyEncoder(_.configKey)
 given Decoder[CursorMode] = configKeyDecoder("CursorMode", CursorMode.values, _.configKey)
 
-given Encoder[CursorInfoBarMode] = configKeyEncoder(_.configKey)
-given Decoder[CursorInfoBarMode] = configKeyDecoder("CursorInfoBarMode", CursorInfoBarMode.values, _.configKey)
+given Encoder[CursorInfoBarSegment] = configKeyEncoder(_.configKey)
+given Decoder[CursorInfoBarSegment] =
+  configKeyDecoder("CursorInfoBarSegment", CursorInfoBarSegment.values, _.configKey)
 
 given Encoder[CursorInfoBarPlacement] = configKeyEncoder(_.configKey)
 
@@ -877,9 +878,20 @@ private def encodeCursorConfig(config: AppConfig): List[(String, Json)] =
   List(
     "cursorMode"             -> config.cursorConfig.mode.asJson,
     "cursorColors"           -> config.cursorConfig.colors.asJson,
-    "cursorInfoBarMode"      -> config.cursorConfig.infoBarMode.asJson,
+    "cursorInfoBarSegments"  -> config.cursorConfig.infoBarSegments.asJson,
     "cursorInfoBarPlacement" -> config.cursorConfig.infoBarPlacement.asJson
   )
+
+/** Legacy sessions (pre-#1261) stored a single `cursorInfoBarMode` string instead of an ordered segment list; the old
+  * "detailed" preset (position + language + filename) has no exact segment equivalent since language was dropped from
+  * the new segment set, so it maps to the closest available pair (position + title).
+  */
+private def legacyCursorInfoBarModeToSegments(value: String): Option[List[CursorInfoBarSegment]] =
+  value.trim.toLowerCase match
+    case "off" | "false" | "disabled" => Some(Nil)
+    case "position" | "minimal"       => Some(List(CursorInfoBarSegment.Position))
+    case "detailed" | "full"          => Some(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title))
+    case _                            => None
 
 private def encodeWindowConfig(config: AppConfig): List[(String, Json)] =
   List(
@@ -972,16 +984,25 @@ private def decodeLanguageToolsConfig(cursor: HCursor, defaultConfig: AppConfig)
 
 private def decodeCursorConfig(cursor: HCursor, defaultConfig: AppConfig): Decoder.Result[CursorConfig] =
   for
-    mode        <- cursor.getOrElse[CursorMode]("cursorMode")(defaultConfig.cursorConfig.mode)
-    colors      <- cursor.getOrElse[CursorColorConfig]("cursorColors")(defaultConfig.cursorConfig.colors)
-    infoBarMode <- cursor.getOrElse[CursorInfoBarMode]("cursorInfoBarMode")(defaultConfig.cursorConfig.infoBarMode)
+    mode   <- cursor.getOrElse[CursorMode]("cursorMode")(defaultConfig.cursorConfig.mode)
+    colors <- cursor.getOrElse[CursorColorConfig]("cursorColors")(defaultConfig.cursorConfig.colors)
+    infoBarSegments <- cursor.get[Option[List[CursorInfoBarSegment]]]("cursorInfoBarSegments").flatMap {
+      case Some(segments) => Right(segments)
+      case None =>
+        cursor.get[Option[String]]("cursorInfoBarMode").flatMap {
+          case Some(legacyValue) =>
+            legacyCursorInfoBarModeToSegments(legacyValue)
+              .toRight(DecodingFailure(s"Unknown cursorInfoBarMode: $legacyValue", cursor.history))
+          case None => Right(defaultConfig.cursorConfig.infoBarSegments)
+        }
+    }
     infoBarPlacement <- cursor.getOrElse[CursorInfoBarPlacement]("cursorInfoBarPlacement")(
       defaultConfig.cursorConfig.infoBarPlacement
     )
   yield CursorConfig(
     mode = mode,
     colors = colors,
-    infoBarMode = infoBarMode,
+    infoBarSegments = infoBarSegments,
     infoBarPlacement = infoBarPlacement
   )
 
