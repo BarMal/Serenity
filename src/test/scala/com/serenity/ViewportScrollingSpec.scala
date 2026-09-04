@@ -283,6 +283,93 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     buffer.viewport.leftColumn shouldBe 0
   }
 
+  it should "keep the cursor visible across several wrapped paragraphs (visual-row aware recentring)" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+
+    // Six paragraphs, each long enough to wrap across several visual rows at this width, followed by one short
+    // final line -- several wrapped logical lines sit between the viewport's topLine and the cursor once it
+    // lands on that short last line (cursor's own visual-row offset is small, so the buggy branch that subtracts
+    // a visual-row count from a logical-line count is exercised). The buffer is seeded with all the content up
+    // front (rather than typed in, which would self-correct the viewport one keystroke at a time) so a single
+    // cursor jump exercises the recentring math directly.
+    val paragraph  = List.fill(30)("word").mkString(" ")
+    val paragraphs = List.fill(6)(paragraph) :+ "end"
+    val bufferId   = stateManager.createBuffer(paragraphs.mkString("\n")).unsafeRunSync()
+    val state      = stateManager.getCurrentState.unsafeRunSync()
+    val paneId     = state.persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
+
+    stateManager.applyEvent(MoveToEndOfFile).unsafeRunSync()
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    val buffer     = finalState.persisted.buffers(bufferId)
+    val cursor     = buffer.editing.cursors.head
+    val font       = FontLoader.previewTextFont(finalState.persisted.config.editorConfig.fontConfig)
+    val wrapPx = TextLayoutSnapshot.gridWrapWidthPx(
+      buffer.viewport.visibleColumns,
+      finalState.persisted.config.editorConfig.fontConfig
+    )
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val cursorShown = snapshot.visualLines.exists(line =>
+      line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
+    )
+
+    // Under the logical-line/visual-row conflation bug, the viewport under-scrolls once several wrapped lines
+    // separate topLine from the cursor's line, leaving the cursor rendered past the bottom of the viewport.
+    withClue(
+      s"viewport=${buffer.viewport} cursor=$cursor visualLines=${snapshot.visualLines
+          .map(line => line.bufferLine -> (line.startColumn, line.endColumn))}"
+    ) {
+      cursorShown shouldBe true
+    }
+  }
+
+  it should "clamp the viewport at the document's end so no blank trailing rows are shown" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+
+    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
+
+    // Six wrapped paragraphs comfortably produce more total visual rows than the 8-row viewport, so once the
+    // cursor lands at the very end, the viewport should be scrolled exactly to the document's end -- filling all
+    // 8 rows with real content, not stopping short and leaving blank rows below the last line.
+    val paragraph  = List.fill(30)("word").mkString(" ")
+    val paragraphs = List.fill(6)(paragraph)
+    paragraphs.zipWithIndex.foreach {
+      case (text, index) =>
+        text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+        if index < paragraphs.length - 1 then stateManager.applyEvent(NewLine).unsafeRunSync()
+    }
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    val buffer     = finalState.persisted.buffers(bufferId)
+    val font       = FontLoader.previewTextFont(finalState.persisted.config.editorConfig.fontConfig)
+    val wrapPx = TextLayoutSnapshot.gridWrapWidthPx(
+      buffer.viewport.visibleColumns,
+      finalState.persisted.config.editorConfig.fontConfig
+    )
+    val snapshot       = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val lastLineIndex  = buffer.document.content.lineCount - 1
+    val lastVisualLine = snapshot.visualLines.lastOption
+
+    withClue(s"viewport=${buffer.viewport} lastVisualLine=$lastVisualLine lastLineIndex=$lastLineIndex") {
+      snapshot.visualLines.length shouldBe buffer.viewport.visibleLines
+      lastVisualLine.map(_.bufferLine) shouldBe Some(lastLineIndex)
+    }
+  }
+
   behavior of "Buffer Content Integrity"
 
   it should "preserve all text content regardless of viewport position" in {

@@ -54,13 +54,47 @@ object CursorViewport:
     val cursorVisualLine =
       if !wordWrapEnabled then 0
       else measuredCursorVisualLine
-    val targetTopLine =
-      if cursorVisualLine > halfVisibleLines then cursor.line
-      else cursor.line - halfVisibleLines
-    val clampedTopLine = math.max(0, targetTopLine)
-    val topVisualLine =
-      if clampedTopLine == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines)
-      else 0
+
+    // The number of visual rows a logical line occupies on screen -- 1 unless word wrap folds it across several
+    // rows, in which case it must be measured the same way `cursorVisualLine` above was, or the two disagree.
+    def visualRowCountForLine(lineIndex: Int): Int =
+      if !wordWrapEnabled then 1
+      else
+        val text = buffer.document.content.getLine(lineIndex).getOrElse("")
+        if buffer.usesTextFont then
+          TextLayoutSnapshot.boundedVisualLinesForText(text, lineIndex, visibleWidthPx, font).length.max(1)
+        else (text.length / math.max(1, viewport.visibleColumns)) + 1
+
+    // Desired top: walk backward from the cursor's own line in visual rows (not logical lines) until
+    // halfVisibleLines rows of context above the cursor's own visual row have been accounted for, or the buffer
+    // start is reached. This is what `cursor.line - halfVisibleLines` was trying to approximate, but that
+    // subtraction conflated a logical-line count with a visual-row count.
+    val scrollUpBudget = halfVisibleLines - cursorVisualLine
+    def walkBackward(line: Int, remainingBudget: Int): Int =
+      if line <= 0 || remainingBudget <= 0 then line
+      else
+        val previousLineRows = visualRowCountForLine(line - 1)
+        if previousLineRows >= remainingBudget then line - 1
+        else walkBackward(line - 1, remainingBudget - previousLineRows)
+    val rawTopLine = walkBackward(cursor.line, scrollUpBudget)
+    val rawTopVisualLine =
+      if rawTopLine == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines) else 0
+
+    // Bottom clamp: the latest (line, visual-row) start that still fills the viewport with real content, found by
+    // walking backward from the buffer's last line until visibleLines rows of content have been accounted for.
+    // Without this, a cursor near the end of a short-ish document can leave blank rows below the last line.
+    val lineCount = buffer.document.content.lineCount
+    def bottomAlignedWindow(line: Int, remaining: Int): (Int, Int) =
+      val rows = visualRowCountForLine(line)
+      if remaining <= rows || line == 0 then (line, math.max(0, rows - remaining))
+      else bottomAlignedWindow(line - 1, remaining - rows)
+    val (bottomLine, bottomVisualLine) =
+      if lineCount <= 0 then (0, 0) else bottomAlignedWindow(lineCount - 1, viewport.visibleLines)
+
+    val exceedsBottom =
+      rawTopLine > bottomLine || (rawTopLine == bottomLine && rawTopVisualLine > bottomVisualLine)
+    val (clampedTopLine, topVisualLine) =
+      if exceedsBottom then (bottomLine, bottomVisualLine) else (rawTopLine, rawTopVisualLine)
     val clampedLeftColumn =
       if wordWrapEnabled then 0
       else
