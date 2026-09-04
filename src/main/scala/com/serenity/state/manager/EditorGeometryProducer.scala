@@ -22,14 +22,23 @@ object EditorGeometryProducer:
     */
   private val NavigationWindowMarginRows = 4
 
-  def forPane(state: AppState, paneId: PaneId): Option[EditorGeometry] =
+  /** `rowsAbove` is how many visual rows of context above the cursor's own row the caller needs the window to cover.
+    * The default is all a single Up step reads. A page move reads a whole screenful in the direction it travels, and
+    * the window is anchored near the cursor, so it asks for one explicitly -- otherwise PageUp's target row falls
+    * outside the geometry and page navigation drops to the logical-line fallback it is trying to replace.
+    */
+  def forPane(
+    state: AppState,
+    paneId: PaneId,
+    rowsAbove: Int = NavigationWindowMarginRows
+  ): Option[EditorGeometry] =
     state.persisted.layout.editorPanes
       .get(paneId)
       .flatMap(_.bufferId)
       .flatMap(state.persisted.buffers.get)
-      .map(buffer => forBuffer(state, buffer))
+      .map(buffer => forBuffer(state, buffer, rowsAbove))
 
-  private def forBuffer(state: AppState, buffer: Buffer): EditorGeometry =
+  private def forBuffer(state: AppState, buffer: Buffer, rowsAbove: Int = NavigationWindowMarginRows): EditorGeometry =
     val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)
     val isTui   = state.runtime.isTuiMode
     val metrics = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
@@ -52,10 +61,14 @@ object EditorGeometryProducer:
     // cursor's row past the end of the budget for any cursor deep inside a long paragraph -- `visualLineFor` and
     // `moveVertical` then found nothing and Up/Down/Home/End fell back to naive char-grid movement, which is the
     // "wrapped navigation moves by logical line" bug in a real prose document.
-    val wordWrapEnabled     = state.persisted.config.surfaceConfig.wordWrapEnabled
-    val cursor              = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
-    val windowTopLine       = math.max(0, cursor.line - NavigationWindowMarginLines)
-    val windowBudget        = math.max(24, buffer.viewport.visibleLines * 3)
+    val wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
+    val cursor          = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
+    // Every logical line is at least one visual row, so walking back `rowsAbove` logical lines always reaches far
+    // enough to offer `rowsAbove` rows of context; `windowTopVisualLine` below then trims the excess. The window's
+    // budget has to hold that context as well as the rows below the cursor it already covered.
+    val marginLines         = math.max(NavigationWindowMarginLines, rowsAbove)
+    val windowTopLine       = math.max(0, cursor.line - marginLines)
+    val windowBudget        = math.max(24, rowsAbove + buffer.viewport.visibleLines * 3)
     val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
     def visualRowsIn(line: Int): Int =
       TextLayoutSnapshot
@@ -82,7 +95,7 @@ object EditorGeometryProducer:
             cellMetricsOverride = cellMetricsOverride,
             forceCellLayout = isTui
           )
-    val windowTopVisualLine = math.max(0, cursorRowInWindow - NavigationWindowMarginRows)
+    val windowTopVisualLine = math.max(0, cursorRowInWindow - rowsAbove)
     val snapshot =
       TextLayoutSnapshot.fromBuffer(
         buffer.copy(viewport =

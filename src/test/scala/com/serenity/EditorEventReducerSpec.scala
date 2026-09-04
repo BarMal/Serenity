@@ -1582,7 +1582,11 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(PageUp, paneId, initialState).state
+    // The reducer moves the cursors; the viewport is the effect boundary's to place, exactly as it is for every other
+    // navigation event (`CursorViewport.ensureVisibleCursors`, composed here the way `StateManagerEventPipeline` and
+    // `EditorPaneComponent` compose it).
+    val reducedState = EditorEventReducer.reduce(PageUp, paneId, initialState).state
+    val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(3, 0))
@@ -2141,11 +2145,44 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(PageUp, paneId, initialState).state
+    val reducedState = EditorEventReducer.reduce(PageUp, paneId, initialState).state
+    val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.editing.cursors shouldBe List(CursorPosition(2, 0))
     buffer.viewport.topLine shouldBe 1
+  }
+
+  it should "leave the viewport alone when a page move cannot move the cursor any further" in {
+    val paneId   = PaneId(0)
+    val bufferId = BufferId(0)
+    val initialState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = AppState.initial.persisted.buffers.updated(
+          bufferId,
+          AppState.initial.persisted
+            .buffers(bufferId)
+            .copy(
+              document = AppState.initial.persisted
+                .buffers(bufferId)
+                .document
+                .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
+              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(5, 0))),
+              viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 4, visibleLines = 2)
+            )
+        )
+      )
+    )
+
+    // The cursor is already on the last line, so PageDown moves nothing -- and a viewport the reducer computed for
+    // itself would scroll anyway. This is where that showed: the clamp `totalLines - visibleLines` is measured in
+    // logical lines, goes negative for a wrapped document, and snapped the viewport back to the top of the file.
+    val reducedState = EditorEventReducer.reduce(PageDown, paneId, initialState).state
+    val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
+    val buffer       = updatedState.persisted.buffers(bufferId)
+
+    buffer.editing.cursors shouldBe List(CursorPosition(5, 0))
+    buffer.viewport.topLine shouldBe 4
   }
 
   it should "move the cursor to the start of the file" in {
@@ -2198,7 +2235,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(MoveToEndOfFile, paneId, initialState).state
+    val reducedState = EditorEventReducer.reduce(MoveToEndOfFile, paneId, initialState).state
+    val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.editing.cursors shouldBe List(CursorPosition(2, 5))
@@ -2226,7 +2264,8 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val updatedState = EditorEventReducer.reduce(PageDown, paneId, initialState).state
+    val reducedState = EditorEventReducer.reduce(PageDown, paneId, initialState).state
+    val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.editing.cursors shouldBe List(CursorPosition(3, 0))

@@ -127,3 +127,69 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
     down shouldBe CursorPosition(0, cursor.column + panelWidthColumns)
     up shouldBe CursorPosition(0, cursor.column - panelWidthColumns)
   }
+
+  // A page move needs a whole screenful of rows on the side it is moving towards, which the default window (four rows
+  // of context above the cursor, three screenfuls of budget below) only provides downwards.
+
+  it should "keep the requested rows of context above the cursor for a page-sized move" in {
+    val probe             = stateWith(Buffer.fromString(bufferId, "probe"), isTuiMode = true)
+    val panelWidthColumns = panelWidthColumnsFor(probe)
+    val paragraph         = "w" * (panelWidthColumns * 100)
+    val buffer0           = Buffer.fromString(bufferId, paragraph)
+    val cursor            = CursorPosition(0, panelWidthColumns * 60)
+    val buffer = buffer0.copy(
+      viewport =
+        buffer0.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = 20, visibleColumns = panelWidthColumns),
+      editing = buffer0.editing.copy(cursors = List(cursor))
+    )
+    val tuiState = stateWith(buffer, isTuiMode = true)
+
+    val geometry = EditorGeometryProducer
+      .forPane(tuiState, paneId, rowsAbove = 20)
+      .getOrElse(fail("expected geometry for pane"))
+    val cursorRow = geometry.navigation
+      .visualRowIndexFor(cursor)
+      .getOrElse(fail("expected the cursor's own visual row to be covered"))
+
+    cursorRow should be >= 20
+    geometry.navigation.visualLines.length should be > cursorRow + 20
+  }
+
+  it should "still start the window at the document's first row when there is less context than asked for" in {
+    val probe             = stateWith(Buffer.fromString(bufferId, "probe"), isTuiMode = true)
+    val panelWidthColumns = panelWidthColumnsFor(probe)
+    val paragraph         = "w" * (panelWidthColumns * 100)
+    val buffer0           = Buffer.fromString(bufferId, paragraph)
+    val cursor            = CursorPosition(0, panelWidthColumns * 2)
+    val buffer = buffer0.copy(
+      viewport =
+        buffer0.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = 20, visibleColumns = panelWidthColumns),
+      editing = buffer0.editing.copy(cursors = List(cursor))
+    )
+    val tuiState = stateWith(buffer, isTuiMode = true)
+
+    val geometry = EditorGeometryProducer
+      .forPane(tuiState, paneId, rowsAbove = 20)
+      .getOrElse(fail("expected geometry for pane"))
+
+    geometry.navigation.visualRowIndexFor(cursor) shouldBe Some(2)
+    geometry.navigation.visualLines.headOption.map(_.startColumn) shouldBe Some(0)
+  }
+
+  it should "leave single-step navigation on its own smaller window" in {
+    val probe             = stateWith(Buffer.fromString(bufferId, "probe"), isTuiMode = true)
+    val panelWidthColumns = panelWidthColumnsFor(probe)
+    val paragraph         = "w" * (panelWidthColumns * 100)
+    val buffer0           = Buffer.fromString(bufferId, paragraph)
+    val cursor            = CursorPosition(0, panelWidthColumns * 60)
+    val buffer = buffer0.copy(
+      viewport =
+        buffer0.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = 20, visibleColumns = panelWidthColumns),
+      editing = buffer0.editing.copy(cursors = List(cursor))
+    )
+    val tuiState = stateWith(buffer, isTuiMode = true)
+
+    val geometry = EditorGeometryProducer.forPane(tuiState, paneId).getOrElse(fail("expected geometry for pane"))
+
+    geometry.navigation.visualRowIndexFor(cursor) shouldBe Some(4)
+  }
