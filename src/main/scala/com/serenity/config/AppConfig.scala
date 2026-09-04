@@ -1014,7 +1014,11 @@ final case class SurfaceConfig(
     panelCloseTransitionKind: Option[TransitionKind] = None,
     motionConfiguration: Option[MotionConfig] = None,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
-    viewportSizing: ViewportSizing = ViewportSizing()
+    viewportSizing: ViewportSizing = ViewportSizing(),
+    // None (default) keeps the active theme's own panel alpha, matching every other floating panel. Some overrides
+    // just the cursor info bar's background alpha, independent of theme -- see `TextOverlayRenderer`'s per-row
+    // background colour, the one paint site this is scoped to.
+    cursorInfoBarBackgroundAlpha: Option[Double] = None
 ):
 
   def normalized: SurfaceConfig =
@@ -1033,7 +1037,8 @@ final case class SurfaceConfig(
       commandRunnerCursorPeekTapWindowMillis =
         AppConfig.clampCommandRunnerCursorPeekTapWindowMillis(commandRunnerCursorPeekTapWindowMillis),
       textAreaInsets = textAreaInsets.normalized,
-      viewportSizing = viewportSizing.normalized
+      viewportSizing = viewportSizing.normalized,
+      cursorInfoBarBackgroundAlpha = cursorInfoBarBackgroundAlpha.map(AppConfig.clampCursorInfoBarBackgroundAlpha)
     )
 
   def effectiveEditorTextTransitionSpeedScale: Double =
@@ -1189,6 +1194,8 @@ object SurfaceConfig:
       "ui.render.fps",
       "render.damage_granularity",
       "render.damage.granularity",
+      "display.cursor_info_bar_background_alpha",
+      "display.cursor_info_bar.background_alpha",
       "display.word_wrap",
       "display.word.wrap",
       "display.visual_line_navigation",
@@ -1223,42 +1230,43 @@ object SurfaceConfig:
     )
 
     val deprecatedKeys: Map[String, String] = Map(
-      "ui_material"                          -> "ui.material",
-      "material_preset"                      -> "material.preset",
-      "ui_motion"                            -> "ui.motion",
-      "motion_preset"                        -> "motion.preset",
-      "ui_motion_speed_scale"                -> "ui.motion.speed_scale",
-      "motion_speed_scale"                   -> "motion.speed_scale",
-      "ui_motion_editor_text_speed_scale"    -> "ui.motion.editor_text.speed_scale",
-      "ui_motion_command_runner_speed_scale" -> "ui.motion.command_runner.speed_scale",
-      "ui_motion_ui_speed_scale"             -> "ui.motion.ui.speed_scale",
-      "ui_motion_cursor_speed_scale"         -> "ui.motion.cursor.speed_scale",
-      "ui_motion_command_runner"             -> "ui.motion.command_runner",
-      "ui_motion_command_runner_reveal"      -> "ui.motion.command_runner_reveal",
-      "ui_motion_ui"                         -> "ui.motion.ui",
-      "ui_motion_editor_text"                -> "ui.motion.editor_text",
-      "ui_motion_panel_open"                 -> "ui.motion.panel_open",
-      "ui_motion_panel_close"                -> "ui.motion.panel_close",
-      "command_runner_visible_rows"          -> "command_runner.visible_rows",
-      "command_runner_item_gap_rows"         -> "command_runner.item_gap_rows",
-      "command_runner_cursor_gap_rows"       -> "command_runner.cursor_gap_rows",
-      "render_fps"                           -> "render.fps",
-      "ui_render_fps"                        -> "ui.render.fps",
-      "render_damage_granularity"            -> "render.damage_granularity",
-      "display_word_wrap"                    -> "display.word_wrap",
-      "display_visual_line_navigation"       -> "display.visual_line_navigation",
-      "display_pane_headers"                 -> "display.pane_headers",
-      "display_focused_text_body"            -> "display.focused_text_body",
-      "display_contextual_toolbar"           -> "display.contextual_toolbar",
-      "display_contextual_toolbar_mode"      -> "display.contextual_toolbar_mode",
-      "text_area_left_percent"               -> "text_area.left.percent",
-      "text_area_right_percent"              -> "text_area.right.percent",
-      "text_area_top_percent"                -> "text_area.top.percent",
-      "text_area_bottom_percent"             -> "text_area.bottom.percent",
-      "viewport_width_percent"               -> "viewport.width.percent",
-      "viewport_width_max"                   -> "viewport.width.max",
-      "viewport_height_percent"              -> "viewport.height.percent",
-      "viewport_height_max"                  -> "viewport.height.max"
+      "ui_material"                              -> "ui.material",
+      "material_preset"                          -> "material.preset",
+      "ui_motion"                                -> "ui.motion",
+      "motion_preset"                            -> "motion.preset",
+      "ui_motion_speed_scale"                    -> "ui.motion.speed_scale",
+      "motion_speed_scale"                       -> "motion.speed_scale",
+      "ui_motion_editor_text_speed_scale"        -> "ui.motion.editor_text.speed_scale",
+      "ui_motion_command_runner_speed_scale"     -> "ui.motion.command_runner.speed_scale",
+      "ui_motion_ui_speed_scale"                 -> "ui.motion.ui.speed_scale",
+      "ui_motion_cursor_speed_scale"             -> "ui.motion.cursor.speed_scale",
+      "ui_motion_command_runner"                 -> "ui.motion.command_runner",
+      "ui_motion_command_runner_reveal"          -> "ui.motion.command_runner_reveal",
+      "ui_motion_ui"                             -> "ui.motion.ui",
+      "ui_motion_editor_text"                    -> "ui.motion.editor_text",
+      "ui_motion_panel_open"                     -> "ui.motion.panel_open",
+      "ui_motion_panel_close"                    -> "ui.motion.panel_close",
+      "command_runner_visible_rows"              -> "command_runner.visible_rows",
+      "command_runner_item_gap_rows"             -> "command_runner.item_gap_rows",
+      "command_runner_cursor_gap_rows"           -> "command_runner.cursor_gap_rows",
+      "render_fps"                               -> "render.fps",
+      "ui_render_fps"                            -> "ui.render.fps",
+      "render_damage_granularity"                -> "render.damage_granularity",
+      "display_cursor_info_bar_background_alpha" -> "display.cursor_info_bar_background_alpha",
+      "display_word_wrap"                        -> "display.word_wrap",
+      "display_visual_line_navigation"           -> "display.visual_line_navigation",
+      "display_pane_headers"                     -> "display.pane_headers",
+      "display_focused_text_body"                -> "display.focused_text_body",
+      "display_contextual_toolbar"               -> "display.contextual_toolbar",
+      "display_contextual_toolbar_mode"          -> "display.contextual_toolbar_mode",
+      "text_area_left_percent"                   -> "text_area.left.percent",
+      "text_area_right_percent"                  -> "text_area.right.percent",
+      "text_area_top_percent"                    -> "text_area.top.percent",
+      "text_area_bottom_percent"                 -> "text_area.bottom.percent",
+      "viewport_width_percent"                   -> "viewport.width.percent",
+      "viewport_width_max"                       -> "viewport.width.max",
+      "viewport_height_percent"                  -> "viewport.height.percent",
+      "viewport_height_max"                      -> "viewport.height.max"
     )
 
     val commandRunnerVisibleRowsKeys: Set[String] =
@@ -1341,6 +1349,13 @@ object SurfaceConfig:
     val panelCloseTransitionKeys: Set[String] =
       Set("ui.motion.panel_close", "ui.motion.panel.close", "ui_motion_panel_close")
 
+    val cursorInfoBarBackgroundAlphaKeys: Set[String] =
+      Set(
+        "display.cursor_info_bar_background_alpha",
+        "display.cursor_info_bar.background_alpha",
+        "display_cursor_info_bar_background_alpha"
+      )
+
     val wordWrapKeys: Set[String] = Set("display.word_wrap", "display.word.wrap", "display_word_wrap")
 
     val visualLineNavigationKeys: Set[String] =
@@ -1403,6 +1418,7 @@ object SurfaceConfig:
         commandRunnerVisibleRowsKeys ++
         commandRunnerItemGapRowsKeys ++
         commandRunnerCursorGapRowsKeys ++
+        cursorInfoBarBackgroundAlphaKeys ++
         renderFpsKeys ++
         renderDamageGranularityKeys ++
         wordWrapKeys ++
@@ -1461,6 +1477,8 @@ object SurfaceConfig:
         parseCommandRunnerItemGapRows(trimmed).map(config.withCommandRunnerItemGapRows)
       else if commandRunnerCursorGapRowsKeys.contains(key) then
         parseCommandRunnerCursorGapRows(trimmed).map(config.withCommandRunnerCursorGapRows)
+      else if cursorInfoBarBackgroundAlphaKeys.contains(key) then
+        parseCursorInfoBarBackgroundAlpha(trimmed).map(config.withCursorInfoBarBackgroundAlpha)
       else if renderFpsKeys.contains(key) then RenderFpsTarget.fromConfigKey(trimmed).map(config.withRenderFpsTarget)
       else if renderDamageGranularityKeys.contains(key) then
         RenderDamageGranularity.fromConfigKey(trimmed).map(config.withRenderDamageGranularity)
@@ -1582,6 +1600,16 @@ object SurfaceConfig:
               rows >= AppConfig.MinCommandRunnerCursorGapRows && rows <= AppConfig.MaxCommandRunnerCursorGapRows
             )
             .map(rows => Some(rows))
+
+    private def parseCursorInfoBarBackgroundAlpha(value: String): Option[Option[Double]] =
+      value.toLowerCase match
+        case "auto" | "default" | "" => Some(None)
+        case other =>
+          other.toDoubleOption
+            .filter(alpha =>
+              alpha >= AppConfig.MinCursorInfoBarBackgroundAlpha && alpha <= AppConfig.MaxCursorInfoBarBackgroundAlpha
+            )
+            .map(alpha => Some(alpha))
 
     private def parseInsetPercent(value: String): Option[Double] =
       value.toDoubleOption
@@ -1798,6 +1826,14 @@ final case class AppConfig(
 
   def withVisualLineCursorNavigation(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(visualLineCursorNavigation = enabled))
+
+  /** `None` restores the active theme's own panel alpha for the cursor info bar; `Some` overrides just that one panel's
+    * background alpha, independent of theme.
+    */
+  def withCursorInfoBarBackgroundAlpha(alpha: Option[Double]): AppConfig =
+    withSurfaceConfig(
+      surfaceConfig.copy(cursorInfoBarBackgroundAlpha = alpha.map(AppConfig.clampCursorInfoBarBackgroundAlpha))
+    )
 
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
@@ -2187,20 +2223,22 @@ final case class AppConfig(
 
 object AppConfig:
 
-  val MinElementTransitionSpeedScale: Double = 0.0
-  val MaxElementTransitionSpeedScale: Double = 4.0
-  val MinUiElementGap: Double                = 0.0
-  val MaxUiElementGap: Double                = 8.0
-  val MinUiCornerRadiusPx: Int               = 0
-  val MaxUiCornerRadiusPx: Int               = 32
-  val MinUiOutlineThicknessPx: Int           = 1
-  val MaxUiOutlineThicknessPx: Int           = 8
-  val MinCommandRunnerVisibleRows: Int       = 1
-  val MaxCommandRunnerVisibleRows: Int       = 20
-  val MinCommandRunnerItemGapRows: Double    = 0.0
-  val MaxCommandRunnerItemGapRows: Double    = 8.0
-  val MinCommandRunnerCursorGapRows: Double  = 0.0
-  val MaxCommandRunnerCursorGapRows: Double  = 8.0
+  val MinElementTransitionSpeedScale: Double  = 0.0
+  val MaxElementTransitionSpeedScale: Double  = 4.0
+  val MinUiElementGap: Double                 = 0.0
+  val MaxUiElementGap: Double                 = 8.0
+  val MinUiCornerRadiusPx: Int                = 0
+  val MaxUiCornerRadiusPx: Int                = 32
+  val MinUiOutlineThicknessPx: Int            = 1
+  val MaxUiOutlineThicknessPx: Int            = 8
+  val MinCommandRunnerVisibleRows: Int        = 1
+  val MaxCommandRunnerVisibleRows: Int        = 20
+  val MinCommandRunnerItemGapRows: Double     = 0.0
+  val MaxCommandRunnerItemGapRows: Double     = 8.0
+  val MinCommandRunnerCursorGapRows: Double   = 0.0
+  val MaxCommandRunnerCursorGapRows: Double   = 8.0
+  val MinCursorInfoBarBackgroundAlpha: Double = 0.0
+  val MaxCursorInfoBarBackgroundAlpha: Double = 1.0
   // Wide enough to allow a deliberately slow "hold" feel while still rejecting nonsensical (near-zero or
   // multi-second) values; 200 (the default, matching `ModifierTapDetector.WindowMillis`) sits well inside it.
   val MinCommandRunnerCursorPeekTapWindowMillis: Long = 50L
@@ -2220,6 +2258,10 @@ object AppConfig:
 
   def clampCommandRunnerVisibleRows(rows: Int): Int =
     rows.max(MinCommandRunnerVisibleRows).min(MaxCommandRunnerVisibleRows)
+
+  def clampCursorInfoBarBackgroundAlpha(alpha: Double): Double =
+    if alpha.isFinite then alpha.max(MinCursorInfoBarBackgroundAlpha).min(MaxCursorInfoBarBackgroundAlpha)
+    else MinCursorInfoBarBackgroundAlpha
 
   def clampCommandRunnerItemGapRows(rows: Double): Double =
     if rows.isFinite then rows.max(MinCommandRunnerItemGapRows).min(MaxCommandRunnerItemGapRows)

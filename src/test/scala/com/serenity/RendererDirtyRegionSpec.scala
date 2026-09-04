@@ -255,6 +255,45 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     repaintRegionFor(surface, after, DamageProducer.forTransition(before, after)) shouldBe None
   }
 
+  "Dirty-line rendering" should "redraw the pane rows a floating panel vacates when it moves, without any buffer change" in {
+    val surface   = new MockRenderSurface(80, 24, persistentContent = true)
+    val surfaceId = SurfaceId("floating-panel")
+    val state     = stateWith(lines)
+
+    def withPanelAnchor(anchor: CursorPosition): AppState =
+      state.copy(runtime =
+        state.runtime.copy(
+          uiSurfaces = List(
+            UiSurface(
+              id = surfaceId,
+              content = SurfaceContent.CursorInfoBar("info"),
+              presentation = SurfacePresentation.Floating(Some(anchor), SurfacePlacement.AboveCursor)
+            )
+          )
+        )
+      )
+
+    val before = withPanelAnchor(CursorPosition(3, 0))
+    val after  = withPanelAnchor(CursorPosition(7, 0))
+
+    // Sanity-check the premise: only the floating panel's own position changed (the buffer, cursor, layout and
+    // config are all identical), so the transition damage is scoped narrowly to that one surface.
+    val damage = DamageProducer.forTransition(before, after)
+    damage shouldBe Damage.Surface(surfaceId)
+
+    Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    surface.clear()
+    Renderer.render(after, cursorVisible = false, surface, viewport, None, damage)
+
+    // The panel repainted its own new rect (around row 7) but not the rows it used to sit over (around row 3) -- a
+    // pane row under the vacated rect must be redrawn even though nothing about the buffer content changed there, or
+    // a transparent theme would leave the panel's old opaque background stuck on screen forever. "alpha" sits under
+    // the panel's old (row-3-anchored) rect and must come back; "epsilon" sits under neither the old nor the new rect
+    // and must stay preserved -- this isn't a fallback to redrawing the whole pane.
+    drew(surface, "alpha") shouldBe true
+    drew(surface, "epsilon") shouldBe false
+  }
+
   private def repaintRegionFor(surface: MockRenderSurface, state: AppState, damage: Damage): Option[PixelRect] =
     val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     Renderer.renderWithRepaintRegion(

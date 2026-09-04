@@ -66,6 +66,13 @@ object Damage:
       case _                                          => false
     }
 
+  /** The surfaces named by a `Surface(id)` fact anywhere in `damage`, flattening `Combined`. `Everything` reports none
+    * here -- its lack of per-target detail is what `isEverything` is for, and a caller that needs to treat it as
+    * touching every surface must check that separately.
+    */
+  def surfaceIds(damage: Damage): Set[SurfaceId] =
+    flatten(damage).collect { case Surface(id) => id }
+
   /** Whether `damage` affects the independently-composited surface `surfaceId` -- `Everything` always does (it dirties
     * every target, surfaces included), a `Surface(surfaceId)` leaf does, and nothing else does (buffer/pane/chrome
     * damage has no bearing on a surface's own cached content). Used by a per-surface layer buffer -- see

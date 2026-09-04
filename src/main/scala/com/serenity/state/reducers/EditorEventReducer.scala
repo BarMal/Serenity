@@ -405,7 +405,7 @@ object EditorEventReducer:
         // becomes genuinely multi-cursor again doesn't inherit vertical state pinned to stale cursor positions.
         val buffer = if !hasSelection && !isMulti then clearInFlightMultiCursorVerticalState(rawBuffer) else rawBuffer
         val currentState = Focused.replaceBuffer(incomingState, buffer)
-        val ctx          = CursorEventContext(buffer, head, hasSelection, isMulti, currentState)
+        val ctx          = CursorEventContext(buffer, head, hasSelection, isMulti, currentState, paneId)
 
         event match
           case InsertChar(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |
@@ -433,7 +433,8 @@ object EditorEventReducer:
       head: CursorPosition,
       hasSelection: Boolean,
       isMulti: Boolean,
-      currentState: AppState
+      currentState: AppState,
+      paneId: PaneId
   )
 
   /** Character/newline/tab insertion, indent/unindent and the four deletions -- the families that mutate document
@@ -524,8 +525,8 @@ object EditorEventReducer:
         navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.previousWordBoundary(offset)))
       case MoveWordRight =>
         navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.nextWordBoundary(offset)))
-      case MoveToStart => navigate(_.copy(column = 0))
-      case MoveToEnd   => navigate(cursor => cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
+      case MoveToStart       => navigate(cursor => homeTarget(currentState, paneId, cursor))
+      case MoveToEnd         => navigate(cursor => endTarget(currentState, paneId, buffer, cursor))
       case MoveToStartOfFile => navigate(_ => OriginCursor)
 
       case PageUp =>
@@ -784,6 +785,41 @@ object EditorEventReducer:
     val lineStart = content.lineColumnToOffset(line, 0)
     val lineEnd   = content.lineColumnToOffset(line, Int.MaxValue)
     lineEnd - lineStart
+
+  /** Whether Home/End (and Up/Down, via `verticalTarget`) should move by visual row rather than logical line -- word
+    * wrap has to be on for "visual row" to mean anything different from the logical line at all, and the setting is
+    * independently toggleable on top of it.
+    */
+  private def useVisualLineNavigation(state: AppState): Boolean =
+    state.persisted.config.surfaceConfig.wordWrapEnabled &&
+      state.persisted.config.surfaceConfig.visualLineCursorNavigation
+
+  /** Home's landing column: the start of the cursor's current *visual* row when visual-line navigation applies,
+    * otherwise column 0 of the logical line (`MoveToStartOfFile`-style callers that want the true buffer start
+    * regardless of wrapping use `MoveToStartOfFile`, not this). Falls back to the logical start if no geometry is
+    * available for this pane (e.g. no buffer content yet) even when the setting is on, matching `verticalTarget`'s own
+    * `fallbackVerticalMove` fallback pattern for the same situation.
+    */
+  private def homeTarget(state: AppState, paneId: PaneId, cursor: CursorPosition): CursorPosition =
+    if useVisualLineNavigation(state) then
+      com.serenity.state.manager.EditorGeometryProducer
+        .forPane(state, paneId)
+        .flatMap(_.navigation.visualLineFor(cursor))
+        .map(line => cursor.copy(column = line.startColumn))
+        .getOrElse(cursor.copy(column = 0))
+    else cursor.copy(column = 0)
+
+  /** End's landing column: the end of the cursor's current *visual* row when visual-line navigation applies, otherwise
+    * the logical line's own end (`findLineEnd`). Same geometry-missing fallback as [[homeTarget]].
+    */
+  private def endTarget(state: AppState, paneId: PaneId, buffer: Buffer, cursor: CursorPosition): CursorPosition =
+    if useVisualLineNavigation(state) then
+      com.serenity.state.manager.EditorGeometryProducer
+        .forPane(state, paneId)
+        .flatMap(_.navigation.visualLineFor(cursor))
+        .map(line => cursor.copy(column = line.endColumn))
+        .getOrElse(cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
+    else cursor.copy(column = findLineEnd(buffer.document.content, cursor.line))
 
   private def countLines(rope: Rope): Int =
     rope.lineCount

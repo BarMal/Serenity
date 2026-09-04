@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
+import com.serenity.state.models.UiSurface
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme
@@ -39,8 +40,18 @@ object TextOverlayRenderer:
         _.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, new Color(0, 0, 0))
       )
 
+    // Scoped to the one surface named by config.surfaceConfig.cursorInfoBarBackgroundAlpha's doc comment -- every
+    // other floating panel keeps painting with theme.panel.background exactly as before, unmodified.
+    val cursorInfoBarBackgroundAlphaOverride: Option[Int] =
+      Option
+        .when(overlay.surfaceId.contains(UiSurface.CursorInfoBarSurfaceId))(
+          config.surfaceConfig.cursorInfoBarBackgroundAlpha
+        )
+        .flatten
+        .map(alpha => math.round(alpha * 255.0).toInt.max(0).min(255))
+
     def rowColors(rowOffset: Int): (Color, Color) =
-      overlay.animationState
+      val (fg, bg) = overlay.animationState
         .getCell(0, rowOffset)
         .map(cell =>
           (
@@ -49,6 +60,7 @@ object TextOverlayRenderer:
           )
         )
         .getOrElse((theme.panel.foreground, theme.panel.background))
+      (fg, cursorInfoBarBackgroundAlphaOverride.fold(bg)(bg.withAlpha))
 
     surface.effects.foreach(_.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier))
 

@@ -63,6 +63,17 @@ final case class EditorGeometry(navigation: NavigationGeometry, charWidthPx: Int
 
 final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
 
+  /** The visual (wrapped) row `cursor` currently sits on -- the same containment lookup [[xPxForCursor]] and
+    * [[moveVertical]] use to locate a cursor among wrapped rows, exposed for callers (Home/End under visual-line
+    * navigation) that need that row's own `startColumn`/`endColumn` rather than a caret x-offset or a neighbouring row.
+    */
+  def visualLineFor(cursor: CursorPosition): Option[TextVisualLine] =
+    visualLines
+      .filter(line =>
+        line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
+      )
+      .lastOption
+
   def xPxForCursor(cursor: CursorPosition): Option[Float] =
     visualLines
       .filter(line =>

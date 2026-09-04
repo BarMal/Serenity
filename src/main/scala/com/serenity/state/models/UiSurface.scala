@@ -271,6 +271,12 @@ final case class UiSurface(
 
 object UiSurface:
 
+  /** Identity of the derived cursor info bar surface `AppState.cursorInfoBarSurface` synthesizes each frame -- the one,
+    * fixed id every consumer that needs to recognize that specific surface (rather than any floating panel in general)
+    * keys off, e.g. `TextOverlayRenderer`'s per-surface background alpha override.
+    */
+  val CursorInfoBarSurfaceId: SurfaceId = SurfaceId("cursor-info-bar")
+
   def fromPanelContent(
     id: SurfaceId,
     content: PanelContent,

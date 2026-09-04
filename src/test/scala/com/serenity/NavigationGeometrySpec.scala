@@ -91,3 +91,15 @@ class NavigationGeometrySpec extends AnyFlatSpec with Matchers:
     wrapGeometry.moveVertical(CursorPosition(0, 5), direction = 1, preferredXPx = 0.0f) shouldBe
       Some(CursorPosition(1, 0))
   }
+
+  "NavigationGeometry.visualLineFor" should "return the visual line containing the cursor" in {
+    geometry.visualLineFor(CursorPosition(1, 2)) shouldBe Some(line(1, 3))
+  }
+
+  it should "return None for a cursor outside every visual line" in {
+    geometry.visualLineFor(CursorPosition(9, 0)) shouldBe None
+  }
+
+  it should "resolve a wrap boundary column to the later visual line, matching moveVertical/xPxForCursor" in {
+    wrapGeometry.visualLineFor(CursorPosition(0, 5)) shouldBe Some(wrapLineB)
+  }

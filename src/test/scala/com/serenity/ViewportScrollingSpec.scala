@@ -105,8 +105,11 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val longText = "x" * 100
     longText.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
-    // Now move cursor back to the beginning
-    stateManager.applyEvent(MoveToStart).unsafeRunSync()
+    // Now move cursor back to the beginning. MoveToStartOfFile, not MoveToStart/Home: with wrap and
+    // visual-line-navigation on (both default) and this 100-char run wrapping across multiple visual rows, Home now
+    // lands on the cursor's current visual row rather than column 0 -- this test wants an unconditional jump to the
+    // true start of the buffer to exercise the viewport scrolling back, not Home's own visual-row semantics.
+    stateManager.applyEvent(MoveToStartOfFile).unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.persisted.layout.editorPanes(paneId)

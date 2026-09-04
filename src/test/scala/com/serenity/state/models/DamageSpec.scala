@@ -56,3 +56,24 @@ class DamageSpec extends AnyFlatSpec with Matchers:
     val damage = (Damage.BufferRows(bufferId, Set(1, 2)): Damage) |+| Damage.BufferRows(BufferId(1), Set(9))
     Damage.coarsenToRows(bufferId, damage) shouldBe Set(1, 2)
   }
+
+  "Damage.surfaceIds" should "be empty for Nothing" in {
+    Damage.surfaceIds(Damage.Nothing) shouldBe Set.empty
+  }
+
+  it should "be empty for Everything (handled separately via isEverything)" in {
+    Damage.surfaceIds(Damage.Everything) shouldBe Set.empty
+  }
+
+  it should "collect a bare Surface fact" in {
+    Damage.surfaceIds(Damage.Surface(SurfaceId("overlay"))) shouldBe Set(SurfaceId("overlay"))
+  }
+
+  it should "collect every Surface fact out of a Combined damage, ignoring unrelated facts" in {
+    val damage =
+      (Damage.Surface(SurfaceId("a")): Damage) |+| Damage.Surface(SurfaceId("b")) |+| Damage.BufferRows(
+        bufferId,
+        Set(0)
+      )
+    Damage.surfaceIds(damage) shouldBe Set(SurfaceId("a"), SurfaceId("b"))
+  }

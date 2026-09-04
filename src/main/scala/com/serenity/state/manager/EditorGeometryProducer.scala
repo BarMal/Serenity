@@ -19,14 +19,23 @@ object EditorGeometryProducer:
 
   private def forBuffer(state: AppState, buffer: Buffer): EditorGeometry =
     val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)
-    val metrics = CellMetrics.fromFont(font)
+    val isTui   = state.runtime.isTuiMode
+    val metrics = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
     val panelWidthColumns = effectivePanelWidth(state)
+    // TUI mode's terminal cell is 1px wide by definition, not `font`'s measured pixel width -- `font` is never
+    // actually rendered with in TUI mode (`TuiRuntime.CellFont`'s doc comment), so wrapping geometry for it here must
+    // agree with `TerminalAnsiDiff`'s cell grid, not a pixel measurement of an inert AWT font.
+    val panelWidthPx =
+      if isTui then panelWidthColumns * CellMetrics.cellUnit.charWidth
+      else TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.persisted.config.editorConfig.fontConfig)
     val snapshot =
       TextLayoutSnapshot.fromBuffer(
         buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
-        TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.persisted.config.editorConfig.fontConfig),
+        panelWidthPx,
         font,
-        wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
+        wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
+        cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None,
+        forceCellLayout = isTui
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 

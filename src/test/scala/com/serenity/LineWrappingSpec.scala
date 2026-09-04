@@ -104,7 +104,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     // Navigate to middle of first visual line
     val targetColumn = panelWidth / 2
     // Move to start, then right to target position
-    stateManager.applyEvent(MoveToStart).unsafeRunSync()
+    // Reset with MoveToStartOfFile, not MoveToStart/Home: with wrap and visual-line-navigation on (both default),
+    // Home now lands on the current *visual* row's own start rather than column 0 once the cursor is past the first
+    // visual row of a wrapped line -- exactly the behaviour "Visual Line Home/End Navigation" below covers. This
+    // reset only wants an unconditional jump to the true start of the buffer.
+    stateManager.applyEvent(MoveToStartOfFile).unsafeRunSync()
     for _ <- 0 until targetColumn do stateManager.applyEvent(MoveRight).unsafeRunSync()
 
     val navState  = stateManager.getCurrentState.unsafeRunSync()
@@ -325,7 +329,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     // Position cursor in middle of content
     val targetPosition = testContent.length / 2
     // Move to start, then right to target position
-    stateManager.applyEvent(MoveToStart).unsafeRunSync()
+    // Reset with MoveToStartOfFile, not MoveToStart/Home: with wrap and visual-line-navigation on (both default),
+    // Home now lands on the current *visual* row's own start rather than column 0 once the cursor is past the first
+    // visual row of a wrapped line -- exactly the behaviour "Visual Line Home/End Navigation" below covers. This
+    // reset only wants an unconditional jump to the true start of the buffer.
+    stateManager.applyEvent(MoveToStartOfFile).unsafeRunSync()
     for _ <- 0 until targetPosition do stateManager.applyEvent(MoveRight).unsafeRunSync()
 
     val beforeState  = stateManager.getCurrentState.unsafeRunSync()
@@ -379,7 +387,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     longLine.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     // Position cursor within the second visual line, preserving a non-zero visual column
-    stateManager.applyEvent(MoveToStart).unsafeRunSync()
+    // Reset with MoveToStartOfFile, not MoveToStart/Home: with wrap and visual-line-navigation on (both default),
+    // Home now lands on the current *visual* row's own start rather than column 0 once the cursor is past the first
+    // visual row of a wrapped line -- exactly the behaviour "Visual Line Home/End Navigation" below covers. This
+    // reset only wants an unconditional jump to the true start of the buffer.
+    stateManager.applyEvent(MoveToStartOfFile).unsafeRunSync()
     val targetColumn = panelWidth + 2
     for _ <- 0 until targetColumn do stateManager.applyEvent(MoveRight).unsafeRunSync()
 
@@ -541,6 +553,107 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val finalCursor    = finalBuffer.editing.cursors.head
     finalCursor.line shouldBe 0
     finalCursor.column shouldBe 0
+  }
+
+  behavior of "Visual Line Home/End Navigation"
+
+  it should "move Home/End to the current visual row's own bounds when visual-line navigation is enabled" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+
+    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+
+    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), ViewportSize(80, 24))
+    val panelWidth = layout.editorPanelRect.width
+
+    // One logical line wrapping to three visual rows, each broken at a space -- word-boundary wrapping (see
+    // `TextLayoutSnapshot.wordBoundarySegmentLength`) never breaks mid-word, so an unbroken run longer than
+    // `panelWidth` (as other fixtures in this file use) stays on a single visual row; a trailing word after a space
+    // is what actually forces a wrap. Three rows (rather than two) lets this test land on the *middle* row, where
+    // both the visual start and the visual end genuinely differ from the logical line's start (0) and end. Built
+    // from "M" (the character `CellMetrics.fromFont` measures its own cell width from): a narrower character could
+    // measure under the nominal per-column pixel budget under a proportional font and never wrap at the column count
+    // this arithmetic expects.
+    val word     = "M" * (panelWidth - 3)
+    val lastWord = "MMMMM"
+    val longLine = List.fill(2)(word).mkString(" ") + " " + lastWord
+    longLine.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+
+    val stateAfterTyping = stateManager.getCurrentState.unsafeRunSync()
+    val geometry = com.serenity.state.manager.EditorGeometryProducer
+      .forPane(stateAfterTyping, paneId)
+      .getOrElse(fail("expected geometry for pane"))
+    geometry.navigation.visualLines.size should be >= 3
+    val middleRow = geometry.navigation.visualLines(1)
+
+    // Position the cursor within the middle visual row, at a non-boundary column.
+    stateManager.applyEvent(MoveToStartOfFile).unsafeRunSync()
+    val targetColumn = middleRow.startColumn + 2
+    for _ <- 0 until targetColumn do stateManager.applyEvent(MoveRight).unsafeRunSync()
+    val beforeCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
+    beforeCursor.column shouldBe targetColumn
+
+    // Home lands on the middle visual row's own start column, not the logical line's column 0.
+    stateManager.applyEvent(MoveToStart).unsafeRunSync()
+    val afterHomeCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
+    afterHomeCursor.line shouldBe 0
+    afterHomeCursor.column shouldBe middleRow.startColumn
+    middleRow.startColumn should be > 0
+
+    // From there, End lands on that same visual row's own end column, not the logical line's true end.
+    stateManager.applyEvent(MoveToEnd).unsafeRunSync()
+    val afterEndCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
+    afterEndCursor.line shouldBe 0
+    afterEndCursor.column shouldBe middleRow.endColumn
+    middleRow.endColumn should be < longLine.length
+  }
+
+  it should "still move Home/End to the logical line's bounds when visual-line navigation is disabled" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+
+    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager
+      .updateState(s =>
+        s.copy(persisted = s.persisted.copy(config = s.persisted.config.withVisualLineCursorNavigation(false)))
+      )
+      .unsafeRunSync()
+
+    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), ViewportSize(80, 24))
+    val panelWidth = layout.editorPanelRect.width
+
+    val firstVisualLine  = "a" * panelWidth
+    val secondVisualLine = "bcdef"
+    val longLine         = firstVisualLine + secondVisualLine
+    longLine.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+
+    stateManager.applyEvent(MoveToStartOfFile).unsafeRunSync()
+    val targetColumn = panelWidth + 2
+    for _ <- 0 until targetColumn do stateManager.applyEvent(MoveRight).unsafeRunSync()
+
+    stateManager.applyEvent(MoveToStart).unsafeRunSync()
+    val afterHomeState  = stateManager.getCurrentState.unsafeRunSync()
+    val afterHomeCursor = afterHomeState.persisted.buffers(bufferId).editing.cursors.head
+    afterHomeCursor.line shouldBe 0
+    afterHomeCursor.column shouldBe 0
+
+    stateManager.applyEvent(MoveToEnd).unsafeRunSync()
+    val afterEndState  = stateManager.getCurrentState.unsafeRunSync()
+    val afterEndCursor = afterEndState.persisted.buffers(bufferId).editing.cursors.head
+    afterEndCursor.line shouldBe 0
+    afterEndCursor.column shouldBe longLine.length
   }
 
   // Helper functions for testing visual line wrapping logic

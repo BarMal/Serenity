@@ -418,6 +418,11 @@ object ConfigManager:
        |# Damage granularity the renderer honours: rows redraws whole visible lines; cells honours column ranges on
        |# monospaced buffers only, falling back to rows for proportional or ligature-shaped text
        |render.damage_granularity = ${config.surfaceConfig.renderDamageGranularity.configKey}
+       |# Cursor info bar background alpha (0.0-1.0), overriding the active theme's own panel alpha for just that
+       |# panel. auto/default keeps the theme's alpha.
+       |display.cursor_info_bar_background_alpha = ${config.surfaceConfig.cursorInfoBarBackgroundAlpha
+        .map(_.toString)
+        .getOrElse("auto")}
        |display.word_wrap = ${config.surfaceConfig.wordWrapEnabled}
        |display.visual_line_navigation = ${config.surfaceConfig.visualLineCursorNavigation}
        |display.pane_headers = ${config.surfaceConfig.showPaneHeaders}

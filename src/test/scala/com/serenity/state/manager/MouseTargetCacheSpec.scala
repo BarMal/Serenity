@@ -140,6 +140,24 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     all(snapshot.visualLines.map(_.widthPx)) should be <= snapshot.panelWidthPx.toFloat
   }
 
+  it should "wrap a prose pane on the terminal-cell grid, not a proportional pixel measurement, in TUI mode" in {
+    // Same proportional-font fixture as "use the renderer's proportional wrapped snapshot for hit testing" above --
+    // "i" measures narrower than the nominal cell width ('M') under a real proportional font, so a pixel-measured
+    // wrap fits more of them per row than a terminal's fixed-width cell grid ever could. #1215-class bug: TUI mouse
+    // hit-testing built this snapshot from AWT font-pixel metrics regardless of TUI mode, disagreeing with what the
+    // terminal itself actually wrapped and drew.
+    val state = stateWith(Buffer.fromString(bufferId, "i" * 200))
+      .copy(runtime = AppState.initial.runtime.copy(isTuiMode = true))
+    val size        = ViewportSize(80, 24)
+    val cache       = MouseTargetCache.fromState(state, size)
+    val snapshot    = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
+    val contentRect = cache.scene.paneLayouts(paneId).contentRect
+
+    snapshot.usesMeasuredLayout shouldBe false
+    snapshot.panelWidthPx shouldBe contentRect.width
+    snapshot.visualLines.headOption.map(_.text.length) shouldBe Some(contentRect.width)
+  }
+
   it should "give rendering the scene prepared by mouse targeting first" in {
     val state = stateWith(Buffer.fromString(bufferId, "alpha beta"))
     val size  = ViewportSize(80, 24)
