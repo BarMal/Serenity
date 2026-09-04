@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.util.Locale
 
 import scala.jdk.CollectionConverters.*
+import scala.util.control.NonFatal
 
 import cats.effect.IO
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope, WindowSitterAction}
@@ -120,6 +121,8 @@ object ConfigManager:
               )
             )
             .getOrElse(config)
+        case "editor.minimum_pane_width" | "editor.minimum.pane.width" | "editor_minimum_pane_width" =>
+          value.trim.toIntOption.map(config.withMinimumPaneWidth).getOrElse(config)
         case key if LanguageToolsConfig.Schema.handles(key) =>
           LanguageToolsConfig.Schema.parse(config, key, value).getOrElse(config)
         case "font.code.family" | "font_code_family" =>
@@ -212,6 +215,8 @@ object ConfigManager:
           parseUiOutlineThicknessPx(value.trim).map(config.withUiOutlineThicknessPx).getOrElse(config)
         case key if SurfaceConfig.Schema.handles(key) =>
           SurfaceConfig.Schema.parse(config, key, value).getOrElse(config)
+        case key if InputConfig.Schema.handles(key) =>
+          InputConfig.Schema.parse(config, key, value).getOrElse(config)
         case key if InterfaceConfig.Schema.handles(key) =>
           InterfaceConfig.Schema.parse(config, key, value).getOrElse(config)
         case key if DocumentConfig.Schema.handles(key) =>
@@ -394,8 +399,10 @@ object ConfigManager:
        |cursor.active.color = ${hoconString(config.cursorColors.active.map(formatColor).getOrElse(""))}
        |cursor.inactive.color = ${hoconString(config.cursorColors.inactive.map(formatColor).getOrElse(""))}
        |# Comma-separated segment list (title, position, word_count, char_count, reading_time), or off/empty to hide
-       |"cursor.info_bar" = ${if config.cursorInfoBarSegments.isEmpty then "off"
-      else config.cursorInfoBarSegments.map(_.configKey).mkString(",")}
+       |cursor.info_bar.segments = ${hoconString(
+        if config.cursorInfoBarSegments.isEmpty then "off"
+        else config.cursorInfoBarSegments.map(_.configKey).mkString(",")
+      )}
        |cursor.info_bar.placement = ${config.cursorInfoBarPlacement.configKey}
        |
        |# Interface density: compact, comfortable, spacious
@@ -414,6 +421,16 @@ object ConfigManager:
        |command_runner.visible_rows = ${config.surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")}
        |command_runner.item_gap_rows = ${config.surfaceConfig.commandRunnerItemGapRows}
        |command_runner.cursor_gap_rows = ${config.surfaceConfig.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")}
+       |command_runner.show_key_hints = ${config.surfaceConfig.commandRunnerShowKeyHints}
+       |# Hold or double-tap a bare modifier to peek the command runner near the cursor
+       |command_runner.cursor_peek.enabled = ${config.surfaceConfig.commandRunnerCursorPeekEnabled}
+       |command_runner.cursor_peek.modifier = ${hoconString(
+        config.surfaceConfig.commandRunnerCursorPeekModifier.toString.toLowerCase(Locale.ROOT)
+      )}
+       |command_runner.cursor_peek.tap_window_ms = ${config.surfaceConfig.commandRunnerCursorPeekTapWindowMillis}
+       |command_runner.cursor_peek.placement = ${hoconString(
+        config.surfaceConfig.commandRunnerCursorPeekPlacement.toString.toLowerCase(Locale.ROOT)
+      )}
        |render.fps = ${config.surfaceConfig.renderFpsTarget.configKey}
        |# Damage granularity the renderer honours: rows redraws whole visible lines; cells honours column ranges on
        |# monospaced buffers only, falling back to rows for proportional or ligature-shaped text
@@ -425,6 +442,11 @@ object ConfigManager:
         .getOrElse("auto")}
        |display.word_wrap = ${config.surfaceConfig.wordWrapEnabled}
        |display.visual_line_navigation = ${config.surfaceConfig.visualLineCursorNavigation}
+       |display.line_numbers = ${config.surfaceConfig.showLineNumbers}
+       |display.gutter = ${config.surfaceConfig.showGutter}
+       |display.word_count = ${config.surfaceConfig.showWordCount}
+       |# Where document comments are shown: floating, margin
+       |display.comments = ${config.surfaceConfig.commentDisplayMode.configKey}
        |display.pane_headers = ${config.surfaceConfig.showPaneHeaders}
        |display.focused_text_body = ${config.surfaceConfig.focusedTextBodyEnabled}
        |display.contextual_toolbar = ${config.surfaceConfig.contextualToolbarEnabled}
@@ -449,6 +471,10 @@ object ConfigManager:
        |
        |# Default mode for new buffers: plain-text, markdown, rich-text
        |document.default_mode = ${config.defaultDocumentMode.configKey}
+       |
+       |editor.minimum_pane_width = ${config.editorConfig.minimumPaneWidth}
+       |# Lines one mouse-wheel notch scrolls
+       |input.wheel_scroll_lines = ${config.inputConfig.wheelScrollLines}
        |
        |# Preferred desktop window size. Leave empty to use the default.
        |window.preferred.width = ${hoconString(config.preferredWindowSize.map(_.width).fold("")(_.toString))}
@@ -498,15 +524,41 @@ object ConfigManager:
 
   def saveConfig(config: AppConfig, configPath: Path): Boolean =
     try
-      AtomicFileWriter.writeBytesBlocking(configPath, configToString(config).getBytes(StandardCharsets.UTF_8))
+      AtomicFileWriter.writeBytesBlocking(configPath, renderedConfig(config).getBytes(StandardCharsets.UTF_8))
       true
     catch case _: Exception => false
+
+  /** The config text to write, refused if it is not something this module could read back.
+    *
+    * An unparseable file is worse than a failed save: `loadConfigResult` falls back to defaults for the whole file, so
+    * one bad value silently resets every other setting the user had. That is exactly what an unquoted comma in the
+    * cursor info bar's segment list used to do. Checking here keeps a formatting mistake in one setting from reaching
+    * the file at all, and leaves whatever the user already had in place.
+    */
+  private def renderedConfig(config: AppConfig): String =
+    val text = configToString(config)
+    val _    = ConfigFactory.parseString(text)
+    text
+
+  /** Copy a config file that could not be read to a sibling `.unreadable` path, returning where it went.
+    *
+    * A file that fails to parse costs the user every setting in it for the session, and the next settings change writes
+    * defaults over it -- so the only copy of what they had configured is gone, without them ever being told. Keeping it
+    * aside makes that recoverable. Best-effort: if the copy itself fails there is nothing further to do about it, and
+    * the load carries on with defaults either way.
+    */
+  def preserveUnreadableConfig(path: Path): Option[Path] =
+    try
+      val target = path.resolveSibling(s"${path.getFileName}.unreadable")
+      Files.copy(path, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+      Some(target)
+    catch case NonFatal(_) => None
 
   /** Save configuration on the Cats Effect blocking pool with a structured failure result. */
   def saveConfigIO(config: AppConfig, configPath: Path): IO[Either[ConfigError, Unit]] =
     IO.blocking {
       try
-        AtomicFileWriter.writeBytesBlocking(configPath, configToString(config).getBytes(StandardCharsets.UTF_8))
+        AtomicFileWriter.writeBytesBlocking(configPath, renderedConfig(config).getBytes(StandardCharsets.UTF_8))
         Right(())
       catch
         case error: Exception =>

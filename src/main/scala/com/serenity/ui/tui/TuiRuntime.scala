@@ -50,7 +50,8 @@ object TuiRuntime:
     openPath: Option[Path],
     configPersistencePath: Option[Path],
     hasDisplay: Boolean,
-    sessionRootOverride: Option[Path] = None
+    sessionRootOverride: Option[Path] = None,
+    configNotice: Option[String] = None
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     // #1213: a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way AWT does for a focused Swing
     // window, so any hotkey still at its macOS/Cmd-conditioned platform default (Quit, Save, ...) is rewritten here
@@ -76,7 +77,8 @@ object TuiRuntime:
                   terminalShell.terminal,
                   router,
                   systemClipboard,
-                  terminalShell.pendingInputPrefix
+                  terminalShell.pendingInputPrefix,
+                  terminalConfig.inputConfig.wheelScrollLines
                 )
                 .map { handler =>
                   inputHandlerHolder.set(Some(handler))
@@ -96,7 +98,8 @@ object TuiRuntime:
             openPath = openPath,
             systemClipboard = systemClipboard,
             isTuiMode = true,
-            keyboardFidelityTier = keyboardFidelityTier(terminalShell.keyboardProtocolTier)
+            keyboardFidelityTier = keyboardFidelityTier(terminalShell.keyboardProtocolTier),
+            configNotice = configNotice
           )
         yield ()
     }

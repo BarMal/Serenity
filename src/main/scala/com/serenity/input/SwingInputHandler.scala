@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReferenc
 import java.util.concurrent.{ConcurrentLinkedQueue, Semaphore}
 
 import cats.effect.Sync
+import com.serenity.config.InputConfig
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
@@ -20,7 +21,8 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     component: java.awt.Component,
     inputRouter: InputRouter[F, E],
     metrics: () => CellMetrics,
-    uiMetrics: () => CellMetrics
+    uiMetrics: () => CellMetrics,
+    wheelScrollLines: Int = InputConfig().wheelScrollLines
 ) extends InputHandler[F]:
 
   def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
@@ -119,6 +121,16 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     override def keyReleased(e: KeyEvent): Unit =
       translateModifierReleased(e)
       modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierReleased(modifier, e.getWhen))))
+
+  // AWT reports a wheel notch as one "unit scroll" of `getScrollAmount` units; the platform's own amount is a system
+  // preference this setting stands in for, so a notch is `wheelScrollLines` lines whatever the OS says. Block scrolls
+  // (a page notch, some trackpads) report their own count and are honoured as multiples of it.
+  component.addMouseWheelListener((e: java.awt.event.MouseWheelEvent) =>
+    val notches = if e.getWheelRotation != 0 then e.getWheelRotation else 0
+    if notches != 0 then
+      val lines = math.abs(notches) * wheelScrollLines
+      enqueueRaw(if notches > 0 then ScrollDown(lines) else ScrollUp(lines))
+  )
 
   component.addMouseListener(
     new MouseAdapter:

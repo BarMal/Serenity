@@ -602,6 +602,21 @@ object CommandRunnerSettingsInputItems:
         category = CommandCategory.Settings
       ),
       CommandSurfaceItem.InputItem(
+        id = "wheel-scroll-lines",
+        label = "Wheel Scroll Lines",
+        hint = "Lines per mouse-wheel notch (1-50)",
+        currentValue = inputConfig.wheelScrollLines.toString,
+        isDecimal = false,
+        parse = text =>
+          text.toIntOption
+            .filter(value => value >= 1 && value <= 50)
+            .map(commandIntentArg =>
+              CommandIntent
+                .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWheelScrollLines(commandIntentArg)))
+            ),
+        category = CommandCategory.Settings
+      ),
+      CommandSurfaceItem.InputItem(
         id = "code-font-size",
         label = "Code Font Size",
         hint = "Points (8.0-48.0)",

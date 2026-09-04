@@ -47,28 +47,35 @@ object Main extends IOApp:
       _ <- IO(CrashReporter.install())
       launchOptions = launchOptionsForLogging
       configResult <- ConfigManager.loadConfigResultIO()
-      configLoad <- configResult.fold(
+      // A config that cannot be read means this session runs on defaults -- every setting the user had, gone until
+      // they restart with a readable file. Keep their file aside before anything can overwrite it, and carry a notice
+      // the start page can show: the log line below is invisible in TUI mode, where stderr goes to nowhere.
+      configNotice <- configResult.fold(
         error =>
           logger.error(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}") >>
-            IO.pure(
-              com.serenity.config.ConfigLoadResult(AppConfig.default, com.serenity.config.ConfigMigrationReport.empty)
-            ),
-        IO.pure
+            IO.blocking(ConfigManager.preserveUnreadableConfig(ConfigManager.defaultConfigPath)).map { preserved =>
+              val kept = preserved.fold("")(path => s" A copy was kept at $path.")
+              Some(s"Configuration could not be read, so this session is using defaults.$kept")
+            },
+        _ => IO.pure(None)
+      )
+      configLoad = configResult.getOrElse(
+        com.serenity.config.ConfigLoadResult(AppConfig.default, com.serenity.config.ConfigMigrationReport.empty)
       )
       _ <- ConfigMigrationWarning
         .message(ConfigManager.defaultConfigPath, configLoad.report)
         .fold(IO.unit)(message => logger.warn(message))
       appConfig = resolveAppConfig(configLoad.config, launchOptions)
       _ <-
-        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions)
-        else runGui(appConfig, launchOptions)
+        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, launchOptions, configNotice)
+        else runGui(appConfig, launchOptions, configNotice)
     yield ExitCode.Success
 
   /** The TUI launch path (issue #1112): a real system terminal via [[TerminalShell.resource]], restored on every exit
     * path by that `Resource`'s release. This branch never references `SwingWindow` -- the terminal capability bundle
     * lives entirely in [[TuiRuntime]], which owns no such reference either.
     */
-  private def runTui(appConfig: AppConfig, launchOptions: LaunchOptions)(using
+  private def runTui(appConfig: AppConfig, launchOptions: LaunchOptions, configNotice: Option[String])(using
     logger: Logger[IO],
     loggerFactory: LoggerFactory[IO]
   ): IO[Unit] =
@@ -81,13 +88,14 @@ object Main extends IOApp:
         appConfig = appConfig,
         openPath = launchOptions.openPath,
         configPersistencePath = Some(ConfigManager.defaultConfigPath),
-        hasDisplay = LaunchOptions.isDisplayReachable(sys.env)
+        hasDisplay = LaunchOptions.isDisplayReachable(sys.env),
+        configNotice = configNotice
       )
 
   /** The GUI launch path: unchanged from before #1112 beyond being extracted into its own method. Constructs a
     * [[SwingWindow]] and closes `AppRuntime.run`'s capabilities over it; never touches [[TerminalShell]].
     */
-  private def runGui(appConfig: AppConfig, launchOptions: LaunchOptions)(using
+  private def runGui(appConfig: AppConfig, launchOptions: LaunchOptions, configNotice: Option[String])(using
     logger: Logger[IO],
     loggerFactory: LoggerFactory[IO]
   ): IO[Unit] =
@@ -156,7 +164,8 @@ object Main extends IOApp:
                     swingWin.canvas,
                     router,
                     () => swingWin.metrics,
-                    () => displayState.uiMetrics
+                    () => displayState.uiMetrics,
+                    actualAppConfig.inputConfig.wheelScrollLines
                   )
                 ),
               checkResize = IO(swingWin.doResizeIfNecessary()),
@@ -171,6 +180,7 @@ object Main extends IOApp:
                     paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations)
                   ).evalOn(paintEc),
               appConfig = actualAppConfig,
+              configNotice = configNotice,
               makeStateManager = Some(logger =>
                 com.serenity.state.manager.StateManager.apply(
                   logger,

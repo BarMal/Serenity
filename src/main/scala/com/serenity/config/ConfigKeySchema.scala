@@ -27,6 +27,7 @@ object ConfigKeySchema:
       DocumentConfig.Schema.currentKeys ++
       InterfaceConfig.Schema.currentKeys ++
       WindowConfig.Schema.currentKeys ++
+      InputConfig.Schema.currentKeys ++
       Set(
         "window.sitter.enabled",
         "window.sitter.action",

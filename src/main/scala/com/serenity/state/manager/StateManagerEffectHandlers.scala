@@ -918,6 +918,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateWindowSitterConfig(_.copy(fastActiveTicks = ticks))
       case PanelChromeIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
         updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
+      case PanelChromeIntent.SetWheelScrollLines(lines) =>
+        updateConfig(_.withWheelScrollLines(lines)).void
       case PanelChromeIntent.SetTextAreaLeftInset(value) =>
         updateTextDisplayConfig(_.withTextAreaLeftInset(value)).void
       case PanelChromeIntent.SetTextAreaRightInset(value) =>
