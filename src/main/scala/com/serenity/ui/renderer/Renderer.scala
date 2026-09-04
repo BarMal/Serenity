@@ -72,6 +72,16 @@ object Renderer:
 
   private val preparedSceneRef = new AtomicReference[Option[PreparedScene]](None)
 
+  /** Screen-pixel rects the floating panels (`renderFloatingPanels`'s `overlays`) occupied on the *previous* frame,
+    * keyed by surface id. `planFrame`/`dirtyRowsFor` read this before `renderFloatingPanels` runs for the current
+    * frame, so it always reflects the frame before the one being planned -- exactly what's needed to find the pane
+    * rows a moved/resized/closed panel vacated (see `dirtyRowsFor`'s doc comment). Updated at the end of
+    * `renderFloatingPanels` once this frame's rects are known, ready for the next frame's `planFrame` call. Keeping
+    * this as a single object-level `AtomicReference`, rather than threading it through `RenderContext`, matches how
+    * `preparedSceneRef` above already caches single-surface frame state for this renderer.
+    */
+  private val previousFloatingSurfaceRectsRef = new AtomicReference[Map[SurfaceId, PixelRect]](Map.empty)
+
   private val MarkdownSelectionProbeLimit = 512
 
   final private case class EditorPaneRenderPlan(
@@ -1470,7 +1480,13 @@ object Renderer:
 
   /** Rows of `record` that `damage` marks dirty, translated from buffer line numbers to this pane's current visual row
     * indices, widened by one row on each side and by the rows whose glyphs reach outside the band this pane can
-    * preserve. `Damage.Everything` dirties every row, since it carries no per-buffer detail to translate.
+    * preserve, plus any row whose pixel band was under a floating panel's *previous*-frame rect for every
+    * `Damage.Surface(id)` fact in `damage` ([[vacatedFloatingSurfaceRows]]). `Damage.Surface` carries no buffer-row
+    * detail for `Damage.coarsenToRows` to translate -- a panel's move/resize/close only reports which surface changed,
+    * not which pane pixels it used to cover -- so without this, a pane whose own content didn't change preserves rows
+    * a panel painted opaque background into last frame and no longer paints into this frame, leaving that background
+    * stale under any theme with a transparent pane background. `Damage.Everything` dirties every row, since it carries
+    * no per-buffer detail to translate.
     */
   private def dirtyRowsFor(damage: Damage, record: PaneFrameRecord): Set[Int] =
     if Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
@@ -1479,7 +1495,26 @@ object Renderer:
       val dirty = record.rowBufferLines.zipWithIndex.collect {
         case (bufferLine, row) if bufferLines.contains(bufferLine) => row
       }.toSet
-      DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++ record.overflowingRows
+      DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
+        record.overflowingRows ++
+        vacatedFloatingSurfaceRows(damage, record)
+
+  /** Rows of `record` whose pixel band ([[PaneFrameRecord.rowRects]]) intersects the previous frame's rect of any
+    * floating surface `damage` reports as changed ([[Damage.surfaceIds]]). A surface absent from
+    * [[previousFloatingSurfaceRectsRef]] (never painted as a floating panel, or this is its first frame) contributes
+    * nothing -- there is no earlier rect for it to have vacated.
+    */
+  private def vacatedFloatingSurfaceRows(damage: Damage, record: PaneFrameRecord): Set[Int] =
+    val changedSurfaceIds = Damage.surfaceIds(damage)
+    if changedSurfaceIds.isEmpty then Set.empty
+    else
+      val previousRects = previousFloatingSurfaceRectsRef.get()
+      val vacatedRects   = changedSurfaceIds.flatMap(previousRects.get)
+      if vacatedRects.isEmpty then Set.empty
+      else
+        record.rowRects.zipWithIndex.collect {
+          case (rect, row) if vacatedRects.exists(rect.intersects) => row
+        }.toSet
 
   /** Geometry for the panes drawn by [[renderPlainBufferContent]]: which buffer line each visual row shows (to
     * translate `Damage`'s buffer-line facts into row indices) and the pixel band each row owns (to know what a
@@ -3061,6 +3096,24 @@ object Renderer:
     val belowOverlays =
       if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
     belowOverlays.foreach(paintOverlay)
+
+    // Recorded *after* this frame's panels are painted, so `dirtyRowsFor`'s read of this same ref (via `planFrame`,
+    // which always runs before this method for a given frame) still sees last frame's rects while planning this one --
+    // see `previousFloatingSurfaceRectsRef`'s doc comment.
+    val currentFloatingRects: Map[SurfaceId, PixelRect] =
+      (overlays.aboveCursor.toList ++ belowOverlays).flatMap { overlay =>
+        overlay.surfaceId.map(_ -> floatingPanelPixelRect(overlay.rect, context.cellMetrics))
+      }.toMap
+    previousFloatingSurfaceRectsRef.set(currentFloatingRects)
+
+  /** `rect` (in cell/row units, as every [[LayoutRect]] floating panels are placed with is) converted to the pixel
+    * rectangle it occupies on screen, using the same `cellMetrics`-based conversion [[paneRowRects]] uses for pane
+    * content rows -- the two need to agree for [[vacatedFloatingSurfaceRows]]'s intersection test to mean anything.
+    */
+  private def floatingPanelPixelRect(rect: LayoutRect, cellMetrics: CellMetrics): PixelRect =
+    val leftPx = cellMetrics.toPixelX(rect.x)
+    val topPx  = cellMetrics.toPixelY(rect.y)
+    PixelRect(leftPx, topPx, cellMetrics.toPixelX(rect.right) - leftPx, cellMetrics.toPixelY(rect.bottom) - topPx)
 
   private def renderFloatingBackdrop(
     overlay: TextOverlayView,
