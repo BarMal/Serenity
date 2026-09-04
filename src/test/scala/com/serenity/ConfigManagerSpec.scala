@@ -755,6 +755,41 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     )
   }
 
+  it should "load and write the cursor info bar background alpha override" in {
+    val configFile = Files.createTempFile("serenity-cursor-info-bar-alpha-config", ".conf")
+    Files.writeString(
+      configFile,
+      """display.cursor_info_bar_background_alpha = 0.5
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.cursorInfoBarBackgroundAlpha shouldBe Some(0.5)
+    ConfigManager.configToString(config) should include("display.cursor_info_bar_background_alpha = 0.5")
+  }
+
+  it should "default the cursor info bar background alpha to unset (theme default) when not configured" in {
+    ConfigManager.configToString(AppConfig.default) should include(
+      "display.cursor_info_bar_background_alpha = auto"
+    )
+    AppConfig.default.surfaceConfig.cursorInfoBarBackgroundAlpha shouldBe None
+  }
+
+  it should "reject a cursor info bar background alpha outside 0.0-1.0" in {
+    val configFile = Files.createTempFile("serenity-cursor-info-bar-alpha-invalid-config", ".conf")
+    Files.writeString(
+      configFile,
+      """display.cursor_info_bar_background_alpha = 1.5
+        |""".stripMargin
+    )
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.config.surfaceConfig.cursorInfoBarBackgroundAlpha shouldBe None
+    result.report.invalidEntries.map(_.key) should contain("display.cursor_info_bar_background_alpha")
+  }
+
   it should "load and write word wrap display mode" in {
     val configFile = Files.createTempFile("serenity-word-wrap-config", ".conf")
     Files.writeString(
