@@ -105,7 +105,7 @@ final class TuiSession private (
       animations <- stateManager.getBufferAnimations
       pending    <- damage.getAndSet(Damage.Nothing)
       surface    = surfaces.forSize(size)
-      cursorOnly = current.runtime.windowSitter.isActive && !AppRuntime.needsFullContentRender(current, animations)
+      cursorOnly = AppRuntime.canStandDownToCursorOnly(current, animations, pending)
       _ <- IO(
         if cursorOnly then TuiRuntime.paintCursorOnly(current, surface, size, true, None, animations)
         else TuiRuntime.paintFrame(current, surface, size, true, None, pending)
@@ -129,11 +129,12 @@ final class TuiSession private (
       }
     loop(AnimationTickLimit)
 
-  /** Whether the runtime's fast phase would paint the cursor-only path on the next frame. */
+  /** Whether the runtime's fast phase would paint the cursor-only path on the next frame -- asked of `AppRuntime`
+    * itself rather than restated here, so a change to that decision shows up in these scenarios instead of leaving the
+    * harness describing a branch production no longer takes.
+    */
   def paintsCursorOnly: IO[Boolean] =
-    (state, stateManager.getBufferAnimations).mapN((current, animations) =>
-      current.runtime.windowSitter.isActive && !AppRuntime.needsFullContentRender(current, animations)
-    )
+    (state, stateManager.getBufferAnimations, damage.get).mapN(AppRuntime.canStandDownToCursorOnly)
 
   /** Let the interface finish moving, then paint until the frame stops changing.
     *

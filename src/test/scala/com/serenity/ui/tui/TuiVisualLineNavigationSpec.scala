@@ -1,4 +1,5 @@
 package com.serenity.ui.tui
+
 import com.serenity.state.models.{AppState, CursorPosition}
 
 import TuiScenarios.*

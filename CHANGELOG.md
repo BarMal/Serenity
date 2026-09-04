@@ -5,6 +5,8 @@
 - Repainted editor content on every damaged frame while the window sitter is active, so typed characters and their wrapped reflow appear immediately instead of trailing the cursor by the sitter's activity window.
 - Anchored the vertical-navigation geometry window on the cursor's own visual row, so Up/Down and Home/End keep stepping by visual row deep inside a paragraph longer than a screenful instead of falling back to logical-line movement.
 - Added a Visual Line Navigation toggle to the Text Display settings group, alongside the existing `display.visual_line_navigation` config key and command-palette toggle.
+- Added a cell-level TUI behaviour suite driving real terminal sessions end to end (startup, editing, files, settings, unicode width, redraw, wrapped navigation, typing latency).
+- Ran test suites serially, since the renderer's previous-frame state is keyed by pane id alone and concurrent painting suites overwrote each other's frame history.
 
 ## 2026-07-06
 
