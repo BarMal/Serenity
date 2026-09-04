@@ -361,20 +361,22 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
           case item: CommandSurfaceItem.OptionItem if item.id == itemId => item.hint
         }.flatten
 
+      // The annotation leads the hint rather than trailing it: the settings surface's hint column is a fixed share of
+      // the panel width and elides from the right, so a trailing annotation was cut off before it could be read.
       hintOf(tuiGroups, "settings-typography") shouldBe Some(
-        "Typefaces for prose, code, and interface -- inert in TUI mode"
+        "Inert in TUI mode -- Typefaces for prose, code, and interface"
       )
-      hintOf(tuiGroups, "settings-code-font") shouldBe Some("Family, size, ligatures -- inert in TUI mode")
-      hintOf(tuiGroups, "settings-prose-font") shouldBe Some("Family, size, ligatures -- inert in TUI mode")
-      hintOf(tuiGroups, "settings-ui-font") shouldBe Some("Family, size, ligatures -- inert in TUI mode")
+      hintOf(tuiGroups, "settings-code-font") shouldBe Some("Inert in TUI mode -- Family, size, ligatures")
+      hintOf(tuiGroups, "settings-prose-font") shouldBe Some("Inert in TUI mode -- Family, size, ligatures")
+      hintOf(tuiGroups, "settings-ui-font") shouldBe Some("Inert in TUI mode -- Family, size, ligatures")
       optionHintOf(tuiGroups, "settings-surface-appearance", "post-processing").exists(
-        _.endsWith("-- inert in TUI mode")
+        _.startsWith("Inert in TUI mode --")
       ) shouldBe true
 
       hintOf(guiGroups, "settings-typography") shouldBe Some("Typefaces for prose, code, and interface")
       hintOf(guiGroups, "settings-code-font") shouldBe Some("Family, size, ligatures")
       optionHintOf(guiGroups, "settings-surface-appearance", "post-processing").exists(
-        _.endsWith("-- inert in TUI mode")
+        _.startsWith("Inert in TUI mode --")
       ) shouldBe false
 
       // Unrelated groups are untouched by the flag.

@@ -40,7 +40,7 @@ The hardware terminal cursor is hidden once, for the whole TUI session, by `Term
 
 ## Inert config surfaces in TUI mode
 
-Post-processing effects and typography (font family/size, ligatures, the proportional prose path) have no visible effect on a fixed-cell terminal surface (epic #1103's accepted degradations). Rather than hiding these controls -- which would make it impossible to prepare a config file while running headless -- the command runner's settings surface annotates their hint text with "-- inert in TUI mode" when it is running in TUI mode:
+Post-processing effects and typography (font family/size, ligatures, the proportional prose path) have no visible effect on a fixed-cell terminal surface (epic #1103's accepted degradations). Rather than hiding these controls -- which would make it impossible to prepare a config file while running headless -- the command runner's settings surface prefixes their hint text with "Inert in TUI mode -- " when it is running in TUI mode (leading, not trailing: the hint column is a fixed share of the panel width and elides from the right, so an appended annotation was never legible on the longer hints):
 
 - The **Post-processing** option (`settings-surface-appearance`).
 - The **Typography** group and its three children, **Code Font**, **Prose Font**, **UI Font**.

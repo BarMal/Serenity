@@ -75,20 +75,17 @@ class TuiSettingsSpec extends TuiSpec:
       _ <- enter
       _ <- verify("annotated") { screen =>
         // Epic #1103's accepted degradation: typography has no effect on a fixed cell grid, so the hint says so.
-        screen.containsText("inert in TUI mode") shouldBe true
+        screen.containsText("Inert in TUI mode") shouldBe true
         screen.containsText("Prose Font") shouldBe true
       }
     yield ()
   }
 
-  /** The Post-processing option carries the same "-- inert in TUI mode" suffix as Typography
-    * (`CommandRunnerSettingsGroups.inertInTuiHint`), but its hint is long enough that the settings surface's
-    * fixed-width hint column elides it before the suffix is reached -- at 240 columns just as at 200, since that column
-    * does not grow with the terminal. So the annotation `docs/tui-mode.md` describes for this option is never actually
-    * legible in TUI mode. Asserted as it behaves today rather than as the doc describes it; the elision is worth
-    * fixing, and this test will say so when it is.
+  /** The Post-processing hint is longer than the settings surface's hint column, which is a fixed share of the panel
+    * width and does not grow with the terminal -- at 240 columns just as at 200. The annotation therefore has to lead
+    * the hint to be legible at all: elision takes the description's tail instead.
     */
-  "the post-processing option" should "be reachable and show its value, with its hint elided before the annotation" in
+  "the post-processing option" should "be reachable and show its value and its annotation, elided description aside" in
     runTui(TuiEnvironment.default.withViewport(TuiViewport.Wide)) {
       for
         _ <- openSettings
@@ -97,9 +94,8 @@ class TuiSettingsSpec extends TuiSpec:
         _ <- verify("option row") { screen =>
           val row = screen.rowOf("Post-processing").getOrElse(fail("expected the Post-processing option"))
           screen.rowText(row) should include("Off")
-          screen.rowText(row) should include("Frame-wide scanlines")
+          screen.rowText(row) should include("Inert in TUI mode")
           screen.rowText(row) should include("...")
-          screen.rowText(row) should not include "inert in TUI mode"
         }
       yield ()
     }
