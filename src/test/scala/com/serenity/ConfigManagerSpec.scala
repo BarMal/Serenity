@@ -984,7 +984,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     val loaded = ConfigManager.loadConfig(Some(configFile.toString))
 
-    serialized should include("\"ui.motion.family.command_surfaces.animation\" = custom")
+    serialized should include("ui.motion.family.command_surfaces.animation.preset = custom")
     serialized should include("ui.motion.family.command_surfaces.animation.duration_ms = 320")
     serialized should include("ui.motion.family.command_surfaces.animation.steps = 7")
     loaded.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.CommandSurfaces).animation shouldBe Some(
@@ -1055,16 +1055,16 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     config.editorConfig.characterAnimation shouldBe None
     val serialized = ConfigManager.configToString(config)
     serialized should include("ui.material = crystal")
-    serialized should include("\"ui.motion\" = reduced")
+    serialized should include("ui.motion.preset = reduced")
     serialized should include("ui.motion.accessibility = standard")
     serialized should include("ui.motion.family.editor_text.transition = typed")
     serialized should include("ui.motion.family.editor_text.speed_scale = 0.5")
     serialized should include("ui.motion.family.command_surfaces.transition = outline")
-    serialized should include("\"ui.motion.family.command_surfaces.animation\" = subtle")
+    serialized should include("ui.motion.family.command_surfaces.animation.preset = subtle")
     serialized should include("ui.motion.family.command_surfaces.speed_scale = 2.25")
     serialized should include("ui.motion.family.pinned_panels.open_transition = directional")
     serialized should include("ui.motion.family.pinned_panels.close_transition = off")
-    serialized should include("\"ui.motion.family.ui_transitions.animation\" = smooth")
+    serialized should include("ui.motion.family.ui_transitions.animation.preset = smooth")
     serialized should include("ui.motion.family.cursor.speed_scale = 0.75")
   }
 
@@ -1087,7 +1087,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     )
     val written = ConfigManager.configToString(AppConfig.default.withCharacterAnimation(customAnimation))
 
-    written should include("\"character.animation\" = custom")
+    written should include("character.animation.preset = custom")
     written should include("character.animation.duration_ms = 320")
     written should include("character.animation.steps = 7")
 

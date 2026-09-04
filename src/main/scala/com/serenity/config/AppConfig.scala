@@ -18,6 +18,19 @@ enum BackgroundStyle:
   case Frosted
   case GlassLike
 
+  def configKey: String =
+    this match
+      case Solid       => "solid"
+      case Transparent => "transparent"
+      case Frosted     => "frosted"
+      case GlassLike   => "glass-like"
+
+object BackgroundStyle:
+
+  def fromConfigKey(value: String): Option[BackgroundStyle] =
+    val normalized = value.trim.toLowerCase.replace("_", "-")
+    BackgroundStyle.values.find(_.configKey == normalized)
+
 enum MaterialPreset(val configKey: String):
   case Solid   extends MaterialPreset("solid")
   case Clear   extends MaterialPreset("clear")
@@ -702,6 +715,9 @@ object EditorConfig:
   object Schema:
 
     val currentKeys: Set[String] = Set(
+      // `character.animation.preset` is the spelling written: `character.animation` is a leaf whose own children
+      // (`.duration_ms`, `.steps`) HOCON would resolve by dropping it, and it survived only by being quoted.
+      "character.animation.preset",
       "character.animation",
       "character.animation.duration_ms",
       "character.animation.duration.ms",
@@ -1188,6 +1204,7 @@ object SurfaceConfig:
       "material.preset",
       "ui.post_processing",
       "ui.shadows",
+      "ui.motion.preset",
       "ui.motion",
       "motion.preset",
       "ui.motion.speed_scale",
@@ -1231,6 +1248,10 @@ object SurfaceConfig:
       "display.word.wrap",
       "display.visual_line_navigation",
       "display.visual.line.navigation",
+      "ui.blur_radius",
+      "ui.blur.radius",
+      "ui.background_style",
+      "ui.background.style",
       "display.line_numbers",
       "display.line.numbers",
       "display.gutter",
@@ -1270,9 +1291,15 @@ object SurfaceConfig:
       "viewport.height.percent",
       "viewport.height.max"
     ) ++ Set("ui.motion.accessibility") ++ MotionFamily.values.flatMap { family =>
-      Set("enabled", "transition", "animation", "animation.duration_ms", "animation.steps", "speed_scale").map(field =>
-        s"ui.motion.family.${family.configKey}.$field"
-      )
+      Set(
+        "enabled",
+        "transition",
+        "animation",
+        "animation.preset",
+        "animation.duration_ms",
+        "animation.steps",
+        "speed_scale"
+      ).map(field => s"ui.motion.family.${family.configKey}.$field")
     } ++ Set(
       "ui.motion.family.pinned_panels.open_transition",
       "ui.motion.family.pinned_panels.close_transition"
@@ -1338,14 +1365,25 @@ object SurfaceConfig:
 
     val uiShadowsKeys: Set[String] = Set("ui.shadows", "ui_shadows")
 
-    val motionPresetKeys: Set[String]        = Set("ui.motion", "ui_motion", "motion.preset", "motion_preset")
+    /** `ui.motion.preset` is the spelling written. `ui.motion` is a leaf on a path whose children (`ui.motion.family`,
+      * `ui.motion.accessibility`) HOCON would resolve by dropping it, so it survived only by being written as a quoted
+      * key; it stays readable for files that already have it.
+      */
+    val motionPresetKeys: Set[String] =
+      Set("ui.motion.preset", "ui.motion", "ui_motion", "motion.preset", "motion_preset")
     val motionAccessibilityKeys: Set[String] = Set("ui.motion.accessibility")
     val motionFamilyPrefix                   = "ui.motion.family."
 
     val motionFamilyKeys: Set[String] = MotionFamily.values.flatMap { family =>
-      Set("enabled", "transition", "animation", "animation.duration_ms", "animation.steps", "speed_scale").map(field =>
-        s"$motionFamilyPrefix${family.configKey}.$field"
-      )
+      Set(
+        "enabled",
+        "transition",
+        "animation",
+        "animation.preset",
+        "animation.duration_ms",
+        "animation.steps",
+        "speed_scale"
+      ).map(field => s"$motionFamilyPrefix${family.configKey}.$field")
     }.toSet ++ Set(
       s"${motionFamilyPrefix}pinned_panels.open_transition",
       s"${motionFamilyPrefix}pinned_panels.close_transition"
@@ -1409,6 +1447,10 @@ object SurfaceConfig:
 
     val visualLineNavigationKeys: Set[String] =
       Set("display.visual_line_navigation", "display.visual.line.navigation", "display_visual_line_navigation")
+
+    val blurRadiusKeys: Set[String] = Set("ui.blur_radius", "ui.blur.radius", "ui_blur_radius")
+
+    val backgroundStyleKeys: Set[String] = Set("ui.background_style", "ui.background.style", "ui_background_style")
 
     val lineNumberKeys: Set[String] =
       Set("display.line_numbers", "display.line.numbers", "display_line_numbers")
@@ -1504,6 +1546,8 @@ object SurfaceConfig:
         renderFpsKeys ++
         renderDamageGranularityKeys ++
         wordWrapKeys ++
+        blurRadiusKeys ++
+        backgroundStyleKeys ++
         visualLineNavigationKeys ++
         lineNumberKeys ++
         gutterKeys ++
@@ -1577,6 +1621,10 @@ object SurfaceConfig:
       else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
       else if visualLineNavigationKeys.contains(key) then
         parseBoolean(trimmed).map(config.withVisualLineCursorNavigation)
+      else if blurRadiusKeys.contains(key) then
+        trimmed.toFloatOption.filter(radius => radius >= 0.0f && radius <= 1.0f).map(config.withBlurRadius)
+      else if backgroundStyleKeys.contains(key) then
+        BackgroundStyle.fromConfigKey(trimmed).map(config.withBackgroundStyle)
       else if lineNumberKeys.contains(key) then parseBoolean(trimmed).map(config.withLineNumbers)
       else if gutterKeys.contains(key) then parseBoolean(trimmed).map(config.withGutter)
       else if wordCountKeys.contains(key) then parseBoolean(trimmed).map(config.withWordCount)
@@ -1650,9 +1698,10 @@ object SurfaceConfig:
         updated <- field match
           case "enabled"    => parseBoolean(value).map(enabled => settings.copy(enabled = enabled))
           case "transition" => parseTransitionKind(value).map(kind => settings.copy(transitionKind = kind))
-          case "animation" if value.equalsIgnoreCase("custom") =>
+          case "animation" | "animation.preset" if value.equalsIgnoreCase("custom") =>
             Some(settings.copy(animation = Some(settings.animation.getOrElse(AnimationConfig.Enabled.smooth))))
-          case "animation" => parseAnimationPreset(value).map(animation => settings.copy(animation = animation))
+          case "animation" | "animation.preset" =>
+            parseAnimationPreset(value).map(animation => settings.copy(animation = animation))
           case "animation.duration_ms" =>
             value.toIntOption
               .filter(_ > 0)
@@ -1724,14 +1773,21 @@ object SurfaceConfig:
             )
             .map(alpha => Some(alpha))
 
+    /** These are stored as fractions and written as percentages, so reading one back divides by 100 -- and binary
+      * floating point turns 17.3 into 0.17299999999999996 rather than the 0.173 that was saved. Rounding to the
+      * precision the file actually carries makes saving and loading a settings value give that value back.
+      */
+    private def fractionOfPercent(value: Double): Double =
+      BigDecimal(value / 100.0).setScale(9, BigDecimal.RoundingMode.HALF_UP).toDouble
+
     private def parseInsetPercent(value: String): Option[Double] =
       value.toDoubleOption
-        .map(_ / 100.0)
+        .map(fractionOfPercent)
         .filter(percent => percent >= 0.0 && percent <= TextAreaInsets.MaxInset)
 
     private def parseViewportPercent(value: String): Option[Double] =
       value.toDoubleOption
-        .map(_ / 100.0)
+        .map(fractionOfPercent)
         .filter(percent =>
           percent >= ViewportAxisSizing.MinPercent &&
             percent <= ViewportAxisSizing.MaxPercent
