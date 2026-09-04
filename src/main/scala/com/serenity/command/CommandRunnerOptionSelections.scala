@@ -67,6 +67,7 @@ object CommandRunnerOptionSelections:
       "gutter"                     -> enabledIndex(surfaceConfig.showGutter),
       "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
       "word-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
+      "visual-line-navigation"     -> enabledIndex(surfaceConfig.visualLineCursorNavigation),
       "focused-text-body"          -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
       "contextual-toolbar"         -> enabledIndex(surfaceConfig.contextualToolbarEnabled),
       "contextual-toolbar-display" -> contextualToolbarDisplayModeIndex(surfaceConfig.contextualToolbarDisplayMode),

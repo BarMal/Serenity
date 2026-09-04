@@ -876,6 +876,20 @@ object CommandRunnerSettingsItems:
       hint = "Wrap long logical lines to the editor width"
     )
 
+  private[command] def visualLineNavigationOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "visual-line-navigation",
+      label = "Visual Line Navigation",
+      selectedIndex = optionSelections.getOrElse("visual-line-navigation", 0),
+      enabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualLineCursorNavigation(true))),
+      disabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualLineCursorNavigation(false))),
+      hint = "Move Up/Down by wrapped visual row instead of logical line"
+    )
+
   private[command] def focusedTextBodyOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =

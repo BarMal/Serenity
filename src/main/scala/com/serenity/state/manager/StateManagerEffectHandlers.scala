@@ -886,6 +886,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateTextDisplayConfig(config => config.withGutter(enabled)).void
       case PanelChromeIntent.SetWordWrap(enabled) =>
         updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
+      case PanelChromeIntent.SetVisualLineCursorNavigation(enabled) =>
+        updateTextDisplayConfig(config => config.withVisualLineCursorNavigation(enabled)).void
       case PanelChromeIntent.SetFocusedTextBody(enabled) =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
       case PanelChromeIntent.SetContextualToolbarEnabled(enabled) =>

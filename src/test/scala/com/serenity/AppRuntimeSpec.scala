@@ -312,6 +312,83 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
 
+  it should "still repaint content while the window sitter is active when a frame has pending content damage" in {
+    // The typed character reaching state is worthless if the frame that follows it paints only the cursor: the sitter
+    // stays active for its whole activity window after every keystroke, so gating the cheap cursor-only path on the
+    // sitter alone froze document content for the rest of that window -- the cursor moved, the glyphs and the wrapped
+    // reflow behind it arrived a fraction of a second later.
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        config = AppState.initial.persisted.config.withRenderFpsTarget(RenderFpsTarget.Fps30)
+      ),
+      runtime = AppState.initial.runtime.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L))
+    )
+    state.runtime.windowSitter.isActive shouldBe true
+    AppRuntime.needsFullContentRender(state, Map.empty) shouldBe false
+
+    val program = for
+      fastModeSignal       <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      pendingDamage        <- Ref.of[IO, Damage](Damage.Nothing)
+      pendingPaintDamage   <- Ref.of[IO, Damage](Damage.BufferRows(BufferId(1), Set(3)))
+      animationTickCadence <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
+      fullFrames           <- Ref.of[IO, Int](0)
+      cursorOnlyFrames     <- Ref.of[IO, Int](0)
+      stateManager = new com.serenity.state.manager.StateReader
+        with com.serenity.state.manager.StateUpdater
+        with com.serenity.state.manager.EventApplier
+        with com.serenity.state.manager.AnimationTicker:
+        def getCurrentState: IO[AppState]                                                 = IO.pure(state)
+        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
+        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
+        def updateBufferAnimations(
+          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+            BufferId,
+            com.serenity.animation.AnimationState
+          ]
+        ): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]     = IO.unit
+        def advanceAnimationFrames(): IO[Unit]     = IO.unit
+        def advanceAnimationsOnTick(): IO[Boolean] = IO.pure(true)
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      _ <- AppRuntime
+        .fastRenderPhase(
+          stateManager,
+          fastModeSignal,
+          pendingDamage,
+          pendingPaintDamage,
+          animationTickCadence,
+          IO.pure(Some(state)),
+          IO.unit,
+          (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => fullFrames.update(_ + 1),
+          (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: Map[BufferId, com.serenity.animation.AnimationState]
+          ) => cursorOnlyFrames.update(_ + 1),
+          _ => IO.unit
+        )
+        .take(2)
+        .compile
+        .drain
+      full       <- fullFrames.get
+      cursorOnly <- cursorOnlyFrames.get
+    yield
+      // Frame one carries the damage and must repaint content; frame two has none left to paint and may stand down
+      // to the cursor-only path again.
+      full shouldBe 1
+      cursorOnly shouldBe 1
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   it should "advance animations once per frame at whatever render FPS is configured, not a fixed 60Hz rate" in
     List(RenderFpsTarget.Fps30, RenderFpsTarget.Fps60, RenderFpsTarget.Fps90, RenderFpsTarget.Fps120).foreach {
       target =>
@@ -966,6 +1043,38 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       )
       calls <- renderCalls.get
     yield calls shouldBe 0
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "leave content damage pending for the fast phase when an idle cursor frame renders" in {
+    val state  = AppState.initial
+    val damage = Damage.BufferRows(BufferId(1), Set(3))
+
+    val program = for
+      cursorVisible      <- Ref.of[IO, Boolean](true)
+      breathIndex        <- Ref.of[IO, Int](0)
+      pendingPaintDamage <- Ref.of[IO, Damage](damage)
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      _ <- AppRuntime.runIdleRenderStep(
+        currentStateForDiagnostics = IO.pure(Some(state)),
+        loadState = IO.pure(state),
+        loadBufferAnimations = IO.pure(Map.empty),
+        pendingPaintDamage = pendingPaintDamage,
+        checkResizeAndHandle = IO.unit,
+        cursorVisible = cursorVisible,
+        breathIndex = breathIndex,
+        renderCursorOnly = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => IO.unit,
+        requestFastRender = IO.unit
+      )
+      remaining <- pendingPaintDamage.get
+    yield remaining shouldBe damage
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }

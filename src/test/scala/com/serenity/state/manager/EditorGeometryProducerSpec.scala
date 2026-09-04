@@ -93,3 +93,37 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
       geometry.navigation.visualLineFor(CursorPosition(6, 0)) should not be None
       geometry.navigation.moveVertical(CursorPosition(6, 0), direction = 1, preferredXPx = 0.0f) should not be None
     }
+
+  it should "cover the cursor's own visual row deep inside one long wrapped paragraph" in {
+    // Prose wraps one logical line into far more visual rows than the window's row budget. Anchoring the window on
+    // the cursor's *logical* line alone left the cursor's own visual row past the end of the budget once a paragraph
+    // ran longer than a few screenfuls, so `moveVertical` returned None and Up/Down fell back to naive char-grid
+    // movement -- the "wrapped navigation jumps by logical line" report.
+    val probe             = stateWith(Buffer.fromString(bufferId, "probe"), isTuiMode = true)
+    val panelWidthColumns = panelWidthColumnsFor(probe)
+    val paragraph         = "w" * (panelWidthColumns * 100)
+    val buffer0           = Buffer.fromString(bufferId, paragraph)
+    val cursor            = CursorPosition(0, panelWidthColumns * 50)
+    val buffer = buffer0.copy(
+      viewport =
+        buffer0.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = 3, visibleColumns = panelWidthColumns),
+      editing = buffer0.editing.copy(cursors = List(cursor))
+    )
+    val tuiState = stateWith(buffer, isTuiMode = true)
+
+    val geometry = EditorGeometryProducer.forPane(tuiState, paneId).getOrElse(fail("expected geometry for pane"))
+    val cursorRow = geometry.navigation
+      .visualLineFor(cursor)
+      .getOrElse(fail("expected the cursor's own visual row to be covered"))
+    cursorRow.startColumn shouldBe cursor.column
+
+    val down = geometry.navigation
+      .moveVertical(cursor, direction = 1, preferredXPx = 0.0f)
+      .getOrElse(fail("expected a visual row below the cursor"))
+    val up = geometry.navigation
+      .moveVertical(cursor, direction = -1, preferredXPx = 0.0f)
+      .getOrElse(fail("expected a visual row above the cursor"))
+
+    down shouldBe CursorPosition(0, cursor.column + panelWidthColumns)
+    up shouldBe CursorPosition(0, cursor.column - panelWidthColumns)
+  }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-04
+
+- Repainted editor content on every damaged frame while the window sitter is active, so typed characters and their wrapped reflow appear immediately instead of trailing the cursor by the sitter's activity window.
+- Anchored the vertical-navigation geometry window on the cursor's own visual row, so Up/Down and Home/End keep stepping by visual row deep inside a paragraph longer than a screenful instead of falling back to logical-line movement.
+- Added a Visual Line Navigation toggle to the Text Display settings group, alongside the existing `display.visual_line_navigation` config key and command-palette toggle.
+
 ## 2026-07-06
 
 - Added a storage-location classifier that recognizes local paths, local `file:` URIs, and remote URI-backed document locations.

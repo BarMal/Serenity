@@ -364,6 +364,74 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
   behavior of "Visual Line Navigation"
 
+  it should "step one visual row at a time deep inside a paragraph far longer than a screenful" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val stateManager = StateManager
+      .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
+      .unsafeRunSync()
+
+    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val paneId   = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+
+    val layout     = LayoutEngine.calculateLayout(stateManager.getCurrentState.unsafeRunSync(), ViewportSize(80, 24))
+    val panelWidth = layout.editorPanelRect.width
+
+    // One prose paragraph as a single logical line, wrapping into many more visual rows than any navigation window
+    // budget. A cursor this far into it used to fall outside the geometry the reducer navigates by, dropping Up/Down
+    // to a naive char-grid step instead of the wrapped row the reader actually sees.
+    val paragraph = "w" * (panelWidth * 60)
+    stateManager.updateBuffer(bufferId, paragraph).unsafeRunSync()
+    val startColumn = panelWidth * 30
+    stateManager
+      .updateState { s =>
+        val buffer = s.persisted.buffers(bufferId)
+        s.copy(persisted =
+          s.persisted.copy(buffers =
+            s.persisted.buffers.updated(
+              bufferId,
+              buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, startColumn))))
+            )
+          )
+        )
+      }
+      .unsafeRunSync()
+
+    def cursor: CursorPosition =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
+
+    // The contract is the row the reader sees: whatever the full-document layout says sits below the cursor, measured
+    // exactly as the renderer measures it -- not the char-grid step (`+ panelWidth`) the missing-geometry fallback
+    // would have produced.
+    val startCursor = CursorPosition(0, startColumn)
+    val startState  = stateManager.getCurrentState.unsafeRunSync()
+    val startBuffer = startState.persisted.buffers(bufferId)
+    val font = FontLoader.previewFontForRole(
+      startState.persisted.config.editorConfig.fontConfig,
+      startBuffer.typographyRole
+    )
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      startBuffer.copy(viewport =
+        startBuffer.viewport.copy(leftColumn = 0, topLine = 0, topVisualLine = 0, visibleLines = paragraph.length)
+      ),
+      TextLayoutSnapshot.gridWrapWidthPx(panelWidth, startState.persisted.config.editorConfig.fontConfig),
+      font,
+      wordWrapEnabled = true
+    )
+    val preferredXPx = snapshot.xPxForCursor(startCursor).getOrElse(fail("missing caret x"))
+    val expectedDown =
+      snapshot.moveVertical(startCursor, direction = 1, preferredXPx).getOrElse(fail("missing row below"))
+    expectedDown.line shouldBe 0
+    expectedDown.column should be > startColumn
+
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    cursor shouldBe expectedDown
+
+    stateManager.applyEvent(MoveUp).unsafeRunSync()
+    cursor shouldBe startCursor
+  }
+
   it should "navigate up and down through visual lines correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))

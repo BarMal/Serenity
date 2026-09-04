@@ -54,6 +54,7 @@ object CommandRunnerSettingsGroups:
     val wordCountItem               = CommandRunnerSettingsItems.wordCountOptionItem(optionSelections)
     val gutterItem                  = CommandRunnerSettingsItems.gutterOptionItem(optionSelections)
     val lineWrapItem                = CommandRunnerSettingsItems.lineWrapOptionItem(optionSelections)
+    val visualLineNavigationItem    = CommandRunnerSettingsItems.visualLineNavigationOptionItem(optionSelections)
     val focusedTextBodyItem         = CommandRunnerSettingsItems.focusedTextBodyOptionItem(optionSelections)
     val contextualToolbarItem       = CommandRunnerSettingsItems.contextualToolbarOptionItem(optionSelections)
     val contextualToolbarDisplayItem =
@@ -85,13 +86,14 @@ object CommandRunnerSettingsGroups:
         lineNumbersItem,
         gutterItem,
         lineWrapItem,
+        visualLineNavigationItem,
         wordCountItem,
         focusedTextBodyItem,
         contextualToolbarItem,
         contextualToolbarDisplayItem
       ),
       category = CommandCategory.Settings,
-      hint = Some("Line numbers, gutter, wrap, word count, focus, toolbar")
+      hint = Some("Line numbers, gutter, wrap, visual-line navigation, word count, focus, toolbar")
     )
     val motionInputIds = Set(
       "element-transition-speed-scale",
