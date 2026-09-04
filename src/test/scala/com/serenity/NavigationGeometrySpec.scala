@@ -103,3 +103,19 @@ class NavigationGeometrySpec extends AnyFlatSpec with Matchers:
   it should "resolve a wrap boundary column to the later visual line, matching moveVertical/xPxForCursor" in {
     wrapGeometry.visualLineFor(CursorPosition(0, 5)) shouldBe Some(wrapLineB)
   }
+
+  "NavigationGeometry.visualRowIndexFor" should "return the row index containing the cursor" in {
+    geometry.visualRowIndexFor(CursorPosition(1, 2)) shouldBe Some(1)
+  }
+
+  it should "return None for a cursor outside every visual line" in {
+    geometry.visualRowIndexFor(CursorPosition(9, 0)) shouldBe None
+  }
+
+  it should
+    "resolve a wrap boundary column to the later visual row -- the row the renderer's caret must also pick, or vertical navigation gets stuck" in {
+      // wrapLineA (row 0) endColumn == wrapLineB (row 1) startColumn == 5. The renderer's caret placement delegates to
+      // this same function, so drawing the caret and moving from it agree on row 1 -- the fix for the boundary "stuck"
+      // bug where the caret was drawn on row 0 (collectFirst) while navigation moved from row 1 (lastOption).
+      wrapGeometry.visualRowIndexFor(CursorPosition(0, 5)) shouldBe Some(1)
+    }

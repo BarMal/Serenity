@@ -119,12 +119,13 @@ object TextLayoutSnapshot:
     font: Font,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     wordWrapEnabled: Boolean = true,
-    cellMetricsOverride: Option[CellMetrics] = None
+    cellMetricsOverride: Option[CellMetrics] = None,
+    forceCellLayout: Boolean = false
   ): Int =
     if !wordWrapEnabled then 0
     else
       val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-      val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
+      val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
       wrapLogicalLine(
         lineText,
         0,
@@ -134,9 +135,12 @@ object TextLayoutSnapshot:
         measuredLayout,
         cellMetrics
       ).zipWithIndex
-        .collectFirst {
-          case (line, index) if cursorColumn >= line.startColumn && cursorColumn <= line.endColumn => index
-        }
+        // `.lastOption`, not `collectFirst`: at a wrap boundary (one row's endColumn == the next row's startColumn) the
+        // cursor belongs to the *later* row, matching NavigationGeometry.visualRowIndexFor and the renderer's caret, so
+        // viewport centring measures the cursor's visual row the same way the caret is actually drawn.
+        .filter { case (line, _) => cursorColumn >= line.startColumn && cursorColumn <= line.endColumn }
+        .lastOption
+        .map(_._2)
         .getOrElse(0)
 
   private[serenity] def boundedVisualLinesForText(
@@ -147,10 +151,11 @@ object TextLayoutSnapshot:
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     baseColumn: Int = 0,
     maxVisualLines: Int = Int.MaxValue,
-    cellMetricsOverride: Option[CellMetrics] = None
+    cellMetricsOverride: Option[CellMetrics] = None,
+    forceCellLayout: Boolean = false
   ): Vector[TextVisualLine] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
+    val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
     wrapLogicalLine(
       text,
       bufferLine,

@@ -10,6 +10,12 @@ import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, Vi
   */
 object EditorGeometryProducer:
 
+  /** Logical lines of context to keep above the cursor when building the navigation window (see [[forBuffer]]). A
+    * single UP move only needs the line directly above, so a small margin is plenty; keeping it small also keeps the
+    * accumulate-until-budget walk below from being pushed off the cursor's own line by a run of wrapped lines above it.
+    */
+  private val NavigationWindowMarginLines = 2
+
   def forPane(state: AppState, paneId: PaneId): Option[EditorGeometry] =
     state.persisted.layout.editorPanes
       .get(paneId)
@@ -28,9 +34,20 @@ object EditorGeometryProducer:
     val panelWidthPx =
       if isTui then panelWidthColumns * CellMetrics.cellUnit.charWidth
       else TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.persisted.config.editorConfig.fontConfig)
+    // Build the geometry over a window centred on the cursor rather than pinned to the viewport's top line. Pinning to
+    // the top let a single heavily-wrapped line there fill the whole visual-row budget, so the cursor's own line fell
+    // out of the geometry entirely -- `moveVertical`/`visualLineFor` then found nothing and vertical navigation dropped
+    // to naive char-grid movement that mis-wraps prose (the "stuck"/jumpy cursor past the first screenful). Starting a
+    // couple of lines above the cursor keeps an UP neighbour in range, and a budget of a few screenfuls of visual rows
+    // covers the cursor and its DOWN neighbours while staying bounded on huge documents.
+    val cursorLine    = buffer.editing.cursors.headOption.map(_.line).getOrElse(0)
+    val windowTopLine = math.max(0, cursorLine - NavigationWindowMarginLines)
+    val windowBudget  = math.max(24, buffer.viewport.visibleLines * 3)
     val snapshot =
       TextLayoutSnapshot.fromBuffer(
-        buffer.copy(viewport = buffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
+        buffer.copy(viewport =
+          buffer.viewport.copy(leftColumn = 0, topLine = windowTopLine, topVisualLine = 0, visibleLines = windowBudget)
+        ),
         panelWidthPx,
         font,
         wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
