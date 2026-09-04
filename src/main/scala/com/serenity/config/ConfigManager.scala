@@ -82,7 +82,7 @@ object ConfigManager:
     val parsed = entries.foldLeft(AppConfig.default) { (config, entry) =>
       val HoconEntry(key, value, _) = entry
       key match
-        case "character.animation" | "character_animation" =>
+        case "character.animation" | "character.animation.preset" | "character_animation" =>
           value.trim.toLowerCase match
             case "none" | "false" | "off" | "disabled" =>
               config.withoutCharacterAnimation
@@ -154,22 +154,18 @@ object ConfigManager:
             .map(size => config.withFontConfig(config.editorConfig.fontConfig.copy(uiFontSize = clampFontSize(size))))
             .getOrElse(config)
         case "font.scale.mode" | "font_scale_mode" =>
+          // Only the mode. Automatic scaling derives its multiplier rather than reading one, but resolving it here
+          // depended on this key being folded after `font.text_scale`, which is an ordering the key names happened to
+          // give rather than one anything stated. `resolveAutoTextScale` runs once the whole file has been read.
           parseTextScaleMode(value.trim)
-            .map(mode =>
-              config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMode = mode).resolveAutoTextScale(1.0))
-            )
+            .map(mode => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMode = mode)))
             .getOrElse(config)
         case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
+          // Only the multiplier. Inferring "manual" from a non-default multiplier is for files that never say what the
+          // mode is (see `inferTextScaleMode` below); doing it here overrode an explicit `font.scale.mode = off`,
+          // because entries are folded in key order and the multiplier's key sorts after the mode's.
           parseTextScaleMultiplier(value.trim)
-            .map(scale =>
-              config.withFontConfig(
-                config.editorConfig.fontConfig.copy(
-                  textScaleMultiplier = scale,
-                  textScaleMode =
-                    if scale == 1.0 then config.editorConfig.fontConfig.textScaleMode else TextScaleMode.Manual
-                )
-              )
-            )
+            .map(scale => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMultiplier = scale)))
             .getOrElse(config)
         case "font.code.ligatures" | "font_code_ligatures" =>
           value.trim.toLowerCase match
@@ -298,7 +294,8 @@ object ConfigManager:
           config
     }
 
-    val withLists    = applyHoconLists(parsed, source)
+    val scaled       = inferTextScaleMode(parsed, entries)
+    val withLists    = applyHoconLists(scaled, source)
     val withLspLists = applyHoconLspLists(withLists, source)
     HotkeyConfig
       .fromBindings(withLspLists.inputConfig.hotkeyConfig.bindings)
@@ -353,7 +350,7 @@ object ConfigManager:
           else ""
         s"""ui.motion.family.${family.configKey}.enabled = ${settings.enabled}
          |ui.motion.family.${family.configKey}.transition = ${transitionKindConfigKey(settings.transitionKind)}
-         |"ui.motion.family.${family.configKey}.animation" = $animationSetting$customAnimationDetails
+         |ui.motion.family.${family.configKey}.animation.preset = $animationSetting$customAnimationDetails
          |ui.motion.family.${family.configKey}.speed_scale = $speedScale$scopedTransitions""".stripMargin
       }
       .mkString("\n")
@@ -376,7 +373,7 @@ object ConfigManager:
        |config.version = ${ConfigVersion.Current.value}
        |
        |# Character animation style: none, quick, smooth, subtle, custom
-       |"character.animation" = $animationSetting$characterAnimationDetails
+       |character.animation.preset = $animationSetting$characterAnimationDetails
        |
        |# Syntax highlighting: true, false
        |syntax.highlighting = ${config.languageToolsConfig.syntaxHighlightingEnabled}
@@ -458,7 +455,11 @@ object ConfigManager:
        |ui.post_processing = ${config.surfaceConfig.postProcessingEffect.configKey}
        |# Draw soft shadows behind menus and panels
        |ui.shadows = ${config.surfaceConfig.uiShadowsEnabled}
-       |"ui.motion" = ${motionConfiguration.baseline.configKey}
+       |# Background treatment behind panes: solid, transparent, frosted, glass-like
+       |ui.background_style = ${config.surfaceConfig.backgroundStyle.configKey}
+       |# Blur strength behind translucent surfaces (0.0-1.0)
+       |ui.blur_radius = ${config.surfaceConfig.blurRadius}
+       |ui.motion.preset = ${motionConfiguration.baseline.configKey}
        |ui.motion.accessibility = ${motionConfiguration.accessibility.configKey}
        |${config.surfaceConfig.editorTextTransitionSpeedScale.map(value => s"ui.motion.editor_text.speed_scale = $value").getOrElse("")}
        |${config.surfaceConfig.commandRunnerTransitionSpeedScale.map(value => s"ui.motion.command_runner.speed_scale = $value").getOrElse("")}
@@ -650,12 +651,20 @@ object ConfigManager:
 
   final private case class HoconEntry(key: String, value: String, valueType: ConfigValueType)
 
+  /** Entries in the order they are applied: shallower paths first, then alphabetically.
+    *
+    * The parse is a fold, so a broader setting has to be applied before the narrower ones that refine it --
+    * `ui.motion.preset` rebuilds every motion family, and `ui.motion.family.command_surfaces.transition` then adjusts
+    * one of them. Sorting on the key alone made that ordering an accident of the alphabet: it held while the key was
+    * spelled `ui.motion` (which sorts before `ui.motion.family.…`) and broke the moment it was renamed. Depth says what
+    * was meant.
+    */
   private def hoconEntries(source: Config): List[HoconEntry] =
     source
       .entrySet()
       .asScala
       .toList
-      .sortBy(_.getKey)
+      .sortBy(entry => (entry.getKey.count(_ == '.'), entry.getKey))
       .map { entry =>
         val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
         val value = entry.getValue.valueType match
@@ -722,7 +731,7 @@ object ConfigManager:
     val normalizedValue = value.trim.toLowerCase
     val invalid =
       key match
-        case "character.animation" | "character_animation" =>
+        case "character.animation" | "character.animation.preset" | "character_animation" =>
           !Set("none", "false", "off", "disabled", "quick", "smooth", "subtle", "custom").contains(normalizedValue)
         case "character.animation.duration_ms" | "character.animation.duration.ms" | "character_animation_duration_ms" |
             "character.animation.steps" | "character_animation_steps" =>
@@ -774,6 +783,20 @@ object ConfigManager:
 
   private def clampFontSize(size: Float): Float =
     size.max(8.0f).min(48.0f)
+
+  /** A config that carries a text scale but never says which mode it is in means manual scaling -- that is what the
+    * multiplier was for before `font.scale.mode` existed. A config that does say is taken at its word, including when
+    * it says the scaling is off.
+    */
+  private def inferTextScaleMode(config: AppConfig, entries: List[HoconEntry]): AppConfig =
+    val statesMode = entries.exists(entry => textScaleModeKeys.contains(entry.key))
+    val fontConfig = config.editorConfig.fontConfig
+    val withMode =
+      if statesMode || fontConfig.textScaleMultiplier == 1.0 then fontConfig
+      else fontConfig.copy(textScaleMode = TextScaleMode.Manual)
+    config.withFontConfig(withMode.resolveAutoTextScale(1.0))
+
+  private val textScaleModeKeys: Set[String] = Set("font.scale.mode", "font_scale_mode")
 
   private def parseTextScaleMode(value: String): Option[TextScaleMode] =
     value.toLowerCase match

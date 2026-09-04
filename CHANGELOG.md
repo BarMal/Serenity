@@ -2,6 +2,9 @@
 
 ## 2026-09-04
 
+- Property-tested the config format over generated settings, and fixed what it found: an explicit text-scale mode of "off" being overridden to "manual" by the multiplier, blur radius and background style never being written at all, and percentage settings coming back a floating-point hair away from what was saved.
+- Applied broader config settings before the narrower ones that refine them, rather than in whatever order the key names happened to sort, which is what kept a motion preset from wiping the per-family settings saved alongside it.
+- Moved the three config keys that were both a value and a path (`character.animation`, `ui.motion`, and each motion family's `animation`) onto leaves of their own, so none of them depends on being quoted to survive; the old spellings are still read.
 - Measured the TUI's cell grid in display cells rather than characters, so the caret, word wrap, mouse hit-testing and cursor movement agree with the two cells a wide glyph is actually painted across.
 - Widened Transport and Map Symbols and Symbols and Pictographs Extended-A to two cells, so a rocket or a plaster no longer takes one cell in the app's arithmetic and two on screen.
 - Kept a terminal drag's selection when the mouse button is released, matching the Swing path, instead of collapsing it with a click synthesised from the release.
