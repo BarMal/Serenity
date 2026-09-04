@@ -67,6 +67,26 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     lines.foreach(line => drew(surface, line) shouldBe false)
   }
 
+  // Frame-to-frame state is remembered per surface (by `persistentContentKey`, as the damage accumulator already is)
+  // rather than once for the renderer: what a surface preserves is its own last frame's pixels, and another surface's
+  // frame is nothing to do with it. Held in one place, a second surface's frame became every surface's "previous
+  // frame" -- which is why painting suites could not run concurrently.
+
+  it should "keep each surface's previous frame to itself" in {
+    val first  = new MockRenderSurface(80, 24, persistentContent = true)
+    val second = new MockRenderSurface(80, 24, persistentContent = true)
+    val state  = stateWith(lines)
+    val other  = stateWith(Vector("one", "two", "three", "four"))
+
+    Renderer.render(state, cursorVisible = false, first, viewport)
+    Renderer.render(other, cursorVisible = false, second, viewport)
+    first.clear()
+    Renderer.render(state, cursorVisible = false, first, viewport, None, DamageProducer.forTransition(state, state))
+
+    // Nothing changed on this surface since its own last frame, whatever the other one painted in between.
+    lines.foreach(line => drew(first, line) shouldBe false)
+  }
+
   it should "draw pane rows again when the surface does not preserve its pixels" in {
     val surface = new MockRenderSurface(80, 24)
     val state   = stateWith(lines)

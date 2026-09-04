@@ -70,28 +70,58 @@ object Renderer:
         uiMetrics == candidateUiMetrics &&
         viewportSize == candidateViewportSize
 
-  private val preparedSceneRef = new AtomicReference[Option[PreparedScene]](None)
-
-  /** Screen-pixel rects the floating panels (`renderFloatingPanels`'s `overlays`) occupied on the *previous* frame,
-    * keyed by surface id. `planFrame`/`dirtyRowsFor` read this before `renderFloatingPanels` runs for the current
-    * frame, so it always reflects the frame before the one being planned -- exactly what's needed to find the pane rows
-    * a moved/resized/closed panel vacated (see `dirtyRowsFor`'s doc comment). Updated at the end of
-    * `renderFloatingPanels` once this frame's rects are known, ready for the next frame's `planFrame` call. Keeping
-    * this as a single object-level `AtomicReference`, rather than threading it through `RenderContext`, matches how
-    * `preparedSceneRef` above already caches single-surface frame state for this renderer.
+  /** Frame state below is kept per surface, keyed by the same [[SurfaceContentIdentity]] the damage accumulator uses:
+    * what one surface drew last frame says nothing about what another one preserves, and a single slot shared by every
+    * surface made whichever surface painted most recently the "previous frame" for all of them. A surface with no
+    * persistence key preserves nothing between frames, so it has no previous frame to remember and none is kept for it
+    * -- it redraws in full, which is what a non-persisting surface does anyway.
+    *
+    * Weak keys and synchronised access for the reasons [[bufferDamage]] documents: the base image pool recycles its
+    * images, and the render thread is not guaranteed to be one thread for the app's lifetime.
     */
-  private val previousFloatingSurfaceRectsRef = new AtomicReference[Map[SurfaceId, PixelRect]](Map.empty)
+  private val preparedScenes = new java.util.WeakHashMap[SurfaceContentIdentity, PreparedScene]()
 
-  /** Each pane's [[TextLayoutSnapshot]] as of the *previous* frame this renderer planned, keyed by pane id --
-    * `dirtyRowsFor` reads this (via `planFrame`, which always runs before this ref is updated for the frame being
+  private def preparedSceneFor(surface: RenderSurface): Option[PreparedScene] =
+    surface.persistentContentKey.flatMap(key => preparedScenes.synchronized(Option(preparedScenes.get(key))))
+
+  private def rememberPreparedScene(surface: RenderSurface, scene: PreparedScene): Unit =
+    surface.persistentContentKey.foreach(key => preparedScenes.synchronized { val _ = preparedScenes.put(key, scene) })
+
+  /** Screen-pixel rects the floating panels (`renderFloatingPanels`'s `overlays`) occupied on the *previous* frame a
+    * surface painted, keyed by surface id within it. `planFrame`/`dirtyRowsFor` read this before `renderFloatingPanels`
+    * runs for the current frame, so it always reflects the frame before the one being planned -- exactly what's needed
+    * to find the pane rows a moved/resized/closed panel vacated (see `dirtyRowsFor`'s doc comment). Updated at the end
+    * of `renderFloatingPanels` once this frame's rects are known, ready for the next frame's `planFrame` call.
+    */
+  private val previousFloatingSurfaceRects =
+    new java.util.WeakHashMap[SurfaceContentIdentity, Map[SurfaceId, PixelRect]]()
+
+  private def previousFloatingSurfaceRectsFor(key: SurfaceContentIdentity): Map[SurfaceId, PixelRect] =
+    previousFloatingSurfaceRects.synchronized(Option(previousFloatingSurfaceRects.get(key))).getOrElse(Map.empty)
+
+  private def rememberFloatingSurfaceRects(surface: RenderSurface, rects: Map[SurfaceId, PixelRect]): Unit =
+    surface.persistentContentKey.foreach { key =>
+      previousFloatingSurfaceRects.synchronized { val _ = previousFloatingSurfaceRects.put(key, rects) }
+    }
+
+  /** Each pane's [[TextLayoutSnapshot]] as of the *previous* frame planned for a surface, keyed by pane id within it --
+    * `dirtyRowsFor` reads this (via `planFrame`, which always runs before this state is updated for the frame being
     * planned) to catch rows whose content shifted because an *upstream* paragraph's edit changed how many rows it wraps
     * into, not just rows whose own buffer line `Damage` names directly (see [[DirtyLineDiff]]'s doc comment). Updated
     * right after `planFrame` returns for a frame, from that same frame's `renderPlan.snapshots`, so the next frame's
     * `planFrame` call sees this frame's snapshots as "previous" -- the same before/after timing
-    * [[previousFloatingSurfaceRectsRef]] documents above, except the snapshot itself (not a later paint step) is
-    * already known by the time `planFrame` runs, so there's no need to wait for painting to record it.
+    * [[previousFloatingSurfaceRects]] documents above, except the snapshot itself (not a later paint step) is already
+    * known by the time `planFrame` runs, so there's no need to wait for painting to record it.
     */
-  private val previousSnapshotsRef = new AtomicReference[Map[PaneId, TextLayoutSnapshot]](Map.empty)
+  private val previousSnapshots = new java.util.WeakHashMap[SurfaceContentIdentity, Map[PaneId, TextLayoutSnapshot]]()
+
+  private def previousSnapshotsFor(key: SurfaceContentIdentity): Map[PaneId, TextLayoutSnapshot] =
+    previousSnapshots.synchronized(Option(previousSnapshots.get(key))).getOrElse(Map.empty)
+
+  private def rememberSnapshots(surface: RenderSurface, snapshots: Map[PaneId, TextLayoutSnapshot]): Unit =
+    surface.persistentContentKey.foreach { key =>
+      previousSnapshots.synchronized { val _ = previousSnapshots.put(key, snapshots) }
+    }
 
   private val MarkdownSelectionProbeLimit = 512
 
@@ -471,8 +501,7 @@ object Renderer:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics
   ): (CalculatedLayout, EditorPaneRenderPlan) =
-    preparedSceneRef
-      .get()
+    preparedSceneFor(surface)
       .filter(_.matches(authoritativeScene, codeFont, textFont, uiFont, cellMetrics, uiMetrics, viewportSize))
       .map(value => value.scene.calculatedLayout -> value.renderPlan)
       .getOrElse {
@@ -489,7 +518,7 @@ object Renderer:
           cellMetrics,
           uiMetrics
         )
-        preparedSceneRef.set(Some(next))
+        rememberPreparedScene(surface, next)
         next.scene.calculatedLayout -> next.renderPlan
       }
 
@@ -1135,8 +1164,7 @@ object Renderer:
         renderFloatingPanels(state, floatContext, scene, Damage.Everything)
         None
       case None =>
-        val prepared = preparedSceneRef
-          .get()
+        val prepared = preparedSceneFor(surface)
           .filter(_.matches(scene, codeFont, textFont, uiFont, cellMetrics, uiMetrics, viewportSize))
           .getOrElse {
             val next = prepareScene(
@@ -1152,7 +1180,7 @@ object Renderer:
               cellMetrics,
               uiMetrics
             )
-            preparedSceneRef.set(Some(next))
+            rememberPreparedScene(surface, next)
             next
           }
         val finalizedScene   = prepared.scene
@@ -1170,10 +1198,10 @@ object Renderer:
           bufferAnimations
         )
         val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage)
-        // Recorded *after* `planFrame` (and thus `dirtyRowsFor`) has read `previousSnapshotsRef` for this frame, so
+        // Recorded *after* `planFrame` (and thus `dirtyRowsFor`) has read this surface's snapshots for this frame, so
         // this frame's own snapshots become "previous" only for the frame after it -- see
-        // `previousSnapshotsRef`'s doc comment.
-        previousSnapshotsRef.set(editorRenderPlan.snapshots)
+        // `previousSnapshots`' doc comment.
+        rememberSnapshots(surface, editorRenderPlan.snapshots)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
             surface.clearViewportExcept(state.persisted.theme.background, plan.preserved)
@@ -1410,6 +1438,11 @@ object Renderer:
         val _ = bufferScreen.remove(key)
       }
       bufferDrawState.synchronized { val _ = bufferDrawState.remove(key) }
+      // The previous frame's snapshots and panel rects are reuse promises about pixels this surface no longer holds,
+      // so they go with the rest of them. `preparedScenes` stays: it is a layout memo, not a promise about pixels, and
+      // its own `matches` check is what decides whether it still applies.
+      previousSnapshots.synchronized { val _ = previousSnapshots.remove(key) }
+      previousFloatingSurfaceRects.synchronized { val _ = previousFloatingSurfaceRects.remove(key) }
     }
     output.foreach { value =>
       screenDamage.synchronized { val _ = screenDamage.remove(value.screenToken) }
@@ -1460,7 +1493,7 @@ object Renderer:
         val effectiveDamage      = if inputsOrPanesChanged then Damage.Everything else bufferDamageSinceLastDraw
 
         val dirtyRowsByPane =
-          panes.map { case (paneId, record) => paneId -> dirtyRowsFor(effectiveDamage, paneId, record) }
+          panes.map { case (paneId, record) => paneId -> dirtyRowsFor(effectiveDamage, paneId, record, persistenceKey) }
 
         val preserved = panes.toList.flatMap {
           case (paneId, record) =>
@@ -1480,7 +1513,8 @@ object Renderer:
           Option.when(boundedRepaintEligible) {
             panes.toList.flatMap {
               case (paneId, record) =>
-                dirtyRowsFor(screenDamageSincePublish, paneId, record).toList.flatMap(record.rowRects.lift)
+                dirtyRowsFor(screenDamageSincePublish, paneId, record, persistenceKey).toList
+                  .flatMap(record.rowRects.lift)
             }
           }
 
@@ -1506,14 +1540,19 @@ object Renderer:
     * no per-buffer detail to translate.
     *
     * Unioned with [[DirtyLineDiff.dirtyRows]] comparing this pane's previous frame's [[TextLayoutSnapshot]]
-    * ([[previousSnapshotsRef]]) against `record.snapshot`: `Damage`'s buffer-line facts only ever name the paragraph
+    * ([[previousSnapshots]]) against `record.snapshot`: `Damage`'s buffer-line facts only ever name the paragraph
     * actually edited, so a paragraph whose own content is untouched but whose *screen row* moved -- because an earlier
     * paragraph's edit changed how many rows it wraps into -- is otherwise never marked dirty, leaving stale pixels from
     * the row's old frame in place. `TextVisualLine` carries no cursor/selection state, so this catches reflow shifts
     * precisely without making the `Damage`-based half above redundant: a selection- or cursor-only change can leave
     * every row's `TextVisualLine` equal while still needing a redraw, which only `Damage` reports.
     */
-  private def dirtyRowsFor(damage: Damage, paneId: PaneId, record: PaneFrameRecord): Set[Int] =
+  private def dirtyRowsFor(
+    damage: Damage,
+    paneId: PaneId,
+    record: PaneFrameRecord,
+    persistenceKey: SurfaceContentIdentity
+  ): Set[Int] =
     val damageDirty =
       if Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
       else
@@ -1523,20 +1562,24 @@ object Renderer:
         }.toSet
         DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
           record.overflowingRows ++
-          vacatedFloatingSurfaceRows(damage, record)
-    val previousSnapshot = previousSnapshotsRef.get().get(paneId)
+          vacatedFloatingSurfaceRows(damage, record, persistenceKey)
+    val previousSnapshot = previousSnapshotsFor(persistenceKey).get(paneId)
     damageDirty ++ DirtyLineDiff.dirtyRows(previousSnapshot, record.snapshot)
 
   /** Rows of `record` whose pixel band ([[PaneFrameRecord.rowRects]]) intersects the previous frame's rect of any
     * floating surface `damage` reports as changed ([[Damage.surfaceIds]]). A surface absent from
-    * [[previousFloatingSurfaceRectsRef]] (never painted as a floating panel, or this is its first frame) contributes
+    * [[previousFloatingSurfaceRects]] (never painted as a floating panel, or this is its first frame) contributes
     * nothing -- there is no earlier rect for it to have vacated.
     */
-  private def vacatedFloatingSurfaceRows(damage: Damage, record: PaneFrameRecord): Set[Int] =
+  private def vacatedFloatingSurfaceRows(
+    damage: Damage,
+    record: PaneFrameRecord,
+    persistenceKey: SurfaceContentIdentity
+  ): Set[Int] =
     val changedSurfaceIds = Damage.surfaceIds(damage)
     if changedSurfaceIds.isEmpty then Set.empty
     else
-      val previousRects = previousFloatingSurfaceRectsRef.get()
+      val previousRects = previousFloatingSurfaceRectsFor(persistenceKey)
       val vacatedRects  = changedSurfaceIds.flatMap(previousRects.get)
       if vacatedRects.isEmpty then Set.empty
       else
@@ -3131,14 +3174,14 @@ object Renderer:
       if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
     belowOverlays.foreach(paintOverlay)
 
-    // Recorded *after* this frame's panels are painted, so `dirtyRowsFor`'s read of this same ref (via `planFrame`,
+    // Recorded *after* this frame's panels are painted, so `dirtyRowsFor`'s read of this same state (via `planFrame`,
     // which always runs before this method for a given frame) still sees last frame's rects while planning this one --
-    // see `previousFloatingSurfaceRectsRef`'s doc comment.
+    // see `previousFloatingSurfaceRects`' doc comment.
     val currentFloatingRects: Map[SurfaceId, PixelRect] =
       (overlays.aboveCursor.toList ++ belowOverlays).flatMap { overlay =>
         overlay.surfaceId.map(_ -> floatingPanelPixelRect(overlay.rect, context.cellMetrics))
       }.toMap
-    previousFloatingSurfaceRectsRef.set(currentFloatingRects)
+    rememberFloatingSurfaceRects(context.surface, currentFloatingRects)
 
   /** `rect` (in cell/row units, as every [[LayoutRect]] floating panels are placed with is) converted to the pixel
     * rectangle it occupies on screen, using the same `cellMetrics`-based conversion [[paneRowRects]] uses for pane
