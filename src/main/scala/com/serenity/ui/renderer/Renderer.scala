@@ -74,8 +74,8 @@ object Renderer:
 
   /** Screen-pixel rects the floating panels (`renderFloatingPanels`'s `overlays`) occupied on the *previous* frame,
     * keyed by surface id. `planFrame`/`dirtyRowsFor` read this before `renderFloatingPanels` runs for the current
-    * frame, so it always reflects the frame before the one being planned -- exactly what's needed to find the pane
-    * rows a moved/resized/closed panel vacated (see `dirtyRowsFor`'s doc comment). Updated at the end of
+    * frame, so it always reflects the frame before the one being planned -- exactly what's needed to find the pane rows
+    * a moved/resized/closed panel vacated (see `dirtyRowsFor`'s doc comment). Updated at the end of
     * `renderFloatingPanels` once this frame's rects are known, ready for the next frame's `planFrame` call. Keeping
     * this as a single object-level `AtomicReference`, rather than threading it through `RenderContext`, matches how
     * `preparedSceneRef` above already caches single-surface frame state for this renderer.
@@ -1483,8 +1483,8 @@ object Renderer:
     * preserve, plus any row whose pixel band was under a floating panel's *previous*-frame rect for every
     * `Damage.Surface(id)` fact in `damage` ([[vacatedFloatingSurfaceRows]]). `Damage.Surface` carries no buffer-row
     * detail for `Damage.coarsenToRows` to translate -- a panel's move/resize/close only reports which surface changed,
-    * not which pane pixels it used to cover -- so without this, a pane whose own content didn't change preserves rows
-    * a panel painted opaque background into last frame and no longer paints into this frame, leaving that background
+    * not which pane pixels it used to cover -- so without this, a pane whose own content didn't change preserves rows a
+    * panel painted opaque background into last frame and no longer paints into this frame, leaving that background
     * stale under any theme with a transparent pane background. `Damage.Everything` dirties every row, since it carries
     * no per-buffer detail to translate.
     */
@@ -1509,7 +1509,7 @@ object Renderer:
     if changedSurfaceIds.isEmpty then Set.empty
     else
       val previousRects = previousFloatingSurfaceRectsRef.get()
-      val vacatedRects   = changedSurfaceIds.flatMap(previousRects.get)
+      val vacatedRects  = changedSurfaceIds.flatMap(previousRects.get)
       if vacatedRects.isEmpty then Set.empty
       else
         record.rowRects.zipWithIndex.collect {

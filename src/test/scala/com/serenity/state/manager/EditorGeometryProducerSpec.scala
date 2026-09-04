@@ -41,8 +41,8 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
   private val narrowRun = "i" * 200
 
   "EditorGeometryProducer.forPane" should "wrap at exactly the panel's column count in TUI mode" in {
-    val buffer          = Buffer.fromString(bufferId, narrowRun)
-    val tuiState         = stateWith(buffer, isTuiMode = true)
+    val buffer   = Buffer.fromString(bufferId, narrowRun)
+    val tuiState = stateWith(buffer, isTuiMode = true)
     val panelWidthColumns = com.serenity.ui.layout.LayoutEngine
       .calculateLayout(tuiState, ViewportSize(80, 24))
       .editorPanelRect
@@ -55,8 +55,8 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "wrap later than the panel's column count in GUI mode, for the same proportional-font content" in {
-    val buffer          = Buffer.fromString(bufferId, narrowRun)
-    val guiState         = stateWith(buffer, isTuiMode = false)
+    val buffer   = Buffer.fromString(bufferId, narrowRun)
+    val guiState = stateWith(buffer, isTuiMode = false)
     val panelWidthColumns = com.serenity.ui.layout.LayoutEngine
       .calculateLayout(guiState, ViewportSize(80, 24))
       .editorPanelRect

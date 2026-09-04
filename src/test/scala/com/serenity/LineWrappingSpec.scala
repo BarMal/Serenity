@@ -580,9 +580,9 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     // from "M" (the character `CellMetrics.fromFont` measures its own cell width from): a narrower character could
     // measure under the nominal per-column pixel budget under a proportional font and never wrap at the column count
     // this arithmetic expects.
-    val word         = "M" * (panelWidth - 3)
-    val lastWord      = "MMMMM"
-    val longLine      = List.fill(2)(word).mkString(" ") + " " + lastWord
+    val word     = "M" * (panelWidth - 3)
+    val lastWord = "MMMMM"
+    val longLine = List.fill(2)(word).mkString(" ") + " " + lastWord
     longLine.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
 
     val stateAfterTyping = stateManager.getCurrentState.unsafeRunSync()

@@ -148,8 +148,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     // terminal itself actually wrapped and drew.
     val state = stateWith(Buffer.fromString(bufferId, "i" * 200))
       .copy(runtime = AppState.initial.runtime.copy(isTuiMode = true))
-    val size  = ViewportSize(80, 24)
-    val cache = MouseTargetCache.fromState(state, size)
+    val size        = ViewportSize(80, 24)
+    val cache       = MouseTargetCache.fromState(state, size)
     val snapshot    = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
     val contentRect = cache.scene.paneLayouts(paneId).contentRect
 

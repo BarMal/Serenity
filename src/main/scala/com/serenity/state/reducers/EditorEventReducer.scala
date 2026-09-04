@@ -525,8 +525,8 @@ object EditorEventReducer:
         navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.previousWordBoundary(offset)))
       case MoveWordRight =>
         navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.nextWordBoundary(offset)))
-      case MoveToStart => navigate(cursor => homeTarget(currentState, paneId, cursor))
-      case MoveToEnd   => navigate(cursor => endTarget(currentState, paneId, buffer, cursor))
+      case MoveToStart       => navigate(cursor => homeTarget(currentState, paneId, cursor))
+      case MoveToEnd         => navigate(cursor => endTarget(currentState, paneId, buffer, cursor))
       case MoveToStartOfFile => navigate(_ => OriginCursor)
 
       case PageUp =>
@@ -797,8 +797,8 @@ object EditorEventReducer:
   /** Home's landing column: the start of the cursor's current *visual* row when visual-line navigation applies,
     * otherwise column 0 of the logical line (`MoveToStartOfFile`-style callers that want the true buffer start
     * regardless of wrapping use `MoveToStartOfFile`, not this). Falls back to the logical start if no geometry is
-    * available for this pane (e.g. no buffer content yet) even when the setting is on, matching `verticalTarget`'s
-    * own `fallbackVerticalMove` fallback pattern for the same situation.
+    * available for this pane (e.g. no buffer content yet) even when the setting is on, matching `verticalTarget`'s own
+    * `fallbackVerticalMove` fallback pattern for the same situation.
     */
   private def homeTarget(state: AppState, paneId: PaneId, cursor: CursorPosition): CursorPosition =
     if useVisualLineNavigation(state) then
@@ -809,8 +809,8 @@ object EditorEventReducer:
         .getOrElse(cursor.copy(column = 0))
     else cursor.copy(column = 0)
 
-  /** End's landing column: the end of the cursor's current *visual* row when visual-line navigation applies,
-    * otherwise the logical line's own end (`findLineEnd`). Same geometry-missing fallback as [[homeTarget]].
+  /** End's landing column: the end of the cursor's current *visual* row when visual-line navigation applies, otherwise
+    * the logical line's own end (`findLineEnd`). Same geometry-missing fallback as [[homeTarget]].
     */
   private def endTarget(state: AppState, paneId: PaneId, buffer: Buffer, cursor: CursorPosition): CursorPosition =
     if useVisualLineNavigation(state) then
