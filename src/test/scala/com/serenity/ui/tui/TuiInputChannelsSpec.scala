@@ -47,22 +47,31 @@ class TuiInputChannelsSpec extends TuiSpec:
       yield ()
     }
 
-  /** KNOWN DEFECT, asserted as it behaves today.
-    *
-    * `TerminalInputDecoder` turns every SGR release report into a `MouseClick`, including the release that ends a drag
-    * -- and a click collapses the selection the drag just made. AWT never delivers `mouseClicked` after a drag, so the
-    * Swing path keeps the selection and the terminal path loses it: the same gesture behaves differently in the two
-    * shells. Change this to expect the selection to survive when the release stops synthesising a click after a drag.
-    */
-  it should "lose that selection when the button is released, unlike the Swing path" in
+  it should "keep that selection when the button is released, as the Swing path does" in
     runTui(TuiEnvironment.withFile("selectable text here")) {
       for
         _ <- press(TuiKeys.mousePress(ContentColumn, 1))
         _ <- dragMouse(ContentColumn + 10, 1)
         _ <- press(TuiKeys.mouseRelease(ContentColumn + 10, 1))
-        _ <- verifyState("selection after release")(current =>
+        _ <- verifyState("selection after release") { current =>
+          val selection = focusedBuffer(current).flatMap(_.editing.selection)
+          selection.map(_.start.column) shouldBe Some(0)
+          selection.map(_.end.column) shouldBe Some(10)
+        }
+      yield ()
+    }
+
+  it should "not leave the next release swallowed: a plain click after one still moves the caret" in
+    runTui(TuiEnvironment.withFile("selectable text here")) {
+      for
+        _ <- press(TuiKeys.mousePress(ContentColumn, 1))
+        _ <- dragMouse(ContentColumn + 10, 1)
+        _ <- press(TuiKeys.mouseRelease(ContentColumn + 10, 1))
+        _ <- click(ContentColumn + 4, 1)
+        _ <- verifyState("caret after the following click") { current =>
           focusedBuffer(current).flatMap(_.editing.selection) shouldBe empty
-        )
+          focusedBuffer(current).flatMap(_.editing.cursors.headOption).map(_.column) shouldBe Some(4)
+        }
       yield ()
     }
 

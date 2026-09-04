@@ -136,6 +136,7 @@ object TerminalInputHandler:
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
       rawQueue         <- Queue.unbounded[IO, ReadOutcome]
       latestMovement   <- Ref.of[IO, Option[MovementSlot]](None)
+      draggingButton   <- Ref.of[IO, Option[MouseButton]](None)
       remainder        <- Ref.of[IO, Array[Byte]](Array.emptyByteArray)
       modifierTapState <- Ref.of[IO, ModifierTapState](ModifierTapState.empty)
       focusCallback    <- IO(new AtomicReference[Option[Boolean => Unit]](None))
@@ -148,6 +149,7 @@ object TerminalInputHandler:
           rawQueue,
           queue,
           latestMovement,
+          draggingButton,
           remainder,
           modifierTapState,
           systemClipboard,
@@ -194,6 +196,7 @@ object TerminalInputHandler:
     rawQueue: Queue[IO, ReadOutcome],
     queue: Queue[IO, Option[QueuedInput]],
     latestMovement: Ref[IO, Option[MovementSlot]],
+    draggingButton: Ref[IO, Option[MouseButton]],
     remainder: Ref[IO, Array[Byte]],
     modifierTapState: Ref[IO, ModifierTapState],
     systemClipboard: SystemClipboard[IO],
@@ -240,10 +243,22 @@ object TerminalInputHandler:
       case Modifier.Shift => InputKey.Shift
       case Modifier.Meta  => InputKey.Meta
 
+    // A terminal reports only press and release, and the decoder reads a release as a click -- right for a press and
+    // release in the same place, wrong for the release that ends a drag, where that click collapses the selection the
+    // drag just made. AWT never delivers `mouseClicked` after a drag (`SwingInputHandler` listens for
+    // `mousePressed`/`mouseClicked` and to no release at all), so the drag-ending release is dropped here and the two
+    // shells behave the same way. A drag arms `draggingButton` and the release of that button disarms it; a press
+    // deliberately does not, since no press can reach a terminal between a drag and its own release, and clearing on
+    // one would make the gesture's state depend on unrelated reports.
     def enqueueMouse(event: MouseInputEvent): IO[Unit] = event match
       case m: MouseMove => enqueueMovement(MovementKind.Move, m)
-      case d: MouseDrag => enqueueMovement(MovementKind.Drag, d)
-      case other        => latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(other)))
+      case d: MouseDrag => draggingButton.set(Some(d.button)) >> enqueueMovement(MovementKind.Drag, d)
+      case click: MouseClick =>
+        latestMovement.set(None) >> draggingButton.getAndUpdate(_.filterNot(_ == click.button)).flatMap {
+          case Some(dragging) if dragging == click.button => IO.unit
+          case _                                          => queue.offer(Some(QueuedInput.Direct(click)))
+        }
+      case other => latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(other)))
 
     def enqueueMovement(kind: MovementKind, event: MouseInputEvent): IO[Unit] =
       latestMovement.get.flatMap {
