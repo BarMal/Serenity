@@ -400,7 +400,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val tuiRunner = CommandRunner.empty.activate(registry, AppConfig.default, isTuiMode = true)
     tuiRunner.isTuiMode shouldBe true
     settingsGroup(tuiRunner, "settings-typography").flatMap(_.hint) shouldBe
-      Some("Typefaces for prose, code, and interface -- inert in TUI mode")
+      Some("Inert in TUI mode -- Typefaces for prose, code, and interface")
   }
 
   "CommandRunner.activate with keyboardFidelityTier" should "default to Full and carry the negotiated tier through (issue #1194)" in {

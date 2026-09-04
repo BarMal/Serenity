@@ -6,6 +6,7 @@ import java.util.Base64
 
 import scala.annotation.tailrec
 
+import com.serenity.ui.layout.CharWidth
 import com.serenity.ui.theme.TextStyle
 
 /** A mock terminal, test-only: it interprets the escape sequences Serenity's TUI actually writes -- cursor positioning,

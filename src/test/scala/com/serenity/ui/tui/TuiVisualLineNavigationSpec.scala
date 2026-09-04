@@ -10,11 +10,10 @@ import TuiScenarios.*
   * three cases worth pinning: both on (visual rows), the navigation flag off (logical lines), and word wrap off
   * (logical lines, because there are no visual rows to speak of). Up and Down honour all three.
   *
-  * Home and End do not, and that is the defect this spec pins: End on a wrapped row leaves the caret on the boundary
-  * column shared by that row's end and the next row's start, and the renderer resolves that column to the *next* row --
-  * so pressing End on a wrapped line visibly moves the caret to the far left of the row below, and Home from there does
-  * not bring it back. It is the same earlier-row/later-row ambiguity #1266 fixed for vertical movement
-  * (`NavigationGeometry.visualRowIndexFor`), still present on the horizontal ones.
+  * Home and End honour them too, including at a wrap boundary: the column where one row ends and the next begins
+  * belongs to whichever row the cursor arrived from, which is what `CursorPosition.rowAffinity` records. Without it End
+  * landed on that shared column, the renderer resolved it to the *next* row, and the caret jumped to the far left of
+  * the row below -- the earlier-row/later-row ambiguity #1266 fixed for vertical movement, on the horizontal ones.
   */
 class TuiVisualLineNavigationSpec extends TuiSpec:
 
@@ -86,10 +85,9 @@ class TuiVisualLineNavigationSpec extends TuiSpec:
       cursorLine(after) shouldBe 3
   }
 
-  // -- Home and End do not (the defect) ------------------------------------------------------------------------------
+  // -- Home and End at a wrap boundary -------------------------------------------------------------------------------
 
-  /** KNOWN DEFECT, asserted as it behaves today. */
-  "End on a wrapped row" should "leave the caret at the start of the row below, not the end of that row" in
+  "End on a wrapped row" should "leave the caret at the end of that row, not the start of the row below" in
     runTui(env()) {
       for
         _      <- arrowDown // onto the second visual row of the first logical line
@@ -104,13 +102,13 @@ class TuiVisualLineNavigationSpec extends TuiSpec:
         cursorColumn(onRow) should be > 100
         // ...and End moved it forward, as far as the document is concerned.
         cursorColumn(ended) should be > cursorColumn(onRow)
-        // But that landing column is the boundary the next row starts on, so the caret is drawn one row lower, at the
-        // far left -- the opposite corner of the screen from where End should have put it.
-        after.caret shouldBe (ContentColumn, before.caret._2 + 1)
+        // That landing column is the boundary the next row starts on, but the cursor arrived from the row above it, so
+        // the caret stays on that row, near its right edge.
+        after.caret._2 shouldBe before.caret._2
+        after.caret._1 should be > before.width / 2
     }
 
-  /** KNOWN DEFECT, asserted as it behaves today. */
-  it should "not be undone by Home, which now reads as already being at its row's start" in runTui(env()) {
+  it should "be undone by Home, which returns to the same row's start" in runTui(env()) {
     for
       _         <- arrowDown
       onRow     <- state
@@ -120,10 +118,23 @@ class TuiVisualLineNavigationSpec extends TuiSpec:
       afterHome <- state
       current   <- settledScreen
     yield
-      // Home is a no-op: the caret is already at column 0 of the row the renderer thinks it is on.
-      cursorColumn(afterHome) shouldBe cursorColumn(afterEnd)
-      cursorColumn(afterHome) should not be cursorColumn(onRow)
+      cursorColumn(afterHome) shouldBe cursorColumn(onRow)
+      cursorColumn(afterHome) should not be cursorColumn(afterEnd)
       current.caret._1 shouldBe ContentColumn
+  }
+
+  it should "leave Down moving one visual row, from the row End left the caret on" in runTui(env()) {
+    for
+      _       <- arrowDown
+      before  <- settledScreen
+      _       <- lineEnd
+      _       <- arrowDown
+      after   <- settledScreen
+      current <- state
+    yield
+      // Not two rows: the cursor is on the row End put it on, so Down steps once from there.
+      after.caret._2 shouldBe before.caret._2 + 1
+      cursorLine(current) shouldBe 0
   }
 
   "End on the final visual row of a wrapped line" should "land on the logical line's end, where the two agree" in

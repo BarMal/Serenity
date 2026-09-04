@@ -506,3 +506,84 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     // much wider natural charWidth.
     snapshot.visualLines.head.widthPx shouldBe 5.0f
   }
+
+  // -- The terminal cell grid measures display width, not characters: a wide glyph occupies two cells, so the caret
+  // stops and wrap points a `CellMetrics.cellUnit` layout produces must count cells the way `TerminalScreenBuffer`
+  // paints them. Only that unit is display-width aware; a font-derived grid keeps its uniform per-character advance,
+  // since there the glyph advances come from the font itself. --
+
+  it should "advance a cellUnit layout by each glyph's display width, not one per character" in {
+    val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+    val xs = TextLayoutSnapshot.caretXsForText(
+      "a漢b",
+      font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true
+    )
+
+    xs shouldBe Vector(0.0f, 1.0f, 3.0f, 4.0f)
+  }
+
+  it should "keep a surrogate pair's two chars on one glyph's worth of cells" in {
+    val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+    val xs = TextLayoutSnapshot.caretXsForText(
+      "🚀b",
+      font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true
+    )
+
+    // Three characters (the rocket is a surrogate pair) but two cells for the rocket: the caret stops stay
+    // non-decreasing, and the low surrogate -- which is never a grapheme boundary, so never a caret stop -- shares the
+    // glyph's trailing edge.
+    xs shouldBe Vector(0.0f, 2.0f, 2.0f, 3.0f)
+  }
+
+  it should "keep a font-derived cell grid advancing one cell per character" in {
+    val font    = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+
+    val xs = TextLayoutSnapshot.caretXsForText(
+      "a漢b",
+      font,
+      cellMetricsOverride = Some(metrics),
+      forceCellLayout = true
+    )
+
+    xs shouldBe Vector(0.0f, 1.0f, 2.0f, 3.0f).map(_ * metrics.charWidth)
+  }
+
+  it should "wrap a cellUnit layout on the cell the glyph actually fills, never splitting one" in {
+    val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+    val lines = TextLayoutSnapshot.boundedVisualLinesForText(
+      "漢" * 10,
+      bufferLine = 0,
+      panelWidthPx = 7,
+      font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true
+    )
+
+    // Seven cells hold three wide glyphs with one cell to spare -- the fourth would straddle the boundary.
+    lines.head.text shouldBe "漢漢漢"
+    lines.head.widthPx shouldBe 6.0f
+    lines.map(_.text).mkString shouldBe "漢" * 10
+  }
+
+  it should "wrap a cellUnit layout of mixed widths where the cells run out" in {
+    val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+
+    val lines = TextLayoutSnapshot.boundedVisualLinesForText(
+      "ab漢cd",
+      bufferLine = 0,
+      panelWidthPx = 4,
+      font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true
+    )
+
+    lines.map(_.text) shouldBe Vector("ab漢", "cd")
+  }

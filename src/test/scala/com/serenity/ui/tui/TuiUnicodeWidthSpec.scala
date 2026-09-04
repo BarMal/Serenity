@@ -22,26 +22,20 @@ class TuiUnicodeWidthSpec extends TuiSpec:
       }
     }
 
-  /** KNOWN DEFECT, asserted as it behaves today.
-    *
-    * The hardware caret is positioned from the cursor's character column, not its display column, so every wide glyph
-    * before it costs one cell of drift: after typing a single CJK character the terminal's block cursor sits on that
-    * glyph's own continuation cell rather than after it. The status bar's "Col 2" is right; the caret is not. The
-    * document text and the painted cells are unaffected -- this is the caret alone. Change these expectations to
-    * `ContentColumn + 2 * glyphs` when the column mapping is fixed.
-    */
-  it should "advance the caret by one cell per wide glyph -- one short of the glyph's own width" in runTui() {
+  it should "advance the caret by each glyph's own display width" in runTui() {
     for
       _ <- typeText("漢")
       _ <- verify("after one wide glyph") { screen =>
-        screen.caret shouldBe (ContentColumn + 1, FirstLineRow)
+        // Past the glyph's continuation cell, not on it: the caret's column is a display column, so it agrees with
+        // both the painted cells and the status bar's own count.
+        screen.caret shouldBe (ContentColumn + 2, FirstLineRow)
         screen.cellAt(ContentColumn + 1, FirstLineRow).span shouldBe CellSpan.Continuation
         screen.statusBar should include("Col 2")
       }
       _ <- typeText("字")
-      _ <- verify("after two")(screen => screen.caret shouldBe (ContentColumn + 2, FirstLineRow))
+      _ <- verify("after two")(screen => screen.caret shouldBe (ContentColumn + 4, FirstLineRow))
       _ <- typeText("a")
-      _ <- verify("after a narrow one")(screen => screen.caret shouldBe (ContentColumn + 3, FirstLineRow))
+      _ <- verify("after a narrow one")(screen => screen.caret shouldBe (ContentColumn + 5, FirstLineRow))
     yield ()
   }
 
@@ -81,18 +75,13 @@ class TuiUnicodeWidthSpec extends TuiSpec:
       }
     }
 
-  /** KNOWN GAP, asserted as it behaves today.
-    *
-    * `CharWidth`'s table covers Miscellaneous Symbols and Pictographs (U+1F300-U+1F64F) and Supplemental Symbols
-    * (U+1F900-U+1F9FF), but not Transport and Map Symbols (U+1F680-U+1F6FF) in between -- so a rocket is treated as one
-    * cell wide while every real terminal draws it as two, putting the app's column arithmetic out of step with the
-    * screen for that block. Flip this to `Wide` when the range is added.
-    */
-  "an emoji from a block CharWidth's table omits" should "be treated as a narrow glyph" in
+  "an emoji from the transport and map block" should "occupy two cells like every other wide glyph" in
     runTui(TuiEnvironment.withFile("🚀 go")) {
       verify("transport emoji") { screen =>
         screen.cellAt(ContentColumn, FirstLineRow).text shouldBe "🚀"
-        screen.cellAt(ContentColumn, FirstLineRow).span shouldBe CellSpan.Narrow
+        screen.cellAt(ContentColumn, FirstLineRow).span shouldBe CellSpan.Wide
+        screen.cellAt(ContentColumn + 1, FirstLineRow).span shouldBe CellSpan.Continuation
+        screen.cellAt(ContentColumn + 3, FirstLineRow).text shouldBe "g"
       }
     }
 
@@ -122,8 +111,7 @@ class TuiUnicodeWidthSpec extends TuiSpec:
         _ <- typeText("漢")
         _ <- verify("reflowed") { screen =>
           screen.rowText(FirstLineRow).stripTrailing shouldBe " 1 ab漢cd"
-          // One cell short of the glyph's width, per the caret defect documented above.
-          screen.caret shouldBe (ContentColumn + 3, FirstLineRow)
+          screen.caret shouldBe (ContentColumn + 4, FirstLineRow)
         }
         text <- documentText
       yield text shouldBe Some("ab漢cd")

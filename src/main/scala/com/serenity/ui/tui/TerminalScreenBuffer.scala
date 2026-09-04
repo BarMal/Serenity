@@ -3,6 +3,7 @@ package com.serenity.ui.tui
 import java.awt.Color
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.layout.CharWidth
 import com.serenity.ui.theme.TextStyle
 
 /** A cell grid for the terminal backend: `(codepoint, fg, bg, style)` per cell, filled via the same `putString`/

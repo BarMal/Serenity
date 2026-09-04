@@ -1445,7 +1445,9 @@ class EditorEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = EditorEventReducer.reduce(MoveToEnd, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 4))
+    // End pins each cursor to the row it was pressed on (`RowAffinity.Upstream`), which on this unwrapped line is the
+    // only row there is.
+    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 4).upstream)
   }
 
   it should "move every cursor down while preserving per-cursor columns when multiple cursors are active" in {

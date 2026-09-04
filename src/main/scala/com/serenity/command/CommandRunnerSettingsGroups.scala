@@ -484,12 +484,16 @@ object CommandRunnerSettingsGroups:
       keymapGroup
     )
 
-  /** Suffix a hint to note that the control it describes has no visible effect on a fixed-cell terminal surface -- the
-    * setting still applies and persists identically, it just paints nothing different in TUI mode (see epic #1103's
+  /** Lead a hint with the note that the control it describes has no visible effect on a fixed-cell terminal surface --
+    * the setting still applies and persists identically, it just paints nothing different in TUI mode (see epic #1103's
     * accepted degradations).
+    *
+    * The note leads rather than trails because the settings surface's hint column is a fixed share of the panel width
+    * and elides from the right (`TextOverlayRenderer.fitCellText`): appended to a hint as long as Post-processing's,
+    * the annotation was cut off before it could ever be read, at any terminal width.
     */
   private def inertInTuiHint(hint: String, isTuiMode: Boolean): String =
-    if isTuiMode then s"$hint -- inert in TUI mode" else hint
+    if isTuiMode then s"Inert in TUI mode -- $hint" else hint
 
   private def annotateInertInTui(
     item: CommandSurfaceItem.OptionItem,

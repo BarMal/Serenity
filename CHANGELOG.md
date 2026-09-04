@@ -2,6 +2,11 @@
 
 ## 2026-09-04
 
+- Measured the TUI's cell grid in display cells rather than characters, so the caret, word wrap, mouse hit-testing and cursor movement agree with the two cells a wide glyph is actually painted across.
+- Widened Transport and Map Symbols and Symbols and Pictographs Extended-A to two cells, so a rocket or a plaster no longer takes one cell in the app's arithmetic and two on screen.
+- Kept a terminal drag's selection when the mouse button is released, matching the Swing path, instead of collapsing it with a click synthesised from the release.
+- Kept Home and End on the wrapped row the cursor is on, so End no longer leaves the caret at the far left of the row below and Home returns to the row's own start.
+- Led the inert-in-TUI settings hints with their annotation, so it stays legible instead of being elided with the rest of a long hint.
 - Repainted editor content on every damaged frame while the window sitter is active, so typed characters and their wrapped reflow appear immediately instead of trailing the cursor by the sitter's activity window.
 - Anchored the vertical-navigation geometry window on the cursor's own visual row, so Up/Down and Home/End keep stepping by visual row deep inside a paragraph longer than a screenful instead of falling back to logical-line movement.
 - Added a Visual Line Navigation toggle to the Text Display settings group, alongside the existing `display.visual_line_navigation` config key and command-palette toggle.

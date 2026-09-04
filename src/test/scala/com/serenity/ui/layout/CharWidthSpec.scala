@@ -1,4 +1,4 @@
-package com.serenity.ui.tui
+package com.serenity.ui.layout
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,6 +26,20 @@ class CharWidthSpec extends AnyFlatSpec with Matchers:
     CharWidth.of(0x1f600) shouldBe 2 // grinning face
   }
 
+  it should "report transport and map symbols as wide" in {
+    CharWidth.of(0x1f680) shouldBe 2 // 🚀, the block's first codepoint
+    CharWidth.of(0x1f6a2) shouldBe 2 // 🚢
+    CharWidth.of(0x1f6ff) shouldBe 2 // the block's last codepoint
+  }
+
+  it should "report supplemental symbols extended-A as wide" in {
+    CharWidth.of(0x1fa79) shouldBe 2 // 🩹
+  }
+
   it should "report Latin-1 supplement punctuation as narrow" in {
     CharWidth.of(0x00e9) shouldBe 1 // e-acute
+  }
+
+  it should "report ornamental dingbats, which sit between two wide blocks, as narrow" in {
+    CharWidth.of(0x1f650) shouldBe 1
   }
