@@ -513,10 +513,17 @@ object EditorEventReducer:
     def applyBuffer(f: Buffer => Buffer): ReducerResult =
       ReducerResult.noEffects(Focused.replaceBuffer(currentState, f(buffer)))
 
-    def navigate(moveFn: CursorPosition => CursorPosition): ReducerResult =
+    def navigateWithAffinity(moveFn: CursorPosition => CursorPosition): ReducerResult =
       applyBuffer(target =>
         applyMultiCursorNavigation(if hasSelection then collapseSelectionsToFocus(target) else target)(moveFn)
       )
+
+    // Landing on the column where one wrapped row ends and the next begins means arriving at the start of the later
+    // row -- for every movement but End, which means the end of the row the cursor was already on. Normalising here
+    // rather than in each `moveFn` keeps an upstream affinity from outliving the End that set it, whatever route the
+    // cursor takes away from that column afterwards.
+    def navigate(moveFn: CursorPosition => CursorPosition): ReducerResult =
+      navigateWithAffinity(cursor => moveFn(cursor).downstream)
 
     event match
       case MoveLeft  => navigate(cursor => moveCursorLeft(cursor, buffer.document.content))
@@ -526,7 +533,7 @@ object EditorEventReducer:
       case MoveWordRight =>
         navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.nextWordBoundary(offset)))
       case MoveToStart       => navigate(cursor => homeTarget(currentState, paneId, cursor))
-      case MoveToEnd         => navigate(cursor => endTarget(currentState, paneId, buffer, cursor))
+      case MoveToEnd         => navigateWithAffinity(cursor => endTarget(currentState, paneId, buffer, cursor))
       case MoveToStartOfFile => navigate(_ => OriginCursor)
 
       case PageUp =>
@@ -804,10 +811,12 @@ object EditorEventReducer:
     if useVisualLineNavigation(state) then
       com.serenity.state.manager.EditorGeometryProducer
         .forPane(state, paneId)
+        // The cursor's own affinity, not a normalised one: Home after End has to find the row End left it on, or it
+        // reads as already being at the start of the row below and does nothing.
         .flatMap(_.navigation.visualLineFor(cursor))
-        .map(line => cursor.copy(column = line.startColumn))
-        .getOrElse(cursor.copy(column = 0))
-    else cursor.copy(column = 0)
+        .map(line => CursorPosition(cursor.line, line.startColumn))
+        .getOrElse(CursorPosition(cursor.line, 0))
+    else CursorPosition(cursor.line, 0)
 
   /** End's landing column: the end of the cursor's current *visual* row when visual-line navigation applies, otherwise
     * the logical line's own end (`findLineEnd`). Same geometry-missing fallback as [[homeTarget]].
@@ -816,10 +825,14 @@ object EditorEventReducer:
     if useVisualLineNavigation(state) then
       com.serenity.state.manager.EditorGeometryProducer
         .forPane(state, paneId)
+        // The cursor's own affinity, so a second End is idempotent rather than walking down a row at a time.
         .flatMap(_.navigation.visualLineFor(cursor))
-        .map(line => cursor.copy(column = line.endColumn))
-        .getOrElse(cursor.copy(column = findLineEnd(buffer.document.content, cursor.line)))
-    else cursor.copy(column = findLineEnd(buffer.document.content, cursor.line))
+        // A wrapped row's end is the next row's start, so the landing column alone would put the caret at the far left
+        // of the row below; upstream affinity is what says the cursor stayed on the row End was pressed on. The
+        // logical line's own end is never shared with another row, so marking it there is harmless.
+        .map(line => CursorPosition(cursor.line, line.endColumn).upstream)
+        .getOrElse(CursorPosition(cursor.line, findLineEnd(buffer.document.content, cursor.line)))
+    else CursorPosition(cursor.line, findLineEnd(buffer.document.content, cursor.line))
 
   private def countLines(rope: Rope): Int =
     rope.lineCount

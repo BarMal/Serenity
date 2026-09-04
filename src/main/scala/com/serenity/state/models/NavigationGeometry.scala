@@ -68,17 +68,18 @@ final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
     * `Renderer`'s caret drawing must also use (`Renderer.calculateCursorVisualPosition`), or the caret is painted on a
     * different wrapped row than vertical navigation moves from -- the "cursor stuck at a wrap boundary until nudged
     * left/right" bug. At a wrap boundary, where one row's `endColumn` equals the next row's `startColumn`, both rows
-    * match the column; `.lastOption` resolves it to the later row, so a boundary column belongs to the start of the
-    * next visual line.
+    * match the column and the cursor's own [[RowAffinity]] settles it: downstream (all but End, and the default) reads
+    * the column as the start of the later row, upstream as the end of the earlier one.
     */
   def visualRowIndexFor(cursor: CursorPosition): Option[Int] =
-    visualLines.zipWithIndex
-      .filter {
-        case (line, _) =>
-          line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
-      }
-      .lastOption
-      .map(_._2)
+    val matching = visualLines.zipWithIndex.filter {
+      case (line, _) =>
+        line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
+    }
+    val resolved = cursor.rowAffinity match
+      case RowAffinity.Upstream   => matching.headOption
+      case RowAffinity.Downstream => matching.lastOption
+    resolved.map(_._2)
 
   /** The visual (wrapped) row `cursor` currently sits on, exposed for callers (Home/End under visual-line navigation,
     * and the renderer's caret placement) that need that row's own `startColumn`/`endColumn`/caret stops rather than a

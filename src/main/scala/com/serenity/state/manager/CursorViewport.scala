@@ -59,7 +59,8 @@ object CursorViewport:
           font,
           wordWrapEnabled = true,
           cellMetricsOverride = cellMetricsOverride,
-          forceCellLayout = forceCellLayout
+          forceCellLayout = forceCellLayout,
+          rowAffinity = cursor.rowAffinity
         )
 
     // The number of visual rows a logical line occupies on screen -- 1 unless word wrap folds it across several

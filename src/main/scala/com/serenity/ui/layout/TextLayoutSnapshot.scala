@@ -10,6 +10,7 @@ import com.serenity.state.models.{
   Buffer,
   CursorPosition,
   NavigationGeometry,
+  RowAffinity,
   TextCaretStop,
   TextVisualLine,
   TypographyRole
@@ -123,13 +124,17 @@ object TextLayoutSnapshot:
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     wordWrapEnabled: Boolean = true,
     cellMetricsOverride: Option[CellMetrics] = None,
-    forceCellLayout: Boolean = false
+    forceCellLayout: Boolean = false,
+    rowAffinity: RowAffinity = RowAffinity.Downstream
   ): Int =
     if !wordWrapEnabled then 0
     else
       val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
       val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-      wrapLogicalLine(
+      // At a wrap boundary (one row's endColumn == the next row's startColumn) both rows match the column, and the
+      // cursor's own affinity settles it exactly as `NavigationGeometry.visualRowIndexFor` does -- so viewport centring
+      // measures the cursor's visual row as the row the caret is actually drawn on.
+      val matching = wrapLogicalLine(
         lineText,
         0,
         math.max(1, panelWidthPx),
@@ -138,13 +143,11 @@ object TextLayoutSnapshot:
         measuredLayout,
         cellMetrics
       ).zipWithIndex
-        // `.lastOption`, not `collectFirst`: at a wrap boundary (one row's endColumn == the next row's startColumn) the
-        // cursor belongs to the *later* row, matching NavigationGeometry.visualRowIndexFor and the renderer's caret, so
-        // viewport centring measures the cursor's visual row the same way the caret is actually drawn.
         .filter { case (line, _) => cursorColumn >= line.startColumn && cursorColumn <= line.endColumn }
-        .lastOption
-        .map(_._2)
-        .getOrElse(0)
+      val resolved = rowAffinity match
+        case RowAffinity.Upstream   => matching.headOption
+        case RowAffinity.Downstream => matching.lastOption
+      resolved.map(_._2).getOrElse(0)
 
   private[serenity] def boundedVisualLinesForText(
     text: String,
