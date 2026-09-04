@@ -233,24 +233,93 @@ class TuiWrappedNavigationSpec extends TuiSpec:
     yield settled.caret._2 should be > 0
   }
 
-  /** KNOWN DEFECT, asserted as it behaves today, and adjacent to what #1266 fixed.
-    *
-    * PageDown moves the cursor by a screenful of logical lines but nothing brings the viewport with it: the top line
-    * stays where it was, the cursor ends up outside the visible window, and the terminal's own caret is parked in the
-    * bottom-right corner instead of on the text. Arrow navigation scrolls correctly (the tests above), so this is
-    * PageDown's own path, not the centring logic #1266 repaired. Change these expectations when the viewport follows.
+  // -- Page navigation over wrapped rows -----------------------------------------------------------------------------
+
+  /** A screenful is a screenful of what the terminal shows: visual rows. Counted in logical lines, one PageDown in this
+    * document (47 logical lines wrapping into some 150 rows, in a 54-row viewport) jumps past the end of it.
     */
-  "PageDown" should "move the cursor without scrolling the viewport to follow it" in runTui(environment) {
+  private def topLineOf(current: com.serenity.state.models.AppState): Int =
+    focusedBuffer(current).map(_.viewport.topLine).getOrElse(-1)
+
+  private def caretIsOnTheText(screen: TuiScreen): org.scalatest.Assertion =
+    screen.caret._1 should be < screen.width
+    screen.caret._2 should be > 0
+    screen.caret._2 should be < screen.height - 1
+
+  "PageDown" should "move the cursor a screenful of visual rows, not of logical lines" in runTui(environment) {
     for
-      _       <- pressAll(TuiKeys.PageDown, TuiKeys.PageDown)
+      _       <- settledScreen
+      _       <- press(TuiKeys.PageDown)
+      settled <- settledScreen
+      current <- state
+    yield
+      // Somewhere into the document, nowhere near its last line: a screenful of rows is a few paragraphs, not all of
+      // them.
+      cursorOf(current).map(_.line).getOrElse(-1) should be > 0
+      cursorOf(current).map(_.line).getOrElse(-1) should be < 40
+      caretIsOnTheText(settled)
+  }
+
+  it should "bring the viewport with it, leaving the cursor on screen" in runTui(environment) {
+    for
+      _       <- settledScreen
+      _       <- press(TuiKeys.PageDown)
+      settled <- settledScreen
+      current <- state
+    yield
+      topLineOf(current) should be > 0
+      settled.containsText("Paragraph 0") shouldBe false
+      caretIsOnTheText(settled)
+  }
+
+  it should "keep going on the next press rather than snapping the viewport back to the top" in runTui(environment) {
+    for
+      _       <- settledScreen
+      _       <- press(TuiKeys.PageDown)
+      first   <- state
+      _       <- press(TuiKeys.PageDown)
+      settled <- settledScreen
+      second  <- state
+    yield
+      cursorOf(second).map(_.line).getOrElse(-1) should be > cursorOf(first).map(_.line).getOrElse(-1)
+      topLineOf(second) should be > topLineOf(first)
+      caretIsOnTheText(settled)
+  }
+
+  it should "clamp at the document's last row rather than running off the end" in runTui(environment) {
+    for
+      _       <- settledScreen
+      _       <- pressAll(List.fill(8)(TuiKeys.PageDown)*)
       settled <- settledScreen
       current <- state
     yield
       cursorOf(current).map(_.line) shouldBe Some(46)
-      focusedBuffer(current).map(_.viewport.topLine) shouldBe Some(0)
+      settled.containsText("Paragraph 23") shouldBe true
+      caretIsOnTheText(settled)
+  }
+
+  "PageUp" should "undo PageDown, row for row" in runTui(environment) {
+    for
+      _      <- settledScreen
+      before <- state
+      _      <- press(TuiKeys.PageDown)
+      _      <- press(TuiKeys.PageUp)
+      after  <- state
+    yield
+      cursorOf(after).map(_.line) shouldBe cursorOf(before).map(_.line)
+      topLineOf(after) shouldBe topLineOf(before)
+  }
+
+  it should "clamp at the first row when there is less than a screenful above" in runTui(environment) {
+    for
+      _       <- settledScreen
+      _       <- pressAll(TuiKeys.PageDown, TuiKeys.PageUp, TuiKeys.PageUp)
+      settled <- settledScreen
+      current <- state
+    yield
+      cursorOf(current).map(_.line) shouldBe Some(0)
+      topLineOf(current) shouldBe 0
       settled.containsText("Paragraph 0") shouldBe true
-      settled.containsText("Paragraph 23") shouldBe false
-      // Off-screen caret: parked past the last cell rather than drawn on the cursor's own row.
-      settled.caret shouldBe (settled.width, settled.height - 1)
+      caretIsOnTheText(settled)
   }
 end TuiWrappedNavigationSpec

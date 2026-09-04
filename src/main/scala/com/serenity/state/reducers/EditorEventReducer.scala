@@ -540,6 +540,8 @@ object EditorEventReducer:
         applyBuffer(target =>
           applyMultiCursorPageNavigation(
             if hasSelection then collapseSelectionsToFocus(target) else target,
+            currentState,
+            paneId,
             direction = -1
           )
         )
@@ -547,6 +549,8 @@ object EditorEventReducer:
         applyBuffer(target =>
           applyMultiCursorPageNavigation(
             if hasSelection then collapseSelectionsToFocus(target) else target,
+            currentState,
+            paneId,
             direction = 1
           )
         )
@@ -556,16 +560,16 @@ object EditorEventReducer:
         val lastLine    = totalLines - 1
         val lastLineEnd = findLineEnd(buffer.document.content, lastLine)
         val newCursor   = CursorPosition(lastLine, lastLineEnd)
-        val newTopLine  = math.max(0, lastLine - buffer.viewport.visibleLines + 1)
-        val newViewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+        // No viewport here either, for the reasons `applyMultiCursorPageNavigation` documents: a top line of
+        // `lastLine - visibleLines + 1` counts logical lines against a screen of visual rows, and the effect boundary
+        // recomputes it correctly straight afterwards regardless.
         applyBuffer(
           _.copy(
             editing = buffer.editing.copy(
               cursors = List(newCursor),
               preferredColumn = Some(newCursor.column),
               preferredXPx = None
-            ),
-            viewport = newViewport
+            )
           )
         )
 
@@ -1265,25 +1269,59 @@ object EditorEventReducer:
     )
     baseBuffer
 
+  /** A page is a screenful of what the reader can see. Under word wrap that is a screenful of *visual rows*, which is
+    * far fewer logical lines than `visibleLines` -- counted in logical lines, one PageDown through wrapped prose jumps
+    * several screens, usually straight to the end of the document.
+    *
+    * The viewport is deliberately not set here. Placing it needs the same text measurement placing the cursor does, and
+    * that belongs at the effect boundary (`CursorViewport.ensureVisibleCursors`, which runs after every reduce that
+    * moves a cursor) rather than in a reducer. Computing one here was also how a page move could scroll the viewport
+    * when it had not moved the cursor at all: the old bottom clamp, `totalLines - visibleLines`, is a logical-line
+    * count that goes negative for a document whose wrapped rows outnumber its lines, and snapped the viewport to the
+    * top of the file on the second PageDown at a document's end.
+    */
   private def applyMultiCursorPageNavigation(
     buffer: Buffer,
+    currentState: AppState,
+    paneId: PaneId,
     direction: Int
   ): Buffer =
-    val totalLines = countLines(buffer.document.content)
-    val visLines   = buffer.viewport.visibleLines
-    val finalCursors = buffer.editing.cursors
-      .map { cursor =>
-        val targetLine =
-          if direction < 0 then math.max(0, cursor.line - visLines)
-          else math.min(cursor.line + visLines, totalLines - 1)
-        cursor.copy(line = targetLine, column = 0)
+    val totalLines  = countLines(buffer.document.content)
+    val visibleRows = math.max(1, buffer.viewport.visibleLines)
+    // The window has to reach a whole screenful in the direction of travel, which the default geometry only covers
+    // downwards.
+    val geometry =
+      if useVisualLineNavigation(currentState) then
+        com.serenity.state.manager.EditorGeometryProducer
+          .forPane(currentState, paneId, rowsAbove = visibleRows)
+          .map(_.navigation)
+      else None
+
+    def logicalTarget(cursor: CursorPosition): CursorPosition =
+      val targetLine =
+        if direction < 0 then math.max(0, cursor.line - visibleRows)
+        else math.min(cursor.line + visibleRows, totalLines - 1)
+      CursorPosition(targetLine, 0)
+
+    // A cursor whose own row the window does not cover -- a secondary cursor far from the primary one the window is
+    // anchored on -- falls back to logical lines rather than being left where it is.
+    def visualTarget(navigation: NavigationGeometry)(cursor: CursorPosition): Option[CursorPosition] =
+      navigation.visualRowIndexFor(cursor).flatMap { row =>
+        val lastRow   = navigation.visualLines.length - 1
+        val targetRow = math.max(0, math.min(lastRow, row + direction * visibleRows))
+        navigation.visualLines.lift(targetRow).map(line => CursorPosition(line.bufferLine, line.startColumn))
       }
+
+    val move: CursorPosition => CursorPosition =
+      geometry match
+        case Some(navigation) => cursor => visualTarget(navigation)(cursor).getOrElse(logicalTarget(cursor))
+        case None             => logicalTarget
+
+    val finalCursors = buffer.editing.cursors
+      .map(move)
       .distinct
       .sortBy(cursor => (cursor.line, cursor.column))
     val primaryCursor = finalCursors.primaryCursor
-    val newTopLine =
-      if direction < 0 then math.max(0, buffer.viewport.topLine - visLines)
-      else math.min(buffer.viewport.topLine + visLines, math.max(0, totalLines - visLines))
     buffer.copy(
       editing = buffer.editing.copy(
         cursors = finalCursors,
@@ -1292,8 +1330,7 @@ object EditorEventReducer:
         preferredColumn = Some(primaryCursor.column),
         preferredXPx = None,
         multiCursorVerticalStates = Nil
-      ),
-      viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
+      )
     )
 
   private def multiCursorEntries(buffer: Buffer): List[CursorEntry] =
