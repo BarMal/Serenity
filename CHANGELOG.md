@@ -7,6 +7,8 @@
 - Kept a terminal drag's selection when the mouse button is released, matching the Swing path, instead of collapsing it with a click synthesised from the release.
 - Kept Home and End on the wrapped row the cursor is on, so End no longer leaves the caret at the far left of the row below and Home returns to the row's own start.
 - Led the inert-in-TUI settings hints with their annotation, so it stays legible instead of being elided with the rest of a long hint.
+- Moved PageUp and PageDown by a screenful of visual rows rather than logical lines, so a page through wrapped prose is a page of what is on screen, and left the viewport to follow the cursor at the effect boundary instead of the reducer scrolling on its own.
+- Kept each render surface's previous-frame state against that surface rather than sharing one copy between all of them, and restored parallel test execution.
 - Repainted editor content on every damaged frame while the window sitter is active, so typed characters and their wrapped reflow appear immediately instead of trailing the cursor by the sitter's activity window.
 - Anchored the vertical-navigation geometry window on the cursor's own visual row, so Up/Down and Home/End keep stepping by visual row deep inside a paragraph longer than a screenful instead of falling back to logical-line movement.
 - Added a Visual Line Navigation toggle to the Text Display settings group, alongside the existing `display.visual_line_navigation` config key and command-palette toggle.
