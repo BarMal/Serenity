@@ -406,7 +406,9 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     config.cursorInfoBarSegments shouldBe List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
     config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
-    ConfigManager.configToString(config) should include("\"cursor.info_bar\" = position,title")
+    // The segment list is written under its own leaf and quoted: a bare comma made the file invalid HOCON, and
+    // `cursor.info_bar` as a leaf on a path that also has children (`.placement`) is a value HOCON drops.
+    ConfigManager.configToString(config) should include("cursor.info_bar.segments = \"position,title\"")
     ConfigManager.configToString(config) should include("cursor.info_bar.placement = pinned-bottom")
   }
 

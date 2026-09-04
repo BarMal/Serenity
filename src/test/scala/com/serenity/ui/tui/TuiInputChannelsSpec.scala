@@ -75,6 +75,41 @@ class TuiInputChannelsSpec extends TuiSpec:
       yield ()
     }
 
+  // The wheel is the one mouse report the decoder used to drop on the floor: `ScrollUp`/`ScrollDown` existed and the
+  // reducer handled them, but nothing in either shell ever produced one.
+
+  private val scrollable = TuiEnvironment.withFile((0 until 200).map(index => s"line $index").mkString("\n"))
+
+  "a wheel notch" should "scroll the viewport by the configured number of lines" in
+    runTui(scrollable.withConfig(_.withWheelScrollLines(4))) {
+      for
+        _ <- press(TuiKeys.wheelDown(10, 5))
+        _ <- verifyState("after one notch down")(current =>
+          focusedBuffer(current).map(_.viewport.topLine) shouldBe Some(4)
+        )
+        _ <- press(TuiKeys.wheelDown(10, 5))
+        _ <- verifyState("after two")(current => focusedBuffer(current).map(_.viewport.topLine) shouldBe Some(8))
+        _ <- press(TuiKeys.wheelUp(10, 5))
+        _ <- verifyState("after one back up")(current =>
+          focusedBuffer(current).map(_.viewport.topLine) shouldBe Some(4)
+        )
+      yield ()
+    }
+
+  it should "default to three lines" in runTui(scrollable) {
+    for
+      _ <- press(TuiKeys.wheelDown(10, 5))
+      _ <- verifyState("default notch")(current => focusedBuffer(current).map(_.viewport.topLine) shouldBe Some(3))
+    yield ()
+  }
+
+  it should "stop at the top of the document rather than scrolling past it" in runTui(scrollable) {
+    for
+      _ <- press(TuiKeys.wheelUp(10, 5))
+      _ <- verifyState("already at the top")(current => focusedBuffer(current).map(_.viewport.topLine) shouldBe Some(0))
+    yield ()
+  }
+
   "a bracketed paste" should "insert the text once, not replay it as keystrokes" in runTui() {
     for
       _    <- typeText("start ")

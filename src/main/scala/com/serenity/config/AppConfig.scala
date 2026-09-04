@@ -608,6 +608,8 @@ object CursorConfig:
       "cursor.inactive.color",
       "cursor.info_bar",
       "cursor.info.bar",
+      "cursor.info_bar.segments",
+      "cursor.info.bar.segments",
       "cursor.info_bar.placement",
       "cursor.info.bar.placement"
     )
@@ -626,7 +628,19 @@ object CursorConfig:
 
     val inactiveColorKeys: Set[String] = Set("cursor.inactive.color", "cursor_inactive_color")
 
-    val infoBarModeKeys: Set[String] = Set("cursor.info_bar", "cursor.info.bar", "cursor_info_bar")
+    /** `cursor.info_bar` is the original spelling and stays readable, but it is a leaf on a path that also has children
+      * (`cursor.info_bar.placement`), which HOCON resolves by dropping the leaf. It survived only because the writer
+      * quoted the whole key; `cursor.info_bar.segments` is the spelling written now, so nothing depends on that
+      * subtlety.
+      */
+    val infoBarModeKeys: Set[String] =
+      Set(
+        "cursor.info_bar",
+        "cursor.info.bar",
+        "cursor_info_bar",
+        "cursor.info_bar.segments",
+        "cursor.info.bar.segments"
+      )
 
     val infoBarPlacementKeys: Set[String] =
       Set("cursor.info_bar.placement", "cursor.info.bar.placement", "cursor_info_bar_placement")
@@ -705,7 +719,9 @@ object EditorConfig:
       "font.code.ligatures",
       "font.text.ligatures",
       "font.prose.ligatures",
-      "font.ui.ligatures"
+      "font.ui.ligatures",
+      "editor.minimum_pane_width",
+      "editor.minimum.pane.width"
     )
 
     val deprecatedKeys: Map[String, String] = Map(
@@ -847,12 +863,27 @@ object InterfaceConfig:
 
 final case class InputConfig(
     hotkeyConfig: HotkeyConfig = HotkeyConfig(),
-    focusedKeymapConfig: FocusedKeymapConfig = FocusedKeymapConfig()
-)
+    focusedKeymapConfig: FocusedKeymapConfig = FocusedKeymapConfig(),
+    // Lines a single wheel notch scrolls. Three is the platform convention (`java.awt.event.MouseWheelEvent`'s own
+    // unit-scroll default, and what most terminals send per notch), but it is a matter of taste and pointing device.
+    wheelScrollLines: Int = 3
+):
+
+  def normalized: InputConfig =
+    copy(wheelScrollLines = AppConfig.clampWheelScrollLines(wheelScrollLines))
 
 object InputConfig:
 
   object Schema:
+
+    val currentKeys: Set[String] = Set("input.wheel_scroll_lines", "input.wheel.scroll.lines")
+
+    val wheelScrollLinesKeys: Set[String] = currentKeys + "input_wheel_scroll_lines"
+
+    def handles(key: String): Boolean = wheelScrollLinesKeys.contains(key)
+
+    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
+      Option.when(wheelScrollLinesKeys.contains(key))(value.trim.toIntOption).flatten.map(config.withWheelScrollLines)
 
     val dynamicPrefixes: List[String] = List(
       "hotkey.",
@@ -1200,6 +1231,24 @@ object SurfaceConfig:
       "display.word.wrap",
       "display.visual_line_navigation",
       "display.visual.line.navigation",
+      "display.line_numbers",
+      "display.line.numbers",
+      "display.gutter",
+      "display.word_count",
+      "display.word.count",
+      "display.comments",
+      "command_runner.show_key_hints",
+      "command.runner.show.key.hints",
+      "command_runner.cursor_peek.enabled",
+      "command.runner.cursor.peek.enabled",
+      "command_runner.cursor_peek",
+      "command.runner.cursor.peek",
+      "command_runner.cursor_peek.modifier",
+      "command.runner.cursor.peek.modifier",
+      "command_runner.cursor_peek.tap_window_ms",
+      "command.runner.cursor.peek.tap.window.ms",
+      "command_runner.cursor_peek.placement",
+      "command.runner.cursor.peek.placement",
       "display.pane_headers",
       "display.pane.headers",
       "display.focused_text_body",
@@ -1361,6 +1410,39 @@ object SurfaceConfig:
     val visualLineNavigationKeys: Set[String] =
       Set("display.visual_line_navigation", "display.visual.line.navigation", "display_visual_line_navigation")
 
+    val lineNumberKeys: Set[String] =
+      Set("display.line_numbers", "display.line.numbers", "display_line_numbers")
+
+    val gutterKeys: Set[String] = Set("display.gutter", "display_gutter")
+
+    val wordCountKeys: Set[String] = Set("display.word_count", "display.word.count", "display_word_count")
+
+    val commentDisplayModeKeys: Set[String] = Set("display.comments", "display_comments")
+
+    val commandRunnerShowKeyHintsKeys: Set[String] =
+      Set("command_runner.show_key_hints", "command.runner.show.key.hints", "command_runner_show_key_hints")
+
+    /** `.enabled` rather than `command_runner.cursor_peek` itself: the peek settings below are children of that path,
+      * and HOCON drops a leaf that also has children.
+      */
+    val commandRunnerCursorPeekKeys: Set[String] =
+      Set(
+        "command_runner.cursor_peek.enabled",
+        "command.runner.cursor.peek.enabled",
+        "command_runner.cursor_peek",
+        "command.runner.cursor.peek",
+        "command_runner_cursor_peek"
+      )
+
+    val commandRunnerCursorPeekModifierKeys: Set[String] =
+      Set("command_runner.cursor_peek.modifier", "command.runner.cursor.peek.modifier")
+
+    val commandRunnerCursorPeekTapWindowKeys: Set[String] =
+      Set("command_runner.cursor_peek.tap_window_ms", "command.runner.cursor.peek.tap.window.ms")
+
+    val commandRunnerCursorPeekPlacementKeys: Set[String] =
+      Set("command_runner.cursor_peek.placement", "command.runner.cursor.peek.placement")
+
     val paneHeaderKeys: Set[String] =
       Set("display.pane_headers", "display.pane.headers", "display_pane_headers")
 
@@ -1422,6 +1504,16 @@ object SurfaceConfig:
         renderFpsKeys ++
         renderDamageGranularityKeys ++
         wordWrapKeys ++
+        visualLineNavigationKeys ++
+        lineNumberKeys ++
+        gutterKeys ++
+        wordCountKeys ++
+        commentDisplayModeKeys ++
+        commandRunnerShowKeyHintsKeys ++
+        commandRunnerCursorPeekKeys ++
+        commandRunnerCursorPeekModifierKeys ++
+        commandRunnerCursorPeekTapWindowKeys ++
+        commandRunnerCursorPeekPlacementKeys ++
         paneHeaderKeys ++
         focusedTextBodyKeys ++
         contextualToolbarKeys ++
@@ -1485,6 +1577,21 @@ object SurfaceConfig:
       else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
       else if visualLineNavigationKeys.contains(key) then
         parseBoolean(trimmed).map(config.withVisualLineCursorNavigation)
+      else if lineNumberKeys.contains(key) then parseBoolean(trimmed).map(config.withLineNumbers)
+      else if gutterKeys.contains(key) then parseBoolean(trimmed).map(config.withGutter)
+      else if wordCountKeys.contains(key) then parseBoolean(trimmed).map(config.withWordCount)
+      else if commentDisplayModeKeys.contains(key) then
+        CommentDisplayMode.fromConfigKey(trimmed).map(config.withCommentDisplayMode)
+      else if commandRunnerShowKeyHintsKeys.contains(key) then
+        parseBoolean(trimmed).map(config.withCommandRunnerShowKeyHints)
+      else if commandRunnerCursorPeekKeys.contains(key) then
+        parseBoolean(trimmed).map(config.withCommandRunnerCursorPeekEnabled)
+      else if commandRunnerCursorPeekModifierKeys.contains(key) then
+        parseModifier(trimmed).map(config.withCommandRunnerCursorPeekModifier)
+      else if commandRunnerCursorPeekTapWindowKeys.contains(key) then
+        trimmed.toLongOption.map(config.withCommandRunnerCursorPeekTapWindowMillis)
+      else if commandRunnerCursorPeekPlacementKeys.contains(key) then
+        parseSurfacePlacement(trimmed).map(config.withCommandRunnerCursorPeekPlacement)
       else if paneHeaderKeys.contains(key) then parseBoolean(trimmed).map(config.withPaneHeaders)
       else if focusedTextBodyKeys.contains(key) then parseBoolean(trimmed).map(config.withFocusedTextBody)
       else if contextualToolbarKeys.contains(key) then parseBoolean(trimmed).map(config.withContextualToolbarEnabled)
@@ -1519,6 +1626,12 @@ object SurfaceConfig:
 
     def invalidValue(key: String, value: String): Boolean =
       parse(AppConfig.default, key, value).isEmpty
+
+    private def parseModifier(value: String): Option[Modifier] =
+      Modifier.values.find(_.toString.equalsIgnoreCase(value))
+
+    private def parseSurfacePlacement(value: String): Option[SurfacePlacement] =
+      SurfacePlacement.values.find(placement => placement.toString.equalsIgnoreCase(value.replace("-", "")))
 
     private def parseBoolean(value: String): Option[Boolean] =
       value.toLowerCase match
@@ -2093,6 +2206,12 @@ final case class AppConfig(
   def effectivePanelCloseTransitionKind: TransitionKind =
     surfaceConfig.effectivePanelCloseTransitionKind
 
+  /** One line is the least a notch can usefully move; the upper bound keeps a mis-typed value from turning a notch into
+    * a jump across the document.
+    */
+  def withWheelScrollLines(lines: Int): AppConfig =
+    withInputConfig(inputConfig.copy(wheelScrollLines = AppConfig.clampWheelScrollLines(lines)))
+
   private def updateAuthoritativeMotion(
     updateSurface: SurfaceConfig => SurfaceConfig
   )(
@@ -2255,6 +2374,9 @@ object AppConfig:
 
   def clampUiOutlineThicknessPx(thickness: Int): Int =
     thickness.max(MinUiOutlineThicknessPx).min(MaxUiOutlineThicknessPx)
+
+  def clampWheelScrollLines(lines: Int): Int =
+    lines.max(1).min(50)
 
   def clampCommandRunnerVisibleRows(rows: Int): Int =
     rows.max(MinCommandRunnerVisibleRows).min(MaxCommandRunnerVisibleRows)

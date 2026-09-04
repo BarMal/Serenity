@@ -158,4 +158,23 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
 
     stateManager.getCurrentState.unsafeRunSync().startPageSurface should not be None
   }
+
+  // A config file that cannot be read resets every setting for the session. The only report of that was a line on
+  // stderr, which the TUI redirects to nowhere -- so the start page, which is on screen at exactly that moment, says
+  // it instead.
+
+  it should "show a configuration notice on the start page, in place of the session status" in {
+    val page = AppStartup.createStartPage(
+      sessionExists = false,
+      recentFiles = Nil,
+      configNotice = Some("Configuration could not be read; using defaults")
+    )
+
+    page.statusMessage shouldBe Some("Configuration could not be read; using defaults")
+  }
+
+  it should "keep the session status when there is no configuration notice" in {
+    AppStartup.createStartPage(sessionExists = false, recentFiles = Nil).statusMessage shouldBe
+      Some("No previous session found")
+  }
 end StartupLaunchSurfaceSpec

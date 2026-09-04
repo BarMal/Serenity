@@ -221,6 +221,7 @@ enum PanelChromeIntent:
   case SetWindowSitterActiveTicks(ticks: Int)
   case SetWindowSitterFastActiveTicks(ticks: Int)
   case SetWindowSitterFastTypingThresholdMs(ms: Int)
+  case SetWheelScrollLines(lines: Int)
   case SetTextAreaLeftInset(value: Double)
   case SetTextAreaRightInset(value: Double)
   case SetTextAreaTopInset(value: Double)

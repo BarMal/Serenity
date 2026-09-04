@@ -8,6 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Queue
 import cats.effect.{FiberIO, IO, Ref}
 import cats.syntax.all.*
+import com.serenity.config.InputConfig
 import com.serenity.input.{InputHandler, InputRouter, ModifierTapDetector, ModifierTapState, SystemClipboard}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
@@ -130,7 +131,8 @@ object TerminalInputHandler:
     terminal: Terminal,
     inputRouter: InputRouter[IO, Event],
     systemClipboard: SystemClipboard[IO],
-    seedBytes: Array[Byte] = Array.emptyByteArray
+    seedBytes: Array[Byte] = Array.emptyByteArray,
+    wheelScrollLines: Int = InputConfig().wheelScrollLines
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
@@ -154,7 +156,8 @@ object TerminalInputHandler:
           modifierTapState,
           systemClipboard,
           seedBytes,
-          focusCallback
+          focusCallback,
+          wheelScrollLines
         )
           .guarantee(rawFiber.cancel)
       }.start
@@ -201,7 +204,8 @@ object TerminalInputHandler:
     modifierTapState: Ref[IO, ModifierTapState],
     systemClipboard: SystemClipboard[IO],
     seedBytes: Array[Byte],
-    focusCallback: AtomicReference[Option[Boolean => Unit]]
+    focusCallback: AtomicReference[Option[Boolean => Unit]],
+    wheelScrollLines: Int
   ): IO[Unit] =
 
     def processTokens(tokens: List[DecodedToken]): IO[Unit] =
@@ -212,6 +216,9 @@ object TerminalInputHandler:
         modifierTapState.update(ModifierTapDetector.otherKeyPressed) >>
           latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info)))
       case DecodedToken.Mouse(event) => enqueueMouse(event)
+      case DecodedToken.WheelNotch(down) =>
+        val scroll = if down then ScrollDown(wheelScrollLines) else ScrollUp(wheelScrollLines)
+        latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(scroll)))
       case DecodedToken.Pasted(text) =>
         // The "paste event path": write the pasted text where a Ctrl+V paste would have left it, then emit the
         // same `Paste` event a hotkey would -- so multi-line pastes are inserted as one paste, not replayed as

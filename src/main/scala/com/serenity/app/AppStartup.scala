@@ -17,10 +17,15 @@ object AppStartup:
   /** `recentFiles` must already be filtered to existing, readable files -- `createStartPage` does no filesystem access
     * of its own, so callers filter via `IO.blocking` before calling this.
     */
-  def createStartPage(sessionExists: Boolean, recentFiles: List[Path] = Nil): StartupPage =
+  def createStartPage(
+    sessionExists: Boolean,
+    recentFiles: List[Path] = Nil,
+    configNotice: Option[String] = None
+  ): StartupPage =
+    // A configuration that could not be read takes the status line: it is the more consequential of the two, and the
+    // start page is on screen at exactly the moment it happened. Its only other report is a log line the TUI discards.
     val statusMessage =
-      if sessionExists then None
-      else Some("No previous session found")
+      configNotice.orElse(Option.when(!sessionExists)("No previous session found"))
 
     val primaryActions = List(
       StartupAction(
@@ -99,7 +104,8 @@ object AppStartup:
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default,
     isTuiMode: Boolean = false,
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    configNotice: Option[String] = None
   ): IO[AppState] =
     for
       sessionExists <- stateManager.sessionExists
@@ -107,7 +113,7 @@ object AppStartup:
       readableRecentFiles <- IO.blocking(
         recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
       )
-      startPage = createStartPage(sessionExists, readableRecentFiles)
+      startPage = createStartPage(sessionExists, readableRecentFiles, configNotice)
     yield
       val startPageSurfaceId = SurfaceId("surface-0")
       val base               = AppState.empty(appConfig)
@@ -150,7 +156,8 @@ object AppStartup:
     appConfig: AppConfig = AppConfig.default,
     openPath: Option[Path] = None,
     isTuiMode: Boolean = false,
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    configNotice: Option[String] = None
   ): IO[AppState] =
     openPath match
       case Some(path) =>
@@ -178,7 +185,8 @@ object AppStartup:
             initialViewportSize,
             appConfig,
             isTuiMode,
-            keyboardFidelityTier
+            keyboardFidelityTier,
+            configNotice
           )
           _     <- stateManager.updateState(_ => startState)
           state <- stateManager.getCurrentState

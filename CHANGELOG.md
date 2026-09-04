@@ -9,6 +9,11 @@
 - Led the inert-in-TUI settings hints with their annotation, so it stays legible instead of being elided with the rest of a long hint.
 - Moved PageUp and PageDown by a screenful of visual rows rather than logical lines, so a page through wrapped prose is a page of what is on screen, and left the viewport to follow the cursor at the effect boundary instead of the reducer scrolling on its own.
 - Kept each render surface's previous-frame state against that surface rather than sharing one copy between all of them, and restored parallel test execution.
+- Fixed a saved configuration with two or more cursor info bar segments writing a file that could not be read back, which silently reset every other setting to its default on the next launch.
+- Refused to write a config file that cannot be parsed, so a formatting fault in one setting can no longer cost the user the rest of them.
+- Persisted line numbers, gutter, word count, comment display mode, minimum pane width, command-runner key hints and the cursor-peek settings, none of which had a config key, and parsed `display.visual_line_navigation`, which had one but was never read.
+- Kept an unreadable config file aside and said so on the start page, instead of a log line the TUI discards.
+- Added a configurable mouse-wheel scroll distance (`input.wheel_scroll_lines`, default 3) and made the wheel scroll at all: both shells decoded wheel reports and dropped them.
 - Repainted editor content on every damaged frame while the window sitter is active, so typed characters and their wrapped reflow appear immediately instead of trailing the cursor by the sitter's activity window.
 - Anchored the vertical-navigation geometry window on the cursor's own visual row, so Up/Down and Home/End keep stepping by visual row deep inside a paragraph longer than a screenful instead of falling back to logical-line movement.
 - Added a Visual Line Navigation toggle to the Text Display settings group, alongside the existing `display.visual_line_navigation` config key and command-palette toggle.

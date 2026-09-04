@@ -148,7 +148,8 @@ object AppRuntime:
     openPath: Option[Path] = None,
     systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
     isTuiMode: Boolean = false,
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    configNotice: Option[String] = None
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
       for
@@ -165,7 +166,8 @@ object AppRuntime:
           appConfig,
           openPath,
           isTuiMode,
-          keyboardFidelityTier
+          keyboardFidelityTier,
+          configNotice
         )
         inputRouter    <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
         inputHandler   <- makeInputHandler(inputRouter)

@@ -336,7 +336,13 @@ object TuiSession:
       openPath  <- environment.materialise(workspace)
       clipboard <- buildClipboard(shell, environment)
       router    <- InputRouter.create[IO, Event](new TextEntryTranslator(terminalConfig))
-      handler   <- TerminalInputHandler.create(streams.terminal, router, clipboard, shell.pendingInputPrefix)
+      handler <- TerminalInputHandler.create(
+        streams.terminal,
+        router,
+        clipboard,
+        shell.pendingInputPrefix,
+        environment.config.inputConfig.wheelScrollLines
+      )
       stateManager <- TuiRuntime.makeStateManager(
         terminalConfig,
         sessionRootOverride = Some(workspace.resolve("session")),

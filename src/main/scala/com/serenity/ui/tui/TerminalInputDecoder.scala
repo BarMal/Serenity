@@ -33,6 +33,12 @@ object TerminalInputDecoder:
     final case class Mouse(event: MouseInputEvent) extends DecodedToken
     final case class Pasted(text: String)          extends DecodedToken
 
+    /** One wheel notch. How far a notch scrolls is a setting (`InputConfig.wheelScrollLines`), and this decoder is pure
+      * over bytes with no configuration to consult, so it reports the notch and leaves the distance to
+      * [[TerminalInputHandler]].
+      */
+    final case class WheelNotch(down: Boolean) extends DecodedToken
+
     /** A bare modifier key's own press or release, decoded from a kitty-protocol CSI-u sequence reporting one of its
       * private-use-area modifier codepoints (`57441`-`57452`; see [[BareModifierCodepoints]]). xterm's
       * `modifyOtherKeys`/`formatOtherKeys=1` has no equivalent -- it never emits these codepoints -- so this token only
@@ -181,7 +187,7 @@ object TerminalInputDecoder:
       case cbStr :: cxStr :: cyStr :: Nil =>
         (cbStr.toIntOption, cxStr.toIntOption, cyStr.toIntOption) match
           case (Some(cb), Some(cx), Some(cy)) =>
-            Step.Complete(sgrMouseEvent(cb, cx, cy, isRelease).map(DecodedToken.Mouse.apply).toList, nextIndex)
+            Step.Complete(sgrMouseEvent(cb, cx, cy, isRelease).toList, nextIndex)
           case _ => Step.Complete(Nil, nextIndex)
       case _ => Step.Complete(Nil, nextIndex)
 
@@ -192,9 +198,12 @@ object TerminalInputDecoder:
     * `SwingInputHandler` itself only ever reads `e.isShiftDown` for mouse events, never Ctrl/Alt/Meta, so there is
     * nowhere to put Cb's Ctrl/Meta bits even if we decoded them.
     */
-  private def sgrMouseEvent(cb: Int, cx: Int, cy: Int, isRelease: Boolean): Option[MouseInputEvent] =
+  private def sgrMouseEvent(cb: Int, cx: Int, cy: Int, isRelease: Boolean): Option[DecodedToken] =
     val isWheel = (cb & 0x40) != 0
-    if isWheel then None // No MouseWheel event exists in the Event model; out of scope for this issue.
+    // A wheel report's low bits are the direction rather than a button: 64 is up, 65 is down. A release report for a
+    // notch (there is no such thing on a real wheel, but 1006 mode permits the `m` form) would otherwise decode as a
+    // second notch, so only the press form counts.
+    if isWheel then Option.when(!isRelease)(DecodedToken.WheelNotch(down = (cb & 0x01) != 0))
     else
       val col      = cx - 1
       val row      = cy - 1
@@ -205,11 +214,13 @@ object TerminalInputDecoder:
         case 1 => MouseButton.Middle
         case 2 => MouseButton.Secondary
         case _ => MouseButton.Other
-      if isMotion then
-        if (cb & 0x03) == 3 then Some(MouseMove(col, row, shiftDown = shift))
-        else Some(MouseDrag(col, row, shiftDown = shift, button = button))
-      else if isRelease then Some(MouseClick(col, row, clickCount = 1, shiftDown = shift, button = button))
-      else Some(MousePress(col, row, shiftDown = shift, button = button))
+      val event =
+        if isMotion then
+          if (cb & 0x03) == 3 then MouseMove(col, row, shiftDown = shift)
+          else MouseDrag(col, row, shiftDown = shift, button = button)
+        else if isRelease then MouseClick(col, row, clickCount = 1, shiftDown = shift, button = button)
+        else MousePress(col, row, shiftDown = shift, button = button)
+      Some(DecodedToken.Mouse(event))
 
   /** Decodes the legacy CSI-letter (arrow keys, Home/End, Shift+Tab) and CSI-tilde (Home/End/PageUp/PageDown/Delete/
     * F-keys) key forms. Under kitty's "disambiguate escape codes" enhancement these keep their classic final byte but

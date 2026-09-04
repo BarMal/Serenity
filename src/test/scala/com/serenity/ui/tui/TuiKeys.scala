@@ -114,6 +114,10 @@ object TuiKeys:
     val code = buttonCode(button) + (if shift then 4 else 0)
     TuiKey(s"press($col,$row)", csi(s"<$code;${col + 1};${row + 1}M"))
 
+  /** SGR wheel notches: bit 6 (64) marks a wheel report, and the low bits carry the direction. */
+  def wheelUp(col: Int, row: Int): TuiKey   = TuiKey(s"wheelUp($col,$row)", csi(s"<64;${col + 1};${row + 1}M"))
+  def wheelDown(col: Int, row: Int): TuiKey = TuiKey(s"wheelDown($col,$row)", csi(s"<65;${col + 1};${row + 1}M"))
+
   def mouseRelease(col: Int, row: Int, button: MouseButton = MouseButton.Primary, shift: Boolean = false): TuiKey =
     val code = buttonCode(button) + (if shift then 4 else 0)
     TuiKey(s"release($col,$row)", csi(s"<$code;${col + 1};${row + 1}m"))
