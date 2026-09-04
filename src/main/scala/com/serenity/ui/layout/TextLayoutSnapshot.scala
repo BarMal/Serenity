@@ -95,14 +95,17 @@ object TextLayoutSnapshot:
     visibleWidthPx: Int,
     font: Font,
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
-    cellMetricsOverride: Option[CellMetrics] = None
+    cellMetricsOverride: Option[CellMetrics] = None,
+    forceCellLayout: Boolean = false
   ): Int =
     if lineText.isEmpty || visibleWidthPx <= 0 then 0
     else
       val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-      val measuredLayout = shouldUseMeasuredLayout(font, fontRenderContext)
+      val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
       val safeColumn     = cursorColumn.max(0).min(lineText.length)
-      if !measuredLayout then
+      // A display-width-aware grid takes the caret-stop path too: on it a column is not a cell count, so the uniform
+      // `column - visibleColumns + 1` arithmetic below would scroll to the wrong place through any wide glyph.
+      if !measuredLayout && !cellMetrics.displayWidthAware then
         val charWidth      = math.max(1, cellMetrics.charWidth)
         val visibleColumns = math.max(1, visibleWidthPx / charWidth)
         math.max(0, safeColumn - visibleColumns + 1)
@@ -336,7 +339,8 @@ object TextLayoutSnapshot:
   ): Int =
     if !measuredLayout then
       val charWidth = math.max(1, cellMetrics.charWidth)
-      math.max(1, math.min(text.length, panelWidthPx / charWidth))
+      if cellMetrics.displayWidthAware then fittingDisplayWidthSegmentLength(text, panelWidthPx, charWidth)
+      else math.max(1, math.min(text.length, panelWidthPx / charWidth))
     else fittingMeasuredSegmentLength(text, panelWidthPx, font, frc, measuredLayout, cellMetrics)
 
   private def fittingMeasuredSegmentLength(
@@ -444,7 +448,8 @@ object TextLayoutSnapshot:
     if text.isEmpty then Vector(0.0f)
     else if !measuredLayout then
       val charWidth = cellMetrics.charWidth.toFloat
-      Vector.tabulate(text.length + 1)(index => index * charWidth)
+      if cellMetrics.displayWidthAware then displayWidthCaretXs(text, charWidth)
+      else Vector.tabulate(text.length + 1)(index => index * charWidth)
     else
       val attributed = AttributedString(text)
       attributed.addAttribute(TextAttribute.FONT, font)
@@ -452,6 +457,42 @@ object TextLayoutSnapshot:
       val leadingCarets =
         (0 until text.length).toVector.map(index => layout.getCaretInfo(TextHitInfo.leading(index))(0))
       normalizeCollapsedCarets(leadingCarets :+ layout.getAdvance)
+
+  /** Caret stops for a display-width-aware cell grid: each codepoint advances by its own cell count ([[CharWidth]])
+    * rather than one cell per character, so the stops agree with the cells `TerminalScreenBuffer` actually paints. A
+    * surrogate pair contributes one advance across its two char indices; its low half is never a grapheme boundary (see
+    * [[graphemeBoundaryOffsets]]) and so never a caret stop, and taking the glyph's trailing edge there keeps the
+    * sequence non-decreasing for the callers that index it by raw column.
+    */
+  private def displayWidthCaretXs(text: String, charWidth: Float): Vector[Float] =
+    @annotation.tailrec
+    def loop(index: Int, xPx: Float, acc: Vector[Float]): Vector[Float] =
+      if index >= text.length then acc :+ xPx
+      else
+        val codePoint = text.codePointAt(index)
+        val advanced  = xPx + CharWidth.of(codePoint) * charWidth
+        val charCount = Character.charCount(codePoint)
+        val stops     = if charCount == 2 then acc :+ xPx :+ advanced else acc :+ xPx
+        loop(index + charCount, advanced, stops)
+
+    loop(0, 0.0f, Vector.empty)
+
+  /** How many characters of `text` fit in `panelWidthPx` when each glyph costs its own cells. Never splits a wide glyph
+    * across the wrap boundary, and never splits a surrogate pair; like the uniform-advance branch it always consumes at
+    * least one glyph, so wrapping makes progress even in a panel narrower than a single cell.
+    */
+  private def fittingDisplayWidthSegmentLength(text: String, panelWidthPx: Int, charWidth: Int): Int =
+    @annotation.tailrec
+    def loop(index: Int, usedPx: Int): Int =
+      if index >= text.length then index
+      else
+        val codePoint = text.codePointAt(index)
+        val advance   = CharWidth.of(codePoint) * charWidth
+        if usedPx + advance > panelWidthPx then index
+        else loop(index + Character.charCount(codePoint), usedPx + advance)
+
+    val fitted = loop(0, 0)
+    if fitted > 0 then fitted else math.min(text.length, Character.charCount(text.codePointAt(0)))
 
   private def graphemeBoundaryOffsets(text: String): Vector[Int] =
     @annotation.tailrec

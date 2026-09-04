@@ -7,6 +7,7 @@ import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.TextVisualLine
 import com.serenity.text.TextEditing
+import com.serenity.ui.layout.CharWidth
 import com.serenity.ui.theme.{LexState, StyledText, TextStyle, Theme}
 
 object CharacterRenderer:
@@ -447,13 +448,18 @@ object CharacterRenderer:
   private def isVisibleCodePoint(codePoint: Int): Boolean =
     !Character.isISOControl(codePoint)
 
+  /** How many cells a codepoint occupies on the grid: none for a combining mark, which composes onto the glyph before
+    * it, otherwise its display width. [[com.serenity.ui.tui.TerminalScreenBuffer.putString]] advances by exactly this,
+    * so a run laid out here lands on the cells the one before it actually filled -- counting one per codepoint instead
+    * left every run after a wide glyph starting inside that glyph.
+    */
   private def displayWidth(codePoint: Int): Int =
     val category = Character.getType(codePoint)
     if category == Character.NON_SPACING_MARK ||
         category == Character.COMBINING_SPACING_MARK ||
         category == Character.ENCLOSING_MARK
     then 0
-    else 1
+    else CharWidth.of(codePoint)
 
   private def flushPlainRuns(surface: RenderSurface, y: Int, runs: List[TextRun]): Unit =
     runs.foreach(run => surface.putString(run.startX, y, run.content))
@@ -486,18 +492,29 @@ object CharacterRenderer:
         }
       }
 
-  /** Cell-grid runs are one character per column, so truncating a run's content by character count is exact here --
-    * unlike the measured pixel path (`clipRightXPx`), nothing needs sub-character precision. `None` (the common case:
-    * word wrap on, or no pane-width limit given) leaves every run untouched.
+  /** Cell-grid runs need no sub-character precision (unlike the measured pixel path's `clipRightXPx`), but a column is
+    * a cell rather than a character: the content is truncated at the last glyph that fits whole, so a wide one is
+    * dropped rather than half-drawn at the limit. `None` (the common case: word wrap on, or no pane-width limit given)
+    * leaves every run untouched.
     */
   private def clipRunToColumn(run: TextRun, maxColumn: Option[Int]): Option[TextRun] =
     maxColumn match
       case None                               => Some(run)
       case Some(limit) if run.startX >= limit => None
       case Some(limit) =>
-        val allowedLength = limit - run.startX
-        if allowedLength >= run.content.length then Some(run)
-        else Some(run.copy(content = run.content.take(allowedLength)))
+        val allowedCells = limit - run.startX
+        if allowedCells >= run.content.length then Some(run)
+        else
+          @annotation.tailrec
+          def fittingLength(index: Int, usedCells: Int): Int =
+            if index >= run.content.length then index
+            else
+              val codePoint = run.content.codePointAt(index)
+              val width     = displayWidth(codePoint)
+              if usedCells + width > allowedCells then index
+              else fittingLength(index + Character.charCount(codePoint), usedCells + width)
+
+          Some(run.copy(content = run.content.take(fittingLength(0, 0))))
 
   private def groupRunByEffectiveColors(
     run: TextRun,

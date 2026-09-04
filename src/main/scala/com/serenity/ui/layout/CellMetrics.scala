@@ -2,8 +2,14 @@ package com.serenity.ui.layout
 
 /** Font-derived cell dimensions. Constant with respect to window size — resizing changes the cell count, not the cell
   * size. Derived from FontMetrics at startup and font changes only.
+  *
+  * @param displayWidthAware
+  *   whether a glyph on this grid may occupy more than one cell -- true only for a real character-cell terminal
+  *   ([[CellMetrics.cellUnit]]), where a wide glyph takes two cells and [[CharWidth]] says which do. A font-derived
+  *   grid leaves this false: there the advance of any one glyph is the font's business, and the cell path assumes a
+  *   uniform per-character advance as it always has.
   */
-final case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int):
+final case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int, displayWidthAware: Boolean = false):
   def isValid: Boolean        = charWidth > 0 && lineHeight > 0
   def toPixelX(col: Int): Int = col * charWidth
   def toPixelY(row: Int): Int = row * lineHeight
@@ -27,7 +33,7 @@ object CellMetrics:
     * wrapped and drew (mouse hit-testing, vertical/Home/End cursor movement) needs this exact unit when
     * `state.runtime.isTuiMode` holds, instead of `CellMetrics.fromFont` on some AWT font TUI mode never renders with.
     */
-  val cellUnit: CellMetrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+  val cellUnit: CellMetrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0, displayWidthAware = true)
 
   def max(metrics: CellMetrics*): CellMetrics =
     val nonEmpty = metrics.toList

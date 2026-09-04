@@ -1,9 +1,14 @@
-package com.serenity.ui.tui
+package com.serenity.ui.layout
 
 /** East-Asian-Width classification for the ranges that matter to a monospace terminal grid: CJK ideographs, Hangul,
   * Japanese kana, fullwidth forms, and the common emoji blocks. Not a full Unicode East Asian Width table -- combining
-  * marks and the long tail of "Ambiguous" width codepoints are treated as narrow, matching what most terminal emulators
-  * default to.
+  * marks, the long tail of "Ambiguous" width codepoints, and the wide singletons scattered outside these blocks
+  * (U+231A, U+1F004, U+1F0CF and friends) are treated as narrow, matching what most terminal emulators default to.
+  *
+  * This lives in the layout package, not the terminal one, because both ends of the grid have to agree on it:
+  * `TerminalScreenBuffer` advances the cells it paints by this width, and `TextLayoutSnapshot` measures caret stops and
+  * wrap points by it whenever it is laying out on a display-width-aware grid ([[CellMetrics.displayWidthAware]]). When
+  * the two disagree, the caret drifts one cell per wide glyph and wrapped rows break mid-glyph.
   */
 object CharWidth:
 
@@ -20,7 +25,9 @@ object CharWidth:
     0xff00  -> 0xff60,  // Fullwidth forms
     0xffe0  -> 0xffe6,  // Fullwidth signs
     0x1f300 -> 0x1f64f, // Misc symbols and pictographs, emoticons
+    0x1f680 -> 0x1f6ff, // Transport and map symbols
     0x1f900 -> 0x1f9ff, // Supplemental symbols and pictographs
+    0x1fa70 -> 0x1faff, // Symbols and pictographs extended-A
     0x20000 -> 0x3fffd  // CJK unified ideographs extension B and beyond
   )
 

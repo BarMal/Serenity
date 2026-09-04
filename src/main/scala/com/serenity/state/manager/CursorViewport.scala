@@ -114,8 +114,17 @@ object CursorViewport:
     val clampedLeftColumn =
       if wordWrapEnabled then 0
       else
+        // Same TUI-vs-font split as the wrap measurement above: horizontal scrolling has to be measured on the grid
+        // the terminal actually draws on, or a line of wide glyphs scrolls to the wrong column.
         val measuredLeftColumn =
-          TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, gridWidthPx, font)
+          TextLayoutSnapshot.leftColumnForCursorVisibility(
+            lineText,
+            cursor.column,
+            if isTui then wrapWidthPx else gridWidthPx,
+            font,
+            cellMetricsOverride = cellMetricsOverride,
+            forceCellLayout = forceCellLayout
+          )
         val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
         math.max(minimumVisibleColumn, measuredLeftColumn)
 
