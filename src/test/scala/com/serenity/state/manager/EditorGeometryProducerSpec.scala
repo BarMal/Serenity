@@ -67,3 +67,29 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
 
     (firstRow.endColumn - firstRow.startColumn) should be > panelWidthColumns
   }
+
+  private def panelWidthColumnsFor(state: AppState): Int =
+    com.serenity.ui.layout.LayoutEngine.calculateLayout(state, ViewportSize(80, 24)).editorPanelRect.width
+
+  "EditorGeometryProducer.forPane, for vertical navigation" should
+    "cover the cursor's own line even when a heavily-wrapped line at the viewport top would fill the window" in {
+      // The bug: the producer pinned its geometry window to the viewport's top line and a `visibleLines` row budget, so
+      // a single long wrapped line at the top filled the whole window and the cursor's own line (below it) fell out of
+      // the geometry -- `moveVertical` then returned None and vertical nav silently dropped to naive char-grid
+      // movement, which mis-wraps prose ("stuck"/jumpy cursor past the first screenful).
+      val probe             = stateWith(Buffer.fromString(bufferId, "probe"), isTuiMode = true)
+      val panelWidthColumns = panelWidthColumnsFor(probe)
+      val longLine          = "w" * (panelWidthColumns * 4) // wraps into ~4 visual rows, more than the 3-row window
+      val buffer0           = Buffer.fromString(bufferId, Vector.fill(10)(longLine).mkString("\n"))
+      val buffer = buffer0.copy(
+        viewport =
+          buffer0.viewport.copy(topLine = 5, topVisualLine = 0, visibleLines = 3, visibleColumns = panelWidthColumns),
+        editing = buffer0.editing.copy(cursors = List(CursorPosition(6, 0)))
+      )
+      val tuiState = stateWith(buffer, isTuiMode = true)
+
+      val geometry = EditorGeometryProducer.forPane(tuiState, paneId).getOrElse(fail("expected geometry for pane"))
+
+      geometry.navigation.visualLineFor(CursorPosition(6, 0)) should not be None
+      geometry.navigation.moveVertical(CursorPosition(6, 0), direction = 1, preferredXPx = 0.0f) should not be None
+    }

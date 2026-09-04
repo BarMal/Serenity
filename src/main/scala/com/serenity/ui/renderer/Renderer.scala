@@ -3053,15 +3053,20 @@ object Renderer:
         case _ => Nil
     }
 
+  /** The (visual-row index, caret x) the caret is drawn at. Row selection is delegated to
+    * [[com.serenity.state.models.NavigationGeometry.visualRowIndexFor]] -- the same lookup vertical navigation uses --
+    * so the caret is never painted on a different wrapped row than Up/Down moves from at a wrap boundary (the "stuck
+    * until nudged left/right" bug). Previously this used `collectFirst` (the *earlier* row at a boundary) while
+    * navigation used `.lastOption` (the later row), so the two disagreed.
+    */
   private def calculateCursorVisualPosition(
     cursor: CursorPosition,
     snapshot: TextLayoutSnapshot
   ): Option[(Int, Float)] =
-    snapshot.visualLines.zipWithIndex.collectFirst {
-      case (line, visualIndex)
-          if line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn =>
-        val xPx = line.xForColumn(cursor.column).getOrElse(line.widthPx)
-        (visualIndex, xPx)
+    snapshot.navigationGeometry.visualRowIndexFor(cursor).map { visualIndex =>
+      val line = snapshot.visualLines(visualIndex)
+      val xPx  = line.xForColumn(cursor.column).getOrElse(line.widthPx)
+      (visualIndex, xPx)
     }
 
   private def measuredRunWidthWithin(

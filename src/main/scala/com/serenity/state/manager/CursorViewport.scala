@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.TextLayoutSnapshot
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 
 /** Java2D/font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a
   * reducer runs mid-edit against content the effect boundary has not seen yet. `adjustForCursor` is the shared
@@ -35,25 +35,32 @@ object CursorViewport:
     cursor: CursorPosition
   ): Viewport =
     val wordWrapEnabled  = currentState.persisted.config.surfaceConfig.wordWrapEnabled
+    val isTui            = currentState.runtime.isTuiMode
     val viewport         = buffer.viewport
     val halfVisibleLines = viewport.visibleLines / 2
     val font             = previewFontForBuffer(buffer, currentState.persisted.config.editorConfig.fontConfig)
-    val visibleWidthPx =
+    val gridWidthPx =
       TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, currentState.persisted.config.editorConfig.fontConfig)
-    val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
-    val measuredCursorVisualLine =
-      if buffer.usesTextFont then
+    // Count wrapped rows the way the terminal actually drew them: TUI wraps on a fixed 1px-per-cell grid
+    // (`CellMetrics.cellUnit` + forceCellLayout), never a pixel measurement of the inert proportional prose font, which
+    // folds each line across a different number of rows and so mis-places the centred viewport. Mirrors
+    // `EditorGeometryProducer`.
+    val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
+    val forceCellLayout     = isTui
+    val wrapWidthPx         = if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
+    val lineText            = buffer.document.content.getLine(cursor.line).getOrElse("")
+    val cursorVisualLine =
+      if !wordWrapEnabled then 0
+      else
         TextLayoutSnapshot.visualLineIndexForCursor(
           lineText,
           cursor.column,
-          visibleWidthPx,
+          wrapWidthPx,
           font,
-          wordWrapEnabled = wordWrapEnabled
+          wordWrapEnabled = true,
+          cellMetricsOverride = cellMetricsOverride,
+          forceCellLayout = forceCellLayout
         )
-      else cursor.column / math.max(1, viewport.visibleColumns)
-    val cursorVisualLine =
-      if !wordWrapEnabled then 0
-      else measuredCursorVisualLine
 
     // The number of visual rows a logical line occupies on screen -- 1 unless word wrap folds it across several
     // rows, in which case it must be measured the same way `cursorVisualLine` above was, or the two disagree.
@@ -61,24 +68,33 @@ object CursorViewport:
       if !wordWrapEnabled then 1
       else
         val text = buffer.document.content.getLine(lineIndex).getOrElse("")
-        if buffer.usesTextFont then
-          TextLayoutSnapshot.boundedVisualLinesForText(text, lineIndex, visibleWidthPx, font).length.max(1)
-        else (text.length / math.max(1, viewport.visibleColumns)) + 1
+        TextLayoutSnapshot
+          .boundedVisualLinesForText(
+            text,
+            lineIndex,
+            wrapWidthPx,
+            font,
+            cellMetricsOverride = cellMetricsOverride,
+            forceCellLayout = forceCellLayout
+          )
+          .length
+          .max(1)
 
-    // Desired top: walk backward from the cursor's own line in visual rows (not logical lines) until
-    // halfVisibleLines rows of context above the cursor's own visual row have been accounted for, or the buffer
-    // start is reached. This is what `cursor.line - halfVisibleLines` was trying to approximate, but that
-    // subtraction conflated a logical-line count with a visual-row count.
+    // Desired top: walk backward from the cursor's own line in visual rows (not logical lines) until halfVisibleLines
+    // rows of context above the cursor's own visual row have been accounted for, or the buffer start is reached,
+    // carrying the partial offset into whatever line the walk lands on so the cursor stays centred. Forcing that offset
+    // to 0 (as before) whenever the top wasn't the cursor's own line let the cursor drift off-centre by up to a full
+    // wrapped line's worth of rows.
     val scrollUpBudget = halfVisibleLines - cursorVisualLine
-    def walkBackward(line: Int, remainingBudget: Int): Int =
-      if line <= 0 || remainingBudget <= 0 then line
+    def walkBackward(line: Int, remainingBudget: Int): (Int, Int) =
+      if line <= 0 then (0, 0)
       else
         val previousLineRows = visualRowCountForLine(line - 1)
-        if previousLineRows >= remainingBudget then line - 1
+        if previousLineRows >= remainingBudget then (line - 1, previousLineRows - remainingBudget)
         else walkBackward(line - 1, remainingBudget - previousLineRows)
-    val rawTopLine = walkBackward(cursor.line, scrollUpBudget)
-    val rawTopVisualLine =
-      if rawTopLine == cursor.line then math.max(0, cursorVisualLine - halfVisibleLines) else 0
+    val (rawTopLine, rawTopVisualLine) =
+      if scrollUpBudget <= 0 then (cursor.line, math.max(0, cursorVisualLine - halfVisibleLines))
+      else walkBackward(cursor.line, scrollUpBudget)
 
     // Bottom clamp: the latest (line, visual-row) start that still fills the viewport with real content, found by
     // walking backward from the buffer's last line until visibleLines rows of content have been accounted for.
@@ -99,7 +115,7 @@ object CursorViewport:
       if wordWrapEnabled then 0
       else
         val measuredLeftColumn =
-          TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, visibleWidthPx, font)
+          TextLayoutSnapshot.leftColumnForCursorVisibility(lineText, cursor.column, gridWidthPx, font)
         val minimumVisibleColumn = math.max(0, cursor.column - viewport.visibleColumns + 1)
         math.max(minimumVisibleColumn, measuredLeftColumn)
 
