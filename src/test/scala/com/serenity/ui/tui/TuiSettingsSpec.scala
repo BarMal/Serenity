@@ -1,4 +1,5 @@
 package com.serenity.ui.tui
+
 import TuiScenarios.*
 
 /** Changing settings from the terminal: navigating the surface, toggling an option and seeing the editor change shape

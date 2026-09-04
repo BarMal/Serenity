@@ -102,6 +102,17 @@ trait TuiScriptSyntax:
     */
   val settledScreen: TuiScript[TuiScreen] = step(_.settledScreen)
 
+  /** One frame as the runtime's own fast phase would paint it -- including its cursor-only/full-repaint choice, which
+    * is what decides whether freshly typed text is on screen yet.
+    */
+  val runtimeScreen: TuiScript[TuiScreen] = step(_.runtimeScreen)
+
+  /** Whether the runtime would paint the cursor-only path on the next frame, skipping content entirely. */
+  val paintsCursorOnly: TuiScript[Boolean] = step(_.paintsCursorOnly)
+
+  /** Advance the animation clock until the runtime would paint content again. */
+  val advanceUntilFullRepaint: TuiScript[Unit] = step(_.advanceUntilFullRepaint)
+
   /** Advance the animation clock by whole frames, for scenarios that assert on motion rather than its outcome. */
   def advanceAnimations(ticks: Int): TuiScript[Boolean] = step(_.advanceAnimations(ticks))
 

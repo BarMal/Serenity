@@ -1,4 +1,5 @@
 package com.serenity.ui.tui
+
 import TuiScenarios.*
 
 /** The input a terminal delivers that is not a keystroke: SGR mouse reports, bracketed paste, focus reporting, and the

@@ -1,4 +1,5 @@
 package com.serenity.ui.tui
+
 import com.serenity.state.models.Focus
 
 /** What a TUI session puts on the terminal before the user has done anything: the file it was told to open, or the

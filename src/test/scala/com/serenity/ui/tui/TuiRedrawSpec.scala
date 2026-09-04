@@ -1,4 +1,5 @@
 package com.serenity.ui.tui
+
 import TuiScenarios.*
 
 /** What a TUI session actually writes to the terminal, as opposed to what it draws. Bytes are the cost model here: a

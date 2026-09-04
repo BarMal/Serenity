@@ -91,6 +91,50 @@ final class TuiSession private (
 
   def screenWithoutCaret: IO[TuiScreen] = renderFrame(cursorVisible = false)
 
+  /** One frame painted the way `AppRuntime`'s fast render phase paints it, branch included: the cursor-only path while
+    * the window sitter is active and nothing else needs a full content repaint, the full path otherwise.
+    *
+    * [[screen]] always paints the full frame, which is what most scenarios want -- what is on screen once the runtime
+    * has caught up. This one reproduces the runtime's own per-frame choice, and so can show a frame the user would
+    * actually see mid-typing.
+    */
+  def runtimeScreen: IO[TuiScreen] =
+    for
+      size       <- shell.viewportSize
+      current    <- state
+      animations <- stateManager.getBufferAnimations
+      pending    <- damage.getAndSet(Damage.Nothing)
+      surface    = surfaces.forSize(size)
+      cursorOnly = current.runtime.windowSitter.isActive && !AppRuntime.needsFullContentRender(current, animations)
+      _ <- IO(
+        if cursorOnly then TuiRuntime.paintCursorOnly(current, surface, size, true, None, animations)
+        else TuiRuntime.paintFrame(current, surface, size, true, None, pending)
+      )
+      emitted <- drainOutput
+      updated <- screenRef.get
+    yield TuiScreen(updated, emitted)
+
+  /** Advance the animation clock until the runtime would paint content again -- that is, until the window sitter has
+    * finished its run. How many ticks that takes depends on how fast the keystrokes arrived
+    * (`WindowSitterConfig.fastActiveTicks` against `activeTicks`), so scenarios wait for the branch rather than
+    * guessing a count.
+    */
+  def advanceUntilFullRepaint: IO[Unit] =
+    def loop(remaining: Int): IO[Unit] =
+      paintsCursorOnly.flatMap {
+        case false => IO.unit
+        case _ if remaining <= 0 =>
+          IO.raiseError(new AssertionError(s"Window sitter still active after $AnimationTickLimit animation ticks"))
+        case _ => tickAnimations >> loop(remaining - 1)
+      }
+    loop(AnimationTickLimit)
+
+  /** Whether the runtime's fast phase would paint the cursor-only path on the next frame. */
+  def paintsCursorOnly: IO[Boolean] =
+    (state, stateManager.getBufferAnimations).mapN((current, animations) =>
+      current.runtime.windowSitter.isActive && !AppRuntime.needsFullContentRender(current, animations)
+    )
+
   /** Let the interface finish moving, then paint until the frame stops changing.
     *
     * Two things settle here. Surfaces animate in and out (`AppState.runtime.surfaceAnimations`), so a dismissed command
