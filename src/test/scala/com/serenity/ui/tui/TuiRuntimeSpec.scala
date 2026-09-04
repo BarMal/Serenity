@@ -176,6 +176,88 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     harness.written should include(cursorShown)
   }
 
+  // -- The screen the real runtime paints -------------------------------------------------------------------------
+  //
+  // The deterministic behaviour suite (TuiHarnessSpec and friends) drives the same wiring without AppRuntime's own
+  // loops, which is what makes it fast and free of timing. These two anchor it to the real thing: `TuiRuntime.run`
+  // itself, its render loop, its input loop, with the bytes it wrote replayed through the same mock terminal the
+  // behaviour suite asserts through -- so if the two ever disagreed about what reaches the screen, this would say so.
+
+  private def screenOf(harness: LiveHarness): TerminalEmulator =
+    TerminalEmulator.blank(80, 24).consume(harness.written)
+
+  it should "paint the opened file, the gutter and the status bar onto the real terminal" in {
+    val file = Files.createTempFile("tui-runtime-screen-spec", ".md")
+    Files.writeString(file, "alpha\nbeta")
+    val sessionRoot = Files.createTempDirectory("tui-runtime-screen-spec-session")
+    val harness     = liveInputTerminal()
+
+    val program = TuiRuntime.run(
+      shell = TerminalShell.forTerminal(harness.terminal),
+      appConfig = AppConfig.default,
+      openPath = Some(file),
+      configPersistencePath = None,
+      hasDisplay = false,
+      sessionRootOverride = Some(sessionRoot)
+    )
+
+    val fiber = program.start.unsafeRunSync()
+
+    eventually {
+      val screen = screenOf(harness)
+      screen.inAlternateScreen shouldBe true
+      screen.rowText(1).stripTrailing shouldBe " 1 alpha"
+      screen.rowText(2).stripTrailing shouldBe " 2 beta"
+      screen.rowText(23) should include("Line 1, Col 1")
+    }
+
+    harness.send(Array(ctrl('q')))
+    fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
+  }
+
+  it should "repaint typed characters and move the terminal's own caret with them" in {
+    val file = Files.createTempFile("tui-runtime-typing-spec", ".md")
+    Files.writeString(file, "")
+    val sessionRoot = Files.createTempDirectory("tui-runtime-typing-spec-session")
+    val harness     = liveInputTerminal()
+
+    val program = TuiRuntime.run(
+      shell = TerminalShell.forTerminal(harness.terminal),
+      appConfig = AppConfig.default,
+      openPath = Some(file),
+      configPersistencePath = None,
+      hasDisplay = false,
+      sessionRootOverride = Some(sessionRoot)
+    )
+
+    val fiber = program.start.unsafeRunSync()
+
+    harness.send("typed".getBytes(StandardCharsets.UTF_8))
+
+    eventually {
+      val screen = screenOf(harness)
+      screen.rowText(1).stripTrailing shouldBe " 1 typed"
+      // The gutter is three cells wide, so the caret sits just past the five characters typed after it.
+      screen.cursor.col shouldBe 8
+      screen.cursor.row shouldBe 1
+      screen.cursor.visible shouldBe true
+    }
+
+    // Quitting with unsaved changes would raise the "unsaved changes" prompt instead of exiting, so save first.
+    harness.send(Array(ctrl('s')))
+    eventually {
+      Files.readString(file) shouldBe "typed"
+    }
+
+    harness.send(Array(ctrl('q')))
+    fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
+
+    // Restoring the terminal leaves the alternate screen and shows the cursor again.
+    val finalScreen = screenOf(harness)
+    finalScreen.inAlternateScreen shouldBe false
+    finalScreen.cursor.visible shouldBe true
+  }
+
   "TuiRuntime.markdownPreviewSourceWindow" should "return an empty window for an empty buffer" in {
     val buffer = Buffer.fromString(BufferId(1), "")
 
