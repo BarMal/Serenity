@@ -56,6 +56,14 @@ lazy val writeArchitectureBaseline = taskKey[Unit]("Regenerate the architecture-
 lazy val root = (project in file("."))
   .settings(
     name := "Serenity",
+    // Suites run one at a time. `Renderer` keeps its previous-frame state on the object itself -- `preparedSceneRef`,
+    // `previousFloatingSurfaceRectsRef`, and `previousSnapshotsRef` keyed by `PaneId` -- which its own comments
+    // describe as caching "single-surface frame state". Production has exactly one surface, so that holds there; two
+    // suites rendering concurrently in one JVM do not, and they evict each other's cached snapshot (every session's
+    // first pane is `PaneId(0)`). The symptom is a stray repaint in whichever suite renders next, which shows up as a
+    // rare, load-dependent failure in any test that measures what a frame wrote. Serialising is the honest fix until
+    // that state is per-surface; the alternative is tests that pass or fail depending on what else is running.
+    Test / parallelExecution := false,
     // WartRemover encodes rules docs/coding-standards.md and CLAUDE.md already state in prose.
     // Main sources only: tests legitimately use throw/null/partial access to build failure fixtures,
     // mirroring how Test / scalacOptions already relaxes the -W flags above.

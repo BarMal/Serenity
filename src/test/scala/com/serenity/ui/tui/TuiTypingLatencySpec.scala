@@ -1,27 +1,30 @@
 package com.serenity.ui.tui
-import com.serenity.animation.WindowSitterConfig
-import com.serenity.app.AppRuntime
 
-/** KNOWN DEFECT, reproduced end to end: typed text does not appear until the window sitter stops animating.
+import com.serenity.animation.WindowSitterConfig
+
+/** Typed text has to be on screen in the frame that follows the keystroke.
   *
-  * The reported symptom is that the caret moves as you type but the characters arrive a moment later, all at once, with
-  * the surrounding text reflowing around them. This is why:
+  * It is not, today, and this spec says so by asserting what is wanted and letting `pendingUntilFixed` report the gap:
+  * the pending tests below start passing the moment the defect is fixed, at which point `pendingUntilFixed` itself
+  * fails and asks for the marker to be removed. Nothing here encodes the broken behaviour as expected.
   *
-  *   - `AppRuntime.inputEventPhase` marks the window sitter active on every `InsertChar` (`observeWindowSitterTyping`),
-  *     for as long as `WindowSitterConfig.activeTicks`;
+  * The defect, for whoever picks it up:
+  *
+  *   - `AppRuntime.inputEventPhase` marks the window sitter active on every `InsertChar` (`observeWindowSitterTyping`);
   *   - the fast render phase then paints the cursor-only path for every frame where the sitter is active and
   *     `needsFullContentRender` is false -- which moves the caret but paints no content;
-  *   - `needsFullContentRender` is false in TUI mode because it looks for character-reveal buffer animations, a theme
-  *     transition, or surface animations, and the first of those never reaches the surface-generic render entry points
-  *     the terminal uses at all (`docs/tui-mode.md`, "Known degradations").
+  *   - `needsFullContentRender` is always false in TUI mode: it looks for character-reveal buffer animations, a theme
+  *     transition, or surface animations, and the first never reaches the surface-generic render entry points a
+  *     terminal uses at all (`docs/tui-mode.md`, "Known degradations").
   *
-  * So a terminal session paints no typed text until the sitter decays, and then repaints the lot. The exception the
-  * cursor-only branch was written for -- a window-sitter glyph living in the Swing window chrome, never on the canvas
-  * -- does not exist in a terminal: there is no chrome to draw it in, so the branch buys nothing and costs every
-  * keystroke its visibility.
+  * So a terminal session paints no typed text until the sitter decays, then repaints the insertion and its reflow
+  * together -- which is exactly the reported symptom: the caret moves as you type, the characters arrive late and all
+  * at once, and the surrounding text jumps. The cursor-only branch exists for a window-sitter glyph that lives in the
+  * Swing window chrome and never touches the canvas; a terminal has no chrome to draw it in, so in TUI mode the branch
+  * costs every keystroke its visibility and buys nothing.
   *
-  * These tests assert the behaviour as it is today. When the fast phase stops taking that branch in TUI mode, the two
-  * marked expectations flip: the character appears in the first runtime frame, and `paintsCursorOnly` is false.
+  * The control tests at the bottom run the same scenarios with the window sitter disabled. They pass today, which is
+  * what identifies the sitter as the cause rather than the renderer.
   */
 class TuiTypingLatencySpec extends TuiSpec:
 
@@ -31,89 +34,68 @@ class TuiTypingLatencySpec extends TuiSpec:
   private val wrappedProse =
     TuiEnvironment.withFile(prose).withConfig(_.withWordWrap(true).withVisualLineCursorNavigation(true))
 
-  /** The same session with the window sitter switched off -- the control case for every assertion below. */
+  /** The same session with the window sitter switched off -- the control case for every pending assertion above it. */
   private val withoutWindowSitter =
     wrappedProse.withConfig(_.withWindowSitterConfig(WindowSitterConfig.default.copy(enabled = false)))
 
-  "typing a character" should "leave the runtime painting the cursor-only path, which draws no content" in
+  // -- What is wanted (pending until the defect is fixed) -------------------------------------------------------------
+
+  "typing a character" should "put it on screen in the very next frame the runtime paints" in pendingUntilFixed {
+    runTui(wrappedProse) {
+      for
+        _      <- settledScreen
+        before <- runtimeScreen
+        _      <- typeText("Z")
+        after  <- runtimeScreen
+        text   <- documentText
+      yield
+        text.exists(_.contains("Z")) shouldBe true
+        after.caret._1 shouldBe before.caret._1 + 1
+        after.rowText(1).contains("Z") shouldBe true
+    }
+  }
+
+  it should "never leave the runtime painting the caret without its content" in pendingUntilFixed {
     runTui(wrappedProse) {
       for
         _          <- settledScreen
         _          <- typeText("Z")
         cursorOnly <- paintsCursorOnly
-        current    <- state
-        s          <- TuiScript.session
-        animations <- liftIO(s.stateManager.getBufferAnimations)
       yield
-        current.runtime.windowSitter.isActive shouldBe true
-        // Nothing else asks for a full content repaint, so the sitter's own activity decides the branch.
-        AppRuntime.needsFullContentRender(current, animations) shouldBe false
-        animations shouldBe empty
-        cursorOnly shouldBe true // flips to false when the TUI stops taking the cursor-only branch
+        // The window sitter has no visual representation in a terminal, so it must not suppress content painting there.
+        cursorOnly shouldBe false
+    }
+  }
+
+  "a burst of typing" should "appear as it is typed rather than arriving in one later frame" in pendingUntilFixed {
+    runTui(wrappedProse) {
+      for
+        _      <- settledScreen
+        _      <- typeSlowly("HELLO")
+        during <- runtimeScreen
+        text   <- documentText
+      yield
+        text.exists(_.contains("HELLO")) shouldBe true
+        during.rowText(1).contains("HELLO") shouldBe true
+    }
+  }
+
+  "an insertion that reflows the wrapped tail" should "reflow it in the frame after the keystroke" in
+    pendingUntilFixed {
+      runTui(wrappedProse) {
+        for
+          _      <- pressAll(List.fill(190)(TuiKeys.ArrowRight)*)
+          before <- settledScreen
+          _      <- typeText("QQQQQQQQQQ")
+          after  <- runtimeScreen
+        yield
+          after.containsText("QQQQQQQQQQ") shouldBe true
+          // The following visual row is pushed along in the same frame, rather than jumping a moment later.
+          after.rowText(2) should not be before.rowText(2)
+      }
     }
 
-  it should "move the caret in that frame but leave the character off the screen" in runTui(wrappedProse) {
-    for
-      _      <- settledScreen
-      before <- runtimeScreen
-      _      <- typeText("Z")
-      after  <- runtimeScreen
-      text   <- documentText
-    yield
-      // The keystroke reached the document immediately...
-      text.exists(_.contains("Z")) shouldBe true
-      // ...and the caret moved with it...
-      after.caret._1 shouldBe before.caret._1 + 1
-      // ...but the frame the runtime actually painted has no 'Z' on it. This is the delay the user sees.
-      after.rowText(1).contains("Z") shouldBe false
-      after.rowText(1) shouldBe before.rowText(1)
-  }
-
-  it should "show the character only once the window sitter has decayed" in runTui(wrappedProse) {
-    for
-      _       <- settledScreen
-      _       <- typeText("Z")
-      duringA <- runtimeScreen
-      duringB <- runtimeScreen
-      _       <- advanceUntilFullRepaint
-      settled <- runtimeScreen
-    yield
-      duringA.rowText(1).contains("Z") shouldBe false
-      duringB.rowText(1).contains("Z") shouldBe false
-      // Only after the sitter's own animation budget runs out does the text arrive.
-      settled.rowText(1).contains("Z") shouldBe true
-  }
-
-  it should "hold back a whole burst of typing, then paint it in one frame" in runTui(wrappedProse) {
-    for
-      _      <- settledScreen
-      _      <- typeSlowly("HELLO")
-      during <- runtimeScreen
-      text   <- documentText
-      _      <- advanceUntilFullRepaint
-      after  <- runtimeScreen
-    yield
-      text.exists(_.contains("HELLO")) shouldBe true
-      during.rowText(1).contains("HELLO") shouldBe false
-      after.rowText(1).contains("HELLO") shouldBe true
-  }
-
-  it should "reflow the wrapped tail in that same delayed frame" in runTui(wrappedProse) {
-    for
-      _      <- pressAll(List.fill(190)(TuiKeys.ArrowRight)*)
-      before <- settledScreen
-      _      <- typeText("QQQQQQQQQQ")
-      during <- runtimeScreen
-      _      <- advanceUntilFullRepaint
-      after  <- runtimeScreen
-    yield
-      // Nothing at all changes while the sitter is active -- neither the inserted text nor the rows it pushes along.
-      during.rowText(2) shouldBe before.rowText(2)
-      // Then the insertion and the reflow of the following visual row land together, which is what makes the delay
-      // look like a jump rather than a keystroke.
-      after.rowText(2) should not be before.rowText(2)
-      after.containsText("QQQQQQQQQQ") shouldBe true
-  }
+  // -- Control cases: the same scenarios with the window sitter out of the way ---------------------------------------
 
   "the same session with the window sitter disabled" should "paint typed text in the very next frame" in
     runTui(withoutWindowSitter) {
@@ -145,8 +127,15 @@ class TuiTypingLatencySpec extends TuiSpec:
         _          <- typeText("Z")
         forcedFull <- screen
       yield
-        // Proof that the content itself is fine: it is the runtime's choice of render path, not the renderer, that
-        // withholds it.
+        // The content itself is fine: it is the runtime's choice of render path, not the renderer, that withholds it.
         forcedFull.rowText(1).contains("Z") shouldBe true
     }
+
+  "the document" should "always receive the keystroke immediately, whatever is painted" in runTui(wrappedProse) {
+    for
+      _    <- settledScreen
+      _    <- typeSlowly("HELLO")
+      text <- documentText
+    yield text.exists(_.contains("HELLO")) shouldBe true
+  }
 end TuiTypingLatencySpec

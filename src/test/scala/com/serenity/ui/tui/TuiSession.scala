@@ -171,11 +171,29 @@ final class TuiSession private (
     if remaining <= 0 then IO.unit
     else tickAnimations.flatMap(active => if active then advanceAnimationsToRest(remaining - 1) else IO.unit)
 
+  /** Repaint until two frames in a row write nothing.
+    *
+    * One quiet frame is not enough to call a session settled: a repaint queued behind it -- the blank-cell settle after
+    * an `Everything`-damage frame, most often -- would then land in whatever frame a scenario measures next and be
+    * attributed to the interaction under test. Two consecutive silent frames, with a yield between them so any pending
+    * fiber gets its turn, means there is nothing left in flight.
+    *
+    * Failing loudly when it does not converge matters as much as the settling: a dirty frame returned quietly here
+    * surfaces later as an inexplicable byte count in an unrelated assertion.
+    */
   private def repaintUntilQuiet(remaining: Int): IO[TuiScreen] =
-    screen.flatMap { current =>
-      if current.emitted.isEmpty || remaining <= 0 then IO.pure(current)
-      else repaintUntilQuiet(remaining - 1)
-    }
+    def loop(left: Int, quietRun: Int): IO[TuiScreen] =
+      IO.cede >> screen.flatMap { current =>
+        if current.emitted.isEmpty && quietRun >= 1 then IO.pure(current)
+        else if left <= 0 then
+          IO.raiseError(
+            new AssertionError(
+              s"Screen never settled: still writing ${current.emitted.length} bytes after $SettleAttempts repaints"
+            )
+          )
+        else loop(left - 1, if current.emitted.isEmpty then quietRun + 1 else 0)
+      }
+    loop(remaining, quietRun = 0)
 
   /** Resize the terminal underneath the session, the way a window manager does: the shell observes `SIGWINCH`, the
     * runtime picks the new size up through `checkResize`, and the surface is rebuilt for it.
@@ -211,6 +229,9 @@ final class TuiSession private (
     */
   private def drainOutput: IO[String] =
     for
+      // Flush the terminal itself first: everything written through its writer has to have reached the byte stream
+      // before it is measured, or a frame's bytes can be attributed to the next one under load.
+      _      <- IO.blocking(terminal.flush())
       offset <- consumed.get
       bytes  <- IO(output.toByteArray)
       fresh = new String(bytes.drop(offset), StandardCharsets.UTF_8)
@@ -255,7 +276,7 @@ object TuiSession:
   /** How many paints [[TuiSession.settledScreen]] will make before giving up and returning the latest frame. A frame
     * settles after one repaint in practice; more than a handful would itself be the bug worth seeing.
     */
-  private val SettleAttempts = 8
+  private val SettleAttempts = 12
 
   /** A ceiling on how many animation frames [[TuiSession.settledScreen]] will advance before giving up. Surface
     * animations run for a fraction of a second at the configured frame rate; a scenario needing more than this is

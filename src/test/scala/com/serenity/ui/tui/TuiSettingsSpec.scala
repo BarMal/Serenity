@@ -81,14 +81,7 @@ class TuiSettingsSpec extends TuiSpec:
     yield ()
   }
 
-  /** The Post-processing option carries the same "-- inert in TUI mode" suffix as Typography
-    * (`CommandRunnerSettingsGroups.inertInTuiHint`), but its hint is long enough that the settings surface's
-    * fixed-width hint column elides it before the suffix is reached -- at 240 columns just as at 200, since that column
-    * does not grow with the terminal. So the annotation `docs/tui-mode.md` describes for this option is never actually
-    * legible in TUI mode. Asserted as it behaves today rather than as the doc describes it; the elision is worth
-    * fixing, and this test will say so when it is.
-    */
-  "the post-processing option" should "be reachable and show its value, with its hint elided before the annotation" in
+  "the post-processing option" should "be reachable and show its value" in
     runTui(TuiEnvironment.default.withViewport(TuiViewport.Wide)) {
       for
         _ <- openSettings
@@ -98,11 +91,31 @@ class TuiSettingsSpec extends TuiSpec:
           val row = screen.rowOf("Post-processing").getOrElse(fail("expected the Post-processing option"))
           screen.rowText(row) should include("Off")
           screen.rowText(row) should include("Frame-wide scanlines")
-          screen.rowText(row) should include("...")
-          screen.rowText(row) should not include "inert in TUI mode"
         }
       yield ()
     }
+
+  /** PENDING -- OPEN DEFECT. Asserts the behaviour that is wanted, and is reported pending until it holds.
+    *
+    * The Post-processing option carries the same "-- inert in TUI mode" suffix as Typography
+    * (`CommandRunnerSettingsGroups.inertInTuiHint`), but its hint is long enough that the settings surface's
+    * fixed-width hint column elides it before the suffix is reached -- at 240 columns just as at 200, since that column
+    * does not grow with the terminal. So the annotation `docs/tui-mode.md` promises for this option is never legible,
+    * which is the whole point of annotating rather than hiding the control.
+    */
+  it should "show its inert-in-TUI annotation rather than eliding it" in pendingUntilFixed {
+    runTui(TuiEnvironment.default.withViewport(TuiViewport.Wide)) {
+      for
+        _ <- openSettings
+        _ <- typeText("post")
+        _ <- enter
+        _ <- verify("annotation legible") { screen =>
+          val row = screen.rowOf("Post-processing").getOrElse(fail("expected the Post-processing option"))
+          screen.rowText(row) should include("inert in TUI mode")
+        }
+      yield ()
+    }
+  }
 
   "Escape" should "pop one settings level at a time rather than closing the whole surface" in runTui() {
     for

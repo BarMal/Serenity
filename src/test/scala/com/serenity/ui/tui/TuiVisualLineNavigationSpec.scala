@@ -1,4 +1,5 @@
 package com.serenity.ui.tui
+
 import com.serenity.state.models.{AppState, CursorPosition}
 
 import TuiScenarios.*
@@ -9,11 +10,15 @@ import TuiScenarios.*
   * three cases worth pinning: both on (visual rows), the navigation flag off (logical lines), and word wrap off
   * (logical lines, because there are no visual rows to speak of). Up and Down honour all three.
   *
-  * Home and End do not, and that is the defect this spec pins: End on a wrapped row leaves the caret on the boundary
-  * column shared by that row's end and the next row's start, and the renderer resolves that column to the *next* row --
-  * so pressing End on a wrapped line visibly moves the caret to the far left of the row below, and Home from there does
-  * not bring it back. It is the same earlier-row/later-row ambiguity #1266 fixed for vertical movement
-  * (`NavigationGeometry.visualRowIndexFor`), still present on the horizontal ones.
+  * Home and End do not, and the two `pendingUntilFixed` tests below assert what they should do rather than what they
+  * currently do: End on a wrapped row leaves the caret on the boundary column shared by that row's end and the next
+  * row's start, and the renderer resolves that column to the *next* row -- so pressing End on a wrapped line visibly
+  * moves the caret to the far left of the row below, and Home from there does not bring it back. It is the same
+  * earlier-row/later-row ambiguity #1266 fixed for vertical movement (`NavigationGeometry.visualRowIndexFor`), still
+  * present on the horizontal ones: `homeTarget`/`endTarget` in `EditorEventReducer` resolve the column through
+  * `visualLineFor` without that disambiguation.
+  *
+  * When it is fixed those two start passing, and `pendingUntilFixed` fails to ask for its own removal.
   */
 class TuiVisualLineNavigationSpec extends TuiSpec:
 
@@ -87,42 +92,47 @@ class TuiVisualLineNavigationSpec extends TuiSpec:
 
   // -- Home and End do not (the defect) ------------------------------------------------------------------------------
 
-  /** KNOWN DEFECT, asserted as it behaves today. */
-  "End on a wrapped row" should "leave the caret at the start of the row below, not the end of that row" in
-    runTui(env()) {
-      for
-        _      <- arrowDown // onto the second visual row of the first logical line
-        before <- settledScreen
-        onRow  <- state
-        _      <- lineEnd
-        after  <- settledScreen
-        ended  <- state
-      yield
-        // The caret was on a wrapped row with plenty of text to its right...
-        before.caret._1 shouldBe ContentColumn
-        cursorColumn(onRow) should be > 100
-        // ...and End moved it forward, as far as the document is concerned.
-        cursorColumn(ended) should be > cursorColumn(onRow)
-        // But that landing column is the boundary the next row starts on, so the caret is drawn one row lower, at the
-        // far left -- the opposite corner of the screen from where End should have put it.
-        after.caret shouldBe (ContentColumn, before.caret._2 + 1)
+  /** PENDING -- OPEN DEFECT. Asserts the behaviour that is wanted, and is reported pending until it holds. */
+  "End on a wrapped row" should "put the caret at the end of that row, not the start of the row below" in
+    pendingUntilFixed {
+      runTui(env()) {
+        for
+          _      <- arrowDown // onto the second visual row of the first logical line
+          before <- settledScreen
+          onRow  <- state
+          _      <- lineEnd
+          after  <- settledScreen
+          ended  <- state
+        yield
+          // The caret starts at the left edge of a wrapped row with plenty of text to its right...
+          before.caret._1 shouldBe ContentColumn
+          cursorColumn(onRow) should be > 100
+          // ...and End moves it forward within that same row.
+          cursorColumn(ended) should be > cursorColumn(onRow)
+          // The caret stays on the row the user pressed End on, at its right-hand end -- not at the far left of the
+          // row below, which is the opposite corner of the screen.
+          after.caret._2 shouldBe before.caret._2
+          after.caret._1 should be > 100
+      }
     }
 
-  /** KNOWN DEFECT, asserted as it behaves today. */
-  it should "not be undone by Home, which now reads as already being at its row's start" in runTui(env()) {
-    for
-      _         <- arrowDown
-      onRow     <- state
-      _         <- lineEnd
-      afterEnd  <- state
-      _         <- lineStart
-      afterHome <- state
-      current   <- settledScreen
-    yield
-      // Home is a no-op: the caret is already at column 0 of the row the renderer thinks it is on.
-      cursorColumn(afterHome) shouldBe cursorColumn(afterEnd)
-      cursorColumn(afterHome) should not be cursorColumn(onRow)
-      current.caret._1 shouldBe ContentColumn
+  /** PENDING -- OPEN DEFECT. Asserts the behaviour that is wanted, and is reported pending until it holds. */
+  it should "be undone by Home, which returns the caret to that row's own start" in pendingUntilFixed {
+    runTui(env()) {
+      for
+        _         <- arrowDown
+        onRow     <- state
+        _         <- lineEnd
+        afterEnd  <- state
+        _         <- lineStart
+        afterHome <- state
+        current   <- settledScreen
+      yield
+        // End moved somewhere, and Home brings the caret back to where the row began.
+        cursorColumn(afterEnd) should not be cursorColumn(onRow)
+        cursorColumn(afterHome) shouldBe cursorColumn(onRow)
+        current.caret._1 shouldBe ContentColumn
+    }
   }
 
   "End on the final visual row of a wrapped line" should "land on the logical line's end, where the two agree" in

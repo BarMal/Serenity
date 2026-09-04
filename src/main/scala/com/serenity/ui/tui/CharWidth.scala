@@ -20,6 +20,7 @@ object CharWidth:
     0xff00  -> 0xff60,  // Fullwidth forms
     0xffe0  -> 0xffe6,  // Fullwidth signs
     0x1f300 -> 0x1f64f, // Misc symbols and pictographs, emoticons
+    0x1f680 -> 0x1f6ff, // Transport and map symbols
     0x1f900 -> 0x1f9ff, // Supplemental symbols and pictographs
     0x20000 -> 0x3fffd  // CJK unified ideographs extension B and beyond
   )

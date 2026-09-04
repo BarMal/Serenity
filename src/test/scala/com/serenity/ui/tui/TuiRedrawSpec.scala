@@ -16,6 +16,9 @@ class TuiRedrawSpec extends TuiSpec:
     */
   private val DiffBudgetBytes = 2000
 
+  /** Escaped so a failure names the sequence that was written rather than printing invisible control bytes. */
+  private def readable(emitted: String): String = emitted.replace(Esc.toString, "<ESC>")
+
   "a settled screen" should "write nothing at all when nothing has changed" in
     runTui(TuiEnvironment.withFile("unchanging")) {
       for
@@ -23,8 +26,8 @@ class TuiRedrawSpec extends TuiSpec:
         again  <- screen
         andOne <- screen
       yield
-        again.emitted shouldBe ""
-        andOne.emitted shouldBe ""
+        withClue(s"first idle frame wrote: ${readable(again.emitted)}\n")(again.emitted shouldBe "")
+        withClue(s"second idle frame wrote: ${readable(andOne.emitted)}\n")(andOne.emitted shouldBe "")
     }
 
   "typing one character" should "emit a diff of that row and the status bar, not a repaint" in
@@ -125,6 +128,8 @@ class TuiRedrawSpec extends TuiSpec:
         // One line down inside the visible window scrolls nothing: the caret and status bar move, the text does not.
         after.rowText(1) shouldBe before.rowText(1)
         after.changedRows(before) shouldBe Set(after.height - 1)
-        after.emitted.length should be < DiffBudgetBytes
+        withClue(s"scroll frame wrote ${after.emitted.length} bytes starting: ${readable(after.emitted.take(40))}\n")(
+          after.emitted.length should be < DiffBudgetBytes
+        )
     }
 end TuiRedrawSpec
