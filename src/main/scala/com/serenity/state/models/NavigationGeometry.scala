@@ -63,34 +63,37 @@ final case class EditorGeometry(navigation: NavigationGeometry, charWidthPx: Int
 
 final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
 
-  /** The visual (wrapped) row `cursor` currently sits on -- the same containment lookup [[xPxForCursor]] and
-    * [[moveVertical]] use to locate a cursor among wrapped rows, exposed for callers (Home/End under visual-line
-    * navigation) that need that row's own `startColumn`/`endColumn` rather than a caret x-offset or a neighbouring row.
+  /** Index into [[visualLines]] of the visual (wrapped) row `cursor` sits on -- the single containment lookup every
+    * cursor-to-row resolution shares ([[visualLineFor]], [[xPxForCursor]], [[moveVertical]]) and, crucially, the one
+    * `Renderer`'s caret drawing must also use (`Renderer.calculateCursorVisualPosition`), or the caret is painted on a
+    * different wrapped row than vertical navigation moves from -- the "cursor stuck at a wrap boundary until nudged
+    * left/right" bug. At a wrap boundary, where one row's `endColumn` equals the next row's `startColumn`, both rows
+    * match the column; `.lastOption` resolves it to the later row, so a boundary column belongs to the start of the
+    * next visual line.
     */
-  def visualLineFor(cursor: CursorPosition): Option[TextVisualLine] =
-    visualLines
-      .filter(line =>
-        line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
-      )
-      .lastOption
-
-  def xPxForCursor(cursor: CursorPosition): Option[Float] =
-    visualLines
-      .filter(line =>
-        line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
-      )
-      .lastOption
-      .map(line => line.xForColumn(cursor.column).getOrElse(line.widthPx))
-
-  def cursorForVisualRowAndXPx(row: Int, xPx: Float): Option[CursorPosition] =
-    visualLines.lift(row).map(line => CursorPosition(line.bufferLine, line.nearestColumnForXPx(xPx)))
-
-  def moveVertical(cursor: CursorPosition, direction: Int, preferredXPx: Float): Option[CursorPosition] =
+  def visualRowIndexFor(cursor: CursorPosition): Option[Int] =
     visualLines.zipWithIndex
       .filter {
         case (line, _) =>
           line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
       }
       .lastOption
-      .map { case (_, index) => index + direction }
+      .map(_._2)
+
+  /** The visual (wrapped) row `cursor` currently sits on, exposed for callers (Home/End under visual-line navigation,
+    * and the renderer's caret placement) that need that row's own `startColumn`/`endColumn`/caret stops rather than a
+    * neighbouring row.
+    */
+  def visualLineFor(cursor: CursorPosition): Option[TextVisualLine] =
+    visualRowIndexFor(cursor).map(visualLines)
+
+  def xPxForCursor(cursor: CursorPosition): Option[Float] =
+    visualLineFor(cursor).map(line => line.xForColumn(cursor.column).getOrElse(line.widthPx))
+
+  def cursorForVisualRowAndXPx(row: Int, xPx: Float): Option[CursorPosition] =
+    visualLines.lift(row).map(line => CursorPosition(line.bufferLine, line.nearestColumnForXPx(xPx)))
+
+  def moveVertical(cursor: CursorPosition, direction: Int, preferredXPx: Float): Option[CursorPosition] =
+    visualRowIndexFor(cursor)
+      .map(_ + direction)
       .flatMap(targetRow => cursorForVisualRowAndXPx(targetRow, preferredXPx))
