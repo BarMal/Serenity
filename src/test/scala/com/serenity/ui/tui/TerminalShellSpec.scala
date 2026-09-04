@@ -330,6 +330,23 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers:
     harness.written should include(kittyPop)
   }
 
+  // The release half of the quit chord is reported (kitty "report event types") while the protocol is still active,
+  // but the input read loop is already gone by then, so it lands unread in the buffer. Left there, the shell the user
+  // returns to prints it literally (`[113;5:3u`). restore() must drain it -- see TerminalShell.drainPendingInput.
+  "releasing a Kitty-tier shell on clean quit" should
+    "drain a buffered keyboard-protocol release event so the shell doesn't print it" in {
+      val releaseEvent = s"$esc[113;5:3u"
+      val harness      = dumbTerminal(bytes(s"$esc[?1u" + releaseEvent))
+
+      TerminalShell.forTerminal(harness.terminal).use(_ => IO.unit).unsafeRunSync()
+
+      // Negotiation consumes the kitty response; restore() must consume the trailing release event, leaving nothing
+      // meaningful for the returning shell -- the next read is a sentinel (EOF/expired), not the ESC that opens it.
+      val leftover = harness.terminal.reader().read(100L)
+      leftover should (equal(org.jline.utils.NonBlockingReader.EOF) or
+        equal(org.jline.utils.NonBlockingReader.READ_EXPIRED))
+    }
+
   "releasing a confirmed ModifyOtherKeys-tier shell on clean quit" should
     "disable modifyOtherKeys and formatOtherKeys" in {
       val harness = liveTerminal()
