@@ -84,10 +84,10 @@ object Renderer:
 
   /** Each pane's [[TextLayoutSnapshot]] as of the *previous* frame this renderer planned, keyed by pane id --
     * `dirtyRowsFor` reads this (via `planFrame`, which always runs before this ref is updated for the frame being
-    * planned) to catch rows whose content shifted because an *upstream* paragraph's edit changed how many rows it
-    * wraps into, not just rows whose own buffer line `Damage` names directly (see [[DirtyLineDiff]]'s doc comment).
-    * Updated right after `planFrame` returns for a frame, from that same frame's `renderPlan.snapshots`, so the next
-    * frame's `planFrame` call sees this frame's snapshots as "previous" -- the same before/after timing
+    * planned) to catch rows whose content shifted because an *upstream* paragraph's edit changed how many rows it wraps
+    * into, not just rows whose own buffer line `Damage` names directly (see [[DirtyLineDiff]]'s doc comment). Updated
+    * right after `planFrame` returns for a frame, from that same frame's `renderPlan.snapshots`, so the next frame's
+    * `planFrame` call sees this frame's snapshots as "previous" -- the same before/after timing
     * [[previousFloatingSurfaceRectsRef]] documents above, except the snapshot itself (not a later paint step) is
     * already known by the time `planFrame` runs, so there's no need to wait for painting to record it.
     */
@@ -1507,11 +1507,11 @@ object Renderer:
     *
     * Unioned with [[DirtyLineDiff.dirtyRows]] comparing this pane's previous frame's [[TextLayoutSnapshot]]
     * ([[previousSnapshotsRef]]) against `record.snapshot`: `Damage`'s buffer-line facts only ever name the paragraph
-    * actually edited, so a paragraph whose own content is untouched but whose *screen row* moved -- because an
-    * earlier paragraph's edit changed how many rows it wraps into -- is otherwise never marked dirty, leaving stale
-    * pixels from the row's old frame in place. `TextVisualLine` carries no cursor/selection state, so this catches
-    * reflow shifts precisely without making the `Damage`-based half above redundant: a selection- or cursor-only
-    * change can leave every row's `TextVisualLine` equal while still needing a redraw, which only `Damage` reports.
+    * actually edited, so a paragraph whose own content is untouched but whose *screen row* moved -- because an earlier
+    * paragraph's edit changed how many rows it wraps into -- is otherwise never marked dirty, leaving stale pixels from
+    * the row's old frame in place. `TextVisualLine` carries no cursor/selection state, so this catches reflow shifts
+    * precisely without making the `Damage`-based half above redundant: a selection- or cursor-only change can leave
+    * every row's `TextVisualLine` equal while still needing a redraw, which only `Damage` reports.
     */
   private def dirtyRowsFor(damage: Damage, paneId: PaneId, record: PaneFrameRecord): Set[Int] =
     val damageDirty =

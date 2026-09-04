@@ -193,8 +193,9 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       // here the whole wrapped line is short enough to fit the viewport outright, so the clamp pins it to 0).
       // Measuring the caret's row at the buffer font's wider width (the bug this spec is named for) would instead
       // yield a different, too-small row.
-      val totalVisualRows       = TextLayoutSnapshot.boundedVisualLinesForText(content, 0, gridWrapWidthPx, proseFont).length
-      val maxTopVisualLine      = math.max(0, totalVisualRows - syncedBuffer.viewport.visibleLines)
-      val expectedTopVisualLine = math.min(maxTopVisualLine, math.max(0, trueVisualRow - syncedBuffer.viewport.visibleLines / 2))
+      val totalVisualRows  = TextLayoutSnapshot.boundedVisualLinesForText(content, 0, gridWrapWidthPx, proseFont).length
+      val maxTopVisualLine = math.max(0, totalVisualRows - syncedBuffer.viewport.visibleLines)
+      val expectedTopVisualLine =
+        math.min(maxTopVisualLine, math.max(0, trueVisualRow - syncedBuffer.viewport.visibleLines / 2))
       adjusted.topVisualLine shouldBe expectedTopVisualLine
     }

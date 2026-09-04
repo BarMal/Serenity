@@ -347,9 +347,10 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     // 8 rows with real content, not stopping short and leaving blank rows below the last line.
     val paragraph  = List.fill(30)("word").mkString(" ")
     val paragraphs = List.fill(6)(paragraph)
-    paragraphs.zipWithIndex.foreach { case (text, index) =>
-      text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-      if index < paragraphs.length - 1 then stateManager.applyEvent(NewLine).unsafeRunSync()
+    paragraphs.zipWithIndex.foreach {
+      case (text, index) =>
+        text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+        if index < paragraphs.length - 1 then stateManager.applyEvent(NewLine).unsafeRunSync()
     }
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()

@@ -298,8 +298,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     "redraw a later paragraph's screen row after an earlier paragraph's edit reflows it down a row" in {
       val surface = new MockRenderSurface(80, 24, persistentContent = true)
 
-      val words                        = Vector.tabulate(80)(i => f"word$i%02d")
-      def paragraphOf(n: Int): String  = words.take(n).mkString(" ")
+      val words                               = Vector.tabulate(80)(i => f"word$i%02d")
+      def paragraphOf(n: Int): String        = words.take(n).mkString(" ")
       def contentFor(n: Int): Vector[String] = Vector(paragraphOf(n), "MARKERLINE", "TAILLINE")
 
       // How many visual rows the first paragraph's `n` words wrap into, computed the same way `Renderer` itself
@@ -310,7 +310,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         val state            = stateWith(contentFor(n))
         val calculatedLayout = LayoutManager.calculateLayout(state, viewport)
         val workspaceLayout  = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
-        val contentRect = workspaceLayout.activeContentRect(state).getOrElse(fail("expected an active content rect"))
+        val contentRect  = workspaceLayout.activeContentRect(state).getOrElse(fail("expected an active content rect"))
         val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
         val cellMetrics  = CellMetrics.fromFont(font)
         val panelWidthPx = contentRect.width * cellMetrics.charWidth
