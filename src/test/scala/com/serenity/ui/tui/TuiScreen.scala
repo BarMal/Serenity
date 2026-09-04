@@ -31,7 +31,18 @@ final case class TuiScreen(terminal: TerminalEmulator, emitted: String):
   /** The whole grid as one newline-joined string, for a coarse `should include` when the exact row does not matter. */
   def text: String = rows.mkString("\n")
 
+  /** Only the rows with something on them, paired with their row index -- the readable form of a mostly-empty screen. */
+  def paintedRows: List[(Int, String)] =
+    rows.zipWithIndex.collect { case (line, row) if line.strip().nonEmpty => (row, line.stripTrailing()) }.toList
+
   def containsText(value: String): Boolean = rows.exists(_.contains(value))
+
+  /** The chrome rows the editor always draws: the buffer header across the top, the status bar along the bottom. */
+  def titleBar: String  = rowText(0)
+  def statusBar: String = rowText(height - 1)
+
+  /** The editor body: everything between the two chrome rows, which is where document content and the gutter live. */
+  def bodyRows: Vector[String] = rows.slice(1, height - 1)
 
   def rowOf(value: String): Option[Int] = terminal.rowsContaining(value).headOption
 
