@@ -1,6 +1,4 @@
 package com.serenity.ui.tui
-
-import cats.syntax.all.*
 import com.serenity.state.models.SurfaceContent
 
 import TuiScenarios.*
@@ -12,8 +10,9 @@ import TuiScenarios.*
 class TuiCommandPaletteSpec extends TuiSpec:
 
   private def selectedIndex(screenState: com.serenity.state.models.AppState): Option[Int] =
-    screenState.commandRunnerSurface.map(_.content).collect { case SurfaceContent.CommandPalette(runner) =>
-      runner.selectedIndex
+    screenState.commandRunnerSurface.map(_.content).collect {
+      case SurfaceContent.CommandPalette(runner) =>
+        runner.selectedIndex
     }
 
   "Ctrl+P" should "open the palette over the document, with its search field and key hints" in runTui() {
@@ -110,7 +109,7 @@ class TuiCommandPaletteSpec extends TuiSpec:
       for
         _      <- searchCommands("line")
         listed <- screen
-        row = listed.rowOf("Editor View").getOrElse(fail("expected a group row for the filtered query"))
+        row    = listed.rowOf("Editor View").getOrElse(fail("expected a group row for the filtered query"))
         column = listed.rowText(row).indexOf("Editor View")
         _ <- click(column + 1, row)
         _ <- verify("navigated into the group") { screen =>

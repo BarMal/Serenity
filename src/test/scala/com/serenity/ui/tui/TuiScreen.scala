@@ -31,7 +31,8 @@ final case class TuiScreen(terminal: TerminalEmulator, emitted: String):
   /** The whole grid as one newline-joined string, for a coarse `should include` when the exact row does not matter. */
   def text: String = rows.mkString("\n")
 
-  /** Only the rows with something on them, paired with their row index -- the readable form of a mostly-empty screen. */
+  /** Only the rows with something on them, paired with their row index -- the readable form of a mostly-empty screen.
+    */
   def paintedRows: List[(Int, String)] =
     rows.zipWithIndex.collect { case (line, row) if line.strip().nonEmpty => (row, line.stripTrailing()) }.toList
 

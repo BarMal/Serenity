@@ -1,6 +1,4 @@
 package com.serenity.ui.tui
-
-import cats.syntax.all.*
 import com.serenity.state.models.Focus
 
 /** What a TUI session puts on the terminal before the user has done anything: the file it was told to open, or the
@@ -70,8 +68,7 @@ class TuiStartupSpec extends TuiSpec:
   "the first frame" should "enter the alternate screen, then clear and repaint it inside synchronized-update brackets" in
     runTui(TuiEnvironment.withFile("first frame")) {
       val esc = 0x1b.toChar
-      for
-        first <- screen
+      for first <- screen
       yield
         // The shell's own startup comes first: alternate screen, hidden hardware cursor, focus reporting, the
         // keyboard-protocol negotiation, then the input modes the handler enables.

@@ -11,7 +11,8 @@ import TuiScript.*
   */
 object TuiScenarios:
 
-  /** Ctrl+P, the terminal binding for the command palette (`HotkeyConfig.forTerminalUse` rewrites the macOS default). */
+  /** Ctrl+P, the terminal binding for the command palette (`HotkeyConfig.forTerminalUse` rewrites the macOS default).
+    */
   val openCommandPalette: TuiScript[Unit] = ctrl('p')
 
   /** Open the palette and narrow it to commands matching `query`. */
@@ -25,26 +26,30 @@ object TuiScenarios:
   /** The dedicated settings surface, reached through the palette the way a user reaches it. */
   val openSettings: TuiScript[Unit] = runCommand("open settings")
 
-  /** Dismiss whatever surface is open, one level at a time, until none is (issue #1059: Escape pops one level). */
+  /** Dismiss whatever surface is open, one level at a time, until none is (issue #1059: Escape pops one level).
+    *
+    * A surface that has just been dismissed lingers as a fade-out ghost, which is not something left for Escape to
+    * close -- so the loop stops on the live surfaces, not on every entry in `runtime.uiSurfaces`.
+    */
   def dismissSurfaces(maxLevels: Int = 8): TuiScript[Unit] =
     def loop(remaining: Int): TuiScript[Unit] =
-      state.flatMap { current =>
-        if current.runtime.uiSurfaces.isEmpty || remaining <= 0 then TuiScript.unit
+      openSurfaces.flatMap { surfaces =>
+        if surfaces.isEmpty || remaining <= 0 then TuiScript.unit
         else escape >> loop(remaining - 1)
       }
     loop(maxLevels)
 
-  val save: TuiScript[Unit]   = ctrl('s')
-  val saveAs: TuiScript[Unit] = ctrlShift('s')
-  val newTab: TuiScript[Unit] = ctrl('t')
-  val closeTab: TuiScript[Unit] = ctrl('w')
-  val nextTab: TuiScript[Unit]     = press(TuiKeys.CtrlTab)
-  val previousTab: TuiScript[Unit] = press(TuiKeys.CtrlShiftTab)
-  val undo: TuiScript[Unit]     = ctrl('z')
-  val redo: TuiScript[Unit]     = ctrl('y')
-  val selectAll: TuiScript[Unit] = ctrl('a')
-  val copy: TuiScript[Unit]      = ctrl('c')
-  val cut: TuiScript[Unit]       = ctrl('x')
+  val save: TuiScript[Unit]           = ctrl('s')
+  val saveAs: TuiScript[Unit]         = ctrlShift('s')
+  val newTab: TuiScript[Unit]         = ctrl('t')
+  val closeTab: TuiScript[Unit]       = ctrl('w')
+  val nextTab: TuiScript[Unit]        = press(TuiKeys.CtrlTab)
+  val previousTab: TuiScript[Unit]    = press(TuiKeys.CtrlShiftTab)
+  val undo: TuiScript[Unit]           = ctrl('z')
+  val redo: TuiScript[Unit]           = ctrl('y')
+  val selectAll: TuiScript[Unit]      = ctrl('a')
+  val copy: TuiScript[Unit]           = ctrl('c')
+  val cut: TuiScript[Unit]            = ctrl('x')
   val pasteClipboard: TuiScript[Unit] = ctrl('v')
 
   /** Type a document, one line at a time, pressing Enter between lines the way a person would. */
@@ -52,4 +57,5 @@ object TuiScenarios:
     lines.toList.zipWithIndex.traverse_ { (line, index) =>
       (if index == 0 then TuiScript.unit else enter) >> typeText(line)
     }
+
 end TuiScenarios

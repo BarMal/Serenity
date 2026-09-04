@@ -7,7 +7,7 @@ import cats.data.Kleisli
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.keystroke.events.{Event, MouseButton}
-import com.serenity.state.models.{AppState, Buffer}
+import com.serenity.state.models.{AppState, Buffer, SurfaceContent, UiSurface}
 import com.serenity.ui.layout.ViewportSize
 
 /** A scripted interaction with a running TUI session, composed as a for-comprehension.
@@ -19,9 +19,16 @@ import com.serenity.ui.layout.ViewportSize
   */
 type TuiScript[A] = Kleisli[IO, TuiSession, A]
 
-object TuiScript:
+/** The steps a scenario is built from.
+  *
+  * A trait rather than only an object so [[TuiSpec]] can inherit them directly: a spec writes `typeText("hi")`, not
+  * `TuiScript.typeText("hi")`, and inherited members -- unlike wildcard `export` forwarders -- are tracked properly by
+  * incremental compilation, so adding a step here is picked up by every spec without a clean build.
+  */
+trait TuiScriptSyntax:
 
-  def apply[A](run: TuiSession => IO[A]): TuiScript[A] = Kleisli(run)
+  /** Build a step from a session action. Protected so a spec inheriting this trait does not acquire an `apply`. */
+  protected def step[A](run: TuiSession => IO[A]): TuiScript[A] = Kleisli(run)
 
   def pure[A](value: A): TuiScript[A] = Kleisli.pure(value)
 
@@ -35,9 +42,9 @@ object TuiScript:
   // -- input --------------------------------------------------------------------------------------------------------
 
   /** Send a key's bytes and wait until every event they produced has been applied. */
-  def press(key: TuiKey): TuiScript[Unit] = apply(_.feed(key))
+  def press(key: TuiKey): TuiScript[Unit] = step(_.feed(key))
 
-  def pressAll(keys: TuiKey*): TuiScript[Unit] = apply(_.feedAll(keys))
+  def pressAll(keys: TuiKey*): TuiScript[Unit] = step(_.feedAll(keys))
 
   /** Type a run of text the way a terminal delivers a fast typist: one burst of bytes, decoded to one keystroke per
     * character.
@@ -80,27 +87,27 @@ object TuiScript:
   val focusOut: TuiScript[Unit] = press(TuiKeys.FocusOut)
   val focusIn: TuiScript[Unit]  = press(TuiKeys.FocusIn)
 
-  def resize(size: ViewportSize): TuiScript[Unit] = apply(_.resize(size))
+  def resize(size: ViewportSize): TuiScript[Unit] = step(_.resize(size))
 
   // -- observation --------------------------------------------------------------------------------------------------
 
   /** Paint a frame and snapshot what the terminal now shows. */
-  val screen: TuiScript[TuiScreen] = apply(_.screen)
+  val screen: TuiScript[TuiScreen] = step(_.screen)
 
   /** The same, painted without the caret -- for asserting on content without the cursor's own cell in the way. */
-  val screenWithoutCaret: TuiScript[TuiScreen] = apply(_.screenWithoutCaret)
+  val screenWithoutCaret: TuiScript[TuiScreen] = step(_.screenWithoutCaret)
 
-  /** The frame once surfaces have finished animating and repainting has gone quiet -- what the user ends up looking
-    * at, and the starting point for any assertion about emitted bytes.
+  /** The frame once surfaces have finished animating and repainting has gone quiet -- what the user ends up looking at,
+    * and the starting point for any assertion about emitted bytes.
     */
-  val settledScreen: TuiScript[TuiScreen] = apply(_.settledScreen)
+  val settledScreen: TuiScript[TuiScreen] = step(_.settledScreen)
 
   /** Advance the animation clock by whole frames, for scenarios that assert on motion rather than its outcome. */
-  def advanceAnimations(ticks: Int): TuiScript[Boolean] = apply(_.advanceAnimations(ticks))
+  def advanceAnimations(ticks: Int): TuiScript[Boolean] = step(_.advanceAnimations(ticks))
 
-  val animationsActive: TuiScript[Boolean] = apply(_.animationsActive)
+  val animationsActive: TuiScript[Boolean] = step(_.animationsActive)
 
-  val state: TuiScript[AppState] = apply(_.state)
+  val state: TuiScript[AppState] = step(_.state)
 
   /** The buffer the editor is focused on, resolved from state the way the renderer resolves it. */
   def focusedBuffer(current: AppState): Option[Buffer] =
@@ -110,21 +117,31 @@ object TuiScript:
   val documentText: TuiScript[Option[String]] =
     state.map(focusedBuffer(_).map(_.document.content.toString))
 
-  val eventsApplied: TuiScript[Vector[Event]] = apply(_.eventsApplied)
+  /** The surfaces actually open, excluding the transient ghost a closing surface leaves behind while it fades out
+    * (`SurfaceContent.GhostOverlay`) -- which is what "is the palette closed?" means to a user.
+    */
+  val openSurfaces: TuiScript[List[UiSurface]] =
+    state.map(_.runtime.uiSurfaces.filter {
+      _.content match
+        case SurfaceContent.GhostOverlay(_, _) => false
+        case _                                 => true
+    })
 
-  val allBytesWritten: TuiScript[String] = apply(_.allBytesWritten)
+  val eventsApplied: TuiScript[Vector[Event]] = step(_.eventsApplied)
 
-  val clipboardText: TuiScript[Option[String]] = apply(_.clipboard.readText)
+  val allBytesWritten: TuiScript[String] = step(_.allBytesWritten)
+
+  val clipboardText: TuiScript[Option[String]] = step(_.clipboard.readText)
 
   /** The on-disk content of a file in the session's own workspace -- how a save is verified. */
   def fileContent(name: String = TuiEnvironment.DefaultFileName): TuiScript[String] =
-    apply(session => IO.blocking(Files.readString(session.workspace.resolve(name), StandardCharsets.UTF_8)))
+    step(session => IO.blocking(Files.readString(session.workspace.resolve(name), StandardCharsets.UTF_8)))
 
   def workspaceFileExists(name: String): TuiScript[Boolean] =
-    apply(session => IO.blocking(Files.exists(session.workspace.resolve(name))))
+    step(session => IO.blocking(Files.exists(session.workspace.resolve(name))))
 
   def workspacePath(name: String): TuiScript[String] =
-    apply(session => IO.pure(session.workspace.resolve(name).toString))
+    step(session => IO.pure(session.workspace.resolve(name).toString))
 
   // -- assertion ----------------------------------------------------------------------------------------------------
 
@@ -147,7 +164,7 @@ object TuiScript:
       _       <- liftIO(attach(label, shown)(check(current)))
     yield ()
 
-  private def attach(label: String, current: TuiScreen)(check: => Unit): IO[Unit] =
+  protected def attach(label: String, current: TuiScreen)(check: => Unit): IO[Unit] =
     IO(check).handleErrorWith { failure =>
       IO.raiseError(
         new AssertionError(
@@ -159,4 +176,9 @@ object TuiScript:
       )
     }
 
-end TuiScript
+end TuiScriptSyntax
+
+/** The same steps as values, for code that composes scenarios outside a spec class -- see [[TuiScenarios]]. */
+object TuiScript extends TuiScriptSyntax:
+
+  def apply[A](run: TuiSession => IO[A]): TuiScript[A] = step(run)

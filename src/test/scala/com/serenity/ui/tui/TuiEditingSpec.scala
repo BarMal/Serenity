@@ -43,14 +43,14 @@ class TuiEditingSpec extends TuiSpec:
 
   it should "delete backwards over the caret on Backspace, and forwards on Delete" in runTui() {
     for
-      _ <- typeText("abcdef")
-      _ <- backspace
-      _ <- backspace
-      _ <- verify("after backspace")(screen => screen.rowText(1).stripTrailing shouldBe " 1 abcd")
-      _ <- arrowLeft
-      _ <- arrowLeft
-      _ <- delete
-      _ <- verify("after delete")(screen => screen.rowText(1).stripTrailing shouldBe " 1 abd")
+      _    <- typeText("abcdef")
+      _    <- backspace
+      _    <- backspace
+      _    <- verify("after backspace")(screen => screen.rowText(1).stripTrailing shouldBe " 1 abcd")
+      _    <- arrowLeft
+      _    <- arrowLeft
+      _    <- delete
+      _    <- verify("after delete")(screen => screen.rowText(1).stripTrailing shouldBe " 1 abd")
       text <- documentText
     yield text shouldBe Some("abd")
   }
@@ -98,13 +98,13 @@ class TuiEditingSpec extends TuiSpec:
 
   "undo and redo" should "step the document back and forward, repainting each time" in runTui() {
     for
-      _       <- typeText("first edit")
-      _       <- undo
-      undone  <- documentText
-      _       <- verify("undone")(screen => screen.rowText(1) should not include "first edit")
-      _       <- redo
-      redone  <- documentText
-      _       <- verify("redone")(screen => screen.rowText(1).stripTrailing shouldBe " 1 first edit")
+      _      <- typeText("first edit")
+      _      <- undo
+      undone <- documentText
+      _      <- verify("undone")(screen => screen.rowText(1) should not include "first edit")
+      _      <- redo
+      redone <- documentText
+      _      <- verify("redone")(screen => screen.rowText(1).stripTrailing shouldBe " 1 first edit")
     yield
       undone shouldBe Some("")
       redone shouldBe Some("first edit")
@@ -112,17 +112,19 @@ class TuiEditingSpec extends TuiSpec:
 
   "select all" should "cover the whole document and paint the selection with its own background" in runTui() {
     for
-      _       <- typeText("selected text")
-      before  <- screen
-      _       <- selectAll
-      after   <- screen
+      _      <- typeText("selected text")
+      before <- screen
+      _      <- selectAll
+      after  <- screen
       _ <- verifyState("selection in state") { current =>
         focusedBuffer(current).flatMap(_.editing.selection).map(_.end.column) shouldBe Some("selected text".length)
       }
     yield
       // The selected run must actually look different, not merely be recorded in state.
       val selectionCells = (ContentColumn until ContentColumn + "selected text".length).map(col => (col, FirstLineRow))
-      selectionCells.foreach(cell => after.backgroundAt(cell._1, cell._2) should not be before.backgroundAt(cell._1, cell._2))
+      selectionCells.foreach(cell =>
+        after.backgroundAt(cell._1, cell._2) should not be before.backgroundAt(cell._1, cell._2)
+      )
   }
 
   "a long single line" should "wrap across rows, marking each continuation row in the gutter" in

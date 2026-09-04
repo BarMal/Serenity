@@ -14,8 +14,7 @@ import com.serenity.input.{FocusedInputTranslator, InProcessClipboard, InputRout
 import com.serenity.keystroke.events.{Event, MousePress}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
-import com.serenity.state.manager.DamageProducer
+import com.serenity.state.manager.{DamageProducer, StateManager}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
@@ -212,7 +211,7 @@ object TuiSession:
   /** How many paints [[TuiSession.settledScreen]] will make before giving up and returning the latest frame. A frame
     * settles after one repaint in practice; more than a handful would itself be the bug worth seeing.
     */
-  private val SettleAttempts = 4
+  private val SettleAttempts = 8
 
   /** A ceiling on how many animation frames [[TuiSession.settledScreen]] will advance before giving up. Surface
     * animations run for a fraction of a second at the configured frame rate; a scenario needing more than this is
@@ -310,15 +309,15 @@ object TuiSession:
         isTuiMode = true,
         keyboardFidelityTier = TuiRuntime.keyboardFidelityTier(shell.keyboardProtocolTier)
       )
-      _             <- router.setActiveTranslator(FocusedInputTranslator.forState(initialState))
+      _              <- router.setActiveTranslator(FocusedInputTranslator.forState(initialState))
       sentinels      <- Queue.unbounded[IO, Unit]
       appliedSignals <- Queue.unbounded[IO, Unit]
-      damage        <- Ref.of[IO, Damage](Damage.Everything)
-      screenRef     <- Ref.of[IO, TerminalEmulator](TerminalEmulator.blank(viewport.width, viewport.height))
-      consumed      <- Ref.of[IO, Int](0)
-      applied       <- Ref.of[IO, Vector[Event]](Vector.empty)
-      cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
+      damage         <- Ref.of[IO, Damage](Damage.Everything)
+      screenRef      <- Ref.of[IO, TerminalEmulator](TerminalEmulator.blank(viewport.width, viewport.height))
+      consumed       <- Ref.of[IO, Int](0)
+      applied        <- Ref.of[IO, Vector[Event]](Vector.empty)
+      cursorVisible  <- Ref.of[IO, Boolean](true)
+      breathIndex    <- Ref.of[IO, Int](0)
       session = new TuiSession(
         shell = shell,
         handler = handler,

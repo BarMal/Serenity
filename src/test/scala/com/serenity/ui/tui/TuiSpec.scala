@@ -13,7 +13,7 @@ import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 /** Base class for TUI behaviour specs: supplies the effect-system givens a session needs and runs a [[TuiScript]]
   * against a freshly started, fully torn-down session.
   */
-abstract class TuiSpec extends AnyFlatSpec with Matchers:
+abstract class TuiSpec extends AnyFlatSpec with Matchers with TuiScriptSyntax:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
@@ -23,8 +23,6 @@ abstract class TuiSpec extends AnyFlatSpec with Matchers:
     * rather than something being slow.
     */
   private val ScenarioTimeout: FiniteDuration = 60.seconds
-
-  export TuiScript.{apply as _, *}
 
   /** The named keys themselves, so a script reads `press(ArrowDown)`. The builders that would collide with a
     * [[TuiScript]] step of the same name (`ctrl`, `ctrlShift`, `paste`, `text`) stay behind `TuiKeys`.
