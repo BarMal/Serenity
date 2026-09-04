@@ -298,7 +298,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     "redraw a later paragraph's screen row after an earlier paragraph's edit reflows it down a row" in {
       val surface = new MockRenderSurface(80, 24, persistentContent = true)
 
-      val words                               = Vector.tabulate(80)(i => f"word$i%02d")
+      val words                              = Vector.tabulate(80)(i => f"word$i%02d")
       def paragraphOf(n: Int): String        = words.take(n).mkString(" ")
       def contentFor(n: Int): Vector[String] = Vector(paragraphOf(n), "MARKERLINE", "TAILLINE")
 
