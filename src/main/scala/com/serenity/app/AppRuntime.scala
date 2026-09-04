@@ -449,7 +449,7 @@ object AppRuntime:
               bufferAnimations <- stateManager.getBufferAnimations
               paintDamage      <- pendingPaintDamage.getAndSet(Damage.Nothing)
               _ <-
-                if state.runtime.windowSitter.isActive && !needsFullContentRender(state, bufferAnimations) then
+                if canStandDownToCursorOnly(state, bufferAnimations, paintDamage) then
                   withRuntimeDiagnostics("render loop", "fast.cursor-only-render", IO.pure(Some(state)))(
                     renderCursorOnly(state, true, None, paintDamage, bufferAnimations)
                   )
@@ -564,7 +564,11 @@ object AppRuntime:
               "idle.cursor",
               IO.pure(Some(state))
             )(computeIdleCursorFrame(state, cursorVisible, breathIndex))
-            paintDamage      <- pendingPaintDamage.getAndSet(Damage.Nothing)
+            // Read without draining: this frame paints the cursor overlay, never content, so consuming content
+            // damage here would lose it -- an input event that lands just as an idle tick fires would have its
+            // glyphs dropped until something else damaged the same rows. The fast phase that same event wakes
+            // drains it instead.
+            paintDamage      <- pendingPaintDamage.get
             bufferAnimations <- loadBufferAnimations
             _ <- withRuntimeDiagnostics(
               "render loop",
@@ -663,6 +667,23 @@ object AppRuntime:
     state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
       state.runtime.themeTransition.isDefined ||
       state.runtime.surfaceAnimations.nonEmpty
+
+  /** Whether this frame may take the cheap cursor-only path instead of repainting content. The window sitter's glyph
+    * lives in the window chrome and needs no canvas work, so a frame that only advances it can stand down -- but only
+    * when the frame has nothing else to paint. Typing arms the sitter for its whole activity window
+    * (`WindowSitterConfig.activeTicks`), so gating on the sitter alone held every keystroke's own glyphs and wrapped
+    * reflow off screen until that window expired: the cursor moved immediately and the text caught up a fraction of a
+    * second later. Any pending paint damage means content changed, and content is exactly what `renderCursorOnly` does
+    * not draw.
+    */
+  private[serenity] def canStandDownToCursorOnly(
+    state: AppState,
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState],
+    paintDamage: Damage
+  ): Boolean =
+    paintDamage == Damage.Nothing &&
+      state.runtime.windowSitter.isActive &&
+      !needsFullContentRender(state, bufferAnimations)
 
   private def logSelectiveEvents(
     event: Event,

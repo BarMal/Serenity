@@ -155,7 +155,14 @@ lazy val root = (project in file("."))
     Test / testOptions ++= Seq(
       Tests.Setup(() => System.setProperty("serenity.test.ephemeralSessions", "true")),
       Tests.Cleanup(() => System.clearProperty("serenity.test.ephemeralSessions"))
-    )
+    ),
+    // Suites run one at a time because `Renderer` keeps its previous-frame state in object-level refs keyed by pane
+    // id alone (`previousSnapshotsRef`, `preparedSceneRef`), and every spec that paints uses `PaneId(0)`. Two suites
+    // painting at once therefore overwrite each other's "previous frame", which shows up as dirty-row and
+    // emitted-byte assertions failing for whichever suite painted second -- an ordering artefact, not a defect in the
+    // code under test. Serial suites make those specs deterministic; keying that frame state per surface (as the
+    // damage accumulator already is) would let this go back to parallel.
+    Test / parallelExecution := false
   )
 
 libraryDependencies ++= Seq(
