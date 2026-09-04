@@ -19,7 +19,7 @@ import com.serenity.input.{
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, Buffer}
+import com.serenity.state.models.{AppState, Buffer, BufferId, Damage}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import org.typelevel.log4cats.{Logger, LoggerFactory}
@@ -87,26 +87,8 @@ object TuiRuntime:
             renderCursorOnly = renderCursorOnlyFn(surfaceHolder, terminalShell, previewWindowAvailability),
             appConfig = terminalConfig,
             registerFocusCallback = cb => inputHandlerHolder.get().foreach(_.registerFocusCallback(cb)),
-            makeStateManager = Some(logger =>
-              StateManager.apply(
-                logger,
-                initialConfig = terminalConfig,
-                sessionRootOverride = sessionRootOverride,
-                configPersistencePath = configPersistencePath,
-                // Device scale and preferred window size are Swing-only concepts: a terminal cell grid has no device
-                // pixel ratio and no window to resize, so these are inert stubs rather than real providers (#1112 scope).
-                deviceTextScaleProvider = IO.pure(1.0),
-                windowSizeProvider = IO.pure(None),
-                onPreferredWindowSizeChanged = _ => IO.unit,
-                // Typography is inert in cell space (epic #1103's accepted degradations), so a font-config change has
-                // nothing to resync.
-                onFontConfigChanged = _ => IO.unit,
-                // None: no native dialog exists in a terminal. StateManager's save-as/open workflow already falls back
-                // to the in-app form (#1110) whenever fileDialog is None, distinct from a dialog being shown and
-                // cancelled.
-                fileDialog = None,
-                markdownPreviewWindow = previewWindowAvailability
-              )
+            makeStateManager = Some(
+              makeStateManager(terminalConfig, sessionRootOverride, configPersistencePath, previewWindowAvailability)
             ),
             awaitExternalQuit = terminalShell.awaitExternalQuit,
             registerResizeCallback = cb => terminalShell.registerResizeCallback(cb),
@@ -119,6 +101,33 @@ object TuiRuntime:
         yield ()
     }
 
+  /** The `StateManager` a TUI session runs on: a terminal has no device pixel ratio, no window to resize, no typography
+    * to resync and no native file dialog, so those four capabilities are inert stubs rather than real providers. Named
+    * rather than inlined into [[run]] so a spec can build the same state manager a real TUI session gets instead of
+    * approximating one.
+    */
+  private[tui] def makeStateManager(
+    terminalConfig: AppConfig,
+    sessionRootOverride: Option[Path],
+    configPersistencePath: Option[Path],
+    previewWindowAvailability: MarkdownPreviewWindowAvailability
+  )(using LoggerFactory[IO], com.serenity.rope.Balance): Logger[IO] => IO[StateManager] =
+    logger =>
+      StateManager.apply(
+        logger,
+        initialConfig = terminalConfig,
+        sessionRootOverride = sessionRootOverride,
+        configPersistencePath = configPersistencePath,
+        deviceTextScaleProvider = IO.pure(1.0),
+        windowSizeProvider = IO.pure(None),
+        onPreferredWindowSizeChanged = _ => IO.unit,
+        onFontConfigChanged = _ => IO.unit,
+        // None: no native dialog exists in a terminal. StateManager's save-as/open workflow already falls back to the
+        // in-app form (#1110) whenever fileDialog is None, distinct from a dialog being shown and cancelled.
+        fileDialog = None,
+        markdownPreviewWindow = previewWindowAvailability
+      )
+
   /** Maps #1109's negotiated wire-protocol tier onto the state layer's fidelity concept (issue #1194) --
     * `TerminalShell.KeyboardProtocolTier` is this method's only caller outside `ui.tui`, kept from leaking into
     * `AppState`/`CommandRunner` themselves so neither depends on the terminal-negotiation package.
@@ -130,7 +139,7 @@ object TuiRuntime:
     * pre-existing gap this tier-confirmation follow-up doesn't newly introduce, and widening `KeyboardFidelityTier`
     * itself is out of scope here.
     */
-  private def keyboardFidelityTier(tier: TerminalShell.KeyboardProtocolTier): KeyboardFidelityTier =
+  private[tui] def keyboardFidelityTier(tier: TerminalShell.KeyboardProtocolTier): KeyboardFidelityTier =
     tier match
       case TerminalShell.KeyboardProtocolTier.Kitty           => KeyboardFidelityTier.Full
       case TerminalShell.KeyboardProtocolTier.ModifyOtherKeys => KeyboardFidelityTier.ModifyOtherKeys
@@ -140,7 +149,7 @@ object TuiRuntime:
     * damage-diff history) whenever the size actually changes -- a terminal resize warrants a full repaint anyway, so
     * losing the previous frame's diff state on that transition is the correct behaviour, not a gap.
     */
-  final private class SurfaceHolder(shell: TerminalShell):
+  final private[tui] class SurfaceHolder(shell: TerminalShell):
     private val current = new AtomicReference[Option[(ViewportSize, TerminalRenderSurface)]](None)
 
     def forSize(size: ViewportSize): TerminalRenderSurface =
@@ -151,6 +160,70 @@ object TuiRuntime:
           current.set(Some((size, surface)))
           surface
 
+  /** The full-frame paint itself, separated from the `RenderFn` that sequences it so a spec can drive exactly the
+    * renderer call a real TUI session makes -- same entry points, same inert cell font, same unit cell metrics --
+    * rather than a copy of it that can drift from what production actually paints.
+    */
+  private[tui] def paintFrame(
+    state: AppState,
+    surface: TerminalRenderSurface,
+    size: ViewportSize,
+    cursorVisible: Boolean,
+    cursorColor: Option[java.awt.Color],
+    damage: Damage
+  ): Unit =
+    if cursorVisible then
+      val _ = Renderer.renderWithCursorOverlay(
+        state,
+        surface,
+        size,
+        CellFont,
+        CellFont,
+        CellFont,
+        CellMetricsOne,
+        CellMetricsOne,
+        cursorColor,
+        damage
+      )
+      ()
+    else
+      Renderer.render(
+        state,
+        cursorVisible = false,
+        surface,
+        size,
+        CellFont,
+        CellFont,
+        CellFont,
+        CellMetricsOne,
+        CellMetricsOne,
+        None,
+        damage
+      )
+
+  /** The cursor-only counterpart to [[paintFrame]], separated for the same reason. */
+  private[tui] def paintCursorOnly(
+    state: AppState,
+    surface: TerminalRenderSurface,
+    size: ViewportSize,
+    cursorVisible: Boolean,
+    cursorColor: Option[java.awt.Color],
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
+  ): Unit =
+    val _ = Renderer.renderCursorOnly(
+      state,
+      cursorVisible,
+      surface,
+      size,
+      CellFont,
+      CellFont,
+      CellFont,
+      CellMetricsOne,
+      CellMetricsOne,
+      cursorColor,
+      bufferAnimations
+    )
+
   private def renderFullFn(
     surfaceHolder: SurfaceHolder,
     shell: TerminalShell,
@@ -160,36 +233,7 @@ object TuiRuntime:
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO {
-          if cursorVisible then
-            val _ = Renderer.renderWithCursorOverlay(
-              state,
-              surface,
-              size,
-              CellFont,
-              CellFont,
-              CellFont,
-              CellMetricsOne,
-              CellMetricsOne,
-              cursorColor,
-              damage
-            )
-            ()
-          else
-            Renderer.render(
-              state,
-              cursorVisible = false,
-              surface,
-              size,
-              CellFont,
-              CellFont,
-              CellFont,
-              CellMetricsOne,
-              CellMetricsOne,
-              None,
-              damage
-            )
-        }
+        _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor, damage))
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability)
       yield ()
 
@@ -202,21 +246,7 @@ object TuiRuntime:
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO {
-          val _ = Renderer.renderCursorOnly(
-            state,
-            cursorVisible,
-            surface,
-            size,
-            CellFont,
-            CellFont,
-            CellFont,
-            CellMetricsOne,
-            CellMetricsOne,
-            cursorColor,
-            bufferAnimations
-          )
-        }
+        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, bufferAnimations))
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability)
       yield ()
 
