@@ -302,12 +302,20 @@ private[serenity] object AuthoritativeUiScene:
     }
   }
 
+  /** The convenience entry point every mouse-hit-testing call site actually uses (`MouseTargetCache.fromState`,
+    * `ContextualToolbarHitTesting`, `CommandRunnerMouseHitTesting`, `MouseHitTestGeometry`,
+    * `PinnedPanelMouseHitTesting`, `EditorContextMenuHitTesting`). In TUI mode this must build the same cell-grid
+    * scene `Renderer`'s TUI paint path builds (`CellMetrics.cellUnit`, matching `TuiRuntime`'s `CellMetricsOne`) --
+    * otherwise wrap geometry is measured from an AWT font pixel metric TUI mode never actually renders with, and a
+    * click into wrapped prose lands on the wrong character (#1215-class mismatch).
+    */
   def forState(state: AppState, viewportSize: ViewportSize): UiSceneSnapshot =
     forState(
       state,
       viewportSize,
       FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code),
-      FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
+      FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose),
+      cellMetrics = Option.when(state.runtime.isTuiMode)(CellMetrics.cellUnit)
     )
 
 final private[manager] case class MouseTargetCache(

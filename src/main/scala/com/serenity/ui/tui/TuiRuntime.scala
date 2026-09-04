@@ -42,7 +42,7 @@ object TuiRuntime:
     */
   private val CellFont: Font = new Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-  private val CellMetricsOne: CellMetrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+  private val CellMetricsOne: CellMetrics = CellMetrics.cellUnit
 
   def run(
     shell: Resource[IO, TerminalShell],
