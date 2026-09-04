@@ -82,14 +82,21 @@ final class TerminalShell private (
     dispatcher.unsafeRunAndForget(quitDeferred.complete(()).void)
 
   private[tui] def restore(): Unit =
-    terminal.setAttributes(originalAttributes)
-    TerminalShell.disableKeyboardProtocol(terminal, keyboardProtocolTier)
     val w = terminal.writer()
-    // Belt-and-suspenders: TerminalInputHandler.shutdown sends these too, but if it doesn't run
-    // (e.g. a CE3 runtime crash), restore() is the last line of defence -- mouse tracking and
-    // bracketed paste left active after exit_ca_mode corrupt the shell the user returns to.
+    // Disable every mode this session pushed -- keyboard protocol, focus reporting, mouse tracking, bracketed paste --
+    // and flush before draining, so the terminal has actually stopped emitting events. Belt-and-suspenders: the focus/
+    // mouse/paste disables are also sent by TerminalInputHandler.shutdown, but if that doesn't run (e.g. a CE3 runtime
+    // crash) this is the last line of defence -- any left active after exit_ca_mode corrupt the shell the user returns to.
+    TerminalShell.disableKeyboardProtocol(terminal, keyboardProtocolTier)
     w.write(TerminalShell.FocusReportingDisable)
     w.write(TerminalShell.AllInputModesDisable)
+    terminal.flush()
+    // Discard input buffered during teardown -- notably the release half of the quit chord, reported while the kitty
+    // protocol was still active (its press already triggered quit) and left unread once the input loop was cancelled.
+    // Left here the returning shell prints it literally (`[113;5:3u`). Drain while still in raw mode: restoring the
+    // original (cooked) attributes first can withhold buffered bytes until a newline arrives.
+    TerminalShell.drainPendingInput(terminal)
+    terminal.setAttributes(originalAttributes)
     val _ = terminal.puts(Capability.cursor_normal)
     val _ = terminal.puts(Capability.exit_ca_mode)
     terminal.flush()
@@ -371,3 +378,24 @@ object TerminalShell:
         writer.write(FormatOtherKeysDisable)
       // Already reverted at negotiation time when confirmation failed -- nothing left to disable on exit.
       case KeyboardProtocolTier.Legacy => ()
+
+  /** How long [[drainPendingInput]] waits on an otherwise-empty reader before concluding nothing more is buffered.
+    * Sized to bridge the sub-millisecond gap between the bytes of a single escape sequence -- a pty delivers those as
+    * one burst -- without adding a perceptible stall to shutdown: one such wait is the whole cost when nothing is left.
+    */
+  private val DrainPollMillis: Long = 4L
+
+  /** Consume and discard whatever input is buffered on the reader at teardown. The case this exists for: the release
+    * event of the quit chord (e.g. `CSI 113;5:3u` for Ctrl+Q), which the terminal reports because the kitty protocol's
+    * "report event types" flag is active, but which arrives after the input read loop has been cancelled at press time
+    * -- so it sits unread and, left there, is handed to and printed by the shell the user returns to. Callers must
+    * first flush the protocol-disable sequences (so no further events are emitted) and must run only after the input
+    * reader fiber has been cancelled (`AppRuntime`'s shutdown ordering guarantees this), making this the sole reader.
+    */
+  private def drainPendingInput(terminal: Terminal): Unit =
+    val reader = terminal.reader()
+    @annotation.tailrec
+    def loop(): Unit =
+      val ch = reader.read(DrainPollMillis)
+      if ch != NonBlockingReader.EOF && ch != NonBlockingReader.READ_EXPIRED then loop()
+    loop()
