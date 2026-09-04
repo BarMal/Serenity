@@ -90,8 +90,15 @@ object TuiScript:
   /** The same, painted without the caret -- for asserting on content without the cursor's own cell in the way. */
   val screenWithoutCaret: TuiScript[TuiScreen] = apply(_.screenWithoutCaret)
 
-  /** The frame once repainting has gone quiet -- the starting point for any assertion about emitted bytes. */
+  /** The frame once surfaces have finished animating and repainting has gone quiet -- what the user ends up looking
+    * at, and the starting point for any assertion about emitted bytes.
+    */
   val settledScreen: TuiScript[TuiScreen] = apply(_.settledScreen)
+
+  /** Advance the animation clock by whole frames, for scenarios that assert on motion rather than its outcome. */
+  def advanceAnimations(ticks: Int): TuiScript[Boolean] = apply(_.advanceAnimations(ticks))
+
+  val animationsActive: TuiScript[Boolean] = apply(_.animationsActive)
 
   val state: TuiScript[AppState] = apply(_.state)
 

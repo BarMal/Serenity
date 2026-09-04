@@ -15,6 +15,7 @@ import com.serenity.keystroke.events.{Event, MousePress}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
@@ -42,6 +43,7 @@ final class TuiSession private (
     input: PipedOutputStream,
     terminal: DumbTerminal,
     sentinels: Queue[IO, Unit],
+    appliedSignals: Queue[IO, Unit],
     damage: Ref[IO, Damage],
     screenRef: Ref[IO, TerminalEmulator],
     consumed: Ref[IO, Int],
@@ -49,24 +51,39 @@ final class TuiSession private (
     val stateManager: StateManager,
     val clipboard: SystemClipboard[IO],
     val workspace: Path
-):
+)(using Balance):
   import TuiSession.*
 
   def state: IO[AppState] = stateManager.getCurrentState
 
   def eventsApplied: IO[Vector[Event]] = applied.get
 
-  /** Deliver a key's bytes and wait until every event they produced has been applied.
-    *
-    * A chunk ending on a lone `ESC` is genuinely ambiguous at a real terminal -- the input handler holds it for
-    * [[TerminalInputHandler.EscDisambiguationDeadline]] to see whether an escape sequence follows -- so the sentinel is
-    * held back for that long, and only then, rather than being applied blanket to every keystroke.
-    */
+  /** Deliver a key's bytes and wait until every event they produced has been applied. */
   def feed(key: TuiKey): IO[Unit] =
-    val settle =
-      if endsOnLoneEscape(key.bytes) then IO.sleep(TerminalInputHandler.EscDisambiguationDeadline + EscSettleMargin)
-      else IO.unit
-    write(key.bytes) >> settle >> write(SentinelKey.bytes) >> awaitSentinel(key)
+    if endsOnLoneEscape(key.bytes) then feedEscape(key)
+    else write(key.bytes) >> write(SentinelKey.bytes) >> awaitSentinel(key)
+
+  /** A lone `ESC` is genuinely ambiguous at a real terminal: the input handler holds it for
+    * [[TerminalInputHandler.EscDisambiguationDeadline]] to see whether an escape sequence follows. Sending the sentinel
+    * during that window would let the handler read `ESC` and the sentinel's own `CSI` introducer as one sequence, and
+    * the Escape keystroke would vanish -- so the sentinel is held back until the Escape has actually been applied,
+    * which is an observation rather than a sleep long enough to hope.
+    */
+  private def feedEscape(key: TuiKey): IO[Unit] =
+    require(
+      key.bytes.length == 1,
+      s"${key.name} ends on a lone ESC but carries other bytes too; press Escape on its own so it can be disambiguated"
+    )
+    for
+      _ <- appliedSignals.tryTakeN(None)
+      _ <- write(key.bytes)
+      _ <- appliedSignals.take.timeoutTo(
+        SentinelTimeout,
+        IO.raiseError(new AssertionError(s"Timed out waiting for ${key.name} to be applied"))
+      )
+      _ <- write(SentinelKey.bytes)
+      _ <- awaitSentinel(key)
+    yield ()
 
   def feedAll(keys: Seq[TuiKey]): IO[Unit] = keys.toList.traverse_(feed)
 
@@ -75,20 +92,47 @@ final class TuiSession private (
 
   def screenWithoutCaret: IO[TuiScreen] = renderFrame(cursorVisible = false)
 
-  /** Paint until the frame stops changing, and return the settled one.
+  /** Let the interface finish moving, then paint until the frame stops changing.
     *
-    * A frame painted with `Damage.Everything` -- the first frame of a session, and the first after a resize -- is
-    * followed by exactly one further frame that rewrites blank cells whose foreground colour differed invisibly, after
-    * which the surface's diff goes quiet and further paints cost nothing. Scenarios that assert on emitted bytes need
-    * to start from that quiet point rather than from the settling frame.
+    * Two things settle here. Surfaces animate in and out (`AppState.runtime.surfaceAnimations`), so a dismissed command
+    * palette is still drawn for as many frames as its exit animation lasts -- exactly as in a real session, where the
+    * render loop advances one animation tick per painted frame. And a frame painted with `Damage.Everything` -- the
+    * first of a session, and the first after a resize -- is followed by one further frame that rewrites blank cells
+    * whose foreground colour differed invisibly.
+    *
+    * Scenarios that assert on what is finally on screen, or on emitted bytes, want this rather than a single frame.
     */
   def settledScreen: IO[TuiScreen] =
-    def loop(remaining: Int): IO[TuiScreen] =
-      screen.flatMap { current =>
-        if current.emitted.isEmpty || remaining <= 0 then IO.pure(current)
-        else loop(remaining - 1)
-      }
-    loop(SettleAttempts)
+    advanceAnimationsToRest(AnimationTickLimit) >> repaintUntilQuiet(SettleAttempts)
+
+  /** Advance the animation clock by `ticks` frames, folding in the damage each one produces, exactly as the render
+    * loop's fast phase does per painted frame. Returns whether anything is still animating.
+    */
+  def advanceAnimations(ticks: Int): IO[Boolean] =
+    (0 until ticks).toList.foldLeft(IO.pure(false))((previous, _) => previous >> tickAnimations)
+
+  def animationsActive: IO[Boolean] =
+    (state, stateManager.getBufferAnimations).mapN(AppRuntime.hasActiveAnimations)
+
+  private def tickAnimations: IO[Boolean] =
+    for
+      before           <- state
+      beforeAnimations <- stateManager.getBufferAnimations
+      stillActive      <- stateManager.advanceAnimationsOnTick()
+      after            <- state
+      afterAnimations  <- stateManager.getBufferAnimations
+      _ <- damage.update(_ |+| DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations))
+    yield stillActive
+
+  private def advanceAnimationsToRest(remaining: Int): IO[Unit] =
+    if remaining <= 0 then IO.unit
+    else tickAnimations.flatMap(active => if active then advanceAnimationsToRest(remaining - 1) else IO.unit)
+
+  private def repaintUntilQuiet(remaining: Int): IO[TuiScreen] =
+    screen.flatMap { current =>
+      if current.emitted.isEmpty || remaining <= 0 then IO.pure(current)
+      else repaintUntilQuiet(remaining - 1)
+    }
 
   /** Resize the terminal underneath the session, the way a window manager does: the shell observes `SIGWINCH`, the
     * runtime picks the new size up through `checkResize`, and the surface is rebuilt for it.
@@ -165,15 +209,16 @@ object TuiSession:
     */
   private val SentinelTimeout: FiniteDuration = 15.seconds
 
-  /** Added to the input handler's own ESC disambiguation deadline before the sentinel is sent, so the handler has
-    * genuinely resolved a trailing lone `ESC` to an Escape keystroke first.
-    */
-  private val EscSettleMargin: FiniteDuration = 10.millis
-
   /** How many paints [[TuiSession.settledScreen]] will make before giving up and returning the latest frame. A frame
     * settles after one repaint in practice; more than a handful would itself be the bug worth seeing.
     */
   private val SettleAttempts = 4
+
+  /** A ceiling on how many animation frames [[TuiSession.settledScreen]] will advance before giving up. Surface
+    * animations run for a fraction of a second at the configured frame rate; a scenario needing more than this is
+    * either animating forever or waiting for something that is not an animation.
+    */
+  private val AnimationTickLimit = 600
 
   /** A mouse press so far off-screen that nothing can be under it. It is the input barrier every [[TuiSession.feed]]
     * ends with: a mouse report is delivered as a direct event, never passed through a translator, so unlike any key it
@@ -266,7 +311,8 @@ object TuiSession:
         keyboardFidelityTier = TuiRuntime.keyboardFidelityTier(shell.keyboardProtocolTier)
       )
       _             <- router.setActiveTranslator(FocusedInputTranslator.forState(initialState))
-      sentinels     <- Queue.unbounded[IO, Unit]
+      sentinels      <- Queue.unbounded[IO, Unit]
+      appliedSignals <- Queue.unbounded[IO, Unit]
       damage        <- Ref.of[IO, Damage](Damage.Everything)
       screenRef     <- Ref.of[IO, TerminalEmulator](TerminalEmulator.blank(viewport.width, viewport.height))
       consumed      <- Ref.of[IO, Int](0)
@@ -281,6 +327,7 @@ object TuiSession:
         input = streams.input,
         terminal = streams.terminal,
         sentinels = sentinels,
+        appliedSignals = appliedSignals,
         damage = damage,
         screenRef = screenRef,
         consumed = consumed,
@@ -298,7 +345,7 @@ object TuiSession:
         breathIndex,
         (next: Damage) => damage.update(_ |+| next)
       )
-    yield Built(session, consume(handler, funnel, sentinels, applied))
+    yield Built(session, consume(handler, funnel, sentinels, applied, appliedSignals))
 
   /** The event pipeline, shaped exactly like the runtime's: every event goes through `AppRuntime`'s own input phase,
     * one at a time, so the focused translator is refreshed between events the way it is in a real session. The sentinel
@@ -308,12 +355,15 @@ object TuiSession:
     handler: TerminalInputHandler,
     funnel: fs2.Stream[IO, Event] => fs2.Stream[IO, Unit],
     sentinels: Queue[IO, Unit],
-    applied: Ref[IO, Vector[Event]]
+    applied: Ref[IO, Vector[Event]],
+    appliedSignals: Queue[IO, Unit]
   ): IO[Unit] =
     handler.eventStream
       .flatMap { event =>
         if isSentinel(event) then fs2.Stream.eval(sentinels.offer(()))
-        else fs2.Stream.emit(event).through(funnel) ++ fs2.Stream.eval(applied.update(_ :+ event))
+        else
+          fs2.Stream.emit(event).through(funnel) ++
+            fs2.Stream.eval(applied.update(_ :+ event) >> appliedSignals.offer(()))
       }
       .compile
       .drain

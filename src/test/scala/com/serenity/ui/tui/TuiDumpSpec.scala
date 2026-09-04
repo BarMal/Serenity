@@ -3,76 +3,74 @@ package com.serenity.ui.tui
 import cats.effect.IO
 import cats.syntax.all.*
 
+import TuiScenarios.*
+
 class TuiDumpSpec extends TuiSpec:
 
   private def dump(label: String): TuiScript[Unit] =
     screen.flatMapF(current =>
       IO {
         println(s"===== $label =====")
-        current.paintedRows.foreach((row, line) => println(f"$row%3d|$line"))
+        current.paintedRows.foreach((row, line) => println(f"$row%3d|${line.replace('│', '|')}"))
         println(s"caret=${current.caret} visible=${current.caretVisible}")
       }
     )
 
-  "dump" should "show emitted bytes and gutter widths" in
-    runTui(TuiEnvironment.withLines(12)) {
-      for
-        first <- screen
-        _ <- liftIO(IO {
-          println("FIRST-EMITTED=" + first.emitted.take(220).replace(0x1b.toChar.toString, "<E>"))
-          println("ROW1=[" + first.rowText(1).stripTrailing + "]")
-          println("ROW10=[" + first.rowText(10).stripTrailing + "]")
-          println("ROW12=[" + first.rowText(12).stripTrailing + "]")
-          println("CARET=" + first.caret)
-        })
-      yield ()
-    }
-
-  it should "show a 120-line gutter" in
-    runTui(TuiEnvironment.withLines(120)) {
-      verify("gutter")(s => println("ROW1-120=[" + s.rowText(1).stripTrailing + "] ROW11=[" + s.rowText(11).stripTrailing + "]"))
-    }
-
-  it should "show a long wrapped line" in
-    runTui(TuiEnvironment.withFile("x" * 500)) {
-      verify("wrap") { s =>
-        (0 until 8).foreach(r => println(f"WRAP$r%d=[" + s.rowText(r).take(20) + "]"))
-        println("CODEPOINT-1-1=" + s.cellAt(1, 2).codePoint)
-      }
-    }
-
-  it should "show an opened file" in
-    runTui(TuiEnvironment.withFile("alpha\nbeta\ngamma")) {
-      dump("opened file")
-    }
-
-  it should "show the start page" in runTuiStartPage(dump("start page"))
-
-  it should "show the command palette" in runTui() {
+  "dump" should "show what remains after escape" in runTui(TuiEnvironment.withFile("covered content")) {
     for
-      _ <- ctrl('p')
-      _ <- dump("palette open")
-      _ <- typeText("line")
-      _ <- dump("palette filtered")
-      _ <- arrowDown
-      _ <- dump("palette after down arrow")
+      _      <- openCommandPalette
+      _      <- escape
+      after  <- settledScreen
+      _ <- liftIO(IO {
+        println("ROWS-WITH-SEARCH=" + after.rowsContaining("search:"))
+        after.rowsContaining("search:").foreach(r => println(s"  row $r = [${after.rowText(r).strip}]"))
+        println("PAINTED=" + after.paintedRows.map((r, t) => s"$r:${t.strip.take(40)}"))
+      })
     yield ()
   }
 
-  it should "show the settings surface" in runTui() {
+  it should "show what an arrow-down repaints" in runTui() {
     for
-      _ <- ctrl('p')
-      _ <- typeText("open settings")
-      _ <- enter
-      _ <- dump("settings")
+      _      <- searchCommands("line")
+      before <- screen
+      _      <- arrowDown
+      after  <- screen
+      _ <- liftIO(IO {
+        val changed = after.changedRows(before).toList.sorted
+        println(s"CHANGED-ROWS=$changed")
+        changed.take(6).foreach { row =>
+          println(s"  row $row before=[${before.rowText(row).strip.take(50)}] after=[${after.rowText(row).strip.take(50)}]")
+          val cols = (0 until 200).filter(col => before.cellAt(col, row) != after.cellAt(col, row))
+          println(s"    changed cols ${cols.take(6)} .. ${cols.size} total")
+          cols.headOption.foreach(col =>
+            println(s"    first: before=${before.cellAt(col, row)} after=${after.cellAt(col, row)}")
+          )
+        }
+      })
     yield ()
   }
 
-  it should "show two tabs" in runTui(TuiEnvironment.withFile("first file")) {
+  it should "show what escape leaves behind" in runTui(TuiEnvironment.withFile("covered content")) {
     for
-      _ <- ctrl('t')
-      _ <- typeText("second")
-      _ <- dump("two tabs")
+      before <- settledScreen
+      _      <- openCommandPalette
+      _      <- escape
+      after  <- settledScreen
+      _ <- liftIO(IO {
+        val changed = after.changedCells(before).toList.sortBy(cell => (cell._2, cell._1))
+        println(s"ESCAPE-CHANGED=${changed.size} sample=${changed.take(5)}")
+        changed.take(3).foreach((col, row) =>
+          println(s"  ($col,$row) before=${before.cellAt(col, row)} after=${after.cellAt(col, row)}")
+        )
+      })
+    yield ()
+  }
+
+  it should "show a query matching nothing" in runTui() {
+    for
+      _ <- searchCommands("zzzznotacommand")
+      _ <- dump("no matches")
+      _ <- verifyState("surface")(st => println("SURFACES=" + st.runtime.uiSurfaces.size))
     yield ()
   }
 end TuiDumpSpec

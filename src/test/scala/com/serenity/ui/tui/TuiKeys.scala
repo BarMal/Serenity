@@ -67,14 +67,32 @@ object TuiKeys:
 
   val F1: TuiKey = TuiKey("F1", Esc +: bytesOf("OP"))
 
-  /** A cursor or editing key with modifiers held, in the `CSI 1;<mod><letter>` form xterm uses. */
+  /** A cursor key with modifiers held, in the `CSI 1;<mod><letter>` form xterm uses for them.
+    *
+    * Only valid for the keys a terminal already reports as a CSI sequence -- the arrows, Home and End. A key sent as a
+    * bare control byte (Tab, Enter, Backspace, Escape) has no such form: a terminal reports those modified only in the
+    * CSI-u encoding, which is what [[csiU]] and the named chords below are for.
+    */
   def modified(key: TuiKey, shift: Boolean = false, alt: Boolean = false, ctrl: Boolean = false): TuiKey =
+    require(
+      key.bytes.length >= 2 && key.bytes(0) == Esc && key.bytes(1) == '['.toByte,
+      s"${key.name} is not a CSI key, so it has no CSI-parameter form -- use csiU for its modified encoding"
+    )
     val finalByte = key.bytes.lastOption.getOrElse('A'.toByte).toChar
     val label     = List(Option.when(ctrl)("Ctrl"), Option.when(alt)("Alt"), Option.when(shift)("Shift")).flatten
     TuiKey(
       (label :+ key.name).mkString("+"),
       csi(s"1;${modifierParam(shift, alt, ctrl)}$finalByte")
     )
+
+  /** A key in the CSI-u form (`CSI <code>;<mod> u`), which is how a terminal speaking the kitty keyboard protocol
+    * reports a modified key that the legacy encoding cannot express at all.
+    */
+  def csiU(name: String, code: Int, shift: Boolean = false, alt: Boolean = false, ctrl: Boolean = false): TuiKey =
+    TuiKey(name, csi(s"$code;${modifierParam(shift, alt, ctrl)}u"))
+
+  val CtrlTab: TuiKey      = csiU("Ctrl+Tab", 9, ctrl = true)
+  val CtrlShiftTab: TuiKey = csiU("Ctrl+Shift+Tab", 9, shift = true, ctrl = true)
 
   /** Bracketed paste: the terminal frames pasted text so the application inserts it as one paste rather than replaying
     * it as individual keystrokes, which would fire hotkeys on any embedded control character.

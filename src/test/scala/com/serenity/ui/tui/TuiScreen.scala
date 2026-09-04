@@ -60,15 +60,29 @@ final case class TuiScreen(terminal: TerminalEmulator, emitted: String):
   def textAt(col: Int, row: Int, length: Int): String =
     (col until math.min(col + length, width)).map(x => cellAt(x, row).text).mkString
 
-  /** Every cell whose content, colour or style differs from `previous`. Empty means the two frames are identical, which
-    * for a terminal means the second one cost nothing to draw.
+  /** Every cell that *looks* different from `previous`.
+    *
+    * A blank cell's foreground colour and text style are invisible -- nothing is drawn in that colour -- so two spaces
+    * over the same background are the same cell to a reader, whatever attributes the app happened to leave behind.
+    * Comparing them strictly would report the whole screen as changed after any repaint that merely re-established the
+    * theme's foreground on empty space, which says nothing about what the user sees. Use [[changedCellsExactly]] when
+    * the attributes themselves are the point.
     */
   def changedCells(previous: TuiScreen): Set[(Int, Int)] =
+    changedCellsBy(previous, TuiScreen.looksTheSame)
+
+  /** Every cell differing in any attribute at all, invisible ones included -- the strict counterpart to
+    * [[changedCells]], for assertions about what was actually written rather than what can be seen.
+    */
+  def changedCellsExactly(previous: TuiScreen): Set[(Int, Int)] =
+    changedCellsBy(previous, _ == _)
+
+  private def changedCellsBy(previous: TuiScreen, same: (TerminalCell, TerminalCell) => Boolean): Set[(Int, Int)] =
     val cells =
       for
         row <- 0 until math.min(height, previous.height)
         col <- 0 until math.min(width, previous.width)
-        if cellAt(col, row) != previous.cellAt(col, row)
+        if !same(cellAt(col, row), previous.cellAt(col, row))
       yield (col, row)
     cells.toSet
 
@@ -86,3 +100,13 @@ final case class TuiScreen(terminal: TerminalEmulator, emitted: String):
     counts.groupBy(identity).view.mapValues(_.size).toList.sortBy(-_._2)
 
 end TuiScreen
+
+object TuiScreen:
+
+  /** Whether two cells are indistinguishable on screen: same glyph over the same background, and -- only when there is
+    * a glyph to colour -- the same foreground and style.
+    */
+  private def looksTheSame(left: TerminalCell, right: TerminalCell): Boolean =
+    val sameGround = left.codePoint == right.codePoint && left.span == right.span && left.bg == right.bg
+    val blank      = left.text.isBlank
+    sameGround && (blank || (left.fg == right.fg && left.style == right.style))
