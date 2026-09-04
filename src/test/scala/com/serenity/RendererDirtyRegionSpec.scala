@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{PixelRect, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, LayoutEngine, LayoutManager, PixelRect, TextLayoutSnapshot, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -293,6 +293,86 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     drew(surface, "alpha") shouldBe true
     drew(surface, "epsilon") shouldBe false
   }
+
+  "Dirty-line rendering" should
+    "redraw a later paragraph's screen row after an earlier paragraph's edit reflows it down a row" in {
+      val surface = new MockRenderSurface(80, 24, persistentContent = true)
+
+      val words                        = Vector.tabulate(80)(i => f"word$i%02d")
+      def paragraphOf(n: Int): String  = words.take(n).mkString(" ")
+      def contentFor(n: Int): Vector[String] = Vector(paragraphOf(n), "MARKERLINE", "TAILLINE")
+
+      // How many visual rows the first paragraph's `n` words wrap into, computed the same way `Renderer` itself
+      // derives a pane's wrap width (`contentRect.width` cells -> `panelWidthPx` -> `TextLayoutSnapshot.fromBuffer`),
+      // so the word count found below reflects this test's real viewport/pane geometry rather than a guessed
+      // constant.
+      def wrappedRowCountFor(n: Int): Int =
+        val state            = stateWith(contentFor(n))
+        val calculatedLayout = LayoutManager.calculateLayout(state, viewport)
+        val workspaceLayout  = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
+        val contentRect = workspaceLayout.activeContentRect(state).getOrElse(fail("expected an active content rect"))
+        val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+        val cellMetrics  = CellMetrics.fromFont(font)
+        val panelWidthPx = contentRect.width * cellMetrics.charWidth
+        val rawBuffer    = state.persisted.buffers(bufferId)
+        val buffer =
+          rawBuffer.copy(viewport =
+            LayoutEngine.updateBufferViewportDimensions(rawBuffer, contentRect, wordWrapEnabled = true)
+          )
+        val snapshot = TextLayoutSnapshot.fromBuffer(
+          buffer,
+          panelWidthPx,
+          font,
+          TextLayoutSnapshot.defaultFontRenderContext(),
+          wordWrapEnabled = true,
+          cellMetricsOverride = Some(cellMetrics)
+        )
+        snapshot.visualLines.count(_.bufferLine == 0)
+
+      // The fewest words whose paragraph wraps onto one more visual row than one word fewer -- the exact wrap
+      // boundary a user crosses by typing one more word at the end of a long line.
+      val n = LazyList
+        .from(1)
+        .take(words.length - 1)
+        .find(k => wrappedRowCountFor(k + 1) > wrappedRowCountFor(k))
+        .getOrElse(fail("expected some word count in range to cross a wrap boundary"))
+
+      val before = stateWith(contentFor(n))
+      // Insert the extra word via the rope's own insert (not a second independent Buffer.fromString call), exactly
+      // like the "only the edited row again" test above, and exactly how a real keystroke extends the paragraph.
+      val paragraphEndOffset = paragraphOf(n).length
+      val editedContent =
+        before.persisted
+          .buffers(bufferId)
+          .document
+          .content
+          .insert(paragraphEndOffset, " " + words(n))
+          .getOrElse(fail("expected insert to succeed"))
+      val after =
+        before.copy(persisted =
+          before.persisted.copy(buffers =
+            before.persisted.buffers.updated(
+              bufferId,
+              before.persisted
+                .buffers(bufferId)
+                .copy(document = before.persisted.buffers(bufferId).document.copy(content = editedContent))
+            )
+          )
+        )
+
+      val damage = DamageProducer.forTransition(before, after)
+
+      Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+      surface.clear()
+      Renderer.render(after, cursorVisible = false, surface, viewport, None, damage)
+
+      // MARKERLINE's own buffer line, cursor, selection and content are all unchanged -- only paragraph 0's extra
+      // wrapped row pushed it one screen row further down. It must still be redrawn there, or the frame leaves
+      // whatever was on screen at its new row (stale pixels, or nothing) instead of "MARKERLINE".
+      drew(surface, "MARKERLINE") shouldBe true
+      // TAILLINE, further downstream still, must be redrawn for the same reason.
+      drew(surface, "TAILLINE") shouldBe true
+    }
 
   private def repaintRegionFor(surface: MockRenderSurface, state: AppState, damage: Damage): Option[PixelRect] =
     val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)

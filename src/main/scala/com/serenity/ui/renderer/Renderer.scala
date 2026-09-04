@@ -82,6 +82,17 @@ object Renderer:
     */
   private val previousFloatingSurfaceRectsRef = new AtomicReference[Map[SurfaceId, PixelRect]](Map.empty)
 
+  /** Each pane's [[TextLayoutSnapshot]] as of the *previous* frame this renderer planned, keyed by pane id --
+    * `dirtyRowsFor` reads this (via `planFrame`, which always runs before this ref is updated for the frame being
+    * planned) to catch rows whose content shifted because an *upstream* paragraph's edit changed how many rows it
+    * wraps into, not just rows whose own buffer line `Damage` names directly (see [[DirtyLineDiff]]'s doc comment).
+    * Updated right after `planFrame` returns for a frame, from that same frame's `renderPlan.snapshots`, so the next
+    * frame's `planFrame` call sees this frame's snapshots as "previous" -- the same before/after timing
+    * [[previousFloatingSurfaceRectsRef]] documents above, except the snapshot itself (not a later paint step) is
+    * already known by the time `planFrame` runs, so there's no need to wait for painting to record it.
+    */
+  private val previousSnapshotsRef = new AtomicReference[Map[PaneId, TextLayoutSnapshot]](Map.empty)
+
   private val MarkdownSelectionProbeLimit = 512
 
   final private case class EditorPaneRenderPlan(
@@ -150,7 +161,8 @@ object Renderer:
       bufferId: BufferId,
       rowBufferLines: Vector[Int],
       rowRects: Vector[PixelRect],
-      overflowingRows: Set[Int]
+      overflowingRows: Set[Int],
+      snapshot: TextLayoutSnapshot
   )
 
   /** What a frame decided to reuse: the rows it still has to draw per pane and the pixel bands it kept. */
@@ -1158,6 +1170,10 @@ object Renderer:
           bufferAnimations
         )
         val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage)
+        // Recorded *after* `planFrame` (and thus `dirtyRowsFor`) has read `previousSnapshotsRef` for this frame, so
+        // this frame's own snapshots become "previous" only for the frame after it -- see
+        // `previousSnapshotsRef`'s doc comment.
+        previousSnapshotsRef.set(editorRenderPlan.snapshots)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
             surface.clearViewportExcept(state.persisted.theme.background, plan.preserved)
@@ -1443,7 +1459,8 @@ object Renderer:
         val inputsOrPanesChanged = drawStateChanged(persistenceKey, paneIds, renderInputsFor(context, viewportSize))
         val effectiveDamage      = if inputsOrPanesChanged then Damage.Everything else bufferDamageSinceLastDraw
 
-        val dirtyRowsByPane = panes.map { case (paneId, record) => paneId -> dirtyRowsFor(effectiveDamage, record) }
+        val dirtyRowsByPane =
+          panes.map { case (paneId, record) => paneId -> dirtyRowsFor(effectiveDamage, paneId, record) }
 
         val preserved = panes.toList.flatMap {
           case (paneId, record) =>
@@ -1462,8 +1479,8 @@ object Renderer:
         val repaintRows =
           Option.when(boundedRepaintEligible) {
             panes.toList.flatMap {
-              case (_, record) =>
-                dirtyRowsFor(screenDamageSincePublish, record).toList.flatMap(record.rowRects.lift)
+              case (paneId, record) =>
+                dirtyRowsFor(screenDamageSincePublish, paneId, record).toList.flatMap(record.rowRects.lift)
             }
           }
 
@@ -1487,17 +1504,28 @@ object Renderer:
     * panel painted opaque background into last frame and no longer paints into this frame, leaving that background
     * stale under any theme with a transparent pane background. `Damage.Everything` dirties every row, since it carries
     * no per-buffer detail to translate.
+    *
+    * Unioned with [[DirtyLineDiff.dirtyRows]] comparing this pane's previous frame's [[TextLayoutSnapshot]]
+    * ([[previousSnapshotsRef]]) against `record.snapshot`: `Damage`'s buffer-line facts only ever name the paragraph
+    * actually edited, so a paragraph whose own content is untouched but whose *screen row* moved -- because an
+    * earlier paragraph's edit changed how many rows it wraps into -- is otherwise never marked dirty, leaving stale
+    * pixels from the row's old frame in place. `TextVisualLine` carries no cursor/selection state, so this catches
+    * reflow shifts precisely without making the `Damage`-based half above redundant: a selection- or cursor-only
+    * change can leave every row's `TextVisualLine` equal while still needing a redraw, which only `Damage` reports.
     */
-  private def dirtyRowsFor(damage: Damage, record: PaneFrameRecord): Set[Int] =
-    if Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
-    else
-      val bufferLines = Damage.coarsenToRows(record.bufferId, damage)
-      val dirty = record.rowBufferLines.zipWithIndex.collect {
-        case (bufferLine, row) if bufferLines.contains(bufferLine) => row
-      }.toSet
-      DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
-        record.overflowingRows ++
-        vacatedFloatingSurfaceRows(damage, record)
+  private def dirtyRowsFor(damage: Damage, paneId: PaneId, record: PaneFrameRecord): Set[Int] =
+    val damageDirty =
+      if Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
+      else
+        val bufferLines = Damage.coarsenToRows(record.bufferId, damage)
+        val dirty = record.rowBufferLines.zipWithIndex.collect {
+          case (bufferLine, row) if bufferLines.contains(bufferLine) => row
+        }.toSet
+        DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
+          record.overflowingRows ++
+          vacatedFloatingSurfaceRows(damage, record)
+    val previousSnapshot = previousSnapshotsRef.get().get(paneId)
+    damageDirty ++ DirtyLineDiff.dirtyRows(previousSnapshot, record.snapshot)
 
   /** Rows of `record` whose pixel band ([[PaneFrameRecord.rowRects]]) intersects the previous frame's rect of any
     * floating surface `damage` reports as changed ([[Damage.surfaceIds]]). A surface absent from
@@ -1549,7 +1577,8 @@ object Renderer:
       bufferId = bufferId,
       rowBufferLines = snapshot.visualLines.map(_.bufferLine),
       rowRects = paneRowRects(contentRect, context, snapshot),
-      overflowingRows = overflowingRows(contentRect, context, snapshot)
+      overflowingRows = overflowingRows(contentRect, context, snapshot),
+      snapshot = snapshot
     )
 
   /** Rows whose run reaches past the pane's content rect.
