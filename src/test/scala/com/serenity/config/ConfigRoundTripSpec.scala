@@ -69,6 +69,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withCommentDisplayMode(CommentDisplayMode.Margin)
     .withWordWrap(false)
     .withVisualLineCursorNavigation(false)
+    .withTypewriterScrolling(true)
     .withFocusedTextBody(true)
     .withContextualToolbarEnabled(false)
     .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
