@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets
 import scala.concurrent.duration.*
 
 import cats.effect.IO
-import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
 import com.serenity.input.{InProcessClipboard, InputRouter, SystemClipboard}
@@ -242,7 +241,34 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe Nil
   }
 
-  /** The deadline still does its own job: an `ESC` that nothing follows is a bare Escape. */
+  /** A lone `ESC` has to be told from the first byte of an escape sequence, and the only thing that distinguishes them
+    * is whether more of the sequence follows. Only the input stream knows which, and it is now asked: the read after an
+    * `ESC` is a timed one, so what the queue carries is the stream's own answer rather than a guess from a timer.
+    *
+    * It used to be a guess. The consumer raced the remaining bytes against a 50ms timer, and on a loaded machine the
+    * timer could win while `[A` was still on its way -- turning Up into Escape and a literal `[A` typed into the
+    * document. CI caught a first attempt at this that only checked the queue before waiting: that still lost when the
+    * reader fiber itself was starved past the deadline, which on a two-core runner it is.
+    *
+    * A deadline of zero is what holds it here: even with no patience at all, a sequence the terminal has already sent
+    * must decode as a sequence, because the reader finds those bytes rather than timing out on them.
+    */
+  "an escape sequence" should "decode as one sequence even with no patience for a lone ESC at all" in {
+    val (terminal, pipeOut) = livePipeTerminal()
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard, escDeadline = Duration.Zero)
+      _         <- IO(pipeOut.write(csi("A"))) >> IO(pipeOut.flush())
+      events    <- handler.eventStream.take(1).compile.toList
+    yield events
+
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
+      translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty))
+    )
+  }
+
+  /** And the deadline still does its own job: an `ESC` that nothing follows is a bare Escape. */
   "a lone ESC with nothing following" should "still resolve to Escape once the deadline passes" in {
     val (terminal, pipeOut) = livePipeTerminal()
     val program = for
@@ -258,7 +284,7 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  /** And a sequence split across two writes, as a slow pty can deliver it, is still one sequence. */
+  /** A sequence split across two writes, as a slow pty can deliver it, is still one sequence. */
   "an escape sequence split across two writes" should "decode as one sequence" in {
     val (terminal, pipeOut) = livePipeTerminal()
     val program = for
@@ -274,52 +300,3 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty))
     )
   }
-
-  /** A lone `ESC` has to be told from the first byte of an escape sequence, and the only thing that distinguishes them
-    * is whether more of the sequence follows. The deadline says how long to wait for that answer; it is not the answer.
-    *
-    * It was treated as one. Escape sequences reach the decoder a character at a time, so an arrow key always leaves it
-    * holding a lone `ESC` with the rest of the sequence already queued behind -- and the old code decided that `ESC` by
-    * racing those bytes against a 50ms timer. Under load the timer could win, and `ESC` `[` `A` became Escape followed
-    * by a literal `[A` typed into the document.
-    *
-    * The fault itself cannot be reproduced through the handler: it needs a stalled scheduler, and simulating one by
-    * shrinking the deadline proved as unreliable as the code it was testing -- the same suite passed at 5ms, failed at
-    * 10ms and passed at 25ms. So it is held here at the seam where the answer is not a matter of timing at all.
-    */
-  "the rest of a sequence" should "be taken from input already in hand, whatever the deadline says" in {
-    val program = for
-      queue <- Queue.unbounded[IO, TerminalInputHandler.ReadOutcome]
-      _     <- queue.offer(TerminalInputHandler.ReadOutcome.Bytes(bytes("[A")))
-      // Zero: the deadline is already spent. It still may not overrule input that has arrived.
-      found <- TerminalInputHandler.sequenceRemainder(queue, Duration.Zero)
-    yield found
-
-    outcomeBytes(program) shouldBe Some(bytes("[A").toList)
-  }
-
-  it should "report nothing once the deadline passes with no input at all" in {
-    val program = for
-      queue <- Queue.unbounded[IO, TerminalInputHandler.ReadOutcome]
-      found <- TerminalInputHandler.sequenceRemainder(queue, 20.millis)
-    yield found
-
-    outcomeBytes(program) shouldBe None
-  }
-
-  it should "wait out the deadline for input that has not arrived yet" in {
-    val program = for
-      queue <- Queue.unbounded[IO, TerminalInputHandler.ReadOutcome]
-      _     <- (IO.sleep(10.millis) >> queue.offer(TerminalInputHandler.ReadOutcome.Bytes(bytes("[A")))).start
-      found <- TerminalInputHandler.sequenceRemainder(queue, 5.seconds)
-    yield found
-
-    outcomeBytes(program) shouldBe Some(bytes("[A").toList)
-  }
-
-  /** `ReadOutcome.Bytes` wraps an array, so equality has to be on the contents. */
-  private def outcomeBytes(program: IO[Option[TerminalInputHandler.ReadOutcome]]): Option[List[Byte]] =
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")).map {
-      case TerminalInputHandler.ReadOutcome.Bytes(value) => value.toList
-      case other                                         => fail(s"expected bytes, got $other")
-    }

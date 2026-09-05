@@ -150,7 +150,7 @@ object TerminalInputHandler:
       reader = terminal.reader()
       // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
       // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
-      fiber <- rawReadLoop(reader, rawQueue).start.flatMap { rawFiber =>
+      fiber <- rawReadLoop(reader, rawQueue, escDeadline).start.flatMap { rawFiber =>
         readLoop(
           rawQueue,
           queue,
@@ -161,12 +161,14 @@ object TerminalInputHandler:
           systemClipboard,
           seedBytes,
           focusCallback,
-          wheelScrollLines,
-          escDeadline
+          wheelScrollLines
         )
           .guarantee(rawFiber.cancel)
       }.start
     yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal), focusCallback)
+
+  /** The byte a terminal sends for the Escape key, and to introduce an escape sequence. */
+  private val Escape: Int = 0x1b
 
   private[tui] enum ReadOutcome:
     case Bytes(value: Array[Byte])
@@ -194,34 +196,35 @@ object TerminalInputHandler:
     * fills during a slow dispatch cycle. [[readLoop]] consumes from [[rawQueue]] and can safely use [[Queue.tryTake]]
     * for non-blocking drains without any risk of blocking the compute thread.
     *
-    * A character at a time is what the reader gives, so the bytes of an escape sequence reach [[rawQueue]] separately
-    * even though the terminal sent them together. [[sequenceRemainder]] is where that stops mattering.
-    */
-  private def rawReadLoop(reader: NonBlockingReader, rawQueue: Queue[IO, ReadOutcome]): IO[Unit] =
-    IO.interruptible(reader.read()).map(toOutcome).flatMap {
-      case ReadOutcome.Eof => rawQueue.offer(ReadOutcome.Eof)
-      case outcome         => rawQueue.offer(outcome) >> rawReadLoop(reader, rawQueue)
-    }
-
-  /** What follows a lone `ESC`, if anything -- which is a question about the input, not about the clock.
+    * Reading an `ESC` is the one moment the answer cannot wait: it either begins an escape sequence or is the Escape
+    * key, and only the stream knows which. So the next read after an `ESC` is a timed one, and a
+    * [[ReadOutcome.Expired]] goes into the queue when nothing follows within `escDeadline`. That puts the evidence in
+    * the queue, in order, where being slow to look at it cannot change what it says.
     *
-    * `deadline` says how long to wait for an answer; it is not the answer. Treating it as one is what made an arrow key
-    * unreliable: an `ESC` whose `[A` was already in hand could still be resolved to a bare Escape because a timer
-    * happened to be picked first, leaving the `[A` to be typed into the document as text. So the queue is asked before
-    * the wait begins and again after it ends, and the deadline decides nothing on its own.
+    * Asking it the other way round -- letting the consumer race the remaining bytes against a timer -- is what made
+    * arrow keys unreliable: on a loaded machine the timer could win while `[A` was still on its way from the reader,
+    * and `ESC` `[` `A` became Escape followed by a literal `[A` typed into the document.
     */
-  private[tui] def sequenceRemainder(
+  private def rawReadLoop(
+    reader: NonBlockingReader,
     rawQueue: Queue[IO, ReadOutcome],
-    deadline: FiniteDuration
-  ): IO[Option[ReadOutcome]] =
-    rawQueue.tryTake.flatMap {
-      case arrived @ Some(_) => IO.pure(arrived)
-      case None =>
-        IO.race(IO.sleep(deadline), rawQueue.take).flatMap {
-          case Left(_)        => rawQueue.tryTake
-          case Right(outcome) => IO.pure(Some(outcome))
+    escDeadline: FiniteDuration
+  ): IO[Unit] =
+    def enqueue(outcome: ReadOutcome, afterEsc: Boolean): IO[Unit] =
+      outcome match
+        case ReadOutcome.Eof => rawQueue.offer(ReadOutcome.Eof)
+        case _               => rawQueue.offer(outcome) >> next(afterEsc)
+
+    def next(afterEsc: Boolean): IO[Unit] =
+      if afterEsc then
+        // `read(0)` blocks forever in JLine, so a deadline that rounds to nothing still has to wait a moment.
+        IO.interruptible(reader.read(escDeadline.toMillis.max(1L))).flatMap {
+          case NonBlockingReader.READ_EXPIRED => rawQueue.offer(ReadOutcome.Expired) >> next(afterEsc = false)
+          case read                           => enqueue(toOutcome(read), afterEsc = read == Escape)
         }
-    }
+      else IO.interruptible(reader.read()).flatMap(read => enqueue(toOutcome(read), afterEsc = read == Escape))
+
+    next(afterEsc = false)
 
   private def readLoop(
     rawQueue: Queue[IO, ReadOutcome],
@@ -233,8 +236,7 @@ object TerminalInputHandler:
     systemClipboard: SystemClipboard[IO],
     seedBytes: Array[Byte],
     focusCallback: AtomicReference[Option[Boolean => Unit]],
-    wheelScrollLines: Int,
-    escDeadline: FiniteDuration
+    wheelScrollLines: Int
   ): IO[Unit] =
 
     def processTokens(tokens: List[DecodedToken]): IO[Unit] =
@@ -324,31 +326,21 @@ object TerminalInputHandler:
         case _                           => IO.pure(acc)
       }
 
-    // What a lone `ESC` turns out to be, once the question of whether more of a sequence follows has been settled.
-    def resolveLoneEsc(pending: Array[Byte], outcome: Option[ReadOutcome]): IO[Unit] =
-      outcome match
-        case Some(ReadOutcome.Eof) =>
-          processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
-        case Some(ReadOutcome.Bytes(bs)) =>
-          drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
-        case Some(ReadOutcome.Expired) =>
-          loop // unreachable: rawReadLoop never enqueues Expired
-        case None =>
-          processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray) >> loop
-
+    // A lone `ESC` is Escape exactly when the reader reports that nothing followed it. Waiting is the reader's job;
+    // this only has to read off what it found, which no amount of being late can change.
     def loop: IO[Unit] =
       remainder.get.flatMap { pending =>
-        if pending.length == 1 && pending(0) == 0x1b.toByte then
-          sequenceRemainder(rawQueue, escDeadline).flatMap(resolveLoneEsc(pending, _))
-        else
-          rawQueue.take.flatMap {
-            case ReadOutcome.Eof =>
-              processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
-            case ReadOutcome.Bytes(bs) =>
-              drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
-            case ReadOutcome.Expired =>
-              loop // unreachable: rawReadLoop never enqueues Expired
-          }
+        val holdingLoneEsc = pending.length == 1 && pending(0) == Escape.toByte
+        rawQueue.take.flatMap {
+          case ReadOutcome.Eof =>
+            processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
+          case ReadOutcome.Bytes(bs) =>
+            drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
+          case ReadOutcome.Expired if holdingLoneEsc =>
+            processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray) >> loop
+          case ReadOutcome.Expired =>
+            loop
+        }
       }
 
     // Decode any bytes TerminalShell's startup negotiation read off this same reader but couldn't attribute to its
