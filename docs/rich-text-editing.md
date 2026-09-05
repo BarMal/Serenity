@@ -37,6 +37,8 @@ Build rich text support around the native model and keep Markdown reuse as an ad
 
 ## DOCX and ODT Fidelity Contract
 
-The native DOCX and ODT adapters losslessly represent paragraphs, headings, alignment, inline text marks, font metadata, tabs, line breaks, and the archive entries used by Serenity's writers. Tables, lists, images, links, headers, footnotes, metadata, comments, tracked changes, and other package extensions are outside that model. The adapters expose this boundary as `RichTextFidelity`; DOCX and ODT are therefore advertised as editable but not fully rich-format preserving.
+The native DOCX and ODT adapters losslessly represent paragraphs, headings, alignment, inline text marks, font metadata, tabs, line breaks, and the archive entries used by Serenity's writers. Tables, lists, images, links, headers, footnotes, metadata, comments, tracked changes, and other package extensions are outside that model. The adapters expose that boundary as `RichTextFidelity`, checked on import (`LossyRichTextOverwriteException`, issue #856).
+
+That import-time boundary is a separate axis from `DocumentFormat.capabilities(_).preservesRichFormatting`, which asks whether saving a buffer's *currently authored* formatting -- marks, alignment, headings -- survives at a given target format. RTF, ODT, and DOCX all report `true` there: every one of Serenity's own codecs round-trips marks, alignment, and (DOCX/ODT only; RTF approximates it visually, see `RtfDocumentCodec.headingAdjustedStyle`) headings without loss (issue #1291).
 
 The current codec slice detects unsupported imported structures before a caller saves. Buffer/session retention and an explicit lossy-save or Save As decision remain application-layer work. No Apache POI or ODF Toolkit dependency is required for this contract because detection operates on the existing XML/package reader.
