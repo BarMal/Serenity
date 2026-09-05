@@ -108,6 +108,8 @@ enum ViewIntent:
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
+  case SetAppMode(mode: AppMode)
+  case SetShowAllSettingsRegardlessOfMode(value: Boolean)
   case ToggleShortcutsHelp
 
 enum ProjectIntent:

@@ -62,6 +62,8 @@ object CommandRunnerOptionSelections:
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "spellcheck-enabled"         -> spellCheckEnabledIndex(languageToolsConfig.spellCheck.enabled),
+      "app-mode"                   -> appModeIndex(config.appMode),
+      "settings-show-all"          -> (if config.showAllSettingsRegardlessOfMode then 1 else 0),
       "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
       "show-word-count"            -> enabledIndex(surfaceConfig.showWordCount),
       "gutter"                     -> enabledIndex(surfaceConfig.showGutter),
@@ -222,6 +224,11 @@ object CommandRunnerOptionSelections:
       case DefaultDocumentMode.PlainText => 0
       case DefaultDocumentMode.Markdown  => 1
       case DefaultDocumentMode.RichText  => 2
+
+  private def appModeIndex(mode: AppMode): Int =
+    mode match
+      case AppMode.Code  => 0
+      case AppMode.Prose => 1
 
   private def spellCheckEnabledIndex(enabled: Boolean): Int =
     if enabled then 1 else 0

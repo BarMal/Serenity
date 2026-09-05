@@ -35,8 +35,8 @@ class AppModeSpec extends AnyFlatSpec with Matchers:
       .appMode shouldBe AppMode.Prose
 
     ConfigRegistry
-      .read(AppConfig.default, "app.mode.show_all_settings", "true")
-      .getOrElse(fail("app.mode.show_all_settings parse"))
+      .read(AppConfig.default, "app.show_all_settings", "true")
+      .getOrElse(fail("app.show_all_settings parse"))
       .showAllSettingsRegardlessOfMode shouldBe true
 
     ConfigRegistry.rejects("app.mode", "prose") shouldBe false
@@ -45,5 +45,5 @@ class AppModeSpec extends AnyFlatSpec with Matchers:
 
   "ConfigKeySchema" should "know the app mode keys" in {
     ConfigKeySchema.isKnownKey("app.mode") shouldBe true
-    ConfigKeySchema.isKnownKey("app.mode.show_all_settings") shouldBe true
+    ConfigKeySchema.isKnownKey("app.show_all_settings") shouldBe true
   }

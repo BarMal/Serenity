@@ -4,7 +4,8 @@ import java.awt.Font
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.ToolbarDisplayMode
+import com.serenity.config.{AppMode, ToolbarDisplayMode}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
@@ -925,6 +926,36 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     ContextualToolbar.displayText(input, ToolbarDisplayMode.IconOnly) shouldBe "\ue245"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.TextOnly) shouldBe "Size 18"
     ContextualToolbar.displayText(input, ToolbarDisplayMode.IconAndText) shouldBe "\ue245 Size 18"
+  }
+
+  it should "not offer build/test/run/debug buttons for a code buffer while the app is in prose mode" in {
+    val stateManager = createStateManager("ContextualToolbarSpec-prose-mode")
+    stateManager
+      .updateState { state =>
+        val bufferId = state.focusedBufferId.getOrElse(fail("Expected focused buffer"))
+        val buffer   = state.persisted.buffers(bufferId)
+        val updated  = buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Scala)))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, updated)))
+      }
+      .unsafeRunSync()
+
+    val codeModeItems = ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync())
+    codeModeItems shouldBe ContextualToolbar.codeItems
+
+    stateManager
+      .executeCommand(
+        Command.typed(
+          "app-mode-prose",
+          "Switch to prose mode",
+          CommandIntent.View(ViewIntent.SetAppMode(AppMode.Prose)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    val proseModeItems = ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync())
+    proseModeItems.map(_.id) should not contain "project-run"
+    proseModeItems should not be ContextualToolbar.codeItems
   }
 
   it should "use Material Icons Round code points in icon-only mode" in {

@@ -632,6 +632,20 @@ object CommandRegistry:
       label = "Markdown View Inline Lens"
     ),
     Command.typed(
+      "app-mode-code",
+      "Switch the app to code mode, gating tooling and settings toward code workspaces.",
+      CommandIntent.View(ViewIntent.SetAppMode(com.serenity.config.AppMode.Code)),
+      CommandCategory.Settings,
+      label = "App Mode: Code"
+    ),
+    Command.typed(
+      "app-mode-prose",
+      "Switch the app to prose mode, gating tooling and settings toward prose workspaces.",
+      CommandIntent.View(ViewIntent.SetAppMode(com.serenity.config.AppMode.Prose)),
+      CommandCategory.Settings,
+      label = "App Mode: Prose"
+    ),
+    Command.typed(
       "spellcheck-on",
       "Enable spell-checking for prose buffers.",
       CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true))),

@@ -512,7 +512,7 @@ object ConfigRegistry:
     named("app.mode", "appMode")(
       enumerated(AppMode.fromConfigKey, _.configKey, text => AppMode.values.find(_.toString == text))
     )(_.appMode, (config, value) => config.withAppMode(value)),
-    field("app.mode.show_all_settings", "app_mode_show_all_settings")(boolean)(
+    field("app.show_all_settings", "app_show_all_settings")(boolean)(
       _.showAllSettingsRegardlessOfMode,
       (config, value) => config.withShowAllSettingsRegardlessOfMode(value)
     ),

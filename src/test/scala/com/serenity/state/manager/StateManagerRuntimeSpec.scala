@@ -12,8 +12,10 @@ import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
-import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.command.ViewIntent
+import com.serenity.state.models.{AppState, BufferId, SurfaceContent, SurfacePresentation, UiSurface}
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
+import com.serenity.ui.layout.PanelPosition
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -204,6 +206,110 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       projectTaskAfterShutdown shouldBe None
       analysisWasCancelled shouldBe Some(())
       pendingAnalysisFiber shouldBe None
+
+    program.unsafeRunSync()
+  }
+
+  it should "cancel a running project task when its output panel is closed" in {
+    val program = for
+      stateRef                 <- Ref.of[IO, AppState](AppState.initial)
+      undoRef                  <- Ref.of[IO, UndoState](UndoState())
+      themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
+      quitSignal               <- Deferred[IO, Unit]
+      lspQueue                 <- LspEffectQueue.create
+      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore     <- Semaphore[IO](1)
+      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
+      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      bufferAnimationsRef      <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
+      logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
+      sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
+      runtime = StateManagerRuntime.create(
+        stateRef = stateRef,
+        undoRef = undoRef,
+        themeNamesRef = themeNamesRef,
+        quitSignal = quitSignal,
+        logger = logger,
+        policy = SessionManager.SessionPolicy(),
+        sessionRootOverride = Some(sessionRoot),
+        themeManager = AppThemeManager.create,
+        lspQueue = lspQueue,
+        projectTaskFiberRef = projectTaskFiberRef,
+        projectTaskSemaphore = projectTaskSemaphore,
+        mouseTargetCacheRef = mouseTargetCacheRef,
+        documentAnalysisFiberRef = documentAnalysisFiberRef,
+        bufferAnimationsRef = bufferAnimationsRef,
+        onFontConfigChanged = (_: FontConfig) => IO.unit,
+        deviceTextScaleProvider = IO.pure(1.0),
+        configPersistencePath = None,
+        uiPresetStore = UiPresetStore.default,
+        windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
+        onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
+        fileDialog = None
+      )
+      operations <- StateManagerOperationBoundary.create(
+        stateRef,
+        documentAnalysisFiberRef,
+        logger
+      )
+      composition = new StateManagerComposition(
+        runtime.stateRef,
+        runtime.undoRef,
+        runtime.themeNamesRef,
+        runtime.quitSignal,
+        runtime.logger,
+        runtime.policy,
+        runtime.themeManager,
+        runtime.lspQueue,
+        runtime.projectTaskFiberRef,
+        runtime.projectTaskSemaphore,
+        runtime.mouseTargetCacheRef,
+        runtime.documentAnalysisFiberRef,
+        runtime.bufferAnimationsRef,
+        runtime.onFontConfigChanged,
+        runtime.deviceTextScaleProvider,
+        runtime.configPersistencePath,
+        runtime.uiPresetStore,
+        runtime.windowSizeProvider,
+        runtime.fileDialog,
+        runtime.markdownPreviewWindow,
+        runtime.fileManager,
+        runtime.sessionManager,
+        runtime.sessionPersistence,
+        operations
+      )
+      _              <- composition.pinOrUpdateTerminalPanel("Running build task...", PanelPosition.Bottom, 14)
+      taskDestroyed  <- Deferred[IO, Unit]
+      taskStarted    <- Deferred[IO, Unit]
+      taskFinished   <- Deferred[IO, Unit]
+      task <- IO
+        .defer(taskStarted.complete(()).void >> IO.never[Unit])
+        .onCancel(taskDestroyed.complete(()).void)
+        .start
+      _              <- taskStarted.get
+      _              <- projectTaskFiberRef.set(Some(ManagedProjectTask(taskFinished, task)))
+      stateWithPanel <- stateRef.get
+      _ <- composition.interpretCommand(
+        Command.typed(
+          "unpin-bottom-panel",
+          "Unpin the bottom panel.",
+          CommandIntent.View(ViewIntent.UnpinPanel(PanelPosition.Bottom)),
+          CommandCategory.View
+        ),
+        stateWithPanel
+      )
+      taskWasDestroyed  <- taskDestroyed.tryGet
+      projectTaskAfter  <- projectTaskFiberRef.get
+      stateAfterUnpin   <- stateRef.get
+      _                 <- projectTaskAfter.fold(IO.unit)(_.fiber.cancel)
+    yield
+      taskWasDestroyed shouldBe Some(())
+      projectTaskAfter shouldBe None
+      stateAfterUnpin.pinnedSurfaces.exists {
+        case UiSurface(_, SurfaceContent.Terminal(_, _), SurfacePresentation.Pinned(PanelPosition.Bottom, _), _) =>
+          true
+        case _ => false
+      } shouldBe false
 
     program.unsafeRunSync()
   }
