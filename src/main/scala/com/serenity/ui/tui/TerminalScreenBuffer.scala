@@ -24,6 +24,7 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
 
   def setForegroundColor(color: Color): Unit = fgColorRef.set(color)
   def setBackgroundColor(color: Color): Unit = bgColorRef.set(color)
+  def getForegroundColor: Color              = fgColorRef.get()
   def getBackgroundColor: Color              = bgColorRef.get()
 
   def enableStyle(style: TextStyle): Unit = activeStyleRef.set(activeStyleRef.get().combine(style))
