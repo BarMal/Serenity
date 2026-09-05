@@ -505,7 +505,9 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, viewport)
 
-    val call = surface.drawRunPxCalls.lastOption.getOrElse(fail("Expected a gutter draw call"))
+    val call = surface.drawRunPxCalls
+      .find(_.s.contains("Line 2, Col 3"))
+      .getOrElse(fail("Expected a gutter draw call showing the cursor info bar text"))
     call.foreground shouldBe foreground
     call.background shouldBe background
   }
@@ -535,7 +537,9 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     Renderer.render(state, cursorVisible = true, surface, viewport)
 
-    val call = surface.drawRunPxCalls.lastOption.getOrElse(fail("Expected a gutter draw call"))
+    val call = surface.drawRunPxCalls
+      .find(_.s.contains("Line 2, Col 3"))
+      .getOrElse(fail("Expected a gutter draw call showing the cursor info bar text"))
     call.foreground shouldBe Theme.light.panel.foreground
     call.background shouldBe Theme.light.panel.background
   }

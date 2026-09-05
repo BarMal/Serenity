@@ -935,9 +935,11 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   // command explicitly marked `keepMenuOpenOnSubmit` (the info bar segment movers, below) keeps it open.
   it should "close the command-runner overlay when an ordinary settings command is submitted from a submenu" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-ui-font", "ui-font")
+    // "ui-font" is itself a nested group of font-family choices -- entering it is a navigation step, not yet a
+    // command submit, exactly as in "open font family picker submenus and submit UI font choices" above.
+    val entered = CommandRunnerReducer.reduce(RunnerSubmit, settingsStateOnItem("settings-ui-font", "ui-font"), registry)
 
-    val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
+    val submitted = CommandRunnerReducer.reduce(RunnerSubmit, entered.state, registry)
 
     submitted.state.commandRunnerSurface shouldBe None
   }
@@ -950,10 +952,15 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default.withCursorInfoBarSegments(
       List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
     )
-    val opened      = CommandRunner.empty.activate(registry, config).openSettings
-    val groupIndex  = opened.visibleItems.indexWhere(_.id == "settings-cursor")
-    val entered     = opened.withSelectedVisibleIndex(groupIndex).enterSelectedGroup
-    val moveIndex   = entered.submenuItems("settings-cursor").indexWhere(_.id == "move-cursor-info-bar-position-later")
+    // Mirrors settingsStateOnItem's own navigation: search narrows visibleItems to the target group before
+    // indexing into it, exactly as reaching any other settings group does elsewhere in this spec.
+    val searched = CommandRunner.empty
+      .activate(registry, config)
+      .openSettings
+      .updateSearchTerm(settingsGroupSearchTerm("settings-cursor"))
+    val groupIndex = searched.visibleItems.indexWhere(_.id == "settings-cursor")
+    val entered    = searched.withSelectedVisibleIndex(groupIndex).enterSelectedGroup
+    val moveIndex  = entered.submenuItems("settings-cursor").indexWhere(_.id == "move-cursor-info-bar-position-later")
     val positioned  = entered.withSelectedFocusedSubmenuIndex(moveIndex)
     val surface = UiSurface(
       SurfaceId("command-runner"),
