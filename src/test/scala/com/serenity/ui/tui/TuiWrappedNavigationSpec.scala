@@ -322,4 +322,107 @@ class TuiWrappedNavigationSpec extends TuiSpec:
       settled.containsText("Paragraph 0") shouldBe true
       caretIsOnTheText(settled)
   }
+
+  // -- Shift-selection over the same ground (#1292) -------------------------------------------------------------------
+
+  /** The selection a shifted key leaves behind, as `(anchor, focus)`. */
+  private def selectionOf(current: com.serenity.state.models.AppState): Option[(CursorPosition, CursorPosition)] =
+    focusedBuffer(current).flatMap(_.primarySelection).map(selection => (selection.anchor, selection.focus))
+
+  /** Shift+End must select to wherever End alone would have gone. Under word wrap that is the end of the cursor's own
+    * visual row -- End honours that, but the shifted form extended to the end of the whole logical line instead,
+    * selecting the rest of the paragraph from a row the reader can see the end of.
+    */
+  "Shift+End on a wrapped row" should "select to the same column End alone moves to" in runTui(environment) {
+    for
+      _        <- settledScreen
+      _        <- arrowDown
+      onRow    <- state
+      _        <- lineEnd
+      afterEnd <- state
+      // Home returns to the row End started from, so the shifted press below runs from the same place.
+      _          <- lineStart
+      backOnRow  <- state
+      _          <- press(modified(End, shift = true))
+      afterShift <- state
+    yield
+      cursorOf(backOnRow).map(_.column) shouldBe cursorOf(onRow).map(_.column)
+      cursorOf(afterShift).map(_.column) shouldBe cursorOf(afterEnd).map(_.column)
+      selectionOf(afterShift).map(_._1.column) shouldBe cursorOf(onRow).map(_.column)
+      selectionOf(afterShift).map(_._2.column) shouldBe cursorOf(afterEnd).map(_.column)
+  }
+
+  "Shift+Home on a wrapped row" should "select back to the same column Home alone moves to" in runTui(environment) {
+    def intoTheRow = arrowDown >> pressAll(List.fill(10)(ArrowRight)*)
+    for
+      _         <- settledScreen
+      _         <- intoTheRow
+      onRow     <- state
+      _         <- lineStart
+      afterHome <- state
+      // Back to the same offset into the same row, this time with Shift held.
+      _          <- press(modified(Home, ctrl = true))
+      _          <- intoTheRow
+      backOnRow  <- state
+      _          <- press(modified(Home, shift = true))
+      afterShift <- state
+    yield
+      cursorOf(backOnRow).map(_.column) shouldBe cursorOf(onRow).map(_.column)
+      cursorOf(afterShift).map(_.column) shouldBe cursorOf(afterHome).map(_.column)
+      selectionOf(afterShift).map(_._1.column) shouldBe cursorOf(onRow).map(_.column)
+      selectionOf(afterShift).map(_._2.column) shouldBe cursorOf(afterHome).map(_.column)
+  }
+
+  /** Shift+PageDown and Shift+PageUp had no binding at all: the keys decoded with their modifier and then went nowhere,
+    * so a reader could page through a document but never select a page of it.
+    */
+  "Shift+PageDown" should "select a screenful, landing where PageDown alone lands" in runTui(environment) {
+    for
+      _         <- settledScreen
+      start     <- state
+      _         <- press(TuiKeys.PageDown)
+      afterPage <- state
+      // Ctrl+Home is an unconditional jump to the buffer's start, so the shifted press runs from where the plain one
+      // did rather than from wherever the page move left the cursor.
+      _          <- press(modified(Home, ctrl = true))
+      backAtTop  <- state
+      _          <- press(TuiKeys.ShiftPageDown)
+      afterShift <- state
+      settled    <- settledScreen
+    yield
+      cursorOf(backAtTop) shouldBe cursorOf(start)
+      cursorOf(afterShift).map(_.line) shouldBe cursorOf(afterPage).map(_.line)
+      cursorOf(afterShift).map(_.column) shouldBe cursorOf(afterPage).map(_.column)
+      selectionOf(afterShift).map(_._1) shouldBe cursorOf(start)
+      selectionOf(afterShift).map(_._2.line) shouldBe cursorOf(afterPage).map(_.line)
+      caretIsOnTheText(settled)
+  }
+
+  "Shift+PageUp" should "select back a screenful from where the cursor is" in runTui(environment) {
+    for
+      _       <- settledScreen
+      _       <- press(TuiKeys.PageDown)
+      _       <- press(TuiKeys.PageDown)
+      before  <- state
+      _       <- press(TuiKeys.ShiftPageUp)
+      current <- state
+      settled <- settledScreen
+    yield
+      cursorOf(current).map(_.line).getOrElse(-1) should be < cursorOf(before).map(_.line).getOrElse(-1)
+      selectionOf(current).map(_._1) shouldBe cursorOf(before)
+      selectionOf(current).map(_._2) shouldBe cursorOf(current)
+      caretIsOnTheText(settled)
+  }
+
+  "a shifted page move followed by an unshifted one" should "drop the selection again" in runTui(environment) {
+    for
+      _       <- settledScreen
+      _       <- press(TuiKeys.ShiftPageDown)
+      shifted <- state
+      _       <- press(TuiKeys.PageUp)
+      plain   <- state
+    yield
+      selectionOf(shifted) should not be None
+      selectionOf(plain) shouldBe None
+  }
 end TuiWrappedNavigationSpec
