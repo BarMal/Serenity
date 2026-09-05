@@ -1,5 +1,6 @@
 package com.serenity.command
 
+import com.serenity.config.CursorInfoBarSegment
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
@@ -22,10 +23,15 @@ object CommandRunnerSettingsGroups:
     // deterministic catalog instead so the result doesn't depend on the host's installed fonts (issue: Windows
     // Desktop Publish release-blocker -- a Windows-only font whose family name happened to contain a search term
     // used in a settings-search test).
-    fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system
+    fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system,
+    // The segments' actual current order (`AppConfig.cursorInfoBarSegments`) -- threaded through so the reorder
+    // commands `cursorInfoBarSegmentItems` builds reflect it (issue #1298). `Nil` falls back to that function's own
+    // fixed-order, ungated default.
+    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil
   ): List[CommandSurfaceItem.GroupItem] =
-    val cursorModeItem          = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
-    val cursorInfoBarItems      = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(optionSelections)
+    val cursorModeItem = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
+    val cursorInfoBarItems =
+      CommandRunnerSettingsItems.cursorInfoBarSegmentItems(optionSelections, cursorInfoBarSegments)
     val cursorInfoPlacement     = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
     val backgroundStyleItem     = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
     val interfaceDensityItem    = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)

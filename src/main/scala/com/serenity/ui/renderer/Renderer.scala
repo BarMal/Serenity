@@ -3495,8 +3495,22 @@ object Renderer:
       context.surface.text.setFont(context.uiFont)
       val surface = context.surface
 
-      surface.setBackgroundColor(state.persisted.theme.panel.background)
-      surface.setForegroundColor(state.persisted.theme.panel.foreground)
+      // #1295: scoped to the pinned-bottom cursor info bar the same way TextOverlayRenderer scopes its own colour
+      // override to the floating cursor info bar surface -- the legacy gutter (no info bar text to show) keeps the
+      // theme's own panel colours unconditionally.
+      val showsCursorInfoBar =
+        state.persisted.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom &&
+          state.cursorInfoBarText.nonEmpty
+      val infoBarColors = state.persisted.config.cursorInfoBarColors
+      val gutterBackground =
+        if showsCursorInfoBar then infoBarColors.backgroundOr(state.persisted.theme.panel.background)
+        else state.persisted.theme.panel.background
+      val gutterForeground =
+        if showsCursorInfoBar then infoBarColors.foregroundOr(state.persisted.theme.panel.foreground)
+        else state.persisted.theme.panel.foreground
+
+      surface.setBackgroundColor(gutterBackground)
+      surface.setForegroundColor(gutterForeground)
 
       surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
 

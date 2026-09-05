@@ -107,12 +107,20 @@ object ConfigGenerators:
 
   val genCursorConfig: Gen[CursorConfig] =
     for
-      mode      <- oneOfEnum(CursorMode.values)
-      active    <- Gen.option(genColor)
-      inactive  <- Gen.option(genColor)
-      segments  <- Gen.someOf(CursorInfoBarSegment.values.toIndexedSeq).map(_.toList)
-      placement <- oneOfEnum(CursorInfoBarPlacement.values)
-    yield CursorConfig(mode, CursorColorConfig(active, inactive), segments, placement)
+      mode       <- oneOfEnum(CursorMode.values)
+      active     <- Gen.option(genColor)
+      inactive   <- Gen.option(genColor)
+      segments   <- Gen.someOf(CursorInfoBarSegment.values.toIndexedSeq).map(_.toList)
+      placement  <- oneOfEnum(CursorInfoBarPlacement.values)
+      foreground <- Gen.option(genColor)
+      background <- Gen.option(genColor)
+    yield CursorConfig(
+      mode,
+      CursorColorConfig(active, inactive),
+      segments,
+      placement,
+      CursorInfoBarColorConfig(foreground, background)
+    )
 
   val genWindowConfig: Gen[WindowConfig] =
     for

@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{BackgroundStyle, PostProcessingEffect, WindowChromeMode}
+import com.serenity.config.{BackgroundStyle, CursorInfoBarSegment, PostProcessingEffect, WindowChromeMode}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
@@ -188,10 +188,54 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0)
     )
 
+    val moveCommands = items.collect { case c: CommandSurfaceItem.CommandItem => c.command }
+    moveCommands.map(_.name) shouldBe List(
+      "move-cursor-info-bar-title-earlier",
+      "move-cursor-info-bar-title-later",
+      "move-cursor-info-bar-position-earlier",
+      "move-cursor-info-bar-position-later"
+    )
+    // #1298: pressing "move earlier/later" repeatedly shouldn't force a full menu re-open between presses.
+    moveCommands.foreach(_.keepMenuOpenOnSubmit shouldBe true)
+  }
+
+  // #1298: without a `currentOrder`, the reorder commands' listed sequence can't be trusted to match the segments'
+  // real on-screen order -- so, as before, every included segment still offers both directions rather than risking a
+  // wrongly-omitted one.
+  it should "order reorder commands by segmentDefinitions and gate neither direction when no current order is given" in {
+    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(
+      Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0),
+      currentOrder = Nil
+    )
+
     items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe List(
       "move-cursor-info-bar-title-earlier",
       "move-cursor-info-bar-title-later",
       "move-cursor-info-bar-position-earlier",
       "move-cursor-info-bar-position-later"
     )
+  }
+
+  // #1298: given the real order, the commands are listed in that order and only the direction that would actually
+  // move the segment is offered -- Position (first) has no-op "earlier" suppressed, Title (last) has no-op "later"
+  // suppressed.
+  it should "order reorder commands by the current segment order and suppress no-op directions" in {
+    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(
+      Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0),
+      currentOrder = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
+    )
+
+    items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe List(
+      "move-cursor-info-bar-position-later",
+      "move-cursor-info-bar-title-earlier"
+    )
+  }
+
+  it should "expose no cursor info bar reorder commands when fewer than 2 segments are included, given a current order" in {
+    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(
+      Map("cursor-info-bar-position" -> 0),
+      currentOrder = List(CursorInfoBarSegment.Position)
+    )
+
+    items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe Nil
   }
