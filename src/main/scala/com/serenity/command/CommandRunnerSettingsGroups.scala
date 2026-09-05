@@ -32,7 +32,7 @@ object CommandRunnerSettingsGroups:
     // Read off `optionSelections` rather than taking a separate `AppConfig` parameter: it is already the one place
     // every setting's current value reaches this builder, so mode filtering can't drift from what the app-mode
     // toggle itself displays as selected.
-    val appMode                         = if optionSelections.getOrElse("app-mode", 0) == 1 then AppMode.Prose else AppMode.Code
+    val appMode = if optionSelections.getOrElse("app-mode", 0) == 1 then AppMode.Prose else AppMode.Code
     val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 0) == 1
     val cursorModeItem                  = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
     val cursorInfoBarItems =
