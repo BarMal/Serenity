@@ -1,11 +1,16 @@
 package com.serenity
 
-import java.awt.Font
+import java.awt.{Color, Font}
 import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity}
+import com.serenity.config.{
+  CursorInfoBarColorConfig,
+  CursorInfoBarPlacement,
+  CursorInfoBarSegment,
+  InterfaceDensity
+}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -467,6 +472,72 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     surface.drawRunPxCalls.map(_.s).mkString should include("Line 2, Col 3")
     layout.pinnedSurfaceRects.get(SurfaceId("cursor-info-bar")) shouldBe None
+  }
+
+  // #1295: the pinned-bottom cursor info bar bypasses TextOverlayRenderer entirely (it paints straight into the
+  // gutter row), so its colour override needs its own guard here -- TextOverlayRendererSpec only covers the
+  // floating placement's render path.
+  it should "override the pinned cursor info bar's colours when configured" in {
+    val foreground = new Color(0x11, 0x22, 0x33)
+    val background = new Color(0x44, 0x55, 0x66)
+    val buffer0     = Buffer.fromString(BufferId(6), "alpha\nbeta")
+    val buffer      = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        config = AppState.initial.persisted.config
+          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
+          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+          .withCursorInfoBarColors(CursorInfoBarColorConfig(Some(foreground), Some(background)))
+          .withGutter(false),
+        theme = Theme.light
+      )
+    )
+    val surface  = new MockRenderSurface(80, 24)
+    val viewport = ViewportSize(80, 24)
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    val call = surface.drawRunPxCalls.lastOption.getOrElse(fail("Expected a gutter draw call"))
+    call.foreground shouldBe foreground
+    call.background shouldBe background
+  }
+
+  it should "keep the theme's own panel colours in the gutter when no cursor info bar colour override is configured" in {
+    val buffer0 = Buffer.fromString(BufferId(7), "alpha\nbeta")
+    val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        config = AppState.initial.persisted.config
+          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
+          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+          .withGutter(false),
+        theme = Theme.light
+      )
+    )
+    val surface  = new MockRenderSurface(80, 24)
+    val viewport = ViewportSize(80, 24)
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    val call = surface.drawRunPxCalls.lastOption.getOrElse(fail("Expected a gutter draw call"))
+    call.foreground shouldBe Theme.light.panel.foreground
+    call.background shouldBe Theme.light.panel.background
   }
 
   it should "render pinned cursor info with UI font metrics inside the gutter row" in {

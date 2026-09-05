@@ -254,10 +254,22 @@ object CommandRunnerSettingsItems:
   /** One boolean include/exclude toggle per segment (mirroring `enabledOptionItem`'s On/Off shape), plus Move
     * Earlier/Later commands for whichever segments are currently included -- the same discrete-move pattern
     * `workspaceLayoutItems`' panel order group uses, rather than a drag gesture this keyboard-driven app has no
-    * mechanism for. Order isn't tracked by `optionSelections` (only inclusion is), so -- exactly like the panel-order
-    * group -- the move commands are offered whenever 2+ segments are included, not gated on their current order.
+    * mechanism for.
+    *
+    * `currentOrder` is the segments' actual current order (`AppConfig.cursorInfoBarSegments`), so the listed move
+    * commands reflect which segment is really earlier/later and a segment already at an end doesn't offer a no-op
+    * move in that direction (issue #1298). Callers that don't have it yet fall back to `segmentDefinitions`' fixed
+    * order with neither direction gated, exactly as before -- that fixed order can't be trusted to match the real
+    * one, so gating on it could wrongly hide a move that would in fact do something.
+    *
+    * Every move command is `keepMenuOpenOnSubmit` (issue #1298): reordering is naturally a repeated action, so
+    * submitting one leaves the "Cursor" settings group open at its current position instead of closing the whole
+    * command-runner overlay, letting the next move be submitted immediately.
     */
-  private[command] def cursorInfoBarSegmentItems(optionSelections: Map[String, Int]): List[CommandSurfaceItem] =
+  private[command] def cursorInfoBarSegmentItems(
+    optionSelections: Map[String, Int],
+    currentOrder: List[CursorInfoBarSegment] = Nil
+  ): List[CommandSurfaceItem] =
     val segmentDefinitions = List(
       (CursorInfoBarSegment.Title, "Title", "cursor-info-bar-title"),
       (CursorInfoBarSegment.Position, "Position", "cursor-info-bar-position"),
@@ -283,34 +295,46 @@ object CommandRunnerSettingsItems:
           hint = s"Include $shortLabel in the cursor info bar"
         )
     }
-    val includedSegments = segmentDefinitions.filter {
-      case (_, _, optionId) => optionSelections.getOrElse(optionId, 1) == 0
-    }
+    val includedByCurrentOrder = currentOrder.flatMap(segment => segmentDefinitions.find(_._1 == segment))
+    val knowsCurrentOrder      = includedByCurrentOrder.nonEmpty
+    val includedSegments =
+      if knowsCurrentOrder then includedByCurrentOrder
+      else segmentDefinitions.filter { case (_, _, optionId) => optionSelections.getOrElse(optionId, 1) == 0 }
     val orderItems =
       if includedSegments.size < 2 then Nil
       else
-        includedSegments.flatMap {
-          case (segment, shortLabel, _) =>
+        includedSegments.zipWithIndex.flatMap {
+          case ((segment, shortLabel, _), index) =>
+            val offerEarlier = !knowsCurrentOrder || index > 0
+            val offerLater   = !knowsCurrentOrder || index < includedSegments.size - 1
             List(
-              CommandSurfaceItem.CommandItem(
-                Command.typed(
-                  s"move-cursor-info-bar-${segment.configKey}-earlier",
-                  s"Move the $shortLabel segment earlier in the cursor info bar.",
-                  CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentEarlier(segment))),
-                  CommandCategory.Settings,
-                  label = s"Move Info Bar $shortLabel Earlier"
+              Option.when(offerEarlier)(
+                CommandSurfaceItem.CommandItem(
+                  Command.typed(
+                    s"move-cursor-info-bar-${segment.configKey}-earlier",
+                    s"Move the $shortLabel segment earlier in the cursor info bar.",
+                    CommandIntent.Settings(
+                      SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentEarlier(segment))
+                    ),
+                    CommandCategory.Settings,
+                    label = s"Move Info Bar $shortLabel Earlier",
+                    keepMenuOpenOnSubmit = true
+                  )
                 )
               ),
-              CommandSurfaceItem.CommandItem(
-                Command.typed(
-                  s"move-cursor-info-bar-${segment.configKey}-later",
-                  s"Move the $shortLabel segment later in the cursor info bar.",
-                  CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentLater(segment))),
-                  CommandCategory.Settings,
-                  label = s"Move Info Bar $shortLabel Later"
+              Option.when(offerLater)(
+                CommandSurfaceItem.CommandItem(
+                  Command.typed(
+                    s"move-cursor-info-bar-${segment.configKey}-later",
+                    s"Move the $shortLabel segment later in the cursor info bar.",
+                    CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentLater(segment))),
+                    CommandCategory.Settings,
+                    label = s"Move Info Bar $shortLabel Later",
+                    keepMenuOpenOnSubmit = true
+                  )
                 )
               )
-            )
+            ).flatten
         }
     toggleItems ++ orderItems
 

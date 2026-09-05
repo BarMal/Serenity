@@ -468,11 +468,26 @@ final case class CursorColorConfig(
   def inactiveOr(activeColor: Color): Color =
     inactive.getOrElse(activeColor)
 
+/** #1295: `None` (default) keeps the active theme's own panel colour for the cursor info bar, matching every other
+  * floating panel; `Some` overrides just that one surface's foreground/background, independent of theme -- mirrors
+  * [[CursorColorConfig]]'s active/inactive override shape.
+  */
+final case class CursorInfoBarColorConfig(
+    foreground: Option[Color] = None,
+    background: Option[Color] = None
+):
+  def foregroundOr(default: Color): Color =
+    foreground.getOrElse(default)
+
+  def backgroundOr(default: Color): Color =
+    background.getOrElse(default)
+
 final case class CursorConfig(
     mode: CursorMode = CursorMode.Blink,
     colors: CursorColorConfig = CursorColorConfig(),
     infoBarSegments: List[CursorInfoBarSegment] = Nil,
-    infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating
+    infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating,
+    infoBarColors: CursorInfoBarColorConfig = CursorInfoBarColorConfig()
 )
 
 final case class EditorConfig(
@@ -1980,6 +1995,9 @@ final case class AppConfig(
   def cursorInfoBarPlacement: CursorInfoBarPlacement =
     cursorConfig.infoBarPlacement
 
+  def cursorInfoBarColors: CursorInfoBarColorConfig =
+    cursorConfig.infoBarColors
+
   def withCursorConfig(config: CursorConfig): AppConfig =
     copy(cursorConfig = config)
 
@@ -1994,6 +2012,9 @@ final case class AppConfig(
 
   def withCursorInfoBarPlacement(placement: CursorInfoBarPlacement): AppConfig =
     withCursorConfig(cursorConfig.copy(infoBarPlacement = placement))
+
+  def withCursorInfoBarColors(colors: CursorInfoBarColorConfig): AppConfig =
+    withCursorConfig(cursorConfig.copy(infoBarColors = colors))
 
   def withWindowConfig(config: WindowConfig): AppConfig =
     copy(windowConfig = config.normalized)

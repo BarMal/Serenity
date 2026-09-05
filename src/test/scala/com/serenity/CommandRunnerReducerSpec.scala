@@ -931,6 +931,48 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       firstUiFontIntent
   }
 
+  // #1298: an ordinary settings CommandItem still closes the whole command-runner overlay on submit -- only a
+  // command explicitly marked `keepMenuOpenOnSubmit` (the info bar segment movers, below) keeps it open.
+  it should "close the command-runner overlay when an ordinary settings command is submitted from a submenu" in {
+    val registry = CommandRegistry.default
+    val state    = settingsStateOnItem("settings-ui-font", "ui-font")
+
+    val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
+
+    submitted.state.commandRunnerSurface shouldBe None
+  }
+
+  // #1298: reordering the cursor info bar's segments used to close the whole settings menu on every single move,
+  // forcing a full re-open/re-navigate round trip to nudge one segment more than one step. Moving a segment now
+  // leaves the "Cursor" group open so the next move can be submitted immediately.
+  it should "keep the settings submenu open after moving a cursor info bar segment" in {
+    val registry = CommandRegistry.default
+    val config = AppConfig.default.withCursorInfoBarSegments(
+      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
+    )
+    val opened      = CommandRunner.empty.activate(registry, config).openSettings
+    val groupIndex  = opened.visibleItems.indexWhere(_.id == "settings-cursor")
+    val entered     = opened.withSelectedVisibleIndex(groupIndex).enterSelectedGroup
+    val moveIndex   = entered.submenuItems("settings-cursor").indexWhere(_.id == "move-cursor-info-bar-position-later")
+    val positioned  = entered.withSelectedFocusedSubmenuIndex(moveIndex)
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(positioned),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val state = AppState(
+      persisted = Persisted(layout = Layout.empty, buffers = Map.empty, focus = Focus.Surface(surface.id)),
+      runtime = Runtime(uiSurfaces = List(surface), focusHistory = List(Focus.EditorPane(PaneId(2))))
+    )
+
+    val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
+
+    submitted.state.commandRunnerSurface shouldBe defined
+    runnerFrom(submitted.state).activeSubmenuGroupId shouldBe Some("settings-cursor")
+    submitted.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.name } shouldBe
+      Some("move-cursor-info-bar-position-later")
+  }
+
   it should "enter the edit preset submenu from UI presets" in {
     val registry = CommandRegistry.default
     val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
