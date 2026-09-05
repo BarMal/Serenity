@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-05
+
+- Stopped a click on the floating cursor info bar from placing the caret in the hidden text behind it: the bar is derived per frame rather than stored, so the guard that keeps clicks out of a floating surface never saw it, and the bar sits exactly where the reader is working.
+- Made Shift+Home and Shift+End select to the same place Home and End move to -- the cursor's own visual row under word wrap, rather than the whole logical line.
+- Added Shift+PageUp and Shift+PageDown, which select a screenful of visual rows; the keys decoded with their modifier but had no binding at all, so they did nothing.
+- Kept screen cells and buffer columns apart when grouping an animated run by colour, so a colour group after a wide glyph starts on the right cell and a surrogate pair is never split across two groups.
+
 ## 2026-09-04
 
 - Property-tested the config format over generated settings, and fixed what it found: an explicit text-scale mode of "off" being overridden to "manual" by the multiplier, blur radius and background style never being written at all, and percentage settings coming back a floating-point hair away from what was saved.

@@ -54,18 +54,23 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
     extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 4), CursorPosition(0, 0)))
   }
 
+  /** The focus lands `upstream`, exactly as End's own does: the column ending a wrapped row is the column starting the
+    * next one, and the affinity is what says the selection stops at the end of the row it was extended along rather
+    * than at the far left of the row below. Unwrapped, as here, the two rows never meet -- but Shift+End shares End's
+    * landing place now (#1292), and that includes how it marks it.
+    */
   "ExtendSelectionToLineEnd" should "anchor at the cursor and move the focus to the end of the line" in {
     val extended = reduce(bufferOf("abcdef", CursorPosition(0, 2)), ExtendSelectionToLineEnd)
 
-    extended.editing.cursors shouldBe List(CursorPosition(0, 6))
-    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(0, 6)))
+    extended.editing.cursors shouldBe List(CursorPosition(0, 6).upstream)
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(0, 6).upstream))
   }
 
   it should "keep the original anchor across repeated presses" in {
     val extended =
       reduce(bufferOf("abcdef", CursorPosition(0, 2)), ExtendSelectionToLineEnd, ExtendSelectionToLineEnd)
 
-    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(0, 6)))
+    extended.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(0, 6).upstream))
   }
 
   "ExtendSelectionWordLeft" should "anchor at the cursor and move the focus to the previous word boundary" in {

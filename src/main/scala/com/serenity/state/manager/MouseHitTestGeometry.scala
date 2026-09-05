@@ -14,9 +14,13 @@ private[manager] object MouseHitTestGeometry:
   def floatingCellMetrics(state: AppState): CellMetrics =
     CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
 
+  /** `visibleFloatingSurfaces`, not `floatingSurfaces`: the cursor info bar is derived per frame rather than stored,
+    * and it floats over the document right where the caret is -- so reading the stored list alone let every click on
+    * the bar fall through to the hidden text it was covering (#1292).
+    */
   def isInsideFloatingSurface(event: MouseInputEvent, state: AppState): Boolean =
     state.runtime.viewportSize.exists { viewportSize =>
-      state.floatingSurfaces.exists(insideFloatingSurface(event, state, viewportSize, _))
+      state.visibleFloatingSurfaces.exists(insideFloatingSurface(event, state, viewportSize, _))
     }
 
   /** Whether `event` lands inside a single floating surface's frame -- the per-surface primitive
