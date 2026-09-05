@@ -516,7 +516,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .copy(editingPresetName = Some("Review"))
       .updateSearchTerm("default document")
     val activated = activeState(registry)
@@ -1309,7 +1309,11 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "emit authored document comment text from the navigation input item" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-navigation", "document-comment")
+    val state = settingsStateOnItem(
+      "settings-navigation",
+      "document-comment",
+      config = AppConfig.default.withShowAllSettingsRegardlessOfMode(true)
+    )
 
     val typed =
       "Tighten this opening".foldLeft(state)((s, char) =>

@@ -226,7 +226,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry(commands)
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .openSettings
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
@@ -277,7 +277,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
         .trim
 
     headerLine should include("Settings")
-    optionLine should include("Panels & Workspace")
+    optionLine should include("App Mode")
     optionLine should not include "["
 
     surface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor) should have size 1

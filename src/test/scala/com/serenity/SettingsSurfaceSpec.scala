@@ -33,7 +33,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
   "Settings surface" should "show peer categories and search leaves with their current values and paths" in {
     given CommandRegistry = registry
-    val runner            = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val runner            = CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true)).openSettings
 
     runner.settingsSurfaceItems.collect {
       case group: CommandSurfaceItem.GroupItem => group.label
@@ -59,7 +59,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
   // depth, ending in a full dismiss once there is nothing left to pop.
   it should "make Backspace a no-op with no text to delete, and Escape go up one level at a time to dismiss" in {
     val opened = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .openSettings
       .withSelectedItem("settings-document-writing")
       .enterSelectedGroup
@@ -119,7 +119,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "describe the selected group, option, and input action in its footer" in {
-    val root = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val root = CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true)).openSettings
     val option = root.withDrilledSettingsSurface(
       SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance"))
     )

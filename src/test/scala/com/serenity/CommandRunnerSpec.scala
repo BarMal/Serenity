@@ -353,13 +353,15 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
   it should "group related settings into expandable submenu rows" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
+    // "Show all settings" is on: this test inspects the full taxonomy, mode filtering (issue #1297) aside.
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .openSettings
 
     val groupItems = runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group }
 
     groupItems.map(_.id) shouldBe List(
+      "settings-app-mode",
       "settings-workspace-layout",
       "settings-document-writing",
       "settings-editor-view",
@@ -377,11 +379,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
         .find(_.id == id)
         .getOrElse(fail(s"missing nested group $id"))
 
-    groupItems.head.label shouldBe "Panels & Workspace"
-    groupItems.head.children.map(_.id) shouldBe List(
+    val workspaceLayoutGroup = group("settings-workspace-layout")
+    workspaceLayoutGroup.label shouldBe "Panels & Workspace"
+    workspaceLayoutGroup.children.map(_.id) shouldBe List(
       "settings-panel-pins"
     )
-    val panelPins = groupById(groupItems.head.children, "settings-panel-pins")
+    val panelPins = groupById(workspaceLayoutGroup.children, "settings-panel-pins")
     panelPins.label shouldBe "Panel Pins"
     panelPins.children.map(_.id) shouldBe List(
       "panel-explorer-pin",
@@ -658,7 +661,12 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default.withDefaultDocumentMode(DefaultDocumentMode.RichText))
+      .activate(
+        registry,
+        AppConfig.default
+          .withDefaultDocumentMode(DefaultDocumentMode.RichText)
+          .withShowAllSettingsRegardlessOfMode(true)
+      )
 
     val documentDefaultsGroup = groupByIdRecursive(runner.settingsGroups, "settings-document-defaults")
 
@@ -683,7 +691,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
 
     val richTextGroup = groupByIdRecursive(runner.settingsGroups, "settings-rich-text")
     val inputs        = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
@@ -701,14 +709,16 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(
         registry,
-        AppConfig.default.withSpellCheck(
-          SpellCheckConfig(
-            enabled = true,
-            languages = List("en", "fr"),
-            dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
-            additionalWords = List("serenity")
+        AppConfig.default
+          .withSpellCheck(
+            SpellCheckConfig(
+              enabled = true,
+              languages = List("en", "fr"),
+              dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
+              additionalWords = List("serenity")
+            )
           )
-        )
+          .withShowAllSettingsRegardlessOfMode(true)
       )
 
     val spellGroup = groupByIdRecursive(runner.settingsGroups, "settings-spellcheck")
@@ -998,7 +1008,7 @@ class CommandRunnerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .updateSearchTerm("font")
 
     runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-prose-font")

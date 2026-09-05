@@ -15,8 +15,10 @@ class CommandRunnerSettingsSurfaceMigrationSpec extends AnyFlatSpec with Matcher
 
   private val registry = CommandRegistry.default
 
+  // "Show all settings" is on: this spec exercises page-stack navigation across the full settings taxonomy, mode
+  // filtering (issue #1297) aside.
   private def opened: CommandRunner =
-    CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true)).openSettings
 
   "openSettings" should "leave no active settings-surface stack" in {
     opened.activeSettingsSurface shouldBe None
