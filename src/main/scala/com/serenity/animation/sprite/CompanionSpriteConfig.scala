@@ -2,8 +2,8 @@ package com.serenity.animation.sprite
 
 import com.serenity.ui.layout.PanelPosition
 
-/** Persisted controls for the companion sprite pane, mirroring `com.serenity.animation.WindowSitterConfig`'s shape:
-  * an enabled toggle, plus the settings that shape it once on.
+/** Persisted controls for the companion sprite pane, mirroring `com.serenity.animation.WindowSitterConfig`'s shape: an
+  * enabled toggle, plus the settings that shape it once on.
   */
 final case class CompanionSpriteConfig(
     enabled: Boolean = false,

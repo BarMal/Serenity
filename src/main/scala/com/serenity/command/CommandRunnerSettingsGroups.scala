@@ -24,17 +24,17 @@ object CommandRunnerSettingsGroups:
     // used in a settings-search test).
     fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system
   ): List[CommandSurfaceItem.GroupItem] =
-    val cursorModeItem          = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
-    val cursorInfoBarItems      = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(optionSelections)
-    val cursorInfoPlacement     = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
-    val backgroundStyleItem     = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
-    val interfaceDensityItem    = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
-    val windowChromeItem        = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
+    val cursorModeItem             = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
+    val cursorInfoBarItems         = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(optionSelections)
+    val cursorInfoPlacement        = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
+    val backgroundStyleItem        = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
+    val interfaceDensityItem       = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
+    val windowChromeItem           = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
     val windowSitterEnabledItem    = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
     val windowSitterActionItem     = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
     val companionSpriteEnabledItem = CommandRunnerSettingsItems.companionSpriteEnabledOptionItem(optionSelections)
     val visualFlairLevelItem       = CommandRunnerSettingsItems.visualFlairLevelOptionItem(optionSelections)
-    val materialPresetItem      = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
+    val materialPresetItem         = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
     val postProcessingItem =
       annotateInertInTui(CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections), isTuiMode)
     val uiShadowsItem               = CommandRunnerSettingsItems.uiShadowsOptionItem(optionSelections)

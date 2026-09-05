@@ -5,11 +5,8 @@ import org.scalatest.matchers.should.Matchers
 
 class VisualFlairLevelSpec extends AnyFlatSpec with Matchers:
 
-  "VisualFlairLevel.fromConfigKey" should "parse every value's own config key" in {
-    VisualFlairLevel.values.foreach { level =>
-      VisualFlairLevel.fromConfigKey(level.configKey) shouldBe Some(level)
-    }
-  }
+  "VisualFlairLevel.fromConfigKey" should "parse every value's own config key" in
+    VisualFlairLevel.values.foreach(level => VisualFlairLevel.fromConfigKey(level.configKey) shouldBe Some(level))
 
   it should "be case- and whitespace-insensitive" in {
     VisualFlairLevel.fromConfigKey(" Full ") shouldBe Some(VisualFlairLevel.Full)

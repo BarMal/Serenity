@@ -495,7 +495,9 @@ object CommandRunnerSettingsItems:
       options = List(
         CommandOption(
           "Full",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Full)))
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Full))
+          )
         ),
         CommandOption(
           "Reduced",
@@ -505,7 +507,9 @@ object CommandRunnerSettingsItems:
         ),
         CommandOption(
           "Off",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Off)))
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
+          )
         )
       ),
       selectedIndex = optionSelections.getOrElse("visual-flair-level", 0),

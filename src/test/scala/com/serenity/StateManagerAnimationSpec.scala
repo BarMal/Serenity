@@ -130,7 +130,7 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
   it should "advance the companion sprite's frame on every tick while it is enabled" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val config              = AppConfig.default.withCompanionSpriteConfig(
+    val config = AppConfig.default.withCompanionSpriteConfig(
       AppConfig.default.companionSpriteConfig.copy(enabled = true)
     )
     val sm = StateManager.apply(logger, initialConfig = config).unsafeRunSync()

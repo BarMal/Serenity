@@ -65,13 +65,14 @@ final private[manager] class StateManagerEditorCapability(
       hasCompanionSprite   = state.persisted.config.companionSpriteConfig.enabled && flairLevel != VisualFlairLevel.Off
       stillActive <-
         if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasWindowSitter &&
-          !hasCompanionSprite
+            !hasCompanionSprite
         then IO.pure(false)
         else
           val updatedTransition = state.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
           val advancedCompanionSprite =
             if hasCompanionSprite then
-              state.runtime.companionSprite.tick(companionSpriteRandom, reducedRate = flairLevel == VisualFlairLevel.Reduced)
+              state.runtime.companionSprite
+                .tick(companionSpriteRandom, reducedRate = flairLevel == VisualFlairLevel.Reduced)
             else state.runtime.companionSprite
           val stateWithAdvancedBuffers = state.copy(
             runtime = state.runtime.copy(

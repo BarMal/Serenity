@@ -4,14 +4,14 @@ import java.awt.Color
 
 import scala.concurrent.duration.DurationInt
 
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope, WindowSitterAction, WindowSitterConfig}
 import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope, WindowSitterAction, WindowSitterConfig}
 import com.serenity.config.*
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
-import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.PanelPosition
 import org.scalacheck.Gen
 
 /** Generators over [[AppConfig]], for properties about the config file format.

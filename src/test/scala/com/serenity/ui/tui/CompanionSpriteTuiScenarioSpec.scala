@@ -65,7 +65,7 @@ class CompanionSpriteTuiScenarioSpec extends AnyFlatSpec with Matchers with Even
       glyphCells should not be empty
     }
 
-    pipeOut.write(Array((17: Byte))) // Ctrl+Q
+    pipeOut.write(Array(17: Byte)) // Ctrl+Q
     pipeOut.flush()
     fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
   }
@@ -102,7 +102,7 @@ class CompanionSpriteTuiScenarioSpec extends AnyFlatSpec with Matchers with Even
     yield (col, row)
     glyphCells shouldBe empty
 
-    pipeOut.write(Array((17: Byte)))
+    pipeOut.write(Array(17: Byte))
     pipeOut.flush()
     fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
   }

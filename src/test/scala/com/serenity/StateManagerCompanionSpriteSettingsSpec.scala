@@ -88,7 +88,11 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
   it should "remove the companion pane when flair drops to Off, even while the sprite is still enabled" in {
     val stateManager = createStateManager()
     execute(stateManager, PanelChromeIntent.SetCompanionSpriteEnabled(true))
-    stateManager.getCurrentState.unsafeRunSync().runtime.uiSurfaces.exists(_.id == SurfaceId.CompanionSprite) shouldBe true
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .runtime
+      .uiSurfaces
+      .exists(_.id == SurfaceId.CompanionSprite) shouldBe true
 
     execute(stateManager, PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
 
@@ -104,7 +108,11 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
 
     execute(stateManager, PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Full))
 
-    stateManager.getCurrentState.unsafeRunSync().runtime.uiSurfaces.exists(_.id == SurfaceId.CompanionSprite) shouldBe true
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .runtime
+      .uiSurfaces
+      .exists(_.id == SurfaceId.CompanionSprite) shouldBe true
   }
 
   "CompanionSpriteConfig.default" should "name the bundled placeholder character" in {

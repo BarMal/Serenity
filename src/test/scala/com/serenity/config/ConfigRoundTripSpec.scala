@@ -6,8 +6,8 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration.DurationInt
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterAction, WindowSitterConfig}
 import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
+import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterAction, WindowSitterConfig}
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader

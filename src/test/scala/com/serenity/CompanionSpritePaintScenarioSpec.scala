@@ -27,7 +27,8 @@ class CompanionSpritePaintScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not draw anything when disabled" in {
-    val driver = UiScenarioDriver.create("companion-sprite-gui-disabled", initialConfig = AppConfig.default).unsafeRunSync()
+    val driver =
+      UiScenarioDriver.create("companion-sprite-gui-disabled", initialConfig = AppConfig.default).unsafeRunSync()
 
     val frame = driver.renderFrame("disabled").unsafeRunSync()
 

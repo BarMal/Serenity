@@ -16,9 +16,8 @@ final case class SpriteSheetLayout(clips: Map[String, SpriteClip]):
 
 object SpriteSheetLayout:
 
-  /** A single horizontal strip of `frameCount` equally sized, contiguous frames -- the shape
-    * `CompanionSpriteAssets`'s generated placeholder sheet uses, and the simplest shape a hand-drawn replacement sheet
-    * can use too.
+  /** A single horizontal strip of `frameCount` equally sized, contiguous frames -- the shape `CompanionSpriteAssets`'s
+    * generated placeholder sheet uses, and the simplest shape a hand-drawn replacement sheet can use too.
     */
   def horizontalStrip(clipName: String, frameWidth: Int, frameHeight: Int, frameCount: Int): SpriteSheetLayout =
     val frames = Vector.tabulate(frameCount)(i => SpriteFrameRect(i * frameWidth, 0, frameWidth, frameHeight))

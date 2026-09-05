@@ -264,10 +264,10 @@ enum SurfaceContent:
     */
   case ShortcutsHelp(groups: List[ShortcutHelpGroup])
 
-  /** The companion sprite pane -- a small idling pixel-art character. Carries no payload: the frame it currently
-    * shows lives in `Runtime.companionSprite`, advanced by the same per-tick pass as every other surface animation
-    * (see `AnimationChoreography`), not resolved into cell text here. `SurfaceContentResolver` resolves this to an
-    * empty `ResolvedSurfaceContent` -- painting the sprite bitmap is `Renderer`'s own dedicated paint step, alongside
+  /** The companion sprite pane -- a small idling pixel-art character. Carries no payload: the frame it currently shows
+    * lives in `Runtime.companionSprite`, advanced by the same per-tick pass as every other surface animation (see
+    * `AnimationChoreography`), not resolved into cell text here. `SurfaceContentResolver` resolves this to an empty
+    * `ResolvedSurfaceContent` -- painting the sprite bitmap is `Renderer`'s own dedicated paint step, alongside
     * wherever pinned panels are painted, not the generic text-overlay path every other case here goes through.
     */
   case CompanionSprite

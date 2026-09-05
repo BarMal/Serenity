@@ -28,7 +28,9 @@ class HalfBlockImageRendererSpec extends AnyFlatSpec with Matchers:
 
     grid should have length 1
     grid.head should have length 1
-    grid.head.head shouldBe Some(HalfBlockImageRenderer.HalfBlockCell(new Color(0xffff0000, true), new Color(0xff0000ff, true)))
+    grid.head.head shouldBe Some(
+      HalfBlockImageRenderer.HalfBlockCell(new Color(0xffff0000, true), new Color(0xff0000ff, true))
+    )
   }
 
   it should "produce one row of cells per two source pixel rows, and one column per source pixel column" in {
@@ -47,7 +49,7 @@ class HalfBlockImageRendererSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "substitute the fallback color for a transparent half of an otherwise opaque cell" in {
-    val image = solid(1, 2) { case (_, y) => if y == 0 then 0xffff0000 else 0x00000000 }
+    val image    = solid(1, 2) { case (_, y) => if y == 0 then 0xffff0000 else 0x00000000 }
     val fallback = new Color(10, 20, 30)
 
     val grid = HalfBlockImageRenderer.render(image, cellsWide = 1, cellsHigh = 1, fallback = fallback)

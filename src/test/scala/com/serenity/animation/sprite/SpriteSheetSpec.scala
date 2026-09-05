@@ -13,11 +13,12 @@ class SpriteSheetSpec extends AnyFlatSpec with Matchers:
   private def testSheet(colors: Vector[Int]): BufferedImage =
     val frameSize = 2
     val sheet     = new BufferedImage(frameSize * colors.length, frameSize, BufferedImage.TYPE_INT_ARGB)
-    colors.zipWithIndex.foreach { case (color, index) =>
-      for
-        x <- 0 until frameSize
-        y <- 0 until frameSize
-      do sheet.setRGB(index * frameSize + x, y, color)
+    colors.zipWithIndex.foreach {
+      case (color, index) =>
+        for
+          x <- 0 until frameSize
+          y <- 0 until frameSize
+        do sheet.setRGB(index * frameSize + x, y, color)
     }
     sheet
 
@@ -50,11 +51,12 @@ class SpriteSheetSpec extends AnyFlatSpec with Matchers:
     val frames = SpriteSheetSlicer.frames(sheet, clip)
 
     frames should have length 4
-    frames.zip(colors).foreach { case (frame, color) =>
-      frame.getWidth shouldBe 2
-      frame.getHeight shouldBe 2
-      frame.getRGB(0, 0) shouldBe color
-      frame.getRGB(1, 1) shouldBe color
+    frames.zip(colors).foreach {
+      case (frame, color) =>
+        frame.getWidth shouldBe 2
+        frame.getHeight shouldBe 2
+        frame.getRGB(0, 0) shouldBe color
+        frame.getRGB(1, 1) shouldBe color
     }
   }
 

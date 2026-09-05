@@ -11,21 +11,21 @@ import javax.imageio.ImageIO
   */
 object CompanionSpriteAssets:
 
-  val IdleClipName: String       = "idle"
-  val IdleFrameSize: Int         = 16
-  val IdleFrameCount: Int        = 4
+  val IdleClipName: String = "idle"
+  val IdleFrameSize: Int   = 16
+  val IdleFrameCount: Int  = 4
   val IdleLayout: SpriteSheetLayout =
     SpriteSheetLayout.horizontalStrip(IdleClipName, IdleFrameSize, IdleFrameSize, IdleFrameCount)
 
-  /** `None` when the classpath resource is missing or fails to decode -- mirrors
-    * `SwingWindow.applicationIconImages`'s own `Option(...).flatMap(...)` shape for loading a bundled image, so a
-    * companion pane with no loadable sheet degrades to simply not painting rather than crashing render.
+  /** `None` when the classpath resource is missing or fails to decode -- mirrors `SwingWindow.applicationIconImages`'s
+    * own `Option(...).flatMap(...)` shape for loading a bundled image, so a companion pane with no loadable sheet
+    * degrades to simply not painting rather than crashing render.
     */
   def loadSheet(character: CompanionCharacter): Option[BufferedImage] =
     Option(getClass.getResource(character.sheetResourcePath)).flatMap(url => Option(ImageIO.read(url)))
 
-  /** Every clip the sheet actually has frames for, sliced and ready to paint. Only [[IdleLayout]] is declared today,
-    * so this is always either empty (sheet failed to load) or `Map("idle" -> <4 frames>)`; painting a non-idle
+  /** Every clip the sheet actually has frames for, sliced and ready to paint. Only [[IdleLayout]] is declared today, so
+    * this is always either empty (sheet failed to load) or `Map("idle" -> <4 frames>)`; painting a non-idle
     * [[CompanionSpriteAction]] before a matching clip exists falls back to these idle frames (see
     * [[CompanionSpriteFrames.framesFor]]).
     *
@@ -48,8 +48,7 @@ object CompanionSpriteAssets:
   private lazy val framesByCharacter: Map[CompanionCharacter, Map[String, Vector[BufferedImage]]] =
     CompanionCharacter.values.map(character => character -> loadFramesFromDisk(character)).toMap
 
-/** Resolves a [[CompanionSpriteState]] to the frame it should currently paint, given a sheet's actually-loaded
-  * clips.
+/** Resolves a [[CompanionSpriteState]] to the frame it should currently paint, given a sheet's actually-loaded clips.
   */
 object CompanionSpriteFrames:
 

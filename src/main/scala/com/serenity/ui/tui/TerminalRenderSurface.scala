@@ -190,15 +190,16 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val previousForeground = screenBuffer.getForegroundColor
     val previousBackground = screenBuffer.getBackgroundColor
-    val grid                = HalfBlockImageRenderer.render(image, width, height, fallback = previousBackground)
-    grid.zipWithIndex.foreach { case (row, rowOffset) =>
-      row.zipWithIndex.foreach {
-        case (Some(cell), colOffset) =>
-          screenBuffer.setForegroundColor(cell.foreground)
-          screenBuffer.setBackgroundColor(cell.background)
-          screenBuffer.putString(x + colOffset, y + rowOffset, HalfBlockImageRenderer.UpperHalfBlock.toString)
-        case (None, _) => ()
-      }
+    val grid               = HalfBlockImageRenderer.render(image, width, height, fallback = previousBackground)
+    grid.zipWithIndex.foreach {
+      case (row, rowOffset) =>
+        row.zipWithIndex.foreach {
+          case (Some(cell), colOffset) =>
+            screenBuffer.setForegroundColor(cell.foreground)
+            screenBuffer.setBackgroundColor(cell.background)
+            screenBuffer.putString(x + colOffset, y + rowOffset, HalfBlockImageRenderer.UpperHalfBlock.toString)
+          case (None, _) => ()
+        }
     }
     screenBuffer.setForegroundColor(previousForeground)
     screenBuffer.setBackgroundColor(previousBackground)

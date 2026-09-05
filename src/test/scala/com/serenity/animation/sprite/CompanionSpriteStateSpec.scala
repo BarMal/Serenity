@@ -42,7 +42,9 @@ class CompanionSpriteStateSpec extends AnyFlatSpec with Matchers:
     val random = new Random(7L)
     val state  = CompanionSpriteState(frameCounts = frameCounts)
     val ticked =
-      (1 to CompanionSpriteState.MinIdleTicksBeforeAction).foldLeft(state)((s, _) => s.advance(random, actionChance = 1.0))
+      (1 to CompanionSpriteState.MinIdleTicksBeforeAction).foldLeft(state)((s, _) =>
+        s.advance(random, actionChance = 1.0)
+      )
 
     ticked.action should not be CompanionSpriteAction.Idle
     ticked.frameIndex shouldBe 0
@@ -75,7 +77,9 @@ class CompanionSpriteStateSpec extends AnyFlatSpec with Matchers:
     val random = new Random(9L)
     val state  = CompanionSpriteState(frameCounts = frameCounts)
     val ticked =
-      (1 until CompanionSpriteState.MinIdleTicksBeforeAction).foldLeft(state)((s, _) => s.advance(random, actionChance = 1.0))
+      (1 until CompanionSpriteState.MinIdleTicksBeforeAction).foldLeft(state)((s, _) =>
+        s.advance(random, actionChance = 1.0)
+      )
 
     ticked.action shouldBe CompanionSpriteAction.Idle
   }

@@ -6,8 +6,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** `tick` is the render-loop entry point: `advance` unthrottled, or throttled to half rate at the "Reduced" visual
-  * flair tier (`VisualFlairLevel.Reduced` lives in `com.serenity.config`, a layer above this package, so the
-  * throttle itself is expressed as a plain `reducedRate: Boolean` rather than depending on that type).
+  * flair tier (`VisualFlairLevel.Reduced` lives in `com.serenity.config`, a layer above this package, so the throttle
+  * itself is expressed as a plain `reducedRate: Boolean` rather than depending on that type).
   */
 class CompanionSpriteStateTickSpec extends AnyFlatSpec with Matchers:
 

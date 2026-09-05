@@ -10,22 +10,22 @@ import scala.util.Random
 enum CompanionSpriteAction:
   case Idle, Walk, Shoot, Morph
 
-/** Frame-cycling state for the companion sprite: which clip is playing, which frame of it is showing, and how long
-  * the current clip has been running. Advanced one tick at a time by [[advance]], mirroring
+/** Frame-cycling state for the companion sprite: which clip is playing, which frame of it is showing, and how long the
+  * current clip has been running. Advanced one tick at a time by [[advance]], mirroring
   * `com.serenity.animation.WindowSitter`'s own tick-driven frame cycling.
   *
   * The transition policy between clips is deliberately explicit rather than "pick uniformly at random every tick",
   * which would look visually chaotic:
   *   1. Only idling rolls for a new action, and only once at least [[CompanionSpriteState.MinIdleTicksBeforeAction]]
   *      ticks have passed in the current idle run.
-  *   2. Every non-idle action always returns to `Idle` the moment it completes one full loop -- two actions never
-  *      chain directly into one another.
+  *   2. Every non-idle action always returns to `Idle` the moment it completes one full loop -- two actions never chain
+  *      directly into one another.
   *   3. The action chosen never repeats the one just played (tracked in [[lastAction]]), so consecutive rolls read as
   *      varied rather than "the same trick over and over".
   *
-  * Action selection is pseudo-random but never touches unseeded global randomness itself: every call site passes in
-  * a `Random`, so a test (or a production caller that wants to replay a session) can make the whole trace
-  * deterministic by fixing the seed.
+  * Action selection is pseudo-random but never touches unseeded global randomness itself: every call site passes in a
+  * `Random`, so a test (or a production caller that wants to replay a session) can make the whole trace deterministic
+  * by fixing the seed.
   */
 final case class CompanionSpriteState(
     action: CompanionSpriteAction = CompanionSpriteAction.Idle,
@@ -41,9 +41,9 @@ final case class CompanionSpriteState(
 
   def frameCount: Int = frameCounts.getOrElse(action, 1).max(1)
 
-  /** The render-loop entry point: `advance` at full rate, or throttled to every second call when `reducedRate` is
-    * set -- the "Reduced" visual flair tier's lower tick rate (`VisualFlairLevel` itself lives in `com.serenity.config`,
-    * a layer above this package, so the throttle is a plain boolean rather than a dependency on that type).
+  /** The render-loop entry point: `advance` at full rate, or throttled to every second call when `reducedRate` is set
+    * -- the "Reduced" visual flair tier's lower tick rate (`VisualFlairLevel` itself lives in `com.serenity.config`, a
+    * layer above this package, so the throttle is a plain boolean rather than a dependency on that type).
     */
   def tick(
     random: Random,

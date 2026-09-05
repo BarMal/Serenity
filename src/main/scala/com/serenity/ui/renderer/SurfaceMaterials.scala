@@ -16,8 +16,8 @@ object SurfaceMaterials:
       case MaterialPreset.Custom  => alphaForBackground(config.surfaceConfig.backgroundStyle, theme)
 
   /** Background blur is real GPU/CPU work per frame -- a cost [[VisualFlairLevel]] exists to let a viewer on a slow
-    * link or a battery-powered machine turn down independently of the material preset that would otherwise call for
-    * it: `Reduced` halves whatever radius the preset picked, `Off` drops it to zero outright.
+    * link or a battery-powered machine turn down independently of the material preset that would otherwise call for it:
+    * `Reduced` halves whatever radius the preset picked, `Off` drops it to zero outright.
     */
   def effectiveBlurRadius(config: AppConfig): Float =
     val presetRadius = config.surfaceConfig.materialPreset match

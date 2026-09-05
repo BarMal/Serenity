@@ -3365,8 +3365,8 @@ object Renderer:
     * frame drawn directly via `surface.pixels.drawImage` -- on the GUI surface a real bitmap blit, on the TUI surface
     * `TerminalRenderSurface`'s half-block conversion -- filling the panel's whole content rect. Gated on
     * `VisualFlairLevel` here as well as by `StateManagerEffectHandlers.syncCompanionSpritePanel` removing the surface
-    * entirely at `Off`: a defensive second check, not a second source of truth, so this paint step alone can never
-    * draw the sprite once flair is turned all the way off.
+    * entirely at `Off`: a defensive second check, not a second source of truth, so this paint step alone can never draw
+    * the sprite once flair is turned all the way off.
     */
   private def renderCompanionSpritePanel(
     rect: LayoutRect,

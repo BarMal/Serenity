@@ -268,8 +268,8 @@ final private[manager] class StateManagerEffectHandlers(
       .void
 
   /** Adds or removes the companion sprite's pinned panel surface to match the config: visible exactly when the
-    * companion sprite is enabled and visual flair is not `Off` (matching item 8/9's "Off = don't render" rule).
-    * Called after either setting changes, since either can flip the panel's visibility.
+    * companion sprite is enabled and visual flair is not `Off` (matching item 8/9's "Off = don't render" rule). Called
+    * after either setting changes, since either can flip the panel's visibility.
     */
   private def syncCompanionSpritePanel(state: AppState, config: AppConfig): AppState =
     val shouldShow = config.companionSpriteConfig.enabled && config.visualFlairLevel != VisualFlairLevel.Off
