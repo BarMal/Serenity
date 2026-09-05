@@ -132,25 +132,25 @@ object MotionConfig:
           enabled = true,
           transitionKind = TransitionKind.Fade,
           animation = base,
-          speedScale = config.effectiveCursorTransitionSpeedScale
+          speedScale = config.legacyCursorTransitionSpeedScale
         ),
         MotionFamily.EditorText -> MotionFamilyConfig(
           enabled = config.editorInsertionTransitionKind != TransitionKind.Disabled,
           transitionKind = config.editorInsertionTransitionKind,
           animation = base,
-          speedScale = config.effectiveEditorTextTransitionSpeedScale
+          speedScale = config.legacyEditorTextTransitionSpeedScale
         ),
         MotionFamily.CommandSurfaces -> MotionFamilyConfig(
           enabled = commandTransition != TransitionKind.Disabled,
           transitionKind = commandTransition,
           animation = commandAnimation,
-          speedScale = config.effectiveCommandRunnerTransitionSpeedScale
+          speedScale = config.legacyCommandRunnerTransitionSpeedScale
         ),
         MotionFamily.PinnedPanels -> MotionFamilyConfig(
           enabled = panelOpenTransition != TransitionKind.Disabled || panelCloseTransition != TransitionKind.Disabled,
           transitionKind = panelOpenTransition,
           animation = uiAnimation,
-          speedScale = config.effectiveUiTransitionSpeedScale,
+          speedScale = config.legacyUiTransitionSpeedScale,
           transitionOverrides = Map(
             TransitionScope.PanelOpen  -> panelOpenTransition,
             TransitionScope.PanelClose -> panelCloseTransition
@@ -160,7 +160,7 @@ object MotionConfig:
           enabled = true,
           transitionKind = TransitionKind.Fade,
           animation = uiAnimation,
-          speedScale = config.effectiveUiTransitionSpeedScale
+          speedScale = config.legacyUiTransitionSpeedScale
         )
       )
     )
