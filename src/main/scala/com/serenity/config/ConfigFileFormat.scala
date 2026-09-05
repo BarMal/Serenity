@@ -12,8 +12,8 @@ import com.typesafe.config.{ConfigFactory, ConfigRenderOptions, ConfigUtil, Conf
 /** The configuration file, as data rather than as text.
   *
   * Every line is an [[Entry]]: a comment, a blank, or a setting carrying a [[Value]]. A `Value` holds the config
-  * library's own representation alongside the text the file will carry, and the two are the reason this is not built
-  * by interpolating strings:
+  * library's own representation alongside the text the file will carry, and the two are the reason this is not built by
+  * interpolating strings:
   *
   *   - the text is derived from the library's rendering, so quoting and escaping are its problem. A font family
   *     containing a quote, a segment list containing a comma -- the cases that produced a file the parser then
@@ -49,12 +49,12 @@ object ConfigFileFormat:
 
   /** The settings [[render]] would emit that reading the file back would not return, empty when there are none.
     *
-    * A key at a path that also has children (`ui.motion` alongside `ui.motion.family.…`) is not an error to the
-    * library -- the later assignment simply replaces the earlier value with an object -- so assembling the settings
-    * into a `Config` and counting what survives is what reveals it. A duplicated key shows up the same way.
+    * A key at a path that also has children (`ui.motion` alongside `ui.motion.family.…`) is not an error to the library
+    * -- the later assignment simply replaces the earlier value with an object -- so assembling the settings into a
+    * `Config` and counting what survives is what reveals it. A duplicated key shows up the same way.
     */
   def unwritableSettings(config: AppConfig): List[String] =
-    val settings = entries(config).collect { case Entry.Setting(key, value) => key -> value.config }
+    val settings  = entries(config).collect { case Entry.Setting(key, value) => key -> value.config }
     val assembled = settings.foldLeft(ConfigFactory.empty()) { case (acc, (key, value)) => acc.withValue(key, value) }
     if assembled.entrySet().size == settings.size then Nil
     else
@@ -70,7 +70,7 @@ object ConfigFileFormat:
     * list into a file the parser rejected, taking every other setting in it down to defaults.
     */
   private def string(value: String): Value =
-    val quoted = ConfigValueFactory.fromAnyRef(value).render(ConfigRenderOptions.concise())
+    val quoted  = ConfigValueFactory.fromAnyRef(value).render(ConfigRenderOptions.concise())
     val legible = value.nonEmpty && value.forall(char => char.isLetterOrDigit || "_./-".contains(char))
     val faithful =
       legible && (try ConfigFactory.parseString(s"probe = $value").getString("probe") == value
@@ -104,7 +104,7 @@ object ConfigFileFormat:
 
   /** `auto` is how this file spells "no value set" for the settings that have such a state. */
   private def optionalNumber(value: Option[Double]): Value = value.fold(string("auto"))(number)
-  private def optionalCount(value: Option[Int]): Value      = value.fold(string("auto"))(number)
+  private def optionalCount(value: Option[Int]): Value     = value.fold(string("auto"))(number)
 
   /** An empty string is how it spells the same thing for the ones that predate that convention. */
   private def optionalString(value: Option[String]): Value = string(value.getOrElse(""))
@@ -119,11 +119,11 @@ object ConfigFileFormat:
 
   private def transitionKindConfigKey(kind: TransitionKind): String =
     kind match
-      case TransitionKind.Disabled              => "off"
-      case TransitionKind.Fade                  => "fade"
-      case TransitionKind.TypedText             => "typed"
-      case TransitionKind.DirectionalSweep      => "directional"
-      case TransitionKind.OutlineThenContent    => "outline"
+      case TransitionKind.Disabled               => "off"
+      case TransitionKind.Fade                   => "fade"
+      case TransitionKind.TypedText              => "typed"
+      case TransitionKind.DirectionalSweep       => "directional"
+      case TransitionKind.OutlineThenContent     => "outline"
       case TransitionKind.LineAndCharacterTandem => "tandem"
 
   private def entries(config: AppConfig): List[Entry] =
@@ -348,13 +348,14 @@ object ConfigFileFormat:
       .getOrElse(Map.empty)
       .toList
       .sortBy(_._1)
-      .flatMap { case (languageId, serverOverride) =>
-        def key(field: String) = ConfigUtil.joinPath("lsp", languageId, field)
-        List(
-          serverOverride.enabled.map(enabled => Entry.Setting(key("enabled"), boolean(enabled))),
-          serverOverride.command.map(command => Entry.Setting(key("command"), string(command))),
-          serverOverride.args.map(args => Entry.Setting(key("args"), list(args)))
-        ).flatten
+      .flatMap {
+        case (languageId, serverOverride) =>
+          def key(field: String) = ConfigUtil.joinPath("lsp", languageId, field)
+          List(
+            serverOverride.enabled.map(enabled => Entry.Setting(key("enabled"), boolean(enabled))),
+            serverOverride.command.map(command => Entry.Setting(key("command"), string(command))),
+            serverOverride.args.map(args => Entry.Setting(key("args"), list(args)))
+          ).flatten
       }
 
   private def hotkeyEntries(config: AppConfig): List[Entry] =

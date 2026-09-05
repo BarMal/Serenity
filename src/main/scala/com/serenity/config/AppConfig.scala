@@ -2120,16 +2120,14 @@ final case class AppConfig(
 
   private def withExplicitFamilySpeeds(configuration: MotionConfig): MotionConfig =
     val overrides = List(
-      MotionFamily.EditorText     -> surfaceConfig.editorTextTransitionSpeedScale,
+      MotionFamily.EditorText      -> surfaceConfig.editorTextTransitionSpeedScale,
       MotionFamily.CommandSurfaces -> surfaceConfig.commandRunnerTransitionSpeedScale,
-      MotionFamily.UiTransitions  -> surfaceConfig.uiTransitionSpeedScale,
-      MotionFamily.Cursor         -> surfaceConfig.cursorTransitionSpeedScale
+      MotionFamily.UiTransitions   -> surfaceConfig.uiTransitionSpeedScale,
+      MotionFamily.Cursor          -> surfaceConfig.cursorTransitionSpeedScale
     )
     overrides.foldLeft(configuration) {
       case (current, (family, Some(scale))) =>
-        current.copy(families =
-          current.families.updated(family, current.families(family).copy(speedScale = scale))
-        )
+        current.copy(families = current.families.updated(family, current.families(family).copy(speedScale = scale)))
       case (current, _) => current
     }
 
@@ -2338,9 +2336,9 @@ final case class AppConfig(
   )(
     updateConfiguration: MotionConfig => MotionConfig
   ): AppConfig =
-    val updatedSurface = updateSurface(surfaceConfig)
-    val current        = surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(surfaceConfig))
-    val fallback       = MotionConfig.fromLegacy(surfaceConfig, current.baseline)
+    val updatedSurface       = updateSurface(surfaceConfig)
+    val current              = surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(surfaceConfig))
+    val fallback             = MotionConfig.fromLegacy(surfaceConfig, current.baseline)
     val updatedConfiguration = updateConfiguration(current.withFallback(fallback)).normalized
     withSurfaceConfig(updatedSurface.copy(motionConfiguration = Some(updatedConfiguration)))
 

@@ -219,7 +219,9 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
       .withMotionPreset(MotionPreset.Smooth)
       .withMotionFamilyConfiguration(
         MotionFamily.EditorText,
-        AppConfig.default.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.EditorText).copy(speedScale = 1.75)
+        AppConfig.default.surfaceConfig.effectiveMotionConfiguration
+          .family(MotionFamily.EditorText)
+          .copy(speedScale = 1.75)
       )
 
     hierarchy.surfaceConfig.editorTextTransitionSpeedScale shouldBe None
