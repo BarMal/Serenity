@@ -38,10 +38,6 @@ object ConfigRegistry:
       percent >= ViewportAxisSizing.MinPercent * 100.0 && percent <= ViewportAxisSizing.MaxPercent * 100.0
     )
 
-  double.filtered(scale =>
-    scale >= AppConfig.MinElementTransitionSpeedScale && scale <= AppConfig.MaxElementTransitionSpeedScale
-  )
-
   /** `#RRGGBB` or `#RRGGBBAA`, which is what [[ColorFormat.toHex]] writes. */
   private def colorFromHex(value: String): Option[Color] =
     val hex = value.trim.stripPrefix("#")
@@ -76,9 +72,9 @@ object ConfigRegistry:
   /** The segment list, which also accepts the older single-word presets (`minimal`, `detailed`) it replaced. */
   private val infoBarSegments: FieldCodec[List[CursorInfoBarSegment]] =
     given io.circe.Encoder[List[CursorInfoBarSegment]] =
-      io.circe.Encoder.encodeList(io.circe.Encoder.encodeString.contramap(_.configKey))
+      io.circe.Encoder.encodeList(using io.circe.Encoder.encodeString.contramap(_.configKey))
     given io.circe.Decoder[List[CursorInfoBarSegment]] =
-      io.circe.Decoder.decodeList(
+      io.circe.Decoder.decodeList(using
         io.circe.Decoder.decodeString.emap(key =>
           CursorInfoBarSegment
             .fromConfigKey(key)
