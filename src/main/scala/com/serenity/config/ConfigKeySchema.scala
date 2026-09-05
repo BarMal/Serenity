@@ -1,11 +1,27 @@
 package com.serenity.config
 
-/** Static and dynamic keys understood by the text config format. */
+/** Which keys the text config format understands, derived from the settings themselves.
+  *
+  * This used to be a hand-maintained list beside the parser's own, and the two had drifted: eleven spellings the parser
+  * accepted were reported to the user as unknown keys. Reading both off [[ConfigRegistry]] and [[ConfigGroups]] is what
+  * stops that happening again -- a key is known exactly when something can read it.
+  */
 object ConfigKeySchema:
 
-  val dynamicPrefixes: List[String] =
-    LanguageToolsConfig.Schema.dynamicPrefixes ++
-      InputConfig.Schema.dynamicPrefixes
+  val dynamicPrefixes: List[String] = ConfigGroups.dynamicPrefixes
+
+  val currentKeys: Set[String] =
+    Set("config.version") ++ ConfigRegistry.writtenKeys ++ ConfigGroups.currentKeys
+
+  /** An old spelling and the current one to use instead.
+    *
+    * Most come straight from the fields' own aliases. The exceptions are the spellings that set more than one field, so
+    * there is no single key to point at.
+    */
+  val deprecatedKeys: Map[String, String] =
+    ConfigRegistry.fields.flatMap { field =>
+      field.aliases.filterNot(currentKeys.contains).map(_ -> field.key)
+    }.toMap ++ ConfigGroups.deprecatedKeys ++ ConfigLegacyKeys.replacements
 
   def deprecatedReplacement(key: String): Option[String] =
     deprecatedKeys.get(key)
@@ -13,38 +29,7 @@ object ConfigKeySchema:
   def isKnownKey(key: String): Boolean =
     currentKeys.contains(key) ||
       deprecatedKeys.contains(key) ||
+      ConfigRegistry.allKeys.contains(key) ||
+      ConfigLegacyKeys.handles(key) ||
+      ConfigGroups.handles(key) ||
       dynamicPrefixes.exists(key.startsWith)
-
-  val currentKeys: Set[String] =
-    Set(
-      "config.version",
-      "syntax.highlighting"
-    ) ++
-      EditorConfig.Schema.currentKeys ++
-      LanguageToolsConfig.Schema.currentKeys ++
-      SurfaceConfig.Schema.currentKeys ++
-      CursorConfig.Schema.currentKeys ++
-      DocumentConfig.Schema.currentKeys ++
-      InterfaceConfig.Schema.currentKeys ++
-      WindowConfig.Schema.currentKeys ++
-      InputConfig.Schema.currentKeys ++
-      Set(
-        "window.sitter.enabled",
-        "window.sitter.action",
-        "window.sitter.frames",
-        "window.sitter.active_ticks",
-        "window.sitter.fast_active_ticks",
-        "window.sitter.fast_typing_threshold_ms"
-      )
-
-  val deprecatedKeys: Map[String, String] =
-    Map(
-      "syntax_highlighting" -> "syntax.highlighting"
-    ) ++
-      EditorConfig.Schema.deprecatedKeys ++
-      LanguageToolsConfig.Schema.deprecatedKeys ++
-      SurfaceConfig.Schema.deprecatedKeys ++
-      CursorConfig.Schema.deprecatedKeys ++
-      DocumentConfig.Schema.deprecatedKeys ++
-      InterfaceConfig.Schema.deprecatedKeys ++
-      WindowConfig.Schema.deprecatedKeys

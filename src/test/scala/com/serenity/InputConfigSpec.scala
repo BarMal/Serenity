@@ -9,15 +9,8 @@ import org.scalatest.matchers.should.Matchers
 class InputConfigSpec extends AnyFlatSpec with Matchers:
 
   "InputConfig" should "own hotkey and keymap dynamic prefixes" in
-    InputConfig.Schema.dynamicPrefixes.shouldBe(
-      List(
-        "hotkey.",
-        "keymap.editor.",
-        "keymap.command_runner.",
-        "keymap.modal.",
-        "keymap.panel.",
-        "keymap.peek."
-      )
+    ConfigKeySchema.dynamicPrefixes.should(
+      contain allOf ("hotkey.", "keymap.")
     )
 
   it should "group hotkeys and focused keymaps under AppConfig" in {

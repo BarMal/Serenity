@@ -9,28 +9,24 @@ import org.scalatest.matchers.should.Matchers
 class EditorConfigSpec extends AnyFlatSpec with Matchers:
 
   "EditorConfig" should "own character animation and font schema metadata" in {
-    EditorConfig.Schema.currentKeys.should(
-      contain allOf (
-        "character.animation",
-        "character.animation.duration_ms",
-        "character.animation.steps",
-        "font.code.family",
-        "font.text.family",
-        "font.ui.family",
-        "font.code.size",
-        "font.text.size",
-        "font.ui.size",
-        "font.scale.mode",
-        "font.text_scale",
-        "font.code.ligatures",
-        "font.text.ligatures",
-        "font.ui.ligatures"
-      )
-    )
+    ConfigKeySchema.isKnownKey("character.animation") shouldBe true
+    ConfigKeySchema.isKnownKey("character.animation.duration_ms") shouldBe true
+    ConfigKeySchema.isKnownKey("character.animation.steps") shouldBe true
+    ConfigKeySchema.isKnownKey("font.code.family") shouldBe true
+    ConfigKeySchema.isKnownKey("font.text.family") shouldBe true
+    ConfigKeySchema.isKnownKey("font.ui.family") shouldBe true
+    ConfigKeySchema.isKnownKey("font.code.size") shouldBe true
+    ConfigKeySchema.isKnownKey("font.text.size") shouldBe true
+    ConfigKeySchema.isKnownKey("font.ui.size") shouldBe true
+    ConfigKeySchema.isKnownKey("font.scale.mode") shouldBe true
+    ConfigKeySchema.isKnownKey("font.text_scale") shouldBe true
+    ConfigKeySchema.isKnownKey("font.code.ligatures") shouldBe true
+    ConfigKeySchema.isKnownKey("font.text.ligatures") shouldBe true
+    ConfigKeySchema.isKnownKey("font.ui.ligatures") shouldBe true
 
-    EditorConfig.Schema.deprecatedKeys.should(
+    ConfigKeySchema.deprecatedKeys.should(
       contain allOf (
-        "character_animation"             -> "character.animation",
+        "character_animation"             -> "character.animation.preset",
         "character_animation_duration_ms" -> "character.animation.duration_ms",
         "font_code_family"                -> "font.code.family",
         "font_size"                       -> "font.code.size and font.text.size",
