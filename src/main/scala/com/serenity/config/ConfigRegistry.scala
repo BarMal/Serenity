@@ -535,6 +535,9 @@ object ConfigRegistry:
       _.showAllSettingsRegardlessOfMode,
       (config, value) => config.withShowAllSettingsRegardlessOfMode(value)
     ),
+    named("widget.mode_tab_corner", "modeTabWidgetCornerPosition", "widget_mode_tab_corner")(
+      enumerated(CornerPosition.fromConfigKey, _.configKey, text => CornerPosition.values.find(_.toString == text))
+    )(_.modeTabWidgetCornerPosition, (config, value) => config.withModeTabWidgetCornerPosition(value)),
     named("editor.minimum_pane_width", "minimumPaneWidth", "editor.minimum.pane.width", "editor_minimum_pane_width")(
       int
     )(_.editorConfig.minimumPaneWidth, (config, value) => config.withMinimumPaneWidth(value)),

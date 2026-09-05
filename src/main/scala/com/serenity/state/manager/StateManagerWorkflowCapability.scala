@@ -552,7 +552,9 @@ final private[manager] class StateManagerWorkflowCapability(
                     val stateWithBuffer = state.copy(
                       persisted = state.persisted.copy(
                         buffers = state.persisted.buffers + (newBufferId -> loadedBuffer),
-                        recentFiles = trackRecentFile(state.persisted.recentFiles, targetPath)
+                        recentFiles = trackRecentFile(state.persisted.recentFiles, targetPath),
+                        recentFilesByMode =
+                          Persisted.trackRecentFile(state.persisted.recentFilesByMode, state.persisted.config.appMode, targetPath)
                       ),
                       runtime = state.runtime.copy(uiSurfaces = List.empty)
                     )

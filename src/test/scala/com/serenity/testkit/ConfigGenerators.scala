@@ -153,6 +153,9 @@ object ConfigGenerators:
       showAll <- Gen.oneOf(true, false)
     yield AppModeConfig(mode, showAll)
 
+  val genModeTabWidgetConfig: Gen[ModeTabWidgetConfig] =
+    oneOfEnum(CornerPosition.values).map(ModeTabWidgetConfig.apply)
+
   val genInterfaceConfig: Gen[InterfaceConfig] =
     for
       density   <- oneOfEnum(InterfaceDensity.values)
@@ -343,6 +346,7 @@ object ConfigGenerators:
       syntax    <- Gen.oneOf(true, false)
       spell     <- genSpellCheckConfig
       appMode   <- genAppModeConfig
+      widget    <- genModeTabWidgetConfig
       motion    <- genMotionEdit
       material  <- genMaterialEdit
     yield (motion andThen material)(
@@ -356,6 +360,7 @@ object ConfigGenerators:
         documentConfig = document,
         interfaceConfig = interface,
         languageToolsConfig = LanguageToolsConfig(syntaxHighlightingEnabled = syntax, spellCheck = spell),
-        appModeConfig = appMode
+        appModeConfig = appMode,
+        modeTabWidgetConfig = widget
       )
     )

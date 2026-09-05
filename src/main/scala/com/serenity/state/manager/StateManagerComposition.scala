@@ -288,7 +288,11 @@ final private[manager] class StateManagerFilePersistence(
           .flatTap(_ =>
             stateRef.update(current =>
               current.copy(persisted =
-                current.persisted.copy(recentFiles = trackRecentFile(current.persisted.recentFiles, path))
+                current.persisted.copy(
+                  recentFiles = trackRecentFile(current.persisted.recentFiles, path),
+                  recentFilesByMode =
+                    Persisted.trackRecentFile(current.persisted.recentFilesByMode, current.persisted.config.appMode, path)
+                )
               )
             )
           )

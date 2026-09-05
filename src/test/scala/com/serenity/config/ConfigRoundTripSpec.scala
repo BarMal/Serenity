@@ -95,6 +95,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
     .withAppMode(AppMode.Prose)
     .withShowAllSettingsRegardlessOfMode(true)
+    .withModeTabWidgetCornerPosition(CornerPosition.TopLeft)
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(2.0)
     .withUiCornerRadiusPx(6)

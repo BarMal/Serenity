@@ -524,6 +524,30 @@ final case class AppModeConfig(
     showAllSettingsRegardlessOfMode: Boolean = false
 )
 
+/** A window corner the mode/tab widget can be addressed to (issue #1307). Distinct from `CursorInfoBarPlacement`,
+  * which only chooses between a floating overlay and folding into the full-width bottom bar -- this widget is
+  * always its own small corner element, so it needs an actual corner, not an on/off-bar toggle.
+  */
+enum CornerPosition(val configKey: String):
+  case TopLeft     extends CornerPosition("top-left")
+  case TopRight    extends CornerPosition("top-right")
+  case BottomLeft  extends CornerPosition("bottom-left")
+  case BottomRight extends CornerPosition("bottom-right")
+
+object CornerPosition:
+
+  def fromConfigKey(value: String): Option[CornerPosition] =
+    value.trim.toLowerCase match
+      case "top-left"     => Some(CornerPosition.TopLeft)
+      case "top-right"    => Some(CornerPosition.TopRight)
+      case "bottom-left"  => Some(CornerPosition.BottomLeft)
+      case "bottom-right" => Some(CornerPosition.BottomRight)
+      case _              => None
+
+final case class ModeTabWidgetConfig(
+    position: CornerPosition = CornerPosition.BottomRight
+)
+
 final case class InterfaceConfig(
     density: InterfaceDensity = InterfaceDensity.Comfortable,
     elementGap: Double = 0.0,
@@ -1532,7 +1556,8 @@ final case class AppConfig(
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
-    appModeConfig: AppModeConfig = AppModeConfig()
+    appModeConfig: AppModeConfig = AppModeConfig(),
+    modeTabWidgetConfig: ModeTabWidgetConfig = ModeTabWidgetConfig()
 ):
 
   def withEditorConfig(config: EditorConfig): AppConfig =
@@ -1564,6 +1589,9 @@ final case class AppConfig(
 
   def showAllSettingsRegardlessOfMode: Boolean =
     appModeConfig.showAllSettingsRegardlessOfMode
+
+  def modeTabWidgetCornerPosition: CornerPosition =
+    modeTabWidgetConfig.position
 
   def interfaceDensity: InterfaceDensity =
     interfaceConfig.density
@@ -2076,6 +2104,12 @@ final case class AppConfig(
 
   def withShowAllSettingsRegardlessOfMode(value: Boolean): AppConfig =
     withAppModeConfig(appModeConfig.copy(showAllSettingsRegardlessOfMode = value))
+
+  def withModeTabWidgetConfig(config: ModeTabWidgetConfig): AppConfig =
+    copy(modeTabWidgetConfig = config)
+
+  def withModeTabWidgetCornerPosition(position: CornerPosition): AppConfig =
+    withModeTabWidgetConfig(modeTabWidgetConfig.copy(position = position))
 
   def withInterfaceConfig(config: InterfaceConfig): AppConfig =
     copy(interfaceConfig = config.normalized)

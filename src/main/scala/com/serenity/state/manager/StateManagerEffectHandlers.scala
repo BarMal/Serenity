@@ -2464,7 +2464,12 @@ final private[manager] class StateManagerEffectHandlers(
           }
           .flatTap(_ =>
             stateRef.update(s =>
-              s.copy(persisted = s.persisted.copy(recentFiles = trackRecentFile(s.persisted.recentFiles, path)))
+              s.copy(persisted =
+                s.persisted.copy(
+                  recentFiles = trackRecentFile(s.persisted.recentFiles, path),
+                  recentFilesByMode = Persisted.trackRecentFile(s.persisted.recentFilesByMode, s.persisted.config.appMode, path)
+                )
+              )
             )
           )
           .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path"))

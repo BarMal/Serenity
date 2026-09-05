@@ -180,6 +180,8 @@ object ConfigFileFormat:
     field("app.mode"),
     comment("Show every setting regardless of the app mode filter above"),
     field("app.show_all_settings"),
+    comment("Corner for the mode/tab widget: top-left, top-right, bottom-left, bottom-right"),
+    field("widget.mode_tab_corner"),
     blank,
     field("editor.minimum_pane_width"),
     comment("Lines one mouse-wheel notch scrolls"),
