@@ -524,9 +524,9 @@ final case class AppModeConfig(
     showAllSettingsRegardlessOfMode: Boolean = false
 )
 
-/** A window corner the mode/tab widget can be addressed to (issue #1307). Distinct from `CursorInfoBarPlacement`,
-  * which only chooses between a floating overlay and folding into the full-width bottom bar -- this widget is
-  * always its own small corner element, so it needs an actual corner, not an on/off-bar toggle.
+/** A window corner the mode/tab widget can be addressed to (issue #1307). Distinct from `CursorInfoBarPlacement`, which
+  * only chooses between a floating overlay and folding into the full-width bottom bar -- this widget is always its own
+  * small corner element, so it needs an actual corner, not an on/off-bar toggle.
   */
 enum CornerPosition(val configKey: String):
   case TopLeft     extends CornerPosition("top-left")

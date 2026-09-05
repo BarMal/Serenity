@@ -1008,12 +1008,12 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
         cursor.history
       )
     )
-    buffers     <- cursor.get[List[SessionBuffer]]("buffers")
-    layout      <- cursor.get[SessionLayout]("layout")
-    focus       <- cursor.get[Option[SessionFocus]]("focus")
-    bufferOrder <- cursor.get[List[Int]]("bufferOrder")
-    config      <- cursor.get[AppConfig]("config")
-    themeName   <- cursor.get[String]("themeName")
+    buffers           <- cursor.get[List[SessionBuffer]]("buffers")
+    layout            <- cursor.get[SessionLayout]("layout")
+    focus             <- cursor.get[Option[SessionFocus]]("focus")
+    bufferOrder       <- cursor.get[List[Int]]("bufferOrder")
+    config            <- cursor.get[AppConfig]("config")
+    themeName         <- cursor.get[String]("themeName")
     recentFiles       <- cursor.getOrElse[List[String]]("recentFiles")(Nil)
     recentFilesByMode <- cursor.getOrElse[Map[String, List[String]]]("recentFilesByMode")(Map.empty)
   yield SessionState(

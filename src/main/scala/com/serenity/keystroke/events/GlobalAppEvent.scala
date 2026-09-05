@@ -11,6 +11,8 @@ case object Quit                    extends GlobalAppEvent
 case object ToggleCommandRunner     extends GlobalAppEvent
 case object ToggleContextualToolbar extends GlobalAppEvent
 case object ToggleShortcutsHelp     extends GlobalAppEvent // F1 (issue #1247)
+case object ToggleTabList           extends GlobalAppEvent // issue #1307
+case object ToggleRecentFilesInMode extends GlobalAppEvent // issue #1307
 case object NewTab                  extends GlobalAppEvent // Ctrl+T
 case object CloseTab                extends GlobalAppEvent // Ctrl+W
 case object NextTab                 extends GlobalAppEvent // Ctrl+Tab

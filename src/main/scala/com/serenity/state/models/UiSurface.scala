@@ -3,6 +3,7 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import com.serenity.command.{Command, CommandRunner, SessionIntent}
+import com.serenity.config.AppMode
 import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ThemeCreatorState
@@ -23,6 +24,14 @@ object SurfaceId:
     * `AppEventReducer.toggleShortcutsHelp` looks it up by id to decide whether to open or close it.
     */
   val ShortcutsHelp: SurfaceId = SurfaceId("shortcuts-help")
+
+  /** Reserved ids for the mode/tab corner widget's two summonable lists (issue #1307) -- fixed constants for the same
+    * reason as [[ShortcutsHelp]]: at most one instance of each exists at a time, and the toggle reducers look them up
+    * by id.
+    */
+  val TabList: SurfaceId = SurfaceId("tab-list")
+
+  val RecentFilesInMode: SurfaceId = SurfaceId("recent-files-in-mode")
 
 /** An executable option displayed on the startup launch surface. */
 enum StartupActionSection:
@@ -191,6 +200,12 @@ final case class ShortcutHelpEntry(label: String, keys: String)
 /** One named section of the shortcuts-help reference, e.g. "Global" or "Editor". */
 final case class ShortcutHelpGroup(title: String, entries: List[ShortcutHelpEntry])
 
+/** One row of the mode/tab corner widget's tab list (issue #1307): `title` is the buffer's display name (a file's name,
+  * or `Buffer <id>` for one not yet saved to disk) -- never the full path, matching `Renderer.renderBufferHeader`'s
+  * existing per-pane header title.
+  */
+final case class TabListEntry(bufferId: BufferId, title: String, isDirty: Boolean)
+
 enum SurfacePlacement:
   case AboveCursor
   case BelowCursor
@@ -258,6 +273,17 @@ enum SurfaceContent:
     * when `AppEventReducer.toggleShortcutsHelp` opens the surface, not re-derived on every render.
     */
   case ShortcutsHelp(groups: List[ShortcutHelpGroup])
+
+  /** The mode/tab corner widget's tab-list summon (issue #1307) -- a snapshot of `TabListContent.build`, taken when
+    * `AppEventReducer.toggleTabList` opens the surface, not re-derived on every render (same trade-off as
+    * [[ShortcutsHelp]]: staying open across an edit that adds or closes a tab shows the list as of when it opened).
+    */
+  case TabList(entries: List[TabListEntry], activeBufferId: Option[BufferId])
+
+  /** The mode/tab corner widget's "recent in this mode" summon (issue #1307) -- a snapshot of
+    * `RecentFilesInModeContent.build` for whichever `AppMode` was active when it was opened.
+    */
+  case RecentFilesInMode(mode: AppMode, paths: List[java.nio.file.Path])
 
   /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
   case GhostOverlay(originalContent: SurfaceContent, cachedRect: LayoutRect)

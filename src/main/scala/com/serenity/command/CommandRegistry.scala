@@ -611,6 +611,20 @@ object CommandRegistry:
       label = "Toggle Shortcuts Help"
     ),
     Command.typed(
+      "toggle-tab-list",
+      "Show or hide the list of open tabs.",
+      CommandIntent.View(ViewIntent.ToggleTabList),
+      CommandCategory.View,
+      label = "Tab List"
+    ),
+    Command.typed(
+      "toggle-recent-in-mode",
+      "Show or hide recent files opened in the current app mode.",
+      CommandIntent.View(ViewIntent.ToggleRecentFilesInMode),
+      CommandCategory.View,
+      label = "Recent in This Mode"
+    ),
+    Command.typed(
       "markdown-preview",
       "Open a rendered Markdown preview for the current buffer.",
       CommandIntent.View(ViewIntent.OpenMarkdownPreview),

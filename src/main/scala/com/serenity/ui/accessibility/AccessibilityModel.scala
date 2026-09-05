@@ -420,6 +420,8 @@ object AccessibilitySnapshot:
       case SurfaceContent.Comments(_, _)               => "Comments"
       case SurfaceContent.Diagnostics(_, _)            => "Diagnostics"
       case SurfaceContent.ShortcutsHelp(_)             => "Keyboard shortcuts"
+      case SurfaceContent.TabList(_, _)                => "Open tabs"
+      case SurfaceContent.RecentFilesInMode(mode, _)   => s"Recent in ${mode.toString} mode"
       case SurfaceContent.GhostOverlay(original, _)    => surfaceName(original)
 
   private def surfaceValue(content: SurfaceContent): Option[String] =

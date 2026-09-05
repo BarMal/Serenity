@@ -679,6 +679,10 @@ final private[manager] class StateManagerEffectHandlers(
         collapseExpandedPanel()
       case ViewIntent.ToggleShortcutsHelp =>
         enqueueEvent(com.serenity.keystroke.events.ToggleShortcutsHelp)
+      case ViewIntent.ToggleTabList =>
+        enqueueEvent(com.serenity.keystroke.events.ToggleTabList)
+      case ViewIntent.ToggleRecentFilesInMode =>
+        enqueueEvent(com.serenity.keystroke.events.ToggleRecentFilesInMode)
 
   private def interpretProjectIntent(intent: ProjectIntent, state: AppState): IO[Unit] =
     intent match
@@ -2467,7 +2471,8 @@ final private[manager] class StateManagerEffectHandlers(
               s.copy(persisted =
                 s.persisted.copy(
                   recentFiles = trackRecentFile(s.persisted.recentFiles, path),
-                  recentFilesByMode = Persisted.trackRecentFile(s.persisted.recentFilesByMode, s.persisted.config.appMode, path)
+                  recentFilesByMode =
+                    Persisted.trackRecentFile(s.persisted.recentFilesByMode, s.persisted.config.appMode, path)
                 )
               )
             )

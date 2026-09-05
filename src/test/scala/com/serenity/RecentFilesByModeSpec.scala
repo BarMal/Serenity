@@ -7,14 +7,14 @@ import com.serenity.state.models.Persisted
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Recent files tagged with the app mode active when they were opened (issue #1307), so the mode/tab widget can
-  * offer "recent projects/sessions opened in this mode" rather than one undifferentiated list.
+/** Recent files tagged with the app mode active when they were opened (issue #1307), so the mode/tab widget can offer
+  * "recent projects/sessions opened in this mode" rather than one undifferentiated list.
   */
 class RecentFilesByModeSpec extends AnyFlatSpec with Matchers:
 
-  private val codeFile   = Paths.get("/tmp/main.scala")
-  private val proseFile  = Paths.get("/tmp/notes.md")
-  private val codeFile2  = Paths.get("/tmp/other.scala")
+  private val codeFile  = Paths.get("/tmp/main.scala")
+  private val proseFile = Paths.get("/tmp/notes.md")
+  private val codeFile2 = Paths.get("/tmp/other.scala")
 
   "Persisted.trackRecentFile" should "record a path under the mode it was opened in" in {
     val updated = Persisted.trackRecentFile(Map.empty, AppMode.Code, codeFile)
@@ -38,7 +38,7 @@ class RecentFilesByModeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "cap each mode's list at 20 entries" in {
-    val paths  = (1 to 25).map(i => Paths.get(s"/tmp/file$i.scala")).toList
+    val paths = (1 to 25).map(i => Paths.get(s"/tmp/file$i.scala")).toList
     val result = paths.foldLeft(Map.empty[AppMode, List[java.nio.file.Path]]) { (acc, path) =>
       Persisted.trackRecentFile(acc, AppMode.Code, path)
     }
