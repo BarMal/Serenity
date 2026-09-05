@@ -47,6 +47,8 @@ final class TuiSession private (
     screenRef: Ref[IO, TerminalEmulator],
     consumed: Ref[IO, Int],
     applied: Ref[IO, Vector[Event]],
+    cursorVisible: Ref[IO, Boolean],
+    breathIndex: Ref[IO, Int],
     val stateManager: StateManager,
     val clipboard: SystemClipboard[IO],
     val workspace: Path
@@ -112,6 +114,27 @@ final class TuiSession private (
       )
       emitted <- drainOutput
       updated <- screenRef.get
+    yield TuiScreen(updated, emitted)
+
+  /** One frame of the *idle* render phase: the cursor-only paint `AppRuntime.runIdleRenderStep` makes on each tick of
+    * the cursor's own cadence, with the visibility and colour `AppRuntime.computeIdleCursorFrame` computes for that
+    * tick. Successive calls advance the same blink/breathe cycle a running session would, because they share the refs
+    * the input phase resets on a keystroke.
+    *
+    * This is the path that owns the caret while nothing else is happening, so it is the one that has to leave the
+    * terminal's cursor where the editing position is (#1215).
+    */
+  def idleCursorScreen: IO[TuiScreen] =
+    for
+      current <- state
+      frame   <- AppRuntime.computeIdleCursorFrame(current, cursorVisible, breathIndex)
+      (visible, colour) = frame
+      size <- shell.viewportSize
+      surface = surfaces.forSize(size)
+      bufferAnimations <- stateManager.getBufferAnimations
+      _                <- IO(TuiRuntime.paintCursorOnly(current, surface, size, visible, colour, bufferAnimations))
+      emitted          <- drainOutput
+      updated          <- screenRef.get
     yield TuiScreen(updated, emitted)
 
   /** Advance the animation clock until the runtime would paint content again -- that is, until the window sitter has
@@ -383,6 +406,8 @@ object TuiSession:
         screenRef = screenRef,
         consumed = consumed,
         applied = applied,
+        cursorVisible = cursorVisible,
+        breathIndex = breathIndex,
         stateManager = stateManager,
         clipboard = clipboard,
         workspace = workspace

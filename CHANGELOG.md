@@ -6,6 +6,7 @@
 - Made Shift+Home and Shift+End select to the same place Home and End move to -- the cursor's own visual row under word wrap, rather than the whole logical line.
 - Added Shift+PageUp and Shift+PageDown, which select a screenful of visual rows; the keys decoded with their modifier but had no binding at all, so they did nothing.
 - Kept screen cells and buffer columns apart when grouping an animated run by colour, so a colour group after a wide glyph starts on the right cell and a surrogate pair is never split across two groups.
+- Kept the terminal's cursor on the editing position in breathe mode, instead of parking it at the bottom of the screen on every frame that was not an idle cursor tick.
 
 ## 2026-09-04
 

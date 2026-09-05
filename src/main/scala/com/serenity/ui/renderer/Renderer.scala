@@ -583,7 +583,11 @@ object Renderer:
             cellMetrics.toRow(rect.yPx),
             HardwareCursorStyle(HardwareCursorShape.Block, blinking = true)
           )
-        case (CursorMode.Breathe, Some(rect)) if cursorColor.exists(_.getAlpha >= 128) =>
+        // `forall`, not `exists`: only the idle cursor phase supplies a colour, so a frame without one is an ordinary
+        // content frame rather than the faded half of a breathe cycle. Treating a missing colour as faded hid the
+        // caret on every content frame and left the terminal's own cursor wherever the content diff last wrote --
+        // the bottom of the screen (#1215).
+        case (CursorMode.Breathe, Some(rect)) if cursorVisible && cursorColor.forall(_.getAlpha >= 128) =>
           hardwareCursor.present(
             cellMetrics.toCol(rect.xPx),
             cellMetrics.toRow(rect.yPx),
