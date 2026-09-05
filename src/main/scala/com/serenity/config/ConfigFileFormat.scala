@@ -168,6 +168,14 @@ object ConfigFileFormat:
     comment("Default mode for new buffers: plain-text, markdown, rich-text"),
     field("document.default_mode"),
     blank,
+    comment(
+      "App mode: code, prose -- filters which settings are shown by default and gates code-only tooling (LSP, " +
+        "project build/run/test/debug)"
+    ),
+    field("app.mode"),
+    comment("Show every setting regardless of the app mode filter above"),
+    field("app.mode.show_all_settings"),
+    blank,
     field("editor.minimum_pane_width"),
     comment("Lines one mouse-wheel notch scrolls"),
     field("input.wheel_scroll_lines"),

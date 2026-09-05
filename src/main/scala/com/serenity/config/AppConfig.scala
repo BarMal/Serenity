@@ -280,6 +280,21 @@ object DefaultDocumentMode:
       case "rich-text" | "richtext" | "rich" | "rtf"     => Some(DefaultDocumentMode.RichText)
       case _                                             => None
 
+/** Whether the workspace is primarily code or prose. Gates code-only tooling (LSP connections, project
+  * build/run/test/debug) and filters which settings are shown by default.
+  */
+enum AppMode(val configKey: String):
+  case Code  extends AppMode("code")
+  case Prose extends AppMode("prose")
+
+object AppMode:
+
+  def fromConfigKey(value: String): Option[AppMode] =
+    value.trim.toLowerCase match
+      case "code"              => Some(AppMode.Code)
+      case "prose" | "writing" => Some(AppMode.Prose)
+      case _                   => None
+
 enum InterfaceDensity:
   case Compact
   case Comfortable
@@ -487,6 +502,11 @@ final case class EditorConfig(
 final case class DocumentConfig(
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     defaultMode: DefaultDocumentMode = DefaultDocumentMode.PlainText
+)
+
+final case class AppModeConfig(
+    mode: AppMode = AppMode.Code,
+    showAllSettingsRegardlessOfMode: Boolean = false
 )
 
 final case class InterfaceConfig(
@@ -1490,7 +1510,8 @@ final case class AppConfig(
     windowSitterConfig: WindowSitterConfig = WindowSitterConfig.default,
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
-    languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig()
+    languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
+    appModeConfig: AppModeConfig = AppModeConfig()
 ):
 
   def withEditorConfig(config: EditorConfig): AppConfig =
@@ -1516,6 +1537,12 @@ final case class AppConfig(
 
   def defaultDocumentMode: DefaultDocumentMode =
     documentConfig.defaultMode
+
+  def appMode: AppMode =
+    appModeConfig.mode
+
+  def showAllSettingsRegardlessOfMode: Boolean =
+    appModeConfig.showAllSettingsRegardlessOfMode
 
   def interfaceDensity: InterfaceDensity =
     interfaceConfig.density
@@ -2010,6 +2037,15 @@ final case class AppConfig(
   /** Create a new config with the default mode used for new empty buffers. */
   def withDefaultDocumentMode(mode: DefaultDocumentMode): AppConfig =
     withDocumentConfig(documentConfig.copy(defaultMode = mode))
+
+  def withAppModeConfig(config: AppModeConfig): AppConfig =
+    copy(appModeConfig = config)
+
+  def withAppMode(mode: AppMode): AppConfig =
+    withAppModeConfig(appModeConfig.copy(mode = mode))
+
+  def withShowAllSettingsRegardlessOfMode(value: Boolean): AppConfig =
+    withAppModeConfig(appModeConfig.copy(showAllSettingsRegardlessOfMode = value))
 
   def withInterfaceConfig(config: InterfaceConfig): AppConfig =
     copy(interfaceConfig = config.normalized)
