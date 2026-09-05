@@ -671,7 +671,8 @@ final private[manager] class StateManagerEffectHandlers(
             case (SurfaceContent.Terminal(_, _), SurfacePresentation.Pinned(`position`, _)) => true
             case _                                                                           => false
         }
-        unpinPanel(PanelTarget.ByPosition(position)) >> (if closingRunningTaskPanel then cancelProjectTask else IO.unit)
+        unpinPanel(PanelTarget.ByPosition(position)) >>
+          (if closingRunningTaskPanel then cancelProjectTaskSilently else IO.unit)
       case ViewIntent.ExpandPanel(position) =>
         expandPinnedPanel(PanelTarget.ByPosition(position))
       case ViewIntent.CollapseExpandedPanel =>
@@ -1680,6 +1681,12 @@ final private[manager] class StateManagerEffectHandlers(
       case true  => pinProjectTerminal("Project task cancelled.")
       case false => pinProjectTerminal("No project task is running.")
     }
+
+  /** Same cancellation as `cancelProjectTask`, without the confirmation pin -- for closing the output panel itself
+    * (issue #1294), where re-pinning a "cancelled" message would immediately undo the close.
+    */
+  private def cancelProjectTaskSilently: IO[Unit] =
+    ProjectTaskOwnership.cancel(projectTaskFiberRef, projectTaskSemaphore).void
 
   private def requestLspHover(state: AppState): IO[Unit] =
     activeLspRequestTarget(state) match
