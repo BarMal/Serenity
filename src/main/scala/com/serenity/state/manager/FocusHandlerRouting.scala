@@ -96,6 +96,7 @@ private[manager] object FocusHandlerRouting:
       case SurfaceContent.Comments(_, _)            => peekOverlay
       case SurfaceContent.Diagnostics(_, _)         => peekOverlay
       case SurfaceContent.GhostOverlay(_, _)        => peekOverlay
+      case SurfaceContent.CompanionSprite           => peekOverlay
       // Cursor-peek prototype: never focused in practice (look-but-don't-touch), but routed as a read-only peek
       // overlay rather than left unhandled, matching every other passive preview content case above.
       case SurfaceContent.CommandRunnerPeek(_) => peekOverlay

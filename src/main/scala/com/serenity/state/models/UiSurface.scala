@@ -24,6 +24,11 @@ object SurfaceId:
     */
   val ShortcutsHelp: SurfaceId = SurfaceId("shortcuts-help")
 
+  /** Reserved id for the companion sprite pane -- a fixed constant like [[ShortcutsHelp]], since at most one instance
+    * exists at a time and the settings toggle looks it up by id to decide whether to open or close it.
+    */
+  val CompanionSprite: SurfaceId = SurfaceId("companion-sprite")
+
 /** An executable option displayed on the startup launch surface. */
 enum StartupActionSection:
   case Session
@@ -258,6 +263,14 @@ enum SurfaceContent:
     * when `AppEventReducer.toggleShortcutsHelp` opens the surface, not re-derived on every render.
     */
   case ShortcutsHelp(groups: List[ShortcutHelpGroup])
+
+  /** The companion sprite pane -- a small idling pixel-art character. Carries no payload: the frame it currently
+    * shows lives in `Runtime.companionSprite`, advanced by the same per-tick pass as every other surface animation
+    * (see `AnimationChoreography`), not resolved into cell text here. `SurfaceContentResolver` resolves this to an
+    * empty `ResolvedSurfaceContent` -- painting the sprite bitmap is `Renderer`'s own dedicated paint step, alongside
+    * wherever pinned panels are painted, not the generic text-overlay path every other case here goes through.
+    */
+  case CompanionSprite
 
   /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
   case GhostOverlay(originalContent: SurfaceContent, cachedRect: LayoutRect)

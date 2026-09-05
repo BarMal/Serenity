@@ -2,8 +2,11 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
+import scala.util.Random
+
 import cats.effect.IO
 import com.serenity.animation.CharacterKey
+import com.serenity.config.VisualFlairLevel
 import com.serenity.rope.Rope
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
@@ -13,7 +16,12 @@ final private[manager] class StateManagerEditorCapability(
     stateRef: cats.effect.Ref[IO, AppState],
     lspQueue: LspEffectQueue,
     bufferAnimationsRef: cats.effect.Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
-    animations: AnimationChoreography
+    animations: AnimationChoreography,
+    // Seeds the companion sprite's pseudo-random idle-to-action rolls (see `CompanionSpriteState`'s transition
+    // policy). A single mutable source threaded through every tick, same as a real hardware RNG would be -- the pure
+    // transition logic itself never touches unseeded randomness directly, only what this IO-boundary constructor
+    // passes it. Tests construct this class with a seeded `Random` for a deterministic trace.
+    companionSpriteRandom: Random = new Random()
 )(using balance: com.serenity.rope.Balance):
 
   def getCurrentState: IO[AppState] = stateRef.get
@@ -53,14 +61,23 @@ final private[manager] class StateManagerEditorCapability(
       hasThemeTransition   = state.runtime.themeTransition.isDefined
       hasSurfaceAnimations = state.runtime.surfaceAnimations.nonEmpty
       hasWindowSitter      = state.runtime.windowSitter.isActive
+      flairLevel           = state.persisted.config.visualFlairLevel
+      hasCompanionSprite   = state.persisted.config.companionSpriteConfig.enabled && flairLevel != VisualFlairLevel.Off
       stillActive <-
-        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasWindowSitter then IO.pure(false)
+        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasWindowSitter &&
+          !hasCompanionSprite
+        then IO.pure(false)
         else
           val updatedTransition = state.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
+          val advancedCompanionSprite =
+            if hasCompanionSprite then
+              state.runtime.companionSprite.tick(companionSpriteRandom, reducedRate = flairLevel == VisualFlairLevel.Reduced)
+            else state.runtime.companionSprite
           val stateWithAdvancedBuffers = state.copy(
             runtime = state.runtime.copy(
               themeTransition = updatedTransition,
-              windowSitter = state.runtime.windowSitter.advance
+              windowSitter = state.runtime.windowSitter.advance,
+              companionSprite = advancedCompanionSprite
             )
           )
           val newState = animations.advanceSurfaceAnimations(stateWithAdvancedBuffers)
@@ -77,7 +94,8 @@ final private[manager] class StateManagerEditorCapability(
             .exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
             newState.runtime.themeTransition.isDefined ||
             newState.runtime.surfaceAnimations.nonEmpty ||
-            newState.runtime.windowSitter.isActive
+            newState.runtime.windowSitter.isActive ||
+            hasCompanionSprite
     yield stillActive
 
   /** A cell outside the buffer's currently visible viewport isn't rendered, so there's no need to pay its

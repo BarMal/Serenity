@@ -284,6 +284,7 @@ object UiPreset:
       case PanelContentSnapshot.Comments(_)            => "comments"
       case PanelContentSnapshot.Diagnostics(_)         => "diagnostics"
       case PanelContentSnapshot.MarkdownPreview(_, _)  => "markdown preview"
+      case PanelContentSnapshot.CompanionSprite        => "companion sprite"
 
   private def writingPreset: UiPreset =
     UiPreset(
@@ -411,6 +412,7 @@ object UiPreset:
     case Comments(symbols: List[Symbol])
     case Diagnostics(issues: List[Diagnostic])
     case MarkdownPreview(bufferId: Int, title: String)
+    case CompanionSprite
 
     def toSurfaceContent: SurfaceContent =
       this match
@@ -433,6 +435,8 @@ object UiPreset:
           SurfaceContent.Diagnostics(issues)
         case MarkdownPreview(bufferId, title) =>
           SurfaceContent.MarkdownPreview(BufferId(bufferId), title)
+        case CompanionSprite =>
+          SurfaceContent.CompanionSprite
 
   object PinnedPanel:
 
@@ -478,6 +482,8 @@ object UiPreset:
           PanelContentSnapshot.Diagnostics(issues)
         case PanelContent.MarkdownPreview(bufferId, title) =>
           PanelContentSnapshot.MarkdownPreview(bufferId.value, title)
+        case PanelContent.CompanionSprite =>
+          PanelContentSnapshot.CompanionSprite
 
   def capture(
     name: String,

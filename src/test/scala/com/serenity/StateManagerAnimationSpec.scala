@@ -4,7 +4,7 @@ import java.awt.Color
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{AppConfig, MotionPreset}
+import com.serenity.config.{AppConfig, MotionPreset, VisualFlairLevel}
 import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -125,6 +125,46 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     // already present in the map, so leaving it unseeded is the real assertion here.
     animationsBefore.get(inactiveBufferId) shouldBe None
     animationsAfter.get(inactiveBufferId) shouldBe None
+  }
+
+  it should "advance the companion sprite's frame on every tick while it is enabled" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val config              = AppConfig.default.withCompanionSpriteConfig(
+      AppConfig.default.companionSpriteConfig.copy(enabled = true)
+    )
+    val sm = StateManager.apply(logger, initialConfig = config).unsafeRunSync()
+
+    val before = sm.getCurrentState.unsafeRunSync().runtime.companionSprite
+
+    val stillActive = sm.advanceAnimationsOnTick().unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync().runtime.companionSprite
+    stillActive shouldBe true
+    after.ticksInAction should not be before.ticksInAction
+  }
+
+  it should "not advance the companion sprite while it is disabled" in {
+    val sm     = makeStateManager()
+    val before = sm.getCurrentState.unsafeRunSync().runtime.companionSprite
+
+    sm.advanceAnimationsOnTick().unsafeRunSync()
+
+    sm.getCurrentState.unsafeRunSync().runtime.companionSprite shouldBe before
+  }
+
+  it should "not advance the companion sprite when visual flair is Off, even while enabled" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
+    val config = AppConfig.default
+      .withCompanionSpriteConfig(AppConfig.default.companionSpriteConfig.copy(enabled = true))
+      .withVisualFlairLevel(VisualFlairLevel.Off)
+    val sm = StateManager.apply(logger, initialConfig = config).unsafeRunSync()
+
+    val before = sm.getCurrentState.unsafeRunSync().runtime.companionSprite
+    sm.advanceAnimationsOnTick().unsafeRunSync()
+
+    sm.getCurrentState.unsafeRunSync().runtime.companionSprite shouldBe before
   }
 
   it should "scale pane flow animations with the global animation speed" in {
