@@ -40,6 +40,29 @@ jobs:
             exit 1
           fi
 
+  architecture:
+    name: Architecture ratchet
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      # Reads sources directly rather than compiling, so this is the cheapest job here. It failed
+      # silently for many commits because nothing ran it -- that is the reason it is a job now.
+      - name: Check file and method size ratchet
+        run: sbt -v architectureCheck
+
   test:
     name: Test
     runs-on: ubuntu-latest
