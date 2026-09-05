@@ -14,7 +14,7 @@ import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
-import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValueType}
+import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValue, ConfigValueType}
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
@@ -80,8 +80,15 @@ object ConfigManager:
     val entries = hoconEntries(source)
 
     val parsed = entries.foldLeft(AppConfig.default) { (config, entry) =>
-      val HoconEntry(key, value, _) = entry
-      key match
+      val HoconEntry(key, value, _, raw) = entry
+      // The registry knows every setting that is one key to one value, in both directions at once. Only the settings
+      // that are not -- the animation presets, the motion families, the key groups, and the spellings that set more
+      // than one field -- are still spelled out below.
+      ConfigRegistry
+        .find(key)
+        .flatMap(field => field.readValue(config, raw))
+        .orElse(ConfigLegacyKeys.find(key).flatMap(_.read(config, value)))
+        .getOrElse(key match
         case "character.animation" | "character.animation.preset" | "character_animation" =>
           value.trim.toLowerCase match
             case "none" | "false" | "off" | "disabled" =>
@@ -292,6 +299,7 @@ object ConfigManager:
           config
         case _ =>
           config
+      )
     }
 
     val scaled       = inferTextScaleMode(parsed, entries)
@@ -452,7 +460,7 @@ object ConfigManager:
       case _: ConfigException.Parse =>
         ConfigFactory.parseMap(Map(entry.key -> entry.value).asJava)
 
-  final private case class HoconEntry(key: String, value: String, valueType: ConfigValueType)
+  final private case class HoconEntry(key: String, value: String, valueType: ConfigValueType, raw: ConfigValue)
 
   /** Entries in the order they are applied: shallower paths first, then alphabetically.
     *
@@ -474,7 +482,7 @@ object ConfigManager:
           case ConfigValueType.LIST =>
             source.getList(entry.getKey).asScala.map(_.unwrapped().toString).mkString(",")
           case _ => entry.getValue.unwrapped().toString
-        HoconEntry(key, value, entry.getValue.valueType)
+        HoconEntry(key, value, entry.getValue.valueType, entry.getValue)
       }
 
   private def applyHoconLists(config: AppConfig, source: Config): AppConfig =
