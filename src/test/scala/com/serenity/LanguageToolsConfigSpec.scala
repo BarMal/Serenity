@@ -8,11 +8,11 @@ import org.scalatest.matchers.should.Matchers
 class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
 
   "LanguageToolsConfig" should "own language-tool schema metadata and dynamic prefixes" in {
-    LanguageToolsConfig.Schema.currentKeys.should(contain("syntax.highlighting"))
-    LanguageToolsConfig.Schema.currentKeys.should(contain("spellcheck.dictionary_paths"))
-    LanguageToolsConfig.Schema.deprecatedKeys("syntax_highlighting").shouldBe("syntax.highlighting")
-    LanguageToolsConfig.Schema.deprecatedKeys("spellcheck_words").shouldBe("spellcheck.words")
-    LanguageToolsConfig.Schema.dynamicPrefixes.shouldBe(List("lsp."))
+    ConfigKeySchema.currentKeys.should(contain("syntax.highlighting"))
+    ConfigKeySchema.currentKeys.should(contain("spellcheck.dictionary_paths"))
+    ConfigKeySchema.deprecatedKeys("syntax_highlighting").shouldBe("syntax.highlighting")
+    ConfigKeySchema.deprecatedKeys("spellcheck_words").shouldBe("spellcheck.words")
+    ConfigKeySchema.dynamicPrefixes.should(contain("lsp."))
   }
 
   it should "group syntax highlighting, LSP, and spell-check settings under AppConfig" in {
@@ -53,28 +53,28 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
 
   it should "parse language-tool config entries centrally" in {
     val syntaxConfig =
-      LanguageToolsConfig.Schema
-        .parse(AppConfig.default, "syntax_highlighting", "true")
+      ConfigRegistry
+        .read(AppConfig.default, "syntax_highlighting", "true")
         .getOrElse(fail("syntax parse"))
     val spellEnabledConfig =
-      LanguageToolsConfig.Schema
-        .parse(AppConfig.default, "spellcheck.enabled", "on")
+      ConfigRegistry
+        .read(AppConfig.default, "spellcheck.enabled", "on")
         .getOrElse(fail("spellcheck enabled parse"))
     val languageConfig =
-      LanguageToolsConfig.Schema
-        .parse(AppConfig.default, "spellcheck_languages", " en,FR,,en ")
+      ConfigRegistry
+        .read(AppConfig.default, "spellcheck_languages", " en,FR,,en ")
         .getOrElse(fail("spellcheck languages parse"))
     val dictionaryConfig =
-      LanguageToolsConfig.Schema
-        .parse(
+      ConfigRegistry
+        .read(
           AppConfig.default,
           "spellcheck.dictionary.paths",
           " C:\\Dictionaries\\en_US.dic , /usr/share/hunspell/fr.dic "
         )
         .getOrElse(fail("spellcheck dictionary paths parse"))
     val wordsConfig =
-      LanguageToolsConfig.Schema
-        .parse(AppConfig.default, "spellcheck.words", " Serenity,IO,,serenity ")
+      ConfigRegistry
+        .read(AppConfig.default, "spellcheck.words", " Serenity,IO,,serenity ")
         .getOrElse(fail("spellcheck words parse"))
 
     syntaxConfig.languageToolsConfig.syntaxHighlightingEnabled.shouldBe(true)
@@ -84,15 +84,15 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
       List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
     )
     wordsConfig.languageToolsConfig.spellCheck.additionalWords.shouldBe(List("serenity", "io"))
-    LanguageToolsConfig.Schema.parse(AppConfig.default, "syntax.highlighting", "maybe").shouldBe(None)
+    ConfigRegistry.read(AppConfig.default, "syntax.highlighting", "maybe").shouldBe(None)
   }
 
   it should "validate language-tool config entries centrally" in {
-    LanguageToolsConfig.Schema.invalidValue("syntax.highlighting", "true").shouldBe(false)
-    LanguageToolsConfig.Schema.invalidValue("syntax.highlighting", "maybe").shouldBe(true)
-    LanguageToolsConfig.Schema.invalidValue("spellcheck.enabled", "on").shouldBe(false)
-    LanguageToolsConfig.Schema.invalidValue("spellcheck.enabled", "perhaps").shouldBe(true)
-    LanguageToolsConfig.Schema.invalidValue("spellcheck.languages", "en,fr").shouldBe(false)
-    LanguageToolsConfig.Schema.invalidValue("spellcheck.dictionary_paths", "").shouldBe(false)
-    LanguageToolsConfig.Schema.invalidValue("spellcheck.words", "Serenity,IO").shouldBe(false)
+    ConfigRegistry.rejects("syntax.highlighting", "true").shouldBe(false)
+    ConfigRegistry.rejects("syntax.highlighting", "maybe").shouldBe(true)
+    ConfigRegistry.rejects("spellcheck.enabled", "on").shouldBe(false)
+    ConfigRegistry.rejects("spellcheck.enabled", "perhaps").shouldBe(true)
+    ConfigRegistry.rejects("spellcheck.languages", "en,fr").shouldBe(false)
+    ConfigRegistry.rejects("spellcheck.dictionary_paths", "").shouldBe(false)
+    ConfigRegistry.rejects("spellcheck.words", "Serenity,IO").shouldBe(false)
   }

@@ -59,7 +59,7 @@ object ConfigFileFormat:
       case Entry.Comment(text)   => List(Left(s"# $text"))
       case Entry.Blank           => List(Left(""))
       case Entry.Group(settings) => settings(config).map(Right.apply)
-      case Entry.Field(key)      => ConfigRegistry.find(key).toList.map(configField => Right(configField.setting(config)))
+      case Entry.Field(key) => ConfigRegistry.find(key).toList.map(configField => Right(configField.setting(config)))
     }
 
   private def field(key: String): Entry    = Entry.Field(key)

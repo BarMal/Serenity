@@ -7,19 +7,15 @@ import org.scalatest.matchers.should.Matchers
 class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
 
   "InterfaceConfig" should "own interface density and chrome metric schema metadata" in {
-    InterfaceConfig.Schema.currentKeys.should(
-      contain allOf (
-        "interface.density",
-        "ui.element_gap",
-        "ui.element.gap",
-        "ui.corner_radius",
-        "ui.corner.radius",
-        "ui.outline_thickness",
-        "ui.outline.thickness"
-      )
-    )
+    ConfigKeySchema.isKnownKey("interface.density") shouldBe true
+    ConfigKeySchema.isKnownKey("ui.element_gap") shouldBe true
+    ConfigKeySchema.isKnownKey("ui.element.gap") shouldBe true
+    ConfigKeySchema.isKnownKey("ui.corner_radius") shouldBe true
+    ConfigKeySchema.isKnownKey("ui.corner.radius") shouldBe true
+    ConfigKeySchema.isKnownKey("ui.outline_thickness") shouldBe true
+    ConfigKeySchema.isKnownKey("ui.outline.thickness") shouldBe true
 
-    InterfaceConfig.Schema.deprecatedKeys.should(
+    ConfigKeySchema.deprecatedKeys.should(
       contain allOf (
         "interface_density"    -> "interface.density",
         "ui_element_gap"       -> "ui.element_gap",
@@ -55,29 +51,29 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
 
   it should "parse interface config entries centrally" in {
     val densityConfig =
-      InterfaceConfig.Schema
-        .parse(AppConfig.default, "interface_density", "spacious")
+      ConfigRegistry
+        .read(AppConfig.default, "interface_density", "spacious")
         .getOrElse(fail("density parse"))
     val gapConfig =
-      InterfaceConfig.Schema.parse(AppConfig.default, "ui.element_gap", "4").getOrElse(fail("gap parse"))
+      ConfigRegistry.read(AppConfig.default, "ui.element_gap", "4").getOrElse(fail("gap parse"))
     val radiusConfig =
-      InterfaceConfig.Schema.parse(AppConfig.default, "ui_corner_radius", "14").getOrElse(fail("radius parse"))
+      ConfigRegistry.read(AppConfig.default, "ui_corner_radius", "14").getOrElse(fail("radius parse"))
     val outlineConfig =
-      InterfaceConfig.Schema
-        .parse(AppConfig.default, "ui.outline.thickness", "5")
+      ConfigRegistry
+        .read(AppConfig.default, "ui.outline.thickness", "5")
         .getOrElse(fail("outline parse"))
 
     densityConfig.interfaceConfig.density.shouldBe(InterfaceDensity.Spacious)
     gapConfig.interfaceConfig.elementGap.shouldBe(4)
     radiusConfig.interfaceConfig.cornerRadiusPx.shouldBe(14)
     outlineConfig.interfaceConfig.outlineThicknessPx.shouldBe(5)
-    InterfaceConfig.Schema.parse(AppConfig.default, "interface.density", "unknown").shouldBe(None)
+    ConfigRegistry.read(AppConfig.default, "interface.density", "unknown").shouldBe(None)
   }
 
   it should "validate interface config entries centrally" in {
-    InterfaceConfig.Schema.invalidValue("interface.density", "compact").shouldBe(false)
-    InterfaceConfig.Schema.invalidValue("interface.density", "unknown").shouldBe(true)
-    InterfaceConfig.Schema.invalidValue("ui.element_gap", "wide").shouldBe(true)
-    InterfaceConfig.Schema.invalidValue("ui.corner_radius", "14").shouldBe(false)
-    InterfaceConfig.Schema.invalidValue("ui.outline.thickness", "").shouldBe(true)
+    ConfigRegistry.rejects("interface.density", "compact").shouldBe(false)
+    ConfigRegistry.rejects("interface.density", "unknown").shouldBe(true)
+    ConfigRegistry.rejects("ui.element_gap", "wide").shouldBe(true)
+    ConfigRegistry.rejects("ui.corner_radius", "14").shouldBe(false)
+    ConfigRegistry.rejects("ui.outline.thickness", "").shouldBe(true)
   }

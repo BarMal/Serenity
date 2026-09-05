@@ -38,10 +38,9 @@ object ConfigRegistry:
       percent >= ViewportAxisSizing.MinPercent * 100.0 && percent <= ViewportAxisSizing.MaxPercent * 100.0
     )
 
-  private val speedScale: FieldCodec[Double] =
-    double.filtered(scale =>
-      scale >= AppConfig.MinElementTransitionSpeedScale && scale <= AppConfig.MaxElementTransitionSpeedScale
-    )
+  double.filtered(scale =>
+    scale >= AppConfig.MinElementTransitionSpeedScale && scale <= AppConfig.MaxElementTransitionSpeedScale
+  )
 
   /** `#RRGGBB` or `#RRGGBBAA`, which is what [[ColorFormat.toHex]] writes. */
   private def colorFromHex(value: String): Option[Color] =
@@ -74,6 +73,24 @@ object ConfigRegistry:
     )
 
   /** Font sizes are clamped rather than refused: a file asking for 400pt is a file that means "as big as you allow". */
+  /** The segment list, which also accepts the older single-word presets (`minimal`, `detailed`) it replaced. */
+  private val infoBarSegments: FieldCodec[List[CursorInfoBarSegment]] =
+    given io.circe.Encoder[List[CursorInfoBarSegment]] =
+      io.circe.Encoder.encodeList(io.circe.Encoder.encodeString.contramap(_.configKey))
+    given io.circe.Decoder[List[CursorInfoBarSegment]] =
+      io.circe.Decoder.decodeList(
+        io.circe.Decoder.decodeString.emap(key =>
+          CursorInfoBarSegment
+            .fromConfigKey(key)
+            .orElse(CursorInfoBarSegment.values.find(_.toString == key))
+            .toRight(s"Unknown cursor info bar segment: $key")
+        )
+      )
+    FieldCodec.of(
+      CursorInfoBarSegment.parseList,
+      values => HoconValue.string(if values.isEmpty then "off" else values.map(_.configKey).mkString(","))
+    )
+
   private val fontSize: FieldCodec[Float] =
     FieldCodec.of(text => text.trim.toFloatOption.map(size => size.max(8.0f).min(48.0f)), HoconValue.number)
 
@@ -112,6 +129,11 @@ object ConfigRegistry:
     get: AppConfig => A,
     set: (AppConfig, A) => AppConfig
   ): ConfigField[A] = ConfigField(key, aliases.toSet, codec, get, set, Some(jsonKey))
+
+  /** For a setting whose setter adjusts a neighbour: putting back what was saved should touch only the field itself. */
+  extension [A](configField: ConfigField[A])
+    private def restoredBy(assign: (AppConfig, A) => AppConfig): ConfigField[A] =
+      configField.copy(restore = Some(assign))
 
   val fields: List[ConfigField[?]] = List(
     // -- Language tools ------------------------------------------------------------------------------------------
@@ -178,7 +200,7 @@ object ConfigRegistry:
       _.editorConfig.fontConfig.textScaleMultiplier,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMultiplier = value))
     ),
-    named("font.code.ligatures", "enableLigatures", "font_code_ligatures")(boolean)(
+    field("font.code.ligatures", "font_code_ligatures")(boolean)(
       _.editorConfig.fontConfig.codeLigatures,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = value))
     ),
@@ -192,7 +214,9 @@ object ConfigRegistry:
     ),
 
     // -- Cursor --------------------------------------------------------------------------------------------------
-    named("cursor.mode", "cursorMode", "cursor_mode")(enumerated(CursorMode.fromConfigKey, _.configKey))(
+    named("cursor.mode", "cursorMode", "cursor_mode")(
+      enumerated(CursorMode.fromConfigKey, _.configKey, text => CursorMode.values.find(_.toString == text))
+    )(
       _.cursorMode,
       (config, value) => config.withCursorMode(value)
     ),
@@ -211,7 +235,7 @@ object ConfigRegistry:
       "cursor.info.bar",
       "cursor_info_bar",
       "cursor.info.bar.segments"
-    )(commaSeparated(CursorInfoBarSegment.fromConfigKey, _.configKey))(
+    )(infoBarSegments)(
       _.cursorInfoBarSegments,
       (config, value) => config.withCursorInfoBarSegments(value)
     ),
@@ -220,14 +244,20 @@ object ConfigRegistry:
       "cursorInfoBarPlacement",
       "cursor.info.bar.placement",
       "cursor_info_bar_placement"
-    )(enumerated(CursorInfoBarPlacement.fromConfigKey, _.configKey))(
+    )(
+      enumerated(
+        CursorInfoBarPlacement.fromConfigKey,
+        _.configKey,
+        text => CursorInfoBarPlacement.values.find(_.toString == text)
+      )
+    )(
       _.cursorInfoBarPlacement,
       (config, value) => config.withCursorInfoBarPlacement(value)
     ),
 
     // -- Interface -----------------------------------------------------------------------------------------------
     named("interface.density", "interfaceDensity", "interface_density")(
-      enumerated(InterfaceDensity.fromConfigKey, _.configKey)
+      enumerated(InterfaceDensity.fromConfigKey, _.configKey, text => InterfaceDensity.values.find(_.toString == text))
     )(_.interfaceDensity, (config, value) => config.withInterfaceDensity(value)),
     named("ui.element_gap", "uiElementGap", "ui.element.gap", "ui_element_gap")(
       double.filtered(gap => gap.isFinite && gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
@@ -242,14 +272,20 @@ object ConfigRegistry:
     )(_.uiOutlineThicknessPx, (config, value) => config.withUiOutlineThicknessPx(value)),
 
     // -- Window --------------------------------------------------------------------------------------------------
-    named("window.chrome", "windowChromeMode", "window.chrome.mode", "window_chrome")(
-      enumerated(WindowChromeMode.fromConfigKey, _.configKey)
+    named("window.chrome", "windowChromeMode", "window.chrome.mode", "window_chrome", "window_chrome_mode")(
+      enumerated(WindowChromeMode.fromConfigKey, _.configKey, text => WindowChromeMode.values.find(_.toString == text))
     )(_.windowChromeMode, (config, value) => config.withWindowChromeMode(value)),
     field("window.sitter.enabled")(boolean)(
       _.windowSitterConfig.enabled,
       (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(enabled = value))
     ),
-    field("window.sitter.action")(enumerated(WindowSitterAction.fromConfigKey, _.configKey))(
+    field("window.sitter.action")(
+      enumerated(
+        WindowSitterAction.fromConfigKey,
+        _.configKey,
+        text => WindowSitterAction.values.find(_.toString == text)
+      )
+    )(
       _.windowSitterConfig.action,
       (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(action = value))
     ),
@@ -274,7 +310,7 @@ object ConfigRegistry:
       (config, value) =>
         value.fold(config)(width =>
           config.withPreferredWindowSize(
-            PreferredWindowSize(width, config.preferredWindowSize.map(_.height).getOrElse(width))
+            config.preferredWindowSize.getOrElse(PreferredWindowSize(width, 768)).copy(width = width)
           )
         )
     ),
@@ -283,7 +319,7 @@ object ConfigRegistry:
       (config, value) =>
         value.fold(config)(height =>
           config.withPreferredWindowSize(
-            PreferredWindowSize(config.preferredWindowSize.map(_.width).getOrElse(height), height)
+            config.preferredWindowSize.getOrElse(PreferredWindowSize(1024, height)).copy(height = height)
           )
         )
     ),
@@ -339,14 +375,20 @@ object ConfigRegistry:
 
     // -- Rendering and display -----------------------------------------------------------------------------------
     named("render.fps", "renderFpsTarget", "render_fps", "ui.render.fps", "ui_render_fps")(
-      enumerated(RenderFpsTarget.fromConfigKey, _.configKey)
+      enumerated(RenderFpsTarget.fromConfigKey, _.configKey, text => RenderFpsTarget.values.find(_.toString == text))
     )(_.surfaceConfig.renderFpsTarget, (config, value) => config.withRenderFpsTarget(value)),
     named(
       "render.damage_granularity",
       "renderDamageGranularity",
       "render.damage.granularity",
       "render_damage_granularity"
-    )(enumerated(RenderDamageGranularity.fromConfigKey, _.configKey))(
+    )(
+      enumerated(
+        RenderDamageGranularity.fromConfigKey,
+        _.configKey,
+        text => RenderDamageGranularity.values.find(_.toString == text)
+      )
+    )(
       _.surfaceConfig.renderDamageGranularity,
       (config, value) => config.withRenderDamageGranularity(value)
     ),
@@ -370,7 +412,10 @@ object ConfigRegistry:
       "visualLineCursorNavigation",
       "display.visual.line.navigation",
       "display_visual_line_navigation"
-    )(boolean)(_.surfaceConfig.visualLineCursorNavigation, (config, value) => config.withVisualLineCursorNavigation(value)),
+    )(boolean)(
+      _.surfaceConfig.visualLineCursorNavigation,
+      (config, value) => config.withVisualLineCursorNavigation(value)
+    ),
     named("display.line_numbers", "showLineNumbers", "display.line.numbers", "display_line_numbers")(boolean)(
       _.surfaceConfig.showLineNumbers,
       (config, value) => config.withLineNumbers(value)
@@ -383,7 +428,13 @@ object ConfigRegistry:
       _.surfaceConfig.showWordCount,
       (config, value) => config.withWordCount(value)
     ),
-    field("display.comments", "display_comments")(enumerated(CommentDisplayMode.fromConfigKey, _.configKey))(
+    field("display.comments", "display_comments")(
+      enumerated(
+        CommentDisplayMode.fromConfigKey,
+        _.configKey,
+        text => CommentDisplayMode.values.find(_.toString == text)
+      )
+    )(
       _.surfaceConfig.commentDisplayMode,
       (config, value) => config.withCommentDisplayMode(value)
     ),
@@ -408,14 +459,29 @@ object ConfigRegistry:
       "contextualToolbarDisplayMode",
       "display.contextual.toolbar.mode",
       "display_contextual_toolbar_mode"
-    )(enumerated(ToolbarDisplayMode.fromConfigKey, _.configKey))(
+    )(
+      enumerated(
+        ToolbarDisplayMode.fromConfigKey,
+        _.configKey,
+        text => ToolbarDisplayMode.values.find(_.toString == text)
+      )
+    )(
       _.surfaceConfig.contextualToolbarDisplayMode,
       (config, value) => config.withContextualToolbarDisplayMode(value)
     ),
 
     // -- Material and background ---------------------------------------------------------------------------------
-    named("ui.material", "materialPreset", "ui_material", "material.preset", "material_preset")(materialPreset)(_.surfaceConfig.materialPreset, (config, value) => config.withMaterialPreset(value)),
-    named("ui.post_processing", "postProcessingEffect")(enumerated(PostProcessingEffect.fromConfigKey, _.configKey))(
+    named("ui.material", "materialPreset", "ui_material", "material.preset", "material_preset")(materialPreset)(
+      _.surfaceConfig.materialPreset,
+      (config, value) => config.withMaterialPreset(value)
+    ).restoredBy((config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(materialPreset = value))),
+    named("ui.post_processing", "postProcessingEffect")(
+      enumerated(
+        PostProcessingEffect.fromConfigKey,
+        _.configKey,
+        text => PostProcessingEffect.values.find(_.toString == text)
+      )
+    )(
       _.surfaceConfig.postProcessingEffect,
       (config, value) => config.withPostProcessingEffect(value)
     ),
@@ -424,18 +490,24 @@ object ConfigRegistry:
       (config, value) => config.withUiShadowsEnabled(value)
     ),
     named("ui.background_style", "backgroundStyle", "ui.background.style", "ui_background_style")(
-      enumerated(BackgroundStyle.fromConfigKey, _.configKey)
-    )(_.surfaceConfig.backgroundStyle, (config, value) => config.withBackgroundStyle(value)),
+      enumerated(BackgroundStyle.fromConfigKey, _.configKey, text => BackgroundStyle.values.find(_.toString == text))
+    )(_.surfaceConfig.backgroundStyle, (config, value) => config.withBackgroundStyle(value))
+      .restoredBy((config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(backgroundStyle = value))),
     named("ui.blur_radius", "blurRadius", "ui.blur.radius", "ui_blur_radius")(
       float.filtered(radius => radius >= 0.0f && radius <= 1.0f)
-    )(_.surfaceConfig.blurRadius, (config, value) => config.withBlurRadius(value)),
+    )(_.surfaceConfig.blurRadius, (config, value) => config.withBlurRadius(value))
+      .restoredBy((config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(blurRadius = value))),
 
     // -- Documents and editor ------------------------------------------------------------------------------------
     named("document.markdown_view", "markdownViewMode", "document.markdown.view", "document_markdown_view")(
-      enumerated(MarkdownViewMode.fromConfigKey, _.configKey)
+      enumerated(MarkdownViewMode.fromConfigKey, _.configKey, text => MarkdownViewMode.values.find(_.toString == text))
     )(_.markdownViewMode, (config, value) => config.withMarkdownViewMode(value)),
     named("document.default_mode", "defaultDocumentMode", "document.default.mode", "document_default_mode")(
-      enumerated(DefaultDocumentMode.fromConfigKey, _.configKey)
+      enumerated(
+        DefaultDocumentMode.fromConfigKey,
+        _.configKey,
+        text => DefaultDocumentMode.values.find(_.toString == text)
+      )
     )(_.defaultDocumentMode, (config, value) => config.withDefaultDocumentMode(value)),
     named("editor.minimum_pane_width", "minimumPaneWidth", "editor.minimum.pane.width", "editor_minimum_pane_width")(
       int
@@ -460,7 +532,10 @@ object ConfigRegistry:
     ),
     named("text_area.top.percent", "textAreaTopPercent", "text.area.top.percent", "text_area_top_percent")(
       insetPercent
-    )(_.surfaceConfig.textAreaInsets.topPercent, (config, value) => config.withTextAreaTopInset(fractionOfPercent(value))),
+    )(
+      _.surfaceConfig.textAreaInsets.topPercent,
+      (config, value) => config.withTextAreaTopInset(fractionOfPercent(value))
+    ),
     named("text_area.bottom.percent", "textAreaBottomPercent", "text.area.bottom.percent", "text_area_bottom_percent")(
       insetPercent
     )(
@@ -470,11 +545,14 @@ object ConfigRegistry:
     named("viewport.width.percent", "viewportWidthPercent", "viewport_width_percent")(viewportPercent)(
       _.surfaceConfig.viewportSizing.width.percentValue,
       (config, value) =>
-        config.withViewportWidthSizing(config.surfaceConfig.viewportSizing.width.copy(percent = fractionOfPercent(value)))
+        config.withViewportWidthSizing(
+          config.surfaceConfig.viewportSizing.width.copy(percent = fractionOfPercent(value))
+        )
     ),
     named("viewport.width.max", "viewportWidthMax", "viewport_width_max")(int.filtered(_ >= 1).orEmpty)(
       _.surfaceConfig.viewportSizing.width.maxCells,
-      (config, value) => config.withViewportWidthSizing(config.surfaceConfig.viewportSizing.width.copy(maxCells = value))
+      (config, value) =>
+        config.withViewportWidthSizing(config.surfaceConfig.viewportSizing.width.copy(maxCells = value))
     ),
     named("viewport.height.percent", "viewportHeightPercent", "viewport_height_percent")(viewportPercent)(
       _.surfaceConfig.viewportSizing.height.percentValue,
@@ -495,6 +573,23 @@ object ConfigRegistry:
 
   def find(key: String): Option[ConfigField[?]] = byKey.get(key)
 
+  /** Apply one key's value, as reading a config file does. `None` when the key is unknown or the value unusable. */
+  def read(config: AppConfig, key: String, value: String): Option[AppConfig] =
+    find(key).flatMap(_.read(config, value))
+
+  /** Whether a registered key would reject this value. An unknown key is not this function's business, so it says no.
+    */
+  def rejects(key: String, value: String): Boolean =
+    find(key).exists(_.codec.parse(value).isEmpty)
+
   val writtenKeys: List[String] = fields.map(_.key)
 
   val allKeys: Set[String] = byKey.keySet
+
+  /** The order settings are applied in when a whole config is read at once: broader paths before narrower ones, then
+    * alphabetically. It is the order the config file is folded in, and it matters because a handful of setters
+    * deliberately adjust a neighbouring setting -- a custom blur radius switches the material preset to custom, and the
+    * preset's own saved value has to come after that to have the last word.
+    */
+  val readOrder: List[ConfigField[?]] =
+    fields.sortBy(field => (field.key.count(_ == '.'), field.key))

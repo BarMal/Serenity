@@ -28,10 +28,10 @@ object ConfigLegacyKeys:
 
   /** What to tell someone still using one of these. There is no single key to point at, so both are named. */
   val replacements: Map[String, String] = Map(
-    "font.size"       -> "font.code.size and font.text.size",
-    "font_size"       -> "font.code.size and font.text.size",
-    "font.ligatures"  -> "font.code.ligatures and font.text.ligatures",
-    "font_ligatures"  -> "font.code.ligatures and font.text.ligatures"
+    "font.size"      -> "font.code.size and font.text.size",
+    "font_size"      -> "font.code.size and font.text.size",
+    "font.ligatures" -> "font.code.ligatures and font.text.ligatures",
+    "font_ligatures" -> "font.code.ligatures and font.text.ligatures"
   )
 
   private val byKey: Map[String, LegacyConfigKey] =

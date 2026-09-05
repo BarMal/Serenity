@@ -48,7 +48,7 @@ class ConfigRegistrySpec extends AnyFlatSpec with Matchers with ScalaCheckProper
     ConfigRegistry.writtenKeys.filterNot(written.contains) shouldBe empty
   }
 
-  it should "read back the value it wrote, for every field and every generated config" in {
+  it should "read back the value it wrote, for every field and every generated config" in
     forAll(ConfigGenerators.genAppConfig) { config =>
       ConfigRegistry.fields.foreach { field =>
         withClue(s"${field.key}: ") {
@@ -56,9 +56,8 @@ class ConfigRegistrySpec extends AnyFlatSpec with Matchers with ScalaCheckProper
         }
       }
     }
-  }
 
-  it should "read back the value it wrote under every spelling it accepts" in {
+  it should "read back the value it wrote under every spelling it accepts" in
     forAll(Gen.oneOf(ConfigGenerators.genAppConfig, Gen.const(AppConfig.default))) { config =>
       ConfigRegistry.fields.foreach { field =>
         field.spellings.foreach { spelling =>
@@ -68,9 +67,8 @@ class ConfigRegistrySpec extends AnyFlatSpec with Matchers with ScalaCheckProper
         }
       }
     }
-  }
 
-  it should "agree with the writer on what each setting's text is" in {
+  it should "agree with the writer on what each setting's text is" in
     forAll(ConfigGenerators.genAppConfig) { config =>
       val rendered = ConfigFileFormat
         .render(config)
@@ -90,7 +88,6 @@ class ConfigRegistrySpec extends AnyFlatSpec with Matchers with ScalaCheckProper
         }
       }
     }
-  }
 
   /** Through the text the file would carry and back through the parser, because the quoting is part of the trip. */
   private def roundTrip[A](field: ConfigField[A], config: AppConfig): Option[A] =

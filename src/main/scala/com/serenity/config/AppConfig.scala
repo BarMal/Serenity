@@ -446,87 +446,6 @@ final case class LanguageToolsConfig(
   def normalized: LanguageToolsConfig =
     copy(spellCheck = spellCheck.normalized)
 
-object LanguageToolsConfig:
-
-  object Schema:
-
-    val currentKeys: Set[String] = Set(
-      "syntax.highlighting",
-      "spellcheck.enabled",
-      "spellcheck.languages",
-      "spellcheck.dictionary_paths",
-      "spellcheck.dictionary.paths",
-      "spellcheck.words"
-    )
-
-    val deprecatedKeys: Map[String, String] = Map(
-      "syntax_highlighting"         -> "syntax.highlighting",
-      "spellcheck_enabled"          -> "spellcheck.enabled",
-      "spellcheck_languages"        -> "spellcheck.languages",
-      "spellcheck_dictionary_paths" -> "spellcheck.dictionary_paths",
-      "spellcheck_words"            -> "spellcheck.words"
-    )
-
-    val syntaxHighlightingKeys: Set[String] = Set("syntax.highlighting", "syntax_highlighting")
-
-    val spellCheckEnabledKeys: Set[String] = Set("spellcheck.enabled", "spellcheck_enabled")
-
-    val spellCheckLanguageKeys: Set[String] = Set("spellcheck.languages", "spellcheck_languages")
-
-    val spellCheckDictionaryPathKeys: Set[String] =
-      Set("spellcheck.dictionary_paths", "spellcheck.dictionary.paths", "spellcheck_dictionary_paths")
-
-    val spellCheckWordKeys: Set[String] = Set("spellcheck.words", "spellcheck_words")
-
-    val dynamicPrefixes: List[String] = List("lsp.")
-
-    private val handledKeys: Set[String] =
-      syntaxHighlightingKeys ++
-        spellCheckEnabledKeys ++
-        spellCheckLanguageKeys ++
-        spellCheckDictionaryPathKeys ++
-        spellCheckWordKeys
-
-    def handles(key: String): Boolean =
-      handledKeys.contains(key)
-
-    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
-      val trimmed = value.trim
-      if syntaxHighlightingKeys.contains(key) then parseBoolean(trimmed).map(config.withSyntaxHighlighting)
-      else if spellCheckEnabledKeys.contains(key) then
-        parseBoolean(trimmed)
-          .map(enabled => config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(enabled = enabled)))
-      else if spellCheckLanguageKeys.contains(key) then
-        Some(
-          config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(languages = parseCommaList(trimmed)))
-        )
-      else if spellCheckDictionaryPathKeys.contains(key) then
-        Some(
-          config.withSpellCheck(
-            config.languageToolsConfig.spellCheck.copy(dictionaryPaths = parseCommaListPreserveCase(trimmed))
-          )
-        )
-      else if spellCheckWordKeys.contains(key) then
-        Some(
-          config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(additionalWords = parseCommaList(trimmed)))
-        )
-      else None
-
-    def invalidValue(key: String, value: String): Boolean =
-      parse(AppConfig.default, key, value).isEmpty
-
-    private def parseBoolean(value: String): Option[Boolean] =
-      value.toLowerCase match
-        case "true" | "on" | "enabled"    => Some(true)
-        case "false" | "off" | "disabled" => Some(false)
-        case _                            => None
-
-    private def parseCommaList(value: String): List[String] =
-      value.split(',').toList.map(_.trim.toLowerCase).filter(_.nonEmpty)
-
-    private def parseCommaListPreserveCase(value: String): List[String] =
-      value.split(',').toList.map(_.trim).filter(_.nonEmpty)
-
 final case class PreferredWindowSize(width: Int, height: Int):
   def normalized: PreferredWindowSize =
     PreferredWindowSize(width.max(400), height.max(300))
@@ -538,61 +457,6 @@ final case class WindowConfig(
 
   def normalized: WindowConfig =
     copy(preferredSize = preferredSize.map(_.normalized))
-
-object WindowConfig:
-
-  object Schema:
-
-    val currentKeys: Set[String] = Set(
-      "window.chrome",
-      "window.chrome.mode",
-      "window.preferred.width",
-      "window.preferred.height"
-    )
-
-    val deprecatedKeys: Map[String, String] = Map(
-      "window_chrome"           -> "window.chrome",
-      "window_chrome_mode"      -> "window.chrome",
-      "window_preferred_width"  -> "window.preferred.width",
-      "window_preferred_height" -> "window.preferred.height"
-    )
-
-    val chromeKeys: Set[String] = Set("window.chrome", "window.chrome.mode") ++ deprecatedKeys.keySet.filter(
-      _.startsWith("window_chrome")
-    )
-
-    val preferredWidthKeys: Set[String] = Set("window.preferred.width", "window_preferred_width")
-
-    val preferredHeightKeys: Set[String] = Set("window.preferred.height", "window_preferred_height")
-
-    private val handledKeys: Set[String] = chromeKeys ++ preferredWidthKeys ++ preferredHeightKeys
-
-    def handles(key: String): Boolean =
-      handledKeys.contains(key)
-
-    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
-      val trimmed = value.trim
-      if chromeKeys.contains(key) then WindowChromeMode.fromConfigKey(trimmed).map(config.withWindowChromeMode)
-      else if preferredWidthKeys.contains(key) then
-        trimmed.toIntOption.map { width =>
-          config.withPreferredWindowSize(
-            config.preferredWindowSize.getOrElse(PreferredWindowSize(width, 768)).copy(width = width)
-          )
-        }
-      else if preferredHeightKeys.contains(key) then
-        trimmed.toIntOption.map { height =>
-          config.withPreferredWindowSize(
-            config.preferredWindowSize.getOrElse(PreferredWindowSize(1024, height)).copy(height = height)
-          )
-        }
-      else None
-
-    def invalidValue(key: String, value: String): Boolean =
-      val trimmed = value.trim
-      if chromeKeys.contains(key) then WindowChromeMode.fromConfigKey(trimmed).isEmpty
-      else if preferredWidthKeys.contains(key) || preferredHeightKeys.contains(key) then
-        trimmed.nonEmpty && trimmed.toIntOption.isEmpty
-      else false
 
 final case class CursorColorConfig(
     active: Option[Color] = None,
@@ -611,96 +475,6 @@ final case class CursorConfig(
     infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating
 )
 
-object CursorConfig:
-
-  object Schema:
-
-    val currentKeys: Set[String] = Set(
-      "cursor.mode",
-      "cursor.active.color",
-      "cursor.inactive.color",
-      "cursor.info_bar",
-      "cursor.info.bar",
-      "cursor.info_bar.segments",
-      "cursor.info.bar.segments",
-      "cursor.info_bar.placement",
-      "cursor.info.bar.placement"
-    )
-
-    val deprecatedKeys: Map[String, String] = Map(
-      "cursor_mode"               -> "cursor.mode",
-      "cursor_active_color"       -> "cursor.active.color",
-      "cursor_inactive_color"     -> "cursor.inactive.color",
-      "cursor_info_bar"           -> "cursor.info_bar",
-      "cursor_info_bar_placement" -> "cursor.info_bar.placement"
-    )
-
-    val modeKeys: Set[String] = Set("cursor.mode", "cursor_mode")
-
-    val activeColorKeys: Set[String] = Set("cursor.active.color", "cursor_active_color")
-
-    val inactiveColorKeys: Set[String] = Set("cursor.inactive.color", "cursor_inactive_color")
-
-    /** `cursor.info_bar` is the original spelling and stays readable, but it is a leaf on a path that also has children
-      * (`cursor.info_bar.placement`), which HOCON resolves by dropping the leaf. It survived only because the writer
-      * quoted the whole key; `cursor.info_bar.segments` is the spelling written now, so nothing depends on that
-      * subtlety.
-      */
-    val infoBarModeKeys: Set[String] =
-      Set(
-        "cursor.info_bar",
-        "cursor.info.bar",
-        "cursor_info_bar",
-        "cursor.info_bar.segments",
-        "cursor.info.bar.segments"
-      )
-
-    val infoBarPlacementKeys: Set[String] =
-      Set("cursor.info_bar.placement", "cursor.info.bar.placement", "cursor_info_bar_placement")
-
-    private val handledKeys: Set[String] =
-      modeKeys ++ activeColorKeys ++ inactiveColorKeys ++ infoBarModeKeys ++ infoBarPlacementKeys
-
-    def handles(key: String): Boolean =
-      handledKeys.contains(key)
-
-    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
-      val trimmed = value.trim
-      if modeKeys.contains(key) then CursorMode.fromConfigKey(trimmed).map(config.withCursorMode)
-      else if activeColorKeys.contains(key) then
-        if trimmed.isEmpty then Some(config)
-        else
-          parseColor(trimmed)
-            .map(color => config.withCursorColors(config.cursorColors.copy(active = Some(color))))
-      else if inactiveColorKeys.contains(key) then
-        if trimmed.isEmpty then Some(config)
-        else
-          parseColor(trimmed)
-            .map(color => config.withCursorColors(config.cursorColors.copy(inactive = Some(color))))
-      else if infoBarModeKeys.contains(key) then
-        CursorInfoBarSegment.parseList(trimmed).map(config.withCursorInfoBarSegments)
-      else if infoBarPlacementKeys.contains(key) then
-        CursorInfoBarPlacement.fromConfigKey(trimmed).map(config.withCursorInfoBarPlacement)
-      else None
-
-    def invalidValue(key: String, value: String): Boolean =
-      parse(AppConfig.default, key, value).isEmpty
-
-    private def parseColor(value: String): Option[Color] =
-      val hex = value.stripPrefix("#")
-      Option
-        .when(hex.length == 6 || hex.length == 8)(hex)
-        .filter(_.forall(ch => Character.digit(ch, 16) >= 0))
-        .flatMap { normalized =>
-          scala.util.Try {
-            val red   = Integer.parseInt(normalized.substring(0, 2), 16)
-            val green = Integer.parseInt(normalized.substring(2, 4), 16)
-            val blue  = Integer.parseInt(normalized.substring(4, 6), 16)
-            val alpha = if normalized.length == 8 then Integer.parseInt(normalized.substring(6, 8), 16) else 255
-            Color(red, green, blue, alpha)
-          }.toOption
-        }
-
 final case class EditorConfig(
     characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     fontConfig: FontConfig = FontConfig(),
@@ -710,100 +484,10 @@ final case class EditorConfig(
   def normalized: EditorConfig =
     copy(minimumPaneWidth = math.max(1, minimumPaneWidth))
 
-object EditorConfig:
-
-  object Schema:
-
-    val currentKeys: Set[String] = Set(
-      // `character.animation.preset` is the spelling written: `character.animation` is a leaf whose own children
-      // (`.duration_ms`, `.steps`) HOCON would resolve by dropping it, and it survived only by being quoted.
-      "character.animation.preset",
-      "character.animation",
-      "character.animation.duration_ms",
-      "character.animation.duration.ms",
-      "character.animation.steps",
-      "font.code.family",
-      "font.text.family",
-      "font.ui.family",
-      "font.code.size",
-      "font.text.size",
-      "font.prose.size",
-      "font.ui.size",
-      "font.scale.mode",
-      "font.text_scale",
-      "font.text.scale",
-      "font.code.ligatures",
-      "font.text.ligatures",
-      "font.prose.ligatures",
-      "font.ui.ligatures",
-      "editor.minimum_pane_width",
-      "editor.minimum.pane.width"
-    )
-
-    val deprecatedKeys: Map[String, String] = Map(
-      "character_animation"             -> "character.animation",
-      "character_animation_duration_ms" -> "character.animation.duration_ms",
-      "character_animation_steps"       -> "character.animation.steps",
-      "font_code_family"                -> "font.code.family",
-      "font_text_family"                -> "font.text.family",
-      "font_ui_family"                  -> "font.ui.family",
-      "font_code_size"                  -> "font.code.size",
-      "font_text_size"                  -> "font.text.size",
-      "font_prose_size"                 -> "font.text.size",
-      "font_size"                       -> "font.code.size and font.text.size",
-      "font_ui_size"                    -> "font.ui.size",
-      "font_scale_mode"                 -> "font.scale.mode",
-      "font_text_scale"                 -> "font.text_scale",
-      "font_code_ligatures"             -> "font.code.ligatures",
-      "font_text_ligatures"             -> "font.text.ligatures",
-      "font_prose_ligatures"            -> "font.text.ligatures",
-      "font_ligatures"                  -> "font.code.ligatures and font.text.ligatures",
-      "font_ui_ligatures"               -> "font.ui.ligatures"
-    )
-
 final case class DocumentConfig(
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     defaultMode: DefaultDocumentMode = DefaultDocumentMode.PlainText
 )
-
-object DocumentConfig:
-
-  object Schema:
-
-    val currentKeys: Set[String] = Set(
-      "document.markdown_view",
-      "document.markdown.view",
-      "document.default_mode",
-      "document.default.mode"
-    )
-
-    val deprecatedKeys: Map[String, String] = Map(
-      "document_markdown_view" -> "document.markdown_view",
-      "document_default_mode"  -> "document.default_mode"
-    )
-
-    val markdownViewKeys: Set[String] = Set(
-      "document.markdown_view",
-      "document.markdown.view",
-      "document_markdown_view"
-    )
-
-    val defaultModeKeys: Set[String] = currentKeys ++ deprecatedKeys.keySet
-
-    private val handledKeys: Set[String] = markdownViewKeys ++ defaultModeKeys
-
-    def handles(key: String): Boolean =
-      handledKeys.contains(key)
-
-    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
-      val trimmed = value.trim
-      if markdownViewKeys.contains(key) then MarkdownViewMode.fromConfigKey(trimmed).map(config.withMarkdownViewMode)
-      else if defaultModeKeys.contains(key) then
-        DefaultDocumentMode.fromConfigKey(trimmed).map(config.withDefaultDocumentMode)
-      else None
-
-    def invalidValue(key: String, value: String): Boolean =
-      parse(AppConfig.default, key, value).isEmpty
 
 final case class InterfaceConfig(
     density: InterfaceDensity = InterfaceDensity.Comfortable,
@@ -819,64 +503,6 @@ final case class InterfaceConfig(
       outlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(outlineThicknessPx)
     )
 
-object InterfaceConfig:
-
-  object Schema:
-
-    val currentKeys: Set[String] = Set(
-      "interface.density",
-      "ui.element_gap",
-      "ui.element.gap",
-      "ui.corner_radius",
-      "ui.corner.radius",
-      "ui.outline_thickness",
-      "ui.outline.thickness"
-    )
-
-    val deprecatedKeys: Map[String, String] = Map(
-      "interface_density"    -> "interface.density",
-      "ui_element_gap"       -> "ui.element_gap",
-      "ui_corner_radius"     -> "ui.corner_radius",
-      "ui_outline_thickness" -> "ui.outline_thickness"
-    )
-
-    val densityKeys: Set[String] = Set("interface.density", "interface_density")
-
-    val elementGapKeys: Set[String] = Set("ui.element_gap", "ui.element.gap", "ui_element_gap")
-
-    val cornerRadiusKeys: Set[String] = Set("ui.corner_radius", "ui.corner.radius", "ui_corner_radius")
-
-    val outlineThicknessKeys: Set[String] =
-      Set("ui.outline_thickness", "ui.outline.thickness", "ui_outline_thickness")
-
-    private val handledKeys: Set[String] =
-      densityKeys ++ elementGapKeys ++ cornerRadiusKeys ++ outlineThicknessKeys
-
-    def handles(key: String): Boolean =
-      handledKeys.contains(key)
-
-    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
-      val trimmed = value.trim
-      if densityKeys.contains(key) then InterfaceDensity.fromConfigKey(trimmed).map(config.withInterfaceDensity)
-      else if elementGapKeys.contains(key) then
-        trimmed.toDoubleOption
-          .filter(gap => gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
-          .map(config.withUiElementGap)
-      else if cornerRadiusKeys.contains(key) then
-        trimmed.toIntOption
-          .filter(radius => radius >= AppConfig.MinUiCornerRadiusPx && radius <= AppConfig.MaxUiCornerRadiusPx)
-          .map(config.withUiCornerRadiusPx)
-      else if outlineThicknessKeys.contains(key) then
-        trimmed.toIntOption
-          .filter(thickness =>
-            thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
-          )
-          .map(config.withUiOutlineThicknessPx)
-      else None
-
-    def invalidValue(key: String, value: String): Boolean =
-      parse(AppConfig.default, key, value).isEmpty
-
 final case class InputConfig(
     hotkeyConfig: HotkeyConfig = HotkeyConfig(),
     focusedKeymapConfig: FocusedKeymapConfig = FocusedKeymapConfig(),
@@ -887,28 +513,6 @@ final case class InputConfig(
 
   def normalized: InputConfig =
     copy(wheelScrollLines = AppConfig.clampWheelScrollLines(wheelScrollLines))
-
-object InputConfig:
-
-  object Schema:
-
-    val currentKeys: Set[String] = Set("input.wheel_scroll_lines", "input.wheel.scroll.lines")
-
-    val wheelScrollLinesKeys: Set[String] = currentKeys + "input_wheel_scroll_lines"
-
-    def handles(key: String): Boolean = wheelScrollLinesKeys.contains(key)
-
-    def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
-      Option.when(wheelScrollLinesKeys.contains(key))(value.trim.toIntOption).flatten.map(config.withWheelScrollLines)
-
-    val dynamicPrefixes: List[String] = List(
-      "hotkey.",
-      "keymap.editor.",
-      "keymap.command_runner.",
-      "keymap.modal.",
-      "keymap.panel.",
-      "keymap.peek."
-    )
 
 final case class TextAreaInsets(
     left: Double = TextAreaInsets.DefaultInset,

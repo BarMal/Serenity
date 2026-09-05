@@ -102,13 +102,14 @@ object ConfigGroups:
       .getOrElse(Map.empty)
       .toList
       .sortBy(_._1)
-      .flatMap { case (languageId, serverOverride) =>
-        def key(field: String) = ConfigUtil.joinPath("lsp", languageId, field)
-        List(
-          serverOverride.enabled.map(enabled => key("enabled") -> HoconValue.boolean(enabled)),
-          serverOverride.command.map(command => key("command") -> HoconValue.string(command)),
-          serverOverride.args.map(args => key("args") -> HoconValue.list(args))
-        ).flatten
+      .flatMap {
+        case (languageId, serverOverride) =>
+          def key(field: String) = ConfigUtil.joinPath("lsp", languageId, field)
+          List(
+            serverOverride.enabled.map(enabled => key("enabled") -> HoconValue.boolean(enabled)),
+            serverOverride.command.map(command => key("command") -> HoconValue.string(command)),
+            serverOverride.args.map(args => key("args") -> HoconValue.list(args))
+          ).flatten
       }
 
   def hotkeys(config: AppConfig): List[(String, HoconValue)] =
@@ -148,12 +149,12 @@ object ConfigGroups:
     * by dropping it, so it survived only by being written as a quoted key. It stays readable for files that have it.
     */
   private val spellings: List[(String, Set[String])] = List(
-    "character.animation.preset" -> Set("character.animation", "character_animation"),
+    "character.animation.preset"      -> Set("character.animation", "character_animation"),
     "character.animation.duration_ms" -> Set("character.animation.duration.ms", "character_animation_duration_ms"),
     "character.animation.steps"       -> Set("character_animation_steps"),
     "ui.motion.preset"                -> Set("ui.motion", "ui_motion", "motion.preset", "motion_preset"),
     "ui.motion.accessibility"         -> Set.empty,
-    "ui.motion.speed_scale" -> Set("motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale"),
+    "ui.motion.speed_scale"           -> Set("motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale"),
     "ui.motion.editor_text.speed_scale" ->
       Set("ui.motion.editor.text.speed_scale", "ui_motion_editor_text_speed_scale"),
     "ui.motion.command_runner.speed_scale" ->
@@ -165,10 +166,10 @@ object ConfigGroups:
     "ui.motion.command_runner" -> Set("ui.motion.command.runner", "ui_motion_command_runner"),
     "ui.motion.command_runner_reveal" ->
       Set("ui.motion.command.runner.reveal", "ui_motion_command_runner_reveal"),
-    "ui.motion.ui"           -> Set("ui.motion.ui_elements", "ui.motion.ui.elements", "ui_motion_ui"),
-    "ui.motion.editor_text"  -> Set("ui.motion.editor.text", "ui_motion_editor_text"),
-    "ui.motion.panel_open"   -> Set("ui.motion.panel.open", "ui_motion_panel_open"),
-    "ui.motion.panel_close"  -> Set("ui.motion.panel.close", "ui_motion_panel_close")
+    "ui.motion.ui"          -> Set("ui.motion.ui_elements", "ui.motion.ui.elements", "ui_motion_ui"),
+    "ui.motion.editor_text" -> Set("ui.motion.editor.text", "ui_motion_editor_text"),
+    "ui.motion.panel_open"  -> Set("ui.motion.panel.open", "ui_motion_panel_open"),
+    "ui.motion.panel_close" -> Set("ui.motion.panel.close", "ui_motion_panel_close")
   )
 
   private val familyKeys: Set[String] =

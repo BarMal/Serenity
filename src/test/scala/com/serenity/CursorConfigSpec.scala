@@ -9,19 +9,15 @@ import org.scalatest.matchers.should.Matchers
 class CursorConfigSpec extends AnyFlatSpec with Matchers:
 
   "CursorConfig" should "own cursor schema metadata" in {
-    CursorConfig.Schema.currentKeys.should(
-      contain allOf (
-        "cursor.mode",
-        "cursor.active.color",
-        "cursor.inactive.color",
-        "cursor.info_bar",
-        "cursor.info.bar",
-        "cursor.info_bar.placement",
-        "cursor.info.bar.placement"
-      )
-    )
+    ConfigKeySchema.isKnownKey("cursor.mode") shouldBe true
+    ConfigKeySchema.isKnownKey("cursor.active.color") shouldBe true
+    ConfigKeySchema.isKnownKey("cursor.inactive.color") shouldBe true
+    ConfigKeySchema.isKnownKey("cursor.info_bar") shouldBe true
+    ConfigKeySchema.isKnownKey("cursor.info.bar") shouldBe true
+    ConfigKeySchema.isKnownKey("cursor.info_bar.placement") shouldBe true
+    ConfigKeySchema.isKnownKey("cursor.info.bar.placement") shouldBe true
 
-    CursorConfig.Schema.deprecatedKeys.should(
+    ConfigKeySchema.deprecatedKeys.should(
       contain allOf (
         "cursor_mode"               -> "cursor.mode",
         "cursor_active_color"       -> "cursor.active.color",
@@ -60,24 +56,24 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
     val active   = new Color(0x33, 0x66, 0xcc)
     val inactive = new Color(0xcc, 0x66, 0x33, 0x80)
     val modeConfig =
-      CursorConfig.Schema
-        .parse(AppConfig.default, "cursor_mode", "breathing")
+      ConfigRegistry
+        .read(AppConfig.default, "cursor_mode", "breathing")
         .getOrElse(fail("cursor mode parse"))
     val activeColorConfig =
-      CursorConfig.Schema
-        .parse(AppConfig.default, "cursor.active.color", "#3366CC")
+      ConfigRegistry
+        .read(AppConfig.default, "cursor.active.color", "#3366CC")
         .getOrElse(fail("active cursor colour parse"))
     val inactiveColorConfig =
-      CursorConfig.Schema
-        .parse(AppConfig.default, "cursor_inactive_color", "#CC663380")
+      ConfigRegistry
+        .read(AppConfig.default, "cursor_inactive_color", "#CC663380")
         .getOrElse(fail("inactive cursor colour parse"))
     val infoBarModeConfig =
-      CursorConfig.Schema
-        .parse(AppConfig.default, "cursor.info.bar", "minimal")
+      ConfigRegistry
+        .read(AppConfig.default, "cursor.info.bar", "minimal")
         .getOrElse(fail("cursor info-bar mode parse"))
     val placementConfig =
-      CursorConfig.Schema
-        .parse(AppConfig.default, "cursor_info_bar_placement", "bottom")
+      ConfigRegistry
+        .read(AppConfig.default, "cursor_info_bar_placement", "bottom")
         .getOrElse(fail("cursor info-bar placement parse"))
 
     modeConfig.cursorConfig.mode.shouldBe(CursorMode.Breathe)
@@ -85,21 +81,21 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
     inactiveColorConfig.cursorConfig.colors.inactive.shouldBe(Some(inactive))
     infoBarModeConfig.cursorConfig.infoBarSegments.shouldBe(List(CursorInfoBarSegment.Position))
     placementConfig.cursorConfig.infoBarPlacement.shouldBe(CursorInfoBarPlacement.PinnedBottom)
-    CursorConfig.Schema
-      .parse(AppConfig.default, "cursor.active.color", "")
+    ConfigRegistry
+      .read(AppConfig.default, "cursor.active.color", "")
       .map(_.cursorConfig.colors.active)
       .shouldBe(Some(None))
-    CursorConfig.Schema.parse(AppConfig.default, "cursor.mode", "unknown").shouldBe(None)
+    ConfigRegistry.read(AppConfig.default, "cursor.mode", "unknown").shouldBe(None)
   }
 
   it should "validate cursor config entries centrally" in {
-    CursorConfig.Schema.invalidValue("cursor.mode", "breathing").shouldBe(false)
-    CursorConfig.Schema.invalidValue("cursor.mode", "unknown").shouldBe(true)
-    CursorConfig.Schema.invalidValue("cursor.active.color", "#3366CC").shouldBe(false)
-    CursorConfig.Schema.invalidValue("cursor.active.color", "").shouldBe(false)
-    CursorConfig.Schema.invalidValue("cursor.active.color", "not-a-colour").shouldBe(true)
-    CursorConfig.Schema.invalidValue("cursor.info_bar", "minimal").shouldBe(false)
-    CursorConfig.Schema.invalidValue("cursor.info_bar", "sideways").shouldBe(true)
-    CursorConfig.Schema.invalidValue("cursor.info_bar.placement", "bottom").shouldBe(false)
-    CursorConfig.Schema.invalidValue("cursor.info_bar.placement", "sideways").shouldBe(true)
+    ConfigRegistry.rejects("cursor.mode", "breathing").shouldBe(false)
+    ConfigRegistry.rejects("cursor.mode", "unknown").shouldBe(true)
+    ConfigRegistry.rejects("cursor.active.color", "#3366CC").shouldBe(false)
+    ConfigRegistry.rejects("cursor.active.color", "").shouldBe(false)
+    ConfigRegistry.rejects("cursor.active.color", "not-a-colour").shouldBe(true)
+    ConfigRegistry.rejects("cursor.info_bar", "minimal").shouldBe(false)
+    ConfigRegistry.rejects("cursor.info_bar", "sideways").shouldBe(true)
+    ConfigRegistry.rejects("cursor.info_bar.placement", "bottom").shouldBe(false)
+    ConfigRegistry.rejects("cursor.info_bar.placement", "sideways").shouldBe(true)
   }

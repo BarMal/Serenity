@@ -18,6 +18,7 @@ final case class FieldCodec[A](
     decoder: Decoder[A],
     readList: Option[List[String] => Option[A]] = None
 ):
+
   /** Read straight from the parsed file rather than from a flattened rendering of it.
     *
     * A list is the case that needs it: flattening `["a,b", "c"]` to text loses where one element ends and the next
@@ -69,11 +70,28 @@ object FieldCodec:
       values => HoconValue.string(if values.isEmpty then "off" else values.map(toKey).mkString(","))
     )
 
-  /** An enum spelled by its own config key, which is how every enum in this format is written. */
-  def enumerated[A](fromKey: String => Option[A], toKey: A => String): FieldCodec[A] =
-    given Encoder[A] = Encoder.encodeString.contramap(toKey)
-    given Decoder[A] = Decoder.decodeString.emap(key => fromKey(key).toRight(s"Unknown value: $key"))
-    of(text => fromKey(text.trim), value => HoconValue.string(toKey(value)))
+  /** An enum spelled by its own config key, which is how every enum in this format is written.
+    *
+    * Session files written by earlier releases spelled some of these with the case name instead (`PinnedBottom` rather
+    * than `pinned-bottom`), so `alternatives` lets a codec accept those too. Only the config key is ever written.
+    */
+  def enumerated[A](
+    fromKey: String => Option[A],
+    toKey: A => String,
+    alternatives: String => Option[A] = (_: String) => None
+  ): FieldCodec[A] =
+    def read(text: String): Option[A] = fromKey(text).orElse(alternatives(text))
+    given Encoder[A]                  = Encoder.encodeString.contramap(toKey)
+    given Decoder[A]                  = Decoder.decodeString.emap(key => read(key).toRight(s"Unknown value: $key"))
+    of(text => read(text.trim), value => HoconValue.string(toKey(value)))
+
+  /** The same, for an enum whose values are known, accepting the case name as well as the config key. */
+  def enumeratedValues[A](values: Array[A], toKey: A => String): FieldCodec[A] =
+    enumerated(
+      text => values.find(value => toKey(value) == text),
+      toKey,
+      text => values.find(_.toString == text)
+    )
 
   /** Refuse a value the config would only clamp or ignore, rather than storing something the file did not say. */
   extension [A](codec: FieldCodec[A])
@@ -139,7 +157,8 @@ final case class ConfigField[A](
     codec: FieldCodec[A],
     get: AppConfig => A,
     set: (AppConfig, A) => AppConfig,
-    jsonKey: Option[String] = None
+    jsonKey: Option[String] = None,
+    restore: Option[(AppConfig, A) => AppConfig] = None
 ):
   /** The session-state key, which is the config key unless an already-written session file used a different one. */
   def sessionKey: String = jsonKey.getOrElse(key)
@@ -157,9 +176,18 @@ final case class ConfigField[A](
 
   /** Session state falls back to whatever the caller already has rather than failing the whole restore, so a file
     * written before this field existed keeps every other setting in it.
+    *
+    * A key the file does not carry has to be left alone rather than decoded: an `Option` field decodes a missing key as
+    * `None` quite happily, which would replace the default with "not set" on every older session file.
+    *
+    * `restore` is for the handful of settings whose ordinary setter deliberately adjusts a neighbour -- a custom blur
+    * radius makes the material preset custom. That belongs to someone changing the setting, not to putting back what
+    * was saved, so restoring assigns the field and nothing else.
     */
   def decode(cursor: HCursor, config: AppConfig): AppConfig =
-    cursor.downField(sessionKey).as(using codec.decoder).fold(_ => config, value => set(config, value))
+    val stored = cursor.downField(sessionKey)
+    if !stored.succeeded then config
+    else stored.as(using codec.decoder).fold(_ => config, value => restore.getOrElse(set)(config, value))
 
 /** A key that is only ever read.
   *
