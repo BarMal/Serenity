@@ -1088,17 +1088,52 @@ final case class SurfaceConfig(
       cursorInfoBarBackgroundAlpha = cursorInfoBarBackgroundAlpha.map(AppConfig.clampCursorInfoBarBackgroundAlpha)
     )
 
-  def effectiveEditorTextTransitionSpeedScale: Double =
+  /** Speed scales as the legacy fields alone describe them: a per-family override if there is one, otherwise the
+    * element-wide scale.
+    *
+    * These are what [[MotionConfig.fromLegacy]] reads when it derives a hierarchy from a configuration that has none,
+    * so they cannot themselves consult the hierarchy -- that is what the `effective*` accessors below are for, and
+    * asking one of those here would be circular.
+    */
+  private[config] def legacyEditorTextTransitionSpeedScale: Double =
     editorTextTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
 
-  def effectiveCommandRunnerTransitionSpeedScale: Double =
+  private[config] def legacyCommandRunnerTransitionSpeedScale: Double =
     commandRunnerTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
 
-  def effectiveUiTransitionSpeedScale: Double =
+  private[config] def legacyUiTransitionSpeedScale: Double =
     uiTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
 
-  def effectiveCursorTransitionSpeedScale: Double =
+  private[config] def legacyCursorTransitionSpeedScale: Double =
     cursorTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
+
+  /** The speed scale configured for a family: an explicit per-family override if the user set one, otherwise whatever
+    * the authoritative hierarchy holds, and the element-wide scale only when there is nothing else to go on. This is
+    * the value the settings surface shows as current -- the runtime value the renderer plans with comes from
+    * `elementTransitionSettings`, where a `Reduced` preset legitimately disables motion the user has scaled.
+    *
+    * The middle step is the one that was missing. A configuration loaded from a file carries its scales in the
+    * hierarchy and its legacy fields at their defaults -- those `Option`s are not written, being a record of what was
+    * set explicitly rather than settings in their own right -- so resolving from the legacy fields alone reported the
+    * element-wide default for a family the file plainly gave a scale to, and the settings row showed the wrong number
+    * after every restart.
+    */
+  private def configuredFamilySpeedScale(family: MotionFamily, explicit: Option[Double]): Double =
+    explicit
+      .orElse(motionConfiguration.map(_ => effectiveMotionConfiguration.family(family).speedScale))
+      .getOrElse(elementTransitionSpeedScale)
+
+  def effectiveEditorTextTransitionSpeedScale: Double =
+    configuredFamilySpeedScale(MotionFamily.EditorText, editorTextTransitionSpeedScale)
+
+  def effectiveCommandRunnerTransitionSpeedScale: Double =
+    configuredFamilySpeedScale(MotionFamily.CommandSurfaces, commandRunnerTransitionSpeedScale)
+
+  def effectiveUiTransitionSpeedScale: Double =
+    configuredFamilySpeedScale(MotionFamily.UiTransitions, uiTransitionSpeedScale)
+
+  def effectiveCursorTransitionSpeedScale: Double =
+    configuredFamilySpeedScale(MotionFamily.Cursor, cursorTransitionSpeedScale)
 
   /** Resolve every runtime family from one hierarchy, preserving legacy fields when no hierarchy has been saved yet. */
   def effectiveMotionConfiguration: EffectiveMotionConfig =
@@ -2067,14 +2102,36 @@ final case class AppConfig(
         val accessibility = surfaceConfig.motionConfiguration
           .map(_.accessibility)
           .getOrElse(MotionAccessibility.Standard)
+        // A preset sets the baseline; a per-family speed the user set explicitly is not part of that baseline and
+        // survives it. The legacy `Option` fields are exactly the record of which ones were set explicitly, so they
+        // are re-applied over the preset's own hierarchy -- otherwise choosing a preset silently discarded them from
+        // the hierarchy the renderer and the saved file read, while the legacy fields kept claiming they were in
+        // force.
+        val presetConfiguration =
+          withExplicitFamilySpeeds(MotionConfig.forPreset(preset).copy(accessibility = accessibility))
         withEditorConfig(editorConfig.copy(characterAnimation = preset.animationConfig)).withSurfaceConfig(
           surfaceConfig.copy(
             motionPreset = preset,
-            motionConfiguration = Some(MotionConfig.forPreset(preset).copy(accessibility = accessibility)),
+            motionConfiguration = Some(presetConfiguration),
             commandRunnerAnimation = preset.animationConfig,
             uiAnimation = preset.animationConfig
           )
         )
+
+  private def withExplicitFamilySpeeds(configuration: MotionConfig): MotionConfig =
+    val overrides = List(
+      MotionFamily.EditorText     -> surfaceConfig.editorTextTransitionSpeedScale,
+      MotionFamily.CommandSurfaces -> surfaceConfig.commandRunnerTransitionSpeedScale,
+      MotionFamily.UiTransitions  -> surfaceConfig.uiTransitionSpeedScale,
+      MotionFamily.Cursor         -> surfaceConfig.cursorTransitionSpeedScale
+    )
+    overrides.foldLeft(configuration) {
+      case (current, (family, Some(scale))) =>
+        current.copy(families =
+          current.families.updated(family, current.families(family).copy(speedScale = scale))
+        )
+      case (current, _) => current
+    }
 
   /** Marks the current resolved family values as a custom motion baseline. */
   def withCustomMotionBaseline: AppConfig =
@@ -2268,17 +2325,24 @@ final case class AppConfig(
   def withWheelScrollLines(lines: Int): AppConfig =
     withInputConfig(inputConfig.copy(wheelScrollLines = AppConfig.clampWheelScrollLines(lines)))
 
+  /** Apply a motion change to both the legacy field that describes it and the authoritative hierarchy.
+    *
+    * The hierarchy is materialised from the legacy fields when there is none yet. Updating it only when one already
+    * existed meant a change made before any hierarchy was built -- setting an element-wide speed on a fresh
+    * configuration, say -- landed in the legacy field alone, and the next thing to install a hierarchy (choosing a
+    * motion preset) silently dropped it: the configuration then held one value in its legacy field and another in the
+    * hierarchy the renderer and the saved file both use.
+    */
   private def updateAuthoritativeMotion(
     updateSurface: SurfaceConfig => SurfaceConfig
   )(
     updateConfiguration: MotionConfig => MotionConfig
   ): AppConfig =
     val updatedSurface = updateSurface(surfaceConfig)
-    val updatedConfiguration = surfaceConfig.motionConfiguration.map { configuration =>
-      val fallback = MotionConfig.fromLegacy(surfaceConfig, configuration.baseline)
-      updateConfiguration(configuration.withFallback(fallback)).normalized
-    }
-    withSurfaceConfig(updatedSurface.copy(motionConfiguration = updatedConfiguration))
+    val current        = surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(surfaceConfig))
+    val fallback       = MotionConfig.fromLegacy(surfaceConfig, current.baseline)
+    val updatedConfiguration = updateConfiguration(current.withFallback(fallback)).normalized
+    withSurfaceConfig(updatedSurface.copy(motionConfiguration = Some(updatedConfiguration)))
 
   private def updateMotionFamily(
     configuration: MotionConfig,

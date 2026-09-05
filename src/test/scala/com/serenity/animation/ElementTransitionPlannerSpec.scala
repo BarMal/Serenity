@@ -1,6 +1,6 @@
 package com.serenity.animation
 
-import com.serenity.config.{AppConfig, MotionPreset}
+import com.serenity.config.{AppConfig, MotionFamily, MotionPreset}
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -200,6 +200,30 @@ class ElementTransitionPlannerSpec extends AnyFlatSpec with Matchers:
     config.effectiveCommandRunnerTransitionSpeedScale shouldBe 1.5
     config.effectiveUiTransitionSpeedScale shouldBe 0.75
     config.effectiveCursorTransitionSpeedScale shouldBe 0.25
+  }
+
+  it should "carry an element-wide speed into the hierarchy even when set before any preset" in {
+    // `updateAuthoritativeMotion` used to update the hierarchy only when one already existed, so a speed set on a
+    // fresh config landed in the legacy field alone and the next preset installed a hierarchy without it: the config
+    // then reported one scale and planned motion with another.
+    val config = AppConfig.default.withElementTransitionSpeedScale(2.0)
+
+    config.surfaceConfig.motionConfiguration should not be None
+    config.surfaceConfig.effectiveMotionConfiguration.families.values.map(_.speedScale).toSet shouldBe Set(2.0)
+  }
+
+  it should "report a family speed the hierarchy holds when no explicit override was set" in {
+    // What a configuration looks like after a save and reload: the scales are in the hierarchy, and the legacy
+    // `Option`s -- a record of what was set explicitly, never written to the file -- are empty.
+    val hierarchy = AppConfig.default
+      .withMotionPreset(MotionPreset.Smooth)
+      .withMotionFamilyConfiguration(
+        MotionFamily.EditorText,
+        AppConfig.default.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.EditorText).copy(speedScale = 1.75)
+      )
+
+    hierarchy.surfaceConfig.editorTextTransitionSpeedScale shouldBe None
+    hierarchy.effectiveEditorTextTransitionSpeedScale shouldBe 1.75
   }
 
   it should "keep reduced motion disabled even when app config has a custom speed scale" in {

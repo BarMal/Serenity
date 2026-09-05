@@ -5,15 +5,15 @@ import java.nio.file.{Files, Path, Paths}
 import java.util.Locale
 
 import scala.jdk.CollectionConverters.*
+import scala.util.Try
 import scala.util.control.NonFatal
 
 import cats.effect.IO
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope, WindowSitterAction}
+import com.serenity.animation.{AnimationConfig, WindowSitterAction}
 import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
-import com.serenity.ui.theme.ColorFormat
 import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValueType}
 
 /** Manages loading and saving application configuration */
@@ -302,244 +302,44 @@ object ConfigManager:
       .fold(_ => withLspLists.withHotkeyConfig(HotkeyConfig()), withLspLists.withHotkeyConfig)
 
   /** Generate configuration file content from AppConfig */
-  def configToString(config: AppConfig): String =
-    val animationSetting = config.editorConfig.characterAnimation match
-      case None                                                 => "none"
-      case Some(anim) if anim == AnimationConfig.Enabled.quick  => "quick"
-      case Some(anim) if anim == AnimationConfig.Enabled.smooth => "smooth"
-      case Some(anim) if anim == AnimationConfig.Enabled.subtle => "subtle"
-      case Some(_)                                              => "custom" // For custom configurations
-    val characterAnimationDetails =
-      if animationSetting == "custom" then config.editorConfig.characterAnimation.fold("")(anim => s"""
-             |character.animation.duration_ms = ${anim.durationMs}
-             |character.animation.steps = ${anim.steps}""".stripMargin)
-      else ""
-    def motionAnimationSetting(animation: Option[AnimationConfig]): String =
-      animation match
-        case None                                                 => "none"
-        case Some(anim) if anim == AnimationConfig.Enabled.quick  => "quick"
-        case Some(anim) if anim == AnimationConfig.Enabled.smooth => "smooth"
-        case Some(anim) if anim == AnimationConfig.Enabled.subtle => "subtle"
-        case Some(_)                                              => "custom"
-    val motionConfiguration = config.surfaceConfig.motionConfiguration match
-      case Some(configuration) =>
-        configuration.withFallback(MotionConfig.fromLegacy(config.surfaceConfig, configuration.baseline))
-      case None => MotionConfig.fromLegacy(config.surfaceConfig)
-    val motionFamilySettings = MotionFamily.values
-      .map { family =>
-        val settings = motionConfiguration.families(family)
-        val speedScale = family match
-          case MotionFamily.EditorText =>
-            config.surfaceConfig.editorTextTransitionSpeedScale.getOrElse(settings.speedScale)
-          case MotionFamily.CommandSurfaces =>
-            config.surfaceConfig.commandRunnerTransitionSpeedScale.getOrElse(settings.speedScale)
-          case MotionFamily.UiTransitions => config.surfaceConfig.uiTransitionSpeedScale.getOrElse(settings.speedScale)
-          case MotionFamily.Cursor => config.surfaceConfig.cursorTransitionSpeedScale.getOrElse(settings.speedScale)
-          case MotionFamily.PinnedPanels => settings.speedScale
-        val animationSetting = motionAnimationSetting(settings.animation)
-        val customAnimationDetails =
-          if animationSetting == "custom" then settings.animation.fold("")(animation => s"""
-               |ui.motion.family.${family.configKey}.animation.duration_ms = ${animation.durationMs}
-               |ui.motion.family.${family.configKey}.animation.steps = ${animation.steps}""".stripMargin)
-          else ""
-        val scopedTransitions =
-          if family == MotionFamily.PinnedPanels then
-            s"""
-               |ui.motion.family.${family.configKey}.open_transition = ${transitionKindConfigKey(settings.transitionKindFor(TransitionScope.PanelOpen))}
-               |ui.motion.family.${family.configKey}.close_transition = ${transitionKindConfigKey(settings.transitionKindFor(TransitionScope.PanelClose))}""".stripMargin
-          else ""
-        s"""ui.motion.family.${family.configKey}.enabled = ${settings.enabled}
-         |ui.motion.family.${family.configKey}.transition = ${transitionKindConfigKey(settings.transitionKind)}
-         |ui.motion.family.${family.configKey}.animation.preset = $animationSetting$customAnimationDetails
-         |ui.motion.family.${family.configKey}.speed_scale = $speedScale$scopedTransitions""".stripMargin
-      }
-      .mkString("\n")
-    val lspSettings = lspConfigToString(config.languageToolsConfig.lspUserConfig)
-    def bindingValue(bindings: List[HotkeyTrigger], defaults: List[HotkeyTrigger]): String =
-      hoconString(bindings.headOption.orElse(defaults.headOption).fold("")(_.render))
-    def editorBinding(action: EditorKeyAction): String =
-      bindingValue(
-        config.inputConfig.focusedKeymapConfig.editor.bindingsFor(action),
-        EditorKeyAction.defaultBindings.getOrElse(action, Nil)
-      )
-    val hotkeySettings = HotkeyAction.values
-      .map { action =>
-        val bindings = config.inputConfig.hotkeyConfig.bindingsFor(action).map(_.render)
-        s"hotkey.${action.configKey} = ${hoconList(bindings)}"
-      }
-      .mkString("\n")
-
-    s"""# Serenity Editor Configuration
-       |config.version = ${ConfigVersion.Current.value}
-       |
-       |# Character animation style: none, quick, smooth, subtle, custom
-       |character.animation.preset = $animationSetting$characterAnimationDetails
-       |
-       |# Syntax highlighting: true, false
-       |syntax.highlighting = ${config.languageToolsConfig.syntaxHighlightingEnabled}
-       |
-       |# Font configuration
-        |font.code.family = ${hoconString(config.editorConfig.fontConfig.codeFontFamily)}
-        |font.text.family = ${hoconString(config.editorConfig.fontConfig.textFontFamily)}
-        |font.ui.family = ${hoconString(config.editorConfig.fontConfig.uiFontFamily)}
-        |font.code.size = ${config.editorConfig.fontConfig.codeFontSize}
-        |font.text.size = ${config.editorConfig.fontConfig.textFontSize}
-        |font.ui.size = ${config.editorConfig.fontConfig.uiFontSize}
-        |font.scale.mode = ${config.editorConfig.fontConfig.textScaleMode.configKey}
-        |font.text_scale = ${config.editorConfig.fontConfig.textScaleMultiplier}
-        |font.code.ligatures = ${config.editorConfig.fontConfig.codeLigatures}
-        |font.text.ligatures = ${config.editorConfig.fontConfig.textLigatures}
-        |font.ui.ligatures = ${config.editorConfig.fontConfig.uiLigatures}
-       |
-       |# Cursor colour overrides. Leave empty to use the active theme cursor.
-       |cursor.mode = ${config.cursorMode.configKey}
-       |cursor.active.color = ${hoconString(config.cursorColors.active.map(formatColor).getOrElse(""))}
-       |cursor.inactive.color = ${hoconString(config.cursorColors.inactive.map(formatColor).getOrElse(""))}
-       |# Comma-separated segment list (title, position, word_count, char_count, reading_time), or off/empty to hide
-       |cursor.info_bar.segments = ${hoconString(
-        if config.cursorInfoBarSegments.isEmpty then "off"
-        else config.cursorInfoBarSegments.map(_.configKey).mkString(",")
-      )}
-       |cursor.info_bar.placement = ${config.cursorInfoBarPlacement.configKey}
-       |
-       |# Interface density: compact, comfortable, spacious
-       |interface.density = ${config.interfaceDensity.configKey}
-       |# Window chrome: auto uses themed chrome on Linux; native preserves OS snap/window animations; native-themed uses Windows system chrome colours; custom is themed and applies after restart
-       |window.chrome = ${config.windowChromeMode.configKey}
-       |window.sitter.enabled = ${config.windowSitterConfig.enabled}
-       |window.sitter.action = ${config.windowSitterConfig.action.configKey}
-       |window.sitter.frames = ${hoconList(config.windowSitterConfig.frames.toList)}
-       |window.sitter.active_ticks = ${config.windowSitterConfig.activeTicks}
-       |window.sitter.fast_active_ticks = ${config.windowSitterConfig.fastActiveTicks}
-       |window.sitter.fast_typing_threshold_ms = ${config.windowSitterConfig.fastTypingThresholdMs}
-       |ui.element_gap = ${config.uiElementGap}
-       |ui.corner_radius = ${config.uiCornerRadiusPx}
-       |ui.outline_thickness = ${config.uiOutlineThicknessPx}
-       |command_runner.visible_rows = ${config.surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")}
-       |command_runner.item_gap_rows = ${config.surfaceConfig.commandRunnerItemGapRows}
-       |command_runner.cursor_gap_rows = ${config.surfaceConfig.commandRunnerCursorGapRows.map(_.toString).getOrElse("auto")}
-       |command_runner.show_key_hints = ${config.surfaceConfig.commandRunnerShowKeyHints}
-       |# Hold or double-tap a bare modifier to peek the command runner near the cursor
-       |command_runner.cursor_peek.enabled = ${config.surfaceConfig.commandRunnerCursorPeekEnabled}
-       |command_runner.cursor_peek.modifier = ${hoconString(
-        config.surfaceConfig.commandRunnerCursorPeekModifier.toString.toLowerCase(Locale.ROOT)
-      )}
-       |command_runner.cursor_peek.tap_window_ms = ${config.surfaceConfig.commandRunnerCursorPeekTapWindowMillis}
-       |command_runner.cursor_peek.placement = ${hoconString(
-        config.surfaceConfig.commandRunnerCursorPeekPlacement.toString.toLowerCase(Locale.ROOT)
-      )}
-       |render.fps = ${config.surfaceConfig.renderFpsTarget.configKey}
-       |# Damage granularity the renderer honours: rows redraws whole visible lines; cells honours column ranges on
-       |# monospaced buffers only, falling back to rows for proportional or ligature-shaped text
-       |render.damage_granularity = ${config.surfaceConfig.renderDamageGranularity.configKey}
-       |# Cursor info bar background alpha (0.0-1.0), overriding the active theme's own panel alpha for just that
-       |# panel. auto/default keeps the theme's alpha.
-       |display.cursor_info_bar_background_alpha = ${config.surfaceConfig.cursorInfoBarBackgroundAlpha
-        .map(_.toString)
-        .getOrElse("auto")}
-       |display.word_wrap = ${config.surfaceConfig.wordWrapEnabled}
-       |display.visual_line_navigation = ${config.surfaceConfig.visualLineCursorNavigation}
-       |display.line_numbers = ${config.surfaceConfig.showLineNumbers}
-       |display.gutter = ${config.surfaceConfig.showGutter}
-       |display.word_count = ${config.surfaceConfig.showWordCount}
-       |# Where document comments are shown: floating, margin
-       |display.comments = ${config.surfaceConfig.commentDisplayMode.configKey}
-       |display.pane_headers = ${config.surfaceConfig.showPaneHeaders}
-       |display.focused_text_body = ${config.surfaceConfig.focusedTextBodyEnabled}
-       |display.contextual_toolbar = ${config.surfaceConfig.contextualToolbarEnabled}
-       |display.contextual_toolbar_mode = ${config.surfaceConfig.contextualToolbarDisplayMode.configKey}
-       |
-       |# UI material and motion presets: solid, clear, frosted, crystal, custom / reduced, subtle, smooth, expressive, custom
-       |ui.material = ${config.surfaceConfig.materialPreset.configKey}
-       |# Post-processing: off, scanlines, glow, scanlines-glow
-       |ui.post_processing = ${config.surfaceConfig.postProcessingEffect.configKey}
-       |# Draw soft shadows behind menus and panels
-       |ui.shadows = ${config.surfaceConfig.uiShadowsEnabled}
-       |# Background treatment behind panes: solid, transparent, frosted, glass-like
-       |ui.background_style = ${config.surfaceConfig.backgroundStyle.configKey}
-       |# Blur strength behind translucent surfaces (0.0-1.0)
-       |ui.blur_radius = ${config.surfaceConfig.blurRadius}
-       |ui.motion.preset = ${motionConfiguration.baseline.configKey}
-       |ui.motion.accessibility = ${motionConfiguration.accessibility.configKey}
-       |${config.surfaceConfig.editorTextTransitionSpeedScale.map(value => s"ui.motion.editor_text.speed_scale = $value").getOrElse("")}
-       |${config.surfaceConfig.commandRunnerTransitionSpeedScale.map(value => s"ui.motion.command_runner.speed_scale = $value").getOrElse("")}
-       |${config.surfaceConfig.uiTransitionSpeedScale.map(value => s"ui.motion.ui.speed_scale = $value").getOrElse("")}
-       |${config.surfaceConfig.cursorTransitionSpeedScale.map(value => s"ui.motion.cursor.speed_scale = $value").getOrElse("")}
-       |$motionFamilySettings
-       |
-       |# Markdown rendering mode: source, split-preview, inline-lens
-       |document.markdown_view = ${config.markdownViewMode.configKey}
-       |
-       |# Default mode for new buffers: plain-text, markdown, rich-text
-       |document.default_mode = ${config.defaultDocumentMode.configKey}
-       |
-       |editor.minimum_pane_width = ${config.editorConfig.minimumPaneWidth}
-       |# Lines one mouse-wheel notch scrolls
-       |input.wheel_scroll_lines = ${config.inputConfig.wheelScrollLines}
-       |
-       |# Preferred desktop window size. Leave empty to use the default.
-       |window.preferred.width = ${hoconString(config.preferredWindowSize.map(_.width).fold("")(_.toString))}
-       |window.preferred.height = ${hoconString(config.preferredWindowSize.map(_.height).fold("")(_.toString))}
-       |
-        |# Text area insets as percentages of the central workspace.
-        |text_area.left.percent = ${config.surfaceConfig.textAreaInsets.leftPercent}
-        |text_area.right.percent = ${config.surfaceConfig.textAreaInsets.rightPercent}
-        |text_area.top.percent = ${config.surfaceConfig.textAreaInsets.topPercent}
-        |text_area.bottom.percent = ${config.surfaceConfig.textAreaInsets.bottomPercent}
-        |viewport.width.percent = ${config.surfaceConfig.viewportSizing.width.percentValue}
-       |viewport.width.max = ${hoconString(config.surfaceConfig.viewportSizing.width.maxCells.fold("")(_.toString))}
-       |viewport.height.percent = ${config.surfaceConfig.viewportSizing.height.percentValue}
-       |viewport.height.max = ${hoconString(config.surfaceConfig.viewportSizing.height.maxCells.fold("")(_.toString))}
-       |
-       |# LSP server overrides
-       |$lspSettings
-       |
-       |# Spell-checking for prose buffers
-       |spellcheck.enabled = ${config.languageToolsConfig.spellCheck.enabled}
-       |spellcheck.languages = ${hoconList(config.languageToolsConfig.spellCheck.normalized.languages)}
-       |spellcheck.dictionary_paths = ${hoconList(config.languageToolsConfig.spellCheck.normalized.dictionaryPaths)}
-       |spellcheck.words = ${hoconList(config.languageToolsConfig.spellCheck.normalized.additionalWords)}
-       |
-       |# Hotkey overrides
-       |$hotkeySettings
-       |
-       |# Focused keymap overrides
-       |keymap.editor.page_down = ${editorBinding(EditorKeyAction.PageDown)}
-       |keymap.editor.extend_selection_left = ${editorBinding(EditorKeyAction.ExtendSelectionLeft)}
-       |keymap.editor.extend_selection_right = ${editorBinding(EditorKeyAction.ExtendSelectionRight)}
-       |keymap.editor.extend_selection_up = ${editorBinding(EditorKeyAction.ExtendSelectionUp)}
-       |keymap.editor.extend_selection_down = ${editorBinding(EditorKeyAction.ExtendSelectionDown)}
-       |keymap.command_runner.submit = ${bindingValue(
-        config.inputConfig.focusedKeymapConfig.commandRunner.bindingsFor(CommandRunnerKeyAction.Submit),
-        CommandRunnerKeyAction.defaultBindings.getOrElse(CommandRunnerKeyAction.Submit, Nil)
-      )}
-       |keymap.modal.dismiss = ${bindingValue(
-        config.inputConfig.focusedKeymapConfig.modal.bindingsFor(ModalKeyAction.Dismiss),
-        ModalKeyAction.defaultBindings.getOrElse(ModalKeyAction.Dismiss, Nil)
-      )}
-       |""".stripMargin
+  def configToString(config: AppConfig): String = ConfigFileFormat.render(config)
 
   /** Save configuration to file */
   def saveConfig(config: AppConfig, configPath: String): Boolean =
     saveConfig(config, Paths.get(configPath))
 
   def saveConfig(config: AppConfig, configPath: Path): Boolean =
-    try
-      AtomicFileWriter.writeBytesBlocking(configPath, renderedConfig(config).getBytes(StandardCharsets.UTF_8))
-      true
-    catch case _: Exception => false
+    renderedConfig(config).fold(
+      _ => false,
+      text =>
+        try
+          AtomicFileWriter.writeBytesBlocking(configPath, text.getBytes(StandardCharsets.UTF_8))
+          true
+        catch case _: Exception => false
+    )
 
   /** The config text to write, refused if it is not something this module could read back.
     *
     * An unparseable file is worse than a failed save: `loadConfigResult` falls back to defaults for the whole file, so
     * one bad value silently resets every other setting the user had. That is exactly what an unquoted comma in the
     * cursor info bar's segment list used to do. Checking here keeps a formatting mistake in one setting from reaching
-    * the file at all, and leaves whatever the user already had in place.
+    * the file at all, and leaves whatever the user already had in place. A setting the file would swallow rather than
+    * reject -- a key written at a path that also has children -- costs the user that one setting just as silently, so
+    * it is refused on the same terms.
     */
-  private def renderedConfig(config: AppConfig): String =
-    val text = configToString(config)
-    val _    = ConfigFactory.parseString(text)
-    text
+  private def renderedConfig(config: AppConfig): Either[String, String] =
+    ConfigFileFormat.unwritableSettings(config) match
+      case Nil =>
+        val text = ConfigFileFormat.render(config)
+        Try(ConfigFactory.parseString(text)).toEither
+          .map(_ => text)
+          .left
+          .map(error => s"Configuration would not parse back: ${error.getMessage}")
+      case lost =>
+        Left(
+          s"Configuration settings would not survive being written: ${lost.mkString(", ")}. A key cannot be both a " +
+            "value and the parent of other keys."
+        )
 
   /** Copy a config file that could not be read to a sibling `.unreadable` path, returning where it went.
     *
@@ -558,12 +358,15 @@ object ConfigManager:
   /** Save configuration on the Cats Effect blocking pool with a structured failure result. */
   def saveConfigIO(config: AppConfig, configPath: Path): IO[Either[ConfigError, Unit]] =
     IO.blocking {
-      try
-        AtomicFileWriter.writeBytesBlocking(configPath, renderedConfig(config).getBytes(StandardCharsets.UTF_8))
-        Right(())
-      catch
-        case error: Exception =>
-          Left(ConfigError("save", configPath, s"Failed to save configuration: ${error.getMessage}", Some(error)))
+      renderedConfig(config) match
+        case Left(problem) => Left(ConfigError("save", configPath, s"Failed to save configuration: $problem", None))
+        case Right(text) =>
+          try
+            AtomicFileWriter.writeBytesBlocking(configPath, text.getBytes(StandardCharsets.UTF_8))
+            Right(())
+          catch
+            case error: Exception =>
+              Left(ConfigError("save", configPath, s"Failed to save configuration: ${error.getMessage}", Some(error)))
     }
 
   def saveConfigIO(config: AppConfig, configPath: String): IO[Either[ConfigError, Unit]] =
@@ -809,15 +612,6 @@ object ConfigManager:
     value.toDoubleOption
       .filter(scale => scale >= FontLoader.FontConfig.MinTextScale && scale <= FontLoader.FontConfig.MaxTextScale)
 
-  private def transitionKindConfigKey(kind: TransitionKind): String =
-    kind match
-      case TransitionKind.Fade                   => "fade"
-      case TransitionKind.TypedText              => "typed"
-      case TransitionKind.DirectionalSweep       => "directional"
-      case TransitionKind.LineAndCharacterTandem => "tandem"
-      case TransitionKind.Disabled               => "off"
-      case TransitionKind.OutlineThenContent     => "outline"
-
   private def parseUiElementGap(value: String): Option[Double] =
     value.toDoubleOption.filter(gap =>
       gap.isFinite && gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap
@@ -832,16 +626,6 @@ object ConfigManager:
     value.toIntOption.filter(thickness =>
       thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
     )
-
-  private def formatColor(color: java.awt.Color): String =
-    ColorFormat.toHex(color, withAlpha = true)
-
-  private def hoconString(value: String): String =
-    val safe = value.nonEmpty && value.forall(char => char.isLetterOrDigit || "_./-".contains(char))
-    if safe then value else s"\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
-
-  private def hoconList(values: List[String]): String =
-    values.map(value => s"\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\"").mkString("[", ", ", "]")
 
   private def parseLspConfigEntry(config: AppConfig, key: String, value: String): AppConfig =
     key.split("\\.", 3).toList match
@@ -884,18 +668,3 @@ object ConfigManager:
       case "true" | "on" | "enabled"    => Some(true)
       case "false" | "off" | "disabled" => Some(false)
       case _                            => None
-
-  private def lspConfigToString(config: LspUserConfig): String =
-    config.servers
-      .getOrElse(Map.empty)
-      .toList
-      .sortBy(_._1)
-      .flatMap {
-        case (languageId, override_) =>
-          List(
-            override_.enabled.map(enabled => s"lsp.$languageId.enabled = $enabled"),
-            override_.command.map(command => s"lsp.$languageId.command = ${hoconString(command)}"),
-            override_.args.map(args => s"lsp.$languageId.args = ${hoconList(args)}")
-          ).flatten
-      }
-      .mkString("\n")
