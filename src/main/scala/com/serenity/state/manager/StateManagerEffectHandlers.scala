@@ -11,6 +11,7 @@ import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.*
 import com.serenity.config.{
   AppConfig,
+  AppMode,
   CursorInfoBarSegment,
   DefaultDocumentMode,
   HotkeyTrigger,
@@ -228,6 +229,11 @@ final private[manager] class StateManagerEffectHandlers(
     applyConfigUpdate(update)
 
   private def updateDocumentDefaultsConfig(
+    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
+  ): IO[com.serenity.config.AppConfig] =
+    applyConfigUpdate(update)
+
+  private def updateAppModeConfig(
     update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
   ): IO[com.serenity.config.AppConfig] =
     applyConfigUpdate(update)
@@ -541,7 +547,8 @@ final private[manager] class StateManagerEffectHandlers(
                   lspQueue.enqueue(LspEffect.FileClosed(uri, previous))
                 )
               val openNew =
-                language.fold(IO.unit)(next => lspQueue.enqueue(LspEffect.FileOpened(uri, next, text)))
+                if state.persisted.config.appMode != AppMode.Code then IO.unit
+                else language.fold(IO.unit)(next => lspQueue.enqueue(LspEffect.FileOpened(uri, next, text)))
               closeOld >> openNew
             case _ =>
               IO.unit
@@ -684,10 +691,22 @@ final private[manager] class StateManagerEffectHandlers(
         setMarkdownViewMode(mode)
       case ViewIntent.SetDefaultDocumentMode(mode) =>
         updateDocumentDefaultsConfig(_.withDefaultDocumentMode(mode)).void
+      case ViewIntent.SetAppMode(mode) =>
+        updateAppModeConfig(_.withAppMode(mode)).void
+      case ViewIntent.SetShowAllSettingsRegardlessOfMode(value) =>
+        updateAppModeConfig(_.withShowAllSettingsRegardlessOfMode(value)).void
       case ViewIntent.FocusPanel(position) =>
         switchToPinnedPanel(PanelTarget.ByPosition(position))
       case ViewIntent.UnpinPanel(position) =>
-        unpinPanel(PanelTarget.ByPosition(position))
+        // Closing the project-task output panel while its task is still running must actually stop it -- otherwise
+        // the task's own 100ms output-refresh tick (`runProjectTask`) just re-pins it right back (issue #1294).
+        val closingRunningTaskPanel = state.pinnedSurfaces.exists { surface =>
+          (surface.content, surface.presentation) match
+            case (SurfaceContent.Terminal(_, _), SurfacePresentation.Pinned(`position`, _)) => true
+            case _                                                                          => false
+        }
+        unpinPanel(PanelTarget.ByPosition(position)) >>
+          (if closingRunningTaskPanel then cancelProjectTaskSilently else IO.unit)
       case ViewIntent.ExpandPanel(position) =>
         expandPinnedPanel(PanelTarget.ByPosition(position))
       case ViewIntent.CollapseExpandedPanel =>
@@ -920,6 +939,10 @@ final private[manager] class StateManagerEffectHandlers(
         updateTextDisplayConfig(config =>
           config.withVisualLineCursorNavigation(!config.surfaceConfig.visualLineCursorNavigation)
         ).void
+      case PanelChromeIntent.ToggleTypewriterScrolling =>
+        updateTextDisplayConfig(config =>
+          config.withTypewriterScrolling(!config.surfaceConfig.typewriterScrollingEnabled)
+        ).void
       case PanelChromeIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case PanelChromeIntent.SetGutter(enabled) =>
@@ -928,6 +951,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
       case PanelChromeIntent.SetVisualLineCursorNavigation(enabled) =>
         updateTextDisplayConfig(config => config.withVisualLineCursorNavigation(enabled)).void
+      case PanelChromeIntent.SetTypewriterScrolling(enabled) =>
+        updateTextDisplayConfig(config => config.withTypewriterScrolling(enabled)).void
       case PanelChromeIntent.SetFocusedTextBody(enabled) =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
       case PanelChromeIntent.SetContextualToolbarEnabled(enabled) =>
@@ -1635,51 +1660,56 @@ final private[manager] class StateManagerEffectHandlers(
     }
 
   private def runProjectTask(state: AppState, kind: ProjectTaskKind): IO[Unit] =
-    projectTaskStartPath(state).flatMap { start =>
-      ProjectTaskDetector.detect(start, kind) match
-        case None =>
-          pinProjectTerminal(ProjectTaskTerminal.noTask(kind, start))
-        case Some(command) =>
-          projectTaskSemaphore.permit.use { _ =>
-            projectTaskFiberRef.get.flatMap {
-              case Some(_) =>
-                pinProjectTerminal(
-                  "A project task is already running. Use Cancel Project Task before starting another."
-                )
-              case None =>
-                for
-                  outputRef <- Ref.of[IO, String]("")
-                  finished  <- Deferred[IO, Unit]
-                  startTask <- Deferred[IO, Unit]
-                  renderer <- Stream
-                    .awakeEvery[IO](100.millis)
-                    .evalMap(_ =>
-                      outputRef.get.flatMap(output => pinProjectTerminal(ProjectTaskTerminal.running(command, output)))
-                    )
-                    .interruptWhen(Stream.eval(finished.get).as(true))
-                    .compile
-                    .drain
-                    .start
-                  task = startTask.get >> ProjectTaskRunner
-                    .runStreaming(command)(chunk =>
-                      outputRef.update(output => ProjectTaskRunner.appendOutputTail(output, chunk))
-                    )
-                    .attempt
-                    .flatMap {
-                      case Right(result) => pinProjectTerminal(ProjectTaskTerminal.completed(result))
-                      case Left(error)   => pinProjectTerminal(ProjectTaskTerminal.failedToStart(command, error))
-                    }
-                    .guarantee(
-                      finished.complete(()).attempt.void >> renderer.joinWithNever >> ProjectTaskOwnership
-                        .clear(projectTaskFiberRef, finished)
-                    )
-                  fiber <- (pinProjectTerminal(ProjectTaskTerminal.started(command)) >> task).start
-                  _     <- projectTaskFiberRef.set(Some(ManagedProjectTask(finished, fiber)))
-                  _     <- startTask.complete(())
-                yield ()
+    if state.persisted.config.appMode != AppMode.Code then
+      pinProjectTerminal(ProjectTaskTerminal.notAvailableInProseMode(kind))
+    else
+      projectTaskStartPath(state).flatMap { start =>
+        ProjectTaskDetector.detect(start, kind) match
+          case None =>
+            pinProjectTerminal(ProjectTaskTerminal.noTask(kind, start))
+          case Some(command) =>
+            projectTaskSemaphore.permit.use { _ =>
+              projectTaskFiberRef.get.flatMap {
+                case Some(_) =>
+                  pinProjectTerminal(
+                    "A project task is already running. Use Cancel Project Task before starting another."
+                  )
+                case None =>
+                  for
+                    outputRef <- Ref.of[IO, String]("")
+                    finished  <- Deferred[IO, Unit]
+                    startTask <- Deferred[IO, Unit]
+                    renderer <- Stream
+                      .awakeEvery[IO](100.millis)
+                      .evalMap(_ =>
+                        outputRef.get.flatMap(output =>
+                          pinProjectTerminal(ProjectTaskTerminal.running(command, output))
+                        )
+                      )
+                      .interruptWhen(Stream.eval(finished.get).as(true))
+                      .compile
+                      .drain
+                      .start
+                    task = startTask.get >> ProjectTaskRunner
+                      .runStreaming(command)(chunk =>
+                        outputRef.update(output => ProjectTaskRunner.appendOutputTail(output, chunk))
+                      )
+                      .attempt
+                      .flatMap {
+                        case Right(result) => pinProjectTerminal(ProjectTaskTerminal.completed(result))
+                        case Left(error)   => pinProjectTerminal(ProjectTaskTerminal.failedToStart(command, error))
+                      }
+                      .guarantee(
+                        finished.complete(()).attempt.void >> renderer.joinWithNever >> ProjectTaskOwnership
+                          .clear(projectTaskFiberRef, finished)
+                      )
+                    fiber <- (pinProjectTerminal(ProjectTaskTerminal.started(command)) >> task).start
+                    _     <- projectTaskFiberRef.set(Some(ManagedProjectTask(finished, fiber)))
+                    _     <- startTask.complete(())
+                  yield ()
+              }
             }
-          }
-    }
+      }
 
   private def projectTaskStartPath(state: AppState): IO[Path] =
     state.focusedBufferId
@@ -1688,13 +1718,19 @@ final private[manager] class StateManagerEffectHandlers(
       .fold(FileUtils.getCurrentDirectory)(path => IO.pure(path))
 
   private def pinProjectTerminal(text: String): IO[Unit] =
-    pinPanel(PanelContent.Terminal(text, text.length), PanelPosition.Bottom, 14)
+    pinOrUpdateTerminalPanel(text, PanelPosition.Bottom, 14)
 
   private def cancelProjectTask: IO[Unit] =
     ProjectTaskOwnership.cancel(projectTaskFiberRef, projectTaskSemaphore).flatMap {
       case true  => pinProjectTerminal("Project task cancelled.")
       case false => pinProjectTerminal("No project task is running.")
     }
+
+  /** Same cancellation as `cancelProjectTask`, without the confirmation pin -- for closing the output panel itself
+    * (issue #1294), where re-pinning a "cancelled" message would immediately undo the close.
+    */
+  private def cancelProjectTaskSilently: IO[Unit] =
+    ProjectTaskOwnership.cancel(projectTaskFiberRef, projectTaskSemaphore).void
 
   private def requestLspHover(state: AppState): IO[Unit] =
     activeLspRequestTarget(state) match
@@ -2457,7 +2493,11 @@ final private[manager] class StateManagerEffectHandlers(
               case Some(languageId) =>
                 val uri  = path.toUri.toString
                 val text = loadedBuffer.document.content.collect()
-                lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
+                stateRef.get.flatMap { state =>
+                  if state.persisted.config.appMode == AppMode.Code then
+                    lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
+                  else IO.unit
+                }
               case None => IO.unit
           }
           .flatTap(_ =>

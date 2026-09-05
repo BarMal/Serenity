@@ -22,7 +22,8 @@ final case class TuiKey(name: String, bytes: Array[Byte]):
   */
 object TuiKeys:
 
-  private val Esc: Byte = 0x1b.toByte
+  private val Esc: Byte   = 0x1b.toByte
+  private val Tilde: Byte = '~'.toByte
 
   private def bytesOf(text: String): Array[Byte] = text.getBytes(StandardCharsets.UTF_8)
   private def csi(body: String): Array[Byte]     = Esc +: bytesOf(s"[$body")
@@ -78,12 +79,35 @@ object TuiKeys:
       key.bytes.length >= 2 && key.bytes(0) == Esc && key.bytes(1) == '['.toByte,
       s"${key.name} is not a CSI key, so it has no CSI-parameter form -- use csiU for its modified encoding"
     )
+    // A tilde-form key carries its identity in the parameter this would overwrite with `1`: modifying PageUp
+    // (`CSI 5~`) this way would send `CSI 1;2~`, which decodes as Shift+Home rather than failing. Those keys have
+    // their own builder, which keeps the parameter and appends the modifier to it.
+    require(
+      !key.bytes.lastOption.contains(Tilde),
+      s"${key.name} is a tilde-form key -- use modifiedTilde, which keeps its parameter"
+    )
     val finalByte = key.bytes.lastOption.getOrElse('A'.toByte).toChar
     val label     = List(Option.when(ctrl)("Ctrl"), Option.when(alt)("Alt"), Option.when(shift)("Shift")).flatten
     TuiKey(
       (label :+ key.name).mkString("+"),
       csi(s"1;${modifierParam(shift, alt, ctrl)}$finalByte")
     )
+
+  /** A tilde-form key (`CSI <param>~` -- PageUp, PageDown, Delete, and Home/End on the terminals that spell them that
+    * way) with modifiers held, which xterm reports as `CSI <param>;<mod>~`. The parameter is what names the key, so
+    * unlike [[modified]] this keeps it and only appends the modifier.
+    */
+  def modifiedTilde(key: TuiKey, shift: Boolean = false, alt: Boolean = false, ctrl: Boolean = false): TuiKey =
+    val body = new String(key.bytes.drop(2).dropRight(1), java.nio.charset.StandardCharsets.UTF_8)
+    require(
+      key.bytes.lastOption.contains(Tilde) && body.nonEmpty && body.forall(_.isDigit),
+      s"${key.name} is not a tilde-form CSI key, so it has no `CSI <param>;<mod>~` encoding"
+    )
+    val label = List(Option.when(ctrl)("Ctrl"), Option.when(alt)("Alt"), Option.when(shift)("Shift")).flatten
+    TuiKey((label :+ key.name).mkString("+"), csi(s"$body;${modifierParam(shift, alt, ctrl)}~"))
+
+  val ShiftPageUp: TuiKey   = modifiedTilde(PageUp, shift = true)
+  val ShiftPageDown: TuiKey = modifiedTilde(PageDown, shift = true)
 
   /** A key in the CSI-u form (`CSI <code>;<mod> u`), which is how a terminal speaking the kitty keyboard protocol
     * reports a modified key that the legacy encoding cannot express at all.

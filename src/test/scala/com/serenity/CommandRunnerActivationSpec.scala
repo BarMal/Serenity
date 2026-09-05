@@ -43,7 +43,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "split font settings into code, prose, and UI groups" in {
-    val runner = CommandRunner.empty.activate(registry, AppConfig.default)
+    val runner = CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
     val groupIds = runner.settingsGroups.flatMap(group =>
       group.id :: descendants(group).collect { case child: CommandSurfaceItem.GroupItem => child.id }
     )
@@ -183,6 +183,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "gutter",
         "line-wrap",
         "visual-line-navigation",
+        "typewriter-scrolling",
         "show-word-count",
         "focused-text-body",
         "contextual-toolbar",
@@ -224,7 +225,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "expose reorder commands once 2+ cursor info bar segments are included" in {
+  // #1298: reorder commands are listed in the segments' real current order (Position, then Title) and only offer
+  // the direction that would actually move the segment -- Position (first) has no "earlier", Title (last) has no
+  // "later" -- rather than the fixed segmentDefinitions order with both directions always offered.
+  it should "expose reorder commands, in current order and gated by position, once 2+ cursor info bar segments are included" in {
     val config = AppConfig.default.withCursorInfoBarSegments(
       List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
     )
@@ -238,10 +242,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "cursor-info-bar-word-count",
         "cursor-info-bar-char-count",
         "cursor-info-bar-reading-time",
-        "move-cursor-info-bar-title-earlier",
-        "move-cursor-info-bar-title-later",
-        "move-cursor-info-bar-position-earlier",
         "move-cursor-info-bar-position-later",
+        "move-cursor-info-bar-title-earlier",
         "cursor-info-bar-placement"
       )
     )

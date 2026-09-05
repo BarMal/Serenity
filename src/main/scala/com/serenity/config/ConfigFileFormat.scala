@@ -95,6 +95,9 @@ object ConfigFileFormat:
     field("cursor.mode"),
     field("cursor.active.color"),
     field("cursor.inactive.color"),
+    comment("Cursor info bar colour overrides. Leave empty to use the active theme's panel colour."),
+    field("cursor.info_bar.foreground_color"),
+    field("cursor.info_bar.background_color"),
     comment(
       "Comma-separated segment list (title, position, word_count, char_count, reading_time), or off/empty to hide"
     ),
@@ -144,6 +147,8 @@ object ConfigFileFormat:
     field("display.cursor_info_bar_background_alpha"),
     field("display.word_wrap"),
     field("display.visual_line_navigation"),
+    comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
+    field("display.typewriter_scrolling"),
     field("display.line_numbers"),
     field("display.gutter"),
     field("display.word_count"),
@@ -174,6 +179,14 @@ object ConfigFileFormat:
     blank,
     comment("Default mode for new buffers: plain-text, markdown, rich-text"),
     field("document.default_mode"),
+    blank,
+    comment(
+      "App mode: code, prose -- filters which settings are shown by default and gates code-only tooling (LSP, " +
+        "project build/run/test/debug)"
+    ),
+    field("app.mode"),
+    comment("Show every setting regardless of the app mode filter above"),
+    field("app.show_all_settings"),
     blank,
     field("editor.minimum_pane_width"),
     comment("Lines one mouse-wheel notch scrolls"),

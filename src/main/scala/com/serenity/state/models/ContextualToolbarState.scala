@@ -1,7 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.command.*
-import com.serenity.config.{MarkdownViewMode, ToolbarDisplayMode}
+import com.serenity.config.{AppMode, MarkdownViewMode, ToolbarDisplayMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.ui.fonts.FontLoader
@@ -187,7 +187,9 @@ object ContextualToolbar:
       .map {
         case buffer if buffer.document.language.contains(LanguageId.Markdown) =>
           applyMarkdownSelections(markdownItems, state.persisted.config.markdownViewMode)
-        case buffer if buffer.typographyRole == TypographyRole.Code =>
+        // Prose-mode workspaces have no project to build/test/run/debug (issue #1294), so the buttons that would
+        // launch one are never offered there, even for a buffer whose own language happens to read as code.
+        case buffer if buffer.typographyRole == TypographyRole.Code && state.persisted.config.appMode == AppMode.Code =>
           codeItems
         case buffer =>
           proseItems(state, buffer)

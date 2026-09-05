@@ -281,6 +281,21 @@ object DefaultDocumentMode:
       case "rich-text" | "richtext" | "rich" | "rtf"     => Some(DefaultDocumentMode.RichText)
       case _                                             => None
 
+/** Whether the workspace is primarily code or prose. Gates code-only tooling (LSP connections, project
+  * build/run/test/debug) and filters which settings are shown by default.
+  */
+enum AppMode(val configKey: String):
+  case Code  extends AppMode("code")
+  case Prose extends AppMode("prose")
+
+object AppMode:
+
+  def fromConfigKey(value: String): Option[AppMode] =
+    value.trim.toLowerCase match
+      case "code"              => Some(AppMode.Code)
+      case "prose" | "writing" => Some(AppMode.Prose)
+      case _                   => None
+
 enum InterfaceDensity:
   case Compact
   case Comfortable
@@ -469,11 +484,26 @@ final case class CursorColorConfig(
   def inactiveOr(activeColor: Color): Color =
     inactive.getOrElse(activeColor)
 
+/** #1295: `None` (default) keeps the active theme's own panel colour for the cursor info bar, matching every other
+  * floating panel; `Some` overrides just that one surface's foreground/background, independent of theme -- mirrors
+  * [[CursorColorConfig]]'s active/inactive override shape.
+  */
+final case class CursorInfoBarColorConfig(
+    foreground: Option[Color] = None,
+    background: Option[Color] = None
+):
+  def foregroundOr(default: Color): Color =
+    foreground.getOrElse(default)
+
+  def backgroundOr(default: Color): Color =
+    background.getOrElse(default)
+
 final case class CursorConfig(
     mode: CursorMode = CursorMode.Blink,
     colors: CursorColorConfig = CursorColorConfig(),
     infoBarSegments: List[CursorInfoBarSegment] = Nil,
-    infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating
+    infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating,
+    infoBarColors: CursorInfoBarColorConfig = CursorInfoBarColorConfig()
 )
 
 final case class EditorConfig(
@@ -488,6 +518,11 @@ final case class EditorConfig(
 final case class DocumentConfig(
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     defaultMode: DefaultDocumentMode = DefaultDocumentMode.PlainText
+)
+
+final case class AppModeConfig(
+    mode: AppMode = AppMode.Code,
+    showAllSettingsRegardlessOfMode: Boolean = false
 )
 
 final case class InterfaceConfig(
@@ -624,6 +659,12 @@ final case class SurfaceConfig(
     // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
     // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
     visualLineCursorNavigation: Boolean = true,
+    // Off by default (preserves `CursorViewport.adjustForCursor`'s existing behaviour exactly): the cursor's line is
+    // recentred on every move, but never past the document's own end, so a viewport near the last line falls back to
+    // showing as much real content as fits rather than centring. On, that end clamp is lifted -- the caret's line
+    // stays at its centred row even while typing at the very end of the document, padding with blank rows below it
+    // the way iA Writer/Ulysses-style typewriter scrolling does (#1204, #1293).
+    typewriterScrollingEnabled: Boolean = false,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
@@ -1493,7 +1534,8 @@ final case class AppConfig(
     visualFlairLevel: VisualFlairLevel = VisualFlairLevel.default,
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
-    languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig()
+    languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
+    appModeConfig: AppModeConfig = AppModeConfig()
 ):
 
   def withEditorConfig(config: EditorConfig): AppConfig =
@@ -1519,6 +1561,12 @@ final case class AppConfig(
 
   def defaultDocumentMode: DefaultDocumentMode =
     documentConfig.defaultMode
+
+  def appMode: AppMode =
+    appModeConfig.mode
+
+  def showAllSettingsRegardlessOfMode: Boolean =
+    appModeConfig.showAllSettingsRegardlessOfMode
 
   def interfaceDensity: InterfaceDensity =
     interfaceConfig.density
@@ -1637,6 +1685,9 @@ final case class AppConfig(
 
   def withVisualLineCursorNavigation(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(visualLineCursorNavigation = enabled))
+
+  def withTypewriterScrolling(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(typewriterScrollingEnabled = enabled))
 
   /** `None` restores the active theme's own panel alpha for the cursor info bar; `Some` overrides just that one panel's
     * background alpha, independent of theme.
@@ -1983,6 +2034,9 @@ final case class AppConfig(
   def cursorInfoBarPlacement: CursorInfoBarPlacement =
     cursorConfig.infoBarPlacement
 
+  def cursorInfoBarColors: CursorInfoBarColorConfig =
+    cursorConfig.infoBarColors
+
   def withCursorConfig(config: CursorConfig): AppConfig =
     copy(cursorConfig = config)
 
@@ -1997,6 +2051,9 @@ final case class AppConfig(
 
   def withCursorInfoBarPlacement(placement: CursorInfoBarPlacement): AppConfig =
     withCursorConfig(cursorConfig.copy(infoBarPlacement = placement))
+
+  def withCursorInfoBarColors(colors: CursorInfoBarColorConfig): AppConfig =
+    withCursorConfig(cursorConfig.copy(infoBarColors = colors))
 
   def withWindowConfig(config: WindowConfig): AppConfig =
     copy(windowConfig = config.normalized)
@@ -2013,6 +2070,15 @@ final case class AppConfig(
   /** Create a new config with the default mode used for new empty buffers. */
   def withDefaultDocumentMode(mode: DefaultDocumentMode): AppConfig =
     withDocumentConfig(documentConfig.copy(defaultMode = mode))
+
+  def withAppModeConfig(config: AppModeConfig): AppConfig =
+    copy(appModeConfig = config)
+
+  def withAppMode(mode: AppMode): AppConfig =
+    withAppModeConfig(appModeConfig.copy(mode = mode))
+
+  def withShowAllSettingsRegardlessOfMode(value: Boolean): AppConfig =
+    withAppModeConfig(appModeConfig.copy(showAllSettingsRegardlessOfMode = value))
 
   def withInterfaceConfig(config: InterfaceConfig): AppConfig =
     copy(interfaceConfig = config.normalized)

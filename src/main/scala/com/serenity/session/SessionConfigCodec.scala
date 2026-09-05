@@ -5,6 +5,7 @@ import com.serenity.config.{
   AppConfig,
   ConfigRegistry,
   CursorColorConfig,
+  CursorInfoBarColorConfig,
   CursorInfoBarSegment,
   FocusedKeymapConfig,
   HotkeyConfig,
@@ -166,6 +167,11 @@ object SessionConfigCodec:
       "cursorColors",
       _.cursorColors,
       (config, value) => config.withCursorColors(value)
+    ),
+    SessionField[CursorInfoBarColorConfig](
+      "cursorInfoBarColors",
+      _.cursorInfoBarColors,
+      (config, value) => config.withCursorInfoBarColors(value)
     ),
     SessionField[TextAreaInsets](
       "textAreaInsets",

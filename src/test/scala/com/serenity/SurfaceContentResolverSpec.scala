@@ -222,7 +222,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .updateSearchTerm("default document")
 
     val floating = SurfaceContentResolver.resolve(
@@ -308,8 +308,8 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
     */
   it should "always render the selected settings-root group's own row, even when its preview needs the whole item budget" in {
     val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
-      .copy(surface = CommandRunnerSurface.Settings(root = CommandPaletteState(selectedIndex = 1), drilled = None))
+      .activate(CommandRegistry.default, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .copy(surface = CommandRunnerSurface.Settings(root = CommandPaletteState(selectedIndex = 2), drilled = None))
 
     val resolved = SurfaceContentResolver.resolve(
       SurfaceContent.CommandPalette(runner),

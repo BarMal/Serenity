@@ -42,6 +42,32 @@ final private[manager] class StateManagerSurfaceCapability(
   // to unpin/expand/focus/resize a panel that isn't there just see nothing happen, the same explicit policy as
   // "target doesn't apply, ignore the request" used elsewhere in this façade (e.g. `checkUnsavedChanges` and
   // `saveBufferAs` no-op when the bufferId doesn't resolve to a buffer).
+  /** Updates the existing pinned Terminal panel's content in place rather than pinning a new surface every call, so a
+    * project task's periodic output refresh (`StateManagerEffectHandlers.runProjectTask`) doesn't leave behind a fresh
+    * panel -- and the user's own workspace-tree focus on it -- every 100ms for the task's whole lifetime (issue #1294).
+    */
+  def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
+    val content = PanelContent.Terminal(text, text.length)
+    stateRef.get.flatMap { state =>
+      val existing = state.pinnedSurfaces.reverse.find { surface =>
+        surface.content match
+          case SurfaceContent.Terminal(_, _) =>
+            surface.presentation match
+              case SurfacePresentation.Pinned(_, _) => true
+              case _                                => false
+          case _ => false
+      }
+      val updated = existing match
+        case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, _), _)) =>
+          val nextSurface = surface.copy(content = SurfaceContent.Terminal(text, text.length))
+          state.copy(runtime =
+            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
+          )
+        case _ =>
+          PanelStateReducer.pin(content, position, size, state).state
+      validateAndUpdateState(updated, state).flatMap(_ => applyAnimationHooks(state))
+    }
+
   def unpinPanel(target: PanelTarget): IO[Unit] =
     stateRef.get.flatMap { state =>
       val result = target match

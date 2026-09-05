@@ -556,8 +556,11 @@ object CommandRunnerReducer:
                   case None =>
                     ReducerResult.noEffects(state)
               case Some(CommandSurfaceItem.CommandItem(command)) =>
+                // #1298: a command marked `keepMenuOpenOnSubmit` (the info bar segment movers) leaves the submenu
+                // open at its current position, exactly like the `OptionItem` cycle case just above -- only an
+                // ordinary command still closes the whole overlay.
                 ReducerResult(
-                  state = deactivate(state),
+                  state = if command.keepMenuOpenOnSubmit then state else deactivate(state),
                   effects = List(AppEffect.ExecuteCommand(command))
                 )
               case Some(_: CommandSurfaceItem.GroupItem) =>

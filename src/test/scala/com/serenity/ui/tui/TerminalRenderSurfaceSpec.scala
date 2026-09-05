@@ -332,7 +332,14 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       output should include(s"$esc[1 q")  // DECSCUSR: default blinking block
     }
 
-  it should "hide the terminal cursor in breathe mode instead -- breathe stays the app-painted exception" in {
+  /** A frame that carries no cursor colour is a content frame, not the dim half of a breathe cycle: only the idle
+    * cursor phase supplies a colour, and only it can say the caret is currently faded out. Reading `None` as "dim" hid
+    * the caret on every content frame and left the terminal's own cursor wherever the content diff last wrote -- the
+    * bottom of the screen, which is #1215's "jumps to the bottom and stays there". Breathe on a cell terminal has no
+    * content path to paint a caret into (`fillPixelRect` is a no-op there), so presenting one is the only way it is
+    * visible at all.
+    */
+  it should "present the terminal cursor in breathe mode on a frame that carries no cursor colour" in {
     val (rs, writer) = surface(width = 80, height = 24)
     val state        = editorState(cursorMode = CursorMode.Breathe)
     val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
@@ -340,7 +347,55 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     Renderer.renderWithCursorOverlay(state, rs, ViewportSize(80, 24), font, font, font, cellMetrics, cellMetrics, None)
 
+    // The base frame flushes with the caret hidden and the overlay frame presents it, so both escapes appear: what
+    // matters is that the frame *ends* showing the caret, at the cell the cursor is on.
+    val output = writer.toString
+    output should include(s"$esc[2;4H")
+    output.lastIndexOf(s"$esc[?25h") should be > output.lastIndexOf(s"$esc[?25l")
+  }
+
+  it should "hide it on the faded half of a breathe cycle, which is what an idle frame's colour reports" in {
+    val (rs, writer) = surface(width = 80, height = 24)
+    val state        = editorState(cursorMode = CursorMode.Breathe)
+    val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val cellMetrics  = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+    val faded        = new java.awt.Color(255, 255, 255, 16)
+
+    Renderer.renderWithCursorOverlay(
+      state,
+      rs,
+      ViewportSize(80, 24),
+      font,
+      font,
+      font,
+      cellMetrics,
+      cellMetrics,
+      Some(faded)
+    )
+
     writer.toString should include(s"$esc[?25l")
+  }
+
+  it should "present it again on the bright half" in {
+    val (rs, writer) = surface(width = 80, height = 24)
+    val state        = editorState(cursorMode = CursorMode.Breathe)
+    val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val cellMetrics  = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+    val bright       = new java.awt.Color(255, 255, 255, 255)
+
+    Renderer.renderWithCursorOverlay(
+      state,
+      rs,
+      ViewportSize(80, 24),
+      font,
+      font,
+      font,
+      cellMetrics,
+      cellMetrics,
+      Some(bright)
+    )
+
+    writer.toString should include(s"$esc[?25h")
   }
 
   // -- #1172: DEC 2026 synchronized updates bracketing a flush's whole emission ---------------------------------------

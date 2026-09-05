@@ -107,6 +107,9 @@ trait TuiScriptSyntax:
     */
   val runtimeScreen: TuiScript[TuiScreen] = step(_.runtimeScreen)
 
+  /** One tick of the idle cursor phase -- see [[TuiSession.idleCursorScreen]]. */
+  val idleCursorScreen: TuiScript[TuiScreen] = step(_.idleCursorScreen)
+
   /** Whether the runtime would paint the cursor-only path on the next frame, skipping content entirely. */
   val paintsCursorOnly: TuiScript[Boolean] = step(_.paintsCursorOnly)
 

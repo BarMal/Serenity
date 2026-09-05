@@ -103,6 +103,54 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
     surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "abc"))
   }
 
+  /** A run's screen column and its buffer column advance at different rates once a wide glyph is in it: the glyph takes
+    * two cells but one buffer column (`CharWidth`/#1269). Grouping walked the run with a single `Char` index and used
+    * it for both, so every colour group after a wide glyph started one cell early and read the wrong animation cell
+    * (#1271).
+    */
+  it should "keep screen and buffer columns apart when a wide glyph precedes an animated cell" in {
+    val surface = new MockRenderSurface(80, 24)
+    // Buffer columns: 0 is the wide glyph, 1 is 'a', 2 is 'b'. Only 'b' is animated, so it must be its own group,
+    // painted at screen column 3 -- the wide glyph's two cells plus 'a'.
+    val animations = AnimationState.empty.addCompletedCharacter('b', 2, 0, java.awt.Color.RED)
+
+    CharacterRenderer.renderStringWithAnimationPlain(
+      surface,
+      0,
+      0,
+      "漢ab",
+      Theme.default,
+      animations
+    )
+
+    surface.putStringCalls shouldBe List(
+      surface.PutStringCall(0, 0, "漢a"),
+      surface.PutStringCall(3, 0, "b")
+    )
+  }
+
+  it should "keep a surrogate pair whole when only part of the run is animated" in {
+    val surface = new MockRenderSurface(80, 24)
+    // "\uD83D\uDE00" is one codepoint over two chars. The animation names column 1 -- the pair's trailing half, which
+    // is not a character position at all. Walking by `Char` found it there and split the glyph across two colour
+    // groups, painting two broken halves; walking by codepoint looks the pair up once, at the column it starts on.
+    val animations = AnimationState.empty.addCompletedCharacter('x', 1, 0, java.awt.Color.RED)
+
+    CharacterRenderer.renderStringWithAnimationPlain(
+      surface,
+      0,
+      0,
+      "\uD83D\uDE00x",
+      Theme.default,
+      animations
+    )
+
+    // One call, one whole glyph: the pair is looked up once at the column it starts on, so an animation keyed to its
+    // trailing half addresses no character and changes nothing. Before, this painted "?" at column 0, "?" at column 1
+    // and "x" at 2 -- the glyph torn in half.
+    surface.putStringCalls shouldBe List(surface.PutStringCall(0, 0, "\uD83D\uDE00x"))
+  }
+
   it should "batch contiguous runs in syntax-highlighted rendering when the styled segment is uniform" in {
     val surface = new MockRenderSurface(80, 24)
 
