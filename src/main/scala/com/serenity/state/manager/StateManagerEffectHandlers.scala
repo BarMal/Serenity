@@ -7,14 +7,17 @@ import scala.concurrent.duration.*
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
+import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.*
 import com.serenity.config.{
+  AppConfig,
   AppMode,
   CursorInfoBarSegment,
   DefaultDocumentMode,
   HotkeyTrigger,
   KeymapGroup,
-  MarkdownViewMode
+  MarkdownViewMode,
+  VisualFlairLevel
 }
 import com.serenity.document.{CommentRendering, DocumentNavigation, DocumentOutline}
 import com.serenity.io.{FileEntry, FileUtils}
@@ -259,6 +262,37 @@ final private[manager] class StateManagerEffectHandlers(
         state.copy(runtime = state.runtime.copy(windowSitter = sitter))
       }
     }.void
+
+  private def updateCompanionSpriteConfig(update: CompanionSpriteConfig => CompanionSpriteConfig): IO[Unit] =
+    updateAppearanceConfig(config => config.withCompanionSpriteConfig(update(config.companionSpriteConfig)))
+      .flatTap(config => stateRef.update(state => syncCompanionSpritePanel(state, config)))
+      .void
+
+  private def updateVisualFlairLevel(level: VisualFlairLevel): IO[Unit] =
+    updateAppearanceConfig(_.withVisualFlairLevel(level))
+      .flatTap(config => stateRef.update(state => syncCompanionSpritePanel(state, config)))
+      .void
+
+  /** Adds or removes the companion sprite's pinned panel surface to match the config: visible exactly when the
+    * companion sprite is enabled and visual flair is not `Off` (matching item 8/9's "Off = don't render" rule). Called
+    * after either setting changes, since either can flip the panel's visibility.
+    */
+  private def syncCompanionSpritePanel(state: AppState, config: AppConfig): AppState =
+    val shouldShow = config.companionSpriteConfig.enabled && config.visualFlairLevel != VisualFlairLevel.Off
+    val exists     = state.runtime.uiSurfaces.exists(_.id == SurfaceId.CompanionSprite)
+    if shouldShow && !exists then
+      val surface = UiSurface(
+        id = SurfaceId.CompanionSprite,
+        content = SurfaceContent.CompanionSprite,
+        presentation =
+          SurfacePresentation.Pinned(config.companionSpriteConfig.position, config.companionSpriteConfig.size)
+      )
+      state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ surface))
+    else if !shouldShow && exists then
+      state.copy(runtime =
+        state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == SurfaceId.CompanionSprite))
+      )
+    else state
 
   private def cancelActiveMotion(): IO[Unit] =
     clearBufferAnimations() >>
@@ -949,6 +983,10 @@ final private[manager] class StateManagerEffectHandlers(
         updateWindowSitterConfig(_.copy(fastActiveTicks = ticks))
       case PanelChromeIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
         updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
+      case PanelChromeIntent.SetCompanionSpriteEnabled(enabled) =>
+        updateCompanionSpriteConfig(_.copy(enabled = enabled))
+      case PanelChromeIntent.SetVisualFlairLevel(level) =>
+        updateVisualFlairLevel(level)
       case PanelChromeIntent.SetWheelScrollLines(lines) =>
         updateConfig(_.withWheelScrollLines(lines)).void
       case PanelChromeIntent.SetTextAreaLeftInset(value) =>

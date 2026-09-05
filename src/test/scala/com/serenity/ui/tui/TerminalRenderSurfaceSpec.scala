@@ -93,6 +93,75 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     noException should be thrownBy rs.pixels.withPixelTranslation(0.0, 0.0)(())
   }
 
+  // -- pixels.drawImage: a real half-block implementation, not the historical no-op ------------------------------
+
+  // fillPixelRect stays the historical no-op deliberately (see its doc comment in TerminalRenderSurface): the caret
+  // full-frame paint path calls it with real-font pixel coordinates regardless of surface, and making it real on a
+  // cell surface silently overwrote live buffer text -- confirmed empirically while implementing this feature. Only
+  // drawImage (used by the companion sprite pane and Markdown preview/modal-layer caching, none of which ever call
+  // fillPixelRect) gets a real implementation.
+  "pixels.fillPixelRect" should "remain the historical no-op, not painting anything" in {
+    val (rs, writer) = surface(width = 5, height = 3)
+    rs.flush() // baseline frame, so the next flush's diff reflects only what fillPixelRect did (nothing)
+    writer.getBuffer.setLength(0)
+
+    rs.pixels.fillPixelRect(1, 1, 2, 1, Color.RED)
+    rs.flush()
+
+    writer.toString shouldBe ""
+  }
+
+  private def solidImage(width: Int, height: Int)(colorAt: (Int, Int) => Color): java.awt.image.BufferedImage =
+    val image = new java.awt.image.BufferedImage(width, height, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+    for
+      x <- 0 until width
+      y <- 0 until height
+    do image.setRGB(x, y, colorAt(x, y).getRGB)
+    image
+
+  "pixels.drawImage" should "paint an upper-half-block glyph per cell, with fg/bg matching the source pixels" in {
+    val (rs, writer) = surface(width = 3, height = 3)
+    // 1 column x 2 rows of source pixels maps to exactly one cell: red on top, blue on the bottom.
+    val image = solidImage(1, 2) { case (_, y) => if y == 0 then Color.RED else Color.BLUE }
+
+    rs.pixels.drawImage(image, 0, 0, 1, 1)
+    rs.flush()
+
+    val screen = TerminalEmulator.blank(3, 3).consume(writer.toString)
+    val cell   = screen.cellAt(0, 0)
+    cell.text shouldBe HalfBlockImageRenderer.UpperHalfBlock.toString
+    cell.fg shouldBe Color.RED
+    cell.bg shouldBe Color.BLUE
+  }
+
+  it should "leave a fully transparent source cell unpainted rather than drawing an arbitrary color" in {
+    val (rs, writer) = surface(width = 3, height = 3)
+    rs.setBackgroundColor(Color.GREEN)
+    rs.fillRect(0, 0, 3, 3, ' ') // pre-fill so "unpainted" is observable
+    rs.flush()
+    writer.getBuffer.setLength(0)
+
+    val transparent = solidImage(1, 2)((_, _) => new Color(0, 0, 0, 0))
+    rs.pixels.drawImage(transparent, 0, 0, 1, 1)
+    rs.flush()
+
+    // No cell content changed, so the diff against the previous (green-filled) frame is empty.
+    writer.toString shouldBe ""
+  }
+
+  // Regression guard for #1012's modal-layer caching and Markdown preview images (Renderer.scala): both call
+  // `surface.pixels.drawImage` unconditionally, previously swallowed by this surface's no-op. A real implementation
+  // must actually reach the screen buffer for those call sites to stop being silently invisible in TUI mode.
+  it should "produce non-empty flushed output for an opaque image, unlike the historical no-op" in {
+    val (rs, writer) = surface(width = 4, height = 4)
+    val image        = solidImage(2, 2)((_, _) => Color.WHITE)
+
+    rs.pixels.drawImage(image, 0, 0, 2, 1)
+    rs.flush()
+
+    writer.toString should not be empty
+  }
+
   "withRoundRectClip" should "restrict putString to a rectangular cell region, ignoring the arc radius" in {
     val (rs, writer) = surface(width = 4, height = 1)
     rs.setForegroundColor(Color.WHITE)

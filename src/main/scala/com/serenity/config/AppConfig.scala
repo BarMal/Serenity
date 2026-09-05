@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.util.control.NonFatal
 
 import com.serenity.animation.*
+import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
@@ -1529,6 +1530,8 @@ final case class AppConfig(
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
     windowSitterConfig: WindowSitterConfig = WindowSitterConfig.default,
+    companionSpriteConfig: CompanionSpriteConfig = CompanionSpriteConfig.default,
+    visualFlairLevel: VisualFlairLevel = VisualFlairLevel.default,
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
@@ -2121,6 +2124,12 @@ final case class AppConfig(
 
   def withWindowSitterConfig(config: WindowSitterConfig): AppConfig =
     copy(windowSitterConfig = config.normalized)
+
+  def withCompanionSpriteConfig(config: CompanionSpriteConfig): AppConfig =
+    copy(companionSpriteConfig = config.normalized)
+
+  def withVisualFlairLevel(level: VisualFlairLevel): AppConfig =
+    copy(visualFlairLevel = level)
 
   def withLspUserConfig(config: LspUserConfig): AppConfig =
     withLanguageToolsConfig(languageToolsConfig.copy(lspUserConfig = config))

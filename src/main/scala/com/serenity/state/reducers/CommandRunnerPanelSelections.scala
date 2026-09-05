@@ -55,6 +55,7 @@ private[serenity] object CommandRunnerPanelSelections:
       case SurfaceContent.Terminal(_, _)            => None
       case SurfaceContent.ShortcutsHelp(_)          => None
       case SurfaceContent.GhostOverlay(_, _)        => None
+      case SurfaceContent.CompanionSprite           => None
 
   private def positionOf(surface: UiSurface): Option[PanelPosition] =
     surface.presentation match

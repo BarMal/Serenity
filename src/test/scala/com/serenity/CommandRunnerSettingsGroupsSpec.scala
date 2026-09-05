@@ -44,6 +44,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-appearance-motion",
       "settings-ui-presets",
       "settings-accessibility",
+      "settings-performance",
       "settings-keymap"
     )
     groupById(groups, "settings-workspace-layout").children.map(_.id) shouldBe List(

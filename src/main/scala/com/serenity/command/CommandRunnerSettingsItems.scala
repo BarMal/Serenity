@@ -489,6 +489,58 @@ object CommandRunnerSettingsItems:
       hint = Some("Typing-reactive window decoration")
     )
 
+  private[command] def companionSpriteEnabledOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "companion-sprite-enabled",
+      label = "Companion Sprite",
+      options = List(
+        CommandOption(
+          "On",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCompanionSpriteEnabled(true)))
+        ),
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCompanionSpriteEnabled(false)))
+        )
+      ),
+      selectedIndex = optionSelections.getOrElse("companion-sprite-enabled", 1),
+      category = CommandCategory.Settings,
+      hint = Some("A small pixel-art companion pane, idling and occasionally performing an action")
+    )
+
+  private[command] def visualFlairLevelOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "visual-flair-level",
+      label = "Visual Flair",
+      options = List(
+        CommandOption(
+          "Full",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Full))
+          )
+        ),
+        CommandOption(
+          "Reduced",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Reduced))
+          )
+        ),
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
+          )
+        )
+      ),
+      selectedIndex = optionSelections.getOrElse("visual-flair-level", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Performance/battery tier for purely decorative extras -- the companion sprite, background blur")
+    )
+
   private[command] def windowSitterActionOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =

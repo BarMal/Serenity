@@ -420,6 +420,7 @@ object AccessibilitySnapshot:
       case SurfaceContent.Comments(_, _)               => "Comments"
       case SurfaceContent.Diagnostics(_, _)            => "Diagnostics"
       case SurfaceContent.ShortcutsHelp(_)             => "Keyboard shortcuts"
+      case SurfaceContent.CompanionSprite              => "Companion sprite"
       case SurfaceContent.GhostOverlay(original, _)    => surfaceName(original)
 
   private def surfaceValue(content: SurfaceContent): Option[String] =
