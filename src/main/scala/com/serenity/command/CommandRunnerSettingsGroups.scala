@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.CursorInfoBarSegment
+import com.serenity.config.{AppMode, CursorInfoBarSegment}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
@@ -29,7 +29,12 @@ object CommandRunnerSettingsGroups:
     // fixed-order, ungated default.
     cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil
   ): List[CommandSurfaceItem.GroupItem] =
-    val cursorModeItem = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
+    // Read off `optionSelections` rather than taking a separate `AppConfig` parameter: it is already the one place
+    // every setting's current value reaches this builder, so mode filtering can't drift from what the app-mode
+    // toggle itself displays as selected.
+    val appMode = if optionSelections.getOrElse("app-mode", 0) == 1 then AppMode.Prose else AppMode.Code
+    val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 0) == 1
+    val cursorModeItem                  = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
     val cursorInfoBarItems =
       CommandRunnerSettingsItems.cursorInfoBarSegmentItems(optionSelections, cursorInfoBarSegments)
     val cursorInfoPlacement     = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
@@ -481,16 +486,34 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Motion accessibility and reading comfort")
     )
-    List(
-      workspaceLayoutGroup,
-      documentWritingGroup,
-      editorViewGroup,
-      typographyGroup,
-      appearanceMotionGroup,
-      uiPresetsGroup,
-      accessibilityGroup,
-      keymapGroup
+    val appModeGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-app-mode",
+      label = "App Mode",
+      children = List(
+        CommandRunnerSettingsItems.appModeOptionItem(optionSelections),
+        CommandRunnerSettingsItems.showAllSettingsOptionItem(optionSelections)
+      ),
+      category = CommandCategory.Settings,
+      hint = Some("Code or prose workspace -- filters which settings are shown below")
     )
+    // Always shown regardless of mode, otherwise a user in prose mode could never find the toggle back to code mode.
+    val showProseSettings = showAllSettingsRegardlessOfMode || appMode == AppMode.Prose
+    val showCodeSettings  = showAllSettingsRegardlessOfMode || appMode == AppMode.Code
+    val filteredTypographyGroup = typographyGroup.copy(children = typographyGroup.children.filter {
+      case item if item.id == "settings-prose-font" => showProseSettings
+      case item if item.id == "settings-code-font"  => showCodeSettings
+      case _                                        => true
+    })
+    List(appModeGroup, workspaceLayoutGroup) ++
+      (if showProseSettings then List(documentWritingGroup) else Nil) ++
+      List(
+        editorViewGroup,
+        filteredTypographyGroup,
+        appearanceMotionGroup,
+        uiPresetsGroup,
+        accessibilityGroup,
+        keymapGroup
+      )
 
   /** Lead a hint with the note that the control it describes has no visible effect on a fixed-cell terminal surface --
     * the setting still applies and persists identically, it just paints nothing different in TUI mode (see epic #1103's

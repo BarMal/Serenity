@@ -43,7 +43,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "split font settings into code, prose, and UI groups" in {
-    val runner = CommandRunner.empty.activate(registry, AppConfig.default)
+    val runner = CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
     val groupIds = runner.settingsGroups.flatMap(group =>
       group.id :: descendants(group).collect { case child: CommandSurfaceItem.GroupItem => child.id }
     )

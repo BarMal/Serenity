@@ -100,6 +100,7 @@ trait SessionService:
 /** Manages pinned panels and the file explorer. */
 trait PanelManager:
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
+  def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit]
   def unpinPanel(target: PanelTarget): IO[Unit]
   def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit]
   def expandPinnedPanel(target: PanelTarget): IO[Unit]

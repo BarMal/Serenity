@@ -528,6 +528,13 @@ object ConfigRegistry:
         text => DefaultDocumentMode.values.find(_.toString == text)
       )
     )(_.defaultDocumentMode, (config, value) => config.withDefaultDocumentMode(value)),
+    named("app.mode", "appMode")(
+      enumerated(AppMode.fromConfigKey, _.configKey, text => AppMode.values.find(_.toString == text))
+    )(_.appMode, (config, value) => config.withAppMode(value)),
+    field("app.show_all_settings", "app_show_all_settings")(boolean)(
+      _.showAllSettingsRegardlessOfMode,
+      (config, value) => config.withShowAllSettingsRegardlessOfMode(value)
+    ),
     named("editor.minimum_pane_width", "minimumPaneWidth", "editor.minimum.pane.width", "editor_minimum_pane_width")(
       int
     )(_.editorConfig.minimumPaneWidth, (config, value) => config.withMinimumPaneWidth(value)),

@@ -147,6 +147,12 @@ object ConfigGenerators:
       default  <- oneOfEnum(DefaultDocumentMode.values)
     yield DocumentConfig(markdown, default)
 
+  val genAppModeConfig: Gen[AppModeConfig] =
+    for
+      mode    <- oneOfEnum(AppMode.values)
+      showAll <- Gen.oneOf(true, false)
+    yield AppModeConfig(mode, showAll)
+
   val genInterfaceConfig: Gen[InterfaceConfig] =
     for
       density   <- oneOfEnum(InterfaceDensity.values)
@@ -336,6 +342,7 @@ object ConfigGenerators:
       input     <- genInputConfig
       syntax    <- Gen.oneOf(true, false)
       spell     <- genSpellCheckConfig
+      appMode   <- genAppModeConfig
       motion    <- genMotionEdit
       material  <- genMaterialEdit
     yield (motion andThen material)(
@@ -348,6 +355,7 @@ object ConfigGenerators:
         windowSitterConfig = sitter,
         documentConfig = document,
         interfaceConfig = interface,
-        languageToolsConfig = LanguageToolsConfig(syntaxHighlightingEnabled = syntax, spellCheck = spell)
+        languageToolsConfig = LanguageToolsConfig(syntaxHighlightingEnabled = syntax, spellCheck = spell),
+        appModeConfig = appMode
       )
     )

@@ -240,6 +240,12 @@ object ProjectTaskRunner:
 /** Formats project task status for the pinned terminal surface. */
 object ProjectTaskTerminal:
 
+  def notAvailableInProseMode(kind: ProjectTaskKind): String =
+    s"""Project ${kind.lowerLabel} is not available in prose mode.
+       |
+       |Switch to code mode to build, test, run, or debug a project.
+       |""".stripMargin
+
   def noTask(kind: ProjectTaskKind, start: Path): String =
     s"""No ${kind.lowerLabel} task found.
        |

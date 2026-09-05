@@ -709,6 +709,32 @@ object CommandRunnerSettingsItems:
       hint = Some("Mode for newly-created documents")
     )
 
+  private[command] def appModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "app-mode",
+      label = "App Mode",
+      options = List(
+        CommandOption("Code", CommandIntent.View(ViewIntent.SetAppMode(AppMode.Code))),
+        CommandOption("Prose", CommandIntent.View(ViewIntent.SetAppMode(AppMode.Prose)))
+      ),
+      selectedIndex = optionSelections.getOrElse("app-mode", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Code or prose workspace -- filters which settings are shown below")
+    )
+
+  private[command] def showAllSettingsOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "settings-show-all",
+      label = "Show All Settings",
+      options = List(
+        CommandOption("Off", CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(false))),
+        CommandOption("On", CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(true)))
+      ),
+      selectedIndex = optionSelections.getOrElse("settings-show-all", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Show settings hidden by the app mode filter above")
+    )
+
   private[command] def spellCheckOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "spellcheck-enabled",
