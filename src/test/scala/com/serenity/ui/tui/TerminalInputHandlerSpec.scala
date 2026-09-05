@@ -240,3 +240,63 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe Nil
   }
+
+  /** A lone `ESC` has to be told from the first byte of an escape sequence, and the only thing that distinguishes them
+    * is whether more of the sequence follows. Only the input stream knows which, and it is now asked: the read after an
+    * `ESC` is a timed one, so what the queue carries is the stream's own answer rather than a guess from a timer.
+    *
+    * It used to be a guess. The consumer raced the remaining bytes against a 50ms timer, and on a loaded machine the
+    * timer could win while `[A` was still on its way -- turning Up into Escape and a literal `[A` typed into the
+    * document. CI caught a first attempt at this that only checked the queue before waiting: that still lost when the
+    * reader fiber itself was starved past the deadline, which on a two-core runner it is.
+    *
+    * A deadline of zero is what holds it here: even with no patience at all, a sequence the terminal has already sent
+    * must decode as a sequence, because the reader finds those bytes rather than timing out on them.
+    */
+  "an escape sequence" should "decode as one sequence even with no patience for a lone ESC at all" in {
+    val (terminal, pipeOut) = livePipeTerminal()
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard, escDeadline = Duration.Zero)
+      _         <- IO(pipeOut.write(csi("A"))) >> IO(pipeOut.flush())
+      events    <- handler.eventStream.take(1).compile.toList
+    yield events
+
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
+      translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty))
+    )
+  }
+
+  /** And the deadline still does its own job: an `ESC` that nothing follows is a bare Escape. */
+  "a lone ESC with nothing following" should "still resolve to Escape once the deadline passes" in {
+    val (terminal, pipeOut) = livePipeTerminal()
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard)
+      _         <- IO(pipeOut.write(Array(esc))) >> IO(pipeOut.flush())
+      events    <- handler.eventStream.take(1).compile.toList
+    yield events
+
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
+      translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty))
+    )
+  }
+
+  /** A sequence split across two writes, as a slow pty can deliver it, is still one sequence. */
+  "an escape sequence split across two writes" should "decode as one sequence" in {
+    val (terminal, pipeOut) = livePipeTerminal()
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard)
+      _         <- IO(pipeOut.write(Array(esc))) >> IO(pipeOut.flush())
+      _         <- IO(pipeOut.write(bytes("[A"))) >> IO(pipeOut.flush())
+      events    <- handler.eventStream.take(1).compile.toList
+    yield events
+
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
+      translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty))
+    )
+  }

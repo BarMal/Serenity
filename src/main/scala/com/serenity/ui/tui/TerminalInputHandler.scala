@@ -61,10 +61,13 @@ final class TerminalInputHandler private (
 
 object TerminalInputHandler:
 
-  /** How long a lone `ESC` byte is held before it is resolved to a bare [[InputKey.Escape]] rather than the start of a
-    * multi-byte escape sequence. 50ms is comfortably above the delay a real terminal introduces between the bytes of
+  /** How long a lone `ESC` byte is held to see whether the rest of an escape sequence follows, before it is resolved to
+    * a bare [[InputKey.Escape]]. 50ms is comfortably above the delay a real terminal introduces between the bytes of
     * one escape sequence (they arrive as a single burst from the pty), and comfortably below the gap a human perceives
     * as sluggish.
+    *
+    * It is only ever a limit on waiting. What decides the question is whether anything actually followed -- see
+    * [[sequenceRemainder]].
     */
   val EscDisambiguationDeadline: FiniteDuration = 50.millis
 
@@ -132,7 +135,8 @@ object TerminalInputHandler:
     inputRouter: InputRouter[IO, Event],
     systemClipboard: SystemClipboard[IO],
     seedBytes: Array[Byte] = Array.emptyByteArray,
-    wheelScrollLines: Int = InputConfig().wheelScrollLines
+    wheelScrollLines: Int = InputConfig().wheelScrollLines,
+    escDeadline: FiniteDuration = EscDisambiguationDeadline
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
@@ -146,7 +150,7 @@ object TerminalInputHandler:
       reader = terminal.reader()
       // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
       // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
-      fiber <- rawReadLoop(reader, rawQueue).start.flatMap { rawFiber =>
+      fiber <- rawReadLoop(reader, rawQueue, escDeadline).start.flatMap { rawFiber =>
         readLoop(
           rawQueue,
           queue,
@@ -163,7 +167,10 @@ object TerminalInputHandler:
       }.start
     yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal), focusCallback)
 
-  private enum ReadOutcome:
+  /** The byte a terminal sends for the Escape key, and to introduce an escape sequence. */
+  private val Escape: Int = 0x1b
+
+  private[tui] enum ReadOutcome:
     case Bytes(value: Array[Byte])
     case Eof
     case Expired
@@ -188,12 +195,36 @@ object TerminalInputHandler:
     * [[rawQueue]], so the CE3 compute pool is never blocked waiting for terminal I/O and the pty kernel buffer never
     * fills during a slow dispatch cycle. [[readLoop]] consumes from [[rawQueue]] and can safely use [[Queue.tryTake]]
     * for non-blocking drains without any risk of blocking the compute thread.
+    *
+    * Reading an `ESC` is the one moment the answer cannot wait: it either begins an escape sequence or is the Escape
+    * key, and only the stream knows which. So the next read after an `ESC` is a timed one, and a
+    * [[ReadOutcome.Expired]] goes into the queue when nothing follows within `escDeadline`. That puts the evidence in
+    * the queue, in order, where being slow to look at it cannot change what it says.
+    *
+    * Asking it the other way round -- letting the consumer race the remaining bytes against a timer -- is what made
+    * arrow keys unreliable: on a loaded machine the timer could win while `[A` was still on its way from the reader,
+    * and `ESC` `[` `A` became Escape followed by a literal `[A` typed into the document.
     */
-  private def rawReadLoop(reader: NonBlockingReader, rawQueue: Queue[IO, ReadOutcome]): IO[Unit] =
-    IO.interruptible(reader.read()).map(toOutcome).flatMap {
-      case ReadOutcome.Eof => rawQueue.offer(ReadOutcome.Eof)
-      case outcome         => rawQueue.offer(outcome) >> rawReadLoop(reader, rawQueue)
-    }
+  private def rawReadLoop(
+    reader: NonBlockingReader,
+    rawQueue: Queue[IO, ReadOutcome],
+    escDeadline: FiniteDuration
+  ): IO[Unit] =
+    def enqueue(outcome: ReadOutcome, afterEsc: Boolean): IO[Unit] =
+      outcome match
+        case ReadOutcome.Eof => rawQueue.offer(ReadOutcome.Eof)
+        case _               => rawQueue.offer(outcome) >> next(afterEsc)
+
+    def next(afterEsc: Boolean): IO[Unit] =
+      if afterEsc then
+        // `read(0)` blocks forever in JLine, so a deadline that rounds to nothing still has to wait a moment.
+        IO.interruptible(reader.read(escDeadline.toMillis.max(1L))).flatMap {
+          case NonBlockingReader.READ_EXPIRED => rawQueue.offer(ReadOutcome.Expired) >> next(afterEsc = false)
+          case read                           => enqueue(toOutcome(read), afterEsc = read == Escape)
+        }
+      else IO.interruptible(reader.read()).flatMap(read => enqueue(toOutcome(read), afterEsc = read == Escape))
+
+    next(afterEsc = false)
 
   private def readLoop(
     rawQueue: Queue[IO, ReadOutcome],
@@ -295,28 +326,21 @@ object TerminalInputHandler:
         case _                           => IO.pure(acc)
       }
 
+    // A lone `ESC` is Escape exactly when the reader reports that nothing followed it. Waiting is the reader's job;
+    // this only has to read off what it found, which no amount of being late can change.
     def loop: IO[Unit] =
       remainder.get.flatMap { pending =>
-        if pending.length == 1 && pending(0) == 0x1b.toByte then
-          IO.race(IO.sleep(EscDisambiguationDeadline), rawQueue.take).flatMap {
-            case Left(_) =>
-              processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray) >> loop
-            case Right(ReadOutcome.Eof) =>
-              processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
-            case Right(ReadOutcome.Bytes(bs)) =>
-              drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
-            case Right(ReadOutcome.Expired) =>
-              loop // unreachable: rawReadLoop never enqueues Expired
-          }
-        else
-          rawQueue.take.flatMap {
-            case ReadOutcome.Eof =>
-              processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
-            case ReadOutcome.Bytes(bs) =>
-              drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
-            case ReadOutcome.Expired =>
-              loop // unreachable: rawReadLoop never enqueues Expired
-          }
+        val holdingLoneEsc = pending.length == 1 && pending(0) == Escape.toByte
+        rawQueue.take.flatMap {
+          case ReadOutcome.Eof =>
+            processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
+          case ReadOutcome.Bytes(bs) =>
+            drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
+          case ReadOutcome.Expired if holdingLoneEsc =>
+            processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray) >> loop
+          case ReadOutcome.Expired =>
+            loop
+        }
       }
 
     // Decode any bytes TerminalShell's startup negotiation read off this same reader but couldn't attribute to its

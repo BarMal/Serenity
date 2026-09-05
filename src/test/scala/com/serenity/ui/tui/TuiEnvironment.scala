@@ -3,6 +3,8 @@ package com.serenity.ui.tui
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration.FiniteDuration
+
 import cats.effect.IO
 import com.serenity.config.AppConfig
 import com.serenity.ui.layout.ViewportSize
@@ -30,9 +32,16 @@ final case class TuiEnvironment(
     viewport: ViewportSize = TuiViewport.Default,
     config: AppConfig = AppConfig.default,
     file: Option[TuiEnvironment.SourceFile] = None,
-    useOsc52Clipboard: Boolean = true
+    useOsc52Clipboard: Boolean = true,
+    escDeadline: FiniteDuration = TerminalInputHandler.EscDisambiguationDeadline
 ):
-  def withViewport(size: ViewportSize): TuiEnvironment           = copy(viewport = size)
+  def withViewport(size: ViewportSize): TuiEnvironment = copy(viewport = size)
+
+  /** How long a lone `ESC` is held before it resolves to a bare Escape. Set it to zero to prove that decoding an escape
+    * sequence does not depend on that deadline, only on whether the rest of the sequence actually arrived.
+    */
+  def withEscDeadline(deadline: FiniteDuration): TuiEnvironment = copy(escDeadline = deadline)
+
   def withConfig(update: AppConfig => AppConfig): TuiEnvironment = copy(config = update(config))
 
   def withFile(content: String, name: String = TuiEnvironment.DefaultFileName): TuiEnvironment =
