@@ -948,7 +948,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
   // forcing a full re-open/re-navigate round trip to nudge one segment more than one step. Moving a segment now
   // leaves the "Cursor" group open so the next move can be submitted immediately.
   it should "keep the settings submenu open after moving a cursor info bar segment" in {
-    val registry = CommandRegistry.default
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
     val config = AppConfig.default.withCursorInfoBarSegments(
       List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
     )
