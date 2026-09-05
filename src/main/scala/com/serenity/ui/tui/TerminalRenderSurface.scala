@@ -177,11 +177,15 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   // effective vertical resolution a plain ANSI-color terminal can show. Sixel/Kitty/iTerm2 true-pixel protocols are a
   // distinct capability this does not attempt to negotiate.
 
-  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
-    val previousBackground = screenBuffer.getBackgroundColor
-    screenBuffer.setBackgroundColor(color)
-    screenBuffer.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1), ' ')
-    screenBuffer.setBackgroundColor(previousBackground)
+  // fillPixelRect stays a no-op deliberately, unlike drawImage: Renderer's full-frame caret paint
+  // (paintCursorOverlay/similar call sites) calls `pixels.fillPixelRect` with coordinates computed from real font
+  // pixel geometry regardless of surface -- correct on `Java2DRenderSurface`, but on this cell surface (`cellMetrics`
+  // is always `CellMetrics.cellUnit`) that same call lands on real character cells and, if it painted for real, would
+  // silently overwrite live buffer text with a solid caret-colored block every full render (confirmed empirically: it
+  // reliably blanked two characters of "alpha" immediately after the gutter on every frame). TUI's real caret is
+  // `HardwareCursor` (`present`/`hide`, DECSCUSR/CUP) -- this call is simply never meant to paint cell content here,
+  // so it must stay inert the way #1012 originally left it.
+  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit = ()
 
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val previousForeground = screenBuffer.getForegroundColor
