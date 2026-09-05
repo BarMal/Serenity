@@ -591,5 +591,19 @@ object ConfigRegistry:
     * deliberately adjust a neighbouring setting -- a custom blur radius switches the material preset to custom, and the
     * preset's own saved value has to come after that to have the last word.
     */
+  /** Every setting's default value, in the order the file writes them.
+    *
+    * The literals still sit in the config case classes' constructors, but this is where to read them: one list, keyed
+    * the way the config file is, rather than spread over parameter lists and an override block that restates some of
+    * them. `docs/default-config.conf` is generated from it, so a change to any default shows up as a diff there.
+    */
+  lazy val defaults: List[(String, HoconValue)] = fields.map(_.setting(AppConfig.default))
+
+  def defaultFor(key: String): Option[HoconValue] = find(key).map(_.setting(AppConfig.default)._2)
+
+  /** Put one setting back the way it ships, leaving every other setting alone. */
+  def resetToDefault(config: AppConfig, key: String): Option[AppConfig] =
+    find(key).map(_.restoreDefault(config, AppConfig.default))
+
   val readOrder: List[ConfigField[?]] =
     fields.sortBy(field => (field.key.count(_ == '.'), field.key))

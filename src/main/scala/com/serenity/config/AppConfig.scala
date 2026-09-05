@@ -2122,14 +2122,14 @@ object AppConfig:
     animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))
 
   /** Default configuration keeps text entry immediate and uses restrained frosted surfaces. */
+  /** What the app ships with.
+    *
+    * Only the settings that differ from their own field's default belong here. Restating one that already matches hides
+    * which of the two is the real answer -- four of these used to, and telling them apart meant reading both.
+    * `ConfigRegistry.defaults` lists every setting's default, and `docs/default-config.conf` is generated from it.
+    */
   val default: AppConfig = AppConfig(
-    editorConfig = EditorConfig(characterAnimation = AnimationConfig.none),
-    surfaceConfig = SurfaceConfig(
-      uiAnimation = AnimationConfig.smooth,
-      blurRadius = 0.18f,
-      backgroundStyle = BackgroundStyle.Frosted,
-      motionPreset = MotionPreset.Smooth
-    )
+    surfaceConfig = SurfaceConfig(motionPreset = MotionPreset.Smooth)
   )
 
   /** Test configuration with visible animations enabled */

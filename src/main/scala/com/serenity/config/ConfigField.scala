@@ -169,6 +169,9 @@ final case class ConfigField[A](
 
   def read(config: AppConfig, text: String): Option[AppConfig] = codec.parse(text).map(set(config, _))
 
+  /** This one setting taken from `defaults` and put into `config`, which is what resetting a single setting means. */
+  def restoreDefault(config: AppConfig, defaults: AppConfig): AppConfig = set(config, get(defaults))
+
   def readValue(config: AppConfig, value: ConfigValue): Option[AppConfig] =
     codec.fromConfigValue(value).map(set(config, _))
 
