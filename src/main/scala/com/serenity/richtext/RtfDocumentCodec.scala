@@ -154,8 +154,8 @@ object RtfDocumentCodec:
     * its writer only ever emits control words for the character attributes it maps directly (bold/italic/underline,
     * font family/size/color, paragraph alignment), with no passthrough for arbitrary custom attributes. So unlike
     * DOCX/ODT's named paragraph styles, a `ParagraphRole.Heading` can only be approximated visually here: bold text
-    * scaled up by `HeadingFontSizeBoost`. Reading that RTF back (in Serenity or elsewhere) sees ordinary bold body
-    * text at a larger size, not a recoverable heading level -- an accepted, one-way limitation of this format.
+    * scaled up by `HeadingFontSizeBoost`. Reading that RTF back (in Serenity or elsewhere) sees ordinary bold body text
+    * at a larger size, not a recoverable heading level -- an accepted, one-way limitation of this format.
     */
   private def headingAdjustedStyle(style: RichTextStyle, role: ParagraphRole): RichTextStyle =
     role match

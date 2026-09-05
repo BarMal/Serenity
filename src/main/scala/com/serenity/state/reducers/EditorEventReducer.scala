@@ -986,7 +986,9 @@ object EditorEventReducer:
         .sortBy { case (_, start, end) => (-start, -end) }
         .map { case (_, start, end) => MultiCursorEdit(0, start, end, "") }
       val (updatedContent, updatedRichTextDocument) =
-        foldEditsWithRichText(buffer, sortedLineEdits)((content, edit) => deleteOrUnchanged(content, edit.start, edit.end))
+        foldEditsWithRichText(buffer, sortedLineEdits)((content, edit) =>
+          deleteOrUnchanged(content, edit.start, edit.end)
+        )
       val edits = lineEdits.zipWithIndex.map {
         case ((_, start, end), index) =>
           MultiCursorEdit(index, start, end, "")
@@ -1013,8 +1015,8 @@ object EditorEventReducer:
   /** Folds `edits` over `content` and `richTextDocument` together, so a caller's rich-text document stays remapped in
     * lockstep with the plain-text edits it applies -- edits must already be in the order `applyContentEdit` expects
     * (callers sort descending by offset so earlier edits don't shift later ones). Shared by every multi-edit path
-    * instead of copied per call site, after `#1072` and `#1291` both found edit paths that had drifted from this
-    * exact pairing and silently let `richTextDocument` go stale.
+    * instead of copied per call site, after `#1072` and `#1291` both found edit paths that had drifted from this exact
+    * pairing and silently let `richTextDocument` go stale.
     */
   private def foldEditsWithRichText(
     buffer: Buffer,
@@ -1090,7 +1092,9 @@ object EditorEventReducer:
         .sortBy { case (start, end) => (-start, -end) }
         .map { case (start, end) => MultiCursorEdit(0, start, end, "") }
       val (updatedContent, updatedRichTextDocument) =
-        foldEditsWithRichText(buffer, sortedMergedEdits)((content, edit) => deleteOrUnchanged(content, edit.start, edit.end))
+        foldEditsWithRichText(buffer, sortedMergedEdits)((content, edit) =>
+          deleteOrUnchanged(content, edit.start, edit.end)
+        )
       val mergedEdits = mergedRanges.zipWithIndex.map {
         case ((start, end), index) =>
           MultiCursorEdit(index, start, end, "")

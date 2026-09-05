@@ -14,8 +14,8 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Regression coverage for issue #1291: saving a formatted document loses formatting on export. `#1072` centralised
   * `richTextDocument` remapping behind `Buffer.withEditedContent`, but four edit paths never adopted it -- a
-  * single-cursor paste, Tab-to-indent, Shift+Tab-to-unindent, and a no-selection line Cut all mutate
-  * `document.content` while leaving `richText.richTextDocument` untouched or stale. Once the two drift,
+  * single-cursor paste, Tab-to-indent, Shift+Tab-to-unindent, and a no-selection line Cut all mutate `document.content`
+  * while leaving `richText.richTextDocument` untouched or stale. Once the two drift,
   * `RichTextDocument.matchesPlainText` fails permanently for that buffer, and every later save -- RTF, DOCX, ODT, or
   * Markdown alike -- falls back to `RichTextDocument.fromPlainText`, silently discarding every mark, heading and
   * alignment the user had applied.
@@ -29,7 +29,11 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
     val logger = LoggerFactory[IO].getLogger(using LoggerName("RichTextEditPathDesyncSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
-  private def boldSelection(stateManager: StateManager, bufferId: com.serenity.state.models.BufferId, selection: Selection): Unit =
+  private def boldSelection(
+    stateManager: StateManager,
+    bufferId: com.serenity.state.models.BufferId,
+    selection: Selection
+  ): Unit =
     stateManager
       .updateState { state =>
         state.copy(persisted =
@@ -87,7 +91,9 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).richText.richTextDocument shouldBe defined
 
     setCursorAndSelection(stateManager, bufferId, CursorPosition(0, 17), None)
-    stateManager.updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some(" delta")))).unsafeRunSync()
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some(" delta"))))
+      .unsafeRunSync()
 
     stateManager.applyEvent(Paste).unsafeRunSync()
 

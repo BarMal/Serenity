@@ -102,7 +102,7 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     val decoded = RtfDocumentCodec.readBytes(RtfDocumentCodec.writeBytes(source))
 
     val headingStyle = decoded.paragraphs.head.runs.find(_.text.contains("Chapter One")).map(_.style)
-    val bodyStyle     = decoded.paragraphs(1).runs.find(_.text.contains("Body copy")).map(_.style)
+    val bodyStyle    = decoded.paragraphs(1).runs.find(_.text.contains("Body copy")).map(_.style)
 
     headingStyle.map(_.marks) shouldBe Some(Set(InlineMark.Bold))
     bodyStyle.map(_.marks) shouldBe Some(Set.empty)
