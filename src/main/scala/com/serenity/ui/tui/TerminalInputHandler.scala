@@ -61,10 +61,13 @@ final class TerminalInputHandler private (
 
 object TerminalInputHandler:
 
-  /** How long a lone `ESC` byte is held before it is resolved to a bare [[InputKey.Escape]] rather than the start of a
-    * multi-byte escape sequence. 50ms is comfortably above the delay a real terminal introduces between the bytes of
+  /** How long a lone `ESC` byte is held to see whether the rest of an escape sequence follows, before it is resolved to
+    * a bare [[InputKey.Escape]]. 50ms is comfortably above the delay a real terminal introduces between the bytes of
     * one escape sequence (they arrive as a single burst from the pty), and comfortably below the gap a human perceives
     * as sluggish.
+    *
+    * It is only ever a limit on waiting. What decides the question is whether anything actually followed -- see
+    * [[sequenceRemainder]].
     */
   val EscDisambiguationDeadline: FiniteDuration = 50.millis
 
@@ -132,7 +135,8 @@ object TerminalInputHandler:
     inputRouter: InputRouter[IO, Event],
     systemClipboard: SystemClipboard[IO],
     seedBytes: Array[Byte] = Array.emptyByteArray,
-    wheelScrollLines: Int = InputConfig().wheelScrollLines
+    wheelScrollLines: Int = InputConfig().wheelScrollLines,
+    escDeadline: FiniteDuration = EscDisambiguationDeadline
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
@@ -157,13 +161,14 @@ object TerminalInputHandler:
           systemClipboard,
           seedBytes,
           focusCallback,
-          wheelScrollLines
+          wheelScrollLines,
+          escDeadline
         )
           .guarantee(rawFiber.cancel)
       }.start
     yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal), focusCallback)
 
-  private enum ReadOutcome:
+  private[tui] enum ReadOutcome:
     case Bytes(value: Array[Byte])
     case Eof
     case Expired
@@ -188,11 +193,34 @@ object TerminalInputHandler:
     * [[rawQueue]], so the CE3 compute pool is never blocked waiting for terminal I/O and the pty kernel buffer never
     * fills during a slow dispatch cycle. [[readLoop]] consumes from [[rawQueue]] and can safely use [[Queue.tryTake]]
     * for non-blocking drains without any risk of blocking the compute thread.
+    *
+    * A character at a time is what the reader gives, so the bytes of an escape sequence reach [[rawQueue]] separately
+    * even though the terminal sent them together. [[sequenceRemainder]] is where that stops mattering.
     */
   private def rawReadLoop(reader: NonBlockingReader, rawQueue: Queue[IO, ReadOutcome]): IO[Unit] =
     IO.interruptible(reader.read()).map(toOutcome).flatMap {
       case ReadOutcome.Eof => rawQueue.offer(ReadOutcome.Eof)
       case outcome         => rawQueue.offer(outcome) >> rawReadLoop(reader, rawQueue)
+    }
+
+  /** What follows a lone `ESC`, if anything -- which is a question about the input, not about the clock.
+    *
+    * `deadline` says how long to wait for an answer; it is not the answer. Treating it as one is what made an arrow key
+    * unreliable: an `ESC` whose `[A` was already in hand could still be resolved to a bare Escape because a timer
+    * happened to be picked first, leaving the `[A` to be typed into the document as text. So the queue is asked before
+    * the wait begins and again after it ends, and the deadline decides nothing on its own.
+    */
+  private[tui] def sequenceRemainder(
+    rawQueue: Queue[IO, ReadOutcome],
+    deadline: FiniteDuration
+  ): IO[Option[ReadOutcome]] =
+    rawQueue.tryTake.flatMap {
+      case arrived @ Some(_) => IO.pure(arrived)
+      case None =>
+        IO.race(IO.sleep(deadline), rawQueue.take).flatMap {
+          case Left(_)        => rawQueue.tryTake
+          case Right(outcome) => IO.pure(Some(outcome))
+        }
     }
 
   private def readLoop(
@@ -205,7 +233,8 @@ object TerminalInputHandler:
     systemClipboard: SystemClipboard[IO],
     seedBytes: Array[Byte],
     focusCallback: AtomicReference[Option[Boolean => Unit]],
-    wheelScrollLines: Int
+    wheelScrollLines: Int,
+    escDeadline: FiniteDuration
   ): IO[Unit] =
 
     def processTokens(tokens: List[DecodedToken]): IO[Unit] =
@@ -295,19 +324,22 @@ object TerminalInputHandler:
         case _                           => IO.pure(acc)
       }
 
+    // What a lone `ESC` turns out to be, once the question of whether more of a sequence follows has been settled.
+    def resolveLoneEsc(pending: Array[Byte], outcome: Option[ReadOutcome]): IO[Unit] =
+      outcome match
+        case Some(ReadOutcome.Eof) =>
+          processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
+        case Some(ReadOutcome.Bytes(bs)) =>
+          drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
+        case Some(ReadOutcome.Expired) =>
+          loop // unreachable: rawReadLoop never enqueues Expired
+        case None =>
+          processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray) >> loop
+
     def loop: IO[Unit] =
       remainder.get.flatMap { pending =>
         if pending.length == 1 && pending(0) == 0x1b.toByte then
-          IO.race(IO.sleep(EscDisambiguationDeadline), rawQueue.take).flatMap {
-            case Left(_) =>
-              processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray) >> loop
-            case Right(ReadOutcome.Eof) =>
-              processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
-            case Right(ReadOutcome.Bytes(bs)) =>
-              drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
-            case Right(ReadOutcome.Expired) =>
-              loop // unreachable: rawReadLoop never enqueues Expired
-          }
+          sequenceRemainder(rawQueue, escDeadline).flatMap(resolveLoneEsc(pending, _))
         else
           rawQueue.take.flatMap {
             case ReadOutcome.Eof =>

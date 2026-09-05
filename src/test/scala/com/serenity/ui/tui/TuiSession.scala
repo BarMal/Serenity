@@ -341,7 +341,8 @@ object TuiSession:
         router,
         clipboard,
         shell.pendingInputPrefix,
-        environment.config.inputConfig.wheelScrollLines
+        environment.config.inputConfig.wheelScrollLines,
+        environment.escDeadline
       )
       stateManager <- TuiRuntime.makeStateManager(
         terminalConfig,
