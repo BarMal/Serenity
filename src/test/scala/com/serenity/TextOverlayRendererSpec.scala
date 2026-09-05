@@ -747,11 +747,11 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
   // #1295: the cursor info bar had no way to override its own theme colours -- only its background alpha (above).
   it should "override the cursor info bar's foreground and background colours when configured" in {
-    val surface     = new MockRenderSurface(24, 6)
-    val font        = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics     = CellMetrics.fromFont(font)
-    val foreground  = new Color(0x11, 0x22, 0x33)
-    val background  = new Color(0x44, 0x55, 0x66)
+    val surface    = new MockRenderSurface(24, 6)
+    val font       = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics    = CellMetrics.fromFont(font)
+    val foreground = new Color(0x11, 0x22, 0x33)
+    val background = new Color(0x44, 0x55, 0x66)
     val config = AppConfig.default.withCursorInfoBarColors(
       com.serenity.config.CursorInfoBarColorConfig(Some(foreground), Some(background))
     )

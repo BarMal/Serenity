@@ -937,7 +937,8 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     // "ui-font" is itself a nested group of font-family choices -- entering it is a navigation step, not yet a
     // command submit, exactly as in "open font family picker submenus and submit UI font choices" above.
-    val entered = CommandRunnerReducer.reduce(RunnerSubmit, settingsStateOnItem("settings-ui-font", "ui-font"), registry)
+    val entered =
+      CommandRunnerReducer.reduce(RunnerSubmit, settingsStateOnItem("settings-ui-font", "ui-font"), registry)
 
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, entered.state, registry)
 
@@ -962,7 +963,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val groupIndex = searched.visibleItems.indexWhere(_.id == "settings-cursor")
     val entered    = searched.withSelectedVisibleIndex(groupIndex).enterSelectedGroup
     val moveIndex  = entered.submenuItems("settings-cursor").indexWhere(_.id == "move-cursor-info-bar-position-later")
-    val positioned  = entered.withSelectedFocusedSubmenuIndex(moveIndex)
+    val positioned = entered.withSelectedFocusedSubmenuIndex(moveIndex)
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(positioned),

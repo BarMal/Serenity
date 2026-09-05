@@ -257,10 +257,10 @@ object CommandRunnerSettingsItems:
     * mechanism for.
     *
     * `currentOrder` is the segments' actual current order (`AppConfig.cursorInfoBarSegments`), so the listed move
-    * commands reflect which segment is really earlier/later and a segment already at an end doesn't offer a no-op
-    * move in that direction (issue #1298). Callers that don't have it yet fall back to `segmentDefinitions`' fixed
-    * order with neither direction gated, exactly as before -- that fixed order can't be trusted to match the real
-    * one, so gating on it could wrongly hide a move that would in fact do something.
+    * commands reflect which segment is really earlier/later and a segment already at an end doesn't offer a no-op move
+    * in that direction (issue #1298). Callers that don't have it yet fall back to `segmentDefinitions`' fixed order
+    * with neither direction gated, exactly as before -- that fixed order can't be trusted to match the real one, so
+    * gating on it could wrongly hide a move that would in fact do something.
     *
     * Every move command is `keepMenuOpenOnSubmit` (issue #1298): reordering is naturally a repeated action, so
     * submitting one leaves the "Cursor" settings group open at its current position instead of closing the whole

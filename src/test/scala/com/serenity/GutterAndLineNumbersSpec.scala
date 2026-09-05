@@ -5,12 +5,7 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{
-  CursorInfoBarColorConfig,
-  CursorInfoBarPlacement,
-  CursorInfoBarSegment,
-  InterfaceDensity
-}
+import com.serenity.config.{CursorInfoBarColorConfig, CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -480,8 +475,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   it should "override the pinned cursor info bar's colours when configured" in {
     val foreground = new Color(0x11, 0x22, 0x33)
     val background = new Color(0x44, 0x55, 0x66)
-    val buffer0     = Buffer.fromString(BufferId(6), "alpha\nbeta")
-    val buffer      = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
+    val buffer0    = Buffer.fromString(BufferId(6), "alpha\nbeta")
+    val buffer     = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
