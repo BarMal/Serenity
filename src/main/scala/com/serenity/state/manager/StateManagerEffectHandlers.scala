@@ -669,7 +669,7 @@ final private[manager] class StateManagerEffectHandlers(
         val closingRunningTaskPanel = state.pinnedSurfaces.exists { surface =>
           (surface.content, surface.presentation) match
             case (SurfaceContent.Terminal(_, _), SurfacePresentation.Pinned(`position`, _)) => true
-            case _                                                                           => false
+            case _                                                                          => false
         }
         unpinPanel(PanelTarget.ByPosition(position)) >>
           (if closingRunningTaskPanel then cancelProjectTaskSilently else IO.unit)

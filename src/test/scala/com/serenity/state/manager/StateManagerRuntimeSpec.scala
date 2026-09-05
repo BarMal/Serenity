@@ -6,18 +6,17 @@ import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.AnimationState
-import com.serenity.command.{Command, CommandCategory, CommandIntent, ProjectIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, ProjectIntent, ViewIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
-import com.serenity.command.ViewIntent
 import com.serenity.state.models.{AppState, BufferId, SurfaceContent, SurfacePresentation, UiSurface}
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
-import com.serenity.ui.layout.PanelPosition
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -278,10 +277,10 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.sessionPersistence,
         operations
       )
-      _              <- composition.pinOrUpdateTerminalPanel("Running build task...", PanelPosition.Bottom, 14)
-      taskDestroyed  <- Deferred[IO, Unit]
-      taskStarted    <- Deferred[IO, Unit]
-      taskFinished   <- Deferred[IO, Unit]
+      _             <- composition.pinOrUpdateTerminalPanel("Running build task...", PanelPosition.Bottom, 14)
+      taskDestroyed <- Deferred[IO, Unit]
+      taskStarted   <- Deferred[IO, Unit]
+      taskFinished  <- Deferred[IO, Unit]
       task <- IO
         .defer(taskStarted.complete(()).void >> IO.never[Unit])
         .onCancel(taskDestroyed.complete(()).void)
@@ -298,10 +297,10 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         ),
         stateWithPanel
       )
-      taskWasDestroyed  <- taskDestroyed.tryGet
-      projectTaskAfter  <- projectTaskFiberRef.get
-      stateAfterUnpin   <- stateRef.get
-      _                 <- projectTaskAfter.fold(IO.unit)(_.fiber.cancel)
+      taskWasDestroyed <- taskDestroyed.tryGet
+      projectTaskAfter <- projectTaskFiberRef.get
+      stateAfterUnpin  <- stateRef.get
+      _                <- projectTaskAfter.fold(IO.unit)(_.fiber.cancel)
     yield
       taskWasDestroyed shouldBe Some(())
       projectTaskAfter shouldBe None

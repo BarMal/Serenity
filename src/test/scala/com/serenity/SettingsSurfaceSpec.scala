@@ -33,7 +33,8 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
   "Settings surface" should "show peer categories and search leaves with their current values and paths" in {
     given CommandRegistry = registry
-    val runner            = CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true)).openSettings
+    val runner =
+      CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true)).openSettings
 
     runner.settingsSurfaceItems.collect {
       case group: CommandSurfaceItem.GroupItem => group.label
@@ -119,7 +120,8 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "describe the selected group, option, and input action in its footer" in {
-    val root = CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true)).openSettings
+    val root =
+      CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true)).openSettings
     val option = root.withDrilledSettingsSurface(
       SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance"))
     )

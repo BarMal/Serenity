@@ -5,8 +5,8 @@ import java.awt.Font
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.{AppMode, ToolbarDisplayMode}
-import com.serenity.lsp.config.LanguageId
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader

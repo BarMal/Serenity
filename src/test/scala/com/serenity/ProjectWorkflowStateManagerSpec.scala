@@ -139,8 +139,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       .pinnedSurfaces
       .filter(_.content match
         case SurfaceContent.Terminal(_, _) => true
-        case _                             => false
-      )
+        case _                             => false)
 
     terminalSurfaces should have size 1
     terminalSurfaces.head.content shouldBe SurfaceContent.Terminal("second output", "second output".length)

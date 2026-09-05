@@ -141,8 +141,8 @@ object ConfigGenerators:
 
   val genAppModeConfig: Gen[AppModeConfig] =
     for
-      mode     <- oneOfEnum(AppMode.values)
-      showAll  <- Gen.oneOf(true, false)
+      mode    <- oneOfEnum(AppMode.values)
+      showAll <- Gen.oneOf(true, false)
     yield AppModeConfig(mode, showAll)
 
   val genInterfaceConfig: Gen[InterfaceConfig] =
