@@ -50,8 +50,16 @@ object TextOverlayRenderer:
         .flatten
         .map(alpha => math.round(alpha * 255.0).toInt.max(0).min(255))
 
+    // #1295: same one-surface scoping as the alpha override above, for the cursor info bar's own foreground/
+    // background colour instead of just its background alpha.
+    val isCursorInfoBar = overlay.surfaceId.contains(UiSurface.CursorInfoBarSurfaceId)
+    val cursorInfoBarForegroundOverride: Option[Color] =
+      Option.when(isCursorInfoBar)(config.cursorInfoBarColors.foreground).flatten
+    val cursorInfoBarBackgroundOverride: Option[Color] =
+      Option.when(isCursorInfoBar)(config.cursorInfoBarColors.background).flatten
+
     def rowColors(rowOffset: Int): (Color, Color) =
-      val (fg, bg) = overlay.animationState
+      val (defaultFg, defaultBg) = overlay.animationState
         .getCell(0, rowOffset)
         .map(cell =>
           (
@@ -60,6 +68,8 @@ object TextOverlayRenderer:
           )
         )
         .getOrElse((theme.panel.foreground, theme.panel.background))
+      val fg = cursorInfoBarForegroundOverride.getOrElse(defaultFg)
+      val bg = cursorInfoBarBackgroundOverride.getOrElse(defaultBg)
       (fg, cursorInfoBarBackgroundAlphaOverride.fold(bg)(bg.withAlpha))
 
     surface.effects.foreach(_.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier))

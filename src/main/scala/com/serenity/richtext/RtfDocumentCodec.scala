@@ -19,6 +19,13 @@ object RtfDocumentCodec:
   private val RtfInlineLineBreakControl: String = "\\" + "line "
   private val RtfInlineLineBreakPattern         = """(?<!\\)\\line(?=[^A-Za-z]|$) ?""".r
 
+  private val DefaultBodyFontSize: Float = 12f
+
+  /** Point-size bump layered on top of a run's own font size to approximate each heading level, largest for
+    * `Heading(1)`. Levels beyond 6 reuse the smallest bump rather than shrinking further.
+    */
+  private val HeadingFontSizeBoost: Map[Int, Float] = Map(1 -> 12f, 2 -> 8f, 3 -> 6f, 4 -> 4f, 5 -> 2f, 6 -> 1f)
+
   /** Read an RTF file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(readBytes(Files.readAllBytes(path)))
@@ -101,7 +108,7 @@ object RtfDocumentCodec:
         styledDocument.insertString(
           styledDocument.getLength,
           run.text.replace('\n', InlineLineBreakMarker),
-          attributesFromStyle(run.style)
+          attributesFromStyle(headingAdjustedStyle(run.style, paragraph.role))
         )
       }
 
@@ -142,6 +149,20 @@ object RtfDocumentCodec:
         )
         .flatMap(colorToHex)
     )
+
+  /** RTF has no first-class style/outline concept that `javax.swing.text.rtf.RTFEditorKit` can write or read back --
+    * its writer only ever emits control words for the character attributes it maps directly (bold/italic/underline,
+    * font family/size/color, paragraph alignment), with no passthrough for arbitrary custom attributes. So unlike
+    * DOCX/ODT's named paragraph styles, a `ParagraphRole.Heading` can only be approximated visually here: bold text
+    * scaled up by `HeadingFontSizeBoost`. Reading that RTF back (in Serenity or elsewhere) sees ordinary bold body text
+    * at a larger size, not a recoverable heading level -- an accepted, one-way limitation of this format.
+    */
+  private def headingAdjustedStyle(style: RichTextStyle, role: ParagraphRole): RichTextStyle =
+    role match
+      case ParagraphRole.Body => style
+      case ParagraphRole.Heading(level) =>
+        val boost = HeadingFontSizeBoost.getOrElse(level.max(1).min(6), 1f)
+        style.withMark(InlineMark.Bold).withFontSize(style.fontSize.getOrElse(DefaultBodyFontSize) + boost)
 
   private def attributesFromStyle(style: RichTextStyle): SwingText.AttributeSet =
     val attributes = SwingText.SimpleAttributeSet()

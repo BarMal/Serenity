@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.AppMode
+import com.serenity.config.{AppMode, CursorInfoBarSegment}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
@@ -23,22 +23,27 @@ object CommandRunnerSettingsGroups:
     // deterministic catalog instead so the result doesn't depend on the host's installed fonts (issue: Windows
     // Desktop Publish release-blocker -- a Windows-only font whose family name happened to contain a search term
     // used in a settings-search test).
-    fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system
+    fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system,
+    // The segments' actual current order (`AppConfig.cursorInfoBarSegments`) -- threaded through so the reorder
+    // commands `cursorInfoBarSegmentItems` builds reflect it (issue #1298). `Nil` falls back to that function's own
+    // fixed-order, ungated default.
+    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil
   ): List[CommandSurfaceItem.GroupItem] =
     // Read off `optionSelections` rather than taking a separate `AppConfig` parameter: it is already the one place
     // every setting's current value reaches this builder, so mode filtering can't drift from what the app-mode
     // toggle itself displays as selected.
-    val appMode = if optionSelections.getOrElse("app-mode", 0) == 1 then AppMode.Prose else AppMode.Code
+    val appMode                         = if optionSelections.getOrElse("app-mode", 0) == 1 then AppMode.Prose else AppMode.Code
     val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 0) == 1
     val cursorModeItem                  = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
-    val cursorInfoBarItems              = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(optionSelections)
-    val cursorInfoPlacement             = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
-    val backgroundStyleItem             = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
-    val interfaceDensityItem            = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
-    val windowChromeItem                = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
-    val windowSitterEnabledItem         = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
-    val windowSitterActionItem          = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
-    val materialPresetItem              = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
+    val cursorInfoBarItems =
+      CommandRunnerSettingsItems.cursorInfoBarSegmentItems(optionSelections, cursorInfoBarSegments)
+    val cursorInfoPlacement     = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
+    val backgroundStyleItem     = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
+    val interfaceDensityItem    = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
+    val windowChromeItem        = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
+    val windowSitterEnabledItem = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
+    val windowSitterActionItem  = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
+    val materialPresetItem      = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
     val postProcessingItem =
       annotateInertInTui(CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections), isTuiMode)
     val uiShadowsItem               = CommandRunnerSettingsItems.uiShadowsOptionItem(optionSelections)
@@ -61,6 +66,7 @@ object CommandRunnerSettingsGroups:
     val gutterItem                  = CommandRunnerSettingsItems.gutterOptionItem(optionSelections)
     val lineWrapItem                = CommandRunnerSettingsItems.lineWrapOptionItem(optionSelections)
     val visualLineNavigationItem    = CommandRunnerSettingsItems.visualLineNavigationOptionItem(optionSelections)
+    val typewriterScrollingItem     = CommandRunnerSettingsItems.typewriterScrollingOptionItem(optionSelections)
     val focusedTextBodyItem         = CommandRunnerSettingsItems.focusedTextBodyOptionItem(optionSelections)
     val contextualToolbarItem       = CommandRunnerSettingsItems.contextualToolbarOptionItem(optionSelections)
     val contextualToolbarDisplayItem =
@@ -93,6 +99,7 @@ object CommandRunnerSettingsGroups:
         gutterItem,
         lineWrapItem,
         visualLineNavigationItem,
+        typewriterScrollingItem,
         wordCountItem,
         focusedTextBodyItem,
         contextualToolbarItem,

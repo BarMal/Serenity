@@ -69,6 +69,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withCommentDisplayMode(CommentDisplayMode.Margin)
     .withWordWrap(false)
     .withVisualLineCursorNavigation(false)
+    .withTypewriterScrolling(true)
     .withFocusedTextBody(true)
     .withContextualToolbarEnabled(false)
     .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
@@ -123,6 +124,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     )
     .withCursorColors(
       CursorColorConfig(active = Some(Color(0x11, 0x22, 0x33)), inactive = Some(Color(0x44, 0x55, 0x66)))
+    )
+    .withCursorInfoBarColors(
+      CursorInfoBarColorConfig(foreground = Some(Color(0x77, 0x88, 0x99)), background = Some(Color(0xaa, 0xbb, 0xcc)))
     )
     .withSpellCheck(
       SpellCheckConfig(

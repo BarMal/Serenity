@@ -905,6 +905,10 @@ final private[manager] class StateManagerEffectHandlers(
         updateTextDisplayConfig(config =>
           config.withVisualLineCursorNavigation(!config.surfaceConfig.visualLineCursorNavigation)
         ).void
+      case PanelChromeIntent.ToggleTypewriterScrolling =>
+        updateTextDisplayConfig(config =>
+          config.withTypewriterScrolling(!config.surfaceConfig.typewriterScrollingEnabled)
+        ).void
       case PanelChromeIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
       case PanelChromeIntent.SetGutter(enabled) =>
@@ -913,6 +917,8 @@ final private[manager] class StateManagerEffectHandlers(
         updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
       case PanelChromeIntent.SetVisualLineCursorNavigation(enabled) =>
         updateTextDisplayConfig(config => config.withVisualLineCursorNavigation(enabled)).void
+      case PanelChromeIntent.SetTypewriterScrolling(enabled) =>
+        updateTextDisplayConfig(config => config.withTypewriterScrolling(enabled)).void
       case PanelChromeIntent.SetFocusedTextBody(enabled) =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
       case PanelChromeIntent.SetContextualToolbarEnabled(enabled) =>

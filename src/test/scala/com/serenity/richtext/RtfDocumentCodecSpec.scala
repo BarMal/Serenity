@@ -91,6 +91,26 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     singleParagraph(decoded).plainText shouldBe "alpha\tbeta\ngamma"
   }
 
+  it should "visually approximate heading paragraphs as bold, larger text" in {
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph(List(RichTextRun("Chapter One")), role = ParagraphRole.Heading(1)),
+        RichTextParagraph(List(RichTextRun("Body copy")))
+      )
+    )
+
+    val decoded = RtfDocumentCodec.readBytes(RtfDocumentCodec.writeBytes(source))
+
+    val headingStyle = decoded.paragraphs.head.runs.find(_.text.contains("Chapter One")).map(_.style)
+    val bodyStyle    = decoded.paragraphs(1).runs.find(_.text.contains("Body copy")).map(_.style)
+
+    headingStyle.map(_.marks) shouldBe Some(Set(InlineMark.Bold))
+    bodyStyle.map(_.marks) shouldBe Some(Set.empty)
+    val headingSize = headingStyle.flatMap(_.fontSize)
+    headingSize shouldBe defined
+    headingSize.map(_ > bodyStyle.flatMap(_.fontSize).getOrElse(12f)) shouldBe Some(true)
+  }
+
   it should "preserve empty paragraphs through an RTF round trip" in {
     val source = RichTextDocument.fromPlainText("First\n\nThird")
 

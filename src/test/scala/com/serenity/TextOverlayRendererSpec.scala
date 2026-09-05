@@ -744,3 +744,60 @@ class TextOverlayRendererSpec extends AnyFlatSpec with Matchers:
 
     surface.getBg(1, 1) shouldBe Theme.light.panel.background
   }
+
+  // #1295: the cursor info bar had no way to override its own theme colours -- only its background alpha (above).
+  it should "override the cursor info bar's foreground and background colours when configured" in {
+    val surface    = new MockRenderSurface(24, 6)
+    val font       = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics    = CellMetrics.fromFont(font)
+    val foreground = new Color(0x11, 0x22, 0x33)
+    val background = new Color(0x44, 0x55, 0x66)
+    val config = AppConfig.default.withCursorInfoBarColors(
+      com.serenity.config.CursorInfoBarColorConfig(Some(foreground), Some(background))
+    )
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 18, 4),
+      rows = List(OverlayRow(plainText = "12:1")),
+      surfaceId = Some(com.serenity.state.models.UiSurface.CursorInfoBarSurfaceId)
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
+
+    surface.getFg(1, 1) shouldBe foreground
+    surface.getBg(1, 1) shouldBe background
+  }
+
+  it should "keep the theme's own panel colours for the cursor info bar when no colour override is configured" in {
+    val surface = new MockRenderSurface(24, 6)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 18, 4),
+      rows = List(OverlayRow(plainText = "12:1")),
+      surfaceId = Some(com.serenity.state.models.UiSurface.CursorInfoBarSurfaceId)
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getFg(1, 1) shouldBe Theme.light.panel.foreground
+    surface.getBg(1, 1) shouldBe Theme.light.panel.background
+  }
+
+  it should "leave every other panel's colours unaffected by a cursor-info-bar colour override" in {
+    val surface = new MockRenderSurface(24, 6)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val config = AppConfig.default.withCursorInfoBarColors(
+      com.serenity.config.CursorInfoBarColorConfig(Some(new Color(0x11, 0x22, 0x33)), Some(new Color(0x44, 0x55, 0x66)))
+    )
+    val overlay = TextOverlayView(
+      rect = LayoutRect(0, 0, 18, 4),
+      rows = List(OverlayRow(plainText = "some panel")),
+      surfaceId = Some(com.serenity.state.models.SurfaceId("some-other-surface"))
+    )
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
+
+    surface.getFg(1, 1) shouldBe Theme.light.panel.foreground
+    surface.getBg(1, 1) shouldBe Theme.light.panel.background
+  }

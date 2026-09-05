@@ -483,11 +483,26 @@ final case class CursorColorConfig(
   def inactiveOr(activeColor: Color): Color =
     inactive.getOrElse(activeColor)
 
+/** #1295: `None` (default) keeps the active theme's own panel colour for the cursor info bar, matching every other
+  * floating panel; `Some` overrides just that one surface's foreground/background, independent of theme -- mirrors
+  * [[CursorColorConfig]]'s active/inactive override shape.
+  */
+final case class CursorInfoBarColorConfig(
+    foreground: Option[Color] = None,
+    background: Option[Color] = None
+):
+  def foregroundOr(default: Color): Color =
+    foreground.getOrElse(default)
+
+  def backgroundOr(default: Color): Color =
+    background.getOrElse(default)
+
 final case class CursorConfig(
     mode: CursorMode = CursorMode.Blink,
     colors: CursorColorConfig = CursorColorConfig(),
     infoBarSegments: List[CursorInfoBarSegment] = Nil,
-    infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating
+    infoBarPlacement: CursorInfoBarPlacement = CursorInfoBarPlacement.Floating,
+    infoBarColors: CursorInfoBarColorConfig = CursorInfoBarColorConfig()
 )
 
 final case class EditorConfig(
@@ -643,6 +658,12 @@ final case class SurfaceConfig(
     // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
     // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
     visualLineCursorNavigation: Boolean = true,
+    // Off by default (preserves `CursorViewport.adjustForCursor`'s existing behaviour exactly): the cursor's line is
+    // recentred on every move, but never past the document's own end, so a viewport near the last line falls back to
+    // showing as much real content as fits rather than centring. On, that end clamp is lifted -- the caret's line
+    // stays at its centred row even while typing at the very end of the document, padding with blank rows below it
+    // the way iA Writer/Ulysses-style typewriter scrolling does (#1204, #1293).
+    typewriterScrollingEnabled: Boolean = false,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
@@ -1662,6 +1683,9 @@ final case class AppConfig(
   def withVisualLineCursorNavigation(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(visualLineCursorNavigation = enabled))
 
+  def withTypewriterScrolling(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(typewriterScrollingEnabled = enabled))
+
   /** `None` restores the active theme's own panel alpha for the cursor info bar; `Some` overrides just that one panel's
     * background alpha, independent of theme.
     */
@@ -2007,6 +2031,9 @@ final case class AppConfig(
   def cursorInfoBarPlacement: CursorInfoBarPlacement =
     cursorConfig.infoBarPlacement
 
+  def cursorInfoBarColors: CursorInfoBarColorConfig =
+    cursorConfig.infoBarColors
+
   def withCursorConfig(config: CursorConfig): AppConfig =
     copy(cursorConfig = config)
 
@@ -2021,6 +2048,9 @@ final case class AppConfig(
 
   def withCursorInfoBarPlacement(placement: CursorInfoBarPlacement): AppConfig =
     withCursorConfig(cursorConfig.copy(infoBarPlacement = placement))
+
+  def withCursorInfoBarColors(colors: CursorInfoBarColorConfig): AppConfig =
+    withCursorConfig(cursorConfig.copy(infoBarColors = colors))
 
   def withWindowConfig(config: WindowConfig): AppConfig =
     copy(windowConfig = config.normalized)

@@ -228,6 +228,16 @@ object ConfigRegistry:
       _.cursorColors.inactive,
       (config, value) => config.withCursorColors(config.cursorColors.copy(inactive = value))
     ),
+    // #1295: independent of the active theme -- `None` (default) keeps the theme's own panel colour for the cursor
+    // info bar, matching every other floating panel.
+    named("cursor.info_bar.foreground_color", "cursor_info_bar_foreground_color")(color.orEmpty)(
+      _.cursorInfoBarColors.foreground,
+      (config, value) => config.withCursorInfoBarColors(config.cursorInfoBarColors.copy(foreground = value))
+    ),
+    named("cursor.info_bar.background_color", "cursor_info_bar_background_color")(color.orEmpty)(
+      _.cursorInfoBarColors.background,
+      (config, value) => config.withCursorInfoBarColors(config.cursorInfoBarColors.copy(background = value))
+    ),
     named(
       "cursor.info_bar.segments",
       "cursorInfoBarSegments",
@@ -415,6 +425,15 @@ object ConfigRegistry:
     )(boolean)(
       _.surfaceConfig.visualLineCursorNavigation,
       (config, value) => config.withVisualLineCursorNavigation(value)
+    ),
+    named(
+      "display.typewriter_scrolling",
+      "typewriterScrollingEnabled",
+      "display.typewriter.scrolling",
+      "display_typewriter_scrolling"
+    )(boolean)(
+      _.surfaceConfig.typewriterScrollingEnabled,
+      (config, value) => config.withTypewriterScrolling(value)
     ),
     named("display.line_numbers", "showLineNumbers", "display.line.numbers", "display_line_numbers")(boolean)(
       _.surfaceConfig.showLineNumbers,

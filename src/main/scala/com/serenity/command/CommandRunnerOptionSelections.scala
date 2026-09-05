@@ -70,6 +70,7 @@ object CommandRunnerOptionSelections:
       "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
       "word-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
       "visual-line-navigation"     -> enabledIndex(surfaceConfig.visualLineCursorNavigation),
+      "typewriter-scrolling"       -> enabledIndex(surfaceConfig.typewriterScrollingEnabled),
       "focused-text-body"          -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
       "contextual-toolbar"         -> enabledIndex(surfaceConfig.contextualToolbarEnabled),
       "contextual-toolbar-display" -> contextualToolbarDisplayModeIndex(surfaceConfig.contextualToolbarDisplayMode),

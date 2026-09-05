@@ -34,11 +34,12 @@ object CursorViewport:
     currentState: AppState,
     cursor: CursorPosition
   ): Viewport =
-    val wordWrapEnabled  = currentState.persisted.config.surfaceConfig.wordWrapEnabled
-    val isTui            = currentState.runtime.isTuiMode
-    val viewport         = buffer.viewport
-    val halfVisibleLines = viewport.visibleLines / 2
-    val font             = previewFontForBuffer(buffer, currentState.persisted.config.editorConfig.fontConfig)
+    val wordWrapEnabled            = currentState.persisted.config.surfaceConfig.wordWrapEnabled
+    val typewriterScrollingEnabled = currentState.persisted.config.surfaceConfig.typewriterScrollingEnabled
+    val isTui                      = currentState.runtime.isTuiMode
+    val viewport                   = buffer.viewport
+    val halfVisibleLines           = viewport.visibleLines / 2
+    val font                       = previewFontForBuffer(buffer, currentState.persisted.config.editorConfig.fontConfig)
     val gridWidthPx =
       TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, currentState.persisted.config.editorConfig.fontConfig)
     // Count wrapped rows the way the terminal actually drew them: TUI wraps on a fixed 1px-per-cell grid
@@ -99,7 +100,10 @@ object CursorViewport:
 
     // Bottom clamp: the latest (line, visual-row) start that still fills the viewport with real content, found by
     // walking backward from the buffer's last line until visibleLines rows of content have been accounted for.
-    // Without this, a cursor near the end of a short-ish document can leave blank rows below the last line.
+    // Without this, a cursor near the end of a short-ish document can leave blank rows below the last line. Typewriter
+    // scrolling deliberately skips this clamp: its entire point is to hold the cursor's line at its centred row even
+    // while typing at the very end of the document, which means padding with blank rows below rather than showing as
+    // much real content as fits (#1204, #1293).
     val lineCount = buffer.document.content.lineCount
     def bottomAlignedWindow(line: Int, remaining: Int): (Int, Int) =
       val rows = visualRowCountForLine(line)
@@ -111,7 +115,9 @@ object CursorViewport:
     val exceedsBottom =
       rawTopLine > bottomLine || (rawTopLine == bottomLine && rawTopVisualLine > bottomVisualLine)
     val (clampedTopLine, topVisualLine) =
-      if exceedsBottom then (bottomLine, bottomVisualLine) else (rawTopLine, rawTopVisualLine)
+      if typewriterScrollingEnabled then (rawTopLine, rawTopVisualLine)
+      else if exceedsBottom then (bottomLine, bottomVisualLine)
+      else (rawTopLine, rawTopVisualLine)
     val clampedLeftColumn =
       if wordWrapEnabled then 0
       else

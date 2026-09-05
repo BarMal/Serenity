@@ -770,6 +770,9 @@ given Decoder[Color] = Decoder.decodeString.emap(value => parseColor(value).toRi
 given Encoder[CursorColorConfig] = deriveEncoder
 given Decoder[CursorColorConfig] = deriveDecoder
 
+given Encoder[CursorInfoBarColorConfig] = deriveEncoder
+given Decoder[CursorInfoBarColorConfig] = deriveDecoder
+
 given Encoder[LspServerOverride] = deriveEncoder
 given Decoder[LspServerOverride] = deriveDecoder
 

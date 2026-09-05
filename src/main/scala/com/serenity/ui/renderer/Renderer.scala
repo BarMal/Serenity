@@ -583,7 +583,11 @@ object Renderer:
             cellMetrics.toRow(rect.yPx),
             HardwareCursorStyle(HardwareCursorShape.Block, blinking = true)
           )
-        case (CursorMode.Breathe, Some(rect)) if cursorColor.exists(_.getAlpha >= 128) =>
+        // `forall`, not `exists`: only the idle cursor phase supplies a colour, so a frame without one is an ordinary
+        // content frame rather than the faded half of a breathe cycle. Treating a missing colour as faded hid the
+        // caret on every content frame and left the terminal's own cursor wherever the content diff last wrote --
+        // the bottom of the screen (#1215).
+        case (CursorMode.Breathe, Some(rect)) if cursorVisible && cursorColor.forall(_.getAlpha >= 128) =>
           hardwareCursor.present(
             cellMetrics.toCol(rect.xPx),
             cellMetrics.toRow(rect.yPx),
@@ -3495,8 +3499,22 @@ object Renderer:
       context.surface.text.setFont(context.uiFont)
       val surface = context.surface
 
-      surface.setBackgroundColor(state.persisted.theme.panel.background)
-      surface.setForegroundColor(state.persisted.theme.panel.foreground)
+      // #1295: scoped to the pinned-bottom cursor info bar the same way TextOverlayRenderer scopes its own colour
+      // override to the floating cursor info bar surface -- the legacy gutter (no info bar text to show) keeps the
+      // theme's own panel colours unconditionally.
+      val showsCursorInfoBar =
+        state.persisted.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom &&
+          state.cursorInfoBarText.nonEmpty
+      val infoBarColors = state.persisted.config.cursorInfoBarColors
+      val gutterBackground =
+        if showsCursorInfoBar then infoBarColors.backgroundOr(state.persisted.theme.panel.background)
+        else state.persisted.theme.panel.background
+      val gutterForeground =
+        if showsCursorInfoBar then infoBarColors.foregroundOr(state.persisted.theme.panel.foreground)
+        else state.persisted.theme.panel.foreground
+
+      surface.setBackgroundColor(gutterBackground)
+      surface.setForegroundColor(gutterForeground)
 
       surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
 

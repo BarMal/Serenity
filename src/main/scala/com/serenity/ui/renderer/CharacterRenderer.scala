@@ -12,7 +12,12 @@ import com.serenity.ui.theme.{LexState, StyledText, TextStyle, Theme}
 
 object CharacterRenderer:
 
-  final private case class TextRun(startX: Int, content: String)
+  /** A run of text to paint, with both coordinates it sits at: `startX` is a *cell* column on the screen grid (a wide
+    * glyph occupies two of them), `bufferStartColumn` the column of its first character in the buffer line. They
+    * advance at different rates, so a caller that reconstructed one from the other drifted by one per wide glyph
+    * (#1271) -- the run carries both instead.
+    */
+  final private case class TextRun(startX: Int, content: String, bufferStartColumn: Int = 0)
   final private case class CollectedRuns(runs: List[TextRun], endX: Int)
 
   /** A grapheme cluster's boundaries within a line's text, as local character indices. */
@@ -187,18 +192,8 @@ object CharacterRenderer:
     bufferStartColumn: Int = 0,
     maxColumn: Option[Int] = None
   ): Unit =
-    val collectedRuns = collectPlainRuns(x, content, tabWidth)
-    renderAnimatedRuns(
-      surface,
-      x,
-      y,
-      collectedRuns.runs,
-      theme,
-      screenAnimations,
-      bufferLine,
-      bufferStartColumn,
-      maxColumn
-    )
+    val collectedRuns = collectPlainRuns(x, content, tabWidth, bufferStartColumn)
+    renderAnimatedRuns(surface, y, collectedRuns.runs, theme, screenAnimations, bufferLine, maxColumn)
 
   /** Render a visual line using pixel-precision caret stops.
     *
@@ -372,26 +367,20 @@ object CharacterRenderer:
     bufferStartColumn: Int,
     maxColumn: Option[Int]
   ): Unit =
-    styledTexts.foldLeft(x) { (currentX, styledText) =>
-      val segmentTheme = theme.copy(
-        foreground = styledText.foregroundColor,
-        background = styledText.backgroundColor
-      )
-      val collectedRuns = collectPlainRuns(currentX, styledText.content, tabWidth = 4)
-      withStyle(surface, styledText.style) {
-        renderAnimatedRuns(
-          surface,
-          currentX,
-          y,
-          collectedRuns.runs,
-          segmentTheme,
-          screenAnimations,
-          bufferLine,
-          bufferStartColumn + (currentX - x),
-          maxColumn
+    // Both coordinates are carried across the segments rather than one being derived from the other: `currentX` counts
+    // screen cells (a wide glyph takes two, a tab as many as it expands to) and `currentColumn` buffer characters, so
+    // the animation lookup inside each segment stays on the right column past a wide glyph (#1271).
+    styledTexts.foldLeft((x, bufferStartColumn)) {
+      case ((currentX, currentColumn), styledText) =>
+        val segmentTheme = theme.copy(
+          foreground = styledText.foregroundColor,
+          background = styledText.backgroundColor
         )
-      }
-      collectedRuns.endX
+        val collectedRuns = collectPlainRuns(currentX, styledText.content, tabWidth = 4, currentColumn)
+        withStyle(surface, styledText.style) {
+          renderAnimatedRuns(surface, y, collectedRuns.runs, segmentTheme, screenAnimations, bufferLine, maxColumn)
+        }
+        (collectedRuns.endX, currentColumn + styledText.content.length)
     }: Unit
 
   private def withStyle(surface: RenderSurface, style: TextStyle)(render: => Unit): Unit =
@@ -399,46 +388,66 @@ object CharacterRenderer:
     try render
     finally surface.disableStyle(style)
 
+  /** `bufferStartColumn` is the buffer column `content`'s first character sits at, tracked alongside the cell column so
+    * each run can carry its own (see [[TextRun]]). The two advance independently: a cell column moves by a glyph's
+    * display width and by a tab's expansion, a buffer column by one character per codepoint.
+    */
   private def collectPlainRuns(
     startX: Int,
     content: String,
-    tabWidth: Int
+    tabWidth: Int,
+    bufferStartColumn: Int = 0
   ): CollectedRuns =
     final case class PlainRunState(
         completed: List[TextRun],
         currentText: StringBuilder,
         currentStartX: Int,
-        currentX: Int
+        currentX: Int,
+        currentStartColumn: Int,
+        currentColumn: Int
     ):
       def flush: PlainRunState =
         if currentText.length > 0 then
-          copy(completed = TextRun(currentStartX, currentText.toString) :: completed, currentText = StringBuilder())
+          copy(
+            completed = TextRun(currentStartX, currentText.toString, currentStartColumn) :: completed,
+            currentText = StringBuilder()
+          )
         else this
 
-    val initial    = PlainRunState(Nil, StringBuilder(), startX, startX)
+    val initial    = PlainRunState(Nil, StringBuilder(), startX, startX, bufferStartColumn, bufferStartColumn)
     val codePoints = content.codePoints().iterator()
     @annotation.tailrec
     def consume(state: PlainRunState): PlainRunState =
       if !codePoints.hasNext then state.flush
       else
-        val codePoint = codePoints.nextInt()
+        val codePoint  = codePoints.nextInt()
+        val nextColumn = state.currentColumn + Character.charCount(codePoint)
         val nextState = codePoint match
           case '\t' =>
             val flushed     = state.flush
             val spacesToAdd = tabWidth - (flushed.currentX % tabWidth)
             val tabSpaces   = " " * spacesToAdd
+            // The whole expansion stands for the one tab character, so the run starts at the tab's own buffer column.
             flushed.copy(
-              completed = TextRun(flushed.currentX, tabSpaces) :: flushed.completed,
+              completed = TextRun(flushed.currentX, tabSpaces, flushed.currentColumn) :: flushed.completed,
               currentStartX = flushed.currentX + spacesToAdd,
-              currentX = flushed.currentX + spacesToAdd
+              currentX = flushed.currentX + spacesToAdd,
+              currentStartColumn = nextColumn,
+              currentColumn = nextColumn
             )
           case visible if isVisibleCodePoint(visible) =>
-            val start = if state.currentText.length == 0 then state.currentX else state.currentStartX
+            val start       = if state.currentText.length == 0 then state.currentX else state.currentStartX
+            val startColumn = if state.currentText.length == 0 then state.currentColumn else state.currentStartColumn
             state.currentText.appendAll(Character.toChars(visible))
-            state.copy(currentStartX = start, currentX = state.currentX + displayWidth(visible))
+            state.copy(
+              currentStartX = start,
+              currentX = state.currentX + displayWidth(visible),
+              currentStartColumn = startColumn,
+              currentColumn = nextColumn
+            )
           case _ =>
             val flushed = state.flush
-            flushed.copy(currentStartX = flushed.currentX)
+            flushed.copy(currentStartX = flushed.currentX, currentStartColumn = nextColumn, currentColumn = nextColumn)
         consume(nextState)
 
     val finalState = consume(initial)
@@ -466,13 +475,11 @@ object CharacterRenderer:
 
   private def renderAnimatedRuns(
     surface: RenderSurface,
-    screenOriginX: Int,
     y: Int,
     runs: List[TextRun],
     theme: Theme,
     screenAnimations: AnimationState,
     bufferLine: Int,
-    bufferStartColumn: Int,
     maxColumn: Option[Int]
   ): Unit =
     val clippedRuns = runs.flatMap(clipRunToColumn(_, maxColumn))
@@ -482,8 +489,7 @@ object CharacterRenderer:
       clippedRuns.foreach(run => surface.putString(run.startX, y, run.content))
     else
       clippedRuns.foreach { run =>
-        val grouped =
-          groupRunByEffectiveColors(run, screenOriginX, theme, screenAnimations, bufferLine, bufferStartColumn)
+        val grouped = groupRunByEffectiveColors(run, theme, screenAnimations, bufferLine)
         grouped.foreach {
           case (startX, text, foreground, background) =>
             surface.setForegroundColor(foreground)
@@ -516,22 +522,28 @@ object CharacterRenderer:
 
           Some(run.copy(content = run.content.take(fittingLength(0, 0))))
 
+  /** Splits one run into the sub-runs that share an effective colour, walking it by codepoint rather than by `Char`.
+    *
+    * Both coordinates it tracks come from the run itself and advance at their own rate: the screen column by each
+    * glyph's display width, the buffer column by each codepoint's character count. Deriving one from the other by a
+    * single character index put every group after a wide glyph one cell early and looked up the wrong animation cell
+    * (#1271), and stepping by `Char` could split a surrogate pair across two groups when the animation gave its halves
+    * different colours, painting two broken halves instead of one glyph.
+    */
   private def groupRunByEffectiveColors(
     run: TextRun,
-    screenOriginX: Int,
     theme: Theme,
     screenAnimations: AnimationState,
-    bufferLine: Int,
-    bufferStartColumn: Int
+    bufferLine: Int
   ): List[(Int, String, Color, Color)] =
-    val text = run.content
-
     final case class ColorRunState(
         completed: List[(Int, String, Color, Color)],
         currentText: StringBuilder,
         currentStartX: Int,
         currentForeground: Color,
-        currentBackground: Color
+        currentBackground: Color,
+        screenX: Int,
+        bufferColumn: Int
     ):
       def flush: ColorRunState =
         if currentText.length > 0 then
@@ -541,36 +553,52 @@ object CharacterRenderer:
           )
         else this
 
-    val initial = ColorRunState(Nil, StringBuilder(), run.startX, theme.foreground, theme.background)
-    val finalState = text.zipWithIndex
-      .foldLeft(initial) {
-        case (state, (char, index)) =>
-          val bufferColumn = bufferStartColumn + (run.startX - screenOriginX) + index
-          val cell         = screenAnimations.getCell(bufferColumn, bufferLine)
-          val foreground   = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
-          val background   = cell.flatMap(_.currentBackground).getOrElse(theme.background)
+    val initial =
+      ColorRunState(
+        Nil,
+        StringBuilder(),
+        run.startX,
+        theme.foreground,
+        theme.background,
+        run.startX,
+        run.bufferStartColumn
+      )
+    val codePoints = run.content.codePoints().iterator()
 
+    @annotation.tailrec
+    def consume(state: ColorRunState): ColorRunState =
+      if !codePoints.hasNext then state.flush
+      else
+        val codePoint  = codePoints.nextInt()
+        val glyph      = new String(Character.toChars(codePoint))
+        val cell       = screenAnimations.getCell(state.bufferColumn, bufferLine)
+        val foreground = cell.flatMap(_.currentForeground).getOrElse(theme.foreground)
+        val background = cell.flatMap(_.currentBackground).getOrElse(theme.background)
+        val advanced = state.copy(
+          screenX = state.screenX + displayWidth(codePoint),
+          bufferColumn = state.bufferColumn + Character.charCount(codePoint)
+        )
+        val nextState =
           if state.currentText.length == 0 then
-            state.copy(
-              currentText = StringBuilder(char.toString),
-              currentStartX = run.startX + index,
+            advanced.copy(
+              currentText = StringBuilder(glyph),
+              currentStartX = state.screenX,
               currentForeground = foreground,
               currentBackground = background
             )
           else if foreground == state.currentForeground && background == state.currentBackground then
-            state.currentText.append(char)
-            state
+            state.currentText.append(glyph)
+            advanced
           else
-            state.flush.copy(
-              currentText = StringBuilder(char.toString),
-              currentStartX = run.startX + index,
+            advanced.flush.copy(
+              currentText = StringBuilder(glyph),
+              currentStartX = state.screenX,
               currentForeground = foreground,
               currentBackground = background
             )
-      }
-      .flush
+        consume(nextState)
 
-    finalState.completed.reverse
+    consume(initial).completed.reverse
 
   private def blendColors(foreground: Color, background: Color, opacity: Double): Color =
     val t = opacity.max(0.0).min(1.0)
