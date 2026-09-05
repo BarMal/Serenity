@@ -59,6 +59,8 @@ object CommandRunnerOptionSelections:
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
       "window-sitter-enabled"      -> enabledIndex(config.windowSitterConfig.enabled),
       "window-sitter-action"       -> windowSitterActionIndex(config.windowSitterConfig.action),
+      "companion-sprite-enabled"   -> enabledIndex(config.companionSpriteConfig.enabled),
+      "visual-flair-level"         -> visualFlairLevelIndex(config.visualFlairLevel),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "spellcheck-enabled"         -> spellCheckEnabledIndex(languageToolsConfig.spellCheck.enabled),
@@ -139,6 +141,12 @@ object CommandRunnerOptionSelections:
       case WindowSitterAction.Cycle => 0
       case WindowSitterAction.Pulse => 1
       case WindowSitterAction.Blink => 2
+
+  private def visualFlairLevelIndex(level: VisualFlairLevel): Int =
+    level match
+      case VisualFlairLevel.Full    => 0
+      case VisualFlairLevel.Reduced => 1
+      case VisualFlairLevel.Off     => 2
 
   private def materialPresetIndex(preset: MaterialPreset): Int =
     preset match

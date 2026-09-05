@@ -32,10 +32,29 @@ final case class CompanionSpriteState(
     frameIndex: Int = 0,
     ticksInAction: Int = 0,
     lastAction: Option[CompanionSpriteAction] = None,
-    frameCounts: Map[CompanionSpriteAction, Int] = Map(CompanionSpriteAction.Idle -> 1)
+    frameCounts: Map[CompanionSpriteAction, Int] = Map(CompanionSpriteAction.Idle -> 1),
+    // Counts every call to `tick`, including throttled-away ones, so `tick`'s own half-rate throttle at `reducedRate`
+    // has something to alternate on that survives independently of `ticksInAction` (which resets on every clip
+    // change and would make the throttle's phase depend on the transition policy).
+    renderTicks: Long = 0
 ):
 
   def frameCount: Int = frameCounts.getOrElse(action, 1).max(1)
+
+  /** The render-loop entry point: `advance` at full rate, or throttled to every second call when `reducedRate` is
+    * set -- the "Reduced" visual flair tier's lower tick rate (`VisualFlairLevel` itself lives in `com.serenity.config`,
+    * a layer above this package, so the throttle is a plain boolean rather than a dependency on that type).
+    */
+  def tick(
+    random: Random,
+    reducedRate: Boolean,
+    actionChance: Double = CompanionSpriteState.DefaultActionChance
+  ): CompanionSpriteState =
+    if !reducedRate then advance(random, actionChance).copy(renderTicks = renderTicks + 1)
+    else
+      val nextRenderTicks = renderTicks + 1
+      if nextRenderTicks % 2 == 0 then advance(random, actionChance).copy(renderTicks = nextRenderTicks)
+      else copy(renderTicks = nextRenderTicks)
 
   /** Advance one animation tick per the transition policy documented on this class. */
   def advance(

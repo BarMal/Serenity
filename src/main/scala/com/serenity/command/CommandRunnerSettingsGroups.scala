@@ -30,8 +30,10 @@ object CommandRunnerSettingsGroups:
     val backgroundStyleItem     = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
     val interfaceDensityItem    = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
     val windowChromeItem        = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
-    val windowSitterEnabledItem = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
-    val windowSitterActionItem  = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
+    val windowSitterEnabledItem    = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
+    val windowSitterActionItem     = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
+    val companionSpriteEnabledItem = CommandRunnerSettingsItems.companionSpriteEnabledOptionItem(optionSelections)
+    val visualFlairLevelItem       = CommandRunnerSettingsItems.visualFlairLevelOptionItem(optionSelections)
     val materialPresetItem      = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
     val postProcessingItem =
       annotateInertInTui(CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections), isTuiMode)
@@ -473,6 +475,13 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Motion accessibility and reading comfort")
     )
+    val performanceGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-performance",
+      label = "Performance",
+      children = List(visualFlairLevelItem, companionSpriteEnabledItem),
+      category = CommandCategory.Settings,
+      hint = Some("Trim purely decorative extras on a slow link or a battery-powered machine")
+    )
     List(
       workspaceLayoutGroup,
       documentWritingGroup,
@@ -481,6 +490,7 @@ object CommandRunnerSettingsGroups:
       appearanceMotionGroup,
       uiPresetsGroup,
       accessibilityGroup,
+      performanceGroup,
       keymapGroup
     )
 

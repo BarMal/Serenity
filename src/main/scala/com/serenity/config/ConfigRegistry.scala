@@ -4,10 +4,12 @@ import java.awt.Color
 import java.util.Locale
 
 import com.serenity.animation.WindowSitterAction
+import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
+import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.ColorFormat
 
 /** Every setting the config file persists, declared once.
@@ -305,6 +307,33 @@ object ConfigRegistry:
       _.windowSitterConfig.fastTypingThresholdMs,
       (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(fastTypingThresholdMs = value))
     ),
+
+    // -- Companion sprite ------------------------------------------------------------------------------------------
+    field("companion.sprite.enabled")(boolean)(
+      _.companionSpriteConfig.enabled,
+      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(enabled = value))
+    ),
+    field("companion.sprite.character")(
+      enumerated(CompanionCharacter.fromConfigKey, _.id)
+    )(
+      _.companionSpriteConfig.character,
+      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(character = value))
+    ),
+    field("companion.sprite.position")(
+      enumeratedValues(PanelPosition.values, _.toString.toLowerCase(Locale.ROOT))
+    )(
+      _.companionSpriteConfig.position,
+      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(position = value))
+    ),
+    field("companion.sprite.size")(
+      int.filtered(size => size >= CompanionSpriteConfig.MinSize && size <= CompanionSpriteConfig.MaxSize)
+    )(
+      _.companionSpriteConfig.size,
+      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(size = value))
+    ),
+    field("visual.flair.level")(
+      enumerated(VisualFlairLevel.fromConfigKey, _.configKey)
+    )(_.visualFlairLevel, (config, value) => config.withVisualFlairLevel(value)),
     named("window.preferred.width", "preferredWindowWidth", "window_preferred_width")(int.orEmpty)(
       _.preferredWindowSize.map(_.width),
       (config, value) =>

@@ -28,11 +28,25 @@ object CompanionSpriteAssets:
     * so this is always either empty (sheet failed to load) or `Map("idle" -> <4 frames>)`; painting a non-idle
     * [[CompanionSpriteAction]] before a matching clip exists falls back to these idle frames (see
     * [[CompanionSpriteFrames.framesFor]]).
+    *
+    * Backed by [[framesByCharacter]], computed once per character rather than re-decoding the sheet on every render
+    * call.
     */
   def loadFrames(character: CompanionCharacter): Map[String, Vector[BufferedImage]] =
+    framesByCharacter.getOrElse(character, Map.empty)
+
+  private def loadFramesFromDisk(character: CompanionCharacter): Map[String, Vector[BufferedImage]] =
     loadSheet(character).fold(Map.empty[String, Vector[BufferedImage]])(sheet =>
       SpriteSheetSlicer.slice(sheet, IdleLayout)
     )
+
+  /** Every bundled character's sheet, decoded once at class-init time -- `CompanionCharacter` is a small closed enum,
+    * so eagerly loading all of them costs nothing render loops would notice, and avoids `ImageIO.read`ing the same
+    * classpath resource on every single frame paint (mirrors `SwingWindow.applicationIconImages`'s own eager,
+    * decoded-once `lazy val`).
+    */
+  private lazy val framesByCharacter: Map[CompanionCharacter, Map[String, Vector[BufferedImage]]] =
+    CompanionCharacter.values.map(character => character -> loadFramesFromDisk(character)).toMap
 
 /** Resolves a [[CompanionSpriteState]] to the frame it should currently paint, given a sheet's actually-loaded
   * clips.
