@@ -230,6 +230,51 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     finalState.persisted.config.surfaceConfig.visualLineCursorNavigation shouldBe true
   }
 
+  behavior of "Toggle Typewriter Scrolling Command"
+
+  it should "be found in command registry by search terms" in {
+    val registry = CommandRegistry.withToggleUI
+
+    val typewriterResults = registry.searchCommands("typewriter")
+    val scrollingResults  = registry.searchCommands("scrolling")
+    val command           = registry.findCommand("toggle-typewriter-scrolling").get
+
+    typewriterResults.map(_.name) should contain("toggle-typewriter-scrolling")
+    scrollingResults.map(_.name) should contain("toggle-typewriter-scrolling")
+    command.intent shouldBe CommandIntent.Settings(
+      SettingsIntent.PanelChrome(PanelChromeIntent.ToggleTypewriterScrolling)
+    )
+  }
+
+  it should "toggle typewriter scrolling from disabled to enabled" in {
+    val stateManager = createStateManager()
+
+    stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .config
+      .surfaceConfig
+      .typewriterScrollingEnabled shouldBe false
+
+    executeCommandThroughRunner(stateManager, "toggle-typewriter-scrolling", "toggle-typewriter-scrolling")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.persisted.config.surfaceConfig.typewriterScrollingEnabled shouldBe true
+  }
+
+  it should "toggle typewriter scrolling from enabled to disabled" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .updateState(s => s.copy(persisted = s.persisted.copy(config = s.persisted.config.withTypewriterScrolling(true))))
+      .unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "toggle-typewriter-scrolling", "toggle-typewriter-scrolling")
+
+    val finalState = stateManager.getCurrentState.unsafeRunSync()
+    finalState.persisted.config.surfaceConfig.typewriterScrollingEnabled shouldBe false
+  }
+
   behavior of "Combined Toggle UI Command Integration"
 
   it should "allow toggling both line numbers and gutter independently" in {

@@ -183,6 +183,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "gutter",
         "line-wrap",
         "visual-line-navigation",
+        "typewriter-scrolling",
         "show-word-count",
         "focused-text-body",
         "contextual-toolbar",

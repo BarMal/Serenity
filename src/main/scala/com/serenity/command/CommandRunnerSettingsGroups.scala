@@ -61,6 +61,7 @@ object CommandRunnerSettingsGroups:
     val gutterItem                  = CommandRunnerSettingsItems.gutterOptionItem(optionSelections)
     val lineWrapItem                = CommandRunnerSettingsItems.lineWrapOptionItem(optionSelections)
     val visualLineNavigationItem    = CommandRunnerSettingsItems.visualLineNavigationOptionItem(optionSelections)
+    val typewriterScrollingItem     = CommandRunnerSettingsItems.typewriterScrollingOptionItem(optionSelections)
     val focusedTextBodyItem         = CommandRunnerSettingsItems.focusedTextBodyOptionItem(optionSelections)
     val contextualToolbarItem       = CommandRunnerSettingsItems.contextualToolbarOptionItem(optionSelections)
     val contextualToolbarDisplayItem =
@@ -93,6 +94,7 @@ object CommandRunnerSettingsGroups:
         gutterItem,
         lineWrapItem,
         visualLineNavigationItem,
+        typewriterScrollingItem,
         wordCountItem,
         focusedTextBodyItem,
         contextualToolbarItem,

@@ -914,6 +914,20 @@ object CommandRunnerSettingsItems:
       hint = "Move Up/Down by wrapped visual row instead of logical line"
     )
 
+  private[command] def typewriterScrollingOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "typewriter-scrolling",
+      label = "Typewriter Scrolling",
+      selectedIndex = optionSelections.getOrElse("typewriter-scrolling", 1),
+      enabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTypewriterScrolling(true))),
+      disabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTypewriterScrolling(false))),
+      hint = "Keep the cursor's line vertically centred as you type, padding past the document's end"
+    )
+
   private[command] def focusedTextBodyOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =

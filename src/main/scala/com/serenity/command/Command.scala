@@ -202,10 +202,12 @@ enum PanelChromeIntent:
   case ToggleContextualToolbar
   case TogglePaneHeaders
   case ToggleVisualLineCursorNavigation
+  case ToggleTypewriterScrolling
   case SetLineNumbers(enabled: Boolean)
   case SetGutter(enabled: Boolean)
   case SetWordWrap(enabled: Boolean)
   case SetVisualLineCursorNavigation(enabled: Boolean)
+  case SetTypewriterScrolling(enabled: Boolean)
   case SetFocusedTextBody(enabled: Boolean)
   case SetContextualToolbarEnabled(enabled: Boolean)
   case SetContextualToolbarDisplayMode(mode: ToolbarDisplayMode)
