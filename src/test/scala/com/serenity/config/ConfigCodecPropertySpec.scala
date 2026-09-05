@@ -77,7 +77,10 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     "inputConfig.focusedKeymapConfig.commandRunner.bindings",
     "inputConfig.focusedKeymapConfig.modal.bindings",
     "inputConfig.focusedKeymapConfig.panel.bindings",
-    "inputConfig.focusedKeymapConfig.peek.bindings"
+    "inputConfig.focusedKeymapConfig.peek.bindings",
+    // CompanionCharacter has exactly one bundled value today (the placeholder sprite sheet), so a generator has
+    // nothing else to pick -- CompanionCharacterSpec covers fromConfigKey/id round-tripping directly instead.
+    "companionSpriteConfig.character"
   )
 
   /** Every field of the config tree, by path.
