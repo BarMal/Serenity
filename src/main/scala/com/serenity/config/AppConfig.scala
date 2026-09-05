@@ -623,6 +623,12 @@ final case class SurfaceConfig(
     // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
     // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
     visualLineCursorNavigation: Boolean = true,
+    // Off by default (preserves `CursorViewport.adjustForCursor`'s existing behaviour exactly): the cursor's line is
+    // recentred on every move, but never past the document's own end, so a viewport near the last line falls back to
+    // showing as much real content as fits rather than centring. On, that end clamp is lifted -- the caret's line
+    // stays at its centred row even while typing at the very end of the document, padding with blank rows below it
+    // the way iA Writer/Ulysses-style typewriter scrolling does (#1204, #1293).
+    typewriterScrollingEnabled: Boolean = false,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
@@ -1634,6 +1640,9 @@ final case class AppConfig(
 
   def withVisualLineCursorNavigation(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(visualLineCursorNavigation = enabled))
+
+  def withTypewriterScrolling(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(typewriterScrollingEnabled = enabled))
 
   /** `None` restores the active theme's own panel alpha for the cursor info bar; `Some` overrides just that one panel's
     * background alpha, independent of theme.

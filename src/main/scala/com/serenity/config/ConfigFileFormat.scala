@@ -137,6 +137,8 @@ object ConfigFileFormat:
     field("display.cursor_info_bar_background_alpha"),
     field("display.word_wrap"),
     field("display.visual_line_navigation"),
+    comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
+    field("display.typewriter_scrolling"),
     field("display.line_numbers"),
     field("display.gutter"),
     field("display.word_count"),

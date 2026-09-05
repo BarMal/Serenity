@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-05
+
+- Added a Typewriter Scrolling setting (`display.typewriter_scrolling`, default off, plus a Text Display settings row and command-palette toggle): turning it on keeps the cursor's line at its centred row even while typing at the document's actual end, padding past it with blank rows, instead of falling back to the existing "show as much real content as fits" clamp. The clamp was silently overriding vertical centring during ordinary end-of-document typing -- the case #1204 was meant to cover -- and the mode had no config, command, or settings entry at all (#1293).
+
 ## 2026-09-04
 
 - Property-tested the config format over generated settings, and fixed what it found: an explicit text-scale mode of "off" being overridden to "manual" by the multiplier, blur radius and background style never being written at all, and percentage settings coming back a floating-point hair away from what was saved.

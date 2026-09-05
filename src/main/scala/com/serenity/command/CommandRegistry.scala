@@ -117,6 +117,13 @@ object CommandRegistry:
       label = "Toggle Visual Line Navigation"
     ),
     Command.typed(
+      "toggle-typewriter-scrolling",
+      "Keep the cursor's line vertically centred as you type, padding past the document's end.",
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleTypewriterScrolling)),
+      CommandCategory.View,
+      label = "Toggle Typewriter Scrolling"
+    ),
+    Command.typed(
       "toggle-line-wrap",
       "Soft-wrap long logical lines to the editor width.",
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleWordWrap)),

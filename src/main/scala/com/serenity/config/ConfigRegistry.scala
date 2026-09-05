@@ -416,6 +416,15 @@ object ConfigRegistry:
       _.surfaceConfig.visualLineCursorNavigation,
       (config, value) => config.withVisualLineCursorNavigation(value)
     ),
+    named(
+      "display.typewriter_scrolling",
+      "typewriterScrollingEnabled",
+      "display.typewriter.scrolling",
+      "display_typewriter_scrolling"
+    )(boolean)(
+      _.surfaceConfig.typewriterScrollingEnabled,
+      (config, value) => config.withTypewriterScrolling(value)
+    ),
     named("display.line_numbers", "showLineNumbers", "display.line.numbers", "display_line_numbers")(boolean)(
       _.surfaceConfig.showLineNumbers,
       (config, value) => config.withLineNumbers(value)

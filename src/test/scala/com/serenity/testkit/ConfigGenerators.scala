@@ -201,18 +201,19 @@ object ConfigGenerators:
     */
   val genSurfaceConfig: Gen[SurfaceConfig] =
     for
-      lineNumbers     <- Gen.oneOf(true, false)
-      gutter          <- Gen.oneOf(true, false)
-      paneHeaders     <- Gen.oneOf(true, false)
-      wordCount       <- Gen.oneOf(true, false)
-      comments        <- oneOfEnum(CommentDisplayMode.values)
-      wordWrap        <- Gen.oneOf(true, false)
-      visualLineNav   <- Gen.oneOf(true, false)
-      focusedTextBody <- Gen.oneOf(true, false)
-      toolbar         <- Gen.oneOf(true, false)
-      toolbarMode     <- oneOfEnum(ToolbarDisplayMode.values)
-      postProcessing  <- oneOfEnum(PostProcessingEffect.values)
-      shadows         <- Gen.oneOf(true, false)
+      lineNumbers         <- Gen.oneOf(true, false)
+      gutter              <- Gen.oneOf(true, false)
+      paneHeaders         <- Gen.oneOf(true, false)
+      wordCount           <- Gen.oneOf(true, false)
+      comments            <- oneOfEnum(CommentDisplayMode.values)
+      wordWrap            <- Gen.oneOf(true, false)
+      visualLineNav       <- Gen.oneOf(true, false)
+      typewriterScrolling <- Gen.oneOf(true, false)
+      focusedTextBody     <- Gen.oneOf(true, false)
+      toolbar             <- Gen.oneOf(true, false)
+      toolbarMode         <- oneOfEnum(ToolbarDisplayMode.values)
+      postProcessing      <- oneOfEnum(PostProcessingEffect.values)
+      shadows             <- Gen.oneOf(true, false)
       visibleRows <- Gen.option(
         Gen.choose(AppConfig.MinCommandRunnerVisibleRows, AppConfig.MaxCommandRunnerVisibleRows)
       )
@@ -242,6 +243,7 @@ object ConfigGenerators:
       commentDisplayMode = comments,
       wordWrapEnabled = wordWrap,
       visualLineCursorNavigation = visualLineNav,
+      typewriterScrollingEnabled = typewriterScrolling,
       focusedTextBodyEnabled = focusedTextBody,
       contextualToolbarEnabled = toolbar,
       contextualToolbarDisplayMode = toolbarMode,
