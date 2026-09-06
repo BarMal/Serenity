@@ -40,10 +40,6 @@ object ConfigRegistry:
       percent >= ViewportAxisSizing.MinPercent * 100.0 && percent <= ViewportAxisSizing.MaxPercent * 100.0
     )
 
-  double.filtered(scale =>
-    scale >= AppConfig.MinElementTransitionSpeedScale && scale <= AppConfig.MaxElementTransitionSpeedScale
-  )
-
   /** `#RRGGBB` or `#RRGGBBAA`, which is what [[ColorFormat.toHex]] writes. */
   private def colorFromHex(value: String): Option[Color] =
     val hex = value.trim.stripPrefix("#")
@@ -74,13 +70,12 @@ object ConfigRegistry:
       value => value.toString.toLowerCase(Locale.ROOT)
     )
 
-  /** Font sizes are clamped rather than refused: a file asking for 400pt is a file that means "as big as you allow". */
   /** The segment list, which also accepts the older single-word presets (`minimal`, `detailed`) it replaced. */
   private val infoBarSegments: FieldCodec[List[CursorInfoBarSegment]] =
     given io.circe.Encoder[List[CursorInfoBarSegment]] =
-      io.circe.Encoder.encodeList(io.circe.Encoder.encodeString.contramap(_.configKey))
+      io.circe.Encoder.encodeList(using io.circe.Encoder.encodeString.contramap(_.configKey))
     given io.circe.Decoder[List[CursorInfoBarSegment]] =
-      io.circe.Decoder.decodeList(
+      io.circe.Decoder.decodeList(using
         io.circe.Decoder.decodeString.emap(key =>
           CursorInfoBarSegment
             .fromConfigKey(key)
@@ -93,6 +88,7 @@ object ConfigRegistry:
       values => HoconValue.string(if values.isEmpty then "off" else values.map(_.configKey).mkString(","))
     )
 
+  /** Font sizes are clamped rather than refused: a file asking for 400pt is a file that means "as big as you allow". */
   private val fontSize: FieldCodec[Float] =
     FieldCodec.of(text => text.trim.toFloatOption.map(size => size.max(8.0f).min(48.0f)), HoconValue.number)
 

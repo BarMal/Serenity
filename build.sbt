@@ -3,7 +3,7 @@ import sbtassembly.MergeStrategy
 
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalaVersion := "3.8.4"
+ThisBuild / scalaVersion := "3.9.0"
 
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
@@ -11,27 +11,19 @@ ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 Compile / scalacOptions ++= Seq(
   "-Wunused:all",
   "-Wvalue-discard",
-  "-Wnonunit-statement"
-  // NOT YET: "-Werror".
+  "-Wnonunit-statement",
+  // Exhaustivity on a sealed hierarchy is only a warning, so without -Werror, sealing an ADT still lets a missing
+  // case compile. Turning it on is the natural completion of the sealing work. (-Xfatal-warnings is the historical
+  // alias and is deprecated as of Scala 3.8; -Werror is the spelling to use.)
   //
-  // Exhaustivity on a sealed hierarchy is only a warning, so without -Werror, sealing an ADT still
-  // lets a missing case compile -- which makes it the natural completion of the sealing work.
-  // (-Xfatal-warnings is the historical alias and is deprecated as of Scala 3.8; -Werror is the
-  // spelling to use.)
+  // This used to be deferred behind a backlog of 150 warnings -- 105 staged WartRemover findings, 36 unused symbols,
+  // 4 non-exhaustive matches, 2 potential-issue, 1 deprecation. That backlog is gone: a clean compile now reports
+  // zero warnings, so -Werror holds a line already reached rather than demanding a migration first.
   //
-  // It cannot be switched on yet. Compiling this tree produces 150 warnings that -Werror would turn
-  // into build failures:
-  //   105  staged WartRemover findings (Null / Throw / OptionPartial / IterableOps, see below)
-  //    36  unused symbols            [E198]
-  //     4  non-exhaustive matches    [E029]
-  //     2  potential-issue warnings  [E175]
-  //     1  infix-method deprecation
-  //
-  // -Wconf cannot carve these out: under -Werror both the `w` and `i` actions still fail the build,
-  // and `s` would hide the staged wart findings entirely, defeating the point of staging them.
-  // So -Werror lands only once the backlog is genuinely cleared -- unused symbols are auto-fixable
-  // with `sbt "Compile / scalafix RemoveUnused"`, and the 4 exhaustivity warnings need real fixes.
-  // Kept out of this change so it stays a build change rather than a build-plus-42-code-fixes change.
+  // One consequence to know: the wart traversers below are still split into errors and warnings, but under -Werror
+  // that split now only changes the message, not the outcome. The four "warning" warts are at zero violations, so
+  // per the staging policy documented there they are candidates to move up to wartremoverErrors outright.
+  "-Werror"
 )
 
 Test / scalacOptions --= Seq(

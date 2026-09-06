@@ -298,7 +298,7 @@ final case class Command private (
     // #1298: when true, submitting this command from a settings submenu leaves the submenu open at its current
     // position instead of closing the whole command-runner overlay (mirrors how an `OptionItem` cycle already stays
     // open) -- for a command meant to be pressed repeatedly in a row, such as the info bar segment movers.
-    keepMenuOpenOnSubmit: Boolean = false
+    keepMenuOpenOnSubmit: Boolean
 )
 
 object Command:

@@ -56,9 +56,9 @@ object FieldCodec:
 
   /** A list of enum values written as one comma-joined string, with `off` for the empty list. */
   def commaSeparated[A](fromKey: String => Option[A], toKey: A => String): FieldCodec[List[A]] =
-    given Encoder[List[A]] = Encoder.encodeList(Encoder.encodeString.contramap(toKey))
+    given Encoder[List[A]] = Encoder.encodeList(using Encoder.encodeString.contramap(toKey))
     given Decoder[List[A]] =
-      Decoder.decodeList(Decoder.decodeString.emap(key => fromKey(key).toRight(s"Unknown value: $key")))
+      Decoder.decodeList(using Decoder.decodeString.emap(key => fromKey(key).toRight(s"Unknown value: $key")))
     of(
       text =>
         val trimmed = text.trim.toLowerCase

@@ -38,7 +38,7 @@ object EditorGeometryProducer:
       .flatMap(state.persisted.buffers.get)
       .map(buffer => forBuffer(state, buffer, rowsAbove))
 
-  private def forBuffer(state: AppState, buffer: Buffer, rowsAbove: Int = NavigationWindowMarginRows): EditorGeometry =
+  private def forBuffer(state: AppState, buffer: Buffer, rowsAbove: Int): EditorGeometry =
     val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)
     val isTui   = state.runtime.isTuiMode
     val metrics = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
