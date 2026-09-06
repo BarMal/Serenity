@@ -195,7 +195,11 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
       ),
       runtime = AppState.empty.runtime.copy(
         uiSurfaces = List(
-          UiSurface(startupId, SurfaceContent.StartPage(startPage), SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)),
+          UiSurface(
+            startupId,
+            SurfaceContent.StartPage(startPage),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          ),
           UiSurface(modalId, SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)), SurfacePresentation.Modal)
         )
       )

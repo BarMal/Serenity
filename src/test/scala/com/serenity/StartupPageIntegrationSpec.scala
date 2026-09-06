@@ -240,7 +240,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       viewportSize = ViewportSize(80, 24)
 
       initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
-      _            = initialState.startPageSurface should be(defined)
+      _ = initialState.startPageSurface should be(defined)
 
       // "Open file or folder" is at index 1; navigate to it and confirm
       _     <- stateManager.applyEvent(MoveDown)

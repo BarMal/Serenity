@@ -188,7 +188,7 @@ object ModalEventReducer:
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) if workflow.suggestions.nonEmpty =>
             val selectedSuggestion = workflow.suggestions.lift(workflow.selectedSuggestionIndex)
-            val isFileInPathField  =
+            val isFileInPathField =
               workflow.mode == FileWorkflowMode.Open &&
                 workflow.activeField == FileWorkflowField.Path &&
                 selectedSuggestion.exists(!_.isDirectory)
