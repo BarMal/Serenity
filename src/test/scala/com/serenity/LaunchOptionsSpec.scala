@@ -8,82 +8,110 @@ import org.scalatest.matchers.should.Matchers
 
 class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
 
+  /** The parse succeeded, or the test fails with the parser's own message rather than a NoSuchElementException. */
+  private def parsed(args: List[String]): LaunchOptions =
+    LaunchOptions.parse(args).fold(help => fail(s"expected a successful parse, got:\n$help"), identity)
+
   "LaunchOptions.parse" should "accept an explicit open path" in {
-    LaunchOptions.parse(List("--open", "notes.md")).openPath shouldBe Some(Path.of("notes.md"))
+    parsed(List("--open", "notes.md")).openPath shouldBe Some(Path.of("notes.md"))
   }
 
   it should "accept a file alias" in {
-    LaunchOptions.parse(List("--file", "notes.md")).openPath shouldBe Some(Path.of("notes.md"))
+    parsed(List("--file", "notes.md")).openPath shouldBe Some(Path.of("notes.md"))
   }
 
   it should "accept a bare launch path" in {
-    LaunchOptions.parse(List("notes.md")).openPath shouldBe Some(Path.of("notes.md"))
+    parsed(List("notes.md")).openPath shouldBe Some(Path.of("notes.md"))
   }
 
-  it should "ignore unsupported options" in {
-    LaunchOptions.parse(List("--unknown", "notes.md")).openPath shouldBe None
+  it should "reject an unrecognised flag rather than silently discarding the arguments after it" in {
+    // Previously this returned openPath = None: the unknown flag was not filtered, landed at the head of the
+    // match, and took `notes.md` down with it. Silently opening nothing looks like a broken editor (#1280).
+    val result = LaunchOptions.parse(List("--unknown", "notes.md"))
+    result.isLeft shouldBe true
+    result.left.toOption.map(_.errors).getOrElse(Nil) should not be empty
+  }
+
+  it should "reject --open with no path rather than starting with no file" in {
+    val result = LaunchOptions.parse(List("--open"))
+    result.isLeft shouldBe true
+    result.left.toOption.map(_.errors).getOrElse(Nil) should not be empty
+  }
+
+  it should "treat --help as a request rather than an error" in {
+    val result = LaunchOptions.parse(List("--help"))
+    result.isLeft shouldBe true
+    result.left.toOption.map(_.errors).getOrElse(List("unexpected")) shouldBe empty
+  }
+
+  it should "accept --version" in {
+    parsed(List("--version")).showVersion shouldBe true
+  }
+
+  it should "not set showVersion when it is absent" in {
+    parsed(List("notes.md")).showVersion shouldBe false
   }
 
   it should "default eco to false" in {
-    LaunchOptions.parse(List("notes.md")).eco shouldBe false
+    parsed(List("notes.md")).eco shouldBe false
   }
 
   it should "recognise a bare --eco flag" in {
-    LaunchOptions.parse(List("--eco")).eco shouldBe true
+    parsed(List("--eco")).eco shouldBe true
   }
 
   it should "recognise --eco alongside an open path, regardless of order" in {
-    LaunchOptions.parse(List("--eco", "notes.md")) shouldBe LaunchOptions(
+    parsed(List("--eco", "notes.md")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       eco = true
     )
-    LaunchOptions.parse(List("notes.md", "--eco")) shouldBe LaunchOptions(
+    parsed(List("notes.md", "--eco")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       eco = true
     )
   }
 
   it should "recognise --eco alongside --open" in {
-    LaunchOptions.parse(List("--eco", "--open", "notes.md")) shouldBe LaunchOptions(
+    parsed(List("--eco", "--open", "notes.md")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       eco = true
     )
   }
 
   it should "default tui and gui to false" in {
-    val options = LaunchOptions.parse(List("notes.md"))
+    val options = parsed(List("notes.md"))
     options.tui shouldBe false
     options.gui shouldBe false
   }
 
   it should "recognise a bare --tui flag" in {
-    LaunchOptions.parse(List("--tui")).tui shouldBe true
+    parsed(List("--tui")).tui shouldBe true
   }
 
   it should "recognise a bare --gui flag" in {
-    LaunchOptions.parse(List("--gui")).gui shouldBe true
+    parsed(List("--gui")).gui shouldBe true
   }
 
   it should "recognise --tui alongside an open path, regardless of order" in {
-    LaunchOptions.parse(List("--tui", "notes.md")) shouldBe LaunchOptions(
+    parsed(List("--tui", "notes.md")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       tui = true
     )
-    LaunchOptions.parse(List("notes.md", "--tui")) shouldBe LaunchOptions(
+    parsed(List("notes.md", "--tui")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       tui = true
     )
   }
 
   it should "recognise --gui alongside --open" in {
-    LaunchOptions.parse(List("--gui", "--open", "notes.md")) shouldBe LaunchOptions(
+    parsed(List("--gui", "--open", "notes.md")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       gui = true
     )
   }
 
   it should "recognise --tui, --gui, and --eco together" in {
-    LaunchOptions.parse(List("--tui", "--gui", "--eco", "notes.md")) shouldBe LaunchOptions(
+    parsed(List("--tui", "--gui", "--eco", "notes.md")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       eco = true,
       tui = true,
@@ -92,33 +120,33 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "default alpha to false" in {
-    LaunchOptions.parse(List("notes.md")).alpha shouldBe false
+    parsed(List("notes.md")).alpha shouldBe false
   }
 
   it should "recognise a bare --alpha flag" in {
-    LaunchOptions.parse(List("--alpha")).alpha shouldBe true
+    parsed(List("--alpha")).alpha shouldBe true
   }
 
   it should "recognise --alpha alongside an open path, regardless of order" in {
-    LaunchOptions.parse(List("--alpha", "notes.md")) shouldBe LaunchOptions(
+    parsed(List("--alpha", "notes.md")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       alpha = true
     )
-    LaunchOptions.parse(List("notes.md", "--alpha")) shouldBe LaunchOptions(
+    parsed(List("notes.md", "--alpha")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       alpha = true
     )
   }
 
   it should "recognise --alpha alongside --open" in {
-    LaunchOptions.parse(List("--alpha", "--open", "notes.md")) shouldBe LaunchOptions(
+    parsed(List("--alpha", "--open", "notes.md")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       alpha = true
     )
   }
 
   it should "recognise --tui, --gui, --eco, and --alpha together" in {
-    LaunchOptions.parse(List("--tui", "--gui", "--eco", "--alpha", "notes.md")) shouldBe LaunchOptions(
+    parsed(List("--tui", "--gui", "--eco", "--alpha", "notes.md")) shouldBe LaunchOptions(
       openPath = Some(Path.of("notes.md")),
       eco = true,
       tui = true,

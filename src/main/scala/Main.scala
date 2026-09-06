@@ -4,6 +4,7 @@ import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
 import com.serenity.animation.WindowSitter
+import com.serenity.BuildInfo
 import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, MotionFamily}
 import com.serenity.diagnostics.{Trace, TuiConsoleLogFilter}
@@ -31,10 +32,19 @@ object Main extends IOApp:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   def run(args: List[String]): IO[ExitCode] =
+    // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
+    // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
+    LaunchOptions.parse(args) match
+      case Left(help) =>
+        IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
+      case Right(options) if options.showVersion =>
+        IO(println(s"Serenity ${BuildInfo.version} (${BuildInfo.commit})")).as(ExitCode.Success)
+      case Right(options) => launch(options)
+
+  private def launch(launchOptionsForLogging: LaunchOptions): IO[ExitCode] =
     // #1215: must run before the `given logger` below, which triggers logback's one-time console-appender setup on
     // its first call -- `TuiConsoleLogFilter` reads this property per log event, but it still has to be set before
     // the very first event a TUI launch could otherwise leak onto the terminal surface it is about to take over.
-    val launchOptionsForLogging = LaunchOptions.parse(args)
     System.setProperty(
       TuiConsoleLogFilter.EnabledProperty,
       LaunchOptions.resolveTuiMode(launchOptionsForLogging).toString
