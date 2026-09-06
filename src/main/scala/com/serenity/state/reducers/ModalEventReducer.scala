@@ -137,8 +137,7 @@ object ModalEventReducer:
 
   private def reduceFileWorkflow(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
-      case ModalDismiss =>
-        ReducerResult.noEffects(dismissToPane(currentState))
+      case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
       case ModalInsertChar(char) =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) =>
@@ -187,10 +186,11 @@ object ModalEventReducer:
       case ModalNextField =>
         currentModal(currentState) match
           case Some((surface, Modal.FileWorkflow(workflow))) if workflow.suggestions.nonEmpty =>
-            ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.applySelectedSuggestion)),
-              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
-            )
+            val effect =
+              if workflow.acceptedSuggestionOpensFile then WorkflowEffect.SubmitFileWorkflow(surface.id)
+              else WorkflowEffect.RefreshFileWorkflow(surface.id)
+            val updated = updateModal(currentState, surface, Modal.FileWorkflow(workflow.applySelectedSuggestion))
+            ReducerResult.withEffect(updated, AppEffect.Workflow(effect))
           case Some((surface, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
               updateModal(currentState, surface, Modal.FileWorkflow(workflow.switchField(1))),

@@ -1176,6 +1176,9 @@ object Renderer:
             uiMetrics
           )
         renderFloatingPanels(state, floatContext, scene, Damage.Everything)
+        // This branch never reaches `paintFrameLayers`, so paint the modal layer here or a blocking modal opened from
+        // the startup page (the open-file dialog) would be invisible (#1289).
+        paintModalLayer(state, floatContext, scene, isDirty = true)
         None
       case None =>
         val prepared = preparedSceneFor(surface)
