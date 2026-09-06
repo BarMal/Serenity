@@ -200,7 +200,7 @@ libraryDependencies ++= Seq(
   "net.java.dev.jna" % "jna-platform"  % "5.12.0"
 )
 
-val commonMarkVersion = "0.27.0"
+val commonMarkVersion = "0.30.0"
 
 libraryDependencies ++= Seq(
   "org.commonmark"   % "commonmark"                   % commonMarkVersion,
