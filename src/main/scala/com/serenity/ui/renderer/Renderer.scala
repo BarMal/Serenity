@@ -10,6 +10,8 @@ import com.serenity.animation.ThemeInterpolator
 import com.serenity.animation.sprite.{CompanionSpriteAssets, CompanionSpriteFrames}
 import com.serenity.config.{
   AppConfig,
+  AppMode,
+  CornerPosition,
   CursorInfoBarPlacement,
   CursorMode,
   MarkdownViewMode,
@@ -2025,7 +2027,7 @@ object Renderer:
         surface.setBackgroundColor(state.persisted.theme.panel.background)
         surface.setForegroundColor(state.persisted.theme.panel.foreground)
 
-      val bufferTitle = buffer match
+      val bufferTitleBase = buffer match
         case Some(buf) =>
           buf.document.filePath match
             case Some(path) =>
@@ -2035,6 +2037,7 @@ object Renderer:
               if buf.document.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
         case None =>
           "No Buffer"
+      val bufferTitle = if isActive then applyModeTabWidgetToTopCorner(state, bufferTitleBase) else bufferTitleBase
 
       val maxTitleWidth = math.max(1, titleRect.width - 2)
       val displayTitle =
@@ -3605,7 +3608,42 @@ object Renderer:
       else legacyGutterContent(state)
     // Opt-in (`surfaceConfig.showWordCount`, off by default): appended as its own segment rather than folded into
     // `legacyGutterContent`/`cursorInfoBarText`, both of which existing callers assert on as exact strings.
-    state.wordCountStatusText.fold(base)(segment => s" ${base.trim} | $segment ")
+    val withWordCount = state.wordCountStatusText.fold(base)(segment => s" ${base.trim} | $segment ")
+    applyModeTabWidgetToBottomCorner(state, withWordCount)
+
+  /** Folds the mode indicator (issue #1307) into the gutter row's own already-reserved, already-dynamic text for
+    * `BottomLeft`/`BottomRight` rather than painting a separate rect over it -- the gutter is the only screen row every
+    * render already treats as free to overwrite each frame, so sharing it (the same way `wordCountStatusText` shares it
+    * above) is what keeps the indicator from clobbering whatever else happens to occupy that corner.
+    * `TopLeft`/`TopRight` fold into the active pane's header instead -- see `renderBufferHeader`. Only the glyph is
+    * folded in, not the tab title: whichever chrome text it joins already shows that (the gutter's own filename
+    * segment, or the header's title verbatim), so repeating it here would just show the same name twice.
+    */
+  private def applyModeTabWidgetToBottomCorner(state: AppState, gutterText: String): String =
+    val segment = modeTabWidgetSegment(state)
+    state.persisted.config.modeTabWidgetCornerPosition match
+      case CornerPosition.BottomLeft                        => s" $segment ${gutterText.trim} "
+      case CornerPosition.BottomRight                       => s" ${gutterText.trim} $segment "
+      case CornerPosition.TopLeft | CornerPosition.TopRight => gutterText
+
+  private def modeTabWidgetSegment(state: AppState): String =
+    s"[${modeTabWidgetGlyph(state.persisted.config.appMode)}]"
+
+  private def modeTabWidgetGlyph(mode: AppMode): String =
+    mode match
+      case AppMode.Code  => "C"
+      case AppMode.Prose => "P"
+
+  /** The `TopLeft`/`TopRight` half of the mode/tab corner widget (issue #1307): folded into the active pane's own
+    * header text (which already shows "the current tab name" the issue asks the indicator to sit alongside) rather than
+    * a separate rect, for the same collision-avoidance reason as `applyModeTabWidgetToBottomCorner`.
+    */
+  private def applyModeTabWidgetToTopCorner(state: AppState, title: String): String =
+    val segment = modeTabWidgetSegment(state)
+    state.persisted.config.modeTabWidgetCornerPosition match
+      case CornerPosition.TopLeft                                 => s"$segment $title"
+      case CornerPosition.TopRight                                => s"$title $segment"
+      case CornerPosition.BottomLeft | CornerPosition.BottomRight => title
 
   private def legacyGutterContent(state: AppState): String =
     state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get) match

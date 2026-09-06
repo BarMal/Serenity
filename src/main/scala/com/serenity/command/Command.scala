@@ -111,6 +111,8 @@ enum ViewIntent:
   case SetAppMode(mode: AppMode)
   case SetShowAllSettingsRegardlessOfMode(value: Boolean)
   case ToggleShortcutsHelp
+  case ToggleTabList
+  case ToggleRecentFilesInMode
 
 enum ProjectIntent:
   case RunProjectTask(kind: ProjectTaskKind)

@@ -59,7 +59,9 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     val lineResults   = registry.searchCommands("line")
     val numberResults = registry.searchCommands("numbers")
-    val toggleResults = registry.searchCommands("toggle")
+    // `toggle` alone matches every "toggle-*" command equally (issue #1307 added two more), so this needs enough
+    // headroom to find toggle-line-numbers rather than relying on the default top-5 cap.
+    val toggleResults = registry.searchCommands("toggle", maxResults = 50)
     val command       = registry.findCommand("toggle-line-numbers").get
 
     lineResults.map(_.name) should contain("toggle-line-numbers")
@@ -101,7 +103,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     val gutterResults = registry.searchCommands("gutter")
     val statusResults = registry.searchCommands("status")
-    val toggleResults = registry.searchCommands("toggle")
+    val toggleResults = registry.searchCommands("toggle", maxResults = 50)
     val command       = registry.findCommand("toggle-gutter").get
 
     gutterResults.map(_.name) should contain("toggle-gutter")

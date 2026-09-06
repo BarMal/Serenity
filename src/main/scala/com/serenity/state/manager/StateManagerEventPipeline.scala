@@ -249,7 +249,9 @@ final private[manager] class StateManagerEventPipeline(
       case ToggleCommandRunner => reduced >> hydrateCommandRunnerUiPresets
       case NextTab             => reduced >> applyPaneFlowAnimation(SweepDirection.Backward)
       case PreviousTab         => reduced >> applyPaneFlowAnimation(SweepDirection.Forward)
-      case ToggleContextualToolbar | ToggleShortcutsHelp | NewTab | FileSearch                      => reduced
+      case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab |
+          FileSearch =>
+        reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         // Resolving the frozen cursor anchor to a screen position needs LayoutEngine, which reducers may not touch
         // (ArchitectureChecks.ForbiddenImports) -- done here, once, right after the reduce that may have set
