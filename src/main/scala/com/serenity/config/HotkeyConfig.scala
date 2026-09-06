@@ -2,6 +2,7 @@ package com.serenity.config
 
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import io.circe.syntax.given
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.{Decoder, Encoder}
 
 enum HotkeyAction:
@@ -386,11 +387,8 @@ object HotkeyConfig:
   given Decoder[Modifier] =
     Decoder.decodeString.emap(key => Modifier.values.find(_.toString == key).toRight(s"Unknown modifier: $key"))
 
-  given Encoder[HotkeyTrigger] = Encoder.forProduct3("keyType", "character", "modifiers")(trigger =>
-    (trigger.keyType, trigger.character, trigger.modifiers)
-  )
-
-  given Decoder[HotkeyTrigger] = Decoder.forProduct3("keyType", "character", "modifiers")(HotkeyTrigger.apply)
+  given Encoder[HotkeyTrigger] = deriveEncoder
+  given Decoder[HotkeyTrigger] = deriveDecoder
 
   given Encoder[HotkeyConfig] = Encoder.instance { config =>
     config.bindings.map { case (action, triggers) => action.configKey -> triggers }.asJson

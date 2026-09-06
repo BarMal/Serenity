@@ -2,6 +2,7 @@ package com.serenity.config
 
 import com.serenity.keystroke.events.*
 import io.circe.syntax.given
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.{Decoder, Encoder}
 
 import HotkeyConfig.given
@@ -500,21 +501,8 @@ final case class FocusedKeymapConfig(
 
 object FocusedKeymapConfig:
 
-  given Encoder[FocusedKeymapConfig] = Encoder.forProduct5(
-    "editor",
-    "commandRunner",
-    "modal",
-    "panel",
-    "peek"
-  )(config => (config.editor, config.commandRunner, config.modal, config.panel, config.peek))
-
-  given Decoder[FocusedKeymapConfig] = Decoder.forProduct5(
-    "editor",
-    "commandRunner",
-    "modal",
-    "panel",
-    "peek"
-  )(FocusedKeymapConfig.apply)
+  given Encoder[FocusedKeymapConfig] = deriveEncoder
+  given Decoder[FocusedKeymapConfig] = deriveDecoder
 
 private object KeymapCodecSupport:
   def encodeBindings[A](bindings: Map[A, List[HotkeyTrigger]])(keyOf: A => String): io.circe.Json =
