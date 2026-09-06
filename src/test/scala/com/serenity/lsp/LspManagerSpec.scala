@@ -105,7 +105,12 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       )
       hover <- takeMessage(manager.connection)
       _ = hover.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/hover")
-      _      <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+      _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+      // The change supersedes the in-flight hover, so the manager cancels it -- and cancelling now tells the server
+      // to stop (#1285) before the new work goes out, rather than leaving it computing an answer nobody will read.
+      cancel <- takeMessage(manager.connection)
+      _ = cancel.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
+      _ = cancel.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(requestId(hover))
       change <- takeMessage(manager.connection)
       _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
       _ <- manager.stop
