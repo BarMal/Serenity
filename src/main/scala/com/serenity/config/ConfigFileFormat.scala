@@ -11,9 +11,12 @@ import com.typesafe.config.ConfigFactory
   * and not here, and a reader has no way to notice a line that was never written. Now the layout names fields, a field
   * it does not name fails [[missingFromLayout]], and the writer cannot silently drop one.
   *
-  * The comments and ordering are authored rather than generated because the config library's own renderer cannot emit
-  * them without also emitting its own (`# hardcoded value` against every line), and this is a file people open and
-  * edit.
+  * The comments and ordering are authored rather than generated because the config library's renderer would restructure
+  * this file: it nests dotted keys into blocks (`character { animation = ... }`), sorts them alphabetically, losing the
+  * grouping [[Entry.Comment]] and [[Entry.Blank]] exist to express, and quotes every key containing an underscore
+  * (`"info_bar"`). It renders authored comments perfectly well -- `setComments(true)` with `setOriginComments(false)`
+  * emits them without the library's own provenance lines -- so comments are not the reason; layout is. This is a file
+  * people open and edit.
   */
 object ConfigFileFormat:
 
