@@ -2,33 +2,59 @@ package com.serenity.app
 
 import java.nio.file.Path
 
+import cats.syntax.all.*
+import com.monovore.decline.{Command, Help, Opts}
+
+/** @param showVersion
+  *   `--version`: print the build identity and exit without starting the editor. Carried here rather than handled
+  *   before parsing so that an unrecognised flag alongside it is still reported, instead of `--version` masking it.
+  */
 final case class LaunchOptions(
     openPath: Option[Path] = None,
     eco: Boolean = false,
     tui: Boolean = false,
     gui: Boolean = false,
-    alpha: Boolean = false
+    alpha: Boolean = false,
+    showVersion: Boolean = false
 )
 
 object LaunchOptions:
 
-  def parse(args: List[String]): LaunchOptions =
-    val eco   = args.contains("--eco")
-    val tui   = args.contains("--tui")
-    val gui   = args.contains("--gui")
-    val alpha = args.contains("--alpha")
-    // --eco/--tui/--gui/--alpha are bare flags with no value, so they're stripped before the positional/--open/--file
-    // matching below -- that logic only looks at the head of the list and shouldn't have to account for their
-    // position.
-    args.filterNot(arg => arg == "--eco" || arg == "--tui" || arg == "--gui" || arg == "--alpha") match
-      case "--open" :: path :: _ =>
-        LaunchOptions(openPath = Some(Path.of(path)), eco = eco, tui = tui, gui = gui, alpha = alpha)
-      case "--file" :: path :: _ =>
-        LaunchOptions(openPath = Some(Path.of(path)), eco = eco, tui = tui, gui = gui, alpha = alpha)
-      case path :: _ if !path.startsWith("-") =>
-        LaunchOptions(openPath = Some(Path.of(path)), eco = eco, tui = tui, gui = gui, alpha = alpha)
-      case _ =>
-        LaunchOptions(eco = eco, tui = tui, gui = gui, alpha = alpha)
+  private val open: Opts[Option[Path]] =
+    Opts
+      .option[Path]("open", "Open this file on startup.", metavar = "path")
+      .orElse(Opts.option[Path]("file", "Open this file on startup (alias for --open).", metavar = "path"))
+      .orElse(Opts.argument[Path]("path"))
+      .orNone
+
+  private val eco: Opts[Boolean] =
+    Opts.flag("eco", "Lower the frame-rate target and reduce motion.").orFalse
+
+  private val tui: Opts[Boolean] =
+    Opts.flag("tui", "Force the terminal interface.").orFalse
+
+  private val gui: Opts[Boolean] =
+    Opts.flag("gui", "Force the windowed interface. Wins over --tui.").orFalse
+
+  private val alpha: Opts[Boolean] =
+    Opts.flag("alpha", "Enable gated experimental features.").orFalse
+
+  private val version: Opts[Boolean] =
+    Opts.flag("version", "Print the build identity and exit.").orFalse
+
+  val command: Command[LaunchOptions] =
+    Command("serenity", "A calm text editor.")((open, eco, tui, gui, alpha, version).mapN(LaunchOptions.apply))
+
+  /** `Left` carries the text to print. `Help.errors` distinguishes the two reasons: empty for a `--help` request,
+    * non-empty for an argument the parser rejected -- which is what lets the caller exit zero for one and non-zero for
+    * the other.
+    *
+    * This replaces a hand-rolled parser that swallowed everything it did not understand: `--unknown notes.md` silently
+    * opened nothing at all, `--open` with no path started with no file, and a misspelled flag was indistinguishable
+    * from a correct one. Issue #1280.
+    */
+  def parse(args: List[String]): Either[Help, LaunchOptions] =
+    command.parse(args, sys.env)
 
   /** Whether this launch should use the terminal shell rather than Swing.
     *
