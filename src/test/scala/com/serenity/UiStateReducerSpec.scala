@@ -246,3 +246,25 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     result.state.runtime.uiSurfaces shouldBe List(surface)
     result.state.persisted.focus shouldBe Focus.Surface(surface.id)
   }
+
+  "PanelStateReducer.currentSize" should "report a pinned surface's current size" in {
+    val content = PanelContent.Outline(Nil)
+    val pinned  = PanelStateReducer.pin(content, PanelPosition.Right, 28, baseState).state
+    val panelId = pinned.pinnedSurfaces.head.id
+
+    PanelStateReducer.currentSize(panelId, pinned) shouldBe Some(28)
+  }
+
+  it should "report nothing for a surface id that isn't pinned" in {
+    PanelStateReducer.currentSize(SurfaceId("missing"), baseState) shouldBe None
+  }
+
+  it should "reflect a resize applied through PanelStateReducer.resize" in {
+    val content = PanelContent.Outline(Nil)
+    val pinned  = PanelStateReducer.pin(content, PanelPosition.Right, 28, baseState).state
+    val panelId = pinned.pinnedSurfaces.head.id
+
+    val resized = PanelStateReducer.resize(panelId, 35, pinned).state
+
+    PanelStateReducer.currentSize(panelId, resized) shouldBe Some(35)
+  }

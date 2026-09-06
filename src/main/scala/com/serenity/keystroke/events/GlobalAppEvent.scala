@@ -1,6 +1,7 @@
 package com.serenity.keystroke.events
 
 import com.serenity.keystroke.Modifier
+import com.serenity.state.models.PanelId
 
 /** Handled by `AppEventReducer`. Deliberately not editor events: routing is decided by this parent, never by case order
   * in a match.
@@ -13,11 +14,17 @@ case object ToggleContextualToolbar extends GlobalAppEvent
 case object ToggleShortcutsHelp     extends GlobalAppEvent // F1 (issue #1247)
 case object ToggleTabList           extends GlobalAppEvent // issue #1307
 case object ToggleRecentFilesInMode extends GlobalAppEvent // issue #1307
-case object NewTab                  extends GlobalAppEvent // Ctrl+T
-case object CloseTab                extends GlobalAppEvent // Ctrl+W
-case object NextTab                 extends GlobalAppEvent // Ctrl+Tab
-case object PreviousTab             extends GlobalAppEvent // Ctrl+Shift+Tab
-case object FileSearch              extends GlobalAppEvent // Ctrl+Shift+F
+
+/** Toggles a registered panel's floating (command-palette) presentation open or closed (issue #1310) -- the parametric
+  * counterpart to `ToggleTabList`/`ToggleRecentFilesInMode` above, driven by `PanelRegistry` instead of a new case per
+  * panel.
+  */
+final case class TogglePanel(id: PanelId) extends GlobalAppEvent
+case object NewTab                        extends GlobalAppEvent // Ctrl+T
+case object CloseTab                      extends GlobalAppEvent // Ctrl+W
+case object NextTab                       extends GlobalAppEvent // Ctrl+Tab
+case object PreviousTab                   extends GlobalAppEvent // Ctrl+Shift+Tab
+case object FileSearch                    extends GlobalAppEvent // Ctrl+Shift+F
 
 /** Raw bare-modifier press/release, always emitted by `SwingInputHandler` for every modifier key regardless of the
   * cursor-peek prototype's `commandRunnerCursorPeekEnabled` flag -- like mouse-move events, the translator emits

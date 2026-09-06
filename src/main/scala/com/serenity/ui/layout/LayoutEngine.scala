@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.{AppConfig, InterfaceDensityMetrics, TextAreaInsets}
+import com.serenity.config.{AppConfig, CornerPosition, InterfaceDensityMetrics, TextAreaInsets}
 import com.serenity.keystroke.events.Direction
 import com.serenity.state.models.*
 
@@ -1146,6 +1146,11 @@ object LayoutEngine:
           if fitsBelow then preferredBelowY else if fitsAbove then preferredAboveY else clamped
         case SurfacePlacement.AboveCursor =>
           if fitsAbove then preferredAboveY else if fitsBelow then preferredBelowY else clamped
+        case SurfacePlacement.Corner(_) =>
+          // Never actually reached: `resolveFrozenCursorPeekStack` is only ever called with the cursor-peek
+          // prototype's own AboveCursor/BelowCursor placement (`surfaceConfig.commandRunnerCursorPeekPlacement`).
+          // Kept exhaustive, with the same fallback as BelowCursor, rather than partial.
+          if fitsBelow then preferredBelowY else if fitsAbove then preferredAboveY else clamped
 
       val (_, placed) = slots.foldLeft((stackY, List.empty[FrozenPeekPlacement])) {
         case ((currentY, acc), slot) =>
@@ -1161,6 +1166,76 @@ object LayoutEngine:
           (adjustedY + adjustedHeight + gapRows, acc :+ FrozenPeekPlacement(slot.id, rect))
       }
       placed.filter(_.rect.height > 0)
+
+  /** One panel's slot in a corner stack (issue #1310, mode 3): an id plus preferred size, ordered from the screen edge
+    * outward -- deliberately its own type rather than reusing `FrozenPeekSlot`, since a corner stack has no cursor
+    * anchor and a different overflow policy (collapse the tail, not clip each row).
+    */
+  final case class CornerPanelSlot(id: SurfaceId, preferredWidth: Int, preferredHeight: Int)
+
+  final case class CornerOverlayLayout(stack: List[(SurfaceId, LayoutRect)], collapsedSurfaceIds: Set[SurfaceId])
+
+  /** Lays out every panel assigned to one screen corner as a vertical list (issue #1310, mode 3), stacking from the
+    * corner outward -- the first slot sits closest to the corner itself. Unlike `stackBelowCursorSurfaces`, which
+    * shrinks each surface to fit, panels here either fit at their preferred height or collapse: once a slot's
+    * cumulative height would exceed `contentRect.height`, that slot and every slot after it (in `slots` order) report
+    * as `collapsedSurfaceIds` instead of a placed rect, for the caller to render as a "+N more" summary -- the same
+    * idiom `SurfaceContentResolver.groupPreviewRows` already uses, applied to whole panels instead of rows.
+    */
+  def calculateCornerOverlayStack(
+    position: CornerPosition,
+    slots: List[CornerPanelSlot],
+    contentRect: LayoutRect,
+    gapRows: Int
+  ): CornerOverlayLayout =
+    if slots.isEmpty then CornerOverlayLayout(Nil, Set.empty)
+    else
+      val isBottom = position == CornerPosition.BottomLeft || position == CornerPosition.BottomRight
+      val isRight  = position == CornerPosition.TopRight || position == CornerPosition.BottomRight
+
+      val cumulativeHeights = slots.zipWithIndex
+        .scanLeft(0) { case (used, (slot, index)) => used + slot.preferredHeight + (if index == 0 then 0 else gapRows) }
+        .drop(1)
+      val fitCount            = math.max(0, cumulativeHeights.lastIndexWhere(_ <= contentRect.height) + 1)
+      val (visible, overflow) = slots.splitAt(fitCount)
+
+      def xFor(width: Int): Int = if isRight then contentRect.right - width else contentRect.x
+
+      val placed =
+        if isBottom then
+          visible
+            .foldLeft((contentRect.bottom, List.empty[(SurfaceId, LayoutRect)])) {
+              case ((bottomEdge, acc), slot) =>
+                val y = bottomEdge - (if acc.isEmpty then 0 else gapRows) - slot.preferredHeight
+                (
+                  y,
+                  acc :+ (slot.id -> LayoutRect(
+                    xFor(slot.preferredWidth),
+                    y,
+                    slot.preferredWidth,
+                    slot.preferredHeight
+                  ))
+                )
+            }
+            ._2
+        else
+          visible
+            .foldLeft((contentRect.y, List.empty[(SurfaceId, LayoutRect)])) {
+              case ((topEdge, acc), slot) =>
+                val y = topEdge + (if acc.isEmpty then 0 else gapRows)
+                (
+                  y + slot.preferredHeight,
+                  acc :+ (slot.id -> LayoutRect(
+                    xFor(slot.preferredWidth),
+                    y,
+                    slot.preferredWidth,
+                    slot.preferredHeight
+                  ))
+                )
+            }
+            ._2
+
+      CornerOverlayLayout(placed, overflow.map(_.id).toSet)
 
   private def stackBelowCursorSurfaces(
     surfaces: List[UiSurface],

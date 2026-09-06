@@ -255,7 +255,9 @@ object ConfigGenerators:
         AppConfig.MinCommandRunnerCursorPeekTapWindowMillis,
         AppConfig.MaxCommandRunnerCursorPeekTapWindowMillis
       )
-      peekPlacement <- oneOfEnum(SurfacePlacement.values)
+      // Above/below the cursor only (issue #1310: `SurfacePlacement.Corner` isn't a valid value for this cursor-peek
+      // setting, and being a parameterized case, it also means `.values` is no longer generated for the enum).
+      peekPlacement <- oneOfEnum(Array(SurfacePlacement.AboveCursor, SurfacePlacement.BelowCursor))
       fpsTarget     <- oneOfEnum(RenderFpsTarget.values)
       damage        <- oneOfEnum(RenderDamageGranularity.values)
       insets        <- genTextAreaInsets

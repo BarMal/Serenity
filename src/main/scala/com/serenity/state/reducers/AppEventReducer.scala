@@ -12,7 +12,8 @@ object AppEventReducer:
   def reduce(
     event: GlobalAppEvent,
     state: AppState,
-    registry: CommandRegistry
+    registry: CommandRegistry,
+    panelRegistry: PanelRegistry = PanelRegistry.empty
   )(using com.serenity.rope.Balance): ReducerResult =
     event match
       case Quit =>
@@ -61,6 +62,10 @@ object AppEventReducer:
 
       case CursorPeekOtherKeyPressed =>
         ReducerResult.noEffects(handleCursorPeekOtherKeyPressed(state))
+
+      case TogglePanel(id) =>
+        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        else ReducerResult.noEffects(togglePanel(state, panelRegistry, id))
 
   def rebalancePanes(state: AppState, focusedBufferId: Option[BufferId] = None): AppState =
     EditorState.rebalancePanes(state, focusedBufferId)
@@ -295,6 +300,28 @@ object AppEventReducer:
           presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
         )
         state.copy(runtime = state.runtime.copy(uiSurfaces = upsertSurface(state.runtime.uiSurfaces, surface)))
+
+  /** Opens or closes a registered panel's floating (command-palette) presentation at a stable per-panel surface id
+    * (issue #1310), mirroring `toggleTabList`/`toggleShortcutsHelp`'s single-instance toggle exactly. A panel id with
+    * no registration, or one that doesn't declare `PanelDisplayMode.Palette` support, is a no-op -- the same "target
+    * doesn't apply, ignore the request" policy `StateManagerSurfaceCapability`'s panel operations already use.
+    */
+  private def togglePanel(state: AppState, panelRegistry: PanelRegistry, id: PanelId): AppState =
+    val surfaceId = SurfaceId(s"panel-${id.value}")
+    state.surfaceById(surfaceId) match
+      case Some(surface) =>
+        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
+      case None =>
+        panelRegistry.get(id).filter(_.supportedModes.contains(PanelDisplayMode.Palette)) match
+          case Some(registration) =>
+            val surface = UiSurface(
+              id = surfaceId,
+              content = registration.buildContent(state),
+              presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+            )
+            state.copy(runtime = state.runtime.copy(uiSurfaces = upsertSurface(state.runtime.uiSurfaces, surface)))
+          case None =>
+            state
 
   private def closeTabState(state: AppState, registry: CommandRegistry): AppState =
     val closedState = EditorState.closeFocusedTab(state)

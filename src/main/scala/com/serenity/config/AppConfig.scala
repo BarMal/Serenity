@@ -1383,8 +1383,12 @@ object SurfaceConfig:
     private def parseModifier(value: String): Option[Modifier] =
       Modifier.values.find(_.toString.equalsIgnoreCase(value))
 
+    // The cursor-peek prototype's placement is only ever above/below the cursor -- `SurfacePlacement.Corner` (issue
+    // #1310) isn't a value this setting can take, and being a parameterized case, it also means `.values` is no
+    // longer generated for the enum.
     private def parseSurfacePlacement(value: String): Option[SurfacePlacement] =
-      SurfacePlacement.values.find(placement => placement.toString.equalsIgnoreCase(value.replace("-", "")))
+      List(SurfacePlacement.AboveCursor, SurfacePlacement.BelowCursor)
+        .find(placement => placement.toString.equalsIgnoreCase(value.replace("-", "")))
 
     private def parseBoolean(value: String): Option[Boolean] =
       value.toLowerCase match
