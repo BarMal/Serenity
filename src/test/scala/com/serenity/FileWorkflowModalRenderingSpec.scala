@@ -174,3 +174,47 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     surface.alphaCalls should contain(0.4f)
     surface.currentAlphaValue shouldBe 1.0f
   }
+
+  it should "paint the open dialog as a modal over the startup page" in {
+    val startPage = StartupPage(
+      title = "Welcome to Serenity",
+      options = List("New document", "Open file or folder"),
+      selectedIndex = 1
+    )
+    val workflow = FileWorkflowState(
+      mode = FileWorkflowMode.Open,
+      path = "/home/user",
+      activeField = FileWorkflowField.Path
+    )
+    val startupId = SurfaceId("surface-0")
+    val modalId   = SurfaceId("surface-1")
+    val state = AppState.empty.copy(
+      persisted = AppState.empty.persisted.copy(
+        focus = Focus.Surface(modalId),
+        theme = Theme.light
+      ),
+      runtime = AppState.empty.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            startupId,
+            SurfaceContent.StartPage(startPage),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          ),
+          UiSurface(modalId, SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)), SurfacePresentation.Modal)
+        )
+      )
+    )
+    val viewportSize = ViewportSize(100, 30)
+    val surface      = new MockRenderSurface(100, 30)
+    val layout       = LayoutEngine.calculateLayout(state, viewportSize)
+    val modalSurface = state.runtime.uiSurfaces.find(_.id == modalId).getOrElse(fail("Expected modal surface"))
+    val modalRect    = LayoutEngine.calculateModalRect(modalSurface, state, layout)
+
+    Renderer.render(state, cursorVisible = true, surface, viewportSize)
+
+    val innerLines =
+      (modalRect.y + 1 until modalRect.bottom - 1).toList.map { y =>
+        (modalRect.x + 1 until modalRect.right - 1).map(x => surface.getChar(x, y)).mkString.trim
+      }
+    innerLines.exists(_.contains("Path")) shouldBe true
+  }

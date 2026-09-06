@@ -50,4 +50,19 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
 
     ModalStateReducer.show(Modal.Find("", Nil, 0), blocking).state shouldBe blocking
   }
+
+  it should "use Modal presentation for FileWorkflow so the open dialog is always centered and visible" in {
+    val fileWorkflow = Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
+    val shown        = ModalStateReducer.show(fileWorkflow, AppState.initial).state
+
+    shown.blockingModalSurfaces should have size 1
+    shown.blockingModalSurfaces.head.presentation shouldBe SurfacePresentation.Modal
+  }
+
+  it should "block a non-blocking modal while a file dialog is open" in {
+    val fileWorkflow = Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
+    val withDialog   = ModalStateReducer.show(fileWorkflow, AppState.initial).state
+
+    ModalStateReducer.show(Modal.Find("", Nil, 0), withDialog).state shouldBe withDialog
+  }
 end ModalStateReducerSpec

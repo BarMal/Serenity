@@ -133,11 +133,11 @@ class FileWorkflowFormatSpec extends AnyFlatSpec with Matchers:
     afterThree.shouldBe(FileWorkflowField.Filename)
   }
 
-  it should "leave Open's focus cycle unchanged: filename and path only, no format" in {
+  it should "restrict Open's focus cycle to the Path field only, with no filename or format fields" in {
     val open = OpenFileWorkflowState()
 
-    val afterOne: FileWorkflowField = open.switchField(1).activeField
-    val afterTwo: FileWorkflowField = open.switchField(1).switchField(1).activeField
-    afterOne.shouldBe(FileWorkflowField.Path)
-    afterTwo.shouldBe(FileWorkflowField.Filename)
+    open.activeField shouldBe FileWorkflowField.Path
+    open.cyclableFields shouldBe List(FileWorkflowField.Path)
+    open.switchField(1).activeField shouldBe FileWorkflowField.Path
+    open.switchField(-1).activeField shouldBe FileWorkflowField.Path
   }

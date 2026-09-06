@@ -37,4 +37,7 @@ object ModalStateReducer:
   private def isBlocking(modal: Modal): Boolean =
     modal match
       case _: Modal.CloseWorkflow => true
-      case _                      => false
+      // A blocking modal is centred (`SurfacePresentation.Modal`) and painted by the modal layer even from the startup
+      // page, where a floating overlay anchored to a cursor that does not exist would be invisible (#1289).
+      case _: Modal.FileWorkflow => true
+      case _                     => false

@@ -263,6 +263,14 @@ sealed trait FileWorkflowState:
       val wrappedIndex = if rawIndex < 0 then suggestions.length + rawIndex else rawIndex
       updated(selectedSuggestionIndex = wrappedIndex, statusMessage = None)
 
+  /** True when accepting the currently-selected suggestion should open a file rather than descend into a directory: the
+    * open dialog's Path field pointed at a file suggestion (#1289). Directories and save-as always keep browsing.
+    */
+  def acceptedSuggestionOpensFile: Boolean =
+    mode == FileWorkflowMode.Open &&
+      activeField == FileWorkflowField.Path &&
+      suggestions.lift(selectedSuggestionIndex).exists(!_.isDirectory)
+
   def applySelectedSuggestion: FileWorkflowState =
     suggestions.lift(selectedSuggestionIndex) match
       case Some(suggestion) =>
@@ -282,7 +290,7 @@ sealed trait FileWorkflowState:
 final case class OpenFileWorkflowState(
     filename: String = "",
     path: String = "",
-    activeField: FileWorkflowField = FileWorkflowField.Filename,
+    activeField: FileWorkflowField = FileWorkflowField.Path,
     suggestions: List[FileWorkflowSuggestion] = Nil,
     selectedSuggestionIndex: Int = 0,
     missingPathSegments: List[String] = Nil,
@@ -293,6 +301,10 @@ final case class OpenFileWorkflowState(
   val mode: FileWorkflowMode               = FileWorkflowMode.Open
   val operationLabel: String               = "open"
   val supportsFilenameSuggestions: Boolean = true
+
+  // The open dialog is a directory browser: Tab/Shift-Tab stay on the Path field rather than cycling into a filename
+  // input, so the whole flow is "type/navigate a path, pick from the listing" (#1289).
+  override def cyclableFields: List[FileWorkflowField] = List(FileWorkflowField.Path)
 
   protected def rebuild(
     filename: String,

@@ -89,6 +89,7 @@ final private[manager] class StateManagerWorkflowCapability(
         mode = mode,
         filename = filename,
         path = basePath.toString,
+        activeField = if mode == FileWorkflowMode.Open then FileWorkflowField.Path else FileWorkflowField.Filename,
         statusMessage = statusMessage,
         bufferHasRichFormatting = bufferHasRichFormatting
       )
@@ -97,7 +98,11 @@ final private[manager] class StateManagerWorkflowCapability(
         s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
           s"surfaceId=${predictedState.modalSurface.map(_.id).getOrElse("none")} focus=${predictedState.persisted.focus}"
       ) >>
-        updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state)
+        updateState(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state) >>
+        // Populate the open dialog's directory listing immediately so it never appears as an empty, hung modal (#1289).
+        IO.whenA(mode == FileWorkflowMode.Open)(
+          stateRef.get.flatMap(_.modalSurface.fold(IO.unit)(surface => refreshFileWorkflowEffect(surface.id)))
+        )
     }
 
   private[manager] def showSaveAsWorkflow(state: AppState, bufferId: BufferId, statusMessage: String): IO[Unit] =
@@ -443,7 +448,7 @@ final private[manager] class StateManagerWorkflowCapability(
         suggestions <- workflow match
           case openWorkflow: OpenFileWorkflowState =>
             openWorkflow.activeField match
-              case FileWorkflowField.Path     => pathSuggestions(openWorkflow.path)
+              case FileWorkflowField.Path     => pathSuggestions(openWorkflow.path, includeFiles = true)
               case FileWorkflowField.Filename => filenameSuggestions(openWorkflow)
               case FileWorkflowField.Format   => IO.pure(Nil)
           case saveAsWorkflow: SaveAsFileWorkflowState =>
@@ -461,7 +466,9 @@ final private[manager] class StateManagerWorkflowCapability(
         statusMessage = None
       )
 
-  protected def pathSuggestions(pathInput: String): IO[List[FileWorkflowSuggestion]] =
+  // `includeFiles` makes the open dialog a full directory browser (files listed alongside directories); save-as lists
+  // directories only, since its filename is typed separately (#1289).
+  protected def pathSuggestions(pathInput: String, includeFiles: Boolean = false): IO[List[FileWorkflowSuggestion]] =
     for
       currentDirectory <- FileUtils.getCurrentDirectory
       basePathInput = if pathInput.trim.isEmpty then currentDirectory.toString else pathInput
@@ -476,9 +483,9 @@ final private[manager] class StateManagerWorkflowCapability(
         else Option(resolvedPath.getFileName).map(_.toString).getOrElse("")
       entries <- fileManager.listDirectory(baseDirectory)
     yield entries
-      .filter(_.isDirectory)
+      .filter(entry => entry.isDirectory || (includeFiles && FileUtils.isReadableFile(entry.path)))
       .filter(entry => prefix.isEmpty || entry.name.toLowerCase.startsWith(prefix.toLowerCase))
-      .map(entry => FileWorkflowSuggestion(entry.path.toString, isDirectory = true))
+      .map(entry => FileWorkflowSuggestion(entry.path.toString, isDirectory = entry.isDirectory))
 
   protected def filenameSuggestions(workflow: OpenFileWorkflowState): IO[List[FileWorkflowSuggestion]] =
     for
@@ -531,11 +538,21 @@ final private[manager] class StateManagerWorkflowCapability(
         workflowTargetPath(workflow).flatMap { targetPath =>
           IO.blocking(FileUtils.isReadableFile(targetPath)).flatMap {
             case false =>
-              updateFileWorkflowSurface(
-                surfaceId,
-                workflow.updated(statusMessage = Some(s"File not found: $targetPath"))
-              ) >>
-                logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $targetPath")
+              // A path that resolves to a directory is a browse step, not a failure: descend into it and re-list, so
+              // Enter walks the tree exactly like the suggestion listing does (#1289).
+              IO.blocking(Files.isDirectory(targetPath)).flatMap {
+                case true =>
+                  updateFileWorkflowSurface(
+                    surfaceId,
+                    workflow.updated(path = targetPath.toString + java.io.File.separator, statusMessage = None)
+                  ) >> refreshFileWorkflowEffect(surfaceId)
+                case false =>
+                  updateFileWorkflowSurface(
+                    surfaceId,
+                    workflow.updated(statusMessage = Some(s"File not found: $targetPath"))
+                  ) >>
+                    logger.debug(s"[FILE-WORKFLOW] Open target is not readable: $targetPath")
+              }
             case true =>
               stateRef
                 .modify { state =>

@@ -651,7 +651,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "cycle file workflow focus between filename and path with tab and reverse-tab" in {
+  it should "keep Open's Path focus with tab and reverse-tab when there are no suggestions" in {
     val initialState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
       runtime = AppState.initial.runtime.copy(
@@ -669,22 +669,11 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val pathFocusedResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, initialState)
-    pathFocusedResult.effects shouldBe List(
+    val tabResult = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, initialState)
+    tabResult.effects shouldBe List(
       AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
     )
-    val pathFocused = pathFocusedResult.state
-    pathFocused.modalSurface.flatMap {
-      _.content match
-        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
-        case _                                                          => None
-    } shouldBe defined
-    pathFocused.modalSurface.flatMap {
-      _.content match
-        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
-        case _                                                          => None
-    }.get shouldBe a[OpenFileWorkflowState]
-    pathFocused.modalSurface.map(_.content) shouldBe Some(
+    tabResult.state.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.FileWorkflow(
           FileWorkflowState(mode = FileWorkflowMode.Open, activeField = FileWorkflowField.Path)
@@ -692,15 +681,14 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val filenameFocusedResult = ModalEventReducer.reduce(ModalType.FileWorkflow, ReverseTabKey, pathFocused)
-    filenameFocusedResult.effects shouldBe List(
+    val reverseTabResult = ModalEventReducer.reduce(ModalType.FileWorkflow, ReverseTabKey, tabResult.state)
+    reverseTabResult.effects shouldBe List(
       AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(SurfaceId("file-workflow")))
     )
-    val filenameFocused = filenameFocusedResult.state
-    filenameFocused.modalSurface.map(_.content) shouldBe Some(
+    reverseTabResult.state.modalSurface.map(_.content) shouldBe Some(
       SurfaceContent.ModalWorkflow(
         Modal.FileWorkflow(
-          FileWorkflowState(mode = FileWorkflowMode.Open, activeField = FileWorkflowField.Filename)
+          FileWorkflowState(mode = FileWorkflowMode.Open, activeField = FileWorkflowField.Path)
         )
       )
     )

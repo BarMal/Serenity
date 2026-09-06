@@ -230,3 +230,29 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
 
     program.unsafeRunSync()
   }
+
+  it should "open the file dialog as a centered modal when chosen from the startup page" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupPageIntegrationSpec")
+      theme        = Theme.default
+      viewportSize = ViewportSize(80, 24)
+
+      initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      _ = initialState.startPageSurface should be(defined)
+
+      // "Open file or folder" is at index 1; navigate to it and confirm.
+      _     <- stateManager.applyEvent(MoveDown)
+      _     <- stateManager.applyEvent(Enter)
+      state <- stateManager.getCurrentState
+
+      // Startup page remains visible -- the dialog opened on top of it.
+      _ = state.startPageSurface should be(defined)
+      // The file dialog is a blocking modal: centered and always visible regardless of editor state.
+      _ = state.blockingModalSurfaces should have size 1
+      _ = state.blockingModalSurfaces.head.presentation shouldBe SurfacePresentation.Modal
+    yield ()
+
+    program.unsafeRunSync()
+  }
