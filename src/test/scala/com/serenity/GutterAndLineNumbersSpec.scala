@@ -92,7 +92,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       ),
       runtime = AppState.initial.runtime.copy(uiSurfaces = surfaces)
     )
-    val expected = " Line 3, Col 5 | Language: Markdown | active.md "
+    // #1307: the mode indicator's glyph is folded into the gutter row for the default bottom-right corner.
+    val expected = " Line 3, Col 5 | Language: Markdown | active.md [C] "
 
     (Focus.EditorPane(paneId) :: surfaces.map(surface => Focus.Surface(surface.id))).foreach { focus =>
       val surface = new MockRenderSurface(100, 30)
@@ -585,7 +586,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       surface.drawRunPxCalls.find(_.s.contains("Line 1, Col 5")).getOrElse(fail("Expected measured gutter text"))
     val gutterTopPx    = cellMetrics.toPixelY(gutter.y)
     val gutterHeightPx = gutter.height * cellMetrics.lineHeight
-    val expectedText   = " Line 1, Col 5 "
+    // #1307: the mode indicator's glyph is folded into the gutter row for the default bottom-right corner.
+    val expectedText = " Line 1, Col 5 [C] "
     val expectedPlacement = TextAlignment.placeLine(
       text = expectedText,
       area = TextAreaPx(
