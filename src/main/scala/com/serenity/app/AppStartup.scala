@@ -166,8 +166,10 @@ object AppStartup:
             val base = AppState.empty(appConfig)
             base.copy(
               persisted = base.persisted.copy(theme = theme),
+              // uiSurfaces is left as `base.runtime.uiSurfaces` (not reset to empty): AppState.empty already seeds it
+              // with only the config-driven surfaces a fresh session should start with -- the companion sprite pane
+              // when enabled -- so opening straight to a file keeps that instead of silently dropping it.
               runtime = base.runtime.copy(
-                uiSurfaces = List.empty,
                 viewportSize = Some(initialViewportSize),
                 isTuiMode = isTuiMode,
                 keyboardFidelityTier = keyboardFidelityTier

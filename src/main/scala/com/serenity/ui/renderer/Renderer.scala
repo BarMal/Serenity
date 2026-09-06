@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.jdk.CollectionConverters.*
 
 import com.serenity.animation.ThemeInterpolator
+import com.serenity.animation.sprite.{CompanionSpriteAssets, CompanionSpriteFrames}
 import com.serenity.config.{
   AppConfig,
   AppMode,
@@ -14,7 +15,8 @@ import com.serenity.config.{
   CursorInfoBarPlacement,
   CursorMode,
   MarkdownViewMode,
-  PostProcessingEffect
+  PostProcessingEffect,
+  VisualFlairLevel
 }
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownDocumentPreview
@@ -3302,6 +3304,8 @@ object Renderer:
           surface.content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
               renderMarkdownPreviewPanel(bufferId, title, rect, node.contentRect, state, layerContext, animationState)
+            case SurfaceContent.CompanionSprite =>
+              renderCompanionSpritePanel(rect, node.contentRect, state, layerContext, animationState)
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
@@ -3363,6 +3367,29 @@ object Renderer:
         buffer.exists(b => b.markdownPreviewEditGeneration != b.markdownPreviewCommittedGeneration)
     )
     context.surface.pixels.drawImage(image, imageRect.x, imageRect.y, contentWidthCells, contentHeightCells)
+
+  /** Paints the companion sprite pane: the same pinned-panel chrome every other panel gets, then the current sprite
+    * frame drawn directly via `surface.pixels.drawImage` -- on the GUI surface a real bitmap blit, on the TUI surface
+    * `TerminalRenderSurface`'s half-block conversion -- filling the panel's whole content rect. Gated on
+    * `VisualFlairLevel` here as well as by `StateManagerEffectHandlers.syncCompanionSpritePanel` removing the surface
+    * entirely at `Off`: a defensive second check, not a second source of truth, so this paint step alone can never draw
+    * the sprite once flair is turned all the way off.
+    */
+  private def renderCompanionSpritePanel(
+    rect: LayoutRect,
+    contentRect: LayoutRect,
+    state: AppState,
+    context: RenderContext,
+    animationState: com.serenity.animation.AnimationState
+  ): Unit =
+    val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = "Companion", rows = Nil)
+    PinnedPanelRenderer.render(context.surface, shell, state.persisted.theme, state.persisted.config, animationState)
+
+    if state.persisted.config.visualFlairLevel != VisualFlairLevel.Off then
+      val frames = CompanionSpriteAssets.loadFrames(state.persisted.config.companionSpriteConfig.character)
+      CompanionSpriteFrames.currentFrame(frames, state.runtime.companionSprite).foreach { frame =>
+        context.surface.pixels.drawImage(frame, contentRect.x, contentRect.y, contentRect.width, contentRect.height)
+      }
 
   private def markdownPreviewImageRect(
     rect: LayoutRect,

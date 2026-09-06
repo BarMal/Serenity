@@ -159,6 +159,10 @@ object SurfaceContentResolver:
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
+      case SurfaceContent.CompanionSprite =>
+        // Painted directly by Renderer's dedicated companion-sprite paint step (surface.pixels.drawImage), not
+        // through this cell-text path -- see the doc comment on SurfaceContent.CompanionSprite.
+        ResolvedSurfaceContent()
       case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
         resolve(originalContent, cachedRect, mode, itemGapRows)
 

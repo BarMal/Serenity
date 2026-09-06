@@ -37,13 +37,15 @@ object CommandRunnerSettingsGroups:
     val cursorModeItem                  = CommandRunnerSettingsItems.cursorModeOptionItem(optionSelections)
     val cursorInfoBarItems =
       CommandRunnerSettingsItems.cursorInfoBarSegmentItems(optionSelections, cursorInfoBarSegments)
-    val cursorInfoPlacement     = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
-    val backgroundStyleItem     = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
-    val interfaceDensityItem    = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
-    val windowChromeItem        = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
-    val windowSitterEnabledItem = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
-    val windowSitterActionItem  = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
-    val materialPresetItem      = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
+    val cursorInfoPlacement        = CommandRunnerSettingsItems.cursorInfoBarPlacementOptionItem(optionSelections)
+    val backgroundStyleItem        = CommandRunnerSettingsItems.backgroundStyleOptionItem(optionSelections)
+    val interfaceDensityItem       = CommandRunnerSettingsItems.interfaceDensityOptionItem(optionSelections)
+    val windowChromeItem           = CommandRunnerSettingsItems.windowChromeOptionItem(optionSelections)
+    val windowSitterEnabledItem    = CommandRunnerSettingsItems.windowSitterEnabledOptionItem(optionSelections)
+    val windowSitterActionItem     = CommandRunnerSettingsItems.windowSitterActionOptionItem(optionSelections)
+    val companionSpriteEnabledItem = CommandRunnerSettingsItems.companionSpriteEnabledOptionItem(optionSelections)
+    val visualFlairLevelItem       = CommandRunnerSettingsItems.visualFlairLevelOptionItem(optionSelections)
+    val materialPresetItem         = CommandRunnerSettingsItems.materialPresetOptionItem(optionSelections)
     val postProcessingItem =
       annotateInertInTui(CommandRunnerSettingsItems.postProcessingOptionItem(optionSelections), isTuiMode)
     val uiShadowsItem               = CommandRunnerSettingsItems.uiShadowsOptionItem(optionSelections)
@@ -486,6 +488,13 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Motion accessibility and reading comfort")
     )
+    val performanceGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-performance",
+      label = "Performance",
+      children = List(visualFlairLevelItem, companionSpriteEnabledItem),
+      category = CommandCategory.Settings,
+      hint = Some("Trim purely decorative extras on a slow link or a battery-powered machine")
+    )
     val appModeGroup = CommandSurfaceItem.GroupItem(
       id = "settings-app-mode",
       label = "App Mode",
@@ -512,6 +521,7 @@ object CommandRunnerSettingsGroups:
         appearanceMotionGroup,
         uiPresetsGroup,
         accessibilityGroup,
+        performanceGroup,
         keymapGroup
       )
 

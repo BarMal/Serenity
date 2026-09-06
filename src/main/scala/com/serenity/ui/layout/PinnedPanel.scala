@@ -37,6 +37,7 @@ enum PanelContent(val asSurfaceContent: SurfaceContent):
       extends PanelContent(SurfaceContent.Diagnostics(issues, activeLocation))
   case MarkdownPreview(bufferId: BufferId, title: String)
       extends PanelContent(SurfaceContent.MarkdownPreview(bufferId, title))
+  case CompanionSprite extends PanelContent(SurfaceContent.CompanionSprite)
 
 object PanelContent:
 
@@ -49,6 +50,7 @@ object PanelContent:
       case SurfaceContent.Comments(symbols, activeLocation)   => Some(Comments(symbols, activeLocation))
       case SurfaceContent.Diagnostics(issues, activeLocation) => Some(Diagnostics(issues, activeLocation))
       case SurfaceContent.MarkdownPreview(bufferId, title)    => Some(MarkdownPreview(bufferId, title))
+      case SurfaceContent.CompanionSprite                     => Some(CompanionSprite)
       case _                                                  => None
 
 final case class DirectoryTreeData(
