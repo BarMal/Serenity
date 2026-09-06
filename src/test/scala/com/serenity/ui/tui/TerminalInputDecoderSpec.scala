@@ -17,6 +17,7 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
 
   private def bytes(s: String): Array[Byte] = s.getBytes(java.nio.charset.StandardCharsets.UTF_8)
   private def csi(s: String): Array[Byte]   = esc +: bytes(s"[$s")
+  private def ss3(s: String): Array[Byte]   = esc +: bytes(s"O$s")
 
   private def decodeAll(input: Array[Byte]): List[DecodedToken] =
     val result = TerminalInputDecoder.decode(input)
@@ -39,6 +40,18 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
     decodeAll(csi("B")) shouldBe List(tok(InputKey.ArrowDown))
     decodeAll(csi("C")) shouldBe List(tok(InputKey.ArrowRight))
     decodeAll(csi("D")) shouldBe List(tok(InputKey.ArrowLeft))
+  }
+
+  // SS3 (`ESC O <final>`) is the application-cursor-keys form the arrows/Home/End take under DECCKM -- Windows ConPTY
+  // emits it unconditionally for cursor keys (`ESC O A` for Up, not the normal-mode `CSI A`), which left TUI arrow
+  // navigation dead on Windows until these were mapped alongside the existing SS3 F1-F4 handling (#1319).
+  it should "decode the SS3 application-cursor-key form of the arrows and Home/End" in {
+    decodeAll(ss3("A")) shouldBe List(tok(InputKey.ArrowUp))
+    decodeAll(ss3("B")) shouldBe List(tok(InputKey.ArrowDown))
+    decodeAll(ss3("C")) shouldBe List(tok(InputKey.ArrowRight))
+    decodeAll(ss3("D")) shouldBe List(tok(InputKey.ArrowLeft))
+    decodeAll(ss3("H")) shouldBe List(tok(InputKey.Home))
+    decodeAll(ss3("F")) shouldBe List(tok(InputKey.End))
   }
 
   // ===Kitty-protocol "report event types" enhancement over the legacy CSI-letter/CSI-tilde key forms: a physical
