@@ -1,11 +1,11 @@
 package com.serenity
 
-import java.awt.Font
+import java.awt.{Color, Font}
 import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity}
+import com.serenity.config.{CursorInfoBarColorConfig, CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -92,7 +92,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       ),
       runtime = AppState.initial.runtime.copy(uiSurfaces = surfaces)
     )
-    val expected = " Line 3, Col 5 | Language: Markdown | active.md "
+    // #1307: the mode indicator's glyph is folded into the gutter row for the default bottom-right corner.
+    val expected = " Line 3, Col 5 | Language: Markdown | active.md [C] "
 
     (Focus.EditorPane(paneId) :: surfaces.map(surface => Focus.Surface(surface.id))).foreach { focus =>
       val surface = new MockRenderSurface(100, 30)
@@ -469,6 +470,76 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     layout.pinnedSurfaceRects.get(SurfaceId("cursor-info-bar")) shouldBe None
   }
 
+  // #1295: the pinned-bottom cursor info bar bypasses TextOverlayRenderer entirely (it paints straight into the
+  // gutter row), so its colour override needs its own guard here -- TextOverlayRendererSpec only covers the
+  // floating placement's render path.
+  it should "override the pinned cursor info bar's colours when configured" in {
+    val foreground = new Color(0x11, 0x22, 0x33)
+    val background = new Color(0x44, 0x55, 0x66)
+    val buffer0    = Buffer.fromString(BufferId(6), "alpha\nbeta")
+    val buffer     = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        config = AppState.initial.persisted.config
+          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
+          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+          .withCursorInfoBarColors(CursorInfoBarColorConfig(Some(foreground), Some(background)))
+          .withGutter(false),
+        theme = Theme.light
+      )
+    )
+    val surface  = new MockRenderSurface(80, 24)
+    val viewport = ViewportSize(80, 24)
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    val call = surface.drawRunPxCalls
+      .find(_.s.contains("Line 2, Col 3"))
+      .getOrElse(fail("Expected a gutter draw call showing the cursor info bar text"))
+    call.foreground shouldBe foreground
+    call.background shouldBe background
+  }
+
+  it should "keep the theme's own panel colours in the gutter when no cursor info bar colour override is configured" in {
+    val buffer0 = Buffer.fromString(BufferId(7), "alpha\nbeta")
+    val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          paneOrder = List(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        config = AppState.initial.persisted.config
+          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
+          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+          .withGutter(false),
+        theme = Theme.light
+      )
+    )
+    val surface  = new MockRenderSurface(80, 24)
+    val viewport = ViewportSize(80, 24)
+
+    Renderer.render(state, cursorVisible = true, surface, viewport)
+
+    val call = surface.drawRunPxCalls
+      .find(_.s.contains("Line 2, Col 3"))
+      .getOrElse(fail("Expected a gutter draw call showing the cursor info bar text"))
+    call.foreground shouldBe Theme.light.panel.foreground
+    call.background shouldBe Theme.light.panel.background
+  }
+
   it should "render pinned cursor info with UI font metrics inside the gutter row" in {
     val buffer0 = Buffer.fromString(BufferId(5), "alpha")
     val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(0, 4))))
@@ -515,7 +586,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       surface.drawRunPxCalls.find(_.s.contains("Line 1, Col 5")).getOrElse(fail("Expected measured gutter text"))
     val gutterTopPx    = cellMetrics.toPixelY(gutter.y)
     val gutterHeightPx = gutter.height * cellMetrics.lineHeight
-    val expectedText   = " Line 1, Col 5 "
+    // #1307: the mode indicator's glyph is folded into the gutter row for the default bottom-right corner.
+    val expectedText = " Line 1, Col 5 [C] "
     val expectedPlacement = TextAlignment.placeLine(
       text = expectedText,
       area = TextAreaPx(

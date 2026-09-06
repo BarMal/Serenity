@@ -108,7 +108,11 @@ enum ViewIntent:
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
+  case SetAppMode(mode: AppMode)
+  case SetShowAllSettingsRegardlessOfMode(value: Boolean)
   case ToggleShortcutsHelp
+  case ToggleTabList
+  case ToggleRecentFilesInMode
 
 enum ProjectIntent:
   case RunProjectTask(kind: ProjectTaskKind)
@@ -202,10 +206,12 @@ enum PanelChromeIntent:
   case ToggleContextualToolbar
   case TogglePaneHeaders
   case ToggleVisualLineCursorNavigation
+  case ToggleTypewriterScrolling
   case SetLineNumbers(enabled: Boolean)
   case SetGutter(enabled: Boolean)
   case SetWordWrap(enabled: Boolean)
   case SetVisualLineCursorNavigation(enabled: Boolean)
+  case SetTypewriterScrolling(enabled: Boolean)
   case SetFocusedTextBody(enabled: Boolean)
   case SetContextualToolbarEnabled(enabled: Boolean)
   case SetContextualToolbarDisplayMode(mode: ToolbarDisplayMode)
@@ -221,6 +227,8 @@ enum PanelChromeIntent:
   case SetWindowSitterActiveTicks(ticks: Int)
   case SetWindowSitterFastActiveTicks(ticks: Int)
   case SetWindowSitterFastTypingThresholdMs(ms: Int)
+  case SetCompanionSpriteEnabled(enabled: Boolean)
+  case SetVisualFlairLevel(level: VisualFlairLevel)
   case SetWheelScrollLines(lines: Int)
   case SetTextAreaLeftInset(value: Double)
   case SetTextAreaRightInset(value: Double)
@@ -286,7 +294,11 @@ final case class Command private (
     label: String,
     description: String,
     intent: CommandIntent,
-    category: CommandCategory
+    category: CommandCategory,
+    // #1298: when true, submitting this command from a settings submenu leaves the submenu open at its current
+    // position instead of closing the whole command-runner overlay (mirrors how an `OptionItem` cycle already stays
+    // open) -- for a command meant to be pressed repeatedly in a row, such as the info bar segment movers.
+    keepMenuOpenOnSubmit: Boolean
 )
 
 object Command:
@@ -296,9 +308,17 @@ object Command:
     description: String,
     intent: CommandIntent,
     category: CommandCategory = CommandCategory.Edit,
-    label: String = ""
+    label: String = "",
+    keepMenuOpenOnSubmit: Boolean = false
   ): Command =
-    Command(name, Option(label).filter(_.nonEmpty).getOrElse(Command.defaultLabel(name)), description, intent, category)
+    Command(
+      name,
+      Option(label).filter(_.nonEmpty).getOrElse(Command.defaultLabel(name)),
+      description,
+      intent,
+      category,
+      keepMenuOpenOnSubmit
+    )
 
   private def defaultLabel(name: String): String =
     name

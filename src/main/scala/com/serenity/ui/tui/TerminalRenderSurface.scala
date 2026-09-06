@@ -167,14 +167,42 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   override def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit = render
 
   // -- PixelDrawing ---------------------------------------------------------------------------------------------------
-  // Pixel-addressed fills and image blits have no meaningful target on a fixed-cell surface: #1012 made `pixels`
-  // required specifically because every *other* real RenderSurface draws pixels (carets, Markdown preview images) --
-  // its own PR notes call a terminal cell surface out as the one legitimate exception, deliberately degrading rather
-  // than skipping this capability entirely.
+  // `cellMetrics` here is always `CellMetrics.cellUnit` (charWidth = lineHeight = 1, see `TuiRuntime`), so every
+  // "pixel" coordinate `RenderSurface` callers pass is already a cell coordinate -- no metrics conversion needed, in
+  // contrast to `Java2DRenderSurface`'s real pixel scaling.
+  //
+  // `drawImage` renders through `HalfBlockImageRenderer` (notcurses/ratatui-image/Jexer's technique): the source image
+  // is downsampled to twice the target cell grid's vertical resolution, and each cell becomes an upper-half-block
+  // glyph (`▀`) whose foreground paints its top sub-pixel and whose background paints its bottom one, doubling the
+  // effective vertical resolution a plain ANSI-color terminal can show. Sixel/Kitty/iTerm2 true-pixel protocols are a
+  // distinct capability this does not attempt to negotiate.
 
+  // fillPixelRect stays a no-op deliberately, unlike drawImage: Renderer's full-frame caret paint
+  // (paintCursorOverlay/similar call sites) calls `pixels.fillPixelRect` with coordinates computed from real font
+  // pixel geometry regardless of surface -- correct on `Java2DRenderSurface`, but on this cell surface (`cellMetrics`
+  // is always `CellMetrics.cellUnit`) that same call lands on real character cells and, if it painted for real, would
+  // silently overwrite live buffer text with a solid caret-colored block every full render (confirmed empirically: it
+  // reliably blanked two characters of "alpha" immediately after the gutter on every frame). TUI's real caret is
+  // `HardwareCursor` (`present`/`hide`, DECSCUSR/CUP) -- this call is simply never meant to paint cell content here,
+  // so it must stay inert the way #1012 originally left it.
   override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit = ()
 
-  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit = ()
+  override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
+    val previousForeground = screenBuffer.getForegroundColor
+    val previousBackground = screenBuffer.getBackgroundColor
+    val grid               = HalfBlockImageRenderer.render(image, width, height, fallback = previousBackground)
+    grid.zipWithIndex.foreach {
+      case (row, rowOffset) =>
+        row.zipWithIndex.foreach {
+          case (Some(cell), colOffset) =>
+            screenBuffer.setForegroundColor(cell.foreground)
+            screenBuffer.setBackgroundColor(cell.background)
+            screenBuffer.putString(x + colOffset, y + rowOffset, HalfBlockImageRenderer.UpperHalfBlock.toString)
+          case (None, _) => ()
+        }
+    }
+    screenBuffer.setForegroundColor(previousForeground)
+    screenBuffer.setBackgroundColor(previousBackground)
 
   override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit = render
 

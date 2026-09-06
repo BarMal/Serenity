@@ -6,11 +6,13 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration.DurationInt
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
 import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterAction, WindowSitterConfig}
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.PanelPosition
 import com.typesafe.config.ConfigFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -69,6 +71,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withCommentDisplayMode(CommentDisplayMode.Margin)
     .withWordWrap(false)
     .withVisualLineCursorNavigation(false)
+    .withTypewriterScrolling(true)
     .withFocusedTextBody(true)
     .withContextualToolbarEnabled(false)
     .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
@@ -92,6 +95,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
     .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
     .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
+    .withAppMode(AppMode.Prose)
+    .withShowAllSettingsRegardlessOfMode(true)
+    .withModeTabWidgetCornerPosition(CornerPosition.TopLeft)
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(2.0)
     .withUiCornerRadiusPx(6)
@@ -121,6 +127,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     )
     .withCursorColors(
       CursorColorConfig(active = Some(Color(0x11, 0x22, 0x33)), inactive = Some(Color(0x44, 0x55, 0x66)))
+    )
+    .withCursorInfoBarColors(
+      CursorInfoBarColorConfig(foreground = Some(Color(0x77, 0x88, 0x99)), background = Some(Color(0xaa, 0xbb, 0xcc)))
     )
     .withSpellCheck(
       SpellCheckConfig(
@@ -156,6 +165,15 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         fastTypingThresholdMs = 175
       )
     )
+    .withCompanionSpriteConfig(
+      CompanionSpriteConfig(
+        enabled = true,
+        character = CompanionCharacter.PixelWizard,
+        position = PanelPosition.Bottom,
+        size = 14
+      )
+    )
+    .withVisualFlairLevel(VisualFlairLevel.Reduced)
 
   /** Fields that are mirrors of the motion hierarchy rather than settings in their own right: `motionConfiguration` and
     * its families are what the file carries, and `AppConfig`'s `effectiveMotion*` accessors resolve behaviour from
@@ -211,7 +229,11 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     "inputConfig.focusedKeymapConfig.modal.bindings",
     "inputConfig.focusedKeymapConfig.panel.bindings",
     "inputConfig.focusedKeymapConfig.peek.bindings",
-    "inputConfig.hotkeyConfig.bindings"
+    "inputConfig.hotkeyConfig.bindings",
+    // CompanionCharacter has exactly one bundled value today (the placeholder sprite sheet), so there is no other
+    // value `mutated` could move this field to -- CompanionCharacterSpec covers fromConfigKey/id round-tripping
+    // directly instead.
+    "companionSpriteConfig.character"
   )
 
   private def leafValues(config: AppConfig): Map[String, Any] =

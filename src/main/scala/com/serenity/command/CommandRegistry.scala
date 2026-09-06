@@ -117,6 +117,13 @@ object CommandRegistry:
       label = "Toggle Visual Line Navigation"
     ),
     Command.typed(
+      "toggle-typewriter-scrolling",
+      "Keep the cursor's line vertically centred as you type, padding past the document's end.",
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleTypewriterScrolling)),
+      CommandCategory.View,
+      label = "Toggle Typewriter Scrolling"
+    ),
+    Command.typed(
       "toggle-line-wrap",
       "Soft-wrap long logical lines to the editor width.",
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleWordWrap)),
@@ -604,6 +611,20 @@ object CommandRegistry:
       label = "Toggle Shortcuts Help"
     ),
     Command.typed(
+      "toggle-tab-list",
+      "Show or hide the list of open tabs.",
+      CommandIntent.View(ViewIntent.ToggleTabList),
+      CommandCategory.View,
+      label = "Tab List"
+    ),
+    Command.typed(
+      "toggle-recent-in-mode",
+      "Show or hide recent files opened in the current app mode.",
+      CommandIntent.View(ViewIntent.ToggleRecentFilesInMode),
+      CommandCategory.View,
+      label = "Recent in This Mode"
+    ),
+    Command.typed(
       "markdown-preview",
       "Open a rendered Markdown preview for the current buffer.",
       CommandIntent.View(ViewIntent.OpenMarkdownPreview),
@@ -630,6 +651,20 @@ object CommandRegistry:
       CommandIntent.View(ViewIntent.SetMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)),
       CommandCategory.Settings,
       label = "Markdown View Inline Lens"
+    ),
+    Command.typed(
+      "app-mode-code",
+      "Switch the app to code mode, gating tooling and settings toward code workspaces.",
+      CommandIntent.View(ViewIntent.SetAppMode(com.serenity.config.AppMode.Code)),
+      CommandCategory.Settings,
+      label = "App Mode: Code"
+    ),
+    Command.typed(
+      "app-mode-prose",
+      "Switch the app to prose mode, gating tooling and settings toward prose workspaces.",
+      CommandIntent.View(ViewIntent.SetAppMode(com.serenity.config.AppMode.Prose)),
+      CommandCategory.Settings,
+      label = "App Mode: Prose"
     ),
     Command.typed(
       "spellcheck-on",

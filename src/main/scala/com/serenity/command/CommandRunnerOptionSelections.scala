@@ -59,15 +59,20 @@ object CommandRunnerOptionSelections:
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
       "window-sitter-enabled"      -> enabledIndex(config.windowSitterConfig.enabled),
       "window-sitter-action"       -> windowSitterActionIndex(config.windowSitterConfig.action),
+      "companion-sprite-enabled"   -> enabledIndex(config.companionSpriteConfig.enabled),
+      "visual-flair-level"         -> visualFlairLevelIndex(config.visualFlairLevel),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "spellcheck-enabled"         -> spellCheckEnabledIndex(languageToolsConfig.spellCheck.enabled),
+      "app-mode"                   -> appModeIndex(config.appMode),
+      "settings-show-all"          -> (if config.showAllSettingsRegardlessOfMode then 1 else 0),
       "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
       "show-word-count"            -> enabledIndex(surfaceConfig.showWordCount),
       "gutter"                     -> enabledIndex(surfaceConfig.showGutter),
       "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
       "word-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
       "visual-line-navigation"     -> enabledIndex(surfaceConfig.visualLineCursorNavigation),
+      "typewriter-scrolling"       -> enabledIndex(surfaceConfig.typewriterScrollingEnabled),
       "focused-text-body"          -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
       "contextual-toolbar"         -> enabledIndex(surfaceConfig.contextualToolbarEnabled),
       "contextual-toolbar-display" -> contextualToolbarDisplayModeIndex(surfaceConfig.contextualToolbarDisplayMode),
@@ -139,6 +144,12 @@ object CommandRunnerOptionSelections:
       case WindowSitterAction.Cycle => 0
       case WindowSitterAction.Pulse => 1
       case WindowSitterAction.Blink => 2
+
+  private def visualFlairLevelIndex(level: VisualFlairLevel): Int =
+    level match
+      case VisualFlairLevel.Full    => 0
+      case VisualFlairLevel.Reduced => 1
+      case VisualFlairLevel.Off     => 2
 
   private def materialPresetIndex(preset: MaterialPreset): Int =
     preset match
@@ -222,6 +233,11 @@ object CommandRunnerOptionSelections:
       case DefaultDocumentMode.PlainText => 0
       case DefaultDocumentMode.Markdown  => 1
       case DefaultDocumentMode.RichText  => 2
+
+  private def appModeIndex(mode: AppMode): Int =
+    mode match
+      case AppMode.Code  => 0
+      case AppMode.Prose => 1
 
   private def spellCheckEnabledIndex(enabled: Boolean): Int =
     if enabled then 1 else 0

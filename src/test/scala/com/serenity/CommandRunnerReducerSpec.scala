@@ -516,7 +516,7 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .copy(editingPresetName = Some("Review"))
       .updateSearchTerm("default document")
     val activated = activeState(registry)
@@ -931,6 +931,57 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
       firstUiFontIntent
   }
 
+  // #1298: an ordinary settings CommandItem still closes the whole command-runner overlay on submit -- only a
+  // command explicitly marked `keepMenuOpenOnSubmit` (the info bar segment movers, below) keeps it open.
+  it should "close the command-runner overlay when an ordinary settings command is submitted from a submenu" in {
+    val registry = CommandRegistry.default
+    // "ui-font" is itself a nested group of font-family choices -- entering it is a navigation step, not yet a
+    // command submit, exactly as in "open font family picker submenus and submit UI font choices" above.
+    val entered =
+      CommandRunnerReducer.reduce(RunnerSubmit, settingsStateOnItem("settings-ui-font", "ui-font"), registry)
+
+    val submitted = CommandRunnerReducer.reduce(RunnerSubmit, entered.state, registry)
+
+    submitted.state.commandRunnerSurface shouldBe None
+  }
+
+  // #1298: reordering the cursor info bar's segments used to close the whole settings menu on every single move,
+  // forcing a full re-open/re-navigate round trip to nudge one segment more than one step. Moving a segment now
+  // leaves the "Cursor" group open so the next move can be submitted immediately.
+  it should "keep the settings submenu open after moving a cursor info bar segment" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val config = AppConfig.default.withCursorInfoBarSegments(
+      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
+    )
+    // Mirrors settingsStateOnItem's own navigation: search narrows visibleItems to the target group before
+    // indexing into it, exactly as reaching any other settings group does elsewhere in this spec.
+    val searched = CommandRunner.empty
+      .activate(registry, config)
+      .openSettings
+      .updateSearchTerm(settingsGroupSearchTerm("settings-cursor"))
+    val groupIndex = searched.visibleItems.indexWhere(_.id == "settings-cursor")
+    val entered    = searched.withSelectedVisibleIndex(groupIndex).enterSelectedGroup
+    val moveIndex  = entered.submenuItems("settings-cursor").indexWhere(_.id == "move-cursor-info-bar-position-later")
+    val positioned = entered.withSelectedFocusedSubmenuIndex(moveIndex)
+    val surface = UiSurface(
+      SurfaceId("command-runner"),
+      SurfaceContent.CommandPalette(positioned),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val state = AppState(
+      persisted = Persisted(layout = Layout.empty, buffers = Map.empty, focus = Focus.Surface(surface.id)),
+      runtime = Runtime(uiSurfaces = List(surface), focusHistory = List(Focus.EditorPane(PaneId(2))))
+    )
+
+    val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
+
+    submitted.state.commandRunnerSurface shouldBe defined
+    runnerFrom(submitted.state).activeSubmenuGroupId shouldBe Some("settings-cursor")
+    submitted.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.name } shouldBe
+      Some("move-cursor-info-bar-position-later")
+  }
+
   it should "enter the edit preset submenu from UI presets" in {
     val registry = CommandRegistry.default
     val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
@@ -1309,7 +1360,11 @@ class CommandRunnerReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "emit authored document comment text from the navigation input item" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-navigation", "document-comment")
+    val state = settingsStateOnItem(
+      "settings-navigation",
+      "document-comment",
+      config = AppConfig.default.withShowAllSettingsRegardlessOfMode(true)
+    )
 
     val typed =
       "Tighten this opening".foldLeft(state)((s, char) =>

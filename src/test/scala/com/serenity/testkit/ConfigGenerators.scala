@@ -4,12 +4,14 @@ import java.awt.Color
 
 import scala.concurrent.duration.DurationInt
 
+import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope, WindowSitterAction, WindowSitterConfig}
 import com.serenity.config.*
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.PanelPosition
 import org.scalacheck.Gen
 
 /** Generators over [[AppConfig]], for properties about the config file format.
@@ -107,12 +109,20 @@ object ConfigGenerators:
 
   val genCursorConfig: Gen[CursorConfig] =
     for
-      mode      <- oneOfEnum(CursorMode.values)
-      active    <- Gen.option(genColor)
-      inactive  <- Gen.option(genColor)
-      segments  <- Gen.someOf(CursorInfoBarSegment.values.toIndexedSeq).map(_.toList)
-      placement <- oneOfEnum(CursorInfoBarPlacement.values)
-    yield CursorConfig(mode, CursorColorConfig(active, inactive), segments, placement)
+      mode       <- oneOfEnum(CursorMode.values)
+      active     <- Gen.option(genColor)
+      inactive   <- Gen.option(genColor)
+      segments   <- Gen.someOf(CursorInfoBarSegment.values.toIndexedSeq).map(_.toList)
+      placement  <- oneOfEnum(CursorInfoBarPlacement.values)
+      foreground <- Gen.option(genColor)
+      background <- Gen.option(genColor)
+    yield CursorConfig(
+      mode,
+      CursorColorConfig(active, inactive),
+      segments,
+      placement,
+      CursorInfoBarColorConfig(foreground, background)
+    )
 
   val genWindowConfig: Gen[WindowConfig] =
     for
@@ -133,11 +143,28 @@ object ConfigGenerators:
       threshold <- Gen.choose(1, 5000)
     yield WindowSitterConfig(enabled, action, frames, ticks, fastTicks, threshold)
 
+  val genCompanionSpriteConfig: Gen[CompanionSpriteConfig] =
+    for
+      enabled   <- Gen.oneOf(true, false)
+      character <- oneOfEnum(CompanionCharacter.values)
+      position  <- oneOfEnum(PanelPosition.values)
+      size      <- Gen.choose(CompanionSpriteConfig.MinSize, CompanionSpriteConfig.MaxSize)
+    yield CompanionSpriteConfig(enabled, character, position, size)
+
   val genDocumentConfig: Gen[DocumentConfig] =
     for
       markdown <- oneOfEnum(MarkdownViewMode.values)
       default  <- oneOfEnum(DefaultDocumentMode.values)
     yield DocumentConfig(markdown, default)
+
+  val genAppModeConfig: Gen[AppModeConfig] =
+    for
+      mode    <- oneOfEnum(AppMode.values)
+      showAll <- Gen.oneOf(true, false)
+    yield AppModeConfig(mode, showAll)
+
+  val genModeTabWidgetConfig: Gen[ModeTabWidgetConfig] =
+    oneOfEnum(CornerPosition.values).map(ModeTabWidgetConfig.apply)
 
   val genInterfaceConfig: Gen[InterfaceConfig] =
     for
@@ -201,18 +228,19 @@ object ConfigGenerators:
     */
   val genSurfaceConfig: Gen[SurfaceConfig] =
     for
-      lineNumbers     <- Gen.oneOf(true, false)
-      gutter          <- Gen.oneOf(true, false)
-      paneHeaders     <- Gen.oneOf(true, false)
-      wordCount       <- Gen.oneOf(true, false)
-      comments        <- oneOfEnum(CommentDisplayMode.values)
-      wordWrap        <- Gen.oneOf(true, false)
-      visualLineNav   <- Gen.oneOf(true, false)
-      focusedTextBody <- Gen.oneOf(true, false)
-      toolbar         <- Gen.oneOf(true, false)
-      toolbarMode     <- oneOfEnum(ToolbarDisplayMode.values)
-      postProcessing  <- oneOfEnum(PostProcessingEffect.values)
-      shadows         <- Gen.oneOf(true, false)
+      lineNumbers         <- Gen.oneOf(true, false)
+      gutter              <- Gen.oneOf(true, false)
+      paneHeaders         <- Gen.oneOf(true, false)
+      wordCount           <- Gen.oneOf(true, false)
+      comments            <- oneOfEnum(CommentDisplayMode.values)
+      wordWrap            <- Gen.oneOf(true, false)
+      visualLineNav       <- Gen.oneOf(true, false)
+      typewriterScrolling <- Gen.oneOf(true, false)
+      focusedTextBody     <- Gen.oneOf(true, false)
+      toolbar             <- Gen.oneOf(true, false)
+      toolbarMode         <- oneOfEnum(ToolbarDisplayMode.values)
+      postProcessing      <- oneOfEnum(PostProcessingEffect.values)
+      shadows             <- Gen.oneOf(true, false)
       visibleRows <- Gen.option(
         Gen.choose(AppConfig.MinCommandRunnerVisibleRows, AppConfig.MaxCommandRunnerVisibleRows)
       )
@@ -242,6 +270,7 @@ object ConfigGenerators:
       commentDisplayMode = comments,
       wordWrapEnabled = wordWrap,
       visualLineCursorNavigation = visualLineNav,
+      typewriterScrollingEnabled = typewriterScrolling,
       focusedTextBodyEnabled = focusedTextBody,
       contextualToolbarEnabled = toolbar,
       contextualToolbarDisplayMode = toolbarMode,
@@ -321,11 +350,15 @@ object ConfigGenerators:
       cursor    <- genCursorConfig
       window    <- genWindowConfig
       sitter    <- genWindowSitterConfig
+      companion <- genCompanionSpriteConfig
+      flair     <- oneOfEnum(VisualFlairLevel.values)
       document  <- genDocumentConfig
       interface <- genInterfaceConfig
       input     <- genInputConfig
       syntax    <- Gen.oneOf(true, false)
       spell     <- genSpellCheckConfig
+      appMode   <- genAppModeConfig
+      widget    <- genModeTabWidgetConfig
       motion    <- genMotionEdit
       material  <- genMaterialEdit
     yield (motion andThen material)(
@@ -336,8 +369,12 @@ object ConfigGenerators:
         cursorConfig = cursor,
         windowConfig = window,
         windowSitterConfig = sitter,
+        companionSpriteConfig = companion,
+        visualFlairLevel = flair,
         documentConfig = document,
         interfaceConfig = interface,
-        languageToolsConfig = LanguageToolsConfig(syntaxHighlightingEnabled = syntax, spellCheck = spell)
+        languageToolsConfig = LanguageToolsConfig(syntaxHighlightingEnabled = syntax, spellCheck = spell),
+        appModeConfig = appMode,
+        modeTabWidgetConfig = widget
       )
     )

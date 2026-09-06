@@ -1,5 +1,7 @@
 package com.serenity.ui.tui
 
+import com.serenity.config.CursorInfoBarSegment
+
 import TuiScenarios.*
 
 /** The input a terminal delivers that is not a keystroke: SGR mouse reports, bracketed paste, focus reporting, and the
@@ -28,6 +30,53 @@ class TuiInputChannelsSpec extends TuiSpec:
         _ <- verify("clamped to the line end")(screen => screen.statusBar should include("Line 1, Col 3"))
       yield ()
     }
+
+  /** The floating cursor info bar sits over the document, right where the caret is -- which is exactly where a reader
+    * clicks next. It is `AppState.cursorInfoBarSurface`, derived per frame rather than stored in `runtime.uiSurfaces`,
+    * so the guard that stops a click falling through a floating surface
+    * (`MouseHitTestGeometry.isInsideFloatingSurface`, which reads `state.floatingSurfaces`) never saw it: clicking the
+    * bar placed the caret on whatever hidden text the bar was covering (#1292).
+    */
+  "a click on the floating cursor info bar" should "not move the caret into the text underneath it" in
+    runTui(
+      TuiEnvironment
+        .withFile(Array.fill(12)("a line of text to click on").mkString("\n"))
+        .withConfig(
+          _.withCursorInfoBarSegments(List(CursorInfoBarSegment.Title, CursorInfoBarSegment.Position))
+        )
+    ) {
+      for
+        _      <- settledScreen
+        before <- state
+        bar    <- infoBarRow
+        _      <- click(ContentColumn + 4, bar)
+        after  <- state
+      yield focusedBuffer(after).map(_.editing.cursors) shouldBe focusedBuffer(before).map(_.editing.cursors)
+    }
+
+  it should "still place the caret normally on the rows around it" in
+    runTui(
+      TuiEnvironment
+        .withFile(Array.fill(12)("a line of text to click on").mkString("\n"))
+        .withConfig(
+          _.withCursorInfoBarSegments(List(CursorInfoBarSegment.Title, CursorInfoBarSegment.Position))
+        )
+    ) {
+      for
+        _   <- settledScreen
+        bar <- infoBarRow
+        _   <- click(ContentColumn + 4, bar + 2)
+        _   <- verify("caret moved to the clicked row")(screen => screen.caret shouldBe (ContentColumn + 4, bar + 2))
+      yield ()
+    }
+
+  /** The screen row the info bar's own text is painted on. */
+  private val infoBarRow: TuiScript[Int] =
+    settledScreen.map(screen =>
+      (0 until screen.height)
+        .find(row => screen.rowText(row).contains("Line "))
+        .getOrElse(fail("expected the cursor info bar to be painted somewhere"))
+    )
 
   "a mouse drag" should "extend a selection from where the press landed" in
     runTui(TuiEnvironment.withFile("selectable text here")) {

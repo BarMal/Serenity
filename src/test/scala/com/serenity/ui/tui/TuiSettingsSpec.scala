@@ -67,7 +67,11 @@ class TuiSettingsSpec extends TuiSpec:
       yield after.rowText(1).stripTrailing shouldBe " 1 body text"
     }
 
-  "typography settings" should "be annotated as inert in TUI mode rather than hidden" in runTui() {
+  "typography settings" should "be annotated as inert in TUI mode rather than hidden" in runTui(
+    // Prose Font is filtered out of the default code-mode settings tree (issue #1297); show everything so this
+    // scenario can still exercise it.
+    TuiEnvironment.default.withConfig(_.withShowAllSettingsRegardlessOfMode(true))
+  ) {
     for
       _ <- openSettings
       _ <- typeText("typography")

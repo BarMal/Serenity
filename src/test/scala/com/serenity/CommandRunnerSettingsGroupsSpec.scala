@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
@@ -26,7 +26,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail(s"missing group $id"))
 
   "CommandRunnerSettingsGroups" should "build the settings taxonomy independently of runner navigation state" in {
-    val config = AppConfig.default
+    // "Show all settings" is on so this test can see the full tree, mode filtering (issue #1297) aside.
+    val config = AppConfig.default.withShowAllSettingsRegardlessOfMode(true)
     val groups = CommandRunnerSettingsGroups.build(
       optionSelections = CommandRunnerOptionSelections.default(config),
       inputItems = CommandRunnerSettingsInputItems.build(config),
@@ -35,6 +36,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
 
     groups.map(_.id) shouldBe List(
+      "settings-app-mode",
       "settings-workspace-layout",
       "settings-document-writing",
       "settings-editor-view",
@@ -42,6 +44,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-appearance-motion",
       "settings-ui-presets",
       "settings-accessibility",
+      "settings-performance",
       "settings-keymap"
     )
     groupById(groups, "settings-workspace-layout").children.map(_.id) shouldBe List(
@@ -70,6 +73,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "gutter",
       "line-wrap",
       "visual-line-navigation",
+      "typewriter-scrolling",
       "show-word-count",
       "focused-text-body",
       "contextual-toolbar",
@@ -337,7 +341,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
 
   "CommandRunnerSettingsGroups.build with isTuiMode = true" should
     "annotate the typography and post-processing groups as inert, leaving every other hint untouched" in {
-      val config = AppConfig.default
+      val config = AppConfig.default.withShowAllSettingsRegardlessOfMode(true)
       val guiGroups = CommandRunnerSettingsGroups.build(
         optionSelections = CommandRunnerOptionSelections.default(config),
         inputItems = CommandRunnerSettingsInputItems.build(config),
@@ -384,3 +388,66 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       hintOf(tuiGroups, "settings-rendering") shouldBe hintOf(guiGroups, "settings-rendering")
       tuiGroups.map(_.id) shouldBe guiGroups.map(_.id)
     }
+
+  "CommandRunnerSettingsGroups.build with an app mode" should
+    "hide document-writing and prose typography settings by default in code mode" in {
+      // AppConfig.default is already code mode with the override off.
+      val config = AppConfig.default
+      val groups = CommandRunnerSettingsGroups.build(
+        optionSelections = CommandRunnerOptionSelections.default(config),
+        inputItems = CommandRunnerSettingsInputItems.build(config),
+        uiPresetPreviews = Nil,
+        editingPresetName = None
+      )
+
+      groups.map(_.id) should not contain "settings-document-writing"
+      groupById(groups, "settings-typography").children.map(_.id) shouldBe List(
+        "settings-code-font",
+        "settings-ui-font"
+      )
+    }
+
+  it should "hide code typography settings by default in prose mode, while keeping document writing" in {
+    val config = AppConfig.default.withAppMode(AppMode.Prose)
+    val groups = CommandRunnerSettingsGroups.build(
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      uiPresetPreviews = Nil,
+      editingPresetName = None
+    )
+
+    groups.map(_.id) should contain("settings-document-writing")
+    groupById(groups, "settings-typography").children.map(_.id) shouldBe List(
+      "settings-prose-font",
+      "settings-ui-font"
+    )
+  }
+
+  it should "show every group regardless of mode once the override is enabled" in {
+    val config = AppConfig.default.withShowAllSettingsRegardlessOfMode(true)
+    val groups = CommandRunnerSettingsGroups.build(
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      uiPresetPreviews = Nil,
+      editingPresetName = None
+    )
+
+    groups.map(_.id) should contain("settings-document-writing")
+    groupById(groups, "settings-typography").children.map(_.id) shouldBe List(
+      "settings-prose-font",
+      "settings-code-font",
+      "settings-ui-font"
+    )
+  }
+
+  it should "always surface the app mode group itself, even while filtering everything else" in {
+    val config = AppConfig.default
+    val groups = CommandRunnerSettingsGroups.build(
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      uiPresetPreviews = Nil,
+      editingPresetName = None
+    )
+
+    groupById(groups, "settings-app-mode").children.map(_.id) shouldBe List("app-mode", "settings-show-all")
+  }

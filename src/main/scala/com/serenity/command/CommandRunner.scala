@@ -183,7 +183,10 @@ final case class CommandRunner(
     // Defaults to real installed fonts (`FontLoader.FontFamilyCatalog.system`); tests that search the settings tree
     // override this with a deterministic catalog so results don't depend on what's installed on the machine running
     // them -- see `FontLoader.FontFamilyCatalog`'s doc.
-    fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system
+    fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system,
+    // The cursor info bar segments' actual current order, refreshed alongside `optionSelections` in `activate`/
+    // `updateInputItems` -- threaded into `settingsGroups` so its reorder commands reflect it (issue #1298).
+    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil
 ):
 
   def isSettingsSurface: Boolean = surface match
@@ -283,7 +286,8 @@ final case class CommandRunner(
       uiPresetPreviews = uiPresetPreviews,
       editingPresetName = editingPresetName,
       isTuiMode = isTuiMode,
-      fontFamilies = fontFamilies
+      fontFamilies = fontFamilies,
+      cursorInfoBarSegments = cursorInfoBarSegments
     )
 
   def openSettings: CommandRunner =
@@ -730,7 +734,8 @@ final case class CommandRunner(
       inputItems = CommandRunner.buildInputItems(config),
       commandBindings = CommandRunner.commandBindings(config),
       isTuiMode = isTuiMode,
-      keyboardFidelityTier = keyboardFidelityTier
+      keyboardFidelityTier = keyboardFidelityTier,
+      cursorInfoBarSegments = config.cursorInfoBarSegments
     ).syncEditMode
 
   /** Rebuild input items from a new config (called after a setting is applied) */
@@ -738,7 +743,8 @@ final case class CommandRunner(
     copy(
       inputItems = CommandRunner.buildInputItems(config),
       optionSelections = CommandRunner.defaultOptionSelections(config),
-      commandBindings = CommandRunner.commandBindings(config)
+      commandBindings = CommandRunner.commandBindings(config),
+      cursorInfoBarSegments = config.cursorInfoBarSegments
     ).syncEditMode.normalizeSubmenuEditMode
 
   def withUiPresetNames(names: List[String]): CommandRunner =
@@ -761,7 +767,8 @@ final case class CommandRunner(
       recordingItemId = None,
       submenuSelections = Map.empty,
       uiPresetPreviews = Nil,
-      editingPresetName = None
+      editingPresetName = None,
+      cursorInfoBarSegments = Nil
     )
 
   /** Enter edit mode on the currently selected InputItem, or clear edit state otherwise */

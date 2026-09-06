@@ -196,7 +196,7 @@ object EditorEventReducer:
   private def isExtendSelectionEvent(event: TextEntryEvent): Boolean =
     event match
       case ExtendSelectionLeft | ExtendSelectionRight | ExtendSelectionWordLeft | ExtendSelectionWordRight |
-          ExtendSelectionToLineStart | ExtendSelectionToLineEnd =>
+          ExtendSelectionToLineStart | ExtendSelectionToLineEnd | ExtendSelectionPageUp | ExtendSelectionPageDown =>
         true
       case _ => false
 
@@ -390,10 +390,26 @@ object EditorEventReducer:
           case ExtendSelectionRight     => reduceSelectionExtension(buffer, head, currentState)(rightTarget)
           case ExtendSelectionWordLeft  => reduceSelectionExtension(buffer, head, currentState)(wordLeftTarget)
           case ExtendSelectionWordRight => reduceSelectionExtension(buffer, head, currentState)(wordRightTarget)
+          // The same landing places Home and End move to, rather than the logical line's own bounds: a shifted key
+          // selects to where its unshifted form goes, and under word wrap that is the cursor's own visual row. Sharing
+          // `homeTarget`/`endTarget` also carries their row affinity, so Shift+End stops at the row's end instead of
+          // reading as the start of the row below (#1292).
           case ExtendSelectionToLineStart =>
-            reduceSelectionExtension(buffer, head, currentState)((_, from) => lineStartTarget(from))
+            reduceSelectionExtension(buffer, head, currentState)((_, from) =>
+              horizontalTarget(homeTarget(currentState, paneId, from))
+            )
           case ExtendSelectionToLineEnd =>
-            reduceSelectionExtension(buffer, head, currentState)(lineEndTarget)
+            reduceSelectionExtension(buffer, head, currentState)((target, from) =>
+              horizontalTarget(endTarget(currentState, paneId, target, from))
+            )
+          case ExtendSelectionPageUp =>
+            reduceSelectionExtension(buffer, head, currentState)((target, from) =>
+              horizontalTarget(pageTarget(target, currentState, paneId, direction = -1)(from))
+            )
+          case ExtendSelectionPageDown =>
+            reduceSelectionExtension(buffer, head, currentState)((target, from) =>
+              horizontalTarget(pageTarget(target, currentState, paneId, direction = 1)(from))
+            )
           case _ => ReducerResult.noEffects(currentState)
 
       case Some(head) =>
@@ -732,7 +748,9 @@ object EditorEventReducer:
             selection = replacedBuffer.editing.selection,
             preferredColumn = Some(newCursor.column),
             preferredXPx = None
-          )
+          ),
+          annotations = replacedBuffer.annotations,
+          richText = replacedBuffer.richText
         )
         val (updatedBuffer, delta) = addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
         val effects =
@@ -905,9 +923,10 @@ object EditorEventReducer:
           val offset = lineColumnToOffset(buffer.document.content, line, 0)
           MultiCursorEdit(index, offset, offset, TabInsertion)
       }
-      val updatedContent = edits
-        .sortBy(edit => (-edit.start, -edit.end))
-        .foldLeft(buffer.document.content)((content, edit) => insertOrUnchanged(content, edit.start, edit.insertedText))
+      val (updatedContent, updatedRichTextDocument) =
+        foldEditsWithRichText(buffer, edits.sortBy(edit => (-edit.start, -edit.end))) { (content, edit) =>
+          insertOrUnchanged(content, edit.start, edit.insertedText)
+        }
       val finalCursors = buffer.editing.cursors.map { cursor =>
         if targetSet.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
         else cursor
@@ -916,7 +935,8 @@ object EditorEventReducer:
         content = updatedContent,
         cursors = finalCursors,
         documentComments =
-          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
+          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits),
+        richTextDocument = updatedRichTextDocument
       )
       val (animatedBuffer, delta) = addInsertionAnimations(baseBuffer, currentState, edits)
       (animatedBuffer, edits, delta)
@@ -938,9 +958,10 @@ object EditorEventReducer:
           val start = lineColumnToOffset(buffer.document.content, line, 0)
           MultiCursorEdit(index, start, start + removed, "")
       }
-      val updatedContent = edits
-        .sortBy(edit => (-edit.start, -edit.end))
-        .foldLeft(buffer.document.content)((content, edit) => deleteOrUnchanged(content, edit.start, edit.end))
+      val (updatedContent, updatedRichTextDocument) =
+        foldEditsWithRichText(buffer, edits.sortBy(edit => (-edit.start, -edit.end))) { (content, edit) =>
+          deleteOrUnchanged(content, edit.start, edit.end)
+        }
       val finalCursors = buffer.editing.cursors
         .map(cursor => cursor.copy(column = math.max(0, cursor.column - removals.getOrElse(cursor.line, 0))))
         .distinct
@@ -948,7 +969,8 @@ object EditorEventReducer:
         content = updatedContent,
         cursors = finalCursors,
         documentComments =
-          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
+          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits),
+        richTextDocument = updatedRichTextDocument
       )
       (baseBuffer, edits)
 
@@ -976,12 +998,13 @@ object EditorEventReducer:
           else (math.max(0, lineStart - 1), lineEnd)
         (line, deleteStart, deleteEnd)
       }
-      val updatedContent = lineEdits
+      val sortedLineEdits = lineEdits
         .sortBy { case (_, start, end) => (-start, -end) }
-        .foldLeft(buffer.document.content) {
-          case (content, (_, start, end)) =>
-            deleteOrUnchanged(content, start, end)
-        }
+        .map { case (_, start, end) => MultiCursorEdit(0, start, end, "") }
+      val (updatedContent, updatedRichTextDocument) =
+        foldEditsWithRichText(buffer, sortedLineEdits)((content, edit) =>
+          deleteOrUnchanged(content, edit.start, edit.end)
+        )
       val edits = lineEdits.zipWithIndex.map {
         case ((_, start, end), index) =>
           MultiCursorEdit(index, start, end, "")
@@ -1000,9 +1023,35 @@ object EditorEventReducer:
         content = updatedContent,
         cursors = finalCursors,
         documentComments =
-          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits)
+          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits),
+        richTextDocument = updatedRichTextDocument
       )
       (baseBuffer, edits)
+
+  /** Folds `edits` over `content` and `richTextDocument` together, so a caller's rich-text document stays remapped in
+    * lockstep with the plain-text edits it applies -- edits must already be in the order `applyContentEdit` expects
+    * (callers sort descending by offset so earlier edits don't shift later ones). Shared by every multi-edit path
+    * instead of copied per call site, after `#1072` and `#1291` both found edit paths that had drifted from this exact
+    * pairing and silently let `richTextDocument` go stale.
+    */
+  private def foldEditsWithRichText(
+    buffer: Buffer,
+    edits: List[MultiCursorEdit]
+  )(applyContentEdit: (Rope, MultiCursorEdit) => Rope): (Rope, Option[RichTextDocument]) =
+    edits.foldLeft((buffer.document.content, buffer.richText.richTextDocument)) {
+      case ((content, document), edit) =>
+        val nextContent = applyContentEdit(content, edit)
+        val nextDocument = richTextDocumentAfterEdit(
+          buffer.copy(
+            document = buffer.document.copy(content = content),
+            richText = buffer.richText.copy(richTextDocument = document)
+          ),
+          edit.start,
+          edit.end,
+          edit.insertedText
+        )
+        (nextContent, nextDocument)
+    }
 
   private def applyTrackedEdits(
     buffer: Buffer,
@@ -1014,20 +1063,8 @@ object EditorEventReducer:
       val trackedOffsets = initialOffsets.toArray
       val sortedEdits    = edits.sortBy(edit => (-edit.start, -edit.end))
       val (updatedContent, updatedRichTextDocument) =
-        sortedEdits.foldLeft((buffer.document.content, buffer.richText.richTextDocument)) {
-          case ((content, document), edit) =>
-            val deleted     = deleteOrUnchanged(content, edit.start, edit.end)
-            val nextContent = insertOrUnchanged(deleted, edit.start, edit.insertedText)
-            val nextDocument = richTextDocumentAfterEdit(
-              buffer.copy(
-                document = buffer.document.copy(content = content),
-                richText = buffer.richText.copy(richTextDocument = document)
-              ),
-              edit.start,
-              edit.end,
-              edit.insertedText
-            )
-            (nextContent, nextDocument)
+        foldEditsWithRichText(buffer, sortedEdits) { (content, edit) =>
+          insertOrUnchanged(deleteOrUnchanged(content, edit.start, edit.end), edit.start, edit.insertedText)
         }
       val finalOffsets = sortedEdits.foldLeft(trackedOffsets) { (offsets, edit) =>
         val delta = edit.insertedText.length - (edit.end - edit.start)
@@ -1067,23 +1104,13 @@ object EditorEventReducer:
     if edits.isEmpty then (buffer, Nil)
     else
       val mergedRanges = mergeOverlappingDeletionRanges(edits.map(edit => (edit.start, edit.end)))
+      val sortedMergedEdits = mergedRanges
+        .sortBy { case (start, end) => (-start, -end) }
+        .map { case (start, end) => MultiCursorEdit(0, start, end, "") }
       val (updatedContent, updatedRichTextDocument) =
-        mergedRanges
-          .sortBy { case (start, end) => (-start, -end) }
-          .foldLeft((buffer.document.content, buffer.richText.richTextDocument)) {
-            case ((content, document), (start, end)) =>
-              val nextContent = deleteOrUnchanged(content, start, end)
-              val nextDocument = richTextDocumentAfterEdit(
-                buffer.copy(
-                  document = buffer.document.copy(content = content),
-                  richText = buffer.richText.copy(richTextDocument = document)
-                ),
-                start,
-                end,
-                ""
-              )
-              (nextContent, nextDocument)
-          }
+        foldEditsWithRichText(buffer, sortedMergedEdits)((content, edit) =>
+          deleteOrUnchanged(content, edit.start, edit.end)
+        )
       val mergedEdits = mergedRanges.zipWithIndex.map {
         case ((start, end), index) =>
           MultiCursorEdit(index, start, end, "")
@@ -1280,12 +1307,15 @@ object EditorEventReducer:
     * count that goes negative for a document whose wrapped rows outnumber its lines, and snapped the viewport to the
     * top of the file on the second PageDown at a document's end.
     */
-  private def applyMultiCursorPageNavigation(
+  /** Where one cursor lands after a page move of `direction`, shared by the plain page keys and their shifted
+    * selection-extending forms so both travel the same distance over the same rows (#1292).
+    */
+  private def pageTarget(
     buffer: Buffer,
     currentState: AppState,
     paneId: PaneId,
     direction: Int
-  ): Buffer =
+  ): CursorPosition => CursorPosition =
     val totalLines  = countLines(buffer.document.content)
     val visibleRows = math.max(1, buffer.viewport.visibleLines)
     // The window has to reach a whole screenful in the direction of travel, which the default geometry only covers
@@ -1312,10 +1342,17 @@ object EditorEventReducer:
         navigation.visualLines.lift(targetRow).map(line => CursorPosition(line.bufferLine, line.startColumn))
       }
 
-    val move: CursorPosition => CursorPosition =
-      geometry match
-        case Some(navigation) => cursor => visualTarget(navigation)(cursor).getOrElse(logicalTarget(cursor))
-        case None             => logicalTarget
+    geometry match
+      case Some(navigation) => cursor => visualTarget(navigation)(cursor).getOrElse(logicalTarget(cursor))
+      case None             => logicalTarget
+
+  private def applyMultiCursorPageNavigation(
+    buffer: Buffer,
+    currentState: AppState,
+    paneId: PaneId,
+    direction: Int
+  ): Buffer =
+    val move = pageTarget(buffer, currentState, paneId, direction)
 
     val finalCursors = buffer.editing.cursors
       .map(move)
@@ -1666,12 +1703,6 @@ object EditorEventReducer:
 
   private def wordRightTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
     horizontalTarget(wordBoundaryFrom(buffer, from, (rope, offset) => rope.nextWordBoundary(offset)))
-
-  private def lineStartTarget(from: CursorPosition): CursorTarget =
-    horizontalTarget(from.copy(column = 0))
-
-  private def lineEndTarget(buffer: Buffer, from: CursorPosition): CursorTarget =
-    horizontalTarget(from.copy(column = findLineEnd(buffer.document.content, from.line)))
 
   private def verticalTarget(currentState: AppState, geometry: EditorGeometry, direction: Int)(
     buffer: Buffer,

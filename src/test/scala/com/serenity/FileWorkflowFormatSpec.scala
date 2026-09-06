@@ -54,6 +54,16 @@ class FileWorkflowFormatSpec extends AnyFlatSpec with Matchers:
       filename = "notes.rtf",
       bufferHasRichFormatting = true
     ).wouldLoseFormatting shouldBe false
+    FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.odt",
+      bufferHasRichFormatting = true
+    ).wouldLoseFormatting shouldBe false
+    FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.docx",
+      bufferHasRichFormatting = true
+    ).wouldLoseFormatting shouldBe false
   }
 
   "SaveAsFileWorkflowState.cycleFormat" should "step forward through SaveFormat.ordered, rewriting the extension" in {

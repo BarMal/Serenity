@@ -52,6 +52,8 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
   case ExtendSelectionWordRight
   case ExtendSelectionToLineStart
   case ExtendSelectionToLineEnd
+  case ExtendSelectionPageUp
+  case ExtendSelectionPageDown
   case MoveToStart
   case MoveToEnd
   case MoveToStartOfFile
@@ -88,6 +90,10 @@ enum EditorKeyAction extends KeymapEventAction[EditorEvent]:
         com.serenity.keystroke.events.ExtendSelectionToLineStart
       case ExtendSelectionToLineEnd =>
         com.serenity.keystroke.events.ExtendSelectionToLineEnd
+      case ExtendSelectionPageUp =>
+        com.serenity.keystroke.events.ExtendSelectionPageUp
+      case ExtendSelectionPageDown =>
+        com.serenity.keystroke.events.ExtendSelectionPageDown
       case MoveToStart        => com.serenity.keystroke.events.MoveToStart
       case MoveToEnd          => com.serenity.keystroke.events.MoveToEnd
       case MoveToStartOfFile  => com.serenity.keystroke.events.MoveToStartOfFile
@@ -188,8 +194,14 @@ object EditorKeyAction:
     EditorKeyAction.MoveToEndOfFile -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set(com.serenity.keystroke.Modifier.Ctrl))
     ),
-    EditorKeyAction.PageUp         -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageUp, None, Set.empty)),
-    EditorKeyAction.PageDown       -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageDown, None, Set.empty)),
+    EditorKeyAction.PageUp   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageUp, None, Set.empty)),
+    EditorKeyAction.PageDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageDown, None, Set.empty)),
+    EditorKeyAction.ExtendSelectionPageUp -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.PageUp, None, Set(com.serenity.keystroke.Modifier.Shift))
+    ),
+    EditorKeyAction.ExtendSelectionPageDown -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.PageDown, None, Set(com.serenity.keystroke.Modifier.Shift))
+    ),
     EditorKeyAction.DeleteBackward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty)),
     EditorKeyAction.DeleteForward  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)),
     EditorKeyAction.DeleteWordBackward -> List(

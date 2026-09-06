@@ -8,7 +8,7 @@ import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.{PreferredWindowSize, SpellCheckConfig}
+import com.serenity.config.{AppMode, PreferredWindowSize, SpellCheckConfig}
 import com.serenity.diagnostics.Trace
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
@@ -288,7 +288,11 @@ final private[manager] class StateManagerFilePersistence(
           .flatTap(_ =>
             stateRef.update(current =>
               current.copy(persisted =
-                current.persisted.copy(recentFiles = trackRecentFile(current.persisted.recentFiles, path))
+                current.persisted.copy(
+                  recentFiles = trackRecentFile(current.persisted.recentFiles, path),
+                  recentFilesByMode = Persisted
+                    .trackRecentFile(current.persisted.recentFilesByMode, current.persisted.config.appMode, path)
+                )
               )
             )
           )
@@ -312,9 +316,13 @@ final private[manager] class StateManagerFilePersistence(
         case (uri, languageId) =>
           lspQueue.enqueue(LspEffect.FileClosed(uri, languageId))
       } >>
-        next.fold(IO.unit) {
-          case (uri, languageId, text) =>
-            lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
+        stateRef.get.flatMap { state =>
+          if state.persisted.config.appMode != AppMode.Code then IO.unit
+          else
+            next.fold(IO.unit) {
+              case (uri, languageId, text) =>
+                lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
+            }
         }
 
   private def persistAfterSave: IO[Unit] =
@@ -329,6 +337,7 @@ final private[manager] class StateManagerFilePersistence(
 private[manager] trait EffectSurfacePort:
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
+  def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit]
   def unpinPanel(target: PanelTarget): IO[Unit]
   def expandPinnedPanel(target: PanelTarget): IO[Unit]
   def collapseExpandedPanel(): IO[Unit]
@@ -517,6 +526,8 @@ private[manager] class StateManagerComposition(
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = surfaces.showPeek(content, at)
     def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
       surfaces.pinPanel(content, position, size)
+    def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
+      surfaces.pinOrUpdateTerminalPanel(text, position, size)
     def unpinPanel(target: PanelTarget): IO[Unit]          = surfaces.unpinPanel(target)
     def expandPinnedPanel(target: PanelTarget): IO[Unit]   = surfaces.expandPinnedPanel(target)
     def collapseExpandedPanel(): IO[Unit]                  = surfaces.collapseExpandedPanel()
@@ -648,6 +659,8 @@ private[manager] class StateManagerComposition(
   def peekToPin(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.peekToPin(position))
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
     runSurfaceOperation(surfaces.pinPanel(content, position, size))
+  def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
+    runSurfaceOperation(surfaces.pinOrUpdateTerminalPanel(text, position, size))
   def unpinPanel(target: PanelTarget): IO[Unit] = runSurfaceOperation(surfaces.unpinPanel(target))
   def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit] =
     runSurfaceOperation(surfaces.movePinnedPanel(surfaceId, position))

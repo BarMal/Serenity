@@ -87,10 +87,15 @@ class RendererBreatheCursorHardwareSpec extends AnyFlatSpec with Matchers:
     hardwareCursor.hideCallCount shouldBe 1
   }
 
-  it should "hide the terminal cursor when no breathe color has been computed yet" in {
+  /** No colour means no idle frame has run, not a faded caret: only `AppRuntime.computeIdleCursorFrame` supplies one,
+    * and every content frame passes `None`. Hiding on those left the terminal's own cursor wherever the content diff
+    * last wrote -- the bottom of the screen -- for the whole time the reader was typing (#1215), which is the opposite
+    * of what this fallback exists to do.
+    */
+  it should "show the terminal cursor on a content frame, which carries no breathe colour at all" in {
     val hardwareCursor = new FakeHardwareCursor
     renderWith(hardwareCursor, None)
 
-    hardwareCursor.presentCallCount shouldBe 0
-    hardwareCursor.hideCallCount shouldBe 1
+    hardwareCursor.presentCallCount shouldBe 1
+    hardwareCursor.hideCallCount shouldBe 0
   }

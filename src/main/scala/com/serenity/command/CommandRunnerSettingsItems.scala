@@ -254,10 +254,22 @@ object CommandRunnerSettingsItems:
   /** One boolean include/exclude toggle per segment (mirroring `enabledOptionItem`'s On/Off shape), plus Move
     * Earlier/Later commands for whichever segments are currently included -- the same discrete-move pattern
     * `workspaceLayoutItems`' panel order group uses, rather than a drag gesture this keyboard-driven app has no
-    * mechanism for. Order isn't tracked by `optionSelections` (only inclusion is), so -- exactly like the panel-order
-    * group -- the move commands are offered whenever 2+ segments are included, not gated on their current order.
+    * mechanism for.
+    *
+    * `currentOrder` is the segments' actual current order (`AppConfig.cursorInfoBarSegments`), so the listed move
+    * commands reflect which segment is really earlier/later and a segment already at an end doesn't offer a no-op move
+    * in that direction (issue #1298). Callers that don't have it yet fall back to `segmentDefinitions`' fixed order
+    * with neither direction gated, exactly as before -- that fixed order can't be trusted to match the real one, so
+    * gating on it could wrongly hide a move that would in fact do something.
+    *
+    * Every move command is `keepMenuOpenOnSubmit` (issue #1298): reordering is naturally a repeated action, so
+    * submitting one leaves the "Cursor" settings group open at its current position instead of closing the whole
+    * command-runner overlay, letting the next move be submitted immediately.
     */
-  private[command] def cursorInfoBarSegmentItems(optionSelections: Map[String, Int]): List[CommandSurfaceItem] =
+  private[command] def cursorInfoBarSegmentItems(
+    optionSelections: Map[String, Int],
+    currentOrder: List[CursorInfoBarSegment] = Nil
+  ): List[CommandSurfaceItem] =
     val segmentDefinitions = List(
       (CursorInfoBarSegment.Title, "Title", "cursor-info-bar-title"),
       (CursorInfoBarSegment.Position, "Position", "cursor-info-bar-position"),
@@ -283,34 +295,46 @@ object CommandRunnerSettingsItems:
           hint = s"Include $shortLabel in the cursor info bar"
         )
     }
-    val includedSegments = segmentDefinitions.filter {
-      case (_, _, optionId) => optionSelections.getOrElse(optionId, 1) == 0
-    }
+    val includedByCurrentOrder = currentOrder.flatMap(segment => segmentDefinitions.find(_._1 == segment))
+    val knowsCurrentOrder      = includedByCurrentOrder.nonEmpty
+    val includedSegments =
+      if knowsCurrentOrder then includedByCurrentOrder
+      else segmentDefinitions.filter { case (_, _, optionId) => optionSelections.getOrElse(optionId, 1) == 0 }
     val orderItems =
       if includedSegments.size < 2 then Nil
       else
-        includedSegments.flatMap {
-          case (segment, shortLabel, _) =>
+        includedSegments.zipWithIndex.flatMap {
+          case ((segment, shortLabel, _), index) =>
+            val offerEarlier = !knowsCurrentOrder || index > 0
+            val offerLater   = !knowsCurrentOrder || index < includedSegments.size - 1
             List(
-              CommandSurfaceItem.CommandItem(
-                Command.typed(
-                  s"move-cursor-info-bar-${segment.configKey}-earlier",
-                  s"Move the $shortLabel segment earlier in the cursor info bar.",
-                  CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentEarlier(segment))),
-                  CommandCategory.Settings,
-                  label = s"Move Info Bar $shortLabel Earlier"
+              Option.when(offerEarlier)(
+                CommandSurfaceItem.CommandItem(
+                  Command.typed(
+                    s"move-cursor-info-bar-${segment.configKey}-earlier",
+                    s"Move the $shortLabel segment earlier in the cursor info bar.",
+                    CommandIntent.Settings(
+                      SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentEarlier(segment))
+                    ),
+                    CommandCategory.Settings,
+                    label = s"Move Info Bar $shortLabel Earlier",
+                    keepMenuOpenOnSubmit = true
+                  )
                 )
               ),
-              CommandSurfaceItem.CommandItem(
-                Command.typed(
-                  s"move-cursor-info-bar-${segment.configKey}-later",
-                  s"Move the $shortLabel segment later in the cursor info bar.",
-                  CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentLater(segment))),
-                  CommandCategory.Settings,
-                  label = s"Move Info Bar $shortLabel Later"
+              Option.when(offerLater)(
+                CommandSurfaceItem.CommandItem(
+                  Command.typed(
+                    s"move-cursor-info-bar-${segment.configKey}-later",
+                    s"Move the $shortLabel segment later in the cursor info bar.",
+                    CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.MoveCursorInfoBarSegmentLater(segment))),
+                    CommandCategory.Settings,
+                    label = s"Move Info Bar $shortLabel Later",
+                    keepMenuOpenOnSubmit = true
+                  )
                 )
               )
-            )
+            ).flatten
         }
     toggleItems ++ orderItems
 
@@ -463,6 +487,58 @@ object CommandRunnerSettingsItems:
       selectedIndex = optionSelections.getOrElse("window-sitter-enabled", 0),
       category = CommandCategory.Settings,
       hint = Some("Typing-reactive window decoration")
+    )
+
+  private[command] def companionSpriteEnabledOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "companion-sprite-enabled",
+      label = "Companion Sprite",
+      options = List(
+        CommandOption(
+          "On",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCompanionSpriteEnabled(true)))
+        ),
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCompanionSpriteEnabled(false)))
+        )
+      ),
+      selectedIndex = optionSelections.getOrElse("companion-sprite-enabled", 1),
+      category = CommandCategory.Settings,
+      hint = Some("A small pixel-art companion pane, idling and occasionally performing an action")
+    )
+
+  private[command] def visualFlairLevelOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "visual-flair-level",
+      label = "Visual Flair",
+      options = List(
+        CommandOption(
+          "Full",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Full))
+          )
+        ),
+        CommandOption(
+          "Reduced",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Reduced))
+          )
+        ),
+        CommandOption(
+          "Off",
+          CommandIntent.Settings(
+            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
+          )
+        )
+      ),
+      selectedIndex = optionSelections.getOrElse("visual-flair-level", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Performance/battery tier for purely decorative extras -- the companion sprite, background blur")
     )
 
   private[command] def windowSitterActionOptionItem(
@@ -685,6 +761,32 @@ object CommandRunnerSettingsItems:
       hint = Some("Mode for newly-created documents")
     )
 
+  private[command] def appModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "app-mode",
+      label = "App Mode",
+      options = List(
+        CommandOption("Code", CommandIntent.View(ViewIntent.SetAppMode(AppMode.Code))),
+        CommandOption("Prose", CommandIntent.View(ViewIntent.SetAppMode(AppMode.Prose)))
+      ),
+      selectedIndex = optionSelections.getOrElse("app-mode", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Code or prose workspace -- filters which settings are shown below")
+    )
+
+  private[command] def showAllSettingsOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "settings-show-all",
+      label = "Show All Settings",
+      options = List(
+        CommandOption("Off", CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(false))),
+        CommandOption("On", CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(true)))
+      ),
+      selectedIndex = optionSelections.getOrElse("settings-show-all", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Show settings hidden by the app mode filter above")
+    )
+
   private[command] def spellCheckOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "spellcheck-enabled",
@@ -888,6 +990,20 @@ object CommandRunnerSettingsItems:
       disabledIntent =
         CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualLineCursorNavigation(false))),
       hint = "Move Up/Down by wrapped visual row instead of logical line"
+    )
+
+  private[command] def typewriterScrollingOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    enabledOptionItem(
+      id = "typewriter-scrolling",
+      label = "Typewriter Scrolling",
+      selectedIndex = optionSelections.getOrElse("typewriter-scrolling", 1),
+      enabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTypewriterScrolling(true))),
+      disabledIntent =
+        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTypewriterScrolling(false))),
+      hint = "Keep the cursor's line vertically centred as you type, padding past the document's end"
     )
 
   private[command] def focusedTextBodyOptionItem(

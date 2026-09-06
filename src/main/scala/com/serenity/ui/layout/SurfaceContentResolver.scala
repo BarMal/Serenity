@@ -137,6 +137,10 @@ object SurfaceContentResolver:
         resolveDiagnostics(rect, mode, issues, activeLocation)
       case SurfaceContent.ShortcutsHelp(groups) =>
         resolveShortcutsHelp(rect, mode, groups)
+      case SurfaceContent.TabList(entries, activeBufferId) =>
+        resolveTabList(rect, mode, entries, activeBufferId)
+      case SurfaceContent.RecentFilesInMode(recentMode, paths) =>
+        resolveRecentFilesInMode(rect, mode, recentMode, paths)
       case SurfaceContent.ThemePicker(state) =>
         resolveThemePicker(state, rect, mode)
       case SurfaceContent.ThemeCreator(state) =>
@@ -155,6 +159,10 @@ object SurfaceContentResolver:
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
+      case SurfaceContent.CompanionSprite =>
+        // Painted directly by Renderer's dedicated companion-sprite paint step (surface.pixels.drawImage), not
+        // through this cell-text path -- see the doc comment on SurfaceContent.CompanionSprite.
+        ResolvedSurfaceContent()
       case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
         resolve(originalContent, cachedRect, mode, itemGapRows)
 
@@ -922,6 +930,38 @@ object SurfaceContentResolver:
       }
       .take(maxRows)
     ResolvedSurfaceContent(titleFor(mode, "Keyboard Shortcuts"), rows = rows)
+
+  /** The mode/tab corner widget's tab list (issue #1307). A dirty tab carries a persistent trailing marker rather than
+    * the per-pane header's "- unsaved" text suffix -- this list already names the tab, so repeating the word would just
+    * be noise; the highlighted row already marks which tab is focused.
+    */
+  private def resolveTabList(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    entries: List[TabListEntry],
+    activeBufferId: Option[BufferId]
+  ): ResolvedSurfaceContent =
+    val maxRows = math.max(1, rect.height - 2)
+    val rows = entries.take(maxRows).map { entry =>
+      val text = if entry.isDirty then s"${entry.title} ●" else entry.title
+      OverlayRow(text, selected = activeBufferId.contains(entry.bufferId))
+    }
+    ResolvedSurfaceContent(titleFor(mode, "Tabs"), rows = rows)
+
+  /** The mode/tab corner widget's "recent in this mode" list (issue #1307), one row per path -- same full-path label
+    * the startup page's own recent-files list already uses (`AppStartup.createStartPage`).
+    */
+  private def resolveRecentFilesInMode(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    recentMode: com.serenity.config.AppMode,
+    paths: List[java.nio.file.Path]
+  ): ResolvedSurfaceContent =
+    val maxRows = math.max(1, rect.height - 2)
+    val rows =
+      if paths.isEmpty then List(OverlayRow("No recent files in this mode yet"))
+      else paths.take(maxRows).map(path => OverlayRow(path.toString))
+    ResolvedSurfaceContent(titleFor(mode, s"Recent in ${recentMode.toString} Mode"), rows = rows)
 
   private def resolveThemePicker(
     state: ThemePickerState,

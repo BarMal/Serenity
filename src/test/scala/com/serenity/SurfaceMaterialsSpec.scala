@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.Color
 
-import com.serenity.config.{AppConfig, BackgroundStyle, MaterialPreset}
+import com.serenity.config.{AppConfig, BackgroundStyle, MaterialPreset, VisualFlairLevel}
 import com.serenity.ui.renderer.SurfaceMaterials
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -48,4 +48,18 @@ class SurfaceMaterialsSpec extends AnyFlatSpec with Matchers:
     SurfaceMaterials.effectiveBlurRadius(config) shouldBe 0.18f
     SurfaceMaterials.panelAlpha(config, Theme.default) should be >= 0.9f
     SurfaceMaterials.glassSheenBackground(config, Theme.default) shouldBe None
+  }
+
+  it should "halve the blur radius at Reduced visual flair" in {
+    val fullConfig    = AppConfig.default.withMaterialPreset(MaterialPreset.Crystal)
+    val reducedConfig = fullConfig.withVisualFlairLevel(VisualFlairLevel.Reduced)
+
+    SurfaceMaterials.effectiveBlurRadius(reducedConfig) shouldBe
+      (SurfaceMaterials.effectiveBlurRadius(fullConfig) / 2.0f)
+  }
+
+  it should "disable blur entirely at Off visual flair, regardless of material preset" in {
+    val config = AppConfig.default.withMaterialPreset(MaterialPreset.Crystal).withVisualFlairLevel(VisualFlairLevel.Off)
+
+    SurfaceMaterials.effectiveBlurRadius(config) shouldBe 0.0f
   }

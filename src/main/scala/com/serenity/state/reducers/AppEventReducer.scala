@@ -30,6 +30,14 @@ object AppEventReducer:
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
         else ReducerResult.noEffects(toggleShortcutsHelp(state))
 
+      case ToggleTabList =>
+        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        else ReducerResult.noEffects(toggleTabList(state))
+
+      case ToggleRecentFilesInMode =>
+        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        else ReducerResult.noEffects(toggleRecentFilesInMode(state))
+
       case NewTab =>
         ReducerResult.noEffects(EditorState.openNewTab(state))
 
@@ -254,6 +262,36 @@ object AppEventReducer:
         val surface = UiSurface(
           id = SurfaceId.ShortcutsHelp,
           content = SurfaceContent.ShortcutsHelp(ShortcutsHelpContent.build(state.persisted.config)),
+          presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+        )
+        state.copy(runtime = state.runtime.copy(uiSurfaces = upsertSurface(state.runtime.uiSurfaces, surface)))
+
+  /** Opens or closes the tab list at the fixed `SurfaceId.TabList` id (issue #1307), mirroring `toggleShortcutsHelp`'s
+    * single-instance toggle exactly.
+    */
+  private def toggleTabList(state: AppState): AppState =
+    state.tabListSurface match
+      case Some(surface) =>
+        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
+      case None =>
+        val surface = UiSurface(
+          id = SurfaceId.TabList,
+          content = TabListContent.build(state),
+          presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+        )
+        state.copy(runtime = state.runtime.copy(uiSurfaces = upsertSurface(state.runtime.uiSurfaces, surface)))
+
+  /** Opens or closes the "recent in this mode" list at the fixed `SurfaceId.RecentFilesInMode` id (issue #1307),
+    * mirroring `toggleTabList`/`toggleShortcutsHelp`.
+    */
+  private def toggleRecentFilesInMode(state: AppState): AppState =
+    state.recentFilesInModeSurface match
+      case Some(surface) =>
+        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
+      case None =>
+        val surface = UiSurface(
+          id = SurfaceId.RecentFilesInMode,
+          content = RecentFilesInModeContent.build(state),
           presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
         )
         state.copy(runtime = state.runtime.copy(uiSurfaces = upsertSurface(state.runtime.uiSurfaces, surface)))

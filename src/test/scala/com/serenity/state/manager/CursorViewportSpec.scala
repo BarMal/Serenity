@@ -72,3 +72,48 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
     adjusted.topLine shouldBe 0
     adjusted.topVisualLine shouldBe 0
   }
+
+  /** Regression cover for #1293: typewriter scrolling ("keep the caret's line vertically centred", #1204) never held
+    * while typing at the actual end of a document -- the single most common typewriter-mode scenario -- because the
+    * bottom clamp below always overrode centring whenever there wasn't a full half-viewport of real content beneath the
+    * cursor's line, which is true for every line-appending keystroke. `typewriterScrollingEnabled` (default off,
+    * preserving the clamp so no existing scroll spec regresses) lifts that clamp instead of adding a new formula.
+    */
+  private def lastLineState(typewriterScrollingEnabled: Boolean): (Buffer, AppState, CursorPosition) =
+    val content = (0 until 20).map(i => s"line $i").mkString("\n")
+    val cursor  = CursorPosition(19, 6)
+    val buffer = Buffer
+      .fromString(bufferId, content)
+      .copy(
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
+        editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(cursor))
+      )
+    val state = tuiStateWith(buffer)
+    val configuredState = state.copy(persisted =
+      state.persisted.copy(config = state.persisted.config.withTypewriterScrolling(typewriterScrollingEnabled))
+    )
+    (buffer, configuredState, cursor)
+
+  "CursorViewport.adjustForCursor, with typewriter scrolling enabled" should
+    "keep the cursor's line centred at its configured row even at the document's last line, padding past the end" in {
+      val (buffer, state, cursor) = lastLineState(typewriterScrollingEnabled = true)
+
+      val adjusted = CursorViewport.adjustForCursor(buffer, state, cursor)
+
+      // halfVisibleLines = 4: line 19 (the document's last, and the cursor's) sits 4 rows below the top even though
+      // there are no real lines below it to fill the rest of the viewport.
+      adjusted.topLine shouldBe 15
+      adjusted.topVisualLine shouldBe 0
+    }
+
+  "CursorViewport.adjustForCursor, with typewriter scrolling disabled (the default)" should
+    "fall back to showing as much real content as fits at the document's last line" in {
+      val (buffer, state, cursor) = lastLineState(typewriterScrollingEnabled = false)
+
+      val adjusted = CursorViewport.adjustForCursor(buffer, state, cursor)
+
+      // Bottom-aligned: lines 12..19 are the latest window that fills all 8 rows with real content, leaving the
+      // cursor's line at the very bottom row rather than centred.
+      adjusted.topLine shouldBe 12
+      adjusted.topVisualLine shouldBe 0
+    }
