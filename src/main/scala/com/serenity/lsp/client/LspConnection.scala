@@ -37,9 +37,20 @@ class LspConnection private (
         val request      = LspProtocol.request(id, method, params)
         val timeoutError = LspConnection.LspRequestTimeout(languageId, method, timeout)
 
+        // Giving up locally used to leave the server computing an answer nobody would read. On a large project
+        // completion and hover are expensive and are reissued on every keystroke, so the abandoned work piles up
+        // exactly when the server is already slow.
+        //
+        // tryOffer rather than offer: sendQueue is bounded, and the path that is already giving up must not itself
+        // block behind a wedged writer. A dropped cancellation costs the server some wasted work, not correctness.
+        //
+        // Only where the connection is still usable. onError is left alone: the failure there may be the connection
+        // dying, and closeQueues/failPending own that case.
+        val abandon = sendQueue.tryOffer(Some(LspProtocol.cancelRequest(id))).void >> cleanup
+
         (sendQueue.offer(Some(request)) >> deferred.get.flatMap(IO.fromEither))
-          .timeoutTo(timeout, cleanup >> IO.raiseError(timeoutError))
-          .onCancel(cleanup)
+          .timeoutTo(timeout, abandon >> IO.raiseError(timeoutError))
+          .onCancel(abandon)
           .onError(_ => cleanup)
     yield result
 
