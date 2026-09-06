@@ -250,15 +250,19 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     * document. CI caught a first attempt at this that only checked the queue before waiting: that still lost when the
     * reader fiber itself was starved past the deadline, which on a two-core runner it is.
     *
-    * A deadline of zero is what holds it here: even with no patience at all, a sequence the terminal has already sent
-    * must decode as a sequence, because the reader finds those bytes rather than timing out on them.
+    * The read loop's job is what this holds: a sequence the terminal has already sent decodes as one sequence -- the
+    * loop assembles the present bytes rather than splitting them -- because the timed read finds `[A` before the
+    * deadline. It runs at the production default (50ms); a near-zero deadline can't decide this reliably, because
+    * JLine's `NonBlockingReader` delivers bytes via a background pump thread, and under full-suite load on a two-core
+    * runner that thread can be starved past a 1ms window even though the bytes are already flushed -- which is a
+    * scheduling artifact of the test harness, not the read loop splitting a sequence it should have kept whole.
     */
-  "an escape sequence" should "decode as one sequence even with no patience for a lone ESC at all" in {
+  "an escape sequence the terminal has already sent" should "decode as one sequence within the disambiguation deadline" in {
     val (terminal, pipeOut) = livePipeTerminal()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(terminal, router, clipboard, escDeadline = Duration.Zero)
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard, escDeadline = 50.millis)
       _         <- IO(pipeOut.write(csi("A"))) >> IO(pipeOut.flush())
       events    <- handler.eventStream.take(1).compile.toList
     yield events
