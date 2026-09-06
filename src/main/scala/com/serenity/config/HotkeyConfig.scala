@@ -1,8 +1,8 @@
 package com.serenity.config
 
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
-import io.circe.syntax.given
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
 
 enum HotkeyAction:
