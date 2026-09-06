@@ -151,6 +151,43 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
       pendingCount <- conn.pendingRequestCount
     yield pendingCount shouldBe 0).timeout(testTimeout).unsafeRunSync()
 
+  it should "tell the server to stop when a waiting fiber is canceled" in
+    (for
+      conn         <- makeConnection()
+      requestFiber <- conn.sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace")).start
+      outgoing     <- conn.takeOutgoing
+      requestJson  <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
+      requestId <- IO
+        .fromOption(requestJson.hcursor.downField("id").as[Long].toOption)(new RuntimeException("Missing request id"))
+      _          <- requestFiber.cancel
+      _          <- requestFiber.join
+      cancelled  <- conn.takeOutgoing
+      cancelJson <- IO.fromOption(cancelled)(new RuntimeException("No $/cancelRequest was sent"))
+    yield
+      cancelJson.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
+      cancelJson.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(requestId)
+    ).timeout(testTimeout).unsafeRunSync()
+
+  it should "tell the server to stop when a request times out" in
+    (for
+      conn <- makeConnection(shortTimeout)
+      requestFiber <- conn
+        .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
+        .attempt
+        .start
+      outgoing    <- conn.takeOutgoing
+      requestJson <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
+      requestId <- IO
+        .fromOption(requestJson.hcursor.downField("id").as[Long].toOption)(new RuntimeException("Missing request id"))
+      result     <- requestFiber.joinWithNever
+      cancelled  <- conn.takeOutgoing
+      cancelJson <- IO.fromOption(cancelled)(new RuntimeException("No $/cancelRequest was sent"))
+    yield
+      result.isLeft shouldBe true
+      cancelJson.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
+      cancelJson.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(requestId)
+    ).timeout(testTimeout).unsafeRunSync()
+
   "LspConnection.processIncoming" should "route publishDiagnostics to the callback" in
     (for
       conn <- makeConnection()

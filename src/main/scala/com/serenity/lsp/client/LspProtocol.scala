@@ -25,6 +25,15 @@ object LspProtocol:
       "params"  -> params
     )
 
+  /** `$/cancelRequest`: tells the server to stop working on a request whose answer nobody will read.
+    *
+    * A notification, not a request -- the server is not expected to reply to it. It may still answer the original
+    * request normally if it had already finished, or with `RequestCancelled` (-32800); either way the id is no longer
+    * tracked by then, so [[isResponse]]'s caller drops it.
+    */
+  def cancelRequest(id: Long): Json =
+    notification("$/cancelRequest", Json.obj("id" -> id.asJson))
+
   def isResponse(json: Json): Boolean =
     json.hcursor.downField("id").succeeded && json.hcursor.downField("method").failed
   def isNotification(json: Json): Boolean =
