@@ -91,6 +91,11 @@ final private[manager] class StateManagerEffectHandlers(
   import workflow.*
   private val DoubleTapWindow = 200.millis
 
+  /** Floor for command/keyboard panel resize (issue #1310) -- prevents a panel from shrinking to zero or negative
+    * cells; `WorkspaceTree.resizeSurface`'s own ratio clamp is the further backstop against it eating the viewport.
+    */
+  private val MinimumPanelSize = 4
+
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
     def requestOpenFile: IO[Unit] = requestOpenFileDialog
     def requestSaveAs: IO[Unit]   = stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
@@ -717,6 +722,10 @@ final private[manager] class StateManagerEffectHandlers(
         enqueueEvent(com.serenity.keystroke.events.ToggleTabList)
       case ViewIntent.ToggleRecentFilesInMode =>
         enqueueEvent(com.serenity.keystroke.events.ToggleRecentFilesInMode)
+      case ViewIntent.TogglePanel(id) =>
+        enqueueEvent(com.serenity.keystroke.events.TogglePanel(id))
+      case ViewIntent.SetPanelSize(surfaceId, delta) =>
+        setPanelSize(surfaceId, delta)
 
   private def interpretProjectIntent(intent: ProjectIntent, state: AppState): IO[Unit] =
     intent match
@@ -1851,6 +1860,20 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def movePanelKind(kind: PanelKind, delta: Int): IO[Unit] =
     updatePanelState(reorderPanelKind(kind, delta))
+
+  /** The command/keyboard resize entry point (issue #1310) onto the same `resizePinnedPanel` -- and, through it,
+    * `PanelStateReducer.resize` -- the existing mouse-drag path already uses: one shared resize state fed by all three
+    * input methods rather than three separate implementations. A surface that isn't currently pinned is a no-op, the
+    * same policy `resizePinnedPanel`'s own target resolution already applies.
+    */
+  private def setPanelSize(surfaceId: SurfaceId, delta: Int): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      PanelStateReducer.currentSize(surfaceId, state) match
+        case Some(currentSize) =>
+          resizePinnedPanel(PanelTarget.ById(surfaceId), math.max(MinimumPanelSize, currentSize + delta))
+        case None =>
+          IO.unit
+    }
 
   private def pinPanelKind(kind: PanelKind, position: PanelPosition): IO[Unit] =
     kind match

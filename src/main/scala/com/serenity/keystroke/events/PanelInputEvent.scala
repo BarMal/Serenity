@@ -8,6 +8,11 @@ object PanelInputEvent:
   case object Activate                            extends PanelInputEvent
   case object NoOp                                extends PanelInputEvent
 
+  /** Grows (positive `delta`) or shrinks (negative) the focused panel (issue #1310) -- the keyboard leg of the
+    * command/keyboard/drag resize trio, all of which end up at the same `PanelStateReducer.resize`.
+    */
+  final case class Resize(delta: Int) extends PanelInputEvent
+
   given SurfaceInput[PanelInputEvent] with
 
     def fromIntent(intent: FocusIntent): Option[PanelInputEvent] =

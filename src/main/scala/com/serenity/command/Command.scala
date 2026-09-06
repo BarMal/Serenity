@@ -7,6 +7,7 @@ import com.serenity.config.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
+import com.serenity.state.models.{PanelId, SurfaceId}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
@@ -113,6 +114,11 @@ enum ViewIntent:
   case ToggleShortcutsHelp
   case ToggleTabList
   case ToggleRecentFilesInMode
+  // issue #1310: the panel/placement framework's mode-1 (command palette) and mode-4 (docked, resizable) entry
+  // points -- parametric over PanelId/SurfaceId instead of one case per registered panel, mirroring how
+  // SetPanelPin above already generalizes several one-off pin commands into one parametric case.
+  case TogglePanel(id: PanelId)
+  case SetPanelSize(surfaceId: SurfaceId, delta: Int)
 
 enum ProjectIntent:
   case RunProjectTask(kind: ProjectTaskKind)

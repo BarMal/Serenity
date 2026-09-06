@@ -32,6 +32,12 @@ object PanelStateReducer:
       case Some(surface) => focus(surface.id, state)
       case None          => ReducerResult.noEffects(state)
 
+  /** The current size of a pinned surface, or `None` if it isn't pinned -- used by `StateManagerEffectHandlers`'s
+    * command/keyboard resize path (issue #1310) to compute a delta-adjusted absolute size before calling `resize`.
+    */
+  def currentSize(surfaceId: SurfaceId, state: AppState): Option[Int] =
+    state.surfaceById(surfaceId).collect { case UiSurface(_, _, SurfacePresentation.Pinned(_, size), _) => size }
+
   def resize(surfaceId: SurfaceId, newSize: Int, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
       case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _)) =>

@@ -401,8 +401,10 @@ object ConfigRegistry:
       _.surfaceConfig.commandRunnerCursorPeekTapWindowMillis,
       (config, value) => config.withCommandRunnerCursorPeekTapWindowMillis(value)
     ),
+    // Above/below the cursor only (issue #1310: `SurfacePlacement.Corner` isn't a valid value here, and being a
+    // parameterized case, it also means `.values` is no longer generated for the enum).
     field("command_runner.cursor_peek.placement", "command.runner.cursor.peek.placement")(
-      lowercased(SurfacePlacement.values)
+      lowercased(Array(SurfacePlacement.AboveCursor, SurfacePlacement.BelowCursor))
     )(
       _.surfaceConfig.commandRunnerCursorPeekPlacement,
       (config, value) => config.withCommandRunnerCursorPeekPlacement(value)

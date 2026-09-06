@@ -219,4 +219,32 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
 
     component.processEvent(PanelInputEvent.Activate, baseState).shouldBe(ComponentResult.NoChange)
   }
+
+  it should "execute a resize command for the panel at this position on a resize keystroke (issue #1310)" in {
+    val surface = UiSurface.fromPanelContent(
+      SurfaceId("left-panel"),
+      PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
+      PanelPosition.Left,
+      24
+    )
+    val state = baseState.copy(
+      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
+      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
+    )
+    val component = PinnedPanelComponent(PanelPosition.Left)
+
+    component.processEvent(PanelInputEvent.Resize(1), state) match
+      case ComponentResult.ExecuteCommand(command) =>
+        command.intent shouldBe com.serenity.command.CommandIntent.View(
+          com.serenity.command.ViewIntent.SetPanelSize(surface.id, 1)
+        )
+      case other =>
+        fail(s"Expected ExecuteCommand, got $other")
+  }
+
+  it should "ignore a resize keystroke when no pinned surface exists at the requested position" in {
+    val component = PinnedPanelComponent(PanelPosition.Right)
+
+    component.processEvent(PanelInputEvent.Resize(-1), baseState).shouldBe(ComponentResult.NoChange)
+  }
 end PinnedPanelComponentSpec

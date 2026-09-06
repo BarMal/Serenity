@@ -345,6 +345,8 @@ enum PanelKeyAction extends KeymapEventAction[PanelInputEvent]:
   case NavigateRight
   case ReturnFocus
   case Activate
+  case GrowPanel
+  case ShrinkPanel
 
   def event: PanelInputEvent =
     this match
@@ -354,6 +356,8 @@ enum PanelKeyAction extends KeymapEventAction[PanelInputEvent]:
       case NavigateRight => PanelInputEvent.Navigate(Direction.Right)
       case ReturnFocus   => PanelInputEvent.ReturnFocus
       case Activate      => PanelInputEvent.Activate
+      case GrowPanel     => PanelInputEvent.Resize(1)
+      case ShrinkPanel   => PanelInputEvent.Resize(-1)
 
 object PanelKeyAction:
 
@@ -369,7 +373,13 @@ object PanelKeyAction:
       HotkeyTrigger(com.serenity.keystroke.InputKey.ReverseTab, None, Set.empty),
       HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty)
     ),
-    PanelKeyAction.Activate -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty))
+    PanelKeyAction.Activate -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Enter, None, Set.empty)),
+    PanelKeyAction.GrowPanel -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+    ),
+    PanelKeyAction.ShrinkPanel -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+    )
   )
 
   given KeymapActionCodec[PanelKeyAction] with

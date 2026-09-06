@@ -1,5 +1,6 @@
 package com.serenity.state.components
 
+import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, Focus, SurfacePresentation}
 import com.serenity.state.reducers.{AppEffect, ExplorerEffect, FileEffect, ReducerResult}
@@ -35,6 +36,23 @@ class PinnedPanelComponent(
         currentState.persisted.layout.activeEditorPaneId match
           case Some(paneId) => ComponentResult.transferFocus(Focus.EditorPane(paneId))
           case None         => ComponentResult.noChange
+      case PanelInputEvent.Resize(delta) =>
+        resizeActivePanel(delta, currentState).getOrElse(ComponentResult.noChange)
+
+  /** Resizes whichever panel at this component's position is active (issue #1310), through the same generic
+    * `Command`/`CommandIntent` path the palette already uses -- not a bespoke keyboard-only mechanism.
+    */
+  private def resizeActivePanel(delta: Int, currentState: AppState): Option[ComponentResult] =
+    activeDirectorySurface(currentState).map { surface =>
+      ComponentResult.executeCommand(
+        Command.typed(
+          "resize-focused-panel",
+          "Resize the focused panel.",
+          CommandIntent.View(ViewIntent.SetPanelSize(surface.id, delta)),
+          CommandCategory.View
+        )
+      )
+    }
 
   private def navigateDirectoryPanel(direction: Direction, currentState: AppState): Option[ComponentResult] =
     direction match
