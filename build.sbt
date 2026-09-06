@@ -170,20 +170,20 @@ lazy val root = (project in file("."))
   )
 
 libraryDependencies ++= Seq(
-  "org.typelevel"         %% "cats-effect"     % "3.7.0",
+  "org.typelevel"         %% "cats-effect"     % "3.7.1",
   "co.fs2"                %% "fs2-core"        % "3.13.0",
   "co.fs2"                %% "fs2-io"          % "3.13.0",
   "org.scalatest"         %% "scalatest"       % "3.2.19" % "test",
   // Property and law testing, test scope only -- the assembled JAR is unchanged.
   // scalatestplus is pinned to the release matching ScalaTest 3.2.19 and brings ScalaCheck with it.
-  // cats-laws tracks the cats-core 2.13.0 that cats-effect 3.7.0 already resolves, so no eviction.
+  // cats-laws tracks the cats-core 2.13.0 that cats-effect 3.7.1 already resolves, so no eviction.
   "org.scalatestplus"     %% "scalacheck-1-18" % "3.2.19.0" % "test",
   "org.typelevel"         %% "cats-laws"       % "2.13.0"   % "test",
   "org.typelevel"         %% "discipline-scalatest" % "2.3.0" % "test",
-  "com.github.pureconfig" %% "pureconfig-core" % "0.17.9"
+  "com.github.pureconfig" %% "pureconfig-core" % "0.17.10"
 )
 
-val circeVersion = "0.14.10"
+val circeVersion = "0.14.16"
 
 libraryDependencies ++= Seq(
   "io.circe" %% "circe-core"    % circeVersion,
@@ -191,12 +191,12 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-parser"  % circeVersion
 )
 
-val log4CatsVersion = "2.7.0"
+val log4CatsVersion = "2.8.0"
 
 libraryDependencies ++= Seq(
   "org.typelevel" %% "log4cats-core"   % log4CatsVersion,
   "org.typelevel" %% "log4cats-slf4j"  % log4CatsVersion,
-  "ch.qos.logback" % "logback-classic" % "1.5.18",
+  "ch.qos.logback" % "logback-classic" % "1.5.38",
   "net.java.dev.jna" % "jna-platform"  % "5.12.0"
 )
 
