@@ -126,7 +126,18 @@ object TerminalInputDecoder:
         case Ss3 =>
           if i + 2 >= bytes.length then Step.Incomplete
           else
+            // SS3 (`ESC O <final>`): the application-cursor-keys form of the arrows/Home/End and the F1-F4 keys. A
+            // terminal in DECCKM application mode -- notably Windows ConPTY, which emits `ESC O A` for Up rather than
+            // the normal-mode `CSI A` -- sends cursor keys this way, so these must map to the same keys `decodeCsiKey`
+            // gives the CSI form or arrow navigation is silently dead on those terminals (#1319). SS3 carries no
+            // parameters, so there are no modifiers to decode (a modified cursor key switches to the CSI form).
             val key = bytes(i + 2) match
+              case 'A' => InputKey.ArrowUp
+              case 'B' => InputKey.ArrowDown
+              case 'C' => InputKey.ArrowRight
+              case 'D' => InputKey.ArrowLeft
+              case 'H' => InputKey.Home
+              case 'F' => InputKey.End
               case 'P' => InputKey.F1
               case 'Q' => InputKey.F2
               case 'R' => InputKey.F3
