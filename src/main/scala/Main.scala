@@ -3,8 +3,8 @@ import scala.concurrent.duration.Duration
 import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
-import com.serenity.animation.WindowSitter
 import com.serenity.BuildInfo
+import com.serenity.animation.WindowSitter
 import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, MotionFamily}
 import com.serenity.diagnostics.{Trace, TuiConsoleLogFilter}
