@@ -4,8 +4,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 
 /** Resolves the windowed single-selection pickers -- the theme picker/creator, fuzzy file search, and the generic
-  * context menu -- into overlay rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable
-  * -- see the doc comment there.
+  * context menu -- into overlay rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable --
+  * see the doc comment there.
   */
 private[layout] object PickerContentResolver:
 

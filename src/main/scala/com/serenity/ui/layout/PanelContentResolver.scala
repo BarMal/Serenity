@@ -3,8 +3,8 @@ package com.serenity.ui.layout
 import com.serenity.state.models.*
 
 /** Resolves the fixed-shape informational panels -- directory listings/trees, the terminal, outline/comments/
-  * diagnostics lists, the shortcuts reference, and the tab/recent-files corner widgets -- into overlay rows. Split
-  * out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc comment there.
+  * diagnostics lists, the shortcuts reference, and the tab/recent-files corner widgets -- into overlay rows. Split out
+  * of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc comment there.
   */
 private[layout] object PanelContentResolver:
 

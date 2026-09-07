@@ -6,9 +6,9 @@ import com.serenity.config.ToolbarDisplayMode
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 
-/** Resolves `SurfaceContent.ContextualToolbar` -- the floating per-mode action bar and its dropdown/input detail row
-  * -- into overlay rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the
-  * doc comment there.
+/** Resolves `SurfaceContent.ContextualToolbar` -- the floating per-mode action bar and its dropdown/input detail row --
+  * into overlay rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc
+  * comment there.
   */
 private[layout] object ContextualToolbarContentResolver:
 

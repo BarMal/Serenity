@@ -10,9 +10,9 @@ import com.serenity.command.{
 }
 import com.serenity.state.models.*
 
-/** Resolves `SurfaceContent.CommandPalette` -- both the flat search/run palette and the settings surface it also
-  * hosts -- into overlay rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see
-  * the doc comment there.
+/** Resolves `SurfaceContent.CommandPalette` -- both the flat search/run palette and the settings surface it also hosts
+  * -- into overlay rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc
+  * comment there.
   */
 private[layout] object CommandPaletteContentResolver:
 

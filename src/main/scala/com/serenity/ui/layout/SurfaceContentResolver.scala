@@ -60,9 +60,9 @@ final case class ResolvedSurfaceContent(
 )
 
 /** Turns a `SurfaceContent` into the plain overlay rows a renderer paints, independent of any particular render
-  * surface. The individual content kinds' resolution logic lives in sibling `*ContentResolver` objects in this
-  * package -- this file keeps only the dispatcher, the shared data model above, and the handful of helpers
-  * (`titleFor` chief among them) every one of those siblings calls back into.
+  * surface. The individual content kinds' resolution logic lives in sibling `*ContentResolver` objects in this package
+  * -- this file keeps only the dispatcher, the shared data model above, and the handful of helpers (`titleFor` chief
+  * among them) every one of those siblings calls back into.
   */
 object SurfaceContentResolver:
 
@@ -114,11 +114,25 @@ object SurfaceContentResolver:
       case SurfaceContent.DirectoryTree(tree, selectedPath) =>
         PanelContentResolver.resolveDirectoryTree(rect, mode, tree, selectedPath)
       case SurfaceContent.CommandPalette(runner) =>
-        CommandPaletteContentResolver.resolveCommandPalette(runner, rect, mode, itemGapRows, itemTargetRows, showKeyHints)
+        CommandPaletteContentResolver.resolveCommandPalette(
+          runner,
+          rect,
+          mode,
+          itemGapRows,
+          itemTargetRows,
+          showKeyHints
+        )
       case SurfaceContent.CommandRunnerPeek(runner) =>
         // Cursor-peek prototype: same rendering as CommandPalette, reused as-is (see UiSurface.scala's doc comment
         // on why this is a distinct SurfaceContent case rather than the same one).
-        CommandPaletteContentResolver.resolveCommandPalette(runner, rect, mode, itemGapRows, itemTargetRows, showKeyHints)
+        CommandPaletteContentResolver.resolveCommandPalette(
+          runner,
+          rect,
+          mode,
+          itemGapRows,
+          itemTargetRows,
+          showKeyHints
+        )
       case SurfaceContent.ModalWorkflow(modal) =>
         ModalWorkflowContentResolver.resolve(modal, rect, mode)
       case SurfaceContent.Terminal(buffer, cursor) =>

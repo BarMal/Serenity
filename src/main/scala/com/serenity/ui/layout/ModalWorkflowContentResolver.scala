@@ -2,8 +2,8 @@ package com.serenity.ui.layout
 
 import com.serenity.state.models.*
 
-/** Resolves `SurfaceContent.ModalWorkflow` (find, replace, and the various file workflows) into overlay rows.
-  * Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc comment there.
+/** Resolves `SurfaceContent.ModalWorkflow` (find, replace, and the various file workflows) into overlay rows. Split out
+  * of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc comment there.
   */
 private[layout] object ModalWorkflowContentResolver:
 
