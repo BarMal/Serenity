@@ -9,9 +9,9 @@ import com.serenity.state.models.TextVisualLine
 import com.serenity.text.TextEditing
 import com.serenity.ui.theme.{LexState, StyledText, TextStyle, Theme}
 
-/** The pixel-precision, grapheme-cluster-aware line renderer behind [[CharacterRenderer.renderMeasuredLineWithAnimation]],
-  * extracted to keep that one rendering concern -- and its dedicated grapheme-boundary cache -- separate from
-  * [[CharacterRenderer]]'s cell-grid text painting.
+/** The pixel-precision, grapheme-cluster-aware line renderer behind
+  * [[CharacterRenderer.renderMeasuredLineWithAnimation]], extracted to keep that one rendering concern -- and its
+  * dedicated grapheme-boundary cache -- separate from [[CharacterRenderer]]'s cell-grid text painting.
   */
 private[renderer] object GraphemeMeasuredLineRenderer:
 

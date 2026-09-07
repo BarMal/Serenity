@@ -7,8 +7,8 @@ import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme
 
 /** Paints the segment-oriented [[OverlayRowLayout]] variants -- `Distributed`, `Split`, and `Plain`'s inline-segment
-  * path -- extracted from [[TextOverlayRenderer]] alongside [[OverlayColumnRowRenderer]] to keep each row-layout
-  * family in one place.
+  * path -- extracted from [[TextOverlayRenderer]] alongside [[OverlayColumnRowRenderer]] to keep each row-layout family
+  * in one place.
   */
 object OverlaySegmentRowRenderer:
 

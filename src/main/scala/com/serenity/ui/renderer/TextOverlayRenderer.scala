@@ -354,13 +354,53 @@ object TextOverlayRenderer:
           )
         else CharacterRenderer.renderStringPlain(surface, indentedX, y, rowView.row.plainText.take(indentedWidth))
       case OverlayRowLayout.Distributed =>
-        OverlaySegmentRowRenderer.renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        OverlaySegmentRowRenderer.renderDistributedRow(
+          surface,
+          x,
+          y,
+          width,
+          rowView.row,
+          theme,
+          rowForeground,
+          rowBackground,
+          font
+        )
       case OverlayRowLayout.Split =>
-        OverlaySegmentRowRenderer.renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        OverlaySegmentRowRenderer.renderSplitRow(
+          surface,
+          x,
+          y,
+          width,
+          rowView.row,
+          theme,
+          rowForeground,
+          rowBackground,
+          font
+        )
       case OverlayRowLayout.Columns =>
-        OverlayColumnRowRenderer.renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        OverlayColumnRowRenderer.renderColumnRow(
+          surface,
+          x,
+          y,
+          width,
+          rowView.row,
+          theme,
+          rowForeground,
+          rowBackground,
+          font
+        )
       case OverlayRowLayout.PriorityColumns =>
-        OverlayColumnRowRenderer.renderPriorityColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        OverlayColumnRowRenderer.renderPriorityColumnRow(
+          surface,
+          x,
+          y,
+          width,
+          rowView.row,
+          theme,
+          rowForeground,
+          rowBackground,
+          font
+        )
 
     if cursorVisible then
       rowView.row.cursorColumn
@@ -470,7 +510,6 @@ object TextOverlayRenderer:
         ),
         useMeasuredCursor
       )
-
 
   // #1105: drawRunPx is a no-op on a surface with no FontRenderContext (a terminal), so the measured path can never be
   // taken there regardless of what the font alone would call for (ligatures, proportional advances, ...). Every real
