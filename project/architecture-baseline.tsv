@@ -31,7 +31,7 @@ test/scala/com/serenity/FileHandlingSpec.scala	file length	625
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	661
 test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	638
 test/scala/com/serenity/LayoutContractSpec.scala	file length	963
-test/scala/com/serenity/LayoutEngineSpec.scala	file length	735
+test/scala/com/serenity/LayoutEngineSpec.scala	file length	728
 test/scala/com/serenity/LineWrappingSpec.scala	file length	747
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745
 test/scala/com/serenity/ModalEventReducerSpec.scala	file length	1131
@@ -43,8 +43,8 @@ test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	728
 test/scala/com/serenity/SessionStateSpec.scala	file length	1521
 test/scala/com/serenity/StateManagerElementTransitionSettingsSpec.scala	file length	816
 test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	1036
-test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1256
-test/scala/com/serenity/TextOverlayRendererSpec.scala	file length	803
+test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1255
+test/scala/com/serenity/TextOverlayRendererSpec.scala	file length	806
 test/scala/com/serenity/UiPresetSpec.scala	file length	699
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320

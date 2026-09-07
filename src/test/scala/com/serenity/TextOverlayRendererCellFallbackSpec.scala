@@ -4,7 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.ui.layout.{CellMetrics, LayoutRect}
+import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
