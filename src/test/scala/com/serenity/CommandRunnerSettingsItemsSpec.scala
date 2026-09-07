@@ -9,9 +9,9 @@ import org.scalatest.matchers.should.Matchers
 class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
 
   "CommandRunnerSettingsItems" should "build typed option rows independently of runner state" in {
-    val background = CommandRunnerSettingsItems.backgroundStyleOptionItem(Map("background-style" -> 3))
-    val cursor     = CommandRunnerSettingsItems.cursorModeOptionItem(Map("cursor-mode" -> 1))
-    val chrome     = CommandRunnerSettingsItems.windowChromeOptionItem(Map("window-chrome" -> 0))
+    val background = CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(Map("background-style" -> 3))
+    val cursor     = CommandRunnerSettingsCursorItems.cursorModeOptionItem(Map("cursor-mode" -> 1))
+    val chrome     = CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(Map("window-chrome" -> 0))
 
     background.label shouldBe "Background Style"
     background.selectedOption shouldBe "Glass"
@@ -22,7 +22,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     )
     background.options.map(_.label) shouldBe List("Solid", "Transparent", "Frosted", "Glass")
 
-    val postProcessing = CommandRunnerSettingsItems.postProcessingOptionItem(Map("post-processing" -> 2))
+    val postProcessing = CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(Map("post-processing" -> 2))
     postProcessing.label shouldBe "Post-processing"
     postProcessing.selectedOption shouldBe "Glow"
     postProcessing.selectedIntent shouldBe Some(
@@ -32,7 +32,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     )
     postProcessing.options.map(_.label) shouldBe List("Off", "Scanlines", "Glow", "Scanlines + Glow")
 
-    val shadows = CommandRunnerSettingsItems.uiShadowsOptionItem(Map("ui-shadows" -> 1))
+    val shadows = CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(Map("ui-shadows" -> 1))
     shadows.selectedOption shouldBe "On"
     shadows.selectedIntent shouldBe Some(
       CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(true)))
@@ -48,7 +48,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "build workspace panel controls with bounded selections" in {
-    val workspaceItems = CommandRunnerSettingsItems.workspaceLayoutItems(
+    val workspaceItems = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
       Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 99)
     )
 
@@ -81,14 +81,14 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "hide panel order controls unless multiple panels share an edge" in {
-    val noPanels = CommandRunnerSettingsItems.workspaceLayoutItems(Map.empty)
-    val separateEdges = CommandRunnerSettingsItems.workspaceLayoutItems(
+    val noPanels = CommandRunnerSettingsPanelItems.workspaceLayoutItems(Map.empty)
+    val separateEdges = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
       Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 3)
     )
-    val sameEdge = CommandRunnerSettingsItems.workspaceLayoutItems(
+    val sameEdge = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
       Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 2)
     )
-    val sameEdgeWithSeparatePanel = CommandRunnerSettingsItems.workspaceLayoutItems(
+    val sameEdgeWithSeparatePanel = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
       Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 2, "panel-explorer-pin" -> 3)
     )
 
@@ -140,17 +140,17 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     // issue #1057: Focus/Expand/Unpin/Collapse used to appear here as a "Panel Actions" settings group once two
     // edges had pinned panels -- that was a duplicate of ordinary CommandRegistry commands with no persisted value
     // of its own. It never appears now, regardless of what's pinned.
-    val noPanels = CommandRunnerSettingsItems.workspaceLayoutItems(Map.empty)
+    val noPanels = CommandRunnerSettingsPanelItems.workspaceLayoutItems(Map.empty)
     noPanels.map(_.id) should not contain "settings-panel-actions"
 
-    val leftAndRightPanels = CommandRunnerSettingsItems.workspaceLayoutItems(
+    val leftAndRightPanels = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
       Map("panel-outline-pin" -> 4, "panel-diagnostics-pin" -> 2)
     )
     leftAndRightPanels.map(_.id) should not contain "settings-panel-actions"
   }
 
   it should "build a command-runner key-hints option item toggling the persistent footer (issue #931, Stage 3)" in {
-    val onByDefault = CommandRunnerSettingsItems.commandRunnerKeyHintsOptionItem(Map.empty)
+    val onByDefault = CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(Map.empty)
     onByDefault.label shouldBe "Command Runner Key Hints"
     onByDefault.selectedOption shouldBe "On"
     onByDefault.selectedIntent shouldBe Some(
@@ -158,7 +158,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     )
 
     val explicitlyOff =
-      CommandRunnerSettingsItems.commandRunnerKeyHintsOptionItem(Map("command-runner-key-hints" -> 1))
+      CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(Map("command-runner-key-hints" -> 1))
     explicitlyOff.selectedOption shouldBe "Off"
     explicitlyOff.selectedIntent shouldBe Some(
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(false)))
@@ -166,7 +166,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose 5 cursor info bar include/exclude toggles (#1261)" in {
-    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(Map.empty)
+    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(Map.empty)
 
     items.collect { case o: CommandSurfaceItem.OptionItem => o.id } shouldBe List(
       "cursor-info-bar-title",
@@ -178,13 +178,13 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose no cursor info bar reorder commands when fewer than 2 segments are included" in {
-    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(Map("cursor-info-bar-position" -> 0))
+    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(Map("cursor-info-bar-position" -> 0))
 
     items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe Nil
   }
 
   it should "expose earlier/later reorder commands for each included cursor info bar segment once 2+ are included" in {
-    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(
+    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(
       Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0)
     )
 
@@ -203,7 +203,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   // real on-screen order -- so, as before, every included segment still offers both directions rather than risking a
   // wrongly-omitted one.
   it should "order reorder commands by segmentDefinitions and gate neither direction when no current order is given" in {
-    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(
+    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(
       Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0),
       currentOrder = Nil
     )
@@ -220,7 +220,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   // move the segment is offered -- Position (first) has no-op "earlier" suppressed, Title (last) has no-op "later"
   // suppressed.
   it should "order reorder commands by the current segment order and suppress no-op directions" in {
-    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(
+    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(
       Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0),
       currentOrder = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
     )
@@ -232,7 +232,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose no cursor info bar reorder commands when fewer than 2 segments are included, given a current order" in {
-    val items = CommandRunnerSettingsItems.cursorInfoBarSegmentItems(
+    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(
       Map("cursor-info-bar-position" -> 0),
       currentOrder = List(CursorInfoBarSegment.Position)
     )
