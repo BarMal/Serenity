@@ -344,12 +344,6 @@ final case class CommandRunner(
 
 object CommandRunner:
 
-  private[command] def defaultOptionSelections(config: AppConfig): Map[String, Int] =
-    CommandRunnerOptionSelections.default(config)
-
-  private[command] def buildInputItems(config: AppConfig): List[CommandSurfaceItem.InputItem] =
-    CommandRunnerSettingsInputItems.build(config)
-
   private[command] def commandBindings(config: AppConfig): Map[String, String] =
     Map(
       "save"         -> HotkeyAction.Save,

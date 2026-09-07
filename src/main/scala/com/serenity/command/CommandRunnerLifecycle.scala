@@ -26,8 +26,8 @@ private[command] trait CommandRunnerLifecycle:
     copy(
       isActive = true,
       surface = CommandRunnerSurface.Palette(CommandPaletteState(filteredCommands = registry.getAllCommands)),
-      optionSelections = CommandRunner.defaultOptionSelections(config),
-      inputItems = CommandRunner.buildInputItems(config),
+      optionSelections = CommandRunnerOptionSelections.default(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
       commandBindings = CommandRunner.commandBindings(config),
       isTuiMode = isTuiMode,
       keyboardFidelityTier = keyboardFidelityTier,
@@ -37,8 +37,8 @@ private[command] trait CommandRunnerLifecycle:
   /** Rebuild input items from a new config (called after a setting is applied) */
   def updateInputItems(config: AppConfig): CommandRunner =
     copy(
-      inputItems = CommandRunner.buildInputItems(config),
-      optionSelections = CommandRunner.defaultOptionSelections(config),
+      inputItems = CommandRunnerSettingsInputItems.build(config),
+      optionSelections = CommandRunnerOptionSelections.default(config),
       commandBindings = CommandRunner.commandBindings(config),
       cursorInfoBarSegments = config.cursorInfoBarSegments
     ).syncEditMode.normalizeSubmenuEditMode
