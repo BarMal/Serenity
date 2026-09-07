@@ -7,7 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -46,7 +46,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(80, 24)
     noException should be thrownBy
-      Renderer.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+      RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
 
     buffer.document.content.collect() should include("test_func")
     buffer.document.content.collect() should include("\t")

@@ -150,7 +150,7 @@ object RendererHighlights:
 
     Color(blendChannel(_.getRed), blendChannel(_.getGreen), blendChannel(_.getBlue))
 
-  private[renderer] def renderTextRangeBackground(
+  private def renderTextRangeBackground(
     surface: RenderSurface,
     visualLine: TextVisualLine,
     rect: LayoutRect,

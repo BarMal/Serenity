@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-/** Tests that demonstrate the actual rendering clipping issue. These tests show that Renderer.putString can extend
+/** Tests that demonstrate the actual rendering clipping issue. These tests show that RenderSurface.putString can extend
   * beyond panel boundaries.
   */
 class RendererClippingSpec extends AnyFlatSpec with Matchers:

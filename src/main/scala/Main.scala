@@ -13,7 +13,7 @@ import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.renderer.{PaintExecutionContext, Renderer}
+import com.serenity.ui.renderer.{PaintExecutionContext, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -247,7 +247,7 @@ object Main extends IOApp:
     bufferAnimations: Map[com.serenity.state.models.BufferId, com.serenity.animation.AnimationState]
   ): Unit =
     if cursorVisible then
-      val _ = Renderer.renderWithCursorOverlay(
+      val _ = RendererCursorOverlay.renderWithCursorOverlay(
         state,
         window,
         display.codeFont,
@@ -260,7 +260,7 @@ object Main extends IOApp:
       )
       ()
     else
-      Renderer.render(
+      RendererEntryPoints.render(
         state,
         cursorVisible = false,
         window,
@@ -284,7 +284,7 @@ object Main extends IOApp:
     damage: com.serenity.state.models.Damage,
     bufferAnimations: Map[com.serenity.state.models.BufferId, com.serenity.animation.AnimationState]
   ): Unit =
-    val rendered = Renderer.renderCursorOnly(
+    val rendered = RendererCursorOverlay.renderCursorOnly(
       state,
       cursorVisible,
       window,
@@ -296,7 +296,7 @@ object Main extends IOApp:
       bufferAnimations
     )
     if !rendered then
-      Renderer.render(
+      RendererEntryPoints.render(
         state,
         cursorVisible,
         window,

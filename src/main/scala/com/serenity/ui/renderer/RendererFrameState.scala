@@ -22,8 +22,8 @@ final case class FrameOutput(screenToken: ScreenIdentity, repaintRegion: AtomicR
 /** The render parameters that shape a frame but are not part of `AppState`, so `DamageProducer` -- which only diffs
   * `AppState` -- has no way to see them change: the window's pixel size, the three fonts, and the metrics/overrides a
   * caller derives from them. Tracked per persistence key so a mismatch against the last frame drawn with that key can
-  * force a full redraw the same blunt way `Renderer`'s retired `ChromeKey` did by including these fields directly in
-  * its own structural comparison.
+  * force a full redraw the same blunt way the retired `ChromeKey` did by including these fields directly in its own
+  * structural comparison.
   */
 final case class RenderInputs(
     viewportSize: ViewportSize,
@@ -112,10 +112,10 @@ final case class PreparedScene(
       uiMetrics == candidateUiMetrics &&
       viewportSize == candidateViewportSize
 
-/** Per-frame caches `Renderer` consults across the whole module: the prepared render plan a cursor-only redraw can
-  * reuse, the accumulated repaint damage a persisting surface hasn't drawn yet, and the previous frame's floating-panel
-  * rects/pane snapshots later frames diff against. Split out of `Renderer` itself so the mutable, synchronized
-  * bookkeeping lives in one place regardless of which render entry point or frame-planning step reads or updates it.
+/** Per-frame caches consulted across the whole module: the prepared render plan a cursor-only redraw can reuse, the
+  * accumulated repaint damage a persisting surface hasn't drawn yet, and the previous frame's floating-panel rects/pane
+  * snapshots later frames diff against. All the module's mutable, synchronized bookkeeping lives here, in one place,
+  * regardless of which render entry point or frame-planning step reads or updates it.
   */
 object RendererFrameState:
 
@@ -202,9 +202,10 @@ object RendererFrameState:
   /** Keyed by the [[RenderSurface]] a frame was painted onto, exactly like [[bufferScreen]] above and for the same
     * reason: a single JVM-wide slot would let one surface's cached modal image leak into another surface's frame --
     * harmless in production (there is only ever one real window) but a real hazard for any other concurrently running
-    * render session in the same process, tests included, since `Renderer` is a singleton every suite shares. A
-    * `WeakHashMap` (rather than the `AtomicReference` this used to be) lets a surface's entry disappear once nothing
-    * else references it, instead of pinning every `RenderSurface` a process ever rendered to for its whole lifetime.
+    * render session in the same process, tests included, since these caches are process-wide singletons every suite
+    * shares. A `WeakHashMap` (rather than the `AtomicReference` this used to be) lets a surface's entry disappear once
+    * nothing else references it, instead of pinning every `RenderSurface` a process ever rendered to for its whole
+    * lifetime.
     */
   val modalLayerBuffers = new java.util.WeakHashMap[RenderSurface, CachedModalLayer]()
 

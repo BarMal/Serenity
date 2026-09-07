@@ -16,14 +16,26 @@ final case class EditorPaneRenderPlan(
 ):
   def paneLayouts: Map[PaneId, EditorPaneLayout] = workspaceLayout.paneLayouts
 
+/** Per-pane geometry for this frame: which buffer line each visual row shows, to translate `Damage`'s buffer-line facts
+  * into row indices, and the pixel band each row owns, to know what a preserved row's pixels actually cover.
+  */
+final case class PaneFrameRecord(
+    bufferId: BufferId,
+    rowBufferLines: Vector[Int],
+    rowRects: Vector[PixelRect],
+    overflowingRows: Set[Int],
+    snapshot: TextLayoutSnapshot
+)
+
 final case class BufferRenderAnnotations(
     commentsByLine: Map[Int, List[DocumentComment]],
     diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]]
 )
 
-/** Builds the per-frame [[EditorPaneRenderPlan]] (buffer layout snapshots + visible annotations) and the buffer text
-  * layout snapshot each pane paints from. Split out of `Renderer` as the "what does each pane's content look like this
-  * frame" seam, upstream of the actual paint calls in [[RendererPaneContent]].
+/** Answers "what does each pane's content look like this frame": the per-frame [[EditorPaneRenderPlan]] (buffer layout
+  * snapshots + visible annotations), the buffer text layout snapshot each pane paints from, and the [[PaneFrameRecord]]
+  * geometry [[RendererFramePlanner]] plans row reuse against. Upstream of the actual paint calls in
+  * [[RendererPaneContent]].
   */
 object RendererPaneSetup:
 
@@ -201,7 +213,7 @@ object RendererPaneSetup:
     * Panes on any other path — the welcome text, the empty-pane filler, the inline markdown lens, which paint over the
     * whole content rect from inputs this record does not track — are left out, so they always redraw in full.
     */
-  private[renderer] def paneRecordsFor(
+  def paneRecordsFor(
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan

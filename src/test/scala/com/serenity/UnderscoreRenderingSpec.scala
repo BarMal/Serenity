@@ -4,7 +4,7 @@ import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -60,6 +60,6 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
     val surface = new MockRenderSurface(80, 24)
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
     // Verify rendering completes without exception
   }

@@ -285,7 +285,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
       val viewportSize = ViewportSize(mockScreen.cols, mockScreen.rows)
       val layout       = LayoutEngine.calculateLayout(state, viewportSize)
 
-      // Simulate the rendering logic from Renderer.scala
+      // Simulate the rendering logic from the renderer package
       state.persisted.layout.editorPanes.foreach { (paneId, pane) =>
         pane.bufferId.foreach { bufferId =>
           state.persisted.buffers
@@ -298,7 +298,7 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
       val viewport = pane.viewport
       val rope     = buffer.document.content
 
-      // Render visible lines - this simulates Renderer.renderBufferContent
+      // Render visible lines - this simulates RendererPaneContent.renderBufferContent
       for screenLine <- 0 until math.min(viewport.visibleLines, rect.height) do
         val bufferLine  = viewport.topLine + screenLine
         val lineContent = if bufferLine < rope.lineCount then rope.getLine(bufferLine).getOrElse("") else ""

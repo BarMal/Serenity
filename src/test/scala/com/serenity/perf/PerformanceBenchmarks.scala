@@ -35,7 +35,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, ModalEventReducer}
 import com.serenity.ui.layout.{CellMetrics, Layout, TextLayoutSnapshot}
-import com.serenity.ui.renderer.{CharacterRenderer, Java2DRenderSurface, Renderer}
+import com.serenity.ui.renderer.{CharacterRenderer, Java2DRenderSurface, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.Theme
 import io.circe.Json
@@ -653,7 +653,16 @@ object PerformanceBenchmarks:
       deviceScaleX = deviceScale,
       deviceScaleY = deviceScale
     )
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, textFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      textFont,
+      cellMetrics,
+      None
+    )
     reusableFramePools(deviceScale).publish(image)
     image
 
@@ -686,7 +695,7 @@ object PerformanceBenchmarks:
     image
 
   private def prepareCursorBaseFrame(state: AppState, window: SwingWindow): Unit =
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = false,
       window,
@@ -699,7 +708,16 @@ object PerformanceBenchmarks:
     )
 
   private def renderedCursorOverlay(state: AppState, window: SwingWindow): Boolean =
-    Renderer.renderCursorOnly(state, cursorVisible = true, window, monoFont, textFont, uiFont, uiMetrics, None)
+    RendererCursorOverlay.renderCursorOnly(
+      state,
+      cursorVisible = true,
+      window,
+      monoFont,
+      textFont,
+      uiFont,
+      uiMetrics,
+      None
+    )
 
   private def reducedTopLine(result: com.serenity.state.reducers.ReducerResult): Option[Int] =
     result.state.persisted.buffers.get(BufferId(1)).map(_.viewport.topLine)
