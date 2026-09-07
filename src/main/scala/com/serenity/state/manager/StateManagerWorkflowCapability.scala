@@ -47,7 +47,10 @@ final private[manager] class StateManagerWorkflowCapability(
     fileManager,
     validateAndUpdateState,
     updateFileWorkflowSurface,
-    fileWorkflowSurface
+    fileWorkflowSurface,
+    activeEditorBufferId,
+    saveBufferAsEffect,
+    continueCloseAfterFormSaveAs
   )
 
   private val replaceWorkflow =
@@ -203,7 +206,7 @@ final private[manager] class StateManagerWorkflowCapability(
     fileWorkflow.refreshFileWorkflowEffect(surfaceId)
 
   private[manager] def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-    fileWorkflow.submitFileWorkflowEffect(surfaceId)(completeSaveAsWorkflow)
+    fileWorkflow.submitFileWorkflowEffect(surfaceId)
 
   private[manager] def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     replaceWorkflow.submitReplaceWorkflowEffect(surfaceId)
@@ -213,50 +216,23 @@ final private[manager] class StateManagerWorkflowCapability(
     * confirmed double-submit path -- immediately, without a second submit (issue #1253).
     */
   private[manager] def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
-    fileWorkflow.createFileWorkflowDirectoriesEffect(surfaceId)(completeSaveAsWorkflow)
+    fileWorkflow.createFileWorkflowDirectoriesEffect(surfaceId)
 
-  protected def completeSaveAsWorkflow(
-    surfaceId: SurfaceId,
-    workflow: SaveAsFileWorkflowState,
-    state: AppState
-  ): IO[Unit] =
-    activeEditorBufferId(state) match
-      case Some(bufferId) =>
-        fileWorkflow.remoteWorkflowTarget(workflow) match
-          case Some(remoteTarget) =>
-            updateFileWorkflowSurface(
-              surfaceId,
-              workflow.updated(statusMessage = Some(fileWorkflow.remoteStorageMessage(remoteTarget)))
-            )
-          case None if workflow.missingPathSegments.nonEmpty && !workflow.confirmCreateDirectories =>
-            updateFileWorkflowSurface(surfaceId, workflow.updated(confirmCreateDirectories = true))
-          case None =>
-            fileWorkflow.workflowTargetPath(workflow).flatMap { targetPath =>
-              saveBufferAsEffect(bufferId, targetPath)
-                .flatMap { _ =>
-                  stateRef.get.flatMap { savedState =>
-                    savedState.runtime.actionStack.collectFirst {
-                      case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow
-                    } match
-                      case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
-                        val dismissedState = dismissModalSurface(savedState)
-                        val nextState =
-                          if closeWorkflow.scope == CloseScope.Quit then dismissedState
-                          else closeBufferUsingExistingFlow(dismissedState, bufferId)
-                        stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
-                      case _ =>
-                        dismissSurfaceAndFocusEditor(surfaceId)
-                  }
-                }
-                .handleErrorWith { error =>
-                  updateFileWorkflowSurface(
-                    surfaceId,
-                    workflow.updated(statusMessage = Some(fileWorkflow.saveFailureMessage(error)))
-                  )
-                }
-            }
-      case None =>
-        logger.debug("[FILE-WORKFLOW] No focused buffer available for save-as")
+  /** What follows a successful in-app Save-As: resume the close workflow this save was the "Save before close" step of,
+    * or -- when no close workflow is waiting on this buffer -- just dismiss the dialog.
+    */
+  private def continueCloseAfterFormSaveAs(surfaceId: SurfaceId, bufferId: BufferId): IO[Unit] =
+    stateRef.get.flatMap { savedState =>
+      savedState.runtime.actionStack.collectFirst { case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow } match
+        case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
+          val dismissedState = dismissModalSurface(savedState)
+          val nextState =
+            if closeWorkflow.scope == CloseScope.Quit then dismissedState
+            else closeBufferUsingExistingFlow(dismissedState, bufferId)
+          stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
+        case _ =>
+          dismissSurfaceAndFocusEditor(surfaceId)
+    }
 
   private[manager] def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
     bufferIdOverride.orElse(state.focusedBufferId) match

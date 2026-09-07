@@ -10,9 +10,12 @@ import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.ui.layout.LayoutEngine
 import org.typelevel.log4cats.Logger
 
-/** Open/Save-As file workflow mechanics: opening the dialog, suggesting paths, and completing an Open. Save-As
-  * completion stays with [[StateManagerWorkflowCapability]] because it must coordinate with an in-flight close workflow
-  * (Save before close).
+/** Open/Save-As file workflow mechanics: opening the dialog, suggesting paths, and completing both an Open and a
+  * Save-As.
+  *
+  * A Save-As can be the "Save before close" step of an in-flight close workflow, which this class deliberately knows
+  * nothing about: `afterSaveAsCompleted` is the one-way hand-off its owner supplies to decide what follows a successful
+  * save (resume the close workflow, or simply dismiss the dialog).
   */
 final private[manager] class StateManagerFileWorkflow(
     stateRef: Ref[IO, AppState],
@@ -20,7 +23,10 @@ final private[manager] class StateManagerFileWorkflow(
     fileManager: FileManager,
     validateAndUpdateState: (AppState, AppState) => IO[Unit],
     updateFileWorkflowSurface: (SurfaceId, FileWorkflowState) => IO[Unit],
-    fileWorkflowSurface: (AppState, SurfaceId) => Option[(UiSurface, FileWorkflowState)]
+    fileWorkflowSurface: (AppState, SurfaceId) => Option[(UiSurface, FileWorkflowState)],
+    activeEditorBufferId: AppState => Option[BufferId],
+    saveBufferAs: (BufferId, Path) => IO[Unit],
+    afterSaveAsCompleted: (SurfaceId, BufferId) => IO[Unit]
 ):
 
   private def trackRecentFile(current: List[Path], path: Path): List[Path] =
@@ -84,9 +90,7 @@ final private[manager] class StateManagerFileWorkflow(
           IO.unit
     }
 
-  private[manager] def submitFileWorkflowEffect(surfaceId: SurfaceId)(
-    completeSaveAsWorkflow: (SurfaceId, SaveAsFileWorkflowState, AppState) => IO[Unit]
-  ): IO[Unit] =
+  private[manager] def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       fileWorkflowSurface(state, surfaceId) match
         case Some((_, workflow)) =>
@@ -171,7 +175,7 @@ final private[manager] class StateManagerFileWorkflow(
     if workflow.filename.trim.nonEmpty then FileUtils.resolvePath(workflow.path)
     else FileUtils.resolvePath(workflow.path).map(path => Option(path.getParent).getOrElse(path))
 
-  private[manager] def workflowTargetPath(workflow: FileWorkflowState): IO[Path] =
+  protected def workflowTargetPath(workflow: FileWorkflowState): IO[Path] =
     if workflow.filename.trim.nonEmpty then
       FileUtils.resolvePath(workflow.path).map(_.resolve(workflow.filename.trim).normalize())
     else FileUtils.resolvePath(workflow.path)
@@ -264,9 +268,7 @@ final private[manager] class StateManagerFileWorkflow(
     * confirm): creates the missing directories -- as a side effect of performing the save itself, exactly like the
     * confirmed double-submit path -- immediately, without a second submit (issue #1253).
     */
-  private[manager] def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId)(
-    completeSaveAsWorkflow: (SurfaceId, SaveAsFileWorkflowState, AppState) => IO[Unit]
-  ): IO[Unit] =
+  private[manager] def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       fileWorkflowSurface(state, surfaceId) match
         case Some((_, saveAsWorkflow: SaveAsFileWorkflowState)) if saveAsWorkflow.missingPathSegments.nonEmpty =>
@@ -277,10 +279,39 @@ final private[manager] class StateManagerFileWorkflow(
           IO.unit
     }
 
-  private[manager] def saveFailureMessage(error: Throwable): String =
+  protected def completeSaveAsWorkflow(
+    surfaceId: SurfaceId,
+    workflow: SaveAsFileWorkflowState,
+    state: AppState
+  ): IO[Unit] =
+    activeEditorBufferId(state) match
+      case Some(bufferId) =>
+        remoteWorkflowTarget(workflow) match
+          case Some(remoteTarget) =>
+            updateFileWorkflowSurface(
+              surfaceId,
+              workflow.updated(statusMessage = Some(remoteStorageMessage(remoteTarget)))
+            )
+          case None if workflow.missingPathSegments.nonEmpty && !workflow.confirmCreateDirectories =>
+            updateFileWorkflowSurface(surfaceId, workflow.updated(confirmCreateDirectories = true))
+          case None =>
+            workflowTargetPath(workflow).flatMap { targetPath =>
+              saveBufferAs(bufferId, targetPath)
+                .flatMap(_ => afterSaveAsCompleted(surfaceId, bufferId))
+                .handleErrorWith { error =>
+                  updateFileWorkflowSurface(
+                    surfaceId,
+                    workflow.updated(statusMessage = Some(saveFailureMessage(error)))
+                  )
+                }
+            }
+      case None =>
+        logger.debug("[FILE-WORKFLOW] No focused buffer available for save-as")
+
+  private def saveFailureMessage(error: Throwable): String =
     s"Could not save: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}"
 
-  private[manager] def remoteWorkflowTarget(workflow: FileWorkflowState): Option[String] =
+  private def remoteWorkflowTarget(workflow: FileWorkflowState): Option[String] =
     val filenameInput = workflow.filename.trim
     val pathInput     = workflow.path.trim
     if isRemoteStorageInput(filenameInput) then Some(filenameInput)
@@ -298,5 +329,5 @@ final private[manager] class StateManagerFileWorkflow(
     if remoteBase.endsWith("/") then s"$remoteBase$filename"
     else s"$remoteBase/$filename"
 
-  private[manager] def remoteStorageMessage(remoteTarget: String): String =
+  private def remoteStorageMessage(remoteTarget: String): String =
     s"Remote storage is not supported yet: $remoteTarget"
