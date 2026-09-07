@@ -1,12 +1,13 @@
 package com.serenity.command
 
+import com.serenity.animation.WindowSitterConfig
 import com.serenity.config.*
 
 /** Builds the flat list of command-runner settings input items from the current config.
   *
-  * `build` delegates each settings category to a sibling `CommandRunnerSettings*Items` object in this package --
-  * split out to keep every file under the architecture size targets. The small text-parsing helpers below stay
-  * here, `private[command]`, since they are shared across those siblings.
+  * `build` delegates each settings category to a sibling `CommandRunnerSettings*Items` object in this package -- split
+  * out to keep every file under the architecture size targets. The small text-parsing helpers below stay here,
+  * `private[command]`, since they are shared across those siblings.
   */
 object CommandRunnerSettingsInputItems:
 
@@ -20,39 +21,72 @@ object CommandRunnerSettingsInputItems:
       CommandIntent.RichText(RichTextIntent.SetRichTextColor(commandIntentArg))
     )
 
-  def build(config: AppConfig): List[CommandSurfaceItem.InputItem] =
+  /** The config-derived display strings and sub-configs every settings-category builder below needs. Split out of
+    * `build` to keep both under the architecture size targets.
+    */
+  final private case class DerivedValues(
+      inputConfig: InputConfig,
+      durationValue: String,
+      stepsValue: String,
+      blurValue: String,
+      codeFontSizeValue: String,
+      textFontSizeValue: String,
+      uiFontSizeValue: String,
+      textScaleValue: String,
+      textAreaLeftValue: String,
+      textAreaRightValue: String,
+      textAreaTopValue: String,
+      textAreaBottomValue: String,
+      editorTextSpeedScaleValue: String,
+      commandRunnerSpeedScaleValue: String,
+      uiSpeedScaleValue: String,
+      cursorSpeedScaleValue: String,
+      speedScaleValue: String,
+      elementGapValue: String,
+      cornerRadiusValue: String,
+      outlineThicknessValue: String,
+      commandRowsValue: String,
+      commandItemGapRowsValue: String,
+      commandCursorGapRowsValue: String,
+      spellCheck: SpellCheckConfig,
+      sitterConfig: WindowSitterConfig
+  )
+
+  private def derivedValues(config: AppConfig): DerivedValues =
     val editorConfig        = config.editorConfig
-    val inputConfig         = config.inputConfig
     val surfaceConfig       = config.surfaceConfig
     val interfaceConfig     = config.interfaceConfig
     val languageToolsConfig = config.languageToolsConfig
+    DerivedValues(
+      inputConfig = config.inputConfig,
+      durationValue = editorConfig.characterAnimation.map(_.durationMs.toString).getOrElse("0"),
+      stepsValue = editorConfig.characterAnimation.map(_.steps.toString).getOrElse("0"),
+      blurValue = surfaceConfig.blurRadius.toString,
+      codeFontSizeValue = editorConfig.fontConfig.codeFontSize.toString,
+      textFontSizeValue = editorConfig.fontConfig.textFontSize.toString,
+      uiFontSizeValue = editorConfig.fontConfig.uiFontSize.toString,
+      textScaleValue = f"${editorConfig.fontConfig.textScaleMultiplier}%.2f",
+      textAreaLeftValue = f"${surfaceConfig.textAreaInsets.leftPercent}%.1f",
+      textAreaRightValue = f"${surfaceConfig.textAreaInsets.rightPercent}%.1f",
+      textAreaTopValue = f"${surfaceConfig.textAreaInsets.topPercent}%.1f",
+      textAreaBottomValue = f"${surfaceConfig.textAreaInsets.bottomPercent}%.1f",
+      editorTextSpeedScaleValue = f"${config.effectiveEditorTextTransitionSpeedScale}%.2f",
+      commandRunnerSpeedScaleValue = f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f",
+      uiSpeedScaleValue = f"${config.effectiveUiTransitionSpeedScale}%.2f",
+      cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f",
+      speedScaleValue = f"${surfaceConfig.elementTransitionSpeedScale}%.2f",
+      elementGapValue = formatDecimal(interfaceConfig.elementGap),
+      cornerRadiusValue = interfaceConfig.cornerRadiusPx.toString,
+      outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString,
+      commandRowsValue = surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto"),
+      commandItemGapRowsValue = formatDecimal(surfaceConfig.commandRunnerItemGapRows),
+      commandCursorGapRowsValue = surfaceConfig.commandRunnerCursorGapRows.map(formatDecimal).getOrElse("auto"),
+      spellCheck = languageToolsConfig.spellCheck.normalized,
+      sitterConfig = config.windowSitterConfig
+    )
 
-    val durationValue       = editorConfig.characterAnimation.map(_.durationMs.toString).getOrElse("0")
-    val stepsValue          = editorConfig.characterAnimation.map(_.steps.toString).getOrElse("0")
-    val blurValue           = surfaceConfig.blurRadius.toString
-    val codeFontSizeValue   = editorConfig.fontConfig.codeFontSize.toString
-    val textFontSizeValue   = editorConfig.fontConfig.textFontSize.toString
-    val uiFontSizeValue     = editorConfig.fontConfig.uiFontSize.toString
-    val textScaleValue      = f"${editorConfig.fontConfig.textScaleMultiplier}%.2f"
-    val textAreaLeftValue   = f"${surfaceConfig.textAreaInsets.leftPercent}%.1f"
-    val textAreaRightValue  = f"${surfaceConfig.textAreaInsets.rightPercent}%.1f"
-    val textAreaTopValue    = f"${surfaceConfig.textAreaInsets.topPercent}%.1f"
-    val textAreaBottomValue = f"${surfaceConfig.textAreaInsets.bottomPercent}%.1f"
-    val speedScaleValue     = f"${surfaceConfig.elementTransitionSpeedScale}%.2f"
-    val editorTextSpeedScaleValue =
-      f"${config.effectiveEditorTextTransitionSpeedScale}%.2f"
-    val commandRunnerSpeedScaleValue =
-      f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f"
-    val uiSpeedScaleValue         = f"${config.effectiveUiTransitionSpeedScale}%.2f"
-    val cursorSpeedScaleValue     = f"${config.effectiveCursorTransitionSpeedScale}%.2f"
-    val elementGapValue           = formatDecimal(interfaceConfig.elementGap)
-    val cornerRadiusValue         = interfaceConfig.cornerRadiusPx.toString
-    val outlineThicknessValue     = interfaceConfig.outlineThicknessPx.toString
-    val commandRowsValue          = surfaceConfig.commandRunnerVisibleRows.map(_.toString).getOrElse("auto")
-    val commandItemGapRowsValue   = formatDecimal(surfaceConfig.commandRunnerItemGapRows)
-    val commandCursorGapRowsValue = surfaceConfig.commandRunnerCursorGapRows.map(formatDecimal).getOrElse("auto")
-    val spellCheck                = languageToolsConfig.spellCheck.normalized
-    val sitterConfig              = config.windowSitterConfig
+  def build(config: AppConfig): List[CommandSurfaceItem.InputItem] =
+    val v = derivedValues(config)
 
     val commentItems = List(
       CommandSurfaceItem.InputItem(
@@ -75,45 +109,45 @@ object CommandRunnerSettingsInputItems:
       CommandRunnerSettingsInputItemsPresets.presetManageItems ++
       CommandRunnerSettingsInputItemsRichText.richTextItems ++
       CommandRunnerSettingsInputItemsTextAreaAndSpellCheck.textAreaItems(
-        textAreaLeftValue,
-        textAreaRightValue,
-        textAreaTopValue,
-        textAreaBottomValue
+        v.textAreaLeftValue,
+        v.textAreaRightValue,
+        v.textAreaTopValue,
+        v.textAreaBottomValue
       ) ++
-      CommandRunnerSettingsInputItemsTextAreaAndSpellCheck.spellCheckItems(spellCheck) ++
+      CommandRunnerSettingsInputItemsTextAreaAndSpellCheck.spellCheckItems(v.spellCheck) ++
       CommandRunnerSettingsInputItemsMotion.animationTimingItems(
-        durationValue,
-        stepsValue,
-        speedScaleValue,
-        editorTextSpeedScaleValue
+        v.durationValue,
+        v.stepsValue,
+        v.speedScaleValue,
+        v.editorTextSpeedScaleValue
       ) ++
       CommandRunnerSettingsInputItemsMotion.speedScaleItems(
-        commandRunnerSpeedScaleValue,
-        uiSpeedScaleValue,
-        cursorSpeedScaleValue,
-        blurValue
+        v.commandRunnerSpeedScaleValue,
+        v.uiSpeedScaleValue,
+        v.cursorSpeedScaleValue,
+        v.blurValue
       ) ++
       CommandRunnerSettingsInputItemsUiLayout.uiSpacingItems(
-        elementGapValue,
-        cornerRadiusValue,
-        outlineThicknessValue
+        v.elementGapValue,
+        v.cornerRadiusValue,
+        v.outlineThicknessValue
       ) ++
       CommandRunnerSettingsInputItemsUiLayout.commandRunnerLayoutItems(
-        commandRowsValue,
-        commandItemGapRowsValue,
-        commandCursorGapRowsValue
+        v.commandRowsValue,
+        v.commandItemGapRowsValue,
+        v.commandCursorGapRowsValue
       ) ++
       CommandRunnerSettingsInputItemsWindowSitterAndFont.windowSitterAndInputItems(
-        sitterConfig,
-        inputConfig.wheelScrollLines
+        v.sitterConfig,
+        v.inputConfig.wheelScrollLines
       ) ++
       CommandRunnerSettingsInputItemsWindowSitterAndFont.fontSizeItems(
-        codeFontSizeValue,
-        textFontSizeValue,
-        uiFontSizeValue,
-        textScaleValue
+        v.codeFontSizeValue,
+        v.textFontSizeValue,
+        v.uiFontSizeValue,
+        v.textScaleValue
       ) ++
-      CommandRunnerSettingsKeymapItems.buildKeymapInputItems(inputConfig)
+      CommandRunnerSettingsKeymapItems.buildKeymapInputItems(v.inputConfig)
 
   private[command] def nonEmptyText(text: String): Option[String] =
     Option(text.trim).filter(_.nonEmpty)

@@ -1,8 +1,8 @@
 package com.serenity.command
 
-/** `CommandRunner` methods for ranking and matching settings against a search term -- turning a query into the
-  * settings groups/leaves it matches, and resolving the current UI-preset editing context. Split out of
-  * `CommandRunner` to keep both under the architecture size targets -- see that class's doc.
+/** `CommandRunner` methods for ranking and matching settings against a search term -- turning a query into the settings
+  * groups/leaves it matches, and resolving the current UI-preset editing context. Split out of `CommandRunner` to keep
+  * both under the architecture size targets -- see that class's doc.
   */
 private[command] trait CommandRunnerSettingsSearch:
   self: CommandRunner =>
@@ -35,7 +35,7 @@ private[command] trait CommandRunnerSettingsSearch:
             val groupMatch = CommandRunnerSearch.directGroupSearchText(group).contains(lowerTerm)
             val childMatch = group.children.exists {
               case _: CommandSurfaceItem.GroupItem => false
-              case child                           => CommandRunnerSearch.directItemSearchText(child).contains(lowerTerm)
+              case child => CommandRunnerSearch.directItemSearchText(child).contains(lowerTerm)
             }
             Option.when(groupMatch || childMatch)(group -> (settingsSearchRank(group, lowerTerm, groupMatch), index))
         }

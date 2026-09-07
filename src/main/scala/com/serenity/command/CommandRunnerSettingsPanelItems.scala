@@ -1,10 +1,9 @@
 package com.serenity.command
 
-import com.serenity.config.*
 import com.serenity.ui.layout.PanelPosition
 
-/** Pinned-panel placement and reordering settings items. Split out of `CommandRunnerSettingsItems` to keep both
-  * under the architecture size targets -- see that object's doc.
+/** Pinned-panel placement and reordering settings items. Split out of `CommandRunnerSettingsItems` to keep both under
+  * the architecture size targets -- see that object's doc.
   */
 private[command] object CommandRunnerSettingsPanelItems:
 

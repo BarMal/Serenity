@@ -5,8 +5,8 @@ import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.ui.presets.UiPreset
 
 /** `CommandRunner` methods for the overlay's lifecycle -- activating and deactivating it, rebuilding its config-
-  * derived state, and the palette's visible-window computation. Split out of `CommandRunner` to keep both under
-  * the architecture size targets -- see that class's doc.
+  * derived state, and the palette's visible-window computation. Split out of `CommandRunner` to keep both under the
+  * architecture size targets -- see that class's doc.
   */
 private[command] trait CommandRunnerLifecycle:
   self: CommandRunner =>

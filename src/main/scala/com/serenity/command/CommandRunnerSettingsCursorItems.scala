@@ -2,8 +2,8 @@ package com.serenity.command
 
 import com.serenity.config.*
 
-/** Cursor style and cursor-info-bar settings items. Split out of `CommandRunnerSettingsItems` to keep both under
-  * the architecture size targets -- see that object's doc.
+/** Cursor style and cursor-info-bar settings items. Split out of `CommandRunnerSettingsItems` to keep both under the
+  * architecture size targets -- see that object's doc.
   */
 private[command] object CommandRunnerSettingsCursorItems:
 

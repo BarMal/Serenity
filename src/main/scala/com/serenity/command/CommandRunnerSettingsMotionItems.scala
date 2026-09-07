@@ -3,8 +3,8 @@ package com.serenity.command
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 
-/** Motion, animation, and render-cadence settings items. Split out of `CommandRunnerSettingsItems` to keep both
-  * under the architecture size targets -- see that object's doc.
+/** Motion, animation, and render-cadence settings items. Split out of `CommandRunnerSettingsItems` to keep both under
+  * the architecture size targets -- see that object's doc.
   */
 private[command] object CommandRunnerSettingsMotionItems:
 

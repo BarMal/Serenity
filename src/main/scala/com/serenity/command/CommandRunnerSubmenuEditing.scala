@@ -3,8 +3,8 @@ package com.serenity.command
 import com.serenity.keystroke.KeyStrokeInfo
 
 /** `CommandRunner` methods for editing a settings submenu item in place -- moving the submenu selection,
-  * beginning/ending a text edit or keybinding recording, and adjusting an option in place. Split out of
-  * `CommandRunner` to keep both under the architecture size targets -- see that class's doc.
+  * beginning/ending a text edit or keybinding recording, and adjusting an option in place. Split out of `CommandRunner`
+  * to keep both under the architecture size targets -- see that class's doc.
   */
 private[command] trait CommandRunnerSubmenuEditing:
   self: CommandRunner =>

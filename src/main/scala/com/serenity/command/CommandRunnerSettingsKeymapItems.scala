@@ -3,8 +3,7 @@ package com.serenity.command
 import com.serenity.config.*
 
 /** Keybinding input items for every focused keymap and global hotkey. Split out of
-  * `CommandRunnerSettingsInputItems.build` to keep both under the architecture size targets -- see that
-  * object's doc.
+  * `CommandRunnerSettingsInputItems.build` to keep both under the architecture size targets -- see that object's doc.
   */
 private[command] object CommandRunnerSettingsKeymapItems:
 
@@ -72,9 +71,6 @@ private[command] object CommandRunnerSettingsKeymapItems:
       "keymap-peek-accept"
     )
     primaryIds.flatMap(id => items.find(_.id == id)) ++ items.filterNot(item => primaryIds.contains(item.id))
-
-  private def formatDecimal(value: Double): String =
-    if value.isWhole then value.toLong.toString else value.toString
 
   private def keymapLabel(configKey: String): String =
     configKey.split("_").toList.map(_.capitalize).mkString(" ")

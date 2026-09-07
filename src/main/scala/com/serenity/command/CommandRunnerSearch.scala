@@ -2,8 +2,8 @@ package com.serenity.command
 
 import java.util.Locale
 
-/** Search-matching and ranking helpers for the palette and settings search. Split out of `CommandRunner`'s
-  * companion object to keep both under the architecture size targets -- see `CommandRunner`'s doc.
+/** Search-matching and ranking helpers for the palette and settings search. Split out of `CommandRunner`'s companion
+  * object to keep both under the architecture size targets -- see `CommandRunner`'s doc.
   */
 private[command] object CommandRunnerSearch:
 

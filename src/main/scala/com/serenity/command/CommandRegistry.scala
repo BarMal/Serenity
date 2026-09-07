@@ -152,9 +152,9 @@ object CommandRegistry:
 
   /** Default set of editor commands.
     *
-    * Split by domain across `CommandRegistry*Commands` objects in this package to keep both this method and each
-    * split file under the architecture size targets -- the concatenation order below is the exact order the commands
-    * appeared in before the split, so behavior (search ranking, palette default ordering) is unaffected.
+    * Split by domain across `CommandRegistry*Commands` objects in this package to keep both this method and each split
+    * file under the architecture size targets -- the concatenation order below is the exact order the commands appeared
+    * in before the split, so behavior (search ranking, palette default ordering) is unaffected.
     */
   private def defaultCommands: List[Command] =
     CommandRegistryFileCommands.fileCommands ++

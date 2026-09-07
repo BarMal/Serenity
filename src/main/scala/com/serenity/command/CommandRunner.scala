@@ -1,9 +1,7 @@
 package com.serenity.command
 
-import java.util.Locale
-
 import com.serenity.config.*
-import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
@@ -38,7 +36,9 @@ final case class CommandRunner(
     // The cursor info bar segments' actual current order, refreshed alongside `optionSelections` in `activate`/
     // `updateInputItems` -- threaded into `settingsGroups` so its reorder commands reflect it (issue #1298).
     cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil
-) extends CommandRunnerSubmenuEditing with CommandRunnerLifecycle with CommandRunnerSettingsSearch:
+) extends CommandRunnerSubmenuEditing
+    with CommandRunnerLifecycle
+    with CommandRunnerSettingsSearch:
 
   def isSettingsSurface: Boolean = surface match
     case _: CommandRunnerSurface.Settings => true
@@ -90,11 +90,16 @@ final case class CommandRunner(
           val (strongCommandMatches, remainingCommandMatches) =
             commandItems.partition(item => CommandRunnerSearch.isStrongCommandMatch(item.command, state.searchTerm))
           val (exactCommandMatches, remainingStrongCommandMatches) =
-            strongCommandMatches.partition(item => CommandRunnerSearch.isExactCommandMatch(item.command, state.searchTerm))
+            strongCommandMatches.partition(item =>
+              CommandRunnerSearch.isExactCommandMatch(item.command, state.searchTerm)
+            )
           val settingsMatches = matchingSettingsResults(state.searchTerm)
           val (exactSettingsMatches, remainingSettingsMatches) =
             settingsMatches.partition(item =>
-              CommandRunnerSearch.isExactSettingsTarget(item, CommandRunnerSearch.normalizedSearchTerm(state.searchTerm))
+              CommandRunnerSearch.isExactSettingsTarget(
+                item,
+                CommandRunnerSearch.normalizedSearchTerm(state.searchTerm)
+              )
             )
           exactCommandMatches ++ exactSettingsMatches ++ remainingStrongCommandMatches ++ remainingSettingsMatches ++
             remainingCommandMatches
@@ -288,7 +293,10 @@ final case class CommandRunner(
   /** A page's item list, filtered by its `searchTerm` extension so it filters identically whether the page is `Group`
     * or `Editing`.
     */
-  private[command] def filteredPageItems(page: SettingsPage, items: List[CommandSurfaceItem]): List[CommandSurfaceItem] =
+  private[command] def filteredPageItems(
+    page: SettingsPage,
+    items: List[CommandSurfaceItem]
+  ): List[CommandSurfaceItem] =
     val lowerTerm = page.searchTerm.trim.toLowerCase
     if lowerTerm.isEmpty then items
     else items.filter(_.searchText.toLowerCase.contains(lowerTerm))
