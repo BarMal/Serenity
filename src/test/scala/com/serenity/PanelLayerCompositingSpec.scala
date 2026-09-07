@@ -7,7 +7,7 @@ import com.serenity.config.MaterialPreset
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{LayerBufferSupport, RenderSurface, Renderer}
+import com.serenity.ui.renderer.{LayerBufferSupport, RenderSurface, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -16,9 +16,10 @@ import org.scalatest.matchers.should.Matchers
   *
   * Unlike the modal, a panel's paint step samples the pixels behind it (`SurfaceMaterials.effectiveBlurRadius`'s
   * `blurRegion` call), so its cache is safe to reuse only when either blur is off (the modal's own narrower per-surface
-  * rule applies unchanged) or the whole frame's damage is `Damage.Nothing` (see `Renderer.panelDirtyCheck`). The
-  * `AppConfig.default` material preset (`Frosted`) has blur active, so most of these fixtures disable it explicitly to
-  * exercise the narrower per-surface reuse rule the same way [[ModalLayerCompositingSpec]] does for the modal.
+  * rule applies unchanged) or the whole frame's damage is `Damage.Nothing` (see
+  * `RendererFramePlanner.panelDirtyCheck`). The `AppConfig.default` material preset (`Frosted`) has blur active, so
+  * most of these fixtures disable it explicitly to exercise the narrower per-surface reuse rule the same way
+  * [[ModalLayerCompositingSpec]] does for the modal.
   */
 class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
@@ -83,15 +84,22 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "Renderer.render" should "not repaint a pinned panel's own buffer when only editor content changed and blur is off" in {
+  "RendererEntryPoints.render" should "not repaint a pinned panel's own buffer when only editor content changed and blur is off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = true)
 
-    Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val after = editContent(before)
-    Renderer.render(after, cursorVisible = false, surface, viewport, None, DamageProducer.forTransition(before, after))
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      DamageProducer.forTransition(before, after)
+    )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
   }
@@ -100,7 +108,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = true)
 
-    Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val changed          = pinnedPanel.copy(dismissOnMove = true)
@@ -108,7 +116,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage shouldBe Damage.Surface(pinnedId)
 
-    Renderer.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 2
   }
@@ -117,14 +125,14 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = false)
 
-    Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val after            = editContent(before)
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage should not be Damage.Nothing
 
-    Renderer.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
 
     // Blur samples the live frame, so an unrelated content change still forces this panel to repaint.
     surface.newSeededLayerSurfaceCalls.get() shouldBe 2
@@ -134,11 +142,18 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val state   = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = false)
 
-    Renderer.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything)
     val firstDrawImageCalls = surface.drawImageCalls.size
     firstDrawImageCalls should be > 0
 
-    Renderer.render(state, cursorVisible = false, surface, viewport, None, DamageProducer.forTransition(state, state))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      DamageProducer.forTransition(state, state)
+    )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
     surface.drawImageCalls.size shouldBe firstDrawImageCalls + 1
@@ -154,11 +169,18 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     )
     val before = stateWith("alpha\nbeta\ngamma", List(expanded), blurOff = true)
 
-    Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val after = editContent(before)
-    Renderer.render(after, cursorVisible = false, surface, viewport, None, DamageProducer.forTransition(before, after))
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      DamageProducer.forTransition(before, after)
+    )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
   }
@@ -172,17 +194,24 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surfaceA = new CountingLayerBufferSurface(120, 40)
     val before   = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = true)
 
-    Renderer.render(before, cursorVisible = false, surfaceA, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surfaceA, viewport, None, Damage.Everything)
     surfaceA.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     // Stand in for a concurrently running render path -- another suite, another window -- painting a panel with the
     // *same* SurfaceId but a different frame shape.
     val surfaceB     = new CountingLayerBufferSurface(200, 60)
     val wideViewport = ViewportSize(200, 60)
-    Renderer.render(before, cursorVisible = false, surfaceB, wideViewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surfaceB, wideViewport, None, Damage.Everything)
 
     val after = editContent(before)
-    Renderer.render(after, cursorVisible = false, surfaceA, viewport, None, DamageProducer.forTransition(before, after))
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surfaceA,
+      viewport,
+      None,
+      DamageProducer.forTransition(before, after)
+    )
 
     surfaceA.newSeededLayerSurfaceCalls.get() shouldBe 1
   }
@@ -191,11 +220,18 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true)
 
-    Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val after = editContent(before)
-    Renderer.render(after, cursorVisible = false, surface, viewport, None, DamageProducer.forTransition(before, after))
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      DamageProducer.forTransition(before, after)
+    )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
   }
@@ -204,7 +240,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true)
 
-    Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val changed          = floatingPanel.copy(content = SurfaceContent.QuickInfo("different text"))
@@ -212,7 +248,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage shouldBe Damage.Surface(floatingId)
 
-    Renderer.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 2
   }

@@ -6,7 +6,7 @@ import java.nio.file.attribute.FileTime
 
 import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.rope.{Balance, Rope}
-import com.serenity.spellcheck.SpellChecker
+import com.serenity.spellcheck.{DictionaryCache, DictionaryContext, DictionaryLoader, SpellChecker}
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -40,10 +40,10 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   "SpellChecker.analyzeText" should "analyze text against an already-loaded dictionary with no dictionary paths configured" in {
     // `analyzeText` takes a `DictionaryContext` rather than a `SpellCheckConfig` path list, so there is nothing in
     // its signature capable of reaching the filesystem: discovery/loading is a separate, explicit step
-    // (`loadDictionarySnapshot`) that pure analysis never performs itself.
+    // (`DictionaryLoader.loadSnapshot`) that pure analysis never performs itself.
     val config = SpellCheckConfig(enabled = true)
     val dictionary =
-      SpellChecker.DictionaryContext(words = Set("hand", "built"), replacements = Map.empty, failures = Nil)
+      DictionaryContext(words = Set("hand", "built"), replacements = Map.empty, failures = Nil)
 
     val diagnostics = SpellChecker.analyzeText("hand built wurld", config, dictionary)
 
@@ -53,7 +53,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   it should "surface dictionary load failures from a precomputed context without re-reading the filesystem" in {
     val config = SpellCheckConfig(enabled = true)
     val dictionary =
-      SpellChecker.DictionaryContext(words = Set.empty, replacements = Map.empty, failures = List("boom"))
+      DictionaryContext(words = Set.empty, replacements = Map.empty, failures = List("boom"))
 
     val diagnostics = SpellChecker.analyzeText("hi", config, dictionary)
 
@@ -80,23 +80,23 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   "SpellChecker dictionary cache" should "hold at most one entry per normalized dictionary path across repeated edits" in {
-    // Scoped to this one dictionary's own cache entry (`dictionaryCacheEntryCount`), not `DictionaryCache`'s total
-    // size: `DictionaryCache` is a single process-wide map every spec exercising `loadDictionarySnapshot`/`check`
+    // Scoped to this one dictionary's own cache entry (`DictionaryCache.entryCount`), not `DictionaryCache`'s total
+    // size: `DictionaryCache` is a single process-wide map every spec exercising `DictionaryLoader.loadSnapshot`/`check`
     // shares, and sbt/ScalaTest run different suites concurrently in the same JVM by default -- a size-based
     // assertion would spuriously fail whenever an unrelated, concurrently-running suite's own (different-path)
     // dictionary load happened to land its own cache entry inside this test's window.
     val dictionary = writeDic("serenity-bounded-cache", List("hello"))
     val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
 
-    SpellChecker.dictionaryCacheEntryCount(dictionary) shouldBe 0
-    SpellChecker.loadDictionarySnapshot(config)
-    SpellChecker.dictionaryCacheEntryCount(dictionary) shouldBe 1
+    DictionaryCache.entryCount(dictionary) shouldBe 0
+    DictionaryLoader.loadSnapshot(config)
+    DictionaryCache.entryCount(dictionary) shouldBe 1
 
     (1 to 5).foreach { revision =>
       Files.writeString(dictionary, s"1\nrevision$revision", StandardCharsets.UTF_8)
       Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + revision * 10_000L))
-      SpellChecker.loadDictionarySnapshot(config)
-      SpellChecker.dictionaryCacheEntryCount(dictionary) shouldBe 1
+      DictionaryLoader.loadSnapshot(config)
+      DictionaryCache.entryCount(dictionary) shouldBe 1
     }
   }
 
@@ -104,13 +104,13 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     val dictionary = writeDic("serenity-bounded-cache-content", List("hello"))
     val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
 
-    SpellChecker.loadDictionarySnapshot(config)
+    DictionaryLoader.loadSnapshot(config)
 
     Files.writeString(dictionary, "1\nlatest", StandardCharsets.UTF_8)
     Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
 
     val diagnostics =
-      SpellChecker.analyzeText("latest hello", config, SpellChecker.loadDictionarySnapshot(config).context)
+      SpellChecker.analyzeText("latest hello", config, DictionaryLoader.loadSnapshot(config).context)
 
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: hello")
   }

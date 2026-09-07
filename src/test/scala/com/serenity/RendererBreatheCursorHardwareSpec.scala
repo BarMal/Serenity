@@ -58,7 +58,7 @@ class RendererBreatheCursorHardwareSpec extends AnyFlatSpec with Matchers:
 
   private def renderWith(hardwareCursor: HardwareCursor, cursorColor: Option[java.awt.Color]): Unit =
     val surface = new MockRenderSurface(80, 24, persistentContent = true, hardwareCursorOverride = Some(hardwareCursor))
-    val _ = com.serenity.ui.renderer.Renderer.renderCursorOnly(
+    val _ = com.serenity.ui.renderer.RendererCursorOverlay.renderCursorOnly(
       breatheState(),
       cursorVisible = true,
       surface,

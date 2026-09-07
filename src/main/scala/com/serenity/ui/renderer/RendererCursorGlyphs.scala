@@ -5,9 +5,12 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 
-/** Paints the caret glyph(s) for a buffer's cursors, in both the pane content path and the markdown-lens path
-  * ([[RendererMarkdownLens.renderMarkdownLensCursors]]), and the small geometry helpers shared with the highlight
-  * renderers for clipping a measured run to its pane.
+/** The package's caret authority: it paints the caret glyph(s) for a buffer's cursors, and owns the pane-clipping
+  * geometry every caret and measured run in the package is placed by. [[caretWithin]]/[[cursorColorFor]] are public
+  * because [[RendererMarkdownLens]] paints its own carets over the inline preview and must place and colour them
+  * identically to the pane path; [[measuredRunWidthWithin]] is public because [[RendererHighlights]] clips selection
+  * and diagnostic backgrounds to the same right edge a caret is clipped to, and a highlight that clipped differently
+  * would bleed past the pane the caret stops at.
   */
 object RendererCursorGlyphs:
 
@@ -67,7 +70,7 @@ object RendererCursorGlyphs:
       (visualIndex, xPx)
     }
 
-  private[renderer] def measuredRunWidthWithin(
+  def measuredRunWidthWithin(
     rect: LayoutRect,
     context: RenderContext,
     startXPx: Float,
@@ -76,7 +79,7 @@ object RendererCursorGlyphs:
     val rightXPx = context.cellMetrics.toPixelX(rect.right).toFloat
     Option.when(startXPx < rightXPx)(math.max(0.0f, math.min(endXPx, rightXPx) - startXPx)).filter(_ > 0.0f)
 
-  private[renderer] def caretWithin(
+  def caretWithin(
     rect: LayoutRect,
     cellMetrics: CellMetrics,
     desiredXPx: Int,
@@ -87,7 +90,7 @@ object RendererCursorGlyphs:
     val widthPx  = math.min(math.max(1, desiredWidthPx), rightXPx - leftXPx)
     Option.when(widthPx > 0)(desiredXPx.max(leftXPx).min(rightXPx - widthPx) -> widthPx)
 
-  private[renderer] def cursorColorFor(
+  def cursorColorFor(
     config: AppConfig,
     theme: Theme,
     context: RenderContext,

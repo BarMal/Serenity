@@ -6,7 +6,7 @@ import java.io.StringWriter
 import com.serenity.config.CursorMode
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
-import com.serenity.ui.renderer.{HardwareCursorShape, HardwareCursorStyle, Renderer}
+import com.serenity.ui.renderer.{HardwareCursorShape, HardwareCursorStyle, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -149,7 +149,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     writer.toString shouldBe ""
   }
 
-  // Regression guard for #1012's modal-layer caching and Markdown preview images (Renderer.scala): both call
+  // Regression guard for #1012's modal-layer caching and Markdown preview images (the renderer package): both call
   // `surface.pixels.drawImage` unconditionally, previously swallowed by this surface's no-op. A real implementation
   // must actually reach the screen buffer for those call sites to stop being silently invisible in TUI mode.
   it should "produce non-empty flushed output for an opaque image, unlike the historical no-op" in {
@@ -176,7 +176,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     writer.toString should not include "cd"
   }
 
-  "Renderer.render (surface-generic)" should "paint an AppState into a TerminalRenderSurface and flush real ANSI escapes" in {
+  "RendererEntryPoints.render (surface-generic)" should "paint an AppState into a TerminalRenderSurface and flush real ANSI escapes" in {
     val (rs, writer) = surface(width = 80, height = 24)
     val paneId       = PaneId(0)
     val bufferId     = BufferId(1)
@@ -196,7 +196,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    Renderer.render(state, cursorVisible = false, rs, viewport)
+    RendererEntryPoints.render(state, cursorVisible = false, rs, viewport)
 
     val output = writer.toString
     // first frame: full clear-and-repaint, wrapped in #1172's DEC 2026 synchronized-update brackets
@@ -308,14 +308,14 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     out.indexOf("x") should be < out.indexOf(s"$esc[3;4H") // the caret CUP lands after the content write, last word
   }
 
-  "Renderer.renderWithCursorOverlay (surface-generic)" should
+  "RendererCursorOverlay.renderWithCursorOverlay (surface-generic)" should
     "delegate the caret to the terminal's own cursor instead of painting it as cell content, in blink mode" in {
       val (rs, writer) = surface(width = 80, height = 24)
       val state        = editorState(cursorMode = CursorMode.Blink)
       val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
       val cellMetrics  = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
 
-      Renderer.renderWithCursorOverlay(
+      RendererCursorOverlay.renderWithCursorOverlay(
         state,
         rs,
         ViewportSize(80, 24),
@@ -345,7 +345,17 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     val cellMetrics  = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
 
-    Renderer.renderWithCursorOverlay(state, rs, ViewportSize(80, 24), font, font, font, cellMetrics, cellMetrics, None)
+    RendererCursorOverlay.renderWithCursorOverlay(
+      state,
+      rs,
+      ViewportSize(80, 24),
+      font,
+      font,
+      font,
+      cellMetrics,
+      cellMetrics,
+      None
+    )
 
     // The base frame flushes with the caret hidden and the overlay frame presents it, so both escapes appear: what
     // matters is that the frame *ends* showing the caret, at the cell the cursor is on.
@@ -361,7 +371,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val cellMetrics  = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
     val faded        = new java.awt.Color(255, 255, 255, 16)
 
-    Renderer.renderWithCursorOverlay(
+    RendererCursorOverlay.renderWithCursorOverlay(
       state,
       rs,
       ViewportSize(80, 24),
@@ -383,7 +393,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val cellMetrics  = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
     val bright       = new java.awt.Color(255, 255, 255, 255)
 
-    Renderer.renderWithCursorOverlay(
+    RendererCursorOverlay.renderWithCursorOverlay(
       state,
       rs,
       ViewportSize(80, 24),
@@ -438,7 +448,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
   // -- #1215 (remainder): TUI cell metrics must be honoured end-to-end, not re-derived from the real AWT font ---------
 
-  "Renderer.renderWithCursorOverlay (surface-generic)" should
+  "RendererCursorOverlay.renderWithCursorOverlay (surface-generic)" should
     "place the CUP escape at the cursor's real cell column on a line longer than a few characters" in {
       val (rs, writer) = surface(width = 80, height = 24)
       val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
@@ -467,7 +477,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         )
       )
 
-      Renderer.renderWithCursorOverlay(
+      RendererCursorOverlay.renderWithCursorOverlay(
         state,
         rs,
         ViewportSize(80, 24),
@@ -517,7 +527,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    Renderer.renderWithCursorOverlay(
+    RendererCursorOverlay.renderWithCursorOverlay(
       state,
       rs,
       ViewportSize(80, 24),
