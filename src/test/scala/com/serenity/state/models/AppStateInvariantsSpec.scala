@@ -12,12 +12,12 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
 
   "AppState.empty" should "be valid by its own invariants" in {
     AppState.empty.isValid shouldBe true
-    AppState.empty.validationErrors shouldBe empty
+    AppStateValidation.validationErrors(AppState.empty) shouldBe empty
   }
 
   "AppState.initial" should "be valid by its own invariants" in {
     AppState.initial.isValid shouldBe true
-    AppState.initial.validationErrors shouldBe empty
+    AppStateValidation.validationErrors(AppState.initial) shouldBe empty
   }
 
   behavior of "active-pane coherence"
@@ -29,7 +29,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     )
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Active editor pane does not exist: 999")
+    AppStateValidation.validationErrors(invalid) should contain("Active editor pane does not exist: 999")
   }
 
   behavior of "pane order"
@@ -41,7 +41,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     )
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Pane order contains duplicate entries: 0")
+    AppStateValidation.validationErrors(invalid) should contain("Pane order contains duplicate entries: 0")
   }
 
   it should "reject pane-order entries referencing a pane that no longer exists" in {
@@ -51,7 +51,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     )
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Pane order references non-existent panes: 7")
+    AppStateValidation.validationErrors(invalid) should contain("Pane order references non-existent panes: 7")
   }
 
   behavior of "buffer order"
@@ -61,7 +61,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     val invalid = base.copy(persisted = base.persisted.copy(bufferOrder = List(BufferId(0), BufferId(0))))
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Buffer order contains duplicate entries: 0")
+    AppStateValidation.validationErrors(invalid) should contain("Buffer order contains duplicate entries: 0")
   }
 
   it should "reject buffer-order entries referencing a buffer that no longer exists" in {
@@ -69,7 +69,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     val invalid = base.copy(persisted = base.persisted.copy(bufferOrder = List(BufferId(0), BufferId(7))))
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Buffer order references non-existent buffers: 7")
+    AppStateValidation.validationErrors(invalid) should contain("Buffer order references non-existent buffers: 7")
   }
 
   behavior of "surfaces"
@@ -85,7 +85,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
       base.copy(runtime = base.runtime.copy(uiSurfaces = List(surface, surface)))
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Duplicate UI surfaces: dup")
+    AppStateValidation.validationErrors(invalid) should contain("Duplicate UI surfaces: dup")
   }
 
   behavior of "next-ID allocation"
@@ -95,7 +95,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     val invalid = base.copy(runtime = base.runtime.copy(nextBufferId = BufferId(0)))
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Next buffer ID collides with an existing buffer: 0")
+    AppStateValidation.validationErrors(invalid) should contain("Next buffer ID collides with an existing buffer: 0")
   }
 
   it should "reject a next pane ID that collides with an existing pane" in {
@@ -103,7 +103,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     val invalid = base.copy(runtime = base.runtime.copy(nextPaneId = PaneId(0)))
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Next pane ID collides with an existing pane: 0")
+    AppStateValidation.validationErrors(invalid) should contain("Next pane ID collides with an existing pane: 0")
   }
 
   // Deliberately no next-surface-ID collision check: surface IDs are also assigned by hand from fixed string
@@ -136,14 +136,18 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     val invalid = stateWithBuffer(bufferWith("one line", cursors = List(CursorPosition(5, 0))))
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Buffer 0 has out-of-bounds cursor(s): CursorPosition(5,0)")
+    AppStateValidation.validationErrors(invalid) should contain(
+      "Buffer 0 has out-of-bounds cursor(s): CursorPosition(5,0)"
+    )
   }
 
   it should "reject a cursor with a negative line or column" in {
     val invalid = stateWithBuffer(bufferWith("one line", cursors = List(CursorPosition(0, -1))))
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Buffer 0 has out-of-bounds cursor(s): CursorPosition(0,-1)")
+    AppStateValidation.validationErrors(invalid) should contain(
+      "Buffer 0 has out-of-bounds cursor(s): CursorPosition(0,-1)"
+    )
   }
 
   // Deliberately no upper column bound: this codebase routinely carries a cursor/selection column past end-of-line
@@ -161,14 +165,18 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     )
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Buffer 0 has out-of-bounds selection position(s): CursorPosition(9,0)")
+    AppStateValidation.validationErrors(invalid) should contain(
+      "Buffer 0 has out-of-bounds selection position(s): CursorPosition(9,0)"
+    )
   }
 
   it should "reject a bookmark outside document bounds" in {
     val invalid = stateWithBuffer(bufferWith("abc", bookmarks = List(CursorPosition(3, 0))))
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Buffer 0 has out-of-bounds bookmark(s): CursorPosition(3,0)")
+    AppStateValidation.validationErrors(invalid) should contain(
+      "Buffer 0 has out-of-bounds bookmark(s): CursorPosition(3,0)"
+    )
   }
 
   it should "reject a document comment anchored outside document bounds" in {
@@ -180,5 +188,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     )
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Buffer 0 has out-of-bounds comment position(s): CursorPosition(5,0)")
+    AppStateValidation.validationErrors(invalid) should contain(
+      "Buffer 0 has out-of-bounds comment position(s): CursorPosition(5,0)"
+    )
   }

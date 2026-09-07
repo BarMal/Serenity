@@ -70,7 +70,7 @@ final private[manager] class StateManagerOperationBoundary private (
       .pushFocus(Focus.Surface(surfaceId))
 
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-    normalizeCommandRunnerFocus(newState).validated match
+    AppStateValidation.validated(normalizeCommandRunnerFocus(newState)) match
       case Right(validState) =>
         val modalTransitionLog =
           (fallbackState.modalSurface, validState.modalSurface) match
