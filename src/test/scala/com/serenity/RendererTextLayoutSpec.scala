@@ -11,7 +11,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -57,7 +57,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
     val surface     = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -72,7 +72,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
   private def firstNonSpaceColumn(surface: MockRenderSurface, row: Int): Int =
     (0 until surface.width).find(x => surface.getChar(x, row) != ' ').getOrElse(-1)
 
-  "Renderer.render" should "place a proportional-text cursor using measured advances rather than raw column count" in {
+  "RendererEntryPoints.render" should "place a proportional-text cursor using measured advances rather than raw column count" in {
     val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
     val cellMetrics = CellMetrics.fromFont(font)
     val surface     = renderState("iW", CursorPosition(0, 1), font)
@@ -116,7 +116,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val font         = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val cellMetrics  = CellMetrics.fromFont(font)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, font, font, cellMetrics, None)
+    RendererEntryPoints.render(state, cursorVisible = false, surface, viewportSize, font, font, cellMetrics, None)
 
     surface.getRow(1).take(3).trim shouldBe "│"
     surface.getRow(2).take(3).trim shouldBe "│"
@@ -176,7 +176,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         )
         .xPx
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -327,7 +327,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val leftPx  = cellMetric.toPixelX(contentRect.x)
     val rightPx = cellMetric.toPixelX(contentRect.right)
 
-    Renderer.render(state, cursorVisible = true, surface, viewport, codeFont, textFont, cellMetric, None)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport, codeFont, textFont, cellMetric, None)
 
     surface.drawRunPxCalls.filter(_.s.contains("W")).foreach { call =>
       call.xPx should be >= leftPx.toFloat
@@ -363,7 +363,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val surface     = new MockRenderSurface(100, 30)
     val cellMetrics = CellMetrics.fromFont(font)
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30), font, font, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      font,
+      font,
+      cellMetrics,
+      None
+    )
 
     val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
     cursorRects should have size 3
@@ -396,8 +405,26 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val visibleSurface = new MockRenderSurface(100, 30)
     val hiddenSurface  = new MockRenderSurface(100, 30)
 
-    Renderer.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30), font, font, cellMetrics, None)
-    Renderer.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30), font, font, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      visibleSurface,
+      ViewportSize(100, 30),
+      font,
+      font,
+      cellMetrics,
+      None
+    )
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      hiddenSurface,
+      ViewportSize(100, 30),
+      font,
+      font,
+      cellMetrics,
+      None
+    )
 
     val visibleCursorRects = visibleSurface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
     val hiddenCursorRects  = hiddenSurface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
@@ -437,7 +464,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val surface     = new MockRenderSurface(100, 30)
     val cellMetrics = CellMetrics.fromFont(font)
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30), font, font, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      font,
+      font,
+      cellMetrics,
+      None
+    )
 
     surface.fillPixelRectCalls.count(_.color == activeColor) shouldBe 1
     surface.fillPixelRectCalls.count(_.color == inactiveColor) shouldBe 2
@@ -472,7 +508,16 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     )
     val cellMetrics = CellMetrics.fromFont(font)
 
-    Renderer.render(state, cursorVisible = false, blinkOff, ViewportSize(100, 30), font, font, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      blinkOff,
+      ViewportSize(100, 30),
+      font,
+      font,
+      cellMetrics,
+      None
+    )
 
     blinkOff.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor) shouldBe empty
   }

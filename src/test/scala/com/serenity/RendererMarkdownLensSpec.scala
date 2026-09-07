@@ -8,7 +8,7 @@ import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -45,7 +45,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -107,7 +107,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -189,7 +189,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -238,7 +238,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -283,7 +283,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -345,7 +345,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -405,7 +405,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -854,7 +854,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,

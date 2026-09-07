@@ -7,7 +7,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -56,7 +56,16 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     val surface =
       new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     surface.drawRunPxCalls shouldBe empty
     surface.putStringCalls.exists(_.s.contains("hello markdown")) shouldBe true
@@ -67,7 +76,16 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     val surface =
       new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     surface.drawRunPxCalls shouldBe empty
     surface.putStringCalls.exists(_.s.contains("hello prose")) shouldBe true
@@ -78,7 +96,16 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     val surface =
       new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     surface.drawRunPxCalls shouldBe empty
     surface.putStringCalls.exists(_.s.contains("val x = 1")) shouldBe true
@@ -93,7 +120,16 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     val surface =
       new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     surface.drawRunPxCalls shouldBe empty
     // "hello" is selected -- its cells should carry the highlighted background/foreground.
@@ -107,7 +143,16 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     val state   = buildState("hello markdown", language = Some(LanguageId.Markdown))
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     surface.drawRunPxCalls should not be empty
   }
@@ -117,7 +162,16 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     val surface =
       new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     val titledRows = (0 until viewportSize.height).map(surface.getRow)
     titledRows.exists(_.contains("Buffer 1")) shouldBe true
@@ -128,7 +182,16 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     val surface =
       new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     val rows = (0 until viewportSize.height).map(surface.getRow)
     rows.exists(_.contains("Line 1")) shouldBe true

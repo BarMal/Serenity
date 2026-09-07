@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,7 +37,7 @@ class WordCountStatusBarSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(100, 24)
     val viewport = ViewportSize(100, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     surface.drawRunPxCalls.map(_.s).mkString should include("4 words")
     surface.drawRunPxCalls.map(_.s).mkString should include("21 chars")
@@ -48,7 +48,7 @@ class WordCountStatusBarSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(100, 24)
     val viewport = ViewportSize(100, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     surface.drawRunPxCalls.map(_.s).mkString should not include "words"
   }
@@ -59,7 +59,7 @@ class WordCountStatusBarSpec extends AnyFlatSpec with Matchers:
     val surface   = new MockRenderSurface(100, 24)
     val viewport  = ViewportSize(100, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     surface.drawRunPxCalls.map(_.s).mkString should include("1 of 4 words selected")
   }
@@ -70,7 +70,7 @@ class WordCountStatusBarSpec extends AnyFlatSpec with Matchers:
     val surface   = new MockRenderSurface(100, 24)
     val viewport  = ViewportSize(100, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     surface.drawRunPxCalls.map(_.s).mkString should include("4 words")
     surface.drawRunPxCalls.map(_.s).mkString should not include "selected"

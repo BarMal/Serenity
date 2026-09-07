@@ -10,7 +10,7 @@ import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -68,7 +68,16 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
     val panelWidthPx = (contentRect.width * cellMetrics.charWidth).toFloat
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, codeFont, textFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      cellMetrics,
+      None
+    )
 
     val contentRuns =
       surface.drawRunPxCalls.filter(call => call.s.nonEmpty && call.s.forall(char => char >= 'a' && char <= 'j'))
@@ -80,7 +89,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
     val measureFont = if usesTextFont then textFont else codeFont
     TextLayoutSnapshot.caretXsForText(runs.map(_.s).mkString, measureFont).lastOption.getOrElse(0.0f)
 
-  "Renderer.render with a large horizontal margin (text font)" should
+  "RendererEntryPoints.render with a large horizontal margin (text font)" should
     "keep every wrapped row within the margin-adjusted content width" in {
       val viewportSize                             = ViewportSize(80, 24)
       val largeMargin                              = TextAreaInsets(left = 0.35, right = 0.35)
@@ -98,7 +107,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       cursorRects.head.yPx shouldBe rows.last._1
     }
 
-  "Renderer.render at default margin (text font)" should
+  "RendererEntryPoints.render at default margin (text font)" should
     "keep every wrapped row within the content width" in {
       val viewportSize = ViewportSize(50, 14)
       val (rows, panelWidthPx, cursorRects, drawn) =
@@ -112,7 +121,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       cursorRects.head.yPx shouldBe rows.last._1
     }
 
-  "Renderer.render with a large horizontal margin (code font)" should
+  "RendererEntryPoints.render with a large horizontal margin (code font)" should
     "keep every wrapped row within the content width" in {
       val viewportSize                             = ViewportSize(80, 24)
       val largeMargin                              = TextAreaInsets(left = 0.35, right = 0.35)

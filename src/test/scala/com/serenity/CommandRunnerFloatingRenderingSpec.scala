@@ -13,7 +13,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.renderer.{Java2DRenderSurface, Renderer}
+import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -74,7 +74,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "Renderer.render" should "paint a themed command runner with descriptions, selection highlight, and visible search cursor" in {
+  "RendererEntryPoints.render" should "paint a themed command runner with descriptions, selection highlight, and visible search cursor" in {
     val commands = List(
       Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),
       Command.typed("close", "Close current file", CommandIntent.File(FileIntent.CloseCurrentFile))
@@ -91,7 +91,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -147,7 +147,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .getOrElse(paneId, fail("Expected pane layout"))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     overlay.x shouldBe paneLayout.contentRect.x
     overlay.width shouldBe paneLayout.contentRect.width
@@ -263,7 +263,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     val headerLine =
       (commandContentRect.x until commandContentRect.right)
@@ -292,7 +292,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
-    Renderer.render(state, cursorVisible = false, surface, ViewportSize(55, 30))
+    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(55, 30))
 
     val resultLine =
       (contentRect.x until contentRect.right)
@@ -348,8 +348,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val visibleSurface = new MockRenderSurface(100, 30)
     val hiddenSurface  = new MockRenderSurface(100, 30)
 
-    Renderer.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
-    Renderer.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
 
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
@@ -401,8 +401,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val visibleSurface = new MockRenderSurface(100, 30)
     val hiddenSurface  = new MockRenderSurface(100, 30)
 
-    Renderer.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
-    Renderer.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val submenuRect = layout.belowCursorOverlayStack
@@ -462,7 +462,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     val selectedBackground = surface.getBg(commandContentRect.x, commandContentRect.y + 1)
     val selectedForeground = surface.getFg(commandContentRect.x, commandContentRect.y + 1)
@@ -500,7 +500,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.strokeRoundRectCalls should not be empty
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
@@ -515,7 +515,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(100, 30)
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.strokeRoundRectCalls should not be empty
     surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
@@ -530,8 +530,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val enabledSurface  = new MockRenderSurface(100, 30)
     val disabledSurface = new MockRenderSurface(100, 30)
 
-    Renderer.render(enabledState, cursorVisible = true, enabledSurface, ViewportSize(100, 30))
-    Renderer.render(disabledState, cursorVisible = true, disabledSurface, ViewportSize(100, 30))
+    RendererEntryPoints.render(enabledState, cursorVisible = true, enabledSurface, ViewportSize(100, 30))
+    RendererEntryPoints.render(disabledState, cursorVisible = true, disabledSurface, ViewportSize(100, 30))
 
     enabledSurface.roundRectShadowCalls should not be empty
     disabledSurface.roundRectShadowCalls shouldBe empty
@@ -545,7 +545,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
     surface.putStringCalls.map(_.s) should not contain "."
@@ -570,7 +570,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     def renderedImage(renderState: AppState): BufferedImage =
       val image   = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB)
       val surface = new Java2DRenderSurface(image, cellMetrics, codeFont, _ => ())
-      Renderer.render(
+      RendererEntryPoints.render(
         renderState,
         cursorVisible = true,
         surface,
@@ -618,7 +618,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     def renderedImage(renderState: AppState): BufferedImage =
       val image   = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB)
       val surface = new Java2DRenderSurface(image, cellMetrics, codeFont, _ => ())
-      Renderer.render(
+      RendererEntryPoints.render(
         renderState,
         cursorVisible = true,
         surface,
@@ -671,7 +671,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
     surface.putStringCalls.map(_.s) should not contain "."
@@ -687,7 +687,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.blurRegionCalls should contain(
       surface.BlurRegionCall(overlay.x, overlay.y, overlay.width, overlay.height, 0.6f)
@@ -711,7 +711,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       cellMetrics
     )
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -737,7 +737,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.blurRegionCalls shouldBe empty
   }
@@ -756,7 +756,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
     surface.blurRegionCalls should contain(
       surface.BlurRegionCall(overlay.x, overlay.y, overlay.width, overlay.height, 0.42f)

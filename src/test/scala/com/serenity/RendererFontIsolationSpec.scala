@@ -8,7 +8,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -70,7 +70,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -112,7 +112,16 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, codeFont, textFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      cellMetrics,
+      None
+    )
 
     surface.setFontCalls should contain(textFont)
   }
@@ -122,7 +131,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -144,7 +153,16 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, codeFont, textFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      cellMetrics,
+      None
+    )
 
     surface.setFontCalls.last.getFamily shouldBe Font.SANS_SERIF
     surface.setFontCalls.last.getFamily should not be codeFont.getFamily
@@ -156,7 +174,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(80, 24)
     val viewportSize = ViewportSize(80, 24)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,

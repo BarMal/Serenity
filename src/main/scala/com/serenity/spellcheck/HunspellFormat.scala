@@ -3,6 +3,9 @@ package com.serenity.spellcheck
 import java.nio.file.Path
 import java.util.Locale
 
+import scala.util.control.NonFatal
+import scala.util.matching.Regex
+
 private[spellcheck] enum HunspellFlagMode:
   case Simple
   case Long
@@ -10,8 +13,8 @@ private[spellcheck] enum HunspellFlagMode:
 
 /** `continuationFlags` (issue #1187) are the flags attached after '/' in a PFX/SFX rule's append field -- hunspell(5)'s
   * continuation classes, granted to the derived word for further affixation. Only CIRCUMFIX consumes them here (see
-  * `HunspellWordExpander.expand`); every other rule ignores them exactly as before, so a dictionary using continuation
-  * classes for anything else sees no behavior change.
+  * `HunspellFormat.expand`); every other rule ignores them, so a dictionary using continuation classes for anything
+  * else sees no behavior change.
   */
 final private[spellcheck] case class HunspellAffixRule(
     strip: String,
@@ -52,8 +55,22 @@ private[spellcheck] object HunspellAffixRules:
       None
     )
 
-/** Parses a Hunspell `.aff` affix file's trimmed lines into `HunspellAffixRules`. */
-private[spellcheck] object HunspellAffixParser:
+/** One `.dic` entry: a dictionary root and the affix flags it carries. */
+final private[spellcheck] case class HunspellEntry(word: String, flags: Set[String])
+
+/** Reading of the Hunspell `.aff`/`.dic` file pair: parsing an affix file into `HunspellAffixRules`, parsing a
+  * dictionary entry line, and expanding a root into every surface form its affix rules produce.
+  *
+  * These are deliberately one unit rather than a parser and a separate expander. The `.aff` file's FLAG mode and AF
+  * alias table decide how a `.dic` entry's flag field is read at all (`parseEntry` and the PFX/SFX continuation fields
+  * share `parseFlagList`), and the three directives with cross-file semantics -- NEEDAFFIX, CIRCUMFIX and the
+  * continuation classes CIRCUMFIX chains through -- are parsed in one half and applied in the other. Splitting them
+  * leaves neither half explicable on its own.
+  *
+  * `applyConversionTable` is the exception that is genuinely used elsewhere: ICONV/OCONV are Hunspell-format operations
+  * applied at check time, not load time, so `SpellChecker` calls it directly.
+  */
+private[spellcheck] object HunspellFormat:
 
   /** Directives from the Hunspell affix format that this handwritten parser does not implement (the free-form
     * COMPOUNDFLAG compounding mechanism, morphological generation, and similar). Rather than silently ignoring them --
@@ -97,7 +114,7 @@ private[spellcheck] object HunspellAffixParser:
     "IGNORE"
   )
 
-  def parse(lines: List[String]): HunspellAffixRules =
+  def parseAffixRules(lines: List[String]): HunspellAffixRules =
     val flagMode      = parseFlagMode(lines)
     val flagAliases   = parseFlagAliases(lines, flagMode)
     val prefixRules   = parsePrefixOrSuffixRules(lines, "PFX", flagMode)
@@ -144,7 +161,68 @@ private[spellcheck] object HunspellAffixParser:
   def applyConversionTable(word: String, table: List[(String, String)]): String =
     table.foldLeft(word) { case (converted, (from, to)) => converted.replace(from, to) }
 
-  def parseHunspellFlagList(flags: String, flagMode: HunspellFlagMode): Set[String] =
+  def parseEntry(line: String, affixRules: HunspellAffixRules): Option[HunspellEntry] =
+    val withoutMorphology = line.takeWhile(char => !char.isWhitespace)
+    val word              = withoutMorphology.takeWhile(_ != '/').trim
+    Option(word)
+      .filter(_.exists(_.isLetter))
+      .map(word => HunspellEntry(word, parseEntryFlags(withoutMorphology, affixRules)))
+
+  def expand(entry: HunspellEntry, affixRules: HunspellAffixRules): Set[String] =
+    val prefixRules = entry.flags.flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
+    val suffixRules = entry.flags.flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
+
+    def isCircumfix(rule: HunspellAffixRule): Boolean =
+      affixRules.circumfixFlag.exists(rule.continuationFlags.contains)
+    def circumfixPairValid(prefixRule: HunspellAffixRule, suffixRule: HunspellAffixRule): Boolean =
+      isCircumfix(prefixRule) == isCircumfix(suffixRule)
+
+    // CIRCUMFIX (#1187, hunspell(5)): an affix whose continuation class carries the CIRCUMFIX flag may never
+    // surface on its own -- only paired with a counterpart that is itself CIRCUMFIX-flagged.
+    val prefixes = prefixRules.filterNot(isCircumfix).flatMap(applyPrefix(entry.word, _))
+    val suffixes = suffixRules.filterNot(isCircumfix).flatMap(applySuffix(entry.word, _))
+
+    val combined =
+      for
+        prefixRule <- prefixRules if prefixRule.combineable
+        suffixRule <- suffixRules if suffixRule.combineable && circumfixPairValid(prefixRule, suffixRule)
+        suffixed   <- applySuffix(entry.word, suffixRule)
+        combined   <- applyPrefix(suffixed, prefixRule)
+      yield combined
+
+    // CIRCUMFIX continuation chaining: the canonical Hungarian superlative ("legnagyobb") only reaches its prefix
+    // via the suffix's continuation class -- the bare root never carries the prefix's own flag directly (see the
+    // circumfix.aff fixture in hunspell's own test suite) -- so a CIRCUMFIX-flagged affix also looks for its
+    // counterpart among the flags the *other* affix's continuation class grants, applying only when that
+    // counterpart is itself CIRCUMFIX-flagged.
+    val suffixThenPrefix: Set[String] =
+      suffixRules.filter(isCircumfix).flatMap { suffixRule =>
+        applySuffix(entry.word, suffixRule).toList.flatMap { suffixed =>
+          suffixRule.continuationFlags
+            .flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
+            .filter(isCircumfix)
+            .flatMap(prefixRule => applyPrefix(suffixed, prefixRule))
+        }
+      }
+    val prefixThenSuffix: Set[String] =
+      prefixRules.filter(isCircumfix).flatMap { prefixRule =>
+        applyPrefix(entry.word, prefixRule).toList.flatMap { prefixed =>
+          prefixRule.continuationFlags
+            .flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
+            .filter(isCircumfix)
+            .flatMap(suffixRule => applySuffix(prefixed, suffixRule))
+        }
+      }
+
+    // NEEDAFFIX (#1182): a root flagged with the configured NEEDAFFIX flag is a "virtual stem" -- valid only
+    // affixed, per hunspell(5) -- so the bare word is dropped here while its affixed forms above are kept.
+    val standalone = if affixRules.needAffixFlag.exists(entry.flags.contains) then Set.empty else Set(entry.word)
+    standalone ++ prefixes ++ suffixes ++ combined ++ suffixThenPrefix ++ prefixThenSuffix
+
+  /** The `.aff` file's FLAG mode decides how every flag field in both files is tokenized -- a `.dic` entry's flags, a
+    * PFX/SFX rule's continuation class, and an AF alias line all go through here.
+    */
+  def parseFlagList(flags: String, flagMode: HunspellFlagMode): Set[String] =
     flagMode match
       case HunspellFlagMode.Simple =>
         flags.toList.map(_.toString).toSet
@@ -152,6 +230,33 @@ private[spellcheck] object HunspellAffixParser:
         flags.grouped(2).filter(_.length == 2).toSet
       case HunspellFlagMode.Num =>
         flags.split(",").map(_.trim).filter(_.nonEmpty).toSet
+
+  private def parseEntryFlags(entry: String, affixRules: HunspellAffixRules): Set[String] =
+    entry.dropWhile(_ != '/') match
+      case "" => Set.empty
+      case flagsWithSlash =>
+        val flags = flagsWithSlash.drop(1)
+        affixRules.flagAliases.getOrElse(flags, parseFlagList(flags, affixRules.flagMode))
+
+  private def applyPrefix(word: String, rule: HunspellAffixRule): Option[String] =
+    Option.when(word.startsWith(rule.strip) && prefixConditionMatches(word, rule.condition)) {
+      rule.append + word.drop(rule.strip.length)
+    }
+
+  private def applySuffix(word: String, rule: HunspellAffixRule): Option[String] =
+    Option.when(word.endsWith(rule.strip) && suffixConditionMatches(word, rule.condition)) {
+      word.dropRight(rule.strip.length) + rule.append
+    }
+
+  private def prefixConditionMatches(word: String, condition: String): Boolean =
+    condition == "." || regexMatches(s"^(?:$condition).*", word)
+
+  private def suffixConditionMatches(word: String, condition: String): Boolean =
+    condition == "." || regexMatches(s".*(?:$condition)$$", word)
+
+  private def regexMatches(pattern: String, word: String): Boolean =
+    try Regex(pattern).pattern.matcher(word).matches
+    catch case NonFatal(_) => false
 
   private def parseFlagMode(lines: List[String]): HunspellFlagMode =
     lines
@@ -177,7 +282,7 @@ private[spellcheck] object HunspellAffixParser:
       columns match
         case ruleKind :: flag :: strip :: appendField :: condition :: _ if ruleKind == kind =>
           val (appendText, continuationFlags) = appendField.split("/", 2) match
-            case Array(text, continuation) => text        -> parseHunspellFlagList(continuation, flagMode)
+            case Array(text, continuation) => text        -> parseFlagList(continuation, flagMode)
             case _                         => appendField -> Set.empty[String]
           val rule = HunspellAffixRule(
             strip = zeroAsEmpty(strip),
@@ -207,7 +312,7 @@ private[spellcheck] object HunspellAffixParser:
               aliases -> aliasIndex
             case "AF" :: flags :: _ =>
               val nextIndex = aliasIndex + 1
-              aliases.updated(nextIndex.toString, parseHunspellFlagList(flags, flagMode)) -> nextIndex
+              aliases.updated(nextIndex.toString, parseFlagList(flags, flagMode)) -> nextIndex
             case _ =>
               aliases -> aliasIndex
       }
@@ -217,8 +322,8 @@ private[spellcheck] object HunspellAffixParser:
     lines.foldLeft(Map.empty[String, List[String]]) { (replacements, line) =>
       line.split("\\s+").toList match
         case "REP" :: source :: replacement :: _ if !source.forall(_.isDigit) =>
-          val key   = SpellChecker.normalizeWord(source)
-          val value = SpellChecker.normalizeWord(replacement)
+          val key   = DictionaryWord.normalize(source)
+          val value = DictionaryWord.normalize(replacement)
           replacements.updated(key, (replacements.getOrElse(key, Nil) :+ value).distinct)
         case _ =>
           replacements
@@ -244,7 +349,7 @@ private[spellcheck] object HunspellAffixParser:
     }
 
   /** `CIRCUMFIX <flag>` (hunspell(5)): the flag that, when carried in a PFX/SFX rule's continuation class, marks that
-    * rule as usable only paired with its circumfix counterpart -- see `HunspellWordExpander.expand`.
+    * rule as usable only paired with its circumfix counterpart -- see `expand`.
     */
   private def parseCircumfixFlag(lines: List[String]): Option[String] =
     lines
@@ -266,9 +371,9 @@ private[spellcheck] object HunspellAffixParser:
 
   /** `COMPOUNDRULE` (hunspell(5)): one `COMPOUNDRULE count` header (skipped here -- its all-digit body distinguishes it
     * from a pattern line) followed by `count` `COMPOUNDRULE pattern` lines, each a small regex-like grammar over
-    * compound flags (`HunspellCompoundMatcher` tokenizes and matches the grammar itself; the raw pattern strings are
-    * kept here and re-tokenized by the pure, filesystem-free matching path so this stays a plain `List[String]` that
-    * `SpellChecker.DictionaryContext` -- a public type -- can carry without exposing `CompoundToken`).
+    * compound flags. The raw pattern strings are kept as-is: `HunspellCompoundMatcher` owns that grammar and
+    * re-tokenizes them on the pure matching path, which keeps `DictionaryContext` -- a public type -- free of the
+    * matcher's internal token representation.
     */
   private def parseCompoundRules(lines: List[String]): List[String] =
     lines.flatMap { line =>

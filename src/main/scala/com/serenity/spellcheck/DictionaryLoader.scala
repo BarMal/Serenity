@@ -9,15 +9,9 @@ import scala.util.control.NonFatal
 
 import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
 
-/** One entry per normalized dictionary path, holding only the most recently loaded version of that dictionary. A path
-  * whose fingerprint no longer matches is replaced in place rather than accumulating a new entry, so repeated
-  * dictionary edits cannot grow this map without bound.
+/** What one dictionary file (plus its sibling `.aff`) contributed, before merging with the other configured
+  * dictionaries into a `DictionaryContext`.
   */
-final private[spellcheck] case class DictionaryCacheEntry(
-    fingerprints: List[SpellCheckDictionaryFingerprint],
-    result: DictionaryLoadResult
-)
-
 final private[spellcheck] case class DictionaryLoadResult(
     words: Set[String],
     replacements: Map[String, List[String]],
@@ -29,31 +23,119 @@ final private[spellcheck] case class DictionaryLoadResult(
     compoundWordFlags: Map[String, Set[String]]
 )
 
-/** All dictionary discovery, reading, fingerprinting and caching -- explicit filesystem IO throughout. Callers must
-  * invoke `loadSnapshot` from `IO.blocking` and thread the resulting immutable snapshot into `SpellChecker`'s pure
-  * analysis methods rather than calling this (or `SpellChecker.check`) from a state-commit path.
+/** One entry per normalized dictionary path, holding only the most recently loaded version of that dictionary. A path
+  * whose fingerprint no longer matches is replaced in place rather than accumulating a new entry, so repeated
+  * dictionary edits cannot grow this map without bound.
   */
-private[spellcheck] object DictionaryLoader:
+final private[spellcheck] case class DictionaryCacheEntry(
+    fingerprints: List[SpellCheckDictionaryFingerprint],
+    result: DictionaryLoadResult
+)
 
-  private val DictionaryCache                   = ConcurrentHashMap[String, DictionaryCacheEntry]()
-  private val DefaultDictionaryCharset: Charset = StandardCharsets.UTF_8
+/** The process-wide bounded dictionary cache backing `DictionaryLoader`.
+  *
+  * `size` and `entryCount` exist for tests asserting the bounded-per-path contract; they are the intentional
+  * observation points on that contract, so tests call them here rather than through an accessor forwarded from
+  * `SpellChecker`, which has nothing to do with caching.
+  */
+private[serenity] object DictionaryCache:
 
-  /** Number of distinct dictionary paths currently cached -- exposed only so tests can assert the cache stays bounded
-    * to one entry per normalized path rather than growing with every historical fingerprint.
+  private val Entries = ConcurrentHashMap[String, DictionaryCacheEntry]()
+
+  /** Number of distinct dictionary paths currently cached -- the whole-cache view of the contract that this map holds
+    * one entry per normalized path rather than growing with every historical fingerprint.
     */
-  def cacheSize: Int = DictionaryCache.size()
+  def size: Int = Entries.size()
 
-  /** How many cache entries currently exist for `path`'s own normalized key -- 0 or 1, per this cache's own bounded-
-    * per-path contract. Exposed alongside `cacheSize` so a test asserting that contract for one specific dictionary
-    * doesn't have to reason about `DictionaryCache`'s total size, which this process-wide cache shares with every other
-    * test suite exercising `loadSnapshot`/`SpellChecker.check` concurrently in the same JVM (sbt/ScalaTest's default
-    * cross-suite parallelism) -- a size-based assertion is vulnerable to unrelated suites adding their own
+  /** How many entries currently exist for `path`'s own normalized key -- 0 or 1, per the bounded-per-path contract.
+    * Prefer this over `size` in tests: this map is process-wide and shared with every other suite exercising
+    * `DictionaryLoader.loadSnapshot`/`SpellChecker.check` concurrently in the same JVM (sbt/ScalaTest's default
+    * cross-suite parallelism), so a size-based assertion is vulnerable to unrelated suites adding their own
     * (different-path) entries mid-test, while this stays scoped to the one path under test.
     */
-  def cacheEntryCount(path: Path): Int =
-    if DictionaryCache.containsKey(path.toAbsolutePath.normalize().toString) then 1 else 0
+  def entryCount(path: Path): Int =
+    if Entries.containsKey(cacheKey(path)) then 1 else 0
 
-  def loadSnapshot(config: SpellCheckConfig): SpellChecker.DictionarySnapshot =
+  /** Returns the cached load for `path` when it was produced by exactly `fingerprints`, otherwise stores and returns
+    * `load()`. Keyed by normalized path so a changed fingerprint replaces the entry rather than adding one.
+    */
+  private[spellcheck] def getOrLoad(
+    path: Path,
+    fingerprints: List[SpellCheckDictionaryFingerprint],
+    load: () => DictionaryLoadResult
+  ): DictionaryLoadResult =
+    Entries
+      .compute(
+        cacheKey(path),
+        (_, existing) =>
+          Option(existing)
+            .filter(_.fingerprints == fingerprints)
+            .getOrElse(DictionaryCacheEntry(fingerprints, load()))
+      )
+      .result
+
+  private def cacheKey(path: Path): String =
+    path.toAbsolutePath.normalize().toString
+
+/** All dictionary discovery, reading, fingerprinting and caching -- explicit filesystem IO throughout, and the only
+  * producer of `DictionaryContext`/`DictionarySnapshot`. Callers must invoke `loadSnapshot` from `IO.blocking` and
+  * thread the resulting immutable snapshot into `SpellChecker`'s pure analysis methods rather than calling this (or
+  * `SpellChecker.check`) from a state-commit path.
+  */
+object DictionaryLoader:
+
+  private val DefaultDictionaryCharset: Charset = StandardCharsets.UTF_8
+
+  /** The fallback word lists used when no external dictionary is configured, or when every configured one failed to
+    * contribute a word -- enough vocabulary to keep spell-check useful out of the box without shipping a dictionary.
+    */
+  private val BuiltInDictionaries: Map[String, Set[String]] = Map(
+    "en" -> Set(
+      "a",
+      "an",
+      "and",
+      "are",
+      "as",
+      "be",
+      "buffer",
+      "code",
+      "document",
+      "editor",
+      "for",
+      "hello",
+      "in",
+      "is",
+      "json",
+      "language",
+      "markdown",
+      "of",
+      "ok",
+      "parse",
+      "prose",
+      "serenity",
+      "spell",
+      "text",
+      "the",
+      "to",
+      "with",
+      "world"
+    ),
+    "fr" -> Set(
+      "bonjour",
+      "café",
+      "français",
+      "langue",
+      "monde",
+      "résumé",
+      "texte"
+    ),
+    "el" -> Set(
+      "γειά",
+      "κόσμος"
+    )
+  )
+
+  def loadSnapshot(config: SpellCheckConfig): DictionarySnapshot =
     val normalized      = config.normalized
     val sourcePaths     = SpellCheckConfig.discoverDictionarySourcePaths(normalized)
     val externalResults = sourcePaths.map(loadDictionary)
@@ -63,79 +145,46 @@ private[spellcheck] object DictionaryLoader:
     val failures = externalResults.flatMap(_.failures)
     val fallbackWords =
       if normalized.dictionaryPaths.nonEmpty && externalWords.nonEmpty then Set.empty[String]
-      else
-        normalized.languages.flatMap(language => SpellChecker.BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
+      else normalized.languages.flatMap(language => BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
 
-    val context = SpellChecker.DictionaryContext(
-      words = (externalWords ++ fallbackWords ++ normalized.additionalWords).map(SpellChecker.normalizeWord),
+    val context = DictionaryContext(
+      words = (externalWords ++ fallbackWords ++ normalized.additionalWords).map(DictionaryWord.normalize),
       replacements = externalReplacements,
       failures = failures.distinct,
       iconv = externalResults.flatMap(_.iconv).distinct,
       oconv = externalResults.flatMap(_.oconv).distinct,
       compoundRules = externalResults.flatMap(_.compoundRules).distinct,
       compoundMin = externalResults.map(_.compoundMin).foldLeft(3)(math.min),
-      compoundWordFlags = HunspellCompoundMatcher.mergeCompoundWordFlags(externalResults.map(_.compoundWordFlags))
+      compoundWordFlags = mergeCompoundWordFlags(externalResults.map(_.compoundWordFlags))
     )
-    SpellChecker.DictionarySnapshot(context, SpellCheckConfig.discoverDictionaryFingerprints(normalized))
+    DictionarySnapshot(context, SpellCheckConfig.discoverDictionaryFingerprints(normalized))
 
-  /** Loads (or reuses) the dictionary at `path`, keyed by its normalized path so a later call with a changed
-    * fingerprint replaces the cached entry rather than adding a new one -- the cache never holds more than one loaded
-    * dictionary per distinct path.
-    */
   private def loadDictionary(path: Path): DictionaryLoadResult =
-    val normalizedPath  = path.toAbsolutePath.normalize().toString
     val dependencyPaths = SpellCheckConfig.dictionaryDependencyPaths(List(path))
     val fingerprints    = dependencyPaths.map(SpellCheckDictionaryFingerprint.fromPath)
-    DictionaryCache
-      .compute(
-        normalizedPath,
-        (_, existing) =>
-          Option(existing)
-            .filter(_.fingerprints == fingerprints)
-            .getOrElse(DictionaryCacheEntry(fingerprints, readDictionary(path)))
-      )
-      .result
+    DictionaryCache.getOrLoad(path, fingerprints, () => readDictionary(path))
 
   private def readDictionary(path: Path): DictionaryLoadResult =
-    if !Files.exists(path) then
-      DictionaryLoadResult(
-        Set.empty,
-        Map.empty,
-        List(s"Dictionary file does not exist: $path"),
-        Nil,
-        Nil,
-        Nil,
-        3,
-        Map.empty
-      )
-    else if Files.isDirectory(path) then
-      DictionaryLoadResult(
-        Set.empty,
-        Map.empty,
-        List(s"Dictionary path is a directory: $path"),
-        Nil,
-        Nil,
-        Nil,
-        3,
-        Map.empty
-      )
+    if !Files.exists(path) then failedLoad(s"Dictionary file does not exist: $path")
+    else if Files.isDirectory(path) then failedLoad(s"Dictionary path is a directory: $path")
     else
       try
         val affixPath  = affixPathFor(path)
         val charset    = affixPath.map(readDeclaredCharset).getOrElse(DefaultDictionaryCharset)
         val affixLines = affixPath.map(readTrimmedLines(_, charset)).getOrElse(Nil)
-        val affixRules = affixPath.map(_ => HunspellAffixParser.parse(affixLines)).getOrElse(HunspellAffixRules.empty)
-        val unsupportedAff = affixPath.map(HunspellAffixParser.unsupportedAffixDirectives(affixLines, _)).getOrElse(Nil)
+        val affixRules =
+          affixPath.map(_ => HunspellFormat.parseAffixRules(affixLines)).getOrElse(HunspellAffixRules.empty)
+        val unsupportedAff = affixPath.map(HunspellFormat.unsupportedAffixDirectives(affixLines, _)).getOrElse(Nil)
         val lines          = Files.readAllLines(path, charset)
         val entries = lines.toArray.toList
           .collect { case line: String => line.trim }
           .dropWhile(line => line.forall(_.isDigit))
           .filter(line => line.nonEmpty && !line.startsWith("#"))
-          .flatMap(line => HunspellWordExpander.parseEntry(line, affixRules))
+          .flatMap(line => HunspellFormat.parseEntry(line, affixRules))
 
         val words = entries
-          .flatMap(entry => HunspellWordExpander.expand(entry, affixRules))
-          .map(SpellChecker.normalizeWord)
+          .flatMap(entry => HunspellFormat.expand(entry, affixRules))
+          .map(DictionaryWord.normalize)
           .toSet
 
         // COMPOUNDRULE (#1187) matches compound candidates against dictionary entries' own flags, keyed by their
@@ -143,7 +192,7 @@ private[spellcheck] object DictionaryLoader:
         // unused.
         val compoundWordFlags =
           if affixRules.compoundRules.isEmpty then Map.empty[String, Set[String]]
-          else entries.groupMapReduce(entry => SpellChecker.normalizeWord(entry.word))(_.flags)(_ ++ _)
+          else entries.groupMapReduce(entry => DictionaryWord.normalize(entry.word))(_.flags)(_ ++ _)
 
         DictionaryLoadResult(
           words,
@@ -157,16 +206,10 @@ private[spellcheck] object DictionaryLoader:
         )
       catch
         case NonFatal(error) =>
-          DictionaryLoadResult(
-            Set.empty,
-            Map.empty,
-            List(s"Could not load dictionary $path: ${error.getMessage}"),
-            Nil,
-            Nil,
-            Nil,
-            3,
-            Map.empty
-          )
+          failedLoad(s"Could not load dictionary $path: ${error.getMessage}")
+
+  private def failedLoad(failure: String): DictionaryLoadResult =
+    DictionaryLoadResult(Set.empty, Map.empty, List(failure), Nil, Nil, Nil, 3, Map.empty)
 
   private def affixPathFor(dictionaryPath: Path): Option[Path] =
     SpellCheckConfig
@@ -194,5 +237,12 @@ private[spellcheck] object DictionaryLoader:
       replacements.foldLeft(merged) {
         case (acc, (source, suggestions)) =>
           acc.updated(source, (acc.getOrElse(source, Nil) ++ suggestions).distinct)
+      }
+    }
+
+  private def mergeCompoundWordFlags(maps: List[Map[String, Set[String]]]): Map[String, Set[String]] =
+    maps.foldLeft(Map.empty[String, Set[String]]) { (merged, wordFlags) =>
+      wordFlags.foldLeft(merged) {
+        case (acc, (word, flags)) => acc.updated(word, acc.getOrElse(word, Set.empty) ++ flags)
       }
     }

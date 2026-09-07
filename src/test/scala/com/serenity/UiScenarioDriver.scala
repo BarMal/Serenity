@@ -22,7 +22,7 @@ import com.serenity.ui.renderer.{
   Java2DRenderSurface,
   PixelDrawing,
   RenderSurface,
-  Renderer,
+  RendererEntryPoints,
   RoundedRectDrawing,
   SurfaceContentIdentity,
   TextDrawing
@@ -129,7 +129,7 @@ final class UiScenarioDriver private (
         environment.deviceScale
       )
       val recordingSurface = new ScenarioRecordingSurface(surface, environment.cellMetrics)
-      Renderer.render(
+      RendererEntryPoints.render(
         current,
         cursorVisible = true,
         recordingSurface,

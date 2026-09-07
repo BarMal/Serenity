@@ -15,7 +15,7 @@ import com.serenity.session.given
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{EditorPaneLayoutEngine, LayoutEngine, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -223,7 +223,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   "Renderer" should "render the cursor using theme.cursor when no override is given" in {
     val state   = AppState.initial
     val surface = new MockRenderSurface(80, 24)
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
 
     val (cx, cy) = cursorScreenPos(state)
     surface.getBg(cx, cy) shouldBe Theme.default.cursor
@@ -233,7 +233,13 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val state        = AppState.initial
     val surface      = new MockRenderSurface(80, 24)
     val breatheColor = new Color(255, 128, 0, 128)
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(80, 24), cursorColor = Some(breatheColor))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      cursorColor = Some(breatheColor)
+    )
 
     val (cx, cy) = cursorScreenPos(state)
     surface.getBg(cx, cy) shouldBe breatheColor
@@ -243,7 +249,13 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     val state        = AppState.initial
     val surface      = new MockRenderSurface(80, 24)
     val breatheColor = new Color(255, 128, 0, 128)
-    Renderer.render(state, cursorVisible = false, surface, ViewportSize(80, 24), cursorColor = Some(breatheColor))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(80, 24),
+      cursorColor = Some(breatheColor)
+    )
 
     val (cx, cy) = cursorScreenPos(state)
     surface.getBg(cx, cy) should not be breatheColor

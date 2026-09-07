@@ -12,7 +12,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -52,7 +52,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     surface.drawRunPxCalls.map(_.s).mkString should include("Language: Markdown")
   }
@@ -98,7 +98,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     (Focus.EditorPane(paneId) :: surfaces.map(surface => Focus.Surface(surface.id))).foreach { focus =>
       val surface = new MockRenderSurface(100, 30)
 
-      Renderer.render(
+      RendererEntryPoints.render(
         baseState.copy(persisted = baseState.persisted.copy(focus = focus)),
         cursorVisible = true,
         surface,
@@ -113,7 +113,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   it should "show no active editor pane only for an empty workspace" in {
     val surface = new MockRenderSurface(80, 24)
 
-    Renderer.render(AppState.empty, cursorVisible = true, surface, ViewportSize(80, 24))
+    RendererEntryPoints.render(AppState.empty, cursorVisible = true, surface, ViewportSize(80, 24))
 
     surface.drawRunPxCalls.map(_.s).mkString should include("No active editor pane")
   }
@@ -277,7 +277,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val layout   = LayoutEngine.calculateLayout(state, viewport)
     val gutter   = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     surface.getRow(gutter.y).slice(gutter.x, gutter.x + gutter.width) shouldBe "   1 "
     surface.getRow(gutter.y + 1).slice(gutter.x, gutter.x + gutter.width) shouldBe "   2 "
@@ -311,7 +311,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val layout   = LayoutEngine.calculateLayout(state, viewport)
     val lineRect = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     val firstRenderedLine =
       (lineRect.x until lineRect.right).map(x => surface.getChar(x, lineRect.y)).mkString.trim
@@ -352,7 +352,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
           .map(_.y)
           .getOrElse(fail("Expected first line-number row slot"))
 
-      Renderer.render(state, cursorVisible = true, surface, viewport)
+      RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
       withClue(s"density=$density:") {
         val firstNumber = (lineRect.x until lineRect.right).map(x => surface.getChar(x, firstRowY)).mkString.trim
@@ -393,7 +393,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         case -1    => fail("Expected second logical line to be visible")
         case index => index
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     val continuationRow =
       (lineRect.x until lineRect.right).map(x => surface.getChar(x, lineRect.y + 1)).mkString.trim
@@ -464,7 +464,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val layout   = LayoutEngine.calculateLayout(state, viewport)
     val gutter   = layout.gutterRect.getOrElse(fail("Expected cursor info gutter rect"))
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     surface.drawRunPxCalls.map(_.s).mkString should include("Line 2, Col 3")
     layout.pinnedSurfaceRects.get(SurfaceId("cursor-info-bar")) shouldBe None
@@ -499,7 +499,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     val call = surface.drawRunPxCalls
       .find(_.s.contains("Line 2, Col 3"))
@@ -531,7 +531,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
 
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     val call = surface.drawRunPxCalls
       .find(_.s.contains("Line 2, Col 3"))
@@ -569,7 +569,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val uiMetrics   = CellMetrics.fromFont(uiFont)
     val gutter      = LayoutEngine.calculateLayout(state, viewport).gutterRect.getOrElse(fail("Expected gutter rect"))
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,

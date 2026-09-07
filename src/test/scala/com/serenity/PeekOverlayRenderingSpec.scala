@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -45,13 +45,13 @@ class PeekOverlayRenderingSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "Renderer.render" should "paint quick-info peek content inside the above-cursor overlay rect" in {
+  "RendererEntryPoints.render" should "paint quick-info peek content inside the above-cursor overlay rect" in {
     val surface = new MockRenderSurface(100, 30)
     val state   = stateWithPeek("signature(value: Int)")
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.aboveCursorOverlayRect.getOrElse(fail("Expected above-cursor overlay rect"))
 
-    Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
     val renderedText =
       (overlay.x + 1 until overlay.right - 1)

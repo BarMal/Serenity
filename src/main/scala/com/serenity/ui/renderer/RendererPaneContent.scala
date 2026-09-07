@@ -7,9 +7,14 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.*
 
-/** Paints each editor pane's own content: the header/spacer chrome, the visible text rows (plain or the inline
-  * markdown-lens variant), and the per-row geometry ([[textRowMetrics]] and friends) other renderers in this package
-  * (highlights, cursors, the gutter) measure against.
+/** Paints each editor pane's own content: the header/spacer chrome and the visible text rows (plain or the inline
+  * markdown-lens variant).
+  *
+  * It also owns the per-row geometry of a pane -- [[textRowMetrics]] and the [[visualLineFits]]/[[visualLineVisible]]/
+  * [[visualLineTopPx]]/[[visualLineCellOffset]] questions derived from it. Those are public because everything that
+  * paints *onto* a pane row has to place itself against the same rows this object drew: the gutter's line numbers, the
+  * caret glyphs, the highlight backgrounds, and the reuse bands [[RendererPaneSetup.paneRecordsFor]] measures. A second
+  * copy of this arithmetic anywhere is a renderer that draws half a row out of step with the text.
   */
 object RendererPaneContent:
 
@@ -372,7 +377,7 @@ object RendererPaneContent:
             }
     }
 
-  private[renderer] def visualLineFits(
+  def visualLineFits(
     rect: LayoutRect,
     screenLineIndex: Int,
     context: RenderContext,
@@ -380,7 +385,7 @@ object RendererPaneContent:
   ): Boolean =
     textRowMetrics(rect, context, snapshot).lineFits(screenLineIndex)
 
-  private[renderer] def visualLineVisible(
+  def visualLineVisible(
     rect: LayoutRect,
     screenLineIndex: Int,
     context: RenderContext,
@@ -388,7 +393,7 @@ object RendererPaneContent:
   ): Boolean =
     textRowMetrics(rect, context, snapshot).lineVisible(screenLineIndex, context.surface.viewportHeight)
 
-  private[renderer] def visualLineTopPx(
+  def visualLineTopPx(
     rect: LayoutRect,
     screenLineIndex: Int,
     context: RenderContext,
@@ -396,7 +401,7 @@ object RendererPaneContent:
   ): Int =
     textRowMetrics(rect, context, snapshot).lineTopPx(screenLineIndex)
 
-  private[renderer] def textRowMetrics(
+  def textRowMetrics(
     rect: LayoutRect,
     context: RenderContext,
     snapshot: TextLayoutSnapshot
@@ -408,7 +413,7 @@ object RendererPaneContent:
       usesMeasuredLayout = RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
     )
 
-  private[renderer] def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
+  def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
     if visualLine.xOffsetPx <= 0.0f then 0
     else math.round(visualLine.xOffsetPx / context.cellMetrics.charWidth.toFloat).max(0)
 
@@ -473,10 +478,14 @@ object RendererPaneContent:
     context: RenderContext,
     frame: MarkdownLensFrame
   ): Unit =
-    val widthPx =
-      scaledImagePixelDimension(rect.width * context.cellMetrics.charWidth, context.surface.devicePixelScaleX)
-    val heightPx =
-      scaledImagePixelDimension(rect.height * context.cellMetrics.lineHeight, context.surface.devicePixelScaleY)
+    val widthPx = RendererMarkdownLens.scaledImagePixelDimension(
+      rect.width * context.cellMetrics.charWidth,
+      context.surface.devicePixelScaleX
+    )
+    val heightPx = RendererMarkdownLens.scaledImagePixelDimension(
+      rect.height * context.cellMetrics.lineHeight,
+      context.surface.devicePixelScaleY
+    )
     val previewFont = MarkdownDocumentPreview.inlineLensFont(
       context.textFont,
       context.cellMetrics.lineHeight,
@@ -498,6 +507,3 @@ object RendererPaneContent:
       reuseLastRenderWhileEditing = buffer.markdownPreviewEditGeneration != buffer.markdownPreviewCommittedGeneration
     )
     context.surface.pixels.drawImage(image, rect.x, rect.y, rect.width, rect.height)
-
-  private[renderer] def scaledImagePixelDimension(logicalPx: Int, scale: Double): Int =
-    math.ceil(logicalPx.max(1).toDouble * scale.max(1.0)).toInt.max(1)

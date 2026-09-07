@@ -5,15 +5,15 @@ import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.{RendererEntryPoints, RendererHighlights}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Regression coverage for issue #1246: spell-check (and any other diagnostic source sharing the same
   * `DiagnosticsState` pipeline) reaches `Renderer` as line-indexed `Diagnostic`s and already paints a gutter "!" marker
-  * (`Renderer.renderDiagnosticIndicator`), but nothing painted a highlight over the diagnostic's own text range --
-  * neither in the measured (GUI/proportional-font) drawing path nor the cell-based (TUI) one.
+  * (`RendererGutter.renderDiagnosticIndicator`), but nothing painted a highlight over the diagnostic's own text range
+  * -- neither in the measured (GUI/proportional-font) drawing path nor the cell-based (TUI) one.
   */
 class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
@@ -44,7 +44,7 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "Renderer.render" should "highlight a misspelled word's diagnostic range in the measured (GUI) drawing path" in {
+  "RendererEntryPoints.render" should "highlight a misspelled word's diagnostic range in the measured (GUI) drawing path" in {
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val buffer = Buffer
@@ -54,9 +54,9 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(100, 30)
     val diagnosticBackground =
-      Renderer.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
+      RendererHighlights.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
 
-    Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
     val highlightedRuns = surface.drawRunPxCalls.filter(_.background == diagnosticBackground).map(_.s)
 
@@ -75,9 +75,9 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     // (non-measured) drawing path -- see #1105.
     val surface = new MockRenderSurface(100, 30, fontRenderContextOverride = None)
     val diagnosticBackground =
-      Renderer.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
+      RendererHighlights.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
 
-    Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
     val highlightedCells = for
       x <- 0 until surface.width
@@ -98,10 +98,10 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(100, 30)
     val diagnosticBackground =
-      Renderer.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
+      RendererHighlights.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
 
-    Renderer.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
     diagnosticBackground should not be state.persisted.theme.highlighted.background
-    diagnosticBackground should not be Renderer.commentHighlightBackground(state.persisted.theme)
+    diagnosticBackground should not be RendererHighlights.commentHighlightBackground(state.persisted.theme)
   }

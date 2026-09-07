@@ -7,7 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +19,7 @@ class WordWrapRenderingSpec extends AnyFlatSpec with Matchers:
   given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
-  "Renderer.render" should "wrap a long document-font line onto the next visual row with the caret" in {
+  "RendererEntryPoints.render" should "wrap a long document-font line onto the next visual row with the caret" in {
     val paneId       = PaneId(0)
     val bufferId     = BufferId(1)
     val viewportSize = ViewportSize(50, 14)
@@ -50,7 +50,16 @@ class WordWrapRenderingSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
     buffer.usesTextFont shouldBe true
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, codeFont, textFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      cellMetrics,
+      None
+    )
 
     val contentRuns =
       surface.drawRunPxCalls.filter(call => call.s.nonEmpty && call.s.forall(char => char >= 'a' && char <= 'j'))

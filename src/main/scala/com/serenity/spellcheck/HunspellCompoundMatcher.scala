@@ -8,6 +8,10 @@ final private[spellcheck] case class CompoundToken(flag: String, quantifier: Com
 /** Hunspell COMPOUNDRULE matching (issue #1187): parses a dictionary's COMPOUNDRULE pattern strings into flag/
   * quantifier tokens and matches candidate compound words against them, segmenting the candidate into dictionary words
   * carrying the flags each token requires.
+  *
+  * Deliberately independent of the rest of the package: this is a self-contained grammar engine over plain strings,
+  * running on the pure check-time path against an already-loaded `DictionaryContext`, and it names no Hunspell affix
+  * type. Its whole interface is `matches`.
   */
 private[spellcheck] object HunspellCompoundMatcher:
 
@@ -19,13 +23,6 @@ private[spellcheck] object HunspellCompoundMatcher:
   ): Boolean =
     compoundRules.nonEmpty && compoundRules.exists { pattern =>
       compoundMatches(tokenizeCompoundPattern(pattern), word, compoundWordFlags, compoundMin)
-    }
-
-  def mergeCompoundWordFlags(maps: List[Map[String, Set[String]]]): Map[String, Set[String]] =
-    maps.foldLeft(Map.empty[String, Set[String]]) { (merged, wordFlags) =>
-      wordFlags.foldLeft(merged) {
-        case (acc, (word, flags)) => acc.updated(word, acc.getOrElse(word, Set.empty) ++ flags)
-      }
     }
 
   /** Parses one COMPOUNDRULE pattern into flag/quantifier tokens. A flag is either a single character (Simple flag

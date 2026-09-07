@@ -5,8 +5,13 @@ import java.awt.{Color, Font}
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 
-/** Paints the column-oriented [[OverlayRowLayout]] variants -- `Columns` and `PriorityColumns` -- extracted from
-  * [[TextOverlayRenderer]] alongside [[OverlaySegmentRowRenderer]] to keep each row-layout family in one place.
+/** Paints the column-oriented [[OverlayRowLayout]] variants -- `Columns` and `PriorityColumns` -- and owns the column
+  * geometry they lay cells out with.
+  *
+  * [[threeColumnWidths]] and [[fitCellText]] are public for that second reason: [[TextOverlayRenderer]] places the
+  * caret inside a selected column cell, and can only land it on the right pixel by measuring the cell exactly as this
+  * object drew it. A private copy of either rule in the cursor code is a caret that drifts off its cell the moment the
+  * column widths are tuned.
   */
 object OverlayColumnRowRenderer:
 
@@ -173,7 +178,7 @@ object OverlayColumnRowRenderer:
       case _ =>
         renderColumnRow(surface, x, y, width, row, theme, defaultForeground, defaultBackground, font)
 
-  private[renderer] def threeColumnWidths(width: Int): (Int, Int, Int) =
+  def threeColumnWidths(width: Int): (Int, Int, Int) =
     val safeWidth      = math.max(0, width)
     val preferredLabel = math.min(22, math.max(8, safeWidth / 3))
     val preferredValue = math.min(18, math.max(8, safeWidth / 4))
@@ -232,7 +237,7 @@ object OverlayColumnRowRenderer:
       font = font
     )
 
-  private[renderer] def fitCellText(text: String, width: Int): String =
+  def fitCellText(text: String, width: Int): String =
     if width <= 0 then ""
     else if text.length <= width then text
     else if width <= 3 then text.take(width)
