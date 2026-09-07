@@ -2,9 +2,8 @@ package com.serenity.state.models
 
 import com.serenity.ui.layout.{SplitAxis, WorkspaceNodeId, WorkspaceTree}
 
-/** Invariant checking and workspace-tree reconciliation for [[AppState]], pulled out of that file to keep it under
-  * the architecture ratchet's file-length target. Pure functions over an [[AppState]] snapshot -- no state of their
-  * own.
+/** Invariant checking and workspace-tree reconciliation for [[AppState]], pulled out of that file to keep it under the
+  * architecture ratchet's file-length target. Pure functions over an [[AppState]] snapshot -- no state of their own.
   */
 private[models] object AppStateValidation:
 

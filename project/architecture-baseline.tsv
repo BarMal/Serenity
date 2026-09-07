@@ -22,7 +22,6 @@ main/scala/com/serenity/state/manager/StateManagerComposition.scala	file length	
 main/scala/com/serenity/state/manager/StateManagerEffectHandlers.scala	file length	2759
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	file length	947
 main/scala/com/serenity/state/manager/StateManagerWorkflowCapability.scala	method submitReplaceNextEffect	85
-main/scala/com/serenity/state/models/AppState.scala	file length	969
 main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseItems	173
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	713
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceActive	360
