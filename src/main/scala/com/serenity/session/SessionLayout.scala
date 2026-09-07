@@ -11,7 +11,6 @@ import com.serenity.ui.layout.{
   WorkspaceTree
 }
 import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.presets.UiPreset.given
 
 /** Persistent layout information
   */
