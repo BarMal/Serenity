@@ -5,7 +5,7 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Regression coverage for `Renderer.renderedLeftColumn` -- a private duplicate of
+/** Regression coverage for `RendererPaneSetup.renderedLeftColumn` -- a private duplicate of
   * `LayoutEngine.clampLeftColumnForBuffer` (see [[LayoutEngineSpec]]) used to recompute the horizontal scroll clamp
   * whenever a buffer's own font measures a different `visibleColumns` than the code-font grid the pane was sized in.
   * Both copies clamped the rightward scroll to `lineLength - visibleColumns`, one column short of what's needed to keep
@@ -21,7 +21,7 @@ class RendererHorizontalScrollCursorVisibilitySpec extends AnyFlatSpec with Matc
   given Balance = Balance.default
 
   private def invokeRenderedLeftColumn(buffer: Buffer, viewport: Viewport, wordWrapEnabled: Boolean): Int =
-    val moduleField = Class.forName("com.serenity.ui.renderer.Renderer$").getField("MODULE$")
+    val moduleField = Class.forName("com.serenity.ui.renderer.RendererPaneSetup$").getField("MODULE$")
     val module      = moduleField.get(null)
     val method = module.getClass.getDeclaredMethod(
       "renderedLeftColumn",
@@ -32,7 +32,7 @@ class RendererHorizontalScrollCursorVisibilitySpec extends AnyFlatSpec with Matc
     method.setAccessible(true)
     method.invoke(module, buffer, viewport, Boolean.box(wordWrapEnabled)).asInstanceOf[Int]
 
-  "Renderer.renderedLeftColumn" should "keep an end-of-line cursor visible when scrolling horizontally with word wrap off" in {
+  "RendererPaneSetup.renderedLeftColumn" should "keep an end-of-line cursor visible when scrolling horizontally with word wrap off" in {
     val bufferId       = BufferId(1)
     val lineContent    = "0123456789" * 20
     val bufferBase     = Buffer.fromString(bufferId, lineContent)
