@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.config.{AppMode, CornerPosition}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -47,7 +47,7 @@ class ModeTabWidgetRenderSpec extends AnyFlatSpec with Matchers:
   private def renderedText(state: AppState): String =
     val surface  = new MockRenderSurface(100, 24)
     val viewport = ViewportSize(100, 24)
-    Renderer.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
     surface.drawRunPxCalls.map(_.s).mkString("\n")
 
   "The mode indicator" should "append the glyph to the gutter in the bottom-right corner by default" in {

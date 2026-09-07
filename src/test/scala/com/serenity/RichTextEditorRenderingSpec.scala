@@ -7,7 +7,7 @@ import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition}
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.{RichTextStyling, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -155,7 +155,16 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      textFont,
+      monoMetrics,
+      None
+    )
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.bold))
     surface.styleCalls should contain(surface.StyleCall("disable", TextStyle.bold))
@@ -172,7 +181,16 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      textFont,
+      monoMetrics,
+      None
+    )
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.bold))
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.underlined))
@@ -193,7 +211,16 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      textFont,
+      monoMetrics,
+      None
+    )
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.italic))
   }
@@ -207,7 +234,16 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      textFont,
+      monoMetrics,
+      None
+    )
 
     surface.styleCalls should not contain surface.StyleCall("enable", TextStyle.bold)
     surface.styleCalls should not contain surface.StyleCall("enable", TextStyle.underlined)
@@ -234,7 +270,16 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      textFont,
+      monoMetrics,
+      None
+    )
 
     surface.styleCalls should contain(
       surface.StyleCall("enable", TextStyle(fontFamily = Some(Font.SERIF), fontSize = Some(18.0f)))
@@ -257,7 +302,16 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      textFont,
+      monoMetrics,
+      None
+    )
 
     surface.styleCalls should contain(
       surface.StyleCall("enable", TextStyle(isBold = true, fontSize = Some(22.0f)))
@@ -280,7 +334,16 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
     val state   = buildState(buffer)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, textFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      textFont,
+      monoMetrics,
+      None
+    )
 
     val drawCall = surface.drawRunPxCalls.find(_.s == "Centered").getOrElse(fail("expected centered rich text draw"))
     drawCall.xPx should be > 0.0f

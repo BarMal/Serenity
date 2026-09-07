@@ -21,7 +21,7 @@ import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Buffer, BufferId, Damage}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.{RendererCursorOverlay, RendererEntryPoints}
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 /** The TUI capability bundle for `AppRuntime.run` (issue #1112): the terminal-mode counterpart to `Main`'s Swing
@@ -176,7 +176,7 @@ object TuiRuntime:
     damage: Damage
   ): Unit =
     if cursorVisible then
-      val _ = Renderer.renderWithCursorOverlay(
+      val _ = RendererCursorOverlay.renderWithCursorOverlay(
         state,
         surface,
         size,
@@ -190,7 +190,7 @@ object TuiRuntime:
       )
       ()
     else
-      Renderer.render(
+      RendererEntryPoints.render(
         state,
         cursorVisible = false,
         surface,
@@ -213,7 +213,7 @@ object TuiRuntime:
     cursorColor: Option[java.awt.Color],
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
   ): Unit =
-    val _ = Renderer.renderCursorOnly(
+    val _ = RendererCursorOverlay.renderCursorOnly(
       state,
       cursorVisible,
       surface,

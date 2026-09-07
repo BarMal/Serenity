@@ -8,7 +8,7 @@ import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.SpellCheckConfig
 import com.serenity.diagnostics.Trace
-import com.serenity.spellcheck.SpellChecker
+import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, ModalEventReducer}
 import org.typelevel.log4cats.Logger
@@ -154,7 +154,7 @@ final private[manager] class StateManagerOperationBoundary private (
       Trace.timed("analysis.documentAnalysisJob") {
         stateRef.get.flatMap { snapshot =>
           val spellCheckConfig = snapshot.persisted.config.languageToolsConfig.spellCheck
-          IO.blocking(SpellChecker.loadDictionarySnapshot(spellCheckConfig)).flatMap { dictionary =>
+          IO.blocking(DictionaryLoader.loadSnapshot(spellCheckConfig)).flatMap { dictionary =>
             val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
             val analyzed = SpellChecker.refreshDiagnostics(snapshot, dictionary)
             stateRef

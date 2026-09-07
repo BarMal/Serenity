@@ -10,7 +10,7 @@ import com.serenity.state.models.{Focus, SurfaceContent}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -171,7 +171,16 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       val font        = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
       val cellMetrics = CellMetrics.fromFont(font)
 
-      Renderer.render(finalState, cursorVisible = true, surface, initialViewportSize, font, font, cellMetrics, None)
+      RendererEntryPoints.render(
+        finalState,
+        cursorVisible = true,
+        surface,
+        initialViewportSize,
+        font,
+        font,
+        cellMetrics,
+        None
+      )
 
       (0 until initialViewportSize.height).map(surface.getRow).mkString("\n") should include(
         "opened from launch option"

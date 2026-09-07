@@ -330,7 +330,7 @@ object TextOverlayRenderer:
         val indentedX     = x + pad
         val indentedWidth = width - pad
         if rowView.row.segments.nonEmpty then
-          renderInlineSegments(
+          OverlaySegmentRowRenderer.renderInlineSegments(
             surface,
             indentedX,
             y,
@@ -354,13 +354,53 @@ object TextOverlayRenderer:
           )
         else CharacterRenderer.renderStringPlain(surface, indentedX, y, rowView.row.plainText.take(indentedWidth))
       case OverlayRowLayout.Distributed =>
-        renderDistributedRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        OverlaySegmentRowRenderer.renderDistributedRow(
+          surface,
+          x,
+          y,
+          width,
+          rowView.row,
+          theme,
+          rowForeground,
+          rowBackground,
+          font
+        )
       case OverlayRowLayout.Split =>
-        renderSplitRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        OverlaySegmentRowRenderer.renderSplitRow(
+          surface,
+          x,
+          y,
+          width,
+          rowView.row,
+          theme,
+          rowForeground,
+          rowBackground,
+          font
+        )
       case OverlayRowLayout.Columns =>
-        renderColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        OverlayColumnRowRenderer.renderColumnRow(
+          surface,
+          x,
+          y,
+          width,
+          rowView.row,
+          theme,
+          rowForeground,
+          rowBackground,
+          font
+        )
       case OverlayRowLayout.PriorityColumns =>
-        renderPriorityColumnRow(surface, x, y, width, rowView.row, theme, rowForeground, rowBackground, font)
+        OverlayColumnRowRenderer.renderPriorityColumnRow(
+          surface,
+          x,
+          y,
+          width,
+          rowView.row,
+          theme,
+          rowForeground,
+          rowBackground,
+          font
+        )
 
     if cursorVisible then
       rowView.row.cursorColumn
@@ -436,8 +476,8 @@ object TextOverlayRenderer:
   private def columnCursorPlacement(row: OverlayRow, x: Int, width: Int): Option[CursorPlacement] =
     row.segments match
       case _ :: _ :: value :: Nil if value.selected =>
-        val (labelWidth, hintWidth, valueWidth) = threeColumnWidths(width)
-        val valueText                           = fitCellText(value.text, valueWidth)
+        val (labelWidth, hintWidth, valueWidth) = OverlayColumnRowRenderer.threeColumnWidths(width)
+        val valueText                           = OverlayColumnRowRenderer.fitCellText(value.text, valueWidth)
         val valueX = x + labelWidth + hintWidth + 2 + math.max(0, valueWidth - valueText.length)
         Some(CursorPlacement(valueX, valueText, useMeasured = true))
       case _ =>
@@ -470,539 +510,6 @@ object TextOverlayRenderer:
         ),
         useMeasuredCursor
       )
-
-  private def renderDistributedRow(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    row: OverlayRow,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font
-  ): Unit =
-    val segments = row.segments
-    if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
-    else if segments.exists(_.allocatedWidth.nonEmpty) then
-      renderCompactDistributedRow(surface, x, y, width, row, theme, defaultForeground, defaultBackground, font)
-    else
-      val baseCellWidth = width / segments.length
-      val remainder     = width % segments.length
-
-      val _ = segments.zipWithIndex.foldLeft(x) {
-        case (cursorX, (segment, index)) =>
-          val cellWidth = baseCellWidth + (if index < remainder then 1 else 0)
-          renderSegmentCell(
-            surface,
-            cursorX,
-            y,
-            cellWidth,
-            segment,
-            theme,
-            defaultForeground,
-            defaultBackground,
-            font
-          )
-          cursorX + cellWidth
-      }
-      ()
-
-  private def renderCompactDistributedRow(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    row: OverlayRow,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font
-  ): Unit =
-    val segments = row.segments
-    if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
-    else
-      val startX = x + row.leadingPadding.max(0).min(width)
-      val _ = segments.zipWithIndex.foldLeft(startX) {
-        case (cursorX, (segment, index)) =>
-          val remainingWidth = (x + width - cursorX).max(0)
-          val cellWidth      = segment.allocatedWidth.getOrElse(0).min(remainingWidth)
-          renderSegmentCell(
-            surface,
-            cursorX,
-            y,
-            cellWidth,
-            segment,
-            theme,
-            defaultForeground,
-            defaultBackground,
-            font
-          )
-          val afterCell = cursorX + cellWidth
-          val afterSeparator =
-            if segment.trailingSeparator && afterCell < x + width then
-              surface.setForegroundColor(defaultForeground)
-              surface.setBackgroundColor(defaultBackground)
-              CharacterRenderer.renderChar(surface, afterCell, y, '│')
-              afterCell + 1
-            else afterCell
-          if index < segments.length - 1 && afterSeparator < x + width then afterSeparator + 1
-          else afterSeparator
-      }
-      ()
-
-  private def renderSplitRow(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    row: OverlayRow,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font
-  ): Unit =
-    row.segments match
-      case left :: rightSegments if rightSegments.nonEmpty =>
-        if row.cursorColumn.nonEmpty then
-          renderEditableSplitRow(
-            surface,
-            x,
-            y,
-            width,
-            left,
-            rightSegments,
-            theme,
-            defaultForeground,
-            defaultBackground,
-            font
-          )
-        else
-          val rightTexts      = rightSegments.map(_.text)
-          val rightGroupText  = rightTexts.mkString(" ")
-          val rightGroupWidth = math.min(width, rightGroupText.length)
-          val leftMaxWidth    = math.max(0, width - rightGroupWidth - 1)
-          val leftText        = left.text.take(leftMaxWidth)
-
-          renderSegmentText(
-            surface,
-            x,
-            y,
-            leftText.length,
-            leftText,
-            left,
-            theme,
-            defaultForeground,
-            defaultBackground,
-            font
-          )
-
-          val rightStartX = x + math.max(0, width - rightGroupWidth)
-          val _ = rightSegments.foldLeft(rightStartX) { (cursorX, segment) =>
-            val text = segment.text.take(math.max(0, x + width - cursorX))
-            renderSegmentText(
-              surface,
-              cursorX,
-              y,
-              text.length,
-              text,
-              segment,
-              theme,
-              defaultForeground,
-              defaultBackground,
-              font
-            )
-            cursorX + text.length + 1
-          }
-      case _ =>
-        CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
-
-  private def renderEditableSplitRow(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    left: OverlaySegment,
-    rightSegments: List[OverlaySegment],
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font
-  ): Unit =
-    val leftText = left.text.take(width)
-    renderSegmentText(
-      surface,
-      x,
-      y,
-      leftText.length,
-      leftText,
-      left,
-      theme,
-      defaultForeground,
-      defaultBackground,
-      font
-    )
-
-    val firstRightX = x + leftText.length + 1
-    val _ = rightSegments.foldLeft(firstRightX) { (cursorX, segment) =>
-      val remainingWidth = math.max(0, x + width - cursorX)
-      val text           = segment.text.take(remainingWidth)
-      renderSegmentText(
-        surface,
-        cursorX,
-        y,
-        text.length,
-        text,
-        segment,
-        theme,
-        defaultForeground,
-        defaultBackground,
-        font
-      )
-      cursorX + text.length + 1
-    }
-
-  private def renderInlineSegments(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    row: OverlayRow,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font
-  ): Unit =
-    val rightEdge = x + width
-    val _ = row.segments.foldLeft(x) { (cursorX, segment) =>
-      val remainingWidth = math.max(0, rightEdge - cursorX)
-      val text           = segment.text.take(remainingWidth)
-      renderSegmentText(
-        surface,
-        cursorX,
-        y,
-        text.length,
-        text,
-        segment,
-        theme,
-        defaultForeground,
-        defaultBackground,
-        font
-      )
-      val nextX = cursorX + text.length
-      if nextX < rightEdge then nextX + 1 else nextX
-    }
-
-  private def renderColumnRow(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    row: OverlayRow,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font
-  ): Unit =
-    row.segments match
-      case label :: hint :: value :: Nil =>
-        val (labelWidth, hintWidth, valueWidth) = threeColumnWidths(width)
-        renderColumnCell(
-          surface,
-          x,
-          y,
-          labelWidth,
-          label,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font
-        )
-        renderColumnCell(
-          surface,
-          x + labelWidth + 1,
-          y,
-          hintWidth,
-          hint,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font
-        )
-        renderColumnCell(
-          surface,
-          x + labelWidth + hintWidth + 2,
-          y,
-          valueWidth,
-          value,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font,
-          alignRight = true
-        )
-      case label :: value :: scope :: breadcrumb :: Nil =>
-        val (labelWidth, valueWidth, scopeWidth, breadcrumbWidth) = fourColumnWidths(width)
-        renderColumnCell(
-          surface,
-          x,
-          y,
-          labelWidth,
-          label,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font
-        )
-        renderColumnCell(
-          surface,
-          x + labelWidth + 1,
-          y,
-          valueWidth,
-          value,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font
-        )
-        renderColumnCell(
-          surface,
-          x + labelWidth + valueWidth + 2,
-          y,
-          scopeWidth,
-          scope,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font
-        )
-        renderColumnCell(
-          surface,
-          x + labelWidth + valueWidth + scopeWidth + 3,
-          y,
-          breadcrumbWidth,
-          breadcrumb,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font,
-          alignRight = true
-        )
-      case label :: hint :: Nil =>
-        val (labelWidth, hintWidth) = twoColumnWidths(width)
-        renderColumnCell(
-          surface,
-          x,
-          y,
-          labelWidth,
-          label,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font
-        )
-        renderColumnCell(
-          surface,
-          x + labelWidth + 1,
-          y,
-          hintWidth,
-          hint,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font
-        )
-      case _ =>
-        CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
-
-  private def renderPriorityColumnRow(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    row: OverlayRow,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font
-  ): Unit =
-    row.segments match
-      case label :: description :: shortcut :: Nil =>
-        val (labelWidth, descriptionWidth, shortcutWidth) = priorityThreeColumnWidths(width)
-        renderColumnCell(surface, x, y, labelWidth, label, theme, defaultForeground, defaultBackground, font)
-        renderColumnCell(
-          surface,
-          x + labelWidth + 1,
-          y,
-          descriptionWidth,
-          description,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font
-        )
-        renderColumnCell(
-          surface,
-          x + labelWidth + descriptionWidth + 2,
-          y,
-          shortcutWidth,
-          shortcut,
-          theme,
-          defaultForeground,
-          defaultBackground,
-          font,
-          alignRight = true
-        )
-      case _ =>
-        renderColumnRow(surface, x, y, width, row, theme, defaultForeground, defaultBackground, font)
-
-  private def threeColumnWidths(width: Int): (Int, Int, Int) =
-    val safeWidth      = math.max(0, width)
-    val preferredLabel = math.min(22, math.max(8, safeWidth / 3))
-    val preferredValue = math.min(18, math.max(8, safeWidth / 4))
-    val (labelWidth, valueWidth) =
-      if preferredLabel + preferredValue + 2 <= safeWidth then (preferredLabel, preferredValue)
-      else (math.min(22, safeWidth / 3), math.min(18, safeWidth / 4))
-    (labelWidth, math.max(0, safeWidth - labelWidth - valueWidth - 2), valueWidth)
-
-  private def priorityThreeColumnWidths(width: Int): (Int, Int, Int) =
-    val safeWidth      = math.max(0, width)
-    val preferredLabel = math.min(36, math.max(8, (safeWidth * 3) / 5))
-    val preferredValue = math.min(18, math.max(8, safeWidth / 5))
-    val (labelWidth, valueWidth) =
-      if preferredLabel + preferredValue + 2 <= safeWidth then (preferredLabel, preferredValue)
-      else (math.min(22, safeWidth / 3), math.min(18, safeWidth / 4))
-    (labelWidth, math.max(0, safeWidth - labelWidth - valueWidth - 2), valueWidth)
-
-  private def fourColumnWidths(width: Int): (Int, Int, Int, Int) =
-    val safeWidth       = math.max(0, width)
-    val labelWidth      = math.min(28, math.max(8, (safeWidth * 2) / 5))
-    val valueWidth      = math.min(12, math.max(0, safeWidth / 5))
-    val scopeWidth      = math.min(10, math.max(0, safeWidth / 8))
-    val breadcrumbWidth = math.max(0, safeWidth - labelWidth - valueWidth - scopeWidth - 3)
-    (labelWidth, valueWidth, scopeWidth, breadcrumbWidth)
-
-  private def twoColumnWidths(width: Int): (Int, Int) =
-    val safeWidth      = math.max(0, width)
-    val preferredLabel = math.min(22, math.max(8, safeWidth / 3))
-    val labelWidth     = if preferredLabel + 1 <= safeWidth then preferredLabel else math.min(22, safeWidth / 3)
-    (labelWidth, math.max(0, safeWidth - labelWidth - 1))
-
-  private def renderColumnCell(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    segment: OverlaySegment,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font,
-    alignRight: Boolean = false
-  ): Unit =
-    val text    = fitCellText(segment.text, width)
-    val renderX = if alignRight then x + math.max(0, width - text.length) else x
-    renderSegmentText(
-      surface,
-      renderX,
-      y,
-      text.length,
-      text,
-      segment,
-      theme,
-      defaultForeground,
-      defaultBackground,
-      font = font
-    )
-
-  private def fitCellText(text: String, width: Int): String =
-    if width <= 0 then ""
-    else if text.length <= width then text
-    else if width <= 3 then text.take(width)
-    else text.take(width - 3) + "..."
-
-  private def renderSegmentCell(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    segment: OverlaySegment,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font
-  ): Unit =
-    val iconWidth   = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
-    val iconGap     = if iconWidth > 0 && width > iconWidth && segment.text.nonEmpty then 1 else 0
-    val text        = segment.text.take(math.max(0, width - iconWidth - iconGap))
-    val renderWidth = iconWidth + iconGap + text.length
-    val leftPad     = math.max(0, (width - renderWidth) / 2)
-    val renderX     = x + leftPad
-    renderSegmentText(
-      surface,
-      renderX,
-      y,
-      renderWidth,
-      text,
-      segment,
-      theme,
-      defaultForeground,
-      defaultBackground,
-      font
-    )
-
-  private def renderSegmentText(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    segmentText: String,
-    segment: OverlaySegment,
-    theme: Theme,
-    defaultForeground: Color,
-    defaultBackground: Color,
-    font: Font
-  ): Unit =
-    if width > 0 then
-      val segmentBackground =
-        segment.backgroundColor
-          .map(_.withAlpha(defaultBackground.getAlpha))
-          .getOrElse(
-            if segment.selected then theme.highlighted.background.withAlpha(defaultBackground.getAlpha)
-            else if segment.tone == OverlayTone.Error then theme.error.background.withAlpha(defaultBackground.getAlpha)
-            else defaultBackground
-          )
-      val segmentForeground =
-        segment.foregroundColor
-          .map(_.withAlpha(defaultForeground.getAlpha))
-          .getOrElse(
-            if segment.selected then theme.highlighted.foreground.withAlpha(defaultForeground.getAlpha)
-            else if segment.tone == OverlayTone.Muted then theme.muted.withAlpha(defaultForeground.getAlpha)
-            else if segment.tone == OverlayTone.Error then theme.error.foreground.withAlpha(defaultForeground.getAlpha)
-            else defaultForeground
-          )
-      surface.setForegroundColor(segmentForeground)
-      surface.setBackgroundColor(segmentBackground)
-      val inlineIcon = segment.inlineIcon.filter(_ => width > 0)
-      inlineIcon.foreach { icon =>
-        segment.inlineIconFontFamily.foreach(family =>
-          surface.text.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
-        )
-        CharacterRenderer.renderStringPlain(surface, x, y, icon.take(width))
-        if segment.inlineIconFontFamily.nonEmpty then surface.text.setFont(font)
-      }
-      val iconWidth = inlineIcon.map(_.length.min(width)).getOrElse(0)
-      val iconGap   = if iconWidth > 0 && width > iconWidth && segmentText.nonEmpty then 1 else 0
-      segment.fontFamily.foreach(family =>
-        surface.text.setFont(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
-      )
-      CharacterRenderer.renderStringPlain(
-        surface,
-        x + iconWidth + iconGap,
-        y,
-        segmentText.take(math.max(0, width - iconWidth - iconGap))
-      )
-      if segment.fontFamily.nonEmpty then surface.text.setFont(font)
 
   // #1105: drawRunPx is a no-op on a surface with no FontRenderContext (a terminal), so the measured path can never be
   // taken there regardless of what the font alone would call for (ligatures, proportional advances, ...). Every real

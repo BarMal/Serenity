@@ -6,7 +6,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -21,10 +21,15 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     StateManager.apply(logger).unsafeRunSync()
 
-  "Renderer.render" should "complete without error given an AppState with no active pane" in {
+  "RendererEntryPoints.render" should "complete without error given an AppState with no active pane" in {
     val surface = new MockRenderSurface(80, 24)
     val state   = AppState.empty
-    noException should be thrownBy Renderer.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+    noException should be thrownBy RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24)
+    )
   }
 
   it should "complete without error given a pane with an empty buffer" in {
@@ -37,7 +42,12 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
     val finalState = sm.getCurrentState.unsafeRunSync()
-    noException should be thrownBy Renderer.render(finalState, cursorVisible = false, surface, ViewportSize(80, 24))
+    noException should be thrownBy RendererEntryPoints.render(
+      finalState,
+      cursorVisible = false,
+      surface,
+      ViewportSize(80, 24)
+    )
   }
 
   it should "complete without error given a pane with text and a cursor in the middle" in {
@@ -51,7 +61,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     sm.setCursorPosition(paneId, 0, 6).unsafeRunSync()
 
     val finalState = sm.getCurrentState.unsafeRunSync()
-    Renderer.render(finalState, cursorVisible = true, surface, ViewportSize(80, 24))
+    RendererEntryPoints.render(finalState, cursorVisible = true, surface, ViewportSize(80, 24))
 
     (0 until surface.height).map(surface.getRow).mkString("\n") should include("Hello, World!")
   }

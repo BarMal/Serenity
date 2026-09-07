@@ -158,8 +158,20 @@ object RendererMarkdownLens:
         sourceLineCount = math.min(maxSourceLines, lineCount - firstSourceLine)
       )
 
-  private[renderer] def markdownPreviewSourceLineLimit(visibleRows: Int): Int =
+  /** How many source lines a markdown preview windows over `visibleRows` of screen. Public because both markdown
+    * preview paths must window the same way: the inline lens here, and the split-preview panel in
+    * [[RendererFloatingPanels]]. A panel that windowed differently would scroll out of step with the lens over the same
+    * document.
+    */
+  def markdownPreviewSourceLineLimit(visibleRows: Int): Int =
     math.max(MinMarkdownPreviewSourceLines, visibleRows.max(1) * MarkdownPreviewOverscanFactor)
+
+  /** Device-pixel size of a markdown preview image whose logical size is `logicalPx`. Shared by the inline lens image
+    * ([[RendererPaneContent]]) and the split-preview panel image ([[RendererFloatingPanels]]) so both render at the
+    * screen's real resolution rather than the logical cell grid's.
+    */
+  def scaledImagePixelDimension(logicalPx: Int, scale: Double): Int =
+    math.ceil(logicalPx.max(1).toDouble * scale.max(1.0)).toInt.max(1)
 
   private def activeMarkdownBlockRanges(buffer: Buffer): List[Range.Inclusive] =
     val lineCount = buffer.document.content.lineCount

@@ -46,10 +46,10 @@ object AppRuntime:
     * (see [[awaitFocusedIdleTick]]).
     *
     * `isTuiMode` adds a second, TUI-specific reason to return `None` on top of the existing motion-disabled one
-    * (#1170): in TUI blink mode the caret is delegated to the terminal's own cursor (`Renderer.presentHardwareCursor`),
-    * which owns blink timing entirely, so the app has no idle work left to do. Breathe mode is the documented exception
-    * -- it animates color/opacity over time, which a terminal cursor style can't represent -- so it keeps the normal
-    * cadence.
+    * (#1170): in TUI blink mode the caret is delegated to the terminal's own cursor
+    * (`RendererCursorOverlay.presentHardwareCursor`), which owns blink timing entirely, so the app has no idle work
+    * left to do. Breathe mode is the documented exception -- it animates color/opacity over time, which a terminal
+    * cursor style can't represent -- so it keeps the normal cadence.
     */
   private[serenity] def cursorIdleInterval(config: AppConfig, isTuiMode: Boolean = false): Option[FiniteDuration] =
     if isTuiMode && config.cursorMode == CursorMode.Blink then None
@@ -655,11 +655,11 @@ object AppRuntime:
 
   /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
     * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every
-    * visible glyph/background colour (see Renderer.withEffectiveTheme) -- both require the full canvas. Surface
-    * animations (command palette, panel fades) are drawn through the same overlay-scene machinery as full renders, not
-    * the cursor-only path, so they need it too. The window sitter is the one exception: its glyph lives entirely in the
-    * window chrome (SwingWindow.updateWindowSitter, driven by syncChromeTheme, which runs before either render path
-    * every frame regardless) and never touches the canvas -- so it alone keeps the fast loop running (see
+    * visible glyph/background colour (see RendererEntryPoints.withEffectiveTheme) -- both require the full canvas.
+    * Surface animations (command palette, panel fades) are drawn through the same overlay-scene machinery as full
+    * renders, not the cursor-only path, so they need it too. The window sitter is the one exception: its glyph lives
+    * entirely in the window chrome (SwingWindow.updateWindowSitter, driven by syncChromeTheme, which runs before either
+    * render path every frame regardless) and never touches the canvas -- so it alone keeps the fast loop running (see
     * hasActiveAnimations) without forcing a full repaint each frame.
     */
   private[serenity] def needsFullContentRender(

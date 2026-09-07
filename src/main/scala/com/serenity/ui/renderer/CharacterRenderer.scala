@@ -10,6 +10,11 @@ import com.serenity.text.TextEditing
 import com.serenity.ui.layout.CharWidth
 import com.serenity.ui.theme.{LexState, StyledText, TextStyle, Theme}
 
+/** Paints text onto a [[RenderSurface]] in the two ways a surface can accept it: the cell-grid path (`putString`,
+  * counting screen columns) and the measured pixel path ([[renderMeasuredLineWithAnimation]], laying glyph runs out
+  * along a visual line's own caret stops). Both share this object's run-splitting, animation-colour lookup and
+  * codepoint width rules, so a line drawn either way agrees with the other about where each character sits.
+  */
 object CharacterRenderer:
 
   /** A run of text to paint, with both coordinates it sits at: `startX` is a *cell* column on the screen grid (a wide
@@ -197,8 +202,9 @@ object CharacterRenderer:
 
   /** Render a visual line using pixel-precision caret stops.
     *
-    * Groups consecutive characters that share the same effective fg/bg color into runs, then calls
-    * [[RenderSurface.drawRunPx]] for each run. Callers must set the surface font before this call.
+    * Walks the line by grapheme cluster (so a combining mark or an emoji sequence is never split across two runs),
+    * groups consecutive clusters sharing the same effective fg/bg colour and style into runs, and calls
+    * [[RenderSurface.drawRunPx]] for each. Callers must set the surface font before this call.
     *
     * @param xOriginPx
     *   pixel X of the pane's left edge

@@ -7,14 +7,16 @@ import com.serenity.state.manager.AuthoritativeUiScene
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
-/** The primary frame-rendering entry points `Renderer`'s public `render`/`renderWithRepaintRegion` methods forward to:
-  * a full frame either on a `SwingWindow` or a surface-generic [[RenderSurface]], plus the shared startup-page and
-  * theme-blend plumbing every one of them goes through first. Cursor-only and cursor-overlay entry points live
-  * separately in [[RendererCursorOverlay]].
+/** The package's entry point for painting a whole frame: a full frame either on a `SwingWindow` or a surface-generic
+  * [[RenderSurface]], plus the startup-page and theme-blend plumbing every frame goes through first. Cursor-only and
+  * cursor-overlay frames are a separate entry point, [[RendererCursorOverlay]]; it composes the same plumbing exposed
+  * here ([[withEffectiveTheme]], [[withSceneIfNeeded]], [[renderStartPageFrame]]), which is why those are public rather
+  * than private to this object -- both entry points must resolve a theme transition, a start page and a scene the same
+  * way or the two paths disagree about what frame they are painting.
   */
 object RendererEntryPoints:
 
-  private[renderer] def withEffectiveTheme(state: AppState): AppState =
+  def withEffectiveTheme(state: AppState): AppState =
     state.runtime.themeTransition match
       case None => state
       case Some(t) =>
@@ -27,7 +29,7 @@ object RendererEntryPoints:
       case List(UiSurface(_, SurfaceContent.StartPage(page), _, _)) => Some(page)
       case _                                                        => None
 
-  private[renderer] def renderStartPageFrame(
+  def renderStartPageFrame(
     state: AppState,
     page: StartupPage,
     surface: RenderSurface,
@@ -52,7 +54,7 @@ object RendererEntryPoints:
     surface.effects.foreach(_.applyPostProcessing(state.persisted.config.surfaceConfig.postProcessingEffect))
     surface.flush()
 
-  private[renderer] def withSceneIfNeeded[A](
+  private[serenity] def withSceneIfNeeded[A](
     state: AppState,
     buildScene: => UiSceneSnapshot
   )(startup: StartupPage => A)(editor: UiSceneSnapshot => A): A =
@@ -214,7 +216,7 @@ object RendererEntryPoints:
     * `None` means the whole canvas has to be repainted. `Some(rect)` means everything outside `rect` is already correct
     * on screen; an empty rect means the frame is pixel-identical to the one on screen.
     */
-  private[renderer] def renderWithRepaintRegion(
+  private[serenity] def renderWithRepaintRegion(
     state: AppState,
     cursorVisible: Boolean,
     surface: RenderSurface,
@@ -260,7 +262,7 @@ object RendererEntryPoints:
     * Exposed for testing #963's bounded-repaint region: `onCursorOverlayReady` unions this same geometry (from both the
     * previous and current frame) with the base frame's own dirty region.
     */
-  private[renderer] def cursorRepaintRects(
+  private[serenity] def cursorRepaintRects(
     state: AppState,
     surface: RenderSurface,
     viewportSize: ViewportSize,

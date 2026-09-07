@@ -7,17 +7,6 @@ import com.serenity.config.PostProcessingEffect
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
-/** Per-pane geometry for this frame: which buffer line each visual row shows, to translate `Damage`'s buffer-line facts
-  * into row indices, and the pixel band each row owns, to know what a preserved row's pixels actually cover.
-  */
-final case class PaneFrameRecord(
-    bufferId: BufferId,
-    rowBufferLines: Vector[Int],
-    rowRects: Vector[PixelRect],
-    overflowingRows: Set[Int],
-    snapshot: TextLayoutSnapshot
-)
-
 /** What a frame decided to reuse: the rows it still has to draw per pane and the pixel bands it kept. */
 final case class FramePlan(
     dirtyRowsByPane: Map[PaneId, Set[Int]],
@@ -28,9 +17,13 @@ final case class FramePlan(
 
 /** Decides what a frame actually has to (re)draw and paints the resulting layer stack: the row-level reuse plan
   * ([[planFrame]]/[[dirtyRowsFor]]), the modal/panel layer caching ([[paintModalLayer]]/[[paintPanelLayer]]), and the
-  * top-level per-frame orchestration ([[renderFrame]]/[[paintFrameLayers]]) that ties them together. Split out of
-  * `Renderer` as the seam between "what changed" (fed by [[RendererFrameState]]) and "what to paint" (the
-  * feature-specific renderers in the rest of this package).
+  * top-level per-frame orchestration ([[renderFrame]]/[[paintFrameLayers]]) that ties them together. The seam between
+  * "what changed" (fed by [[RendererFrameState]]) and "what to paint" (the feature-specific renderers in the rest of
+  * this package).
+  *
+  * It owns the layer-buffer reuse policy for the whole package, which is why [[paintPanelLayer]]/[[panelDirtyCheck]]
+  * are public: [[RendererFloatingPanels]] paints each panel *through* them rather than deciding for itself when a
+  * cached panel image is still valid, since that decision depends on frame-wide damage the panel renderer never sees.
   */
 object RendererFramePlanner:
 
@@ -212,7 +205,7 @@ object RendererFramePlanner:
     * precondition (`renderModalLayer` never reads pixels back off the surface it paints onto) that keeps this safe for
     * the modal specifically while pinned/expanded panels (which do, via `blurRegion`) aren't yet covered.
     */
-  private[renderer] def paintModalLayer(
+  private def paintModalLayer(
     state: AppState,
     context: RenderContext,
     scene: UiSceneSnapshot,
@@ -278,7 +271,7 @@ object RendererFramePlanner:
     * per-surface check applies exactly as it does for the modal: a panel only redraws when its own `Damage.Surface`
     * entry says so.
     */
-  private[renderer] def panelDirtyCheck(damage: Damage, blurRadius: Float)(surfaceId: SurfaceId): Boolean =
+  def panelDirtyCheck(damage: Damage, blurRadius: Float)(surfaceId: SurfaceId): Boolean =
     Damage.narrowToSurface(damage, surfaceId) != Damage.Nothing || (blurRadius > 0f && damage != Damage.Nothing)
 
   /** Paint one pinned/expanded/floating panel's own content into an isolated layer buffer, reusing its last-painted
@@ -298,7 +291,7 @@ object RendererFramePlanner:
     * directly into the shared surface every frame exactly as before this stage -- the same TUI exclusion #1100 stage 2
     * documented for the modal.
     */
-  private[renderer] def paintPanelLayer(
+  def paintPanelLayer(
     context: RenderContext,
     surfaceId: SurfaceId,
     frameRect: LayoutRect,
@@ -365,7 +358,7 @@ object RendererFramePlanner:
     * entirely, where no pane row survives -- the accumulated damage this identity was tracking is now moot, since
     * everything just got redrawn from nothing this surface's own bookkeeping remembers.
     */
-  private[renderer] def forgetPreservedContent(surface: RenderSurface, output: Option[FrameOutput]): Unit =
+  def forgetPreservedContent(surface: RenderSurface, output: Option[FrameOutput]): Unit =
     surface.persistentContentKey.foreach { key =>
       RendererFrameState.bufferDamage.synchronized {
         val _ = RendererFrameState.bufferDamage.remove(key)
@@ -528,7 +521,7 @@ object RendererFramePlanner:
           case (rect, row) if vacatedRects.exists(rect.intersects) => row
         }.toSet
 
-  private[renderer] def prepareScene(
+  def prepareScene(
     state: AppState,
     surface: RenderSurface,
     viewportSize: ViewportSize,

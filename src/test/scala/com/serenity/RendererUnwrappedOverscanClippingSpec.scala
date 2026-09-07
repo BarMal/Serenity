@@ -6,7 +6,7 @@ import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +26,7 @@ class RendererUnwrappedOverscanClippingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "Renderer.render" should "never paint a character past the editor pane's right edge when word wrap is disabled" in {
+  "RendererEntryPoints.render" should "never paint a character past the editor pane's right edge when word wrap is disabled" in {
     // A surface reporting no FontRenderContext forces the cell/non-measured drawing path regardless of the buffer's
     // own font (see RendererCellFallbackSpec, #1105) -- the deterministic way to exercise that path in a headless
     // test environment, where font-rendering quirks can otherwise tip an ordinary monospace font onto the measured
@@ -62,7 +62,7 @@ class RendererUnwrappedOverscanClippingSpec extends AnyFlatSpec with Matchers:
     val panelRect    = LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, font, font, cellMetrics, None)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, viewportSize, font, font, cellMetrics, None)
 
     // Sanity check: the cell/non-measured path is the one under test -- if this ever starts drawing via drawRunPx
     // instead, the test would vacuously pass without exercising the bug.

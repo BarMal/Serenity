@@ -9,7 +9,7 @@ import com.serenity.config.{AppConfig, PostProcessingEffect}
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, Renderer}
+import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -469,7 +469,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     new Color(image.getRGB(6, 4), true).getRed shouldBe 255
   }
 
-  "Renderer.render" should "clear pixels outside the whole-cell grid to the theme background" in {
+  "RendererEntryPoints.render" should "clear pixels outside the whole-cell grid to the theme background" in {
     val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -481,7 +481,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
 
     new Color(image.getRGB(82, 56), true) shouldBe Theme.light.background
   }
@@ -501,7 +501,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    Renderer.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
 
     (0 until image.getHeight).exists(y => new Color(image.getRGB(82, y), true).getRed < 230) shouldBe true
   }

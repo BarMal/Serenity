@@ -6,6 +6,11 @@ import com.serenity.ui.layout.*
 
 /** Paints the line-number column and the bottom gutter row (cursor position, language, filename, and the optional
   * mode/tab corner widget), and the small chrome-text helpers those two share.
+  *
+  * It owns the whole mode/tab corner widget (issue #1307), both corners, which is why [[applyModeTabWidgetToTopCorner]]
+  * is public rather than private: `TopLeft`/`TopRight` fold into the active pane's header text, painted by
+  * [[RendererPaneContent]], and the two corners must agree on the glyph and the segment format or the indicator changes
+  * shape when the user moves it.
   */
 object RendererGutter:
 
@@ -216,7 +221,7 @@ object RendererGutter:
     * header text (which already shows "the current tab name" the issue asks the indicator to sit alongside) rather than
     * a separate rect, for the same collision-avoidance reason as `applyModeTabWidgetToBottomCorner`.
     */
-  private[renderer] def applyModeTabWidgetToTopCorner(state: AppState, title: String): String =
+  def applyModeTabWidgetToTopCorner(state: AppState, title: String): String =
     val segment = modeTabWidgetSegment(state)
     state.persisted.config.modeTabWidgetCornerPosition match
       case CornerPosition.TopLeft                                 => s"$segment $title"
