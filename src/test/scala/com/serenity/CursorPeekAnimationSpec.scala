@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.MotionPreset
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*

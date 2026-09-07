@@ -10,7 +10,9 @@ import com.serenity.state.models.*
   */
 private[reducers] object EditorNavigationEventReducer:
   import EditorCursorMovement.*
-  import EditorEventReducer.{CursorEventContext, OriginCursor, countLines, findLineEnd, homeTarget, endTarget}
+  import EditorEventReducer.{CursorEventContext, countLines, findLineEnd, homeTarget, endTarget}
+
+  private val OriginCursor = CursorPosition(0, 0)
 
   /** One path over `buffer.cursorList` (see its doc comment) handles single cursor, multi-cursor and multi-selection
     * alike. Movement (`MoveLeft`/`MoveRight`/`MoveWordLeft`/`MoveWordRight`/`MoveToStart`/`MoveToEnd`/

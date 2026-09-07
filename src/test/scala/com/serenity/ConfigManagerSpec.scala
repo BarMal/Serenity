@@ -7,6 +7,7 @@ import java.nio.file.Files
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterConfig}
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.EditorEvent
 import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}

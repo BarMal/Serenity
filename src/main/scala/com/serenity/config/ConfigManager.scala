@@ -16,6 +16,8 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValue, ConfigValueType}
 
+import AppConfigMotionOps.*
+
 /** Manages loading and saving application configuration */
 object ConfigManager:
 
@@ -216,8 +218,8 @@ object ConfigManager:
             parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
           case "ui.outline_thickness" | "ui.outline.thickness" | "ui_outline_thickness" =>
             parseUiOutlineThicknessPx(value.trim).map(config.withUiOutlineThicknessPx).getOrElse(config)
-          case key if SurfaceConfig.Schema.handles(key) =>
-            SurfaceConfig.Schema.parse(config, key, value).getOrElse(config)
+          case key if SurfaceConfigSchemaKeys.handles(key) =>
+            SurfaceConfigSchemaParser.parse(config, key, value).getOrElse(config)
           case "window.sitter.enabled" =>
             parseBoolean(value)
               .map(enabled => config.withWindowSitterConfig(config.windowSitterConfig.copy(enabled = enabled)))
@@ -551,8 +553,8 @@ object ConfigManager:
               value.trim.toFloatOption.isEmpty
             case "font.ligatures" | "font_ligatures" =>
               parseBoolean(value).isEmpty
-            case key if SurfaceConfig.Schema.handles(key) =>
-              SurfaceConfig.Schema.invalidValue(key, value)
+            case key if SurfaceConfigSchemaKeys.handles(key) =>
+              SurfaceConfigSchemaParser.invalidValue(key, value)
             case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>
               value.split(",").toList.map(_.trim).filter(_.nonEmpty).exists(HotkeyTrigger.parse(_).isEmpty)
             case key if key.startsWith("lsp.") =>

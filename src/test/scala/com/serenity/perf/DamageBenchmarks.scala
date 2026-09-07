@@ -1,5 +1,6 @@
 package com.serenity.perf
 
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.RenderDamageGranularity
 import com.serenity.keystroke.events.{InsertChar, ScrollDown}
 import com.serenity.lsp.config.LanguageId

@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier, Modifier}
 import com.serenity.state.models.*

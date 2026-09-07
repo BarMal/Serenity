@@ -1,5 +1,6 @@
 package com.serenity.app
 
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionAccessibility, RenderFpsTarget}
 
 /** Bundles the low-power knobs (30fps render cap, reduced motion, steady cursor) that a battery-conscious session would

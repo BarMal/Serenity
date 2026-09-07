@@ -43,7 +43,7 @@ private[markdown] object MarkdownInlineTablePreview:
     val parsedRows = lines.map(parseTableCells)
     val contentRows =
       parsedRows.zipWithIndex.collect {
-        case (cells, index) if index != 1 => cells.map(MarkdownDocumentPreview.normalizeInline)
+        case (cells, index) if index != 1 => cells.map(MarkdownInlineNormalizer.normalizeInline)
       }
     val columnCount = contentRows.map(_.length).maxOption.getOrElse(0)
     if columnCount == 0 then Vector.empty

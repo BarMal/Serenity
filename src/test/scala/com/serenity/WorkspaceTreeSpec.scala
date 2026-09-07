@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.rope.Balance
 import com.serenity.state.models.{
   AppState,
+  AppStateValidation,
   EditorPane,
   PaneId,
   SurfaceContent,
@@ -102,7 +103,7 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    state.validated.map(_.persisted.layout.workspaceTree.map(_.dockedSurfaceIds)) shouldBe Right(
+    AppStateValidation.validated(state).map(_.persisted.layout.workspaceTree.map(_.dockedSurfaceIds)) shouldBe Right(
       Some(List(SurfaceId("surface-0")))
     )
   }
@@ -111,7 +112,11 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial
     val tree  = state.persisted.layout.workspaceTree
 
-    state.validated.map(_.persisted.layout.workspaceTree) shouldBe Right(tree)
-    state.validated.toOption.flatMap(_.persisted.layout.workspaceTree).get should be theSameInstanceAs tree.get
+    AppStateValidation.validated(state).map(_.persisted.layout.workspaceTree) shouldBe Right(tree)
+    AppStateValidation
+      .validated(state)
+      .toOption
+      .flatMap(_.persisted.layout.workspaceTree)
+      .get should be theSameInstanceAs tree.get
   }
 end WorkspaceTreeSpec

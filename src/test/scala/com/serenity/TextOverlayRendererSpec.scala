@@ -10,6 +10,9 @@ import com.serenity.ui.layout.{
   CellMetrics,
   LayoutRect,
   ModalSurfaceComposition,
+  OverlayRow,
+  OverlayRowLayout,
+  OverlaySegment,
   SurfaceContentRowKind,
   SurfaceFrameLayout
 }

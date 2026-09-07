@@ -5,7 +5,6 @@ import com.serenity.config.{AppConfig, CursorInfoBarPlacement, CursorInfoBarSegm
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{SurfaceContentResolver, SurfaceRenderMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

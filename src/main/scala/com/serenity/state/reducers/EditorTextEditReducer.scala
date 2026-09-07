@@ -193,7 +193,7 @@ private[reducers] object EditorTextEditReducer:
     )
     (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
 
-  private[reducers] def insertAtCursor(
+  private def insertAtCursor(
     buffer: Buffer,
     cursor: CursorPosition,
     text: String,
@@ -210,67 +210,6 @@ private[reducers] object EditorTextEditReducer:
         (animated, effects)
       }
     )
-
-  private[reducers] def replaceSelectionOrInsert(
-    buffer: Buffer,
-    cursor: CursorPosition,
-    insertedText: String
-  ): (Buffer, MultiCursorEdit) =
-    val (baseContent, insertionStart, startOffset, endOffset) = buffer.primarySelection match
-      case Some(selection) =>
-        val startOffset = selectionStartOffset(selection, buffer.document.content)
-        val endOffset   = selectionEndOffset(selection, buffer.document.content)
-        (
-          deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
-          buffer.document.content.offsetToCursorPosition(startOffset),
-          startOffset,
-          endOffset
-        )
-      case None =>
-        val startOffset =
-          buffer.document.content.graphemeBoundaryAfterOrAt(
-            buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
-          )
-        (
-          buffer.document.content,
-          buffer.document.content.offsetToCursorPosition(startOffset),
-          startOffset,
-          startOffset
-        )
-
-    val newContent      = insertOrUnchanged(baseContent, startOffset, insertedText)
-    val newCursor       = cursorAfterInsertion(insertionStart, insertedText)
-    val replacementEdit = MultiCursorEdit(0, startOffset, endOffset, insertedText)
-
-    (
-      buffer.copy(
-        document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-        editing = buffer.editing.copy(
-          cursors = replacePrimaryCursor(newCursor, buffer.editing.cursors),
-          selection = None,
-          selections = Nil,
-          preferredColumn = Some(newCursor.column),
-          preferredXPx = None
-        ),
-        annotations = buffer.annotations.copy(
-          documentComments = adjustDocumentComments(
-            buffer.annotations.documentComments,
-            buffer.document.content,
-            newContent,
-            List(replacementEdit)
-          )
-        ),
-        richText = buffer.richText.copy(
-          richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
-        )
-      ),
-      replacementEdit
-    )
-
-  private[reducers] def cursorAfterInsertion(start: CursorPosition, insertedText: String): CursorPosition =
-    val lines = insertedText.split("\n", -1)
-    if lines.length == 1 then start.copy(column = start.column + insertedText.length)
-    else CursorPosition(start.line + lines.length - 1, lines.last.length)
 
   private def applyMultiCursorInsertion(
     buffer: Buffer,

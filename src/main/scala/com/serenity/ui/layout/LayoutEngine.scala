@@ -71,15 +71,6 @@ final case class CalculatedLayout(
     gutterRect: Option[LayoutRect] = None
 )
 
-object LayoutManager:
-
-  def calculateLayout(
-    state: AppState,
-    viewportSize: ViewportSize,
-    spacerPercentage: Double = LayoutEngine.DefaultSpacerPercentage
-  ): CalculatedLayout =
-    LayoutEngine.calculateLayout(state, viewportSize, spacerPercentage)
-
 object LayoutEngine:
 
   private[layout] val DefaultSpacerPercentage   = 0.0

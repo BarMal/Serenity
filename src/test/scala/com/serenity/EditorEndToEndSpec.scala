@@ -253,7 +253,7 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
     // Then: State should remain valid
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.isValid shouldBe true
-    finalState.validationErrors shouldBe empty
+    AppStateValidation.validationErrors(finalState) shouldBe empty
 
   behavior of "Text Editor - Advanced Features"
 

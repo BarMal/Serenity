@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, LayoutEngine, LayoutManager, PixelRect, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, LayoutEngine, PixelRect, TextLayoutSnapshot, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -384,7 +384,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       // constant.
       def wrappedRowCountFor(n: Int): Int =
         val state            = stateWith(contentFor(n))
-        val calculatedLayout = LayoutManager.calculateLayout(state, viewport)
+        val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
         val workspaceLayout  = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
         val contentRect  = workspaceLayout.activeContentRect(state).getOrElse(fail("expected an active content rect"))
         val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)

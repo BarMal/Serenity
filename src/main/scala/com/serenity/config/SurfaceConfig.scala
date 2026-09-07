@@ -100,6 +100,11 @@ final case class SurfaceConfig(
     * These are what [[MotionConfig.fromLegacy]] reads when it derives a hierarchy from a configuration that has none,
     * so they cannot themselves consult the hierarchy -- that is what the `effective*` accessors below are for, and
     * asking one of those here would be circular.
+    *
+    * Deliberately package-visible rather than public: they are the seam [[MotionConfig]] builds a hierarchy across, and
+    * that derivation is the only legitimate caller. Anything outside this package asking for a family's speed wants the
+    * `effective*` accessor -- a legacy field read directly reports a stale value for a configuration loaded from a
+    * file, which is the bug those accessors exist to fix.
     */
   private[config] def legacyEditorTextTransitionSpeedScale: Double =
     editorTextTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
@@ -235,13 +240,3 @@ final case class SurfaceConfig(
               TransitionScope.PanelClose -> panelMotion.transitionKindFor(TransitionScope.PanelClose)
             )
           )
-
-object SurfaceConfig:
-
-  /** The keys and parsing this format understands for surface settings, split into [[SurfaceConfigSchemaKeys]] and
-    * [[SurfaceConfigSchemaParser]] to keep this file under the architecture ratchet's file-length target -- this object
-    * re-exports their members, so callers see no difference.
-    */
-  object Schema:
-    export SurfaceConfigSchemaKeys.*
-    export SurfaceConfigSchemaParser.*

@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandRunner, CommandSurfaceItem}
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.InterfaceDensity
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*

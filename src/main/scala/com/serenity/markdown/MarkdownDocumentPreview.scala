@@ -263,11 +263,11 @@ object MarkdownDocumentPreview:
     val Heading = """^(#{1,6})\s+(.+)$""".r
     trimmed match
       case Heading(_, text) =>
-        normalizeInline(text).trim
+        MarkdownInlineNormalizer.normalizeInline(text).trim
       case text if text.startsWith(">") =>
-        s"| ${normalizeInline(text.drop(1)).trim}"
+        s"| ${MarkdownInlineNormalizer.normalizeInline(text.drop(1)).trim}"
       case text =>
-        normalizeInline(text)
+        MarkdownInlineNormalizer.normalizeInline(text)
 
   def renderInlineLines(sourceLines: Vector[String]): Vector[String] =
     renderInlineDocument(sourceLines).map(_.text)
@@ -476,19 +476,6 @@ object MarkdownDocumentPreview:
       panelChrome = false,
       Some(inlineLineHeightPx)
     )
-
-  private[markdown] def normalizeInline(text: String): String =
-    val withoutImages = """!\[([^\]]*)\]\(([^)]+)\)""".r.replaceAllIn(
-      text,
-      matched =>
-        val label = Option(matched.group(1).trim).filter(_.nonEmpty).getOrElse("Image")
-        s"Image: $label (${matched.group(2)})"
-    )
-    val withoutLinks = """\[([^\]]+)\]\(([^)]+)\)""".r.replaceAllIn(
-      withoutImages,
-      matched => s"${matched.group(1)} (${matched.group(2)})"
-    )
-    "`([^`]+)`".r.replaceAllIn(withoutLinks, matched => matched.group(1))
 
   private def previewSource(sourceLines: Vector[String], firstSourceLine: Int, maxSourceLines: Int): String =
     val safeMax = maxSourceLines.max(1)
