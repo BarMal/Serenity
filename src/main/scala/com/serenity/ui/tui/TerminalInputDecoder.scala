@@ -388,10 +388,13 @@ object TerminalInputDecoder:
 
   /** A codepoint outside the BMP can't be represented as one UTF-16 `Char` (same constraint [[decodeUtf8Char]]
     * documents for the legacy path); other non-printable codepoints (C0/C1 controls not covered by [[namedCsiUKey]])
-    * have no keystroke to report either.
+    * have no keystroke to report either. U+FFFF and U+FFFE are Unicode noncharacters -- permanently reserved, never
+    * valid text -- so they are rejected here rather than inserted as glyphs.
     */
   private def csiUChar(code: Int): Option[Char] =
-    Option.when(code >= 0x20 && code < 0x110000 && Character.charCount(code) == 1)(code.toChar)
+    Option.when(code >= 0x20 && code < 0x110000 && Character.charCount(code) == 1 && code != 0xffff && code != 0xfffe)(
+      code.toChar
+    )
 
   private def decodePlain(bytes: Array[Byte], i: Int): Step =
     val b        = bytes(i)
@@ -437,7 +440,11 @@ object TerminalInputDecoder:
       val decoded = new String(bytes, i, length, StandardCharsets.UTF_8)
       // A Char is UTF-16 code-unit-wide, same as AWT's KeyEvent#getKeyChar; codepoints outside the BMP (4-byte
       // UTF-8 sequences) can't be represented as one and are dropped rather than emitting a bogus surrogate half.
-      if decoded.length == 1 then
+      // U+FFFF and U+FFFE are Unicode noncharacters -- permanently reserved, never valid text -- so they are
+      // dropped rather than inserted as glyphs (belt-and-suspenders: the handler boundary already translates the
+      // JLine/Windows 0xFFFF Backspace quirk to 0x7F before it reaches the decoder).
+      val ch = decoded.charAt(0)
+      if decoded.length == 1 && ch.toInt != 0xffff && ch.toInt != 0xfffe then
         Step.Complete(
           List(DecodedToken.Key(KeyStrokeInfo(InputKey.Character, Some(decoded.charAt(0)), Set.empty))),
           i + length

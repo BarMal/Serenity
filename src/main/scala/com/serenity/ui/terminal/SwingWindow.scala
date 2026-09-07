@@ -286,7 +286,7 @@ class SwingWindow(
     f.setLocationRelativeTo(null)
     f
 
-  def awaitClose: IO[Unit] = IO.blocking(closeLatch.await())
+  def awaitClose: IO[Unit] = SwingWindow.awaitCloseLatch(closeLatch)
 
   def start(): Unit =
     val showWindow: Runnable = () =>
@@ -431,7 +431,18 @@ class SwingWindow(
 
 object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport with SwingWindowLayoutSupport:
   private val ApplicationIconResource = "/icons/serenity.png"
-  private[serenity] val Transparent   = new Color(0, 0, 0, 0)
+
+  /** Blocks until the window-close latch is counted down (chrome close control or the AWT `windowClosing` event).
+    *
+    * Uses `IO.interruptible` rather than `IO.blocking` so that cancellation actually interrupts the parked `await()`.
+    * The in-app Quit path races this against the quit signal (`AppRuntime.coordinateExternalQuit`); when quit wins, the
+    * loser is cancelled, and an uninterruptible `IO.blocking` would leave the run IO waiting forever on a native
+    * `await()` that can never reach a cancellation boundary -- the app would exit only via the chrome close control,
+    * hanging on the in-app Quit option (thread parked here, `main` parked in `IOApp`).
+    */
+  private[serenity] def awaitCloseLatch(latch: CountDownLatch): IO[Unit] =
+    IO.interruptible(latch.await())
+  private[serenity] val Transparent = new Color(0, 0, 0, 0)
 
   private[serenity] lazy val applicationIconImages: scala.List[Image] =
     Option(getClass.getResource(ApplicationIconResource))

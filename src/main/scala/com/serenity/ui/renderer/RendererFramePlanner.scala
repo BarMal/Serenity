@@ -229,8 +229,7 @@ object RendererFramePlanner:
               c.viewportHeight == context.surface.viewportHeight &&
               c.cursorVisible == context.cursorVisible
             }
-            if reusable then
-              cached.foreach(c => context.surface.pixels.drawImage(c.image, 0, 0, c.viewportWidth, c.viewportHeight))
+            if reusable then cached.foreach(c => context.surface.pixels.compositeFullSurfaceLayer(c.image))
             else
               val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
               val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)))
@@ -246,13 +245,7 @@ object RendererFramePlanner:
                 RendererFrameState.modalLayerBuffers.synchronized {
                   val _ = RendererFrameState.modalLayerBuffers.put(context.surface, newlyCached)
                 }
-                context.surface.pixels.drawImage(
-                  image,
-                  0,
-                  0,
-                  context.surface.viewportWidth,
-                  context.surface.viewportHeight
-                )
+                context.surface.pixels.compositeFullSurfaceLayer(image)
               }
 
   /** Whether a pinned/expanded/floating panel identified by `surfaceId` must repaint this frame rather than reuse its
@@ -310,8 +303,7 @@ object RendererFramePlanner:
           c.cursorVisible == context.cursorVisible &&
           c.frameRect == frameRect
         }
-        if reusable then
-          cached.foreach(c => context.surface.pixels.drawImage(c.image, 0, 0, c.viewportWidth, c.viewportHeight))
+        if reusable then cached.foreach(c => context.surface.pixels.compositeFullSurfaceLayer(c.image))
         else
           val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
           val layerSurface = support.newSeededLayerSurface(image => capturedRef.set(Some(image)))
@@ -330,7 +322,7 @@ object RendererFramePlanner:
                 .getOrElse(Map.empty[SurfaceId, CachedPanelLayer])
               val _ = RendererFrameState.panelLayerBuffers.put(context.surface, current.updated(surfaceId, newlyCached))
             }
-            context.surface.pixels.drawImage(image, 0, 0, context.surface.viewportWidth, context.surface.viewportHeight)
+            context.surface.pixels.compositeFullSurfaceLayer(image)
           }
 
   /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry in

@@ -583,12 +583,24 @@ object AppRuntime:
           IO.unit
     yield ()
 
+  /** Dispatches an AWT/JLine callback's effect onto the runtime, tolerating the dispatcher having already shut down.
+    *
+    * On quit the runtime's `Dispatcher` closes while native callbacks (WINCH resize, window focus-lost) can still fire.
+    * `unsafeRunAndForget` then throws `IllegalStateException: Dispatcher already closed` synchronously -- before the
+    * effect's own error handler can run -- onto the AWT/pump thread, where `CrashReporter` logs it as a crash. A
+    * callback arriving after shutdown has nothing left to do, so swallow only that specific closed-dispatcher state and
+    * let every other failure propagate.
+    */
+  private def dispatchIfRunning(dispatcher: Dispatcher[IO])(effect: IO[Unit]): Unit =
+    try dispatcher.unsafeRunAndForget(effect)
+    catch case _: IllegalStateException => ()
+
   private[serenity] def resizeCallbackBridge(
     signalResize: IO[Unit],
     dispatcher: Dispatcher[IO]
   )(using logger: Logger[IO]): () => Unit =
     () =>
-      dispatcher.unsafeRunAndForget(
+      dispatchIfRunning(dispatcher)(
         signalResize.handleErrorWith(error => logger.error(error)("[RUNTIME] resize callback failed"))
       )
 
@@ -600,7 +612,7 @@ object AppRuntime:
     dispatcher: Dispatcher[IO]
   )(using logger: Logger[IO]): Boolean => Unit =
     focused =>
-      dispatcher.unsafeRunAndForget(
+      dispatchIfRunning(dispatcher)(
         onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )

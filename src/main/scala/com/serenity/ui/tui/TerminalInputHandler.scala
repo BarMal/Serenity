@@ -67,7 +67,7 @@ object TerminalInputHandler:
     * as sluggish.
     *
     * It is only ever a limit on waiting. What decides the question is whether anything actually followed -- see
-    * [[sequenceRemainder]].
+    * [[rawReadLoop]].
     */
   val EscDisambiguationDeadline: FiniteDuration = 50.millis
 
@@ -136,7 +136,8 @@ object TerminalInputHandler:
     systemClipboard: SystemClipboard[IO],
     seedBytes: Array[Byte] = Array.emptyByteArray,
     wheelScrollLines: Int = InputConfig().wheelScrollLines,
-    escDeadline: FiniteDuration = EscDisambiguationDeadline
+    escDeadline: FiniteDuration = EscDisambiguationDeadline,
+    readerOverride: Option[NonBlockingReader] = None
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
@@ -147,7 +148,9 @@ object TerminalInputHandler:
       modifierTapState <- Ref.of[IO, ModifierTapState](ModifierTapState.empty)
       focusCallback    <- IO(new AtomicReference[Option[Boolean => Unit]](None))
       _                <- enableModes(terminal)
-      reader = terminal.reader()
+      // `readerOverride` lets a test drive the exact JLine reader in place of `terminal.reader()` -- in particular one
+      // that emulates a non-tty pipe, where a timed read misfires. Production always uses the terminal's own reader.
+      reader = readerOverride.getOrElse(terminal.reader())
       // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
       // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
       fiber <- rawReadLoop(reader, rawQueue, escDeadline).start.flatMap { rawFiber =>
@@ -175,9 +178,15 @@ object TerminalInputHandler:
     case Eof
     case Expired
 
+  // U+FFFF is a Unicode noncharacter (permanently reserved, never a valid text codepoint). JLine's reader returns
+  // this value when Backspace is pressed on Windows under git bash -- confirmed via runtime capture. Translate it to
+  // the canonical DEL byte (0x7F) so the pure decoder maps it to InputKey.Backspace rather than inserting a ￿ glyph.
+  private val JLineWindowsBackspace: Int = 0xffff
+
   private def toOutcome(read: Int): ReadOutcome =
     if read == NonBlockingReader.EOF then ReadOutcome.Eof
     else if read == NonBlockingReader.READ_EXPIRED then ReadOutcome.Expired
+    else if read == JLineWindowsBackspace then ReadOutcome.Bytes(Array(0x7f.toByte))
     else ReadOutcome.Bytes(toUtf8Bytes(read))
 
   /** JLine's reader hands us decoded Unicode chars, one UTF-16 code unit per `read()`; the pure decoder works on UTF-8
@@ -197,34 +206,55 @@ object TerminalInputHandler:
     * for non-blocking drains without any risk of blocking the compute thread.
     *
     * Reading an `ESC` is the one moment the answer cannot wait: it either begins an escape sequence or is the Escape
-    * key, and only the stream knows which. So the next read after an `ESC` is a timed one, and a
-    * [[ReadOutcome.Expired]] goes into the queue when nothing follows within `escDeadline`. That puts the evidence in
-    * the queue, in order, where being slow to look at it cannot change what it says.
+    * key, and only the stream knows which. So after an `ESC` a [[ReadOutcome.Expired]] goes into [[rawQueue]] when
+    * nothing follows within `escDeadline`, and the byte that did follow otherwise. That puts the evidence in the queue,
+    * in order, where being slow to look at it cannot change what it says -- #1283's fix for the arrow-under-load race,
+    * where letting the *consumer* race the remaining bytes against a timer turned `ESC` `[` `A` into Escape plus a
+    * literal `[A` on a loaded machine.
     *
-    * Asking it the other way round -- letting the consumer race the remaining bytes against a timer -- is what made
-    * arrow keys unreliable: on a loaded machine the timer could win while `[A` was still on its way from the reader,
-    * and `ESC` `[` `A` became Escape followed by a literal `[A` typed into the document.
+    * The deadline is a Cats-Effect timer, not JLine's `reader.read(timeout)`. `IO.sleep` is terminal-independent;
+    * `NonBlockingReader.read(timeout)` is not -- on a non-tty stdin (git bash on Windows without winpty, whose stdin is
+    * a plain MSYS pipe) it reports `READ_EXPIRED` even while the rest of the sequence is already available, which split
+    * every arrow and kitty-Backspace back into Escape-plus-characters. So an ever-running [[pump]] does only plain,
+    * uninterrupted `reader.read()` into [[pumpQueue]], and the [[arbiter]] races the deadline against *taking* the next
+    * pumped byte -- never against a real read. Losing that race therefore cannot lose a byte: it stays in [[pumpQueue]]
+    * for the next take. Before committing to `Expired`, the arbiter re-checks with [[Queue.tryTake]] so a byte that
+    * landed exactly on the boundary (or while the arbiter fiber was momentarily starved) still wins, keeping #1283's
+    * guarantee intact on both real ptys and non-tty pipes.
     */
   private def rawReadLoop(
     reader: NonBlockingReader,
     rawQueue: Queue[IO, ReadOutcome],
     escDeadline: FiniteDuration
   ): IO[Unit] =
-    def enqueue(outcome: ReadOutcome, afterEsc: Boolean): IO[Unit] =
-      outcome match
-        case ReadOutcome.Eof => rawQueue.offer(ReadOutcome.Eof)
-        case _               => rawQueue.offer(outcome) >> next(afterEsc)
-
-    def next(afterEsc: Boolean): IO[Unit] =
-      if afterEsc then
-        // `read(0)` blocks forever in JLine, so a deadline that rounds to nothing still has to wait a moment.
-        IO.interruptible(reader.read(escDeadline.toMillis.max(1L))).flatMap {
-          case NonBlockingReader.READ_EXPIRED => rawQueue.offer(ReadOutcome.Expired) >> next(afterEsc = false)
-          case read                           => enqueue(toOutcome(read), afterEsc = read == Escape)
+    Queue.unbounded[IO, ReadOutcome].flatMap { pumpQueue =>
+      def pump: IO[Unit] =
+        IO.interruptible(reader.read()).map(toOutcome).flatMap {
+          case ReadOutcome.Eof => pumpQueue.offer(ReadOutcome.Eof)
+          case outcome         => pumpQueue.offer(outcome) >> pump
         }
-      else IO.interruptible(reader.read()).flatMap(read => enqueue(toOutcome(read), afterEsc = read == Escape))
 
-    next(afterEsc = false)
+      def forward(outcome: ReadOutcome): IO[Unit] =
+        outcome match
+          case ReadOutcome.Eof => rawQueue.offer(ReadOutcome.Eof)
+          case ReadOutcome.Bytes(bs) if bs.length == 1 && bs(0) == Escape.toByte =>
+            rawQueue.offer(outcome) >> awaitAfterEsc
+          case _ => rawQueue.offer(outcome) >> arbiter
+
+      def awaitAfterEsc: IO[Unit] =
+        IO.race(IO.sleep(escDeadline), pumpQueue.take).flatMap {
+          case Right(outcome) => forward(outcome)
+          case Left(_) =>
+            pumpQueue.tryTake.flatMap {
+              case Some(outcome) => forward(outcome)
+              case None          => rawQueue.offer(ReadOutcome.Expired) >> arbiter
+            }
+        }
+
+      def arbiter: IO[Unit] = pumpQueue.take.flatMap(forward)
+
+      pump.start.flatMap(pumpFiber => arbiter.guarantee(pumpFiber.cancel))
+    }
 
   private def readLoop(
     rawQueue: Queue[IO, ReadOutcome],
