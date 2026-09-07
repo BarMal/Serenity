@@ -247,6 +247,71 @@ private[reducers] object EditorEditSupport:
 
     remappedOffset.max(0)
 
+  /** Replaces the primary selection with `insertedText` if one exists, otherwise inserts at `cursor` -- the single-
+    * cursor edit both plain typing (`EditorTextEditReducer.insertAtCursor`) and paste (`EditorClipboardEventReducer`)
+    * reduce to, since a no-selection insert is just a zero-width "selection" replacement.
+    */
+  def replaceSelectionOrInsert(
+    buffer: Buffer,
+    cursor: CursorPosition,
+    insertedText: String
+  ): (Buffer, MultiCursorEdit) =
+    val (baseContent, insertionStart, startOffset, endOffset) = buffer.primarySelection match
+      case Some(selection) =>
+        val startOffset = EditorCursorMovement.selectionStartOffset(selection, buffer.document.content)
+        val endOffset   = EditorCursorMovement.selectionEndOffset(selection, buffer.document.content)
+        (
+          deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
+          buffer.document.content.offsetToCursorPosition(startOffset),
+          startOffset,
+          endOffset
+        )
+      case None =>
+        val startOffset =
+          buffer.document.content.graphemeBoundaryAfterOrAt(
+            buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
+          )
+        (
+          buffer.document.content,
+          buffer.document.content.offsetToCursorPosition(startOffset),
+          startOffset,
+          startOffset
+        )
+
+    val newContent      = insertOrUnchanged(baseContent, startOffset, insertedText)
+    val newCursor       = cursorAfterInsertion(insertionStart, insertedText)
+    val replacementEdit = MultiCursorEdit(0, startOffset, endOffset, insertedText)
+
+    (
+      buffer.copy(
+        document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
+        editing = buffer.editing.copy(
+          cursors = EditorCursorMovement.replacePrimaryCursor(newCursor, buffer.editing.cursors),
+          selection = None,
+          selections = Nil,
+          preferredColumn = Some(newCursor.column),
+          preferredXPx = None
+        ),
+        annotations = buffer.annotations.copy(
+          documentComments = adjustDocumentComments(
+            buffer.annotations.documentComments,
+            buffer.document.content,
+            newContent,
+            List(replacementEdit)
+          )
+        ),
+        richText = buffer.richText.copy(
+          richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
+        )
+      ),
+      replacementEdit
+    )
+
+  private def cursorAfterInsertion(start: CursorPosition, insertedText: String): CursorPosition =
+    val lines = insertedText.split("\n", -1)
+    if lines.length == 1 then start.copy(column = start.column + insertedText.length)
+    else CursorPosition(start.line + lines.length - 1, lines.last.length)
+
   def deleteSelectedRanges(
     buffer: Buffer
   ): (Buffer, List[MultiCursorEdit]) =
