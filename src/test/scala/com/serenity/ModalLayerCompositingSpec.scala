@@ -5,7 +5,7 @@ import java.awt.image.BufferedImage
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.{LayerBufferSupport, RenderSurface, Renderer}
+import com.serenity.ui.renderer.{LayerBufferSupport, RenderSurface, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -47,11 +47,11 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       runtime = AppState.initial.runtime.copy(uiSurfaces = List(modal))
     )
 
-  "Renderer.render" should "not repaint the modal layer's own buffer when only editor content changed" in {
+  "RendererEntryPoints.render" should "not repaint the modal layer's own buffer when only editor content changed" in {
     val surface = new CountingLayerBufferSurface(80, 24)
     val before  = stateWith("alpha\nbeta\ngamma", modalSurface)
 
-    Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
     val editedContent =
@@ -73,7 +73,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     )
     surface.clear()
 
-    Renderer.render(
+    RendererEntryPoints.render(
       after,
       cursorVisible = false,
       surface,
@@ -91,7 +91,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(80, 24)
     val before  = stateWith("alpha\nbeta\ngamma", modalSurface)
 
-    Renderer.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
     val changedModal = modalSurface.copy(content =
@@ -104,7 +104,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage shouldBe Damage.Surface(modalId)
 
-    Renderer.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
 
     surface.newLayerSurfaceCalls.get() shouldBe 2
   }
@@ -113,11 +113,18 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(80, 24)
     val state   = stateWith("alpha\nbeta\ngamma", modalSurface)
 
-    Renderer.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything)
     val firstDrawImageCalls = surface.drawImageCalls.size
     firstDrawImageCalls should be > 0
 
-    Renderer.render(state, cursorVisible = false, surface, viewport, None, DamageProducer.forTransition(state, state))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      DamageProducer.forTransition(state, state)
+    )
 
     surface.newLayerSurfaceCalls.get() shouldBe 1
     surface.drawImageCalls.size shouldBe firstDrawImageCalls + 1

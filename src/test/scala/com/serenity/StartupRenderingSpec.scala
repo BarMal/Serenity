@@ -12,7 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -33,7 +33,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
     yield
       val sceneBuilds = new AtomicInteger(0)
-      val startupResult = Renderer.withSceneIfNeeded(
+      val startupResult = RendererEntryPoints.withSceneIfNeeded(
         state, {
           sceneBuilds.incrementAndGet()
           throw new AssertionError("startup path must not build an authoritative scene")
@@ -56,7 +56,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     yield
       val surface = new MockRenderSurface(100, 30)
 
-      Renderer.render(
+      RendererEntryPoints.render(
         state,
         cursorVisible = true,
         surface,
@@ -79,7 +79,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
     yield
       val surface = new MockRenderSurface(100, 30)
-      Renderer.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+      RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
       val renderedLines =
         (0 until 30).flatMap { y =>
@@ -124,7 +124,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       val codeMetrics = CellMetrics.fromFont(codeFont)
       val uiMetrics   = CellMetrics.fromFont(uiFont)
 
-      Renderer.render(
+      RendererEntryPoints.render(
         state,
         cursorVisible = true,
         surface,
@@ -162,7 +162,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       val codeMetrics = CellMetrics.fromFont(codeFont)
       val uiMetrics   = CellMetrics.fromFont(uiFont)
 
-      Renderer.render(
+      RendererEntryPoints.render(
         state,
         cursorVisible = true,
         surface,
@@ -198,7 +198,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       val codeMetrics = CellMetrics.fromFont(codeFont)
       val uiMetrics   = CellMetrics.fromFont(uiFont)
 
-      Renderer.render(
+      RendererEntryPoints.render(
         state,
         cursorVisible = true,
         surface,
@@ -254,7 +254,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val codeMetrics = CellMetrics.fromFont(codeFont)
     val textMetrics = CellMetrics.fromFont(textFont)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -320,7 +320,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val codeMetrics = CellMetrics.fromFont(codeFont)
     val textMetrics = CellMetrics.fromFont(textFont)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -365,7 +365,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val codeMetrics = CellMetrics.fromFont(codeFont)
     val textMetrics = CellMetrics.fromFont(textFont)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -399,7 +399,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val codeMetrics = CellMetrics.fromFont(codeFont)
     val textMetrics = CellMetrics.fromFont(textFont)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,

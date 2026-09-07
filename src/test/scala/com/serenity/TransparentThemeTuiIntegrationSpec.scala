@@ -3,15 +3,15 @@ package com.serenity
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.DefaultThemes
 import com.serenity.ui.tui.TerminalRenderSurface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** End-to-end confirmation that the built-in "Transparent" theme actually reaches the terminal as SGR 49 (#1240),
-  * through the real production path -- `Renderer.render` painting a `TerminalRenderSurface` -- rather than only at the
-  * `TerminalAnsiDiff.sgr` unit level.
+  * through the real production path -- `RendererEntryPoints.render` painting a `TerminalRenderSurface` -- rather than
+  * only at the `TerminalAnsiDiff.sgr` unit level.
   */
 class TransparentThemeTuiIntegrationSpec extends AnyFlatSpec with Matchers:
 
@@ -28,7 +28,7 @@ class TransparentThemeTuiIntegrationSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(theme = DefaultThemes.transparent)
     )
 
-    Renderer.render(state, cursorVisible = false, surface, ViewportSize(20, 5))
+    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(20, 5))
     surface.flush()
 
     writer.toString should include(";49m")
@@ -42,7 +42,7 @@ class TransparentThemeTuiIntegrationSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(theme = DefaultThemes.defaultDark)
     )
 
-    Renderer.render(state, cursorVisible = false, surface, ViewportSize(20, 5))
+    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(20, 5))
     surface.flush()
 
     val output = writer.toString

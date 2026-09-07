@@ -121,7 +121,8 @@ trait HardwareCursor:
 
   /** Hide the terminal's own cursor (`DECTCEM` hide) -- used when the caret is app-painted instead (breathe mode on a
     * GUI canvas, #1170's documented exception; a cell-addressed terminal instead approximates breathe by thresholding
-    * its alpha into present/hide, see `Renderer.presentHardwareCursor`) or genuinely not visible this frame.
+    * its alpha into present/hide, see `RendererCursorOverlay.presentHardwareCursor`) or genuinely not visible this
+    * frame.
     */
   def hide(): Unit
 

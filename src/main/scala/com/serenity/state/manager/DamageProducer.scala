@@ -10,8 +10,8 @@ import com.serenity.state.models.*
 
 /** Computes what a transition between two `AppState`s damaged, so the render loop doesn't have to rediscover it by
   * diffing frames -- the wake-up decision this drives is wired in by `#998` (`AppRuntime.inputEventPhase`). `#999` is
-  * migrating `Renderer.planFrame`'s own `ChromeKey`/`dirtyRowsAgainst` machinery onto this same signal for the
-  * paint-scope decision, which is why this producer also reports dimensions `#998`'s wake-up decision alone never
+  * migrating `RendererFramePlanner.planFrame`'s own `ChromeKey`/`dirtyRowsAgainst` machinery onto this same signal for
+  * the paint-scope decision, which is why this producer also reports dimensions `#998`'s wake-up decision alone never
   * needed -- cursor and selection movement, comment/diagnostic annotations, and language reclassification -- each of
   * those already invalidates pixels today via `Renderer`'s own `PaneRowKey`/`PaneContentKey` structural comparison, so
   * this producer has to cover them before `planFrame` can safely trust `Damage` instead of that comparison. See
@@ -27,11 +27,11 @@ import com.serenity.state.models.*
   * state entirely outside `inputEventPhase`, so it needs its own before/after diff to report
   * `animationDamage`/`fullRenderDamage` at all.
   *
-  * `#1000` retires `Renderer.planFrame`'s `overlaysMayCoverPanes` stand-down in favour of `fullRenderDamage`'s
-  * `uiSurfaces`/`focus` checks below, rather than reasoning about each overlay's precise pixel footprint (shadow/blur
-  * bleed included) -- see that function's doc comment for why a coarse "the whole frame redraws whenever an overlay
-  * changes" is both correct and enough to fix the actual reported problem (every frame redrawing while any overlay is
-  * merely visible, not just while one is changing).
+  * `#1000` retires `RendererFramePlanner.planFrame`'s `overlaysMayCoverPanes` stand-down in favour of
+  * `fullRenderDamage`'s `uiSurfaces`/`focus` checks below, rather than reasoning about each overlay's precise pixel
+  * footprint (shadow/blur bleed included) -- see that function's doc comment for why a coarse "the whole frame redraws
+  * whenever an overlay changes" is both correct and enough to fix the actual reported problem (every frame redrawing
+  * while any overlay is merely visible, not just while one is changing).
   */
 object DamageProducer:
 
@@ -199,19 +199,19 @@ object DamageProducer:
     else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
 
   /** Character-reveal (and other per-cell) animation ticks report exactly the rows whose cells changed, read off
-    * `AnimationState.animations`'s `CharacterKey`s -- the same map `PaneRowKey.animations` (`Renderer.scala`) reads
+    * `AnimationState.animations`'s `CharacterKey`s -- the same map `PaneRowKey.animations` (the renderer package) reads
     * today to decide row reuse, so this is a direct structural read rather than a coarsening.
     */
   private def animationDamage(bufferId: BufferId, before: AnimationState, after: AnimationState): Damage =
     if before == after then Damage.Nothing
     else Damage.BufferRows(bufferId, changedAnimationLines(before, after))
 
-  /** `Renderer.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the cursor.
-    * Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]] already
-    * covers, but crossing into a different block flips the dimmed state of every row in the old block that isn't also
-    * in the new one (and vice versa) -- a much wider set than just the old and new cursor row, so this has to be
-    * computed via [[FocusedTextBody]] (shared with `Renderer` so the two can never disagree) rather than derived from
-    * the cursor move alone. Toggling the feature itself is a config change, already caught by [[chromeDamage]]'s
+  /** `RendererPaneContent.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the
+    * cursor. Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]]
+    * already covers, but crossing into a different block flips the dimmed state of every row in the old block that
+    * isn't also in the new one (and vice versa) -- a much wider set than just the old and new cursor row, so this has
+    * to be computed via [[FocusedTextBody]] (shared with `Renderer` so the two can never disagree) rather than derived
+    * from the cursor move alone. Toggling the feature itself is a config change, already caught by [[chromeDamage]]'s
     * blanket `Everything`, so this only has to reason about the range shifting while the feature stays enabled.
     */
   private def focusDimmingDamage(
@@ -271,10 +271,10 @@ object DamageProducer:
     * stage 2 for the modal only; stage 3 extends it to pinned/floating/expanded panels). This is safe for every
     * presentation kind because `Renderer`'s per-surface layer buffer (`LayerBufferSupport.newLayerSurface` for the
     * modal, `newSeededLayerSurface` for panels that read pixels back via `blurRegion`) always paints into an isolated
-    * buffer seeded correctly for that kind, never the live frame surface directly -- see `Renderer.paintPanelLayer`'s
-    * doc comment for why a panel that samples the pixels behind it additionally requires the *whole* frame to be
-    * undamaged (not just its own surface) before it may reuse a cached buffer, on top of the `Damage.Surface` narrowing
-    * this producer reports here.
+    * buffer seeded correctly for that kind, never the live frame surface directly -- see
+    * `RendererFramePlanner.paintPanelLayer`'s doc comment for why a panel that samples the pixels behind it
+    * additionally requires the *whole* frame to be undamaged (not just its own surface) before it may reuse a cached
+    * buffer, on top of the `Damage.Surface` narrowing this producer reports here.
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
     if before.runtime.themeTransition != after.runtime.themeTransition ||
@@ -294,9 +294,9 @@ object DamageProducer:
     * each frame from the active cursor, never stored in `runtime.uiSurfaces` -- so [[uiSurfacesDamage]] above cannot
     * see it move. Its anchor (and `position`/`word_count`/... text) changes on every cursor move, and the renderer
     * needs a `Damage.Surface(cursor-info-bar)` fact to (a) exclude the rows the bar vacated from bounded repaint via
-    * `Renderer.vacatedFloatingSurfaceRows` and (b) actually push them to screen -- without it a translucent-pane theme
-    * keeps the bar's old opaque background stuck until an unrelated full redraw. A pinned bar or an empty segment list
-    * yields `None` on both sides (no floating surface at all), so this reports nothing for those.
+    * `RendererFramePlanner.vacatedFloatingSurfaceRows` and (b) actually push them to screen -- without it a
+    * translucent-pane theme keeps the bar's old opaque background stuck until an unrelated full redraw. A pinned bar or
+    * an empty segment list yields `None` on both sides (no floating surface at all), so this reports nothing for those.
     */
   private def cursorInfoBarDamage(before: AppState, after: AppState): Damage =
     if before.cursorInfoBarSurface == after.cursorInfoBarSurface then Damage.Nothing
@@ -333,21 +333,22 @@ object DamageProducer:
           )(onlyChangedId)
         case _ => None
 
-  /** Pane headers, gutter text and line numbers -- `Renderer.ChromeKey`'s `layout`/`gutterText`/`lineNumberRows`/
-    * `headers` fields, keyed by `PaneId` rather than `BufferId`. `state.layout` keeps the same object reference across
-    * any transition that doesn't touch pane structure or the active pane (Scala's `.copy` only allocates a new object
-    * for the field actually changed), so a reference check here is both cheap and an exact match for what `ChromeKey`'s
-    * own `ReferenceIdentity(state.layout)` already invalidates on today -- reported as `Everything` since a changed
-    * active pane or pane structure affects the gutter, every pane's header, and line numbers all at once, and figuring
-    * out a narrower blast radius from `AppState` alone would just re-derive what `Renderer`'s layout engine computes.
+  /** Pane headers, gutter text and line numbers -- the renderer's retired `ChromeKey`'s
+    * `layout`/`gutterText`/`lineNumberRows`/ `headers` fields, keyed by `PaneId` rather than `BufferId`. `state.layout`
+    * keeps the same object reference across any transition that doesn't touch pane structure or the active pane
+    * (Scala's `.copy` only allocates a new object for the field actually changed), so a reference check here is both
+    * cheap and an exact match for what `ChromeKey`'s own `ReferenceIdentity(state.layout)` already invalidates on today
+    * -- reported as `Everything` since a changed active pane or pane structure affects the gutter, every pane's header,
+    * and line numbers all at once, and figuring out a narrower blast radius from `AppState` alone would just re-derive
+    * what `Renderer`'s layout engine computes.
     */
   private def paneChromeDamage(before: AppState, after: AppState): Damage =
     if before.persisted.layout ne after.persisted.layout then Damage.Everything
     else paneHeaderDamage(before, after) |+| gutterDamage(before, after)
 
   /** A pane's header shows the active highlight, the buffer's filename and its dirty indicator -- exactly the four
-    * inputs `Renderer.chromeKeyFor`'s `headers` field reads. `activeEditorPaneId` can't differ here (the layout
-    * reference is unchanged, see [[paneChromeDamage]]), so only title/dirty/buffer-identity ever trip this.
+    * inputs the renderer's retired `chromeKeyFor`'s `headers` field reads. `activeEditorPaneId` can't differ here (the
+    * layout reference is unchanged, see [[paneChromeDamage]]), so only title/dirty/buffer-identity ever trip this.
     */
   private def paneHeaderDamage(before: AppState, after: AppState): Damage =
     after.persisted.layout.orderedPaneIds.foldLeft(Damage.Nothing: Damage) { (acc, paneId) =>
@@ -365,9 +366,9 @@ object DamageProducer:
       )
     }
 
-  /** The legacy gutter (`Renderer.legacyGutterContent`) shows the active pane's cursor position, language and filename,
-    * and line numbers follow the active pane's own visible lines -- so any of those changing on the active buffer
-    * dirties the gutter/line-number chrome, on top of whatever row damage that buffer's own content reports.
+  /** The legacy gutter (`RendererGutter.legacyGutterContent`) shows the active pane's cursor position, language and
+    * filename, and line numbers follow the active pane's own visible lines -- so any of those changing on the active
+    * buffer dirties the gutter/line-number chrome, on top of whatever row damage that buffer's own content reports.
     */
   private def gutterDamage(before: AppState, after: AppState): Damage =
     if activeGutterInputs(before) == activeGutterInputs(after) then Damage.Nothing else Damage.Chrome

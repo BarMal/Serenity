@@ -3,7 +3,7 @@ package com.serenity.ui.renderer
 import cats.syntax.semigroup.*
 import com.serenity.state.models.Damage
 
-/** Pure accumulation logic standing in for `Renderer`'s current `WeakHashMap[AnyRef, FrameRecord]`-based structural
+/** Pure accumulation logic standing in for the renderer's current `WeakHashMap[AnyRef, FrameRecord]`-based structural
   * diff (`frameRecords`/`publishedRecords`), once `#999` finishes wiring `planFrame` to consume `Damage` instead of
   * reconstructing and comparing a full frame description every frame. Landed here, tested standalone; `planFrame` does
   * not read this yet -- see `DamageProducer`'s doc comment for what still has to land before it safely can.
@@ -21,7 +21,7 @@ import com.serenity.state.models.Damage
   *
   * Every operation here is a pure function over immutable values so the accumulation semantics can be proven correct in
   * isolation; the mutable, synchronized shell `frameRecords`/`publishedRecords` currently provide is a wiring concern
-  * for whichever later change actually calls these from `Renderer`.
+  * for whichever later change actually calls these from the renderer.
   */
 object DamageAccumulator:
 

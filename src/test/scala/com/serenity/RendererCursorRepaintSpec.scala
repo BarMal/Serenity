@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{PixelRect, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -42,7 +42,17 @@ class RendererCursorRepaintSpec extends AnyFlatSpec with Matchers:
 
   private def cursorRects(cursors: List[CursorPosition]): List[PixelRect] =
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
-    Renderer.cursorRepaintRects(stateWith(cursors), surface, viewport, font, font, font, metrics, metrics, None)
+    RendererEntryPoints.cursorRepaintRects(
+      stateWith(cursors),
+      surface,
+      viewport,
+      font,
+      font,
+      font,
+      metrics,
+      metrics,
+      None
+    )
 
   "cursorRepaintRects" should "report one rect for a single visible cursor" in {
     val rects = cursorRects(List(CursorPosition(0, 0)))

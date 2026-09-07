@@ -206,8 +206,8 @@ final case class ShortcutHelpEntry(label: String, keys: String)
 final case class ShortcutHelpGroup(title: String, entries: List[ShortcutHelpEntry])
 
 /** One row of the mode/tab corner widget's tab list (issue #1307): `title` is the buffer's display name (a file's name,
-  * or `Buffer <id>` for one not yet saved to disk) -- never the full path, matching `Renderer.renderBufferHeader`'s
-  * existing per-pane header title.
+  * or `Buffer <id>` for one not yet saved to disk) -- never the full path, matching
+  * `RendererPaneContent.renderBufferHeader`'s existing per-pane header title.
   */
 final case class TabListEntry(bufferId: BufferId, title: String, isDirty: Boolean)
 

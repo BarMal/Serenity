@@ -9,7 +9,12 @@ import com.serenity.ui.layout.*
 /** Paints every surface that floats above or is pinned within the editor workspace: cursor-anchored overlays
   * (completion popups, hovers, ...), the modal backdrop + modal surface, and pinned/expanded panels (outline, markdown
   * split-preview, the companion sprite panel). Panel-level layer caching is delegated to
-  * [[RendererFramePlanner.paintPanelLayer]]/[[RendererFramePlanner.panelDirtyCheck]].
+  * [[RendererFramePlanner.paintPanelLayer]]/[[RendererFramePlanner.panelDirtyCheck]], which decide reuse from
+  * frame-wide damage this object never sees.
+  *
+  * [[renderModalLayer]] and [[pinnedAndExpandedSurfaces]] are public for the reverse direction: the frame planner
+  * schedules the modal layer in its own z-ordered layer stack, and reconciles cached panel buffers against the set of
+  * panels actually on screen, both of which are facts only this object can state.
   */
 object RendererFloatingPanels:
 
@@ -109,7 +114,7 @@ object RendererFloatingPanels:
 
   private val ModalBackdropEffect = LayerEffect(0.4f)
 
-  private[renderer] def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
+  def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
     scene.modalBackdrop.foreach { backdrop =>
       LayerCompositor.withEffect(context.surface)(ModalBackdropEffect) {
         context.surface.setBackgroundColor(state.persisted.theme.margin)
@@ -180,7 +185,7 @@ object RendererFloatingPanels:
     * [[renderPinnedPanels]] paints identically (an expanded panel is a pinned panel temporarily grown to fill more of
     * the workspace; both read their geometry from the same scene node and the same [[PinnedPanelRenderer]]).
     */
-  private[renderer] def pinnedAndExpandedSurfaces(state: AppState): List[UiSurface] =
+  def pinnedAndExpandedSurfaces(state: AppState): List[UiSurface] =
     state.pinnedSurfaces ++ state.runtime.uiSurfaces.filter {
       _.presentation match
         case SurfacePresentation.Expanded(_, _) => true
@@ -202,11 +207,11 @@ object RendererFloatingPanels:
     val imageRect          = markdownPreviewImageRect(rect, contentRect, context)
     val contentWidthCells  = math.max(1, imageRect.width)
     val contentHeightCells = math.max(1, imageRect.height)
-    val widthPx = RendererPaneContent.scaledImagePixelDimension(
+    val widthPx = RendererMarkdownLens.scaledImagePixelDimension(
       contentWidthCells * context.cellMetrics.charWidth,
       context.surface.devicePixelScaleX
     )
-    val heightPx = RendererPaneContent.scaledImagePixelDimension(
+    val heightPx = RendererMarkdownLens.scaledImagePixelDimension(
       contentHeightCells * context.cellMetrics.lineHeight,
       context.surface.devicePixelScaleY
     )

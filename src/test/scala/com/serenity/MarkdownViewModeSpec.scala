@@ -10,7 +10,7 @@ import com.serenity.rope.Rope
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{PinnedPanelViewModel, Renderer}
+import com.serenity.ui.renderer.{PinnedPanelViewModel, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -242,7 +242,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(120, 32)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -266,7 +266,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val font     = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     val viewport = ViewportSize(120, 32)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -294,7 +294,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val metrics = CellMetrics.fromFont(font)
     val surface = new HiDpiMockRenderSurface(120, 32, scaleX = 2.0, scaleY = 2.0)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       markdownPreviewPanelState("# Scaled", CursorPosition(0, 0)),
       cursorVisible = true,
       surface,
@@ -364,7 +364,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 20)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       markdownEditorState(MarkdownViewMode.Source),
       cursorVisible = true,
       surface,
@@ -384,7 +384,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 20)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       markdownEditorState(MarkdownViewMode.InlineLens),
       cursorVisible = true,
       surface,
@@ -407,7 +407,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val metrics = CellMetrics.fromFont(font)
     val surface = new HiDpiMockRenderSurface(100, 20, scaleX = 2.0, scaleY = 2.0)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       markdownEditorState(MarkdownViewMode.InlineLens),
       cursorVisible = true,
       surface,
@@ -463,7 +463,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 20)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -528,7 +528,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(120, 32)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
