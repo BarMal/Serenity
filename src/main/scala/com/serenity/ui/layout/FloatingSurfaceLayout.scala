@@ -3,10 +3,10 @@ package com.serenity.ui.layout
 import com.serenity.config.{AppConfig, InterfaceDensityMetrics}
 import com.serenity.state.models.*
 
-/** Rect, size and cursor-anchor resolution for a single floating surface -- both the live, cursor-tracking path and
-  * the cursor-peek prototype's frozen-anchor variant. Split out of `LayoutEngine` (600-line architecture ratchet);
-  * stacking multiple floating surfaces together lives in [[OverlayStackLayout]], which calls back into the
-  * `private[layout]` helpers here.
+/** Rect, size and cursor-anchor resolution for a single floating surface -- both the live, cursor-tracking path and the
+  * cursor-peek prototype's frozen-anchor variant. Split out of `LayoutEngine` (600-line architecture ratchet); stacking
+  * multiple floating surfaces together lives in [[OverlayStackLayout]], which calls back into the `private[layout]`
+  * helpers here.
   */
 object FloatingSurfaceLayout:
 
@@ -342,9 +342,10 @@ object FloatingSurfaceLayout:
 
   /** Resolves a frozen-anchor cursor-peek stack, box-layout style: each slot in `slots` is stacked in order starting
     * from `anchorScreenPosition`, on the side `placement` prefers, falling back to the other side and then clamping
-    * within `contentRect` when neither side has room -- the same height-budget clamp `OverlayStackLayout.stackBelowCursorSurfaces`
-    * already uses for its own (live) stack, reused rather than inventing a second overflow mechanism. A slot with no
-    * height budget left is dropped from the result entirely rather than rendered at zero height.
+    * within `contentRect` when neither side has room -- the same height-budget clamp
+    * `OverlayStackLayout.stackBelowCursorSurfaces` already uses for its own (live) stack, reused rather than inventing
+    * a second overflow mechanism. A slot with no height budget left is dropped from the result entirely rather than
+    * rendered at zero height.
     *
     * Deliberately distinct from [[floatingAnchor]]/[[calculateFloatingSurfaceRect]]: `anchorScreenPosition` is supplied
     * once by the caller (captured from the cursor's *line* at summon time) rather than derived here from `AppState`/the

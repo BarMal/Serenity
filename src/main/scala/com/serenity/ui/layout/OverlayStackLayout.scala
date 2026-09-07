@@ -126,7 +126,9 @@ object OverlayStackLayout:
         FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface -> _)
       )
     val anchorFrameOpt =
-      surfaces.headOption.flatMap(surface => FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, paneLayouts))
+      surfaces.headOption.flatMap(surface =>
+        FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, paneLayouts)
+      )
     anchorFrameOpt match
       case None =>
         BelowOverlayLayout(Nil, Set.empty)
@@ -134,7 +136,9 @@ object OverlayStackLayout:
         BelowOverlayLayout(Nil, Set.empty)
       case Some(anchorFrame) =>
         val gapRows = surfaces.headOption
-          .map(surface => FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingCursorGapRows(state, surface.content)))
+          .map(surface =>
+            FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingCursorGapRows(state, surface.content))
+          )
           .getOrElse(0)
         val stackGapRows    = FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingStackGapRows(state))
         val availableBottom = anchorFrame.contentRect.bottom

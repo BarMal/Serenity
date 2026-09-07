@@ -377,4 +377,3 @@ object LayoutEngine:
         layout = state.persisted.layout.copy(editorPanes = updatedPanes)
       )
     )
-

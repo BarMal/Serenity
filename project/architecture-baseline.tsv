@@ -32,7 +32,6 @@ main/scala/com/serenity/state/reducers/EditorEventReducer.scala	method reduceCur
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	639
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	130
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
-main/scala/com/serenity/ui/layout/LayoutEngine.scala	file length	1702
 main/scala/com/serenity/ui/layout/SurfaceContentResolver.scala	file length	1208
 main/scala/com/serenity/ui/presets/UiPreset.scala	file length	884
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	609
