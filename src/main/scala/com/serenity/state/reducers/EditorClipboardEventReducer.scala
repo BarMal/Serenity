@@ -77,7 +77,7 @@ private[reducers] object EditorClipboardEventReducer:
       case Some(text) if isMulti =>
         applyEditedBuffer(applyMultiCursorInsertion(_, text))
       case Some(text) =>
-        val (replacedBuffer, replacementEdit) = EditorTextEditReducer.replaceSelectionOrInsert(buffer, head, text)
+        val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, head, text)
         val newCursor                         = replacedBuffer.editing.cursors.headOption.getOrElse(head)
         val withoutAnimations = buffer.copy(
           document = buffer.document.copy(

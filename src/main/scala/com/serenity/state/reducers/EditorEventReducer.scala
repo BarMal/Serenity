@@ -15,7 +15,6 @@ import com.serenity.state.models.*
   */
 object EditorEventReducer:
   private[reducers] val TabInsertion = "    "
-  private[reducers] val OriginCursor = CursorPosition(0, 0)
 
   def reducer(paneId: PaneId)(using balance: com.serenity.rope.Balance): Reducer[TextEntryEvent] =
     Reducer.instance((event, state) => reduce(event, paneId, state))

@@ -240,7 +240,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     // Verify valid state
     val complexState = stateManager.getCurrentState.unsafeRunSync()
     complexState.isValid shouldBe true
-    complexState.validationErrors shouldBe empty
+    AppStateValidation.validationErrors(complexState) shouldBe empty
 
     // When: Test that state remains valid during operations
     stateManager.switchToPane(pane2).unsafeRunSync()
@@ -283,8 +283,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       base.copy(persisted = base.persisted.copy(layout = base.persisted.layout.copy(workspaceTree = Some(invalidTree))))
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Workspace tree contains duplicate node IDs: duplicate")
-    invalid.validationErrors should contain("Workspace tree contains duplicate pane leaves: 0")
+    AppStateValidation.validationErrors(invalid) should contain("Workspace tree contains duplicate node IDs: duplicate")
+    AppStateValidation.validationErrors(invalid) should contain("Workspace tree contains duplicate pane leaves: 0")
 
   it should "reject editor focus outside the workspace tree" in:
     val base        = AppState.initial
@@ -301,8 +301,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     )
 
     invalid.isValid shouldBe false
-    invalid.validationErrors should contain("Workspace tree is missing editor panes: 99")
-    invalid.validationErrors should contain(s"Focus points outside workspace tree: $outsideId")
+    AppStateValidation.validationErrors(invalid) should contain("Workspace tree is missing editor panes: 99")
+    AppStateValidation.validationErrors(invalid) should contain(s"Focus points outside workspace tree: $outsideId")
 
   trait StateFixture:
 

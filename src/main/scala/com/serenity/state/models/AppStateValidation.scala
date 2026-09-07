@@ -5,7 +5,7 @@ import com.serenity.ui.layout.{SplitAxis, WorkspaceNodeId, WorkspaceTree}
 /** Invariant checking and workspace-tree reconciliation for [[AppState]], pulled out of that file to keep it under the
   * architecture ratchet's file-length target. Pure functions over an [[AppState]] snapshot -- no state of their own.
   */
-private[models] object AppStateValidation:
+object AppStateValidation:
 
   def validationErrors(state: AppState): List[String] =
     val errors = List.newBuilder[String]
@@ -126,7 +126,8 @@ private[models] object AppStateValidation:
 
   def validated(state: AppState): Either[List[String], AppState] =
     val reconciled = reconcileWorkspaceTree(state)
-    if reconciled.isValid then Right(reconciled) else Left(reconciled.validationErrors)
+    val errors     = validationErrors(reconciled)
+    if errors.isEmpty then Right(reconciled) else Left(errors)
 
   private def reconcileWorkspaceTree(state: AppState): AppState =
     state.persisted.layout.workspaceTree match

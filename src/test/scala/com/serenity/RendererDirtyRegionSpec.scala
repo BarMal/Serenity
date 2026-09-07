@@ -6,7 +6,6 @@ import com.serenity.ui.layout.{
   CellMetrics,
   EditorPaneLayoutEngine,
   LayoutEngine,
-  LayoutManager,
   PixelRect,
   TextLayoutSnapshot,
   ViewportSize
@@ -392,7 +391,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       // constant.
       def wrappedRowCountFor(n: Int): Int =
         val state            = stateWith(contentFor(n))
-        val calculatedLayout = LayoutManager.calculateLayout(state, viewport)
+        val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
         val workspaceLayout  = EditorPaneLayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
         val contentRect  = workspaceLayout.activeContentRect(state).getOrElse(fail("expected an active content rect"))
         val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)

@@ -165,13 +165,6 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     cursorPosition shouldBe Some(ScreenPosition(paneLayout.contentRect.x + 2, paneLayout.contentRect.y + 1))
   }
 
-  it should "delegate legacy LayoutManager layout calculation to the real layout engine" in {
-    val state        = AppState.initial
-    val viewportSize = ViewportSize(100, 30)
-
-    LayoutManager.calculateLayout(state, viewportSize) shouldBe LayoutEngine.calculateLayout(state, viewportSize)
-  }
-
   it should "apply text area insets inside the workspace without resizing pinned panels or line numbers" in {
     val buffer = Buffer.fromString(BufferId(0), "one\ntwo\nthree")
     val state = AppState.initial.copy(

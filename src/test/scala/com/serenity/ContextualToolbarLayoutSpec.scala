@@ -7,7 +7,6 @@ import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.SurfaceRenderMode
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

@@ -9,8 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.components.ThemeCreatorComponent
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ThemeEffect}
-import com.serenity.ui.layout.{Layout, LayoutRect}
-import com.serenity.ui.renderer.{OverlayRowLayout, SurfaceContentResolver, SurfaceRenderMode}
+import com.serenity.ui.layout.{Layout, LayoutRect, OverlayRowLayout, SurfaceContentResolver, SurfaceRenderMode}
 import com.serenity.ui.theme.DefaultThemes
 import com.serenity.ui.theme.config.{ThemeConfigLoader, ThemeConfigWriter, ThemeCreatorState}
 import org.scalatest.flatspec.AnyFlatSpec

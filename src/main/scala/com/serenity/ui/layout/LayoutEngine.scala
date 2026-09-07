@@ -71,15 +71,6 @@ final case class CalculatedLayout(
     gutterRect: Option[LayoutRect] = None
 )
 
-object LayoutManager:
-
-  def calculateLayout(
-    state: AppState,
-    viewportSize: ViewportSize,
-    spacerPercentage: Double = LayoutEngine.DefaultSpacerPercentage
-  ): CalculatedLayout =
-    LayoutEngine.calculateLayout(state, viewportSize, spacerPercentage)
-
 object LayoutEngine:
 
   // Read by `LayoutManager.calculateLayout`'s default argument below, which is a separate object, so plain `private`
