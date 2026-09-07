@@ -1,30 +1,19 @@
 package com.serenity.markdown
 
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font, RenderingHints}
-import java.io.{ByteArrayInputStream, StringReader}
+import java.awt.Font
 import java.net.URI
-import java.nio.file.{Files, Path, Paths}
-import java.util.{LinkedHashMap, Locale}
-import javax.imageio.ImageIO
-import javax.xml.parsers.DocumentBuilderFactory
 
 import scala.jdk.CollectionConverters.*
-import scala.util.Try
 import scala.util.control.NonFatal
-import scala.util.hashing.MurmurHash3
 
-import com.serenity.ui.theme.{ColorFormat, Theme}
+import com.serenity.ui.theme.Theme
 import org.commonmark.Extension
 import org.commonmark.ext.gfm.tables.TablesExtension
 import org.commonmark.ext.task.list.items.TaskListItemsExtension
-import org.commonmark.node.Image
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.*
-import org.w3c.dom.Document
-import org.xhtmlrenderer.resource.ImageResource
-import org.xhtmlrenderer.swing.{AWTFSImageFactory, ImageResourceLoader, Java2DRenderer, SwingReplacedElementFactory}
-import org.xml.sax.InputSource
+import org.xhtmlrenderer.swing.Java2DRenderer
 
 object MarkdownDocumentPreview:
 
@@ -45,130 +34,11 @@ object MarkdownDocumentPreview:
     val readableFontSize = math.max(font.getSize2D.toDouble, lineHeightPx.max(1).toDouble * 0.8).toFloat
     fontForDeviceScale(font.deriveFont(readableFontSize), deviceScale)
 
-  private val MaxCachedImages          = 24
-  private val MaxCachedHtmlFragments   = 48
-  private val MaxCachedInlineDocuments = 32
-  private val MaxImageBytes            = 2 * 1024 * 1024
-  private val MaxImageDimension        = 4096
-  private val MaxImagePixels           = MaxImageDimension.toLong * MaxImageDimension.toLong
-  private val MaxEditSlotCacheEntries  = 24
-
-  final private case class SourceFingerprint(length: Int, hash: Int)
-
-  private object SourceFingerprint:
-    def from(source: String): SourceFingerprint =
-      SourceFingerprint(source.length, MurmurHash3.stringHash(source))
-
-  final private case class ImageCacheKey(
-      source: SourceFingerprint,
-      title: String,
-      widthPx: Int,
-      heightPx: Int,
-      theme: Theme,
-      font: Font,
-      baseUri: Option[String],
-      panelChrome: Boolean,
-      inlineLineHeightPx: Option[Int],
-      inlineRows: Boolean
-  )
-
-  /** Identifies an `ImageCacheKey` without its `source` fingerprint, so rapid successive renders of the same preview
-    * slot (same title/size/theme/font/etc, only the markdown content changing keystroke to keystroke) can be recognised
-    * as "the same thing being retyped" rather than unrelated cache entries.
-    */
-  final private case class ImageSlotKey(
-      title: String,
-      widthPx: Int,
-      heightPx: Int,
-      theme: Theme,
-      font: Font,
-      baseUri: Option[String],
-      panelChrome: Boolean,
-      inlineLineHeightPx: Option[Int],
-      inlineRows: Boolean
-  )
-
-  private object ImageSlotKey:
-
-    def from(key: ImageCacheKey): ImageSlotKey =
-      ImageSlotKey(
-        key.title,
-        key.widthPx,
-        key.heightPx,
-        key.theme,
-        key.font,
-        key.baseUri,
-        key.panelChrome,
-        key.inlineLineHeightPx,
-        key.inlineRows
-      )
-
-  final private case class SlotRender(image: BufferedImage)
-
-  final private case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
-
-  final private case class SourceLinesFingerprint(lineCount: Int, totalLength: Int, hash: Int)
-
-  private object SourceLinesFingerprint:
-
-    def from(sourceLines: Vector[String]): SourceLinesFingerprint =
-      SourceLinesFingerprint(
-        lineCount = sourceLines.length,
-        totalLength = sourceLines.map(_.length).sum,
-        hash = MurmurHash3.orderedHash(sourceLines)
-      )
-
-  final private case class InlineDocumentCacheKey(source: SourceLinesFingerprint)
-
-  final private case class InlinePreviewIndex(
+  final private[markdown] case class InlinePreviewIndex(
       previewLines: Vector[InlinePreviewLine],
       rowsBySourceLine: Map[Int, Vector[Int]],
       tableLineIndexes: Set[Int]
   )
-
-  private val imageCache =
-    new LinkedHashMap[ImageCacheKey, BufferedImage](MaxCachedImages, 0.75f, true):
-      override def removeEldestEntry(eldest: java.util.Map.Entry[ImageCacheKey, BufferedImage]): Boolean =
-        size() > MaxCachedImages
-
-  private val editSlotCache =
-    new LinkedHashMap[ImageSlotKey, SlotRender](MaxEditSlotCacheEntries, 0.75f, true):
-      override def removeEldestEntry(eldest: java.util.Map.Entry[ImageSlotKey, SlotRender]): Boolean =
-        size() > MaxEditSlotCacheEntries
-
-  /** While `reuseLastRenderWhileEditing` is true, reuses the last image rendered for this preview slot (same
-    * title/size/theme/font/etc, only the markdown content differing) instead of paying for a fresh flying-saucer layout
-    * pass. Callers set this from an explicit, event-driven signal decided upstream -- e.g. "an edit landed for this
-    * buffer more recently than the last settled render" -- never from wall-clock proximity, so the result is fully
-    * deterministic given the caller's inputs. `false` (every direct caller's default) always renders fresh, exactly as
-    * if this cache didn't exist.
-    */
-  private def renderOrReuseCommitted(key: ImageCacheKey, reuseLastRenderWhileEditing: Boolean)(
-    render: => BufferedImage
-  ): BufferedImage =
-    val slotKey = ImageSlotKey.from(key)
-    val reused =
-      if reuseLastRenderWhileEditing then editSlotCache.synchronized(Option(editSlotCache.get(slotKey))) else None
-    reused match
-      case Some(entry) => entry.image
-      case None =>
-        val rendered = render
-        editSlotCache.synchronized {
-          val _ = editSlotCache.put(slotKey, SlotRender(rendered))
-        }
-        rendered
-
-  private val htmlFragmentCache =
-    new LinkedHashMap[HtmlFragmentCacheKey, String](MaxCachedHtmlFragments, 0.75f, true):
-      override def removeEldestEntry(eldest: java.util.Map.Entry[HtmlFragmentCacheKey, String]): Boolean =
-        size() > MaxCachedHtmlFragments
-
-  private val inlineDocumentCache =
-    new LinkedHashMap[InlineDocumentCacheKey, InlinePreviewIndex](MaxCachedInlineDocuments, 0.75f, true):
-      override def removeEldestEntry(
-        eldest: java.util.Map.Entry[InlineDocumentCacheKey, InlinePreviewIndex]
-      ): Boolean =
-        size() > MaxCachedInlineDocuments
 
   private val extensions: java.util.List[Extension] =
     List[Extension](TablesExtension.create(), TaskListItemsExtension.create()).asJava
@@ -187,15 +57,17 @@ object MarkdownDocumentPreview:
       .build()
 
   def renderHtmlFragment(source: String, title: String, baseUri: Option[URI] = None): String =
-    val key = HtmlFragmentCacheKey(SourceFingerprint.from(source), title, baseUri.map(_.toString))
-    htmlFragmentCache
+    val key =
+      MarkdownPreviewCache.HtmlFragmentCacheKey(MarkdownPreviewCache.SourceFingerprint.from(source), title, baseUri.map(_.toString))
+    MarkdownPreviewCache.htmlFragmentCache
       .synchronized {
-        Option(htmlFragmentCache.get(key))
+        Option(MarkdownPreviewCache.htmlFragmentCache.get(key))
       }
       .getOrElse {
-        val rendered = htmlRenderer(baseUri).render(parser.parse(source))
-        htmlFragmentCache.synchronized {
-          val _ = htmlFragmentCache.put(key, rendered)
+        val rendered =
+          MarkdownPreviewXhtml.htmlRenderer(extensions, defaultHtmlRenderer, baseUri).render(parser.parse(source))
+        MarkdownPreviewCache.htmlFragmentCache.synchronized {
+          val _ = MarkdownPreviewCache.htmlFragmentCache.put(key, rendered)
         }
         rendered
       }
@@ -214,8 +86,8 @@ object MarkdownDocumentPreview:
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
-    val key = ImageCacheKey(
-      source = SourceFingerprint.from(source),
+    val key = MarkdownPreviewCache.ImageCacheKey(
+      source = MarkdownPreviewCache.SourceFingerprint.from(source),
       title = title,
       widthPx = safeWidth,
       heightPx = safeHeight,
@@ -226,12 +98,12 @@ object MarkdownDocumentPreview:
       inlineLineHeightPx = inlineLineHeightPx,
       inlineRows = false
     )
-    imageCache
+    MarkdownPreviewCache.imageCache
       .synchronized {
-        Option(imageCache.get(key))
+        Option(MarkdownPreviewCache.imageCache.get(key))
       }
       .getOrElse {
-        renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
+        MarkdownPreviewCache.renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
           val rendered = renderImageUncached(
             source,
             title,
@@ -243,8 +115,8 @@ object MarkdownDocumentPreview:
             panelChrome,
             inlineLineHeightPx
           )
-          imageCache.synchronized {
-            val _ = imageCache.put(key, rendered)
+          MarkdownPreviewCache.imageCache.synchronized {
+            val _ = MarkdownPreviewCache.imageCache.put(key, rendered)
           }
           rendered
         }
@@ -290,8 +162,10 @@ object MarkdownDocumentPreview:
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
     val safeHeight = heightPx.max(1)
-    val key = ImageCacheKey(
-      source = SourceFingerprint.from(rows.map(row => s"${row.sourceLine}:${row.text}").mkString("\u0000")),
+    val key = MarkdownPreviewCache.ImageCacheKey(
+      source = MarkdownPreviewCache.SourceFingerprint.from(
+        rows.map(row => s"${row.sourceLine}:${row.text}").mkString("\u0000")
+      ),
       title = title,
       widthPx = safeWidth,
       heightPx = safeHeight,
@@ -302,12 +176,12 @@ object MarkdownDocumentPreview:
       inlineLineHeightPx = Some(inlineLineHeightPx.max(1)),
       inlineRows = true
     )
-    imageCache
+    MarkdownPreviewCache.imageCache
       .synchronized {
-        Option(imageCache.get(key))
+        Option(MarkdownPreviewCache.imageCache.get(key))
       }
       .getOrElse {
-        renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
+        MarkdownPreviewCache.renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
           val rendered = renderInlineImageUncached(
             rows,
             sourceLines,
@@ -318,8 +192,8 @@ object MarkdownDocumentPreview:
             font,
             inlineLineHeightPx.max(1)
           )
-          imageCache.synchronized {
-            val _ = imageCache.put(key, rendered)
+          MarkdownPreviewCache.imageCache.synchronized {
+            val _ = MarkdownPreviewCache.imageCache.put(key, rendered)
           }
           rendered
         }
@@ -338,16 +212,20 @@ object MarkdownDocumentPreview:
   ): BufferedImage =
     try
       val renderer = Java2DRenderer(
-        parseXhtml(renderXhtml(source, title, theme, font, baseUri, panelChrome, inlineLineHeightPx)),
+        MarkdownPreviewImageResources.parseXhtml(
+          renderXhtml(source, title, theme, font, baseUri, panelChrome, inlineLineHeightPx)
+        ),
         safeWidth,
         safeHeight
       )
-      val resourcePolicy = new PreviewResourcePolicy(baseUri)
-      renderer.getSharedContext.setReplacedElementFactory(previewReplacedElementFactory(resourcePolicy))
+      val resourcePolicy = new MarkdownPreviewImageResources.PreviewResourcePolicy(baseUri)
+      renderer.getSharedContext.setReplacedElementFactory(
+        MarkdownPreviewImageResources.previewReplacedElementFactory(resourcePolicy)
+      )
       renderer.getImage()
     catch
       case NonFatal(error) =>
-        fallbackImage(safeWidth, safeHeight, theme, font, error.getMessage)
+        MarkdownPreviewImageResources.fallbackImage(safeWidth, safeHeight, theme, font, error.getMessage)
 
   private def renderInlineImageUncached(
     rows: Vector[InlinePreviewLine],
@@ -361,16 +239,20 @@ object MarkdownDocumentPreview:
   ): BufferedImage =
     try
       val renderer = Java2DRenderer(
-        parseXhtml(renderInlineXhtml(rows, sourceLines, title, theme, font, inlineLineHeightPx)),
+        MarkdownPreviewImageResources.parseXhtml(
+          renderInlineXhtml(rows, sourceLines, title, theme, font, inlineLineHeightPx)
+        ),
         safeWidth,
         safeHeight
       )
-      val resourcePolicy = new PreviewResourcePolicy(None)
-      renderer.getSharedContext.setReplacedElementFactory(previewReplacedElementFactory(resourcePolicy))
+      val resourcePolicy = new MarkdownPreviewImageResources.PreviewResourcePolicy(None)
+      renderer.getSharedContext.setReplacedElementFactory(
+        MarkdownPreviewImageResources.previewReplacedElementFactory(resourcePolicy)
+      )
       renderer.getImage()
     catch
       case NonFatal(error) =>
-        fallbackImage(safeWidth, safeHeight, theme, font, error.getMessage)
+        MarkdownPreviewImageResources.fallbackImage(safeWidth, safeHeight, theme, font, error.getMessage)
 
   def renderInlineLine(source: String): String =
     val trimmed = source.trim
@@ -455,22 +337,22 @@ object MarkdownDocumentPreview:
     val earliestContextLine = (start - maxWindowLines.max(2)).max(0)
     val tableStart = Iterator
       .iterate(start)(_ - 1)
-      .takeWhile(index => index >= earliestContextLine && isTableRow(sourceLines(index)))
+      .takeWhile(index => index >= earliestContextLine && MarkdownInlineTablePreview.isTableRow(sourceLines(index)))
       .toVector
       .lastOption
-      .filter(index => index + 1 <= start && isTableSeparator(sourceLines(index + 1)))
+      .filter(index => index + 1 <= start && MarkdownInlineTablePreview.isTableSeparator(sourceLines(index + 1)))
     tableStart.getOrElse(start)
 
   private def inlinePreviewIndex(sourceLines: Vector[String]): InlinePreviewIndex =
-    val key = InlineDocumentCacheKey(SourceLinesFingerprint.from(sourceLines))
-    inlineDocumentCache
+    val key = MarkdownPreviewCache.InlineDocumentCacheKey(MarkdownPreviewCache.SourceLinesFingerprint.from(sourceLines))
+    MarkdownPreviewCache.inlineDocumentCache
       .synchronized {
-        Option(inlineDocumentCache.get(key))
+        Option(MarkdownPreviewCache.inlineDocumentCache.get(key))
       }
       .getOrElse {
         val index = buildInlinePreviewIndex(sourceLines)
-        inlineDocumentCache.synchronized {
-          val _ = inlineDocumentCache.put(key, index)
+        MarkdownPreviewCache.inlineDocumentCache.synchronized {
+          val _ = MarkdownPreviewCache.inlineDocumentCache.put(key, index)
         }
         index
       }
@@ -490,7 +372,7 @@ object MarkdownDocumentPreview:
     def loop(index: Int, acc: Vector[InlinePreviewLine]): Vector[InlinePreviewLine] =
       if index >= sourceLines.length then acc
       else
-        tableBlockAt(sourceLines, index) match
+        MarkdownInlineTablePreview.tableBlockAt(sourceLines, index) match
           case Some(tableBlock) =>
             loop(tableBlock.endIndex + 1, acc ++ tableBlock.previewLines)
           case None =>
@@ -503,7 +385,7 @@ object MarkdownDocumentPreview:
     def loop(index: Int, acc: Set[Int]): Set[Int] =
       if index >= sourceLines.length then acc
       else
-        tableBlockAt(sourceLines, index) match
+        MarkdownInlineTablePreview.tableBlockAt(sourceLines, index) match
           case Some(tableBlock) =>
             loop(tableBlock.endIndex + 1, acc ++ (index to tableBlock.endIndex))
           case None =>
@@ -560,37 +442,6 @@ object MarkdownDocumentPreview:
         source = previewSource(sourceLines, firstSourceLine, safeMax)
       )
 
-  private def htmlRenderer(baseUri: Option[URI]): HtmlRenderer =
-    baseUri match
-      case None => defaultHtmlRenderer
-      case Some(uri) =>
-        HtmlRenderer
-          .builder()
-          .extensions(extensions)
-          .escapeHtml(true)
-          .attributeProviderFactory(relativeImageProvider(uri))
-          .build()
-
-  private def relativeImageProvider(baseUri: URI): AttributeProviderFactory =
-    new AttributeProviderFactory:
-      override def create(context: AttributeProviderContext): AttributeProvider =
-        new AttributeProvider:
-          override def setAttributes(
-            node: org.commonmark.node.Node,
-            tagName: String,
-            attributes: java.util.Map[String, String]
-          ): Unit =
-            node match
-              case image: Image =>
-                Option(image.getDestination)
-                  .filterNot(isAbsoluteUri)
-                  .map(baseUri.resolve)
-                  .foreach(uri => attributes.put("src", uri.toString))
-              case _ => ()
-
-  private def isAbsoluteUri(value: String): Boolean =
-    Try(URI.create(value).isAbsolute).getOrElse(false)
-
   private def renderXhtml(
     source: String,
     title: String,
@@ -601,7 +452,7 @@ object MarkdownDocumentPreview:
     inlineLineHeightPx: Option[Int]
   ): String =
     val fragment = renderHtmlFragment(source, title, baseUri)
-    renderXhtmlFragment(fragment, title, theme, font, panelChrome, inlineLineHeightPx)
+    MarkdownPreviewXhtml.renderXhtmlFragment(fragment, title, theme, font, panelChrome, inlineLineHeightPx)
 
   private[serenity] def renderInlineXhtml(
     rows: Vector[InlinePreviewLine],
@@ -612,266 +463,10 @@ object MarkdownDocumentPreview:
     inlineLineHeightPx: Int
   ): String =
     val fragment =
-      s"<div class=\"inline-rows\">${rows.map(inlineRowHtml(_, sourceLines)).mkString}</div>"
-    renderXhtmlFragment(fragment, title, theme, font, panelChrome = false, Some(inlineLineHeightPx))
+      s"<div class=\"inline-rows\">${rows.map(MarkdownPreviewXhtml.inlineRowHtml(_, sourceLines)).mkString}</div>"
+    MarkdownPreviewXhtml.renderXhtmlFragment(fragment, title, theme, font, panelChrome = false, Some(inlineLineHeightPx))
 
-  private def renderXhtmlFragment(
-    fragment: String,
-    title: String,
-    theme: Theme,
-    font: Font,
-    panelChrome: Boolean,
-    inlineLineHeightPx: Option[Int]
-  ): String =
-    s"""<?xml version="1.0" encoding="UTF-8"?>
-       |<html xmlns="http://www.w3.org/1999/xhtml">
-       |  <head>
-       |    <title>${escapeXml(title)}</title>
-       |    <style type="text/css">
-|${stylesheet(theme, font, panelChrome, inlineLineHeightPx)}
-       |    </style>
-       |  </head>
-       |  <body>
-       |    <div class="markdown-body">
-       |$fragment
-       |    </div>
-       |  </body>
-       |</html>""".stripMargin
-
-  private def inlineRowHtml(row: InlinePreviewLine, sourceLines: Vector[String]): String =
-    val headingClass = row.sourceLine
-      .flatMap(sourceLines.lift)
-      .filter(_.matches("^\\s*#{1,6}\\s+.+$"))
-      .fold("")(_ => " inline-heading")
-    s"<div class=\"inline-row$headingClass\">${escapeXml(row.text)}</div>"
-
-  private def stylesheet(
-    theme: Theme,
-    font: Font,
-    panelChrome: Boolean,
-    inlineLineHeightPx: Option[Int]
-  ): String =
-    val background = if panelChrome then theme.panel.background else theme.background
-    val foreground = if panelChrome then theme.panel.foreground else theme.foreground
-    val inlineLensOverrides = inlineLineHeightPx.fold("") { lineHeight =>
-      s"""      html, body { line-height: ${lineHeight.max(1)}px; }
-         |      .markdown-body { padding: 0; }
-         |      h1, h2, h3, h4, h5, h6 {
-         |        font-size: 1em;
-         |        line-height: ${lineHeight.max(1)}px;
-         |        margin: 0;
-         |        border-bottom: 0;
-         |        padding-bottom: 0;
-         |      }
-         |      p, blockquote, pre, table, ul, ol { margin: 0; }
-         |      li { margin: 0; }
-         |      .inline-rows {
-         |        margin: 0;
-         |      }
-         |      .inline-rows .inline-row {
-         |        border: 0;
-         |        height: ${lineHeight.max(1)}px;
-         |        line-height: ${lineHeight.max(1)}px;
-         |        margin: 0;
-         |        padding: 0;
-         |        white-space: pre;
-         |      }
-         |      .inline-heading { font-weight: 700; }
-         |""".stripMargin
-    }
-    s"""      html, body {
-       |        margin: 0;
-       |        padding: 0;
-       |        width: 100%;
-       |        height: 100%;
-       |        background: ${css(background)};
-       |        color: ${css(foreground)};
-       |        font-family: ${cssString(font.getFamily)}, sans-serif;
-       |        font-size: ${font.getSize2D.max(10.0f)}px;
-       |        line-height: 1.45;
-       |      }
-       |      .markdown-body {
-       |        box-sizing: border-box;
-       |        padding: 14px 16px 18px 16px;
-       |      }
-       |      h1, h2, h3, h4, h5, h6 {
-       |        color: ${css(theme.foreground)};
-       |        font-weight: 700;
-       |        line-height: 1.2;
-       |        margin: 0.85em 0 0.35em 0;
-       |      }
-       |      h1 { font-size: 1.8em; border-bottom: 1px solid ${css(theme.border)}; padding-bottom: 0.24em; }
-       |      h2 { font-size: 1.45em; border-bottom: 1px solid ${css(theme.border)}; padding-bottom: 0.2em; }
-       |      h3 { font-size: 1.2em; }
-       |      p { margin: 0.55em 0; }
-       |      a { color: ${css(theme.highlighted.foreground)}; text-decoration: underline; }
-       |      code {
-       |        font-family: ${cssString(Font.MONOSPACED)}, monospace;
-       |        background: ${css(theme.background)};
-       |        border: 1px solid ${css(theme.border)};
-       |        padding: 1px 4px;
-       |      }
-       |      pre {
-       |        background: ${css(theme.background)};
-       |        border: 1px solid ${css(theme.border)};
-       |        padding: 10px;
-       |        overflow: hidden;
-       |      }
-       |      pre code { border: 0; padding: 0; }
-       |      blockquote {
-       |        border-left: 4px solid ${css(theme.border)};
-       |        color: ${css(theme.muted)};
-       |        margin: 0.7em 0;
-       |        padding-left: 0.9em;
-       |      }
-       |      table {
-       |        border-collapse: collapse;
-       |        margin: 0.8em 0;
-       |        width: 100%;
-       |      }
-       |      th, td {
-       |        border: 1px solid ${css(theme.border)};
-       |        padding: 6px 8px;
-       |        text-align: left;
-       |      }
-       |      th { background: ${css(theme.background)}; color: ${css(theme.foreground)}; }
-       |      img {
-       |        max-width: 100%;
-       |        height: auto;
-       |        border: 1px solid ${css(theme.border)};
-       |      }
-       |      ul, ol { padding-left: 1.5em; }
-       |      li { margin: 0.25em 0; }
-       |$inlineLensOverrides
-       |""".stripMargin
-
-  private def parseXhtml(xhtml: String): Document =
-    val factory = DocumentBuilderFactory.newInstance()
-    factory.setNamespaceAware(true)
-    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-    factory.newDocumentBuilder().parse(InputSource(StringReader(xhtml)))
-
-  private class PreviewResourcePolicy(baseUri: Option[URI]):
-
-    private val resourceRoot = baseUri
-      .filter(uri => uri.getScheme == "file" && uri.getHost == null)
-      .flatMap(uri => Try(Paths.get(uri).toAbsolutePath.normalize()).toOption)
-
-    def isDataUri(uri: String): Boolean =
-      Option(uri).exists(_.trim.toLowerCase(Locale.ROOT).startsWith("data:"))
-
-    def placeholderImage: BufferedImage =
-      new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
-
-    def imageFor(uri: String): BufferedImage =
-      loadImage(uri).getOrElse(placeholderImage)
-
-    private def loadImage(uri: String): Option[BufferedImage] =
-      for
-        parsed <- Try(URI.create(uri)).toOption
-        path   <- permittedFile(parsed)
-        bytes  <- readBounded(path)
-        image  <- decodeImage(bytes)
-      yield image
-
-    private def permittedFile(uri: URI): Option[Path] =
-      Option
-        .when(uri.getScheme == "file" && uri.getHost == null && resourceRoot.nonEmpty) {
-          Try(Paths.get(uri).toAbsolutePath.normalize()).toOption
-        }
-        .flatten
-        .filter { path =>
-          resourceRoot.exists { root =>
-            path.startsWith(root) &&
-            Try(path.toRealPath().startsWith(root.toRealPath())).getOrElse(false) &&
-            Files.isRegularFile(path)
-          }
-        }
-
-    private def readBounded(path: Path): Option[Array[Byte]] =
-      Try {
-        val input = Files.newInputStream(path)
-        try
-          val bytes = input.readNBytes(MaxImageBytes + 1)
-          if bytes.length <= MaxImageBytes then Some(bytes) else None
-        finally input.close()
-      }.toOption.flatten
-
-    private def decodeImage(bytes: Array[Byte]): Option[BufferedImage] =
-      Try {
-        Option(ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))).flatMap { input =>
-          val readers = ImageIO.getImageReaders(input)
-          if !readers.hasNext then
-            input.close()
-            None
-          else
-            val reader = readers.next()
-            try
-              reader.setInput(input, true, true)
-              val width  = reader.getWidth(0)
-              val height = reader.getHeight(0)
-              Option
-                .when(
-                  width > 0 &&
-                    height > 0 &&
-                    width <= MaxImageDimension &&
-                    height <= MaxImageDimension &&
-                    width.toLong * height.toLong <= MaxImagePixels
-                )(Option(ImageIO.read(new ByteArrayInputStream(bytes))))
-                .flatten
-            finally
-              reader.dispose()
-              input.close()
-        }
-      }.toOption.flatten
-
-  private def previewReplacedElementFactory(resourcePolicy: PreviewResourcePolicy): SwingReplacedElementFactory =
-    new PreviewReplacedElementFactory(resourcePolicy)
-
-  private class PreviewReplacedElementFactory(resourcePolicy: PreviewResourcePolicy)
-      extends SwingReplacedElementFactory(
-        ImageResourceLoader.NO_OP_REPAINT_LISTENER,
-        new ImageResourceLoader:
-          override def get(uri: String, width: Int, height: Int): ImageResource =
-            ImageResource(uri, AWTFSImageFactory.createImage(resourcePolicy.imageFor(uri)))
-      ):
-
-    override def createReplacedElement(
-      context: org.xhtmlrenderer.layout.LayoutContext,
-      box: org.xhtmlrenderer.render.BlockBox,
-      userAgent: org.xhtmlrenderer.extend.UserAgentCallback,
-      cssWidth: Int,
-      cssHeight: Int
-    ): org.xhtmlrenderer.extend.ReplacedElement =
-      val element = Option(box.getElement)
-      val dataImage = element
-        .filter(_.getNodeName.equalsIgnoreCase("img"))
-        .map(_.getAttribute("src"))
-        .exists(resourcePolicy.isDataUri)
-      if dataImage then
-        new org.xhtmlrenderer.swing.InstantImageReplacedElement(
-          resourcePolicy.placeholderImage,
-          cssWidth,
-          cssHeight
-        )
-      else super.createReplacedElement(context, box, userAgent, cssWidth, cssHeight)
-
-  private def fallbackImage(width: Int, height: Int, theme: Theme, font: Font, message: String): BufferedImage =
-    val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-    val g     = image.createGraphics()
-    try
-      g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-      g.setColor(theme.panel.background)
-      g.fillRect(0, 0, width, height)
-      g.setColor(theme.error.foreground)
-      g.setFont(font)
-      g.drawString("Markdown preview failed", 16, 28)
-      g.setColor(theme.panel.foreground)
-      Option(message).foreach(text => g.drawString(text.take(120), 16, 50))
-    finally g.dispose()
-    image
-
-  private def normalizeInline(text: String): String =
+  private[markdown] def normalizeInline(text: String): String =
     val withoutImages = """!\[([^\]]*)\]\(([^)]+)\)""".r.replaceAllIn(
       text,
       matched =>
@@ -884,103 +479,9 @@ object MarkdownDocumentPreview:
     )
     "`([^`]+)`".r.replaceAllIn(withoutLinks, matched => matched.group(1))
 
-  final private case class InlineTableBlock(endIndex: Int, previewLines: Vector[InlinePreviewLine])
-
   private def previewSource(sourceLines: Vector[String], firstSourceLine: Int, maxSourceLines: Int): String =
     val safeMax = maxSourceLines.max(1)
     val endLine = firstSourceLine + math.min(safeMax, sourceLines.length - firstSourceLine)
     sourceLines.slice(firstSourceLine, endLine).mkString("\n")
-
-  private def tableBlockAt(lines: Vector[String], index: Int): Option[InlineTableBlock] =
-    Option
-      .when(index + 1 < lines.length && isTableRow(lines(index)) && isTableSeparator(lines(index + 1))) {
-        val rows = Iterator
-          .iterate(index)(_ + 1)
-          .takeWhile(lineIndex => lineIndex < lines.length && isTableRow(lines(lineIndex)))
-          .toVector
-        // rows always includes `index` itself (isTableRow(lines(index)) holds per the Option.when guard),
-        // so lastOption is always Some; index is the safe fallback for the unreachable None branch.
-        val endIndex     = rows.lastOption.getOrElse(index)
-        val renderedRows = renderInlineTable(rows.map(lines))
-        InlineTableBlock(endIndex, sourceMappedTableRows(rows, renderedRows))
-      }
-      .filter(_.previewLines.nonEmpty)
-
-  private def sourceMappedTableRows(sourceRows: Vector[Int], renderedRows: Vector[String]): Vector[InlinePreviewLine] =
-    renderedRows.zipWithIndex.map {
-      case (text, 0) =>
-        InlinePreviewLine(None, text)
-      case (text, 1) =>
-        InlinePreviewLine(sourceRows.headOption, text)
-      case (text, 2) =>
-        InlinePreviewLine(sourceRows.lift(1), text)
-      case (text, rowIndex) if rowIndex == renderedRows.length - 1 =>
-        InlinePreviewLine(None, text)
-      case (text, rowIndex) =>
-        InlinePreviewLine(sourceRows.lift(rowIndex - 1), text)
-    }
-
-  private def renderInlineTable(lines: Vector[String]): Vector[String] =
-    val parsedRows = lines.map(parseTableCells)
-    val contentRows =
-      parsedRows.zipWithIndex.collect {
-        case (cells, index) if index != 1 => cells.map(normalizeInline)
-      }
-    val columnCount = contentRows.map(_.length).maxOption.getOrElse(0)
-    if columnCount == 0 then Vector.empty
-    else
-      val widths = (0 until columnCount).map { column =>
-        contentRows.flatMap(_.lift(column)).map(_.length).maxOption.getOrElse(0)
-      }.toVector
-
-      contentRows.zipWithIndex.flatMap {
-        case (cells, 0) =>
-          Vector(tableBorder(widths, "\u250c", "\u252c", "\u2510"), boxedTableRow(cells, widths))
-        case (cells, _) =>
-          Vector(boxedTableRow(cells, widths))
-      } match
-        case rows if rows.nonEmpty =>
-          rows.take(2) ++
-            Vector(tableBorder(widths, "\u251c", "\u253c", "\u2524")) ++
-            rows.drop(2) ++
-            Vector(tableBorder(widths, "\u2514", "\u2534", "\u2518"))
-        case _ =>
-          Vector.empty
-
-  private def boxedTableRow(cells: Vector[String], widths: Vector[Int]): String =
-    widths.zipWithIndex
-      .map { case (width, index) => s" ${cells.lift(index).getOrElse("").padTo(width, ' ')} " }
-      .mkString("\u2502", "\u2502", "\u2502")
-
-  private def tableBorder(widths: Vector[Int], left: String, separator: String, right: String): String =
-    widths
-      .map(width => "\u2500" * (width + 2).max(3))
-      .mkString(left, separator, right)
-
-  private def parseTableCells(line: String): Vector[String] =
-    val trimmed           = line.trim
-    val withoutOuterPipes = trimmed.stripPrefix("|").stripSuffix("|")
-    withoutOuterPipes.split("\\|", -1).toVector.map(_.trim)
-
-  private def isTableRow(line: String): Boolean =
-    val trimmed = line.trim
-    trimmed.contains("|") && parseTableCells(trimmed).length >= 2
-
-  private def isTableSeparator(line: String): Boolean =
-    isTableRow(line) && parseTableCells(line).forall(cell => cell.matches(""":?-{3,}:?"""))
-
-  private def css(color: Color): String =
-    ColorFormat.toHex(color, withAlpha = false)
-
-  private def cssString(value: String): String =
-    "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
-
-  private def escapeXml(value: String): String =
-    value
-      .replace("&", "&amp;")
-      .replace("<", "&lt;")
-      .replace(">", "&gt;")
-      .replace("\"", "&quot;")
-      .replace("'", "&apos;")
 
 end MarkdownDocumentPreview
