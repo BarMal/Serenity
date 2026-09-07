@@ -12,6 +12,7 @@ import cats.syntax.semigroup.*
 import com.serenity.animation.{WindowSitter, WindowSitterConfig}
 import com.serenity.app.AppRuntime
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*

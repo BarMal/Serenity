@@ -5,6 +5,7 @@ import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, CursorInfoBarSegment, VisualFlairLevel}
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*

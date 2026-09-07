@@ -4,9 +4,10 @@ import com.serenity.animation.*
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 
-/** Parses one surface setting's text value against the keys [[SurfaceConfigSchemaKeys]] declares. Split out of
-  * [[SurfaceConfig]] to keep that file under the architecture ratchet's file-length target -- [[SurfaceConfig.Schema]]
-  * re-exports these members, so callers see no difference.
+import AppConfigMotionOps.*
+
+/** Parses one surface setting's text value against the keys [[SurfaceConfigSchemaKeys]] declares, returning the updated
+  * configuration or `None` when the key is not a surface setting or the value is not one it accepts.
   */
 object SurfaceConfigSchemaParser:
 

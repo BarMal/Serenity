@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import cats.effect.{IO, Ref}
 import cats.syntax.foldable.*
 import com.serenity.animation.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ColorParser.transparent

@@ -5,6 +5,7 @@ import java.awt.Color
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationState, CharacterKey, TransitionKind}
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.{DeleteBackward, InsertChar, NewLine, Paste, ScrollDown}
 import com.serenity.rope.Balance

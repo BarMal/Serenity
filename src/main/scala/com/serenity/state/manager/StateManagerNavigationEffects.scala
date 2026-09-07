@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
 import com.serenity.command.{CommentsIntent, NavigationIntent}
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.document.{CommentRendering, DocumentNavigation}
 import com.serenity.rope.*
 import com.serenity.state.models.*

@@ -1,5 +1,6 @@
 package com.serenity.animation
 
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionFamily, MotionPreset}
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec

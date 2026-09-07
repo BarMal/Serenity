@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionAccessibility}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance

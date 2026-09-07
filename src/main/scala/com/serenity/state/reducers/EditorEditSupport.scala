@@ -1,6 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.animation.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.*
 import com.serenity.state.models.*

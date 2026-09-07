@@ -16,6 +16,7 @@ import com.serenity.command.{
   SettingsIntent
 }
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager

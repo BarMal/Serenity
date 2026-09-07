@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.command.CommandRunnerOptionSelections
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import org.scalatest.flatspec.AnyFlatSpec

@@ -4,6 +4,7 @@ import java.awt.Color
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionPreset, VisualFlairLevel}
 import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance

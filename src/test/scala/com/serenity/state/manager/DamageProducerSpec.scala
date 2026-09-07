@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{CursorInfoBarPlacement, CursorInfoBarSegment, RenderDamageGranularity}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}

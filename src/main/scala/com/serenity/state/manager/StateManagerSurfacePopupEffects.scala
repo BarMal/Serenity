@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
 import com.serenity.command.ThemeIntent
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.io.FileUtils
 import com.serenity.state.models.*
 import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfigWriter}

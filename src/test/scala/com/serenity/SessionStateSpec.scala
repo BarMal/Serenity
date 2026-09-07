@@ -7,6 +7,7 @@ import _root_.io.circe.Json
 import _root_.io.circe.syntax.*
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
