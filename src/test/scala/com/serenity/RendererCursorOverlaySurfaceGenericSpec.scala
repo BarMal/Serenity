@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.{RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -61,12 +61,21 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "Renderer.renderCursorOnly (surface-generic)" should "draw the cursor into the given surface and report success" in {
+  "RendererCursorOverlay.renderCursorOnly (surface-generic)" should "draw the cursor into the given surface and report success" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
-    Renderer.render(editorState, cursorVisible = false, surface, viewport, codeFont, codeFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      editorState,
+      cursorVisible = false,
+      surface,
+      viewport,
+      codeFont,
+      codeFont,
+      cellMetrics,
+      None
+    )
     surface.fillPixelRectCalls shouldBe empty
 
-    val rendered = Renderer.renderCursorOnly(
+    val rendered = RendererCursorOverlay.renderCursorOnly(
       editorState,
       cursorVisible = true,
       surface,
@@ -86,7 +95,7 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
   it should "report no cursor drawn for a start-page-only state" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
 
-    val rendered = Renderer.renderCursorOnly(
+    val rendered = RendererCursorOverlay.renderCursorOnly(
       startPageState,
       cursorVisible = true,
       surface,
@@ -103,10 +112,10 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
     surface.fillPixelRectCalls shouldBe empty
   }
 
-  "Renderer.renderWithCursorOverlay (surface-generic)" should "draw both the base content and the cursor into the same surface" in {
+  "RendererCursorOverlay.renderWithCursorOverlay (surface-generic)" should "draw both the base content and the cursor into the same surface" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
 
-    val rendered = Renderer.renderWithCursorOverlay(
+    val rendered = RendererCursorOverlay.renderWithCursorOverlay(
       editorState,
       surface,
       viewport,
@@ -126,7 +135,7 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
   it should "render the start page and report success even though it has no cursor" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
 
-    val rendered = Renderer.renderWithCursorOverlay(
+    val rendered = RendererCursorOverlay.renderWithCursorOverlay(
       startPageState,
       surface,
       viewport,

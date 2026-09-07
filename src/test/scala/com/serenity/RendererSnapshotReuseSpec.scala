@@ -9,7 +9,7 @@ import com.serenity.richtext.{RichTextDocument, RichTextParagraph}
 import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.{RendererEntryPoints, RendererPaneSetup}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -161,7 +161,16 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
   "Renderer" should "use consistent pixel coordinates for text and cursor on a monospaced buffer" in {
     val state   = buildState("hello", cursorCol = 2)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
 
     val cursorRects = surface.fillPixelRectCalls
     cursorRects should not be empty
@@ -185,7 +194,16 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
   it should "draw the content text via drawRunPx when measured code-font layout is required" in {
     val state   = buildState("hello", 0)
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
     surface.drawRunPxCalls.exists(_.s.contains("hello")) shouldBe true
   }
 
@@ -193,7 +211,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val indexed = (0 until 100000).iterator.map(line => line -> List(line)).toMap
     val visible = Set(50000, 50001, 50002)
 
-    val projected = Renderer.visibleAnnotationLines(visible, indexed)
+    val projected = RendererPaneSetup.visibleAnnotationLines(visible, indexed)
 
     projected.keySet shouldBe visible
     projected.values.flatten.toSet shouldBe visible
@@ -255,7 +273,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    noException should be thrownBy Renderer.render(
+    noException should be thrownBy RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -293,7 +311,16 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val paneContentHeight =
       LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect.height
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
 
     lineReads.get() shouldBe math.min(buffer.document.content.lineCount, paneContentHeight) + 1
   }
@@ -323,7 +350,16 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
 
     collects.get() shouldBe 0
   }
@@ -353,7 +389,16 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
 
     collects.get() shouldBe 0
     surface.drawRunPxCalls.map(_.s) should contain("paragraph-1")
@@ -391,7 +436,16 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val paneContentHeight =
       LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect.height
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
 
     lineReads.get() should be < 200
   }
@@ -430,7 +484,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    noException should be thrownBy Renderer.render(
+    noException should be thrownBy RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -476,7 +530,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    noException should be thrownBy Renderer.render(
+    noException should be thrownBy RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -520,7 +574,16 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      monoFont,
+      monoFont,
+      cellMetrics,
+      None
+    )
 
     lineReads.get() should be < 200_000
   }
@@ -559,7 +622,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    noException should be thrownBy Renderer.render(
+    noException should be thrownBy RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,

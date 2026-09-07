@@ -48,7 +48,7 @@ class Java2DRenderSurface(
     * surface, then compositing the flushed image back on top of this surface at full opacity, is pixel-identical to
     * painting directly here -- standard "paint onto transparent, then composite over" associativity for `SRC_OVER` --
     * as long as the caller never reads this surface's own pixels back while painting the layer (no `blurRegion`, no
-    * shadow sampling): `Renderer`'s modal layer, the first consumer of this seam, satisfies that.
+    * shadow sampling): the frame planner's modal layer, the first consumer of this seam, satisfies that.
     */
   override def newLayerSurface(onFlush: BufferedImage => Unit): RenderSurface =
     Java2DRenderSurface.forLayer(

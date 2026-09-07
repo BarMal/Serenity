@@ -11,7 +11,7 @@ import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{Renderer, SurfaceContentResolver, SurfaceRenderMode}
+import com.serenity.ui.renderer.{RendererEntryPoints, SurfaceContentResolver, SurfaceRenderMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -1009,7 +1009,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new MockRenderSurface(viewport.width, viewport.height)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = false,
       surface,
@@ -1201,7 +1201,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new MockRenderSurface(viewport.width, viewport.height)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = false,
       surface,
@@ -1262,7 +1262,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
 
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new MockRenderSurface(viewport.width, viewport.height)
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = false,
       surface,

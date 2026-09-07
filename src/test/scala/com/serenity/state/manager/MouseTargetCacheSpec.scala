@@ -8,7 +8,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -111,7 +111,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     val surface = new com.serenity.MockRenderSurface(size.width, size.height)
 
-    Renderer.render(state, cursorVisible = true, surface, size, mono, text, CellMetrics.fromFont(mono), None)
+    RendererEntryPoints.render(state, cursorVisible = true, surface, size, mono, text, CellMetrics.fromFont(mono), None)
 
     val cache    = MouseTargetCache.fromState(state, size)
     val snapshot = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
@@ -170,7 +170,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     val surface = new com.serenity.MockRenderSurface(size.width, size.height)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,
@@ -200,7 +200,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     val surface = new com.serenity.MockRenderSurface(size.width, size.height)
 
-    Renderer.render(
+    RendererEntryPoints.render(
       state,
       cursorVisible = true,
       surface,

@@ -2,6 +2,7 @@ package com.serenity.ui.tui
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, PipedInputStream, PipedOutputStream}
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.LinkedBlockingQueue
 
 import scala.concurrent.duration.*
 
@@ -14,6 +15,7 @@ import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import org.jline.terminal.Size
 import org.jline.terminal.impl.DumbTerminal
+import org.jline.utils.NonBlockingReader
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -302,5 +304,69 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
       translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty))
+    )
+  }
+
+  /** Emulates JLine's reader over a non-tty MSYS pipe (git bash on Windows without winpty, #-nontty regression): the
+    * plain untimed `read()` returns the next queued char in order and blocks when none is available, but the *timed*
+    * `read(timeout)` misfires -- it reports `READ_EXPIRED` immediately even though the next byte of an in-flight escape
+    * sequence is already available. The ESC-disambiguation deadline must therefore not be delegated to `read(timeout)`;
+    * it has to be driven by a terminal-independent clock. `feed` makes the chars available; `close` signals EOF.
+    */
+  private final class NonTtyPipeReader extends NonBlockingReader:
+    private val chars            = new LinkedBlockingQueue[Int]()
+    private val EofSentinel: Int = NonBlockingReader.EOF
+
+    def feed(input: Array[Byte]): Unit = input.foreach(b => chars.put(b & 0xff))
+
+    override def read(timeout: Long, isPeek: Boolean): Int =
+      if timeout > 0 then NonBlockingReader.READ_EXPIRED // the misfire: timed read never sees the available byte
+      else
+        val next = chars.take() // untimed read blocks until a byte (or EOF) is genuinely available
+        if next == EofSentinel then
+          chars.put(EofSentinel) // leave EOF latched for any subsequent read
+          NonBlockingReader.EOF
+        else next
+
+    override def readBuffered(b: Array[Char], off: Int, len: Int, timeout: Long): Int =
+      throw new UnsupportedOperationException("not used by the handler's read loop")
+
+    override def shutdown(): Unit = ()
+
+  private def eventsFromNonTtyPipe(feed: NonTtyPipeReader => Unit, count: Int): List[Event] =
+    val reader = new NonTtyPipeReader
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler <- TerminalInputHandler.create(
+        dumbTerminal(Array.emptyByteArray),
+        router,
+        clipboard,
+        readerOverride = Some(reader)
+      )
+      _      <- IO(feed(reader))
+      events <- handler.eventStream.take(count.toLong).compile.toList
+    yield events
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out waiting for events"))
+
+  // === #-nontty: the ESC-disambiguation deadline must not ride on JLine's timed read, which misfires on a non-tty
+  // MSYS pipe (git bash without winpty). All three feed the whole sequence up front, so the byte after ESC is always
+  // available -- a correct decoder keeps the sequence whole; the broken timed-read path splits ESC off as a bare key. ===
+
+  "a kitty-protocol Backspace (ESC [ 127 u) over a non-tty pipe" should "decode as one Backspace, not Escape plus literal characters" in {
+    eventsFromNonTtyPipe(_.feed(csi("127u")), 1) shouldBe List(
+      translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set.empty))
+    )
+  }
+
+  "an arrow key (ESC [ A) over a non-tty pipe" should "decode as one ArrowUp, not Escape plus a literal [A" in {
+    eventsFromNonTtyPipe(_.feed(csi("A")), 1) shouldBe List(
+      translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty))
+    )
+  }
+
+  "a genuinely-standalone ESC over a non-tty pipe" should "still resolve to Escape once the deadline passes" in {
+    eventsFromNonTtyPipe(_.feed(Array(esc)), 1) shouldBe List(
+      translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty))
     )
   }

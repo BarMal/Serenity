@@ -65,11 +65,11 @@ final case class NavigationGeometry(visualLines: Vector[TextVisualLine]):
 
   /** Index into [[visualLines]] of the visual (wrapped) row `cursor` sits on -- the single containment lookup every
     * cursor-to-row resolution shares ([[visualLineFor]], [[xPxForCursor]], [[moveVertical]]) and, crucially, the one
-    * `Renderer`'s caret drawing must also use (`Renderer.calculateCursorVisualPosition`), or the caret is painted on a
-    * different wrapped row than vertical navigation moves from -- the "cursor stuck at a wrap boundary until nudged
-    * left/right" bug. At a wrap boundary, where one row's `endColumn` equals the next row's `startColumn`, both rows
-    * match the column and the cursor's own [[RowAffinity]] settles it: downstream (all but End, and the default) reads
-    * the column as the start of the later row, upstream as the end of the earlier one.
+    * `Renderer`'s caret drawing must also use (`RendererCursorGlyphs.calculateCursorVisualPosition`), or the caret is
+    * painted on a different wrapped row than vertical navigation moves from -- the "cursor stuck at a wrap boundary
+    * until nudged left/right" bug. At a wrap boundary, where one row's `endColumn` equals the next row's `startColumn`,
+    * both rows match the column and the cursor's own [[RowAffinity]] settles it: downstream (all but End, and the
+    * default) reads the column as the start of the later row, upstream as the end of the earlier one.
     */
   def visualRowIndexFor(cursor: CursorPosition): Option[Int] =
     val matching = visualLines.zipWithIndex.filter {

@@ -8,7 +8,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
-import com.serenity.ui.renderer.Renderer
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -48,7 +48,16 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     val state   = buildState("hello markdown", language = Some(LanguageId.Markdown))
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     // codeFont = mono, textFont = proportional — Markdown buffer picks textFont
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     surface.drawRunPxCalls should not be empty
     surface.putStringCalls.exists(_.s.contains("hello")) shouldBe false
@@ -57,7 +66,16 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
   it should "use drawRunPx for a code buffer when the code font advances drift from the cell grid" in {
     val state   = buildState("val x = 1")
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     surface.drawRunPxCalls.exists(_.s.contains("val x = 1")) shouldBe true
   }
@@ -70,7 +88,16 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     val ligatureMetric = CellMetrics.fromFont(ligatureFont)
     val surface        = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, ligatureFont, propFont, ligatureMetric, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      ligatureFont,
+      propFont,
+      ligatureMetric,
+      None
+    )
 
     surface.drawRunPxCalls.exists(_.s.contains("->")) shouldBe true
   }
@@ -78,7 +105,16 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
   it should "use the proportional font ascent rather than the code-font ascent" in {
     val state   = buildState("hello markdown", language = Some(LanguageId.Markdown))
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     val expectedAscent = com.serenity.ui.layout.TextLayoutSnapshot
       .fromBuffer(
@@ -118,7 +154,16 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
 
-    Renderer.render(state, cursorVisible = false, surface, viewportSize, monoFont, propFont, monoMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewportSize,
+      monoFont,
+      propFont,
+      monoMetrics,
+      None
+    )
 
     surface.drawRunPxCalls.exists(call =>
       call.s == "hello" &&
