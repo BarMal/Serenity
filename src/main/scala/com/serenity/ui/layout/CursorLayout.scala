@@ -8,7 +8,7 @@ final case class ScreenPosition(x: Int, y: Int)
 object CursorLayout:
 
   def contentRectForPane(paneRect: LayoutRect): LayoutRect =
-    LayoutEngine.contentRectForPane(paneRect)
+    EditorPaneLayoutEngine.contentRectForPane(paneRect)
 
   def calculateVisualPosition(
     cursor: CursorPosition,
