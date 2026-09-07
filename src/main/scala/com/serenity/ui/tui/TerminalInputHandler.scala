@@ -178,9 +178,15 @@ object TerminalInputHandler:
     case Eof
     case Expired
 
+  // U+FFFF is a Unicode noncharacter (permanently reserved, never a valid text codepoint). JLine's reader returns
+  // this value when Backspace is pressed on Windows under git bash -- confirmed via runtime capture. Translate it to
+  // the canonical DEL byte (0x7F) so the pure decoder maps it to InputKey.Backspace rather than inserting a ￿ glyph.
+  private val JLineWindowsBackspace: Int = 0xffff
+
   private def toOutcome(read: Int): ReadOutcome =
     if read == NonBlockingReader.EOF then ReadOutcome.Eof
     else if read == NonBlockingReader.READ_EXPIRED then ReadOutcome.Expired
+    else if read == JLineWindowsBackspace then ReadOutcome.Bytes(Array(0x7f.toByte))
     else ReadOutcome.Bytes(toUtf8Bytes(read))
 
   /** JLine's reader hands us decoded Unicode chars, one UTF-16 code unit per `read()`; the pure decoder works on UTF-8

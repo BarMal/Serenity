@@ -319,6 +319,12 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     def feed(input: Array[Byte]): Unit = input.foreach(b => chars.put(b & 0xff))
 
+    /** Feed a raw int exactly as JLine's reader would return it -- used to simulate the platform-specific Backspace
+      * value 0xFFFF that git bash on Windows delivers, which cannot be represented as a byte.
+      */
+    def feedRawInt(value: Int): Unit = chars.put(value)
+    def feedEof(): Unit              = chars.put(EofSentinel)
+
     override def read(timeout: Long, isPeek: Boolean): Int =
       if timeout > 0 then NonBlockingReader.READ_EXPIRED // the misfire: timed read never sees the available byte
       else
@@ -368,5 +374,20 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   "a genuinely-standalone ESC over a non-tty pipe" should "still resolve to Escape once the deadline passes" in {
     eventsFromNonTtyPipe(_.feed(Array(esc)), 1) shouldBe List(
       translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty))
+    )
+  }
+
+  // === JLine/Windows-console Backspace quirk (#-win-backspace): on Windows under git bash, JLine's reader returns the
+  // int 65535 (0xFFFF, Unicode noncharacter U+FFFF) when the user presses Backspace -- confirmed via runtime capture.
+  // Without the fix, 0xFFFF encodes to UTF-8 bytes EF BF BF and decodes to Character(U+FFFF) instead of Backspace. ===
+
+  "the JLine/Windows Backspace value (0xFFFF) over a non-tty pipe" should "decode to Backspace, not a U+FFFF character" in {
+    eventsFromNonTtyPipe(
+      r =>
+        r.feedRawInt(0xffff); r.feedEof()
+      ,
+      1
+    ) shouldBe List(
+      translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set.empty))
     )
   }

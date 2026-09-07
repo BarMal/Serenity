@@ -393,3 +393,36 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
       DecodedToken.FocusChanged(true)
     )
   }
+
+  // ===Defense-in-depth: Unicode noncharacters U+FFFF and U+FFFE must never be inserted as printable glyphs.
+  // U+FFFF is the value JLine's reader returns for Backspace on Windows/git bash -- the handler boundary translates
+  // it to 0x7F before it reaches the decoder, but the decoder's own paths also reject these noncharacters so that a
+  // stray U+FFFF can never slip through as a Character token regardless of how it arrives.===
+
+  it should "drop a U+FFFF noncharacter arriving as UTF-8 bytes (EF BF BF), not insert it as a glyph" in {
+    val uffff  = Array(0xef.toByte, 0xbf.toByte, 0xbf.toByte)
+    val result = TerminalInputDecoder.decode(uffff)
+    result.tokens shouldBe Nil
+  }
+
+  it should "drop a U+FFFE noncharacter arriving as UTF-8 bytes (EF BF BE), not insert it as a glyph" in {
+    val ufffe  = Array(0xef.toByte, 0xbf.toByte, 0xbe.toByte)
+    val result = TerminalInputDecoder.decode(ufffe)
+    result.tokens shouldBe Nil
+  }
+
+  it should "drop a U+FFFF noncharacter arriving via a CSI-u codepoint sequence" in {
+    decodeAll(csi("65535u")) shouldBe Nil
+  }
+
+  it should "still decode a normal 0x7F byte as Backspace (the canonical DEL code)" in {
+    decodeAll(Array(0x7f.toByte)) shouldBe List(tok(InputKey.Backspace))
+  }
+
+  it should "still decode a normal 0x08 byte as Backspace (the legacy BS code)" in {
+    decodeAll(Array(0x08.toByte)) shouldBe List(tok(InputKey.Backspace))
+  }
+
+  it should "still decode a plain printable ASCII character (0x61 = 'a') as Character('a')" in {
+    decodeAll(Array(0x61.toByte)) shouldBe List(tok(InputKey.Character, Some('a')))
+  }
