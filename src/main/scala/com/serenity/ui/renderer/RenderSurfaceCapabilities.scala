@@ -49,9 +49,9 @@ trait PixelDrawing:
     * blitted one-for-one, not scaled through the cell grid and device transform that [[drawImage]]'s cell-addressed
     * geometry applies. Routing it through `drawImage(image, 0, 0, viewportWidth, viewportHeight)` snaps the destination
     * to `floor(logicalSize / cellSize) * cellSize` and then re-scales by the device factor, so a layer that was seeded
-    * from this surface's own pixels comes back very slightly smaller than it left -- imperceptible in one frame, but the
-    * command runner re-seeds and re-composites the whole frame on every navigation keystroke, so the shrink compounds
-    * into a visible "zoom out" of the editor pane behind it until a full clean repaint resets it.
+    * from this surface's own pixels comes back very slightly smaller than it left -- imperceptible in one frame, but
+    * the command runner re-seeds and re-composites the whole frame on every navigation keystroke, so the shrink
+    * compounds into a visible "zoom out" of the editor pane behind it until a full clean repaint resets it.
     *
     * The only real surface with a layer-buffer capability is [[Java2DRenderSurface]], which overrides this to blit 1:1
     * in device pixels; every other surface either advertises no layer buffers at all (a terminal) or is a headless test

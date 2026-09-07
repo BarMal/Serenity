@@ -313,7 +313,7 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     * sequence is already available. The ESC-disambiguation deadline must therefore not be delegated to `read(timeout)`;
     * it has to be driven by a terminal-independent clock. `feed` makes the chars available; `close` signals EOF.
     */
-  private final class NonTtyPipeReader extends NonBlockingReader:
+  final private class NonTtyPipeReader extends NonBlockingReader:
     private val chars            = new LinkedBlockingQueue[Int]()
     private val EofSentinel: Int = NonBlockingReader.EOF
 

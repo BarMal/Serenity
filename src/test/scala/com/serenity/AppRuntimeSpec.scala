@@ -1495,6 +1495,54 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
 
+  it should "no-op safely when a resize callback fires after the dispatcher has shut down" in {
+    // WINCH can arrive during shutdown, after the runtime's Dispatcher is closed. unsafeRunAndForget then throws
+    // "Dispatcher already closed" synchronously onto the AWT/pump thread -- before the effect's own error handler runs
+    // -- and CrashReporter logs it. The bridge must absorb that late callback rather than raise.
+    val program = for
+      logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
+      given Logger[IO] = new RecordingLogger(logs)
+      closedDispatcher <- Dispatcher.parallel[IO].use(IO.pure)
+      signalled        <- Ref.of[IO, Boolean](false)
+      callback = AppRuntime.resizeCallbackBridge(signalled.set(true), closedDispatcher)
+      thrown  <- IO(callback()).attempt
+      entries <- logs.get
+      ran     <- signalled.get
+    yield
+      thrown shouldBe Right(())
+      ran shouldBe false
+      entries.exists(_.message.contains("[RUNTIME] resize callback failed")) shouldBe false
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "no-op safely when a focus callback fires after the dispatcher has shut down" in {
+    val program = for
+      logs <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
+      given Logger[IO] = new RecordingLogger(logs)
+      closedDispatcher <- Dispatcher.parallel[IO].use(IO.pure)
+      windowFocused    <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      cursorVisible    <- Ref.of[IO, Boolean](true)
+      breathIndex      <- Ref.of[IO, Int](0)
+      requested        <- Ref.of[IO, Boolean](false)
+      callback = AppRuntime.focusCallbackBridge(
+        windowFocused,
+        cursorVisible,
+        breathIndex,
+        requested.set(true),
+        closedDispatcher
+      )
+      thrown  <- IO(callback(false)).attempt
+      entries <- logs.get
+      ran     <- requested.get
+    yield
+      thrown shouldBe Right(())
+      ran shouldBe false
+      entries.exists(_.message.contains("[RUNTIME] focus callback failed")) shouldBe false
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   "closeMarkdownPreviewWindowInState" should "clear the preview window's buffer without touching anything else" in {
     val bufferId = BufferId(7)
     val state = AppState.initial.copy(runtime =

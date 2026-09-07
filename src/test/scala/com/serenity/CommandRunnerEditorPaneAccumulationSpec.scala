@@ -1,7 +1,7 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
 import java.awt.Font
+import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
@@ -93,7 +93,7 @@ class CommandRunnerEditorPaneAccumulationSpec extends AnyFlatSpec with Matchers:
   /** The two-image frame pool `SwingWindow.ReusableImagePool` uses: `acquire` hands back the spare (the frame from two
     * frames ago) so painted pixels alternate between two backing buffers, exactly as in production.
     */
-  private final class Pool:
+  final private class Pool:
     private val published = new AtomicReference[Option[BufferedImage]](None)
     private val spare     = new AtomicReference[Option[BufferedImage]](None)
 
@@ -108,7 +108,7 @@ class CommandRunnerEditorPaneAccumulationSpec extends AnyFlatSpec with Matchers:
       previous.filterNot(_ eq image).foreach(p => spare.set(Some(p)))
 
   private def renderFrame(pool: Pool, state: AppState, damage: Damage): BufferedImage =
-    val capturedRef = new AtomicReference[BufferedImage](null)
+    val capturedRef  = new AtomicReference[BufferedImage](null)
     val deviceWidth  = math.ceil(logicalWidth * deviceScaleX).toInt
     val deviceHeight = math.ceil(logicalHeight * deviceScaleY).toInt
     val image        = pool.acquire(deviceWidth, deviceHeight, BufferedImage.TYPE_INT_ARGB)
@@ -141,6 +141,7 @@ class CommandRunnerEditorPaneAccumulationSpec extends AnyFlatSpec with Matchers:
     out
 
   private val registry = CommandRegistry.default
+
   private val runner0 = CommandRunner.empty
     .activate(registry, AppConfig.default)
     .updateSearchTerm("")(using registry)
@@ -155,7 +156,8 @@ class CommandRunnerEditorPaneAccumulationSpec extends AnyFlatSpec with Matchers:
       .getOrElse(throw new AssertionError("expected a below-cursor overlay rect"))
 
   private def editorPaneRegionPixels(image: BufferedImage): Vector[Int] =
-    val bottomPx = math.round((runnerRect.y - 1) * cellMetrics.lineHeight * deviceScaleY).toInt.max(1).min(image.getHeight)
+    val bottomPx =
+      math.round((runnerRect.y - 1) * cellMetrics.lineHeight * deviceScaleY).toInt.max(1).min(image.getHeight)
     (for
       y <- 0 until bottomPx
       x <- 0 until image.getWidth
