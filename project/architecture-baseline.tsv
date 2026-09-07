@@ -27,8 +27,6 @@ main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseIt
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	713
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceActive	360
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitSubmenu	104
-main/scala/com/serenity/state/reducers/EditorEventReducer.scala	file length	1992
-main/scala/com/serenity/state/reducers/EditorEventReducer.scala	method reduceCursorsNavigationEvent	93
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	639
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	130
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
