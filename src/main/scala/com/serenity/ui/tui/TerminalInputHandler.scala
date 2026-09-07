@@ -16,6 +16,8 @@ import fs2.Stream
 import org.jline.terminal.Terminal
 import org.jline.utils.NonBlockingReader
 
+import org.slf4j.LoggerFactory
+
 import TerminalInputDecoder.DecodedToken
 
 /** [[InputHandler]] for TUI mode: decodes JLine's raw key input stream to the same [[KeyStrokeInfo]] / [[Event]]
@@ -60,6 +62,9 @@ final class TerminalInputHandler private (
     readerFiber.cancel >> disableModes.attempt.void >> queue.offer(None)
 
 object TerminalInputHandler:
+
+  // DIAGNOSTIC (diag/tui-raw-input-logging): remove before merge
+  private val diagLog = LoggerFactory.getLogger("com.serenity.tui.diag")
 
   /** How long a lone `ESC` byte is held to see whether the rest of an escape sequence follows, before it is resolved to
     * a bare [[InputKey.Escape]]. 50ms is comfortably above the delay a real terminal introduces between the bytes of
@@ -223,9 +228,18 @@ object TerminalInputHandler:
   ): IO[Unit] =
     Queue.unbounded[IO, ReadOutcome].flatMap { pumpQueue =>
       def pump: IO[Unit] =
-        IO.interruptible(reader.read()).map(toOutcome).flatMap {
-          case ReadOutcome.Eof => pumpQueue.offer(ReadOutcome.Eof)
-          case outcome         => pumpQueue.offer(outcome) >> pump
+        IO.interruptible(reader.read()).flatMap { raw =>
+          // DIAGNOSTIC (diag/tui-raw-input-logging): remove before merge
+          val logMsg =
+            if raw == NonBlockingReader.EOF then "[RAWDIAG] read=EOF"
+            else if raw == NonBlockingReader.READ_EXPIRED then "[RAWDIAG] read=READ_EXPIRED"
+            else s"[RAWDIAG] read=0x${f"${raw & 0xff}%02x"} (dec ${raw})"
+          IO(diagLog.info(logMsg)) >> {
+            val outcome = toOutcome(raw)
+            outcome match
+              case ReadOutcome.Eof => pumpQueue.offer(ReadOutcome.Eof)
+              case _               => pumpQueue.offer(outcome) >> pump
+          }
         }
 
       def forward(outcome: ReadOutcome): IO[Unit] =
@@ -266,7 +280,9 @@ object TerminalInputHandler:
     def processTokens(tokens: List[DecodedToken]): IO[Unit] =
       tokens.traverse_(processToken)
 
-    def processToken(token: DecodedToken): IO[Unit] = token match
+    def processToken(token: DecodedToken): IO[Unit] =
+      // DIAGNOSTIC (diag/tui-raw-input-logging): remove before merge
+      IO(diagLog.info(s"[RAWDIAG] decoded=$token")) >> (token match
       case DecodedToken.Key(info) =>
         modifierTapState.update(ModifierTapDetector.otherKeyPressed) >>
           latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info)))
@@ -281,6 +297,7 @@ object TerminalInputHandler:
         systemClipboard.writeText(text) >> latestMovement.set(None) >> queue.offer(Some(QueuedInput.Direct(Paste)))
       case DecodedToken.ModifierEdge(modifier, pressed) => processModifierEdge(modifier, pressed)
       case DecodedToken.FocusChanged(focused)           => IO(focusCallback.get().foreach(_.apply(focused)))
+      )
 
     // Drives ModifierTapDetector exactly as SwingInputHandler drives it over AWT modifier press/release events, so
     // `ctrl+ctrl`-style bindings behave identically in both input modes -- only reachable when the terminal answered

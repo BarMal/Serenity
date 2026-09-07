@@ -11,6 +11,8 @@ import org.jline.terminal.{Terminal, TerminalBuilder}
 import org.jline.utils.InfoCmp.Capability
 import org.jline.utils.NonBlockingReader
 
+import org.slf4j.LoggerFactory
+
 import TerminalShell.KeyboardProtocolTier
 
 /** Owns a real JLine terminal for the lifetime of TUI mode: raw input, the alternate screen buffer, a hidden hardware
@@ -102,6 +104,9 @@ final class TerminalShell private (
     terminal.flush()
 
 object TerminalShell:
+  // DIAGNOSTIC (diag/tui-raw-input-logging): remove before merge
+  private val diagLog = LoggerFactory.getLogger("com.serenity.tui.diag")
+
 
   /** Which tier of the CSI-u negotiation ladder (#1109) [[acquire]] settled on, from a startup probe of the terminal:
     *
@@ -221,6 +226,10 @@ object TerminalShell:
         val shell          = new TerminalShell(terminal, originalAttributes, quitDeferred, dispatcher, tier, prefix)
         val _              = terminal.handle(Signal.WINCH, _ => shell.handleWinch())
         val _              = terminal.handle(Signal.INT, _ => shell.handleInt())
+        // DIAGNOSTIC (diag/tui-raw-input-logging): remove before merge
+        diagLog.info(
+          s"[RAWDIAG] negotiated tier=${tier} pendingPrefix=[${prefix.map(b => f"${b & 0xff}%02x").mkString(" ")}] (${prefix.length} bytes)"
+        )
         shell
       }
     yield shell
