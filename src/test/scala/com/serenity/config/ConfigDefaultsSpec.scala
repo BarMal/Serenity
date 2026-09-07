@@ -19,10 +19,10 @@ class ConfigDefaultsSpec extends AnyFlatSpec with Matchers:
   private val referencePath = Paths.get("docs/default-config.conf")
 
   /** `AppConfig.default`'s hotkey bindings come from `HotkeyConfig()`'s own default, which reads the *running* JVM's
-    * `os.name` (Cmd-based on macOS, Ctrl-based everywhere else -- intentional, see `HotkeyConfig.forTerminalUse`).
-    * The committed reference file can only hold one of those, so this test pins the comparison to the Ctrl-based
-    * (non-mac) bindings it was generated with -- otherwise the same source produces a different rendering, and a
-    * different test failure, depending only on which OS happens to run it (issue #1213).
+    * `os.name` (Cmd-based on macOS, Ctrl-based everywhere else -- intentional, see `HotkeyConfig.forTerminalUse`). The
+    * committed reference file can only hold one of those, so this test pins the comparison to the Ctrl-based (non-mac)
+    * bindings it was generated with -- otherwise the same source produces a different rendering, and a different test
+    * failure, depending only on which OS happens to run it (issue #1213).
     */
   private val canonicalDefault = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("linux"))
 
