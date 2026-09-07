@@ -5,10 +5,10 @@ import java.awt.Dimension
 import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 
-/** Pure canvas/viewport sizing math for [[SwingWindow]] -- how a pixel resize (window or font-metrics driven) maps
-  * to a cell viewport, and when that change is worth publishing. Mixed into that class's companion object so callers
-  * keep seeing `SwingWindow.CanvasResizeSnapshot` etc.; split into its own file to keep `SwingWindow.scala` within
-  * the architecture ratchet's line target.
+/** Pure canvas/viewport sizing math for [[SwingWindow]] -- how a pixel resize (window or font-metrics driven) maps to a
+  * cell viewport, and when that change is worth publishing. Mixed into that class's companion object so callers keep
+  * seeing `SwingWindow.CanvasResizeSnapshot` etc.; split into its own file to keep `SwingWindow.scala` within the
+  * architecture ratchet's line target.
   */
 private[terminal] trait SwingWindowLayoutSupport:
 

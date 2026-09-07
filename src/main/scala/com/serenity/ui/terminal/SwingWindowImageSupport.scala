@@ -5,9 +5,9 @@ import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
-/** Frame-buffer pooling, rounded-corner masking, and cursor-overlay repaint math for [[SwingWindow]]. Mixed into
-  * that class's companion object so callers keep seeing `SwingWindow.ReusableImagePool` etc.; split into its own
-  * file to keep `SwingWindow.scala` within the architecture ratchet's line target.
+/** Frame-buffer pooling, rounded-corner masking, and cursor-overlay repaint math for [[SwingWindow]]. Mixed into that
+  * class's companion object so callers keep seeing `SwingWindow.ReusableImagePool` etc.; split into its own file to
+  * keep `SwingWindow.scala` within the architecture ratchet's line target.
   */
 private[terminal] trait SwingWindowImageSupport:
   private val RoundedCornerMaskScale = 2

@@ -5,10 +5,10 @@ import java.awt.event.*
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.swing.*
 
-/** The custom-chrome resize border: an invisible glass-pane overlay whose edges and corners drive an edge-drag
-  * resize of `frame`. Decoupled from [[SwingWindow]] so it can live in its own file -- `frame` is a thunk rather than
-  * a plain reference because this class is built before the enclosing window's `frame` field finishes initializing;
-  * the thunk is only ever invoked later, from an event callback, by which point `frame` is set.
+/** The custom-chrome resize border: an invisible glass-pane overlay whose edges and corners drive an edge-drag resize
+  * of `frame`. Decoupled from [[SwingWindow]] so it can live in its own file -- `frame` is a thunk rather than a plain
+  * reference because this class is built before the enclosing window's `frame` field finishes initializing; the thunk
+  * is only ever invoked later, from an event callback, by which point `frame` is set.
   */
 final private[terminal] class ResizeGlassPane(
     frame: () => JFrame,

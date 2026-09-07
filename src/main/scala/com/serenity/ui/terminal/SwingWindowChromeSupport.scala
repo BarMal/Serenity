@@ -8,10 +8,9 @@ import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.Theme
 
-/** Pure geometry, palette, and control-layout logic for the custom window chrome (title bar, control buttons,
-  * rounded corners). Mixed into [[SwingWindow]]'s companion object so this stays `SwingWindow.XyzMetrics` etc. to
-  * every caller, while living in its own file to keep `SwingWindow.scala` within the architecture ratchet's line
-  * target.
+/** Pure geometry, palette, and control-layout logic for the custom window chrome (title bar, control buttons, rounded
+  * corners). Mixed into [[SwingWindow]]'s companion object so this stays `SwingWindow.XyzMetrics` etc. to every caller,
+  * while living in its own file to keep `SwingWindow.scala` within the architecture ratchet's line target.
   */
 private[terminal] trait SwingWindowChromeSupport:
 

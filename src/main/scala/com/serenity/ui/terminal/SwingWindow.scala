@@ -220,6 +220,7 @@ class SwingWindow(
     () => toggleMaximize(),
     activateChromeControl
   )
+
   maxBtnRef.set(chromeTitleBar.maxButton)
   controlButtonsRef.set(chromeTitleBar.controlButtons)
   controlPanelRef.set(Some(chromeTitleBar.controlPanel))

@@ -9,8 +9,8 @@ import com.serenity.animation.WindowSitter
 
 /** A single custom-chrome title-bar button (minimize/maximize/restore/close).
   *
-  * Decoupled from [[SwingWindow]] itself -- it takes the palette, preferred size, and activation behaviour it needs
-  * as constructor parameters rather than reaching into an enclosing instance, so it can live in its own file.
+  * Decoupled from [[SwingWindow]] itself -- it takes the palette, preferred size, and activation behaviour it needs as
+  * constructor parameters rather than reaching into an enclosing instance, so it can live in its own file.
   */
 final private[terminal] class ChromeControlButton(
     initialKind: SwingWindow.ChromeControlKind,
@@ -164,6 +164,7 @@ final private[terminal] class ChromeTitleBar(
     setBackground(chromePaletteRef.get().titleBackground)
     setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, chromePaletteRef.get().border))
     setPreferredSize(titleBarSize())
+
   controlLayout.placement match
     case SwingWindow.ChromeControlPlacement.Left =>
       panel.add(controlPanel, BorderLayout.WEST)
