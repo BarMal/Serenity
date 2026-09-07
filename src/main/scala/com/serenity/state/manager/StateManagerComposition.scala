@@ -15,7 +15,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
-import com.serenity.spellcheck.SpellChecker
+import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, ModalEventReducer}
 import com.serenity.state.undo.UndoState
@@ -195,7 +195,7 @@ final private[manager] class StateManagerOperationBoundary private (
       Trace.timed("analysis.documentAnalysisJob") {
         stateRef.get.flatMap { snapshot =>
           val spellCheckConfig = snapshot.persisted.config.languageToolsConfig.spellCheck
-          IO.blocking(SpellChecker.loadDictionarySnapshot(spellCheckConfig)).flatMap { dictionary =>
+          IO.blocking(DictionaryLoader.loadSnapshot(spellCheckConfig)).flatMap { dictionary =>
             val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
             val analyzed = SpellChecker.refreshDiagnostics(snapshot, dictionary)
             stateRef
