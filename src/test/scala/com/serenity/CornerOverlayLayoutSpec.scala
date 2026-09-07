@@ -2,13 +2,13 @@ package com.serenity
 
 import com.serenity.config.CornerPosition
 import com.serenity.state.models.SurfaceId
-import com.serenity.ui.layout.LayoutEngine.{CornerPanelSlot, calculateCornerOverlayStack}
 import com.serenity.ui.layout.LayoutRect
+import com.serenity.ui.layout.OverlayStackLayout.{CornerPanelSlot, calculateCornerOverlayStack}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** `LayoutEngine.calculateCornerOverlayStack` (issue #1310, mode 3): lays out every panel assigned to one screen corner
-  * as a vertical list, stacking from the corner outward, collapsing the tail when it doesn't all fit.
+/** `OverlayStackLayout.calculateCornerOverlayStack` (issue #1310, mode 3): lays out every panel assigned to one screen
+  * corner as a vertical list, stacking from the corner outward, collapsing the tail when it doesn't all fit.
   */
 class CornerOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 

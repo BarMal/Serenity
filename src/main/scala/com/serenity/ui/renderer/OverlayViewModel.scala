@@ -206,7 +206,7 @@ object OverlayViewModel:
       else
         content match
           case SurfaceContent.ContextualToolbar(toolbarState) =>
-            SurfaceContentResolver.resolveContextualToolbar(toolbarState, state, rect, SurfaceRenderMode.Floating)
+            ContextualToolbarContentResolver.resolve(toolbarState, state, rect, SurfaceRenderMode.Floating)
           case _ =>
             SurfaceContentResolver.resolve(
               content,

@@ -3,14 +3,17 @@ package com.serenity.ui.layout
 import com.serenity.config.{AppConfig, InterfaceDensityMetrics}
 import com.serenity.state.models.*
 
-/** Rect, size and cursor-anchor resolution for a single floating surface -- both the live, cursor-tracking path and the
-  * cursor-peek prototype's frozen-anchor variant. Split out of `LayoutEngine` (600-line architecture ratchet); stacking
-  * multiple floating surfaces together lives in [[OverlayStackLayout]], which calls back into the `private[layout]`
-  * helpers here.
+/** Rect, size and cursor-anchor resolution for *one* floating surface -- both the live, cursor-tracking path and the
+  * cursor-peek prototype's frozen-anchor variant.
+  *
+  * This is the single-surface primitive layer of floating layout, and everything below is its API rather than an
+  * internal detail: [[OverlayStackLayout]] composes these into multi-surface stacks and `LayoutEngine` uses them
+  * directly for the above-cursor stack and modal centring. The dependency runs one way only -- nothing here knows about
+  * stacking -- which is why the two objects stay separate instead of being one file.
   */
 object FloatingSurfaceLayout:
 
-  private[layout] def calculateFloatingSurfaceRect(
+  def calculateFloatingSurfaceRect(
     surface: UiSurface,
     state: AppState,
     paneLayouts: Map[PaneId, EditorPaneLayout],
@@ -178,9 +181,9 @@ object FloatingSurfaceLayout:
       case _ =>
         None
 
-  final private[layout] case class FloatingAnchorFrame(contentRect: LayoutRect, screenPosition: ScreenPosition)
+  final case class FloatingAnchorFrame(contentRect: LayoutRect, screenPosition: ScreenPosition)
 
-  private[layout] def calculateFloatingAnchorFrame(
+  def calculateFloatingAnchorFrame(
     surface: UiSurface,
     state: AppState,
     paneLayouts: Map[PaneId, EditorPaneLayout]
@@ -204,7 +207,7 @@ object FloatingSurfaceLayout:
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
     math.min(math.max(0, maxWidth), 72)
 
-  private[layout] def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
+  def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
     content match
       case SurfaceContent.CommandPalette(_) =>
         math.max(
@@ -213,15 +216,15 @@ object FloatingSurfaceLayout:
         )
       case _ => floatingStackGapRows(state)
 
-  private[layout] def floatingStackGapRows(state: AppState): Double =
+  def floatingStackGapRows(state: AppState): Double =
     Option
       .when(state.persisted.config.uiElementGap > 0.0)(state.persisted.config.uiElementGap)
       .getOrElse(InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity).overlayGapRows.toDouble)
 
-  private[layout] def wholeRowOrigin(rows: Double): Int =
+  def wholeRowOrigin(rows: Double): Int =
     math.floor(math.max(0.0, rows)).toInt
 
-  private[layout] def calculateFloatingSurfaceHeight(
+  def calculateFloatingSurfaceHeight(
     content: SurfaceContent,
     maxWidth: Int,
     maxHeight: Int,

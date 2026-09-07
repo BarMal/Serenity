@@ -35,7 +35,7 @@ private[layout] object PanelContentResolver:
         List(s"${entryNames.length} entries")
 
     ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, rootName),
+      title = mode.titleFor(rootName),
       rows = lines.map(OverlayRow(_))
     )
 
@@ -62,7 +62,7 @@ private[layout] object PanelContentResolver:
     }
 
     ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, tree.rootPath.getFileName.toString),
+      title = mode.titleFor(tree.rootPath.getFileName.toString),
       rows = rows
     )
 
@@ -83,7 +83,7 @@ private[layout] object PanelContentResolver:
       case SurfaceLayoutKind.Compact =>
         List(s"${lines.length} lines", s"cursor $cursor")
 
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "terminal"), rows = shaped.map(OverlayRow(_)))
+    ResolvedSurfaceContent(mode.titleFor("terminal"), rows = shaped.map(OverlayRow(_)))
 
   def resolveOutline(
     rect: LayoutRect,
@@ -118,7 +118,7 @@ private[layout] object PanelContentResolver:
           case Some(name) => List(OverlayRow(s"${symbols.length} symbols", selected = true), OverlayRow(name))
           case None       => List(OverlayRow(s"${symbols.length} symbols"))
 
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "outline"), rows = shaped)
+    ResolvedSurfaceContent(mode.titleFor("outline"), rows = shaped)
 
   def resolveComments(
     rect: LayoutRect,
@@ -147,7 +147,7 @@ private[layout] object PanelContentResolver:
           case Some(name) => List(OverlayRow(s"${symbols.length} comments", selected = true), OverlayRow(name))
           case None       => List(OverlayRow(s"${symbols.length} comments"))
 
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "comments"), rows = shaped)
+    ResolvedSurfaceContent(mode.titleFor("comments"), rows = shaped)
 
   def resolveDiagnostics(
     rect: LayoutRect,
@@ -179,7 +179,7 @@ private[layout] object PanelContentResolver:
       case SurfaceLayoutKind.Compact =>
         List(OverlayRow(s"${issues.length} issues"), OverlayRow(s"$errorCount error"))
 
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "diagnostics"), rows = shaped)
+    ResolvedSurfaceContent(mode.titleFor("diagnostics"), rows = shaped)
 
   /** The toggleable keyboard-shortcuts reference (issue #1247). Deliberately not layout-kind-branched like
     * `resolveOutline`/`resolveDiagnostics` above -- there is no "current" entry to highlight or compact down to a
@@ -196,7 +196,7 @@ private[layout] object PanelContentResolver:
         OverlayRow(group.title) :: group.entries.map(entry => OverlayRow(s"${entry.label}: ${entry.keys}"))
       }
       .take(maxRows)
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "Keyboard Shortcuts"), rows = rows)
+    ResolvedSurfaceContent(mode.titleFor("Keyboard Shortcuts"), rows = rows)
 
   /** The mode/tab corner widget's tab list (issue #1307). A dirty tab carries a persistent trailing marker rather than
     * the per-pane header's "- unsaved" text suffix -- this list already names the tab, so repeating the word would just
@@ -213,7 +213,7 @@ private[layout] object PanelContentResolver:
       val text = if entry.isDirty then s"${entry.title} ●" else entry.title
       OverlayRow(text, selected = activeBufferId.contains(entry.bufferId))
     }
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "Tabs"), rows = rows)
+    ResolvedSurfaceContent(mode.titleFor("Tabs"), rows = rows)
 
   /** The mode/tab corner widget's "recent in this mode" list (issue #1307), one row per path -- same full-path label
     * the startup page's own recent-files list already uses (`AppStartup.createStartPage`).
@@ -228,4 +228,4 @@ private[layout] object PanelContentResolver:
     val rows =
       if paths.isEmpty then List(OverlayRow("No recent files in this mode yet"))
       else paths.take(maxRows).map(path => OverlayRow(path.toString))
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, s"Recent in ${recentMode.toString} Mode"), rows = rows)
+    ResolvedSurfaceContent(mode.titleFor(s"Recent in ${recentMode.toString} Mode"), rows = rows)

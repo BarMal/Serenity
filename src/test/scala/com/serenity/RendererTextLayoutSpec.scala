@@ -321,7 +321,9 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(viewport.width, viewport.height)
     val contentRect =
-      LayoutEngine.calculateEditorPaneLayouts(state, LayoutEngine.calculateLayout(state, viewport))(paneId).contentRect
+      EditorPaneLayoutEngine
+        .calculateEditorPaneLayouts(state, LayoutEngine.calculateLayout(state, viewport))(paneId)
+        .contentRect
     val leftPx  = cellMetric.toPixelX(contentRect.x)
     val rightPx = cellMetric.toPixelX(contentRect.right)
 

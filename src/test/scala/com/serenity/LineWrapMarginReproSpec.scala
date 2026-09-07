@@ -62,7 +62,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
     )
 
     val contentRect =
-      LayoutEngine
+      EditorPaneLayoutEngine
         .calculateEditorPaneLayouts(state, LayoutEngine.calculateLayout(state, viewportSize))(paneId)
         .contentRect
     val panelWidthPx = (contentRect.width * cellMetrics.charWidth).toFloat

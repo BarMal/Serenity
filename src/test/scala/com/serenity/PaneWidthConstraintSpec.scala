@@ -83,7 +83,8 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 
     // Verify each pane respects minimum width
     val calculatedLayout = LayoutEngine.calculateLayout(finalState, viewportSize)
-    val paneLayouts = LayoutEngine.calculatePaneLayoutsWithMinWidth(finalState, calculatedLayout, defaultMinPaneWidth)
+    val paneLayouts =
+      EditorPaneLayoutEngine.calculatePaneLayoutsWithMinWidth(finalState, calculatedLayout, defaultMinPaneWidth)
 
     paneLayouts.values.foreach(rect => rect.width should be >= defaultMinPaneWidth)
 
@@ -120,7 +121,8 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 
     // Verify custom minimum width is respected
     val calculatedLayout = LayoutEngine.calculateLayout(finalState, viewportSize)
-    val paneLayouts      = LayoutEngine.calculatePaneLayoutsWithMinWidth(finalState, calculatedLayout, customMinWidth)
+    val paneLayouts =
+      EditorPaneLayoutEngine.calculatePaneLayoutsWithMinWidth(finalState, calculatedLayout, customMinWidth)
 
     paneLayouts.values.foreach(rect => rect.width should be >= customMinWidth)
 
@@ -167,7 +169,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     // Verify minimum width is still respected
     val calculatedLayout = LayoutEngine.calculateLayout(stateOnLastBuffer, viewportSize)
     val paneLayouts =
-      LayoutEngine.calculatePaneLayoutsWithMinWidth(stateOnLastBuffer, calculatedLayout, defaultMinPaneWidth)
+      EditorPaneLayoutEngine.calculatePaneLayoutsWithMinWidth(stateOnLastBuffer, calculatedLayout, defaultMinPaneWidth)
 
     paneLayouts.values.foreach(rect => rect.width should be >= defaultMinPaneWidth)
 
@@ -209,7 +211,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
 
     val wideLayout = LayoutEngine.calculateLayout(wideState, wideTerminal)
     val visibleWidePanes =
-      LayoutEngine
+      EditorPaneLayoutEngine
         .calculatePaneLayouts(wideState, wideLayout)
         .values
         .count(rect => rect.x >= wideLayout.editorPanelRect.x && rect.right <= wideLayout.editorPanelRect.right)
@@ -220,7 +222,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     val narrowState  = stateManager.getCurrentState.unsafeRunSync()
     val narrowLayout = LayoutEngine.calculateLayout(narrowState, narrowTerminal)
     val visibleNarrowPanes =
-      LayoutEngine
+      EditorPaneLayoutEngine
         .calculatePaneLayouts(narrowState, narrowLayout)
         .values
         .count(rect => rect.x >= narrowLayout.editorPanelRect.x && rect.right <= narrowLayout.editorPanelRect.right)
@@ -232,7 +234,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     val restoredState  = stateManager.getCurrentState.unsafeRunSync()
     val restoredLayout = LayoutEngine.calculateLayout(restoredState, wideTerminal)
     val restoredVisiblePanes =
-      LayoutEngine
+      EditorPaneLayoutEngine
         .calculatePaneLayouts(restoredState, restoredLayout)
         .values
         .count(rect => rect.x >= restoredLayout.editorPanelRect.x && rect.right <= restoredLayout.editorPanelRect.right)

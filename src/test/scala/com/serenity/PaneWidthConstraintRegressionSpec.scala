@@ -27,10 +27,10 @@ class PaneWidthConstraintRegressionSpec extends AnyFlatSpec with Matchers:
     val viewportSize = ViewportSize(80, 24)
     val layout       = LayoutEngine.calculateLayout(state, viewportSize)
 
-    val defaultLayouts = LayoutEngine.calculatePaneLayouts(state, layout)
+    val defaultLayouts = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)
     val visibleDefault = visiblePaneCount(defaultLayouts, layout.editorPanelRect)
 
-    val oneCellMinimumLayouts     = LayoutEngine.calculatePaneLayoutsWithMinWidth(state, layout, minWidth = 1)
+    val oneCellMinimumLayouts     = EditorPaneLayoutEngine.calculatePaneLayoutsWithMinWidth(state, layout, minWidth = 1)
     val visibleWithOneCellMinimum = visiblePaneCount(oneCellMinimumLayouts, layout.editorPanelRect)
 
     defaultLayouts.should(have).size(panes.size)

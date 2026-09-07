@@ -118,9 +118,9 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
 
   def handlePinnedPanelResizeDrag(drag: MouseDrag, state: AppState): IO[Boolean] =
     state.runtime.viewportSize.flatMap(viewportSize =>
-      LayoutEngine.pinnedPanelResizeFromDrag(state, viewportSize, drag.col, drag.row)
+      PinnedPanelLayoutEngine.pinnedPanelResizeFromDrag(state, viewportSize, drag.col, drag.row)
     ) match
-      case Some(LayoutEngine.PinnedPanelDragResize(position, size)) =>
+      case Some(PinnedPanelLayoutEngine.PinnedPanelDragResize(position, size)) =>
         resizePinnedPanel(PanelTarget.ByPosition(position), size).as(true)
       case None =>
         IO.pure(false)

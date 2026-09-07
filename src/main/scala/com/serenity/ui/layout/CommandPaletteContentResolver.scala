@@ -33,7 +33,7 @@ private[layout] object CommandPaletteContentResolver:
       case _: com.serenity.command.CommandRunnerSurface.Settings =>
         resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows, showKeyHints)
       case com.serenity.command.CommandRunnerSurface.Palette(_) if !runner.isActive =>
-        ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "commands"))
+        ResolvedSurfaceContent(mode.titleFor("commands"))
       case com.serenity.command.CommandRunnerSurface.Palette(paletteState) =>
         // Category tabs are retired (issue #931): the header is always the live search box now, empty or not,
         // rather than switching to a category-switcher row when there's nothing typed yet.
@@ -112,7 +112,7 @@ private[layout] object CommandPaletteContentResolver:
               )
 
         ResolvedSurfaceContent(
-          title = SurfaceContentResolver.titleFor(mode, "commands"),
+          title = mode.titleFor("commands"),
           header = header,
           rows = rows,
           footer = footer,

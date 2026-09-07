@@ -266,7 +266,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
     val paneRect =
-      com.serenity.ui.layout.LayoutEngine.calculatePaneLayouts(
+      com.serenity.ui.layout.EditorPaneLayoutEngine.calculatePaneLayouts(
         state,
         com.serenity.ui.layout.LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
       )(paneId)
@@ -376,7 +376,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       cursorColor = None
     )
 
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorPaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
       .contentRect
     val lineHeightPx = math.max(codeMetrics.lineHeight, textMetrics.lineHeight)
@@ -411,7 +411,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
     val paneId = state.persisted.layout.activeEditorPaneId.getOrElse(fail("expected active pane"))
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorPaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
       .contentRect
     val lineHeightPx  = math.max(codeMetrics.lineHeight, textMetrics.lineHeight)

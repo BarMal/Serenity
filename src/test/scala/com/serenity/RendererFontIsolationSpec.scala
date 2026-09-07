@@ -83,7 +83,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
 
     val buffer       = state.persisted.buffers(bufferId)
     val layout       = LayoutEngine.calculateLayout(state, viewportSize)
-    val paneRect     = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect     = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect  = LayoutRect(paneRect.x, paneRect.y + 1, paneRect.width, math.max(1, paneRect.height - 1))
     val panelWidthPx = contentRect.width * cellMetrics.charWidth
 
@@ -169,7 +169,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
 
     val buffer       = state.persisted.buffers(bufferId)
     val layout       = LayoutEngine.calculateLayout(state, viewportSize)
-    val paneRect     = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect     = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect  = LayoutRect(paneRect.x, paneRect.y + 1, paneRect.width, math.max(1, paneRect.height - 1))
     val panelWidthPx = contentRect.width * cellMetrics.charWidth
 

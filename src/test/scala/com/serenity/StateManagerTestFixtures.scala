@@ -167,7 +167,7 @@ private[serenity] object StateManagerTestFixtures:
       val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
       val layout       = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       currentPaneId
-        .flatMap(LayoutEngine.directionalPaneNeighbor(state, layout, _, direction))
+        .flatMap(EditorPaneLayoutEngine.directionalPaneNeighbor(state, layout, _, direction))
         .map { paneId =>
           state.copy(
             persisted = state.persisted.copy(

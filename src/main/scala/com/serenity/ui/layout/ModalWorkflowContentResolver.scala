@@ -76,7 +76,7 @@ private[layout] object ModalWorkflowContentResolver:
       })
 
     ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, "find"),
+      title = mode.titleFor("find"),
       header = Some(OverlayRow("find")),
       rows = queryRow :: resultRows,
       footer = footer
@@ -130,7 +130,7 @@ private[layout] object ModalWorkflowContentResolver:
     )
 
     ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, "replace"),
+      title = mode.titleFor("replace"),
       header = Some(OverlayRow("replace")),
       rows = List(findRow, replaceRow, actionRow, scopeRow),
       footer = workflow.statusMessage.map(OverlayRow(_))
@@ -194,7 +194,7 @@ private[layout] object ModalWorkflowContentResolver:
         )
 
     ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, operationLabel),
+      title = mode.titleFor(operationLabel),
       header = Some(OverlayRow(operationLabel)),
       rows = filenameRow :: pathRow :: suggestionRows,
       footer = footer

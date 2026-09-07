@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CursorLayout, LayoutEngine, ScreenPosition}
+import com.serenity.ui.layout.{CursorLayout, EditorPaneLayoutEngine, LayoutEngine, ScreenPosition}
 
 /** Resolves the experimental cursor-peek prototype's frozen `CursorPosition` (`AppState.runtime.cursorPeekAnchor`) to
   * an actual on-screen `ScreenPosition`, exactly once per peek session, and caches the result in
@@ -36,7 +36,7 @@ private[manager] object CursorPeekAnchorResolution:
       bufferId     <- pane.bufferId
       buffer       <- state.persisted.buffers.get(bufferId)
       layout = LayoutEngine.calculateLayout(state, viewportSize)
-      paneLayout <- LayoutEngine.calculateEditorPaneLayouts(state, layout).get(paneId)
+      paneLayout <- EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, layout).get(paneId)
       screenPosition <- CursorLayout.calculateScreenPositionInContent(
         cursorPos,
         buffer.document.content,

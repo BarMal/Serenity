@@ -7,7 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{SurfaceContentResolver, SurfaceRenderMode}
+import com.serenity.ui.renderer.SurfaceRenderMode
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -30,7 +30,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
     val viewport     = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout       = LayoutEngine.calculateLayoutWithUI(state, viewport)
     val toolbar      = toolbarRect(state)
-    val editorWidth = LayoutEngine
+    val editorWidth = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
       .map(_.width)
@@ -66,8 +66,8 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
       contentWidth,
       toolbarState.displayMode
     )
-    val resolvedRows = SurfaceContentResolver
-      .resolveContextualToolbar(toolbarState, state, toolbarRect(state), SurfaceRenderMode.Floating)
+    val resolvedRows = ContextualToolbarContentResolver
+      .resolve(toolbarState, state, toolbarRect(state), SurfaceRenderMode.Floating)
       .rows
     val centeredRowIndex = rowGroups.zipWithIndex
       .collectFirst {
@@ -102,7 +102,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val editorWidth = LayoutEngine
+    val editorWidth = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
       .map(_.width)
@@ -125,7 +125,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val editorWidth = LayoutEngine
+    val editorWidth = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
       .map(_.width)
@@ -146,7 +146,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val editorWidth = LayoutEngine
+    val editorWidth = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
       .map(_.width)

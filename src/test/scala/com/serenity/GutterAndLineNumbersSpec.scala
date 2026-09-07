@@ -345,7 +345,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       val layout   = LayoutEngine.calculateLayout(state, viewport)
       val lineRect = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
       val firstRowY =
-        LayoutEngine
+        EditorPaneLayoutEngine
           .calculateEditorWorkspaceLayout(state, layout)
           .lineNumberRowSlots(itemCount = 1)
           .headOption

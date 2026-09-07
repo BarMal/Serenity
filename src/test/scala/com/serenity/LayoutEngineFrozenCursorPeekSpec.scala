@@ -5,11 +5,11 @@ import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Covers `LayoutEngine.resolveFrozenCursorPeekStack`: the box-layout-style, ordered-stack-with-insertion resolver for
-  * the cursor-peek prototype's frozen anchor. Unlike `calculateFloatingSurfaceRect`/`floatingAnchor`, this function
-  * takes its anchor screen position as a plain parameter rather than deriving it from `AppState`/the active buffer --
-  * these specs exercise it as the pure geometry function it is, with no `AppState` at all, which is itself evidence the
-  * anchor really is frozen rather than live-recomputed.
+/** Covers `FloatingSurfaceLayout.resolveFrozenCursorPeekStack`: the box-layout-style, ordered-stack-with-insertion
+  * resolver for the cursor-peek prototype's frozen anchor. Unlike `calculateFloatingSurfaceRect`/`floatingAnchor`, this
+  * function takes its anchor screen position as a plain parameter rather than deriving it from `AppState`/the active
+  * buffer -- these specs exercise it as the pure geometry function it is, with no `AppState` at all, which is itself
+  * evidence the anchor really is frozen rather than live-recomputed.
   */
 class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
 
@@ -17,12 +17,12 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
   private val SlotId      = SurfaceId("command-runner-peek")
 
   private def slot(width: Int = 40, height: Int = 6) =
-    LayoutEngine.FrozenPeekSlot(SlotId, preferredWidth = width, preferredHeight = height)
+    FloatingSurfaceLayout.FrozenPeekSlot(SlotId, preferredWidth = width, preferredHeight = height)
 
   "a single slot with room below the anchor" should "place below.cursor per configured placement" in {
     val anchor = ScreenPosition(x = 20, y = 5)
     val result =
-      LayoutEngine.resolveFrozenCursorPeekStack(
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
         List(slot()),
         anchor,
         ContentRect,
@@ -39,7 +39,7 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
   it should "place above.cursor per configured placement when there is room above" in {
     val anchor = ScreenPosition(x = 20, y = 15)
     val result =
-      LayoutEngine.resolveFrozenCursorPeekStack(
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
         List(slot()),
         anchor,
         ContentRect,
@@ -56,7 +56,7 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
   "a below.cursor preference with no room below" should "fall back to above when that side fits" in {
     val anchor = ScreenPosition(x = 20, y = 22) // only 1 row below in a 24-row content rect
     val result =
-      LayoutEngine.resolveFrozenCursorPeekStack(
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
         List(slot()),
         anchor,
         ContentRect,
@@ -72,7 +72,7 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
   "an above.cursor preference with no room above" should "fall back to below when that side fits" in {
     val anchor = ScreenPosition(x = 20, y = 1) // only 1 row above
     val result =
-      LayoutEngine.resolveFrozenCursorPeekStack(
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
         List(slot()),
         anchor,
         ContentRect,
@@ -88,9 +88,9 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
   "a slot taller than the room on either side" should "be capped to whatever fits, not overflow the content rect" in {
     val anchor = ScreenPosition(x = 20, y = 12)
     val tallSlot =
-      LayoutEngine.FrozenPeekSlot(SlotId, preferredWidth = 40, preferredHeight = 100)
+      FloatingSurfaceLayout.FrozenPeekSlot(SlotId, preferredWidth = 40, preferredHeight = 100)
     val result =
-      LayoutEngine.resolveFrozenCursorPeekStack(
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
         List(tallSlot),
         anchor,
         ContentRect,
@@ -108,9 +108,9 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
   "a slot wider than the content rect" should "be capped to the content rect's width" in {
     val anchor = ScreenPosition(x = 20, y = 5)
     val wideSlot =
-      LayoutEngine.FrozenPeekSlot(SlotId, preferredWidth = 1000, preferredHeight = 6)
+      FloatingSurfaceLayout.FrozenPeekSlot(SlotId, preferredWidth = 1000, preferredHeight = 6)
     val result =
-      LayoutEngine.resolveFrozenCursorPeekStack(
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
         List(wideSlot),
         anchor,
         ContentRect,
@@ -124,7 +124,7 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
   "a slot's x position" should "center on the anchor's column, clipped to the content rect" in {
     val anchor = ScreenPosition(x = 5, y = 5) // near the left edge -- centering would go negative without clipping
     val result =
-      LayoutEngine.resolveFrozenCursorPeekStack(
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
         List(slot()),
         anchor,
         ContentRect,
@@ -139,10 +139,10 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
 
   "multiple ordered slots" should "stack in order, separated by the gap, box-layout style" in {
     val anchor = ScreenPosition(x = 20, y = 2)
-    val first  = LayoutEngine.FrozenPeekSlot(SurfaceId("first"), preferredWidth = 40, preferredHeight = 4)
-    val second = LayoutEngine.FrozenPeekSlot(SurfaceId("second"), preferredWidth = 40, preferredHeight = 4)
+    val first  = FloatingSurfaceLayout.FrozenPeekSlot(SurfaceId("first"), preferredWidth = 40, preferredHeight = 4)
+    val second = FloatingSurfaceLayout.FrozenPeekSlot(SurfaceId("second"), preferredWidth = 40, preferredHeight = 4)
     val result =
-      LayoutEngine.resolveFrozenCursorPeekStack(
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
         List(first, second),
         anchor,
         ContentRect,
@@ -161,10 +161,10 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
     // second slot's height budget is driven to exactly zero.
     val crampedRect = LayoutRect(x = 0, y = 0, width = 80, height = 6)
     val anchor      = ScreenPosition(x = 20, y = 0)
-    val first       = LayoutEngine.FrozenPeekSlot(SurfaceId("first"), preferredWidth = 40, preferredHeight = 6)
-    val second      = LayoutEngine.FrozenPeekSlot(SurfaceId("second"), preferredWidth = 40, preferredHeight = 4)
+    val first       = FloatingSurfaceLayout.FrozenPeekSlot(SurfaceId("first"), preferredWidth = 40, preferredHeight = 6)
+    val second = FloatingSurfaceLayout.FrozenPeekSlot(SurfaceId("second"), preferredWidth = 40, preferredHeight = 4)
     val result =
-      LayoutEngine.resolveFrozenCursorPeekStack(
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
         List(first, second),
         anchor,
         crampedRect,
@@ -178,7 +178,7 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
 
   "an empty slot list" should "resolve to no placements" in {
     val anchor = ScreenPosition(x = 20, y = 5)
-    LayoutEngine.resolveFrozenCursorPeekStack(
+    FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
       Nil,
       anchor,
       ContentRect,
@@ -190,9 +190,21 @@ class LayoutEngineFrozenCursorPeekSpec extends AnyFlatSpec with Matchers:
   "calling the resolver twice with the same frozen anchor" should "always produce the same placement" in {
     val anchor = ScreenPosition(x = 20, y = 5)
     val first =
-      LayoutEngine.resolveFrozenCursorPeekStack(List(slot()), anchor, ContentRect, SurfacePlacement.BelowCursor, 1)
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
+        List(slot()),
+        anchor,
+        ContentRect,
+        SurfacePlacement.BelowCursor,
+        1
+      )
     val second =
-      LayoutEngine.resolveFrozenCursorPeekStack(List(slot()), anchor, ContentRect, SurfacePlacement.BelowCursor, 1)
+      FloatingSurfaceLayout.resolveFrozenCursorPeekStack(
+        List(slot()),
+        anchor,
+        ContentRect,
+        SurfacePlacement.BelowCursor,
+        1
+      )
 
     first shouldBe second
   }

@@ -81,7 +81,7 @@ object UiSceneSnapshot:
     calculatedLayout: CalculatedLayout,
     viewportSize: ViewportSize
   ): UiSceneSnapshot =
-    val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
+    val paneLayouts = EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
     val editorContract = EditorLayoutContract.from(
       state,
       viewportSize,

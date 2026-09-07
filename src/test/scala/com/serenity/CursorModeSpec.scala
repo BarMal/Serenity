@@ -14,7 +14,7 @@ import com.serenity.session.SessionState
 import com.serenity.session.given
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.{EditorPaneLayoutEngine, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -251,7 +251,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   private def cursorScreenPos(state: AppState): (Int, Int) =
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout).get(PaneId(0)).get
+    val paneRect = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout).get(PaneId(0)).get
     (paneRect.x, paneRect.y + 1) // header row at paneRect.y, content starts at +1
 
   private def openSettingsGroup(sm: StateManager, search: String): Unit =

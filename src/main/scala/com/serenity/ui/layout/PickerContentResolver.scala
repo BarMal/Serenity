@@ -24,7 +24,7 @@ private[layout] object PickerContentResolver:
     val rows = itemWindow.slice(state.themes).zipWithIndex.map { (name, idx) =>
       OverlayRow(plainText = name, selected = idx == adjustedSelectedIndex)
     }
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "Theme"), rows = rows)
+    ResolvedSurfaceContent(mode.titleFor("Theme"), rows = rows)
 
   def resolveThemeCreator(
     state: com.serenity.ui.theme.config.ThemeCreatorState,
@@ -62,7 +62,7 @@ private[layout] object PickerContentResolver:
       hasFooter = state.statusMessage.nonEmpty
     )
     ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, "Theme Creator"),
+      title = mode.titleFor("Theme Creator"),
       header = Some(OverlayRow("theme creator")),
       rows = itemWindow.slice(allRows),
       footer = state.statusMessage.map(OverlayRow(_, foregroundColor = Some(java.awt.Color.RED)))
@@ -95,7 +95,7 @@ private[layout] object PickerContentResolver:
       )
     }
     ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, "Search"),
+      title = mode.titleFor("Search"),
       header = Some(headerRow),
       rows = resultRows,
       footer = Option.when(state.hasMoreResults)(OverlayRow(s"${state.results.length} loaded, more available"))
@@ -124,7 +124,7 @@ private[layout] object PickerContentResolver:
     }
 
     ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, menu.title),
+      title = mode.titleFor(menu.title),
       header = Some(OverlayRow(menu.title)),
       rows = rows,
       footer = Option.when(menu.items.nonEmpty)(OverlayRow(s"${menu.selectedIndex + 1}/${menu.items.length}"))

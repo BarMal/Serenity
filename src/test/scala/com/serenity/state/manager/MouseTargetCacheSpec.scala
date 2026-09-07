@@ -7,7 +7,7 @@ import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, EditorPaneLayoutEngine, Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.Renderer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -76,7 +76,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val cache  = MouseTargetCache.fromState(state, size)
     val layout = LayoutEngine.calculateLayoutWithUI(state, size)
 
-    cache.scene.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, layout)
+    cache.scene.paneLayouts shouldBe EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, layout)
     cache.scene.paneLayouts(paneId).headerRect.bottom.shouldBe(cache.scene.paneLayouts(paneId).contentRect.y)
   }
 

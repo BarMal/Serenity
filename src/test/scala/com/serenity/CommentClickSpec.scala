@@ -56,7 +56,7 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
   private def bufferColumnPoint(sm: StateManager, column: Int): (Int, Int) =
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
     (paneRect.x + column, paneRect.y + 1)
 
   private def commentLensState(state: AppState): Option[CommentLensState] =

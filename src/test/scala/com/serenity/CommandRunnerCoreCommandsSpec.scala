@@ -105,7 +105,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .flatMap(_.bufferId)
       .getOrElse(fail("Expected active pane buffer"))
     val layout      = LayoutEngine.calculateLayout(state, viewportSize)
-    val contentRect = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect
+    val contentRect = EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect
     val buffer      = state.persisted.buffers(bufferId)
     buffer.viewport.visibleColumns shouldBe contentRect.width
     buffer.viewport.visibleLines shouldBe contentRect.height
@@ -473,7 +473,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     openedBuffer.flatMap(_.document.language) shouldBe Some(LanguageId.Markdown)
     val paneId = updatedState.persisted.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
     val layout = LayoutEngine.calculateLayout(updatedState, viewportSize)
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorPaneLayouts(updatedState, layout)(paneId)
       .contentRect
     openedBuffer.map(_.viewport.visibleColumns) shouldBe Some(contentRect.width)

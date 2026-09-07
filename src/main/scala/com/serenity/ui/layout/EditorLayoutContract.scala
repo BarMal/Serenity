@@ -368,7 +368,7 @@ object EditorLayoutContract:
     val contentAreaRect = calculatedLayout.gutterRect match
       case Some(gutter) => LayoutRect(0, 0, viewportSize.width, gutter.y)
       case None         => viewportRect
-    val workspace = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
+    val workspace = EditorPaneLayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
     val minimumFloatingOverlayGapRows = math.max(
       InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity).overlayGapRows,
       math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
@@ -498,7 +498,7 @@ object EditorLayoutContract:
       else
         surface.content match
           case SurfaceContent.ContextualToolbar(toolbarState) =>
-            SurfaceContentResolver.resolveContextualToolbar(
+            ContextualToolbarContentResolver.resolve(
               toolbarState,
               state,
               geometryFrame,

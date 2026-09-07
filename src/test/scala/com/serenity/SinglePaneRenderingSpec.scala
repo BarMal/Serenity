@@ -28,7 +28,7 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
       // When: Calculate layout for rendering
       val viewportSize     = ViewportSize(100, 30)
       val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
-      val paneLayouts      = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
+      val paneLayouts      = EditorPaneLayoutEngine.calculatePaneLayouts(state, calculatedLayout)
 
       // Then: Should produce exactly one pane layout
       paneLayouts.should(have).size(1)
@@ -59,9 +59,9 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
     yield
       val viewportSize     = ViewportSize(100, 30)
       val calculatedLayout = LayoutEngine.calculateLayout(initialState, viewportSize)
-      val paneLayouts      = LayoutEngine.calculatePaneLayouts(initialState, calculatedLayout)
+      val paneLayouts      = EditorPaneLayoutEngine.calculatePaneLayouts(initialState, calculatedLayout)
       val newTabLayout     = LayoutEngine.calculateLayout(stateAfterNewTab, viewportSize)
-      val newTabLayouts    = LayoutEngine.calculatePaneLayouts(stateAfterNewTab, newTabLayout)
+      val newTabLayouts    = EditorPaneLayoutEngine.calculatePaneLayouts(stateAfterNewTab, newTabLayout)
 
       // Assertions
       initialState.persisted.layout.editorPanes.should(have).size(1)

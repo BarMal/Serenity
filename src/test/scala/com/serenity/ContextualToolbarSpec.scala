@@ -11,7 +11,7 @@ import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{Renderer, SurfaceContentResolver, SurfaceRenderMode}
+import com.serenity.ui.renderer.{Renderer, SurfaceRenderMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -244,7 +244,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
       .getOrElse(
@@ -282,7 +282,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
       .getOrElse(fail("Expected active content rect"))
@@ -321,7 +321,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
       .getOrElse(fail("Expected active content rect"))
@@ -357,7 +357,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
       .getOrElse(fail("Expected active content rect"))
@@ -393,7 +393,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activeContentRect(state)
       .getOrElse(fail("Expected active content rect"))
@@ -1023,7 +1023,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     val renderedText = surface.putStringCalls.map(_.s).mkString
     renderedText should include("│")
     ContextualToolbar.itemsFor(state).map(_.icon).foreach(renderedText should include(_))
-    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+    val resolved = ContextualToolbarContentResolver.resolve(
       toolbarStateFrom(state),
       state,
       LayoutRect(0, 0, 120, 10),
@@ -1040,7 +1040,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
     seedToolbarDocument(stateManager)
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+    val resolved = ContextualToolbarContentResolver.resolve(
       ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly),
       state,
       LayoutRect(0, 0, 120, 10),

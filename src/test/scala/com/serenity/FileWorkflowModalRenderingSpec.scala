@@ -59,7 +59,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
-    val paneRect = LayoutEngine
+    val paneRect = EditorPaneLayoutEngine
       .calculatePaneLayouts(state, layout)
       .getOrElse(paneId, fail("Expected pane layout"))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
@@ -136,7 +136,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
-    val paneRect = LayoutEngine
+    val paneRect = EditorPaneLayoutEngine
       .calculatePaneLayouts(state, layout)
       .getOrElse(paneId, fail("Expected pane layout"))
     val contentRect = CursorLayout.contentRectForPane(paneRect)

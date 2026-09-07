@@ -63,7 +63,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
             case (paneId, pane) if pane.bufferId.contains(bufferId) => paneId
           }
           .getOrElse(fail("No pane found for buffer"))
-        val contentRect = LayoutEngine.calculateEditorPaneLayouts(updatedState, newLayout)(paneId).contentRect
+        val contentRect = EditorPaneLayoutEngine.calculateEditorPaneLayouts(updatedState, newLayout)(paneId).contentRect
         buffer.viewport.visibleLines.shouldBe(contentRect.height)
         buffer.viewport.visibleColumns.shouldBe(contentRect.width)
       case None => fail("No buffer found in state")
@@ -100,7 +100,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
       .reduce(ResizeEvent(newSize), initialState)
       .state
     val calculatedLayout = LayoutEngine.calculateLayout(resizedState, newSize)
-    val paneLayouts      = LayoutEngine.calculateEditorPaneLayouts(resizedState, calculatedLayout)
+    val paneLayouts      = EditorPaneLayoutEngine.calculateEditorPaneLayouts(resizedState, calculatedLayout)
 
     resizedState.persisted.buffers(firstBuffer.id).viewport.visibleColumns shouldBe paneLayouts(
       firstPaneId
@@ -145,7 +145,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
       .state
     val calculatedLayout = LayoutEngine.calculateLayout(resizedState, newSize)
     val paneId           = resizedState.persisted.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
-    val paneRect         = LayoutEngine.calculatePaneLayouts(resizedState, calculatedLayout)(paneId)
+    val paneRect         = EditorPaneLayoutEngine.calculatePaneLayouts(resizedState, calculatedLayout)(paneId)
     val bufferId =
       resizedState.persisted.layout.editorPanes(paneId).bufferId.getOrElse(fail("Expected active buffer"))
 
@@ -175,7 +175,8 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     val updatedState     = stateManager.getCurrentState.unsafeRunSync()
     val calculatedLayout = LayoutEngine.calculateLayout(updatedState, viewportSize)
-    val contentRect      = LayoutEngine.calculateEditorPaneLayouts(updatedState, calculatedLayout)(paneId).contentRect
+    val contentRect =
+      EditorPaneLayoutEngine.calculateEditorPaneLayouts(updatedState, calculatedLayout)(paneId).contentRect
     updatedState.persisted.buffers(bufferId).viewport.visibleColumns shouldBe contentRect.width
     updatedState.persisted.buffers(bufferId).viewport.visibleLines shouldBe contentRect.height
     updatedState.persisted.layout.editorPanes(paneId).viewport.visibleColumns shouldBe contentRect.width
@@ -221,7 +222,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
             case (paneId, pane) if pane.bufferId.contains(bufferId) => paneId
           }
           .getOrElse(fail("No pane found for buffer"))
-        val paneRect = LayoutEngine.calculatePaneLayouts(state2, layout2)(paneId)
+        val paneRect = EditorPaneLayoutEngine.calculatePaneLayouts(state2, layout2)(paneId)
         buffer.viewport.visibleColumns.shouldBe(paneRect.width)
       case None => fail("No buffer found in state")
   }
@@ -252,7 +253,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val resizedState  = stateManager.getCurrentState.unsafeRunSync()
     val resizedBuffer = resizedState.persisted.buffers(resizedState.persisted.bufferOrder.head)
     val resizedLayout = LayoutEngine.calculateLayout(resizedState, newViewportSize)
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorPaneLayouts(resizedState, resizedLayout)(resizedState.persisted.layout.activeEditorPaneId.get)
       .contentRect
     resizedBuffer.viewport.visibleLines.shouldBe(contentRect.height)
@@ -297,7 +298,8 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     stateAfterWide.persisted.buffers.get(bufferId) match
       case Some(buffer) =>
-        val contentRect = LayoutEngine.calculateEditorPaneLayouts(stateAfterWide, layoutAfterWide)(paneId).contentRect
+        val contentRect =
+          EditorPaneLayoutEngine.calculateEditorPaneLayouts(stateAfterWide, layoutAfterWide)(paneId).contentRect
         buffer.viewport.visibleColumns.shouldBe(contentRect.width)
         buffer.viewport.visibleLines.shouldBe(contentRect.height)
       case None => fail("No buffer found after wide resize")

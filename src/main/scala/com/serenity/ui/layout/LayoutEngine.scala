@@ -82,24 +82,9 @@ object LayoutManager:
 
 object LayoutEngine:
 
-  private[layout] val DefaultSpacerPercentage   = 0.0
-  private[layout] val MinimumVerticalPaneHeight = 5
-  private[layout] val EditorPaneHeaderHeight    = 1
-
-  // Public API for panel placement/resize, floating-surface stacking, and pane splitting lives in these
-  // sibling objects (600-line architecture ratchet split); exported here so existing `LayoutEngine.foo`
-  // call sites keep working unchanged.
-  export PinnedPanelLayoutEngine.{pinnedPanelResizeFromDrag, PinnedPanelDragResize}
-  export FloatingSurfaceLayout.{resolveFrozenCursorPeekStack, FrozenPeekSlot, FrozenPeekPlacement}
-  export OverlayStackLayout.{calculateCornerOverlayStack, CornerPanelSlot, CornerOverlayLayout}
-  export EditorPaneLayoutEngine.{
-    calculatePaneLayouts,
-    calculatePaneLayoutsWithMinWidth,
-    calculateEditorPaneLayouts,
-    directionalPaneNeighbor,
-    calculateEditorWorkspaceLayout,
-    calculateEditorPaneLayoutsWithMinWidth
-  }
+  // Read by `LayoutManager.calculateLayout`'s default argument below, which is a separate object, so plain `private`
+  // does not reach far enough.
+  private[layout] val DefaultSpacerPercentage = 0.0
 
   def calculateLayout(
     state: AppState,
@@ -113,10 +98,9 @@ object LayoutEngine:
     viewportSize: ViewportSize,
     spacerPercentage: Double = DefaultSpacerPercentage
   ): CalculatedLayout =
-    val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
-    val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
-    val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
-    val uiElementGap   = math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
+    val bottomGutterHeight = gutterHeight(state)
+    val gutterFreeHeight   = contentHeight(state, viewportSize)
+    val uiElementGap       = math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.surfaceConfig.textAreaInsets.normalized
       else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
@@ -135,9 +119,9 @@ object LayoutEngine:
           PinnedPanelLayoutEngine.calculateDockedPanelLayout(
             _,
             state.pinnedSurfaces,
-            LayoutRect(0, 0, viewportSize.width, contentHeight),
+            LayoutRect(0, 0, viewportSize.width, gutterFreeHeight),
             minimumEditorWorkspaceWidth,
-            MinimumVerticalPaneHeight,
+            EditorPaneLayoutEngine.MinimumVerticalPaneHeight,
             uiElementGap
           )
         )
@@ -145,7 +129,7 @@ object LayoutEngine:
           PinnedPanelLayoutEngine.calculatePinnedPanelLayout(
             state.pinnedSurfaces,
             viewportSize.width,
-            contentHeight,
+            gutterFreeHeight,
             uiElementGap
           )
         )
@@ -170,9 +154,9 @@ object LayoutEngine:
     val workspaceWidth =
       math.max(1, viewportSize.width - leftPinnedWidth - rightPinnedWidth - leftGap - rightGap)
     val workspaceHeight =
-      math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight - topGap - bottomGap)
+      math.max(1, gutterFreeHeight - topPinnedHeight - bottomPinnedHeight - topGap - bottomGap)
 
-    val editorPaneHeaderHeight = paneHeaderHeight(state)
+    val editorPaneHeaderHeight = EditorPaneLayoutEngine.paneHeaderHeight(state)
     val leftSpacerWidth        = (workspaceWidth * textAreaInsets.left).toInt
     val rightSpacerWidth       = (workspaceWidth * textAreaInsets.right).toInt
     val contentAreaHeight      = math.max(1, workspaceHeight - editorPaneHeaderHeight)
@@ -224,7 +208,7 @@ object LayoutEngine:
 
     val gutterRect =
       if usesBottomGutter(state) then
-        Some(LayoutRect(0, viewportSize.height - gutterHeight, viewportSize.width, gutterHeight))
+        Some(LayoutRect(0, viewportSize.height - bottomGutterHeight, viewportSize.width, bottomGutterHeight))
       else None
 
     val baseLayout = CalculatedLayout(
@@ -240,7 +224,7 @@ object LayoutEngine:
       gutterRect = gutterRect
     )
 
-    val paneLayouts = calculateEditorPaneLayouts(state, baseLayout)
+    val paneLayouts = EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, baseLayout)
 
     val aboveSurfaces = state.floatingSurfaces.filter {
       _.presentation match
@@ -283,13 +267,23 @@ object LayoutEngine:
       height = height
     )
 
-  private[layout] def usesBottomGutter(state: AppState): Boolean =
+  /** Viewport height available to panels and the editor workspace, i.e. everything above the bottom gutter. Public
+    * because pinned-panel geometry has to agree with this exactly -- both `calculateLayoutWithUI` and
+    * `PinnedPanelLayoutEngine`'s drag-resize clamping measure panel sizes against it, and two independent copies of the
+    * subtraction would silently drift apart.
+    */
+  def contentHeight(state: AppState, viewportSize: ViewportSize): Int =
+    math.max(1, viewportSize.height - gutterHeight(state))
+
+  private def gutterHeight(state: AppState): Int =
+    if usesBottomGutter(state) then
+      InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity).gutterHeight
+    else 0
+
+  private def usesBottomGutter(state: AppState): Boolean =
     state.persisted.config.surfaceConfig.showGutter ||
       (state.persisted.config.cursorInfoBarSegments.nonEmpty &&
         state.persisted.config.cursorInfoBarPlacement == com.serenity.config.CursorInfoBarPlacement.PinnedBottom)
-
-  private[layout] def paneHeaderHeight(state: AppState): Int =
-    if state.persisted.config.surfaceConfig.showPaneHeaders then EditorPaneHeaderHeight else 0
 
   private def calculateLineNumberWidth(state: AppState): Int =
     // Find the maximum line count across all buffers to determine width needed
@@ -347,7 +341,7 @@ object LayoutEngine:
 
   def syncViewportDimensions(state: AppState, viewportSize: ViewportSize): AppState =
     val calculatedLayout = calculateLayout(state, viewportSize)
-    val workspaceLayout  = calculateEditorWorkspaceLayout(state, calculatedLayout)
+    val workspaceLayout  = EditorPaneLayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
     val (updatedBuffers, updatedPanes) =
       state.persisted.layout.editorPanes.foldLeft((state.persisted.buffers, state.persisted.layout.editorPanes)) {
         case ((buffers, panes), (paneId, pane)) =>

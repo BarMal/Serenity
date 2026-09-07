@@ -27,7 +27,7 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.runtime.viewportSize shouldBe Some(newSize)
 
     val expectedLayout = LayoutEngine.calculateLayout(updatedState, newSize)
-    val contentRect = LayoutEngine
+    val contentRect = EditorPaneLayoutEngine
       .calculateEditorPaneLayouts(updatedState, expectedLayout)(PaneId(0))
       .contentRect
     val bufferId = updatedState.persisted.bufferOrder.head

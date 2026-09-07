@@ -945,7 +945,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+    val resolved = ContextualToolbarContentResolver.resolve(
       ContextualToolbarState(),
       state,
       LayoutRect(0, 0, 24, 8),
@@ -972,7 +972,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+    val resolved = ContextualToolbarContentResolver.resolve(
       ContextualToolbarState(displayMode = ToolbarDisplayMode.IconAndText),
       state,
       LayoutRect(0, 0, 80, 8),
@@ -1031,7 +1031,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val resolved = SurfaceContentResolver.resolveContextualToolbar(
+    val resolved = ContextualToolbarContentResolver.resolve(
       ContextualToolbarState(),
       state,
       LayoutRect(0, 0, 24, 8),

@@ -1,18 +1,20 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
 
 /** Geometry for panels pinned to a screen edge or docked into the workspace tree, plus drag-to-resize handling for
-  * them. Split out of `LayoutEngine` (issue tracked by the 600-line architecture ratchet) -- this is the self-contained
-  * "where do pinned/docked panels go, and how do they resize" concern; the surrounding editor/floating-surface layout
-  * stays in `LayoutEngine` and calls back into here.
+  * them: the self-contained "where do pinned/docked panels go, and how do they resize" concern.
+  *
+  * `LayoutEngine` calls the two layout entry points below to place panels before it allocates the editor workspace, and
+  * `pinnedPanelResizeFromDrag` calls back for a full `CalculatedLayout` to hit-test the drag against, so the two
+  * objects are mutually recursive by nature; keeping this one's entry points as real API rather than package internals
+  * is what makes that traffic legible.
   */
 object PinnedPanelLayoutEngine:
 
   private val PinnedPanelDragWorkspaceReach = 1
 
-  final private[layout] case class PinnedPanelLayout(
+  final case class PinnedPanelLayout(
       panelRects: Map[PanelPosition, LayoutRect],
       surfaceRects: Map[SurfaceId, LayoutRect]
   )
@@ -21,7 +23,7 @@ object PinnedPanelLayoutEngine:
 
   final case class PinnedPanelDragResize(position: PanelPosition, size: Int)
 
-  private[layout] def calculateDockedPanelLayout(
+  def calculateDockedPanelLayout(
     tree: WorkspaceTree,
     panels: List[UiSurface],
     workspaceRect: LayoutRect,
@@ -174,7 +176,7 @@ object PinnedPanelLayoutEngine:
     cellY: Int
   ): Option[PinnedPanelDragResize] =
     val layout         = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-    val contentHeight  = calculateContentHeight(state, viewportSize)
+    val contentHeight  = LayoutEngine.contentHeight(state, viewportSize)
     val uiElementGap   = math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
     val pinnedSurfaces = state.pinnedSurfaces
     val panelSizes = pinnedSurfaces.foldLeft(Map.empty[PanelPosition, Int]) {
@@ -196,7 +198,7 @@ object PinnedPanelLayoutEngine:
         .map(PinnedPanelDragResize(position, _))
     }
 
-  private[layout] def calculatePinnedPanelLayout(
+  def calculatePinnedPanelLayout(
     panels: List[UiSurface],
     terminalWidth: Int,
     contentHeight: Int,
@@ -337,11 +339,6 @@ object PinnedPanelLayoutEngine:
             uiElementGap
           ).end
         }
-
-  private def calculateContentHeight(state: AppState, viewportSize: ViewportSize): Int =
-    val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
-    val gutterHeight   = if LayoutEngine.usesBottomGutter(state) then densityMetrics.gutterHeight else 0
-    math.max(1, viewportSize.height - gutterHeight)
 
   private def calculatePinnedAxisSizes(
     startSize: Option[Int],

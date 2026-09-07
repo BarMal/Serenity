@@ -357,7 +357,9 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     )
 
     val paneRect =
-      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
+      EditorPaneLayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+        paneId
+      )
     panelRows(surface, state, paneRect) should have size 3
   }
 
@@ -415,7 +417,9 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     )
 
     val paneRect =
-      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(paneId)
+      EditorPaneLayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+        paneId
+      )
     rawSourceRow(surface, "| Task | Owner |") shouldBe paneRect.y + 1
   }
 
@@ -451,7 +455,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       case (name, source, cursor, expectedHeightRows) =>
         val (state, surface, _) = renderMarkdownLens(source, cursor)
         val paneRect =
-          LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+          EditorPaneLayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
             PaneId(1)
           )
 
@@ -493,7 +497,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       case (cursor, expectedLensHeight) =>
         val (state, surface, _) = renderMarkdownLens(source, cursor, topLine = Some(0))
         val paneRect =
-          LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+          EditorPaneLayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
             PaneId(1)
           )
 
@@ -706,7 +710,9 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       selection = Some(Selection(CursorPosition(0, 0), CursorPosition(4, 0)))
     )
     val paneRect =
-      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(PaneId(1))
+      EditorPaneLayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+        PaneId(1)
+      )
 
     val firstHeadingRow = rawSourceRow(surface, "# First heading")
     firstHeadingRow should be >= paneRect.y
@@ -775,7 +781,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
       topLine = Some(0)
     )
     val paneRect =
-      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+      EditorPaneLayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
         PaneId(1)
       )
 
@@ -792,7 +798,7 @@ class RendererMarkdownLensSpec extends AnyFlatSpec with Matchers:
     val cursor              = CursorPosition(4, 0)
     val (state, surface, _) = renderMarkdownLens(source, cursor, topLine = Some(0))
     val paneRect =
-      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
+      EditorPaneLayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
         PaneId(1)
       )
 

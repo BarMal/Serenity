@@ -58,7 +58,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     layout.belowCursorOverlayRect shouldBe None
 
     val rect          = layout.aboveCursorOverlayRect.get
-    val paneRect      = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect      = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect   = CursorLayout.contentRectForPane(paneRect)
     val contentTopY   = paneRect.y + 1
     val cursorScreenY = contentTopY + 6
@@ -91,7 +91,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     layout.aboveCursorOverlayRect shouldBe defined
 
     val rect        = layout.aboveCursorOverlayRect.get
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect    = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
     val contentTopY = paneRect.y + 1
 
@@ -129,7 +129,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     layout.belowCursorOverlayRect shouldBe defined
 
     val rect        = layout.belowCursorOverlayRect.get
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect    = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.y shouldBe contentRect.y + 8
@@ -169,7 +169,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect    = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.y shouldBe contentRect.y + 7
@@ -194,7 +194,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     )
 
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
-    val contentRect = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
+    val contentRect = EditorPaneLayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
     val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
 
     rect.y shouldBe contentRect.y + 10
@@ -225,7 +225,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect    = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.y shouldBe contentRect.y + 2
@@ -257,7 +257,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect    = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.y shouldBe contentRect.y + 2
@@ -305,7 +305,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect    = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.y shouldBe contentRect.y + 2
@@ -359,7 +359,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
 
     val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val paneRect    = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.y shouldBe contentRect.y + (cursor.line - buffer.viewport.topLine) + 2
@@ -419,7 +419,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     )
 
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
-    val paneLayout  = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId)
+    val paneLayout  = EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId)
     val contentRect = paneLayout.contentRect
     val stack       = layout.belowCursorOverlayStack.toMap
 

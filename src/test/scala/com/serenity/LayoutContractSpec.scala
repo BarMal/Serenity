@@ -76,7 +76,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         )
       )
       val layout          = LayoutEngine.calculateLayout(state, viewport)
-      val workspaceLayout = LayoutEngine.calculateEditorWorkspaceLayout(state, layout)
+      val workspaceLayout = EditorPaneLayoutEngine.calculateEditorWorkspaceLayout(state, layout)
       val contentArea     = contentAreaFor(layout)
 
       layout.gutterRect.foreach { gutter =>
@@ -141,7 +141,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       )
     )
     val layout       = LayoutEngine.calculateLayout(state, viewport)
-    val contentRect  = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
+    val contentRect  = EditorPaneLayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
     val overlayRects = layout.belowCursorOverlayStack.map(_._2)
 
     overlayRects should not be empty
@@ -174,7 +174,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       )
     )
     val layout      = LayoutEngine.calculateLayout(state, viewport)
-    val contentRect = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
+    val contentRect = EditorPaneLayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
     val overlayRect = layout.aboveCursorOverlayRect.getOrElse(fail("expected above-cursor overlay"))
 
     assertInside(contentRect, overlayRect, s"above-cursor overlay $overlayRect")
@@ -218,7 +218,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     )
 
     val layout      = LayoutEngine.calculateLayout(state, tinyViewport)
-    val contentRect = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
+    val contentRect = EditorPaneLayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
     val stack       = layout.belowCursorOverlayStack
 
     stack.map(_._1) shouldBe List(SurfaceId("command-runner"))
@@ -312,7 +312,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
     val spacerPercentage = 0.25
     val layout           = LayoutEngine.calculateLayout(state, viewport, spacerPercentage)
-    val paneLayout = LayoutEngine
+    val paneLayout = EditorPaneLayoutEngine
       .calculateEditorWorkspaceLayout(state, layout)
       .activePaneLayout(state)
       .getOrElse(fail("expected active pane layout"))
@@ -368,7 +368,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
     contract.viewportRect shouldBe viewportRect
     contract.contentAreaRect.bottom shouldBe calculatedLayout.gutterRect.map(_.y).getOrElse(viewport.height)
-    contract.workspace.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
+    contract.workspace.paneLayouts shouldBe EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
     contract.pinnedSurfaceTitleRects.keySet shouldBe contract.pinnedSurfaceRects.keySet
     contract.pinnedSurfaceContentRects.keySet shouldBe contract.pinnedSurfaceRects.keySet
     contract.floatingOverlayContentRects.map(_._1) shouldBe contract.floatingOverlayRects.map(_._1)

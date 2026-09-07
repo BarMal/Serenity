@@ -292,6 +292,6 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     val scene = UiSceneSnapshot.from(state, viewport)
 
     scene.calculatedLayout shouldBe LayoutEngine.calculateLayoutWithUI(state, viewport)
-    scene.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, scene.calculatedLayout)
+    scene.paneLayouts shouldBe EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, scene.calculatedLayout)
   }
 end SceneSnapshotSpec

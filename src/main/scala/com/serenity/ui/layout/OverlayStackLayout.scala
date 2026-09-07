@@ -3,19 +3,21 @@ package com.serenity.ui.layout
 import com.serenity.config.CornerPosition
 import com.serenity.state.models.*
 
-/** Stacking multiple floating surfaces together: the below-cursor overlay stack, the vertical offsets that keep a
-  * stack's fractional gap rows visually consistent, and the screen-corner overlay stack (issue #1310, mode 3). Split
-  * out of `LayoutEngine` (600-line architecture ratchet); single-surface rect/size/anchor resolution lives in
-  * [[FloatingSurfaceLayout]], which this calls back into.
+/** Stacking *several* floating surfaces together: the below-cursor overlay stack, the vertical offsets that keep a
+  * stack's fractional gap rows visually consistent, and the screen-corner overlay stack (issue #1310, mode 3).
+  *
+  * The layer above [[FloatingSurfaceLayout]] -- it composes that object's single-surface rect/size/anchor primitives
+  * and never the other way round. Everything below is API: `LayoutEngine` assembles a `CalculatedLayout` out of these
+  * results, and `UiSurface` uses the corner stack directly.
   */
 object OverlayStackLayout:
 
-  final private[layout] case class BelowOverlayLayout(
+  final case class BelowOverlayLayout(
       stack: List[(SurfaceId, LayoutRect)],
       collapsedSurfaceIds: Set[SurfaceId]
   )
 
-  private[layout] def orderedBelowCursorSurfaces(state: AppState): List[UiSurface] =
+  def orderedBelowCursorSurfaces(state: AppState): List[UiSurface] =
     val maybeToolbar = state.contextualToolbarSurface.filter(isBelowCursorSurface).toList
     val maybeRunner  = state.commandRunnerSurface.filter(isBelowCursorSurface).toList
     if maybeToolbar.nonEmpty && maybeRunner.nonEmpty then maybeToolbar ++ maybeRunner
@@ -44,7 +46,7 @@ object OverlayStackLayout:
       case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
       case _                                                             => false
 
-  private[layout] def calculateBelowCursorOverlayStack(
+  def calculateBelowCursorOverlayStack(
     surfaces: List[UiSurface],
     state: AppState,
     paneLayouts: Map[PaneId, EditorPaneLayout]
@@ -63,7 +65,7 @@ object OverlayStackLayout:
       // every below-cursor multi-surface case now goes through the same generic stacking.
       stackBelowCursorSurfaces(surfaces, state, paneLayouts)
 
-  private[layout] def floatingOverlayOffsets(
+  def floatingOverlayOffsets(
     aboveSurfaces: List[UiSurface],
     aboveRects: List[(SurfaceId, LayoutRect)],
     belowSurfaces: List[UiSurface],

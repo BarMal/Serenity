@@ -10,7 +10,7 @@ import com.serenity.ui.fonts.FontLoader
   * into overlay rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc
   * comment there.
   */
-private[layout] object ContextualToolbarContentResolver:
+object ContextualToolbarContentResolver:
 
   def resolve(
     toolbarState: ContextualToolbarState,

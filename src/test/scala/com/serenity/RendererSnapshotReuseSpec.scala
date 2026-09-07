@@ -167,7 +167,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     cursorRects should not be empty
 
     val layout       = LayoutEngine.calculateLayout(state, viewportSize)
-    val paneLayouts  = LayoutEngine.calculatePaneLayouts(state, layout)
+    val paneLayouts  = EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)
     val paneRect     = paneLayouts(PaneId(0))
     val panelWidthPx = paneRect.width * cellMetrics.charWidth
     val snapshot = TextLayoutSnapshot.fromBuffer(
@@ -291,7 +291,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val layout  = LayoutEngine.calculateLayout(state, viewportSize)
     val paneContentHeight =
-      LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect.height
+      EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect.height
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 
@@ -389,7 +389,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val layout  = LayoutEngine.calculateLayout(state, viewportSize)
     val paneContentHeight =
-      LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect.height
+      EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect.height
 
     Renderer.render(state, cursorVisible = true, surface, viewportSize, monoFont, monoFont, cellMetrics, None)
 

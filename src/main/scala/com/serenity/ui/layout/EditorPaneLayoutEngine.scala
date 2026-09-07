@@ -5,11 +5,23 @@ import com.serenity.keystroke.events.Direction
 import com.serenity.state.models.*
 
 /** Splitting the editor workspace area into individual pane rectangles -- both the explicit `WorkspaceTree` path and
-  * the legacy flat horizontal/vertical split, plus the header/content/spacer sub-rects within one pane. Split out of
-  * `LayoutEngine` (600-line architecture ratchet); the surrounding docked/pinned-panel and floating-surface layout
-  * stays there.
+  * the legacy flat horizontal/vertical split, plus the header/content/spacer sub-rects within one pane. Owns the pane
+  * size constants below: `LayoutEngine` reads them when it hands the workspace rect to the docked-panel splitter, and
+  * `CursorLayout` reads `contentRectForPane` to place the caret, so both are part of this object's API rather than
+  * internals.
   */
 object EditorPaneLayoutEngine:
+
+  /** Floor on a pane's height when panes are stacked vertically -- below this a pane has no usable text area, so the
+    * splitter stops subdividing rather than emitting unreadable slivers.
+    */
+  val MinimumVerticalPaneHeight = 5
+
+  /** Rows a pane header occupies when headers are shown at all; see [[paneHeaderHeight]]. */
+  val EditorPaneHeaderHeight = 1
+
+  def paneHeaderHeight(state: AppState): Int =
+    if state.persisted.config.surfaceConfig.showPaneHeaders then EditorPaneHeaderHeight else 0
 
   /** Calculate individual pane layouts within the editor area */
   def calculatePaneLayouts(state: AppState, calculatedLayout: CalculatedLayout): Map[PaneId, LayoutRect] =
@@ -126,7 +138,7 @@ object EditorPaneLayoutEngine:
 
     def minimumHeight(node: WorkspaceNode): Int =
       node match
-        case WorkspaceNode.Leaf(_, _)             => LayoutEngine.MinimumVerticalPaneHeight
+        case WorkspaceNode.Leaf(_, _)             => MinimumVerticalPaneHeight
         case WorkspaceNode.DockedSurface(_, _, _) => 1
         case WorkspaceNode.Split(_, SplitAxis.Horizontal, _, first, second) =>
           minimumHeight(first).max(minimumHeight(second))
@@ -162,7 +174,7 @@ object EditorPaneLayoutEngine:
     state: AppState,
     calculatedLayout: CalculatedLayout
   ): EditorPaneLayout =
-    val headerHeight   = LayoutEngine.paneHeaderHeight(state)
+    val headerHeight   = paneHeaderHeight(state)
     val insets         = state.persisted.config.surfaceConfig.textAreaInsets.normalized
     val paneHeaderRect = paneRect.copy(height = headerHeight)
     val headerRect =
@@ -179,7 +191,7 @@ object EditorPaneLayoutEngine:
     )
 
   private[layout] def contentRectForPane(paneRect: LayoutRect): LayoutRect =
-    contentRectForPane(paneRect, TextAreaInsets(), LayoutEngine.EditorPaneHeaderHeight)
+    contentRectForPane(paneRect, TextAreaInsets(), EditorPaneHeaderHeight)
 
   private def contentRectForPane(paneRect: LayoutRect, insets: TextAreaInsets, headerHeight: Int): LayoutRect =
     val baseContent        = baseContentRectForPane(paneRect, headerHeight)
@@ -278,7 +290,7 @@ object EditorPaneLayoutEngine:
     paneIds: List[PaneId]
   ): Map[PaneId, LayoutRect] =
     val paneCount        = paneIds.size
-    val maxVisiblePanes  = math.max(1, editorRect.height / LayoutEngine.MinimumVerticalPaneHeight)
+    val maxVisiblePanes  = math.max(1, editorRect.height / MinimumVerticalPaneHeight)
     val visiblePaneCount = math.min(paneCount, maxVisiblePanes)
     val focusedPaneId    = focusedPane(state)
     val (visibleStartIndex, _) = calculateVisiblePaneWindow(

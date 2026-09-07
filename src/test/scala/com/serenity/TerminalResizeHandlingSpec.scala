@@ -159,7 +159,7 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
       val state       = stateManager.getCurrentState.unsafeRunSync()
       val layout      = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, viewportSize)
-      val paneLayouts = com.serenity.ui.layout.LayoutEngine.calculatePaneLayouts(state, layout)
+      val paneLayouts = com.serenity.ui.layout.EditorPaneLayoutEngine.calculatePaneLayouts(state, layout)
 
       // Then: All visible panes should respect minimum width
       paneLayouts.values.foreach(rect => rect.width should be >= customMinWidth)

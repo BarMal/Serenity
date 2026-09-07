@@ -83,7 +83,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 30)
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
-    val paneRect = LayoutEngine
+    val paneRect = EditorPaneLayoutEngine
       .calculatePaneLayouts(state, layout)
       .getOrElse(paneId, fail("Expected pane layout"))
     val paneContentRect = CursorLayout.contentRectForPane(paneRect)
@@ -142,7 +142,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
     val state     = baseState.copy(persisted = baseState.persisted.copy(config = writing.config))
     val surface   = new MockRenderSurface(100, 30)
     val layout    = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
-    val paneLayout = LayoutEngine
+    val paneLayout = EditorPaneLayoutEngine
       .calculateEditorPaneLayouts(state, layout)
       .getOrElse(paneId, fail("Expected pane layout"))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
@@ -191,7 +191,7 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
         )
       )
       val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
-      val paneRect = LayoutEngine
+      val paneRect = EditorPaneLayoutEngine
         .calculatePaneLayouts(state, layout)
         .getOrElse(paneId, fail("Expected pane layout"))
 

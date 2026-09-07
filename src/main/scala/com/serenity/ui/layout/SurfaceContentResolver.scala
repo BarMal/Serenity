@@ -2,8 +2,6 @@ package com.serenity.ui.layout
 
 import java.awt.Color
 
-import scala.annotation.unused
-
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -11,6 +9,14 @@ import com.serenity.ui.layout.*
 enum SurfaceRenderMode:
   case Floating
   case Pinned
+
+  /** A pinned surface paints its name in the frame chrome; a floating one has no title bar to paint it in, so every
+    * resolver drops the title it would otherwise supply. Lives on the mode itself because that is the only thing the
+    * answer depends on -- resolvers ask `mode.titleFor(...)` rather than routing through a shared helper.
+    */
+  def titleFor(title: String): Option[String] = this match
+    case Floating => None
+    case Pinned   => Some(title)
 
 enum OverlayTone:
   case Normal
@@ -60,9 +66,10 @@ final case class ResolvedSurfaceContent(
 )
 
 /** Turns a `SurfaceContent` into the plain overlay rows a renderer paints, independent of any particular render
-  * surface. The individual content kinds' resolution logic lives in sibling `*ContentResolver` objects in this package
-  * -- this file keeps only the dispatcher, the shared data model above, and the handful of helpers (`titleFor` chief
-  * among them) every one of those siblings calls back into.
+  * surface. This object is the dispatcher and the home of the handful of trivially-shaped content kinds; each of the
+  * substantial ones is resolved by its own `*ContentResolver` in this package, which the match below delegates to.
+  * Nothing in a sibling resolver reaches back here -- the data model above and `SurfaceRenderMode.titleFor` are what
+  * they share.
   */
 object SurfaceContentResolver:
 
@@ -90,12 +97,12 @@ object SurfaceContentResolver:
         )
       case SurfaceContent.FilePreview(path, content) =>
         ResolvedSurfaceContent(
-          titleFor(mode, s"Preview: ${path.getFileName}"),
+          mode.titleFor(s"Preview: ${path.getFileName}"),
           rows = content.linesIterator.take(4).toList.map(OverlayRow(_))
         )
       case SurfaceContent.SymbolDefinition(symbol, location) =>
         ResolvedSurfaceContent(
-          titleFor(mode, "symbol"),
+          mode.titleFor("symbol"),
           rows = List(
             OverlayRow(s"Symbol: $symbol"),
             OverlayRow(s"Line ${location.line + 1}, Col ${location.column + 1}")
@@ -161,23 +168,18 @@ object SurfaceContentResolver:
         PickerContentResolver.resolveContextMenu(menu, rect, mode, itemGapRows)
       case SurfaceContent.CommentLens(lens) =>
         ResolvedSurfaceContent(
-          title = titleFor(mode, "comment"),
+          title = mode.titleFor("comment"),
           header = Some(OverlayRow("comment")),
           rows = commentLensRows(lens)
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
-        ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
+        ResolvedSurfaceContent(title = mode.titleFor(s"Preview: $title"))
       case SurfaceContent.CompanionSprite =>
         // Painted directly by Renderer's dedicated companion-sprite paint step (surface.pixels.drawImage), not
         // through this cell-text path -- see the doc comment on SurfaceContent.CompanionSprite.
         ResolvedSurfaceContent()
       case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
         resolve(originalContent, cachedRect, mode, itemGapRows)
-
-  private[layout] def titleFor(mode: SurfaceRenderMode, title: String): Option[String] =
-    mode match
-      case SurfaceRenderMode.Floating => None
-      case SurfaceRenderMode.Pinned   => Some(title)
 
   private def commentLensRows(lens: CommentLensState): List[OverlayRow] =
     val (cursorLine, cursorColumn) = lineAndColumnAt(lens.draft, lens.clampedCursor)
@@ -200,14 +202,6 @@ object SurfaceContentResolver:
       case ((line, col), _)  => (line, col + 1)
     }
 
-  def resolveContextualToolbar(
-    toolbarState: ContextualToolbarState,
-    state: AppState,
-    rect: LayoutRect,
-    @unused mode: SurfaceRenderMode
-  ): ResolvedSurfaceContent =
-    ContextualToolbarContentResolver.resolve(toolbarState, state, rect, mode)
-
   def resolveMarkdownPreview(
     title: String,
     content: String,
@@ -223,6 +217,6 @@ object SurfaceContentResolver:
         .map(OverlayRow(_))
         .toList
     ResolvedSurfaceContent(
-      title = titleFor(mode, s"Preview: $title"),
+      title = mode.titleFor(s"Preview: $title"),
       rows = rows
     )
