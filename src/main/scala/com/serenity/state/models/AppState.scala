@@ -40,7 +40,7 @@ final case class AppState(
 
   /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = persisted.config.languageToolsConfig.syntaxHighlightingEnabled
-  def isValid: Boolean                   = validationErrors.isEmpty
+  def isValid: Boolean                   = AppStateValidation.validationErrors(this).isEmpty
 
   /** Cursor position for the currently active editor pane, if any. */
   def activeCursorPosition: Option[CursorPosition] =
@@ -389,10 +389,6 @@ final case class AppState(
       else
         val prevIndex = (currentIndex - 1 + persisted.bufferOrder.size) % persisted.bufferOrder.size
         Some(persisted.bufferOrder(prevIndex))
-
-  def validationErrors: List[String] = AppStateValidation.validationErrors(this)
-
-  def validated: Either[List[String], AppState] = AppStateValidation.validated(this)
 
 object AppState:
 
