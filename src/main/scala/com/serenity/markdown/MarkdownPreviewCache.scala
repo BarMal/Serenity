@@ -8,9 +8,8 @@ import scala.util.hashing.MurmurHash3
 import com.serenity.ui.theme.Theme
 
 /** Bounded render caches backing [[MarkdownDocumentPreview]], split out so the rendering logic itself isn't buried
-  * under cache bookkeeping. Every cache here is a plain size-bounded LRU (`LinkedHashMap` in access-order mode),
-  * keyed on a fingerprint of its input rather than the input itself, so repeated renders of unchanged content are
-  * free.
+  * under cache bookkeeping. Every cache here is a plain size-bounded LRU (`LinkedHashMap` in access-order mode), keyed
+  * on a fingerprint of its input rather than the input itself, so repeated renders of unchanged content are free.
   */
 private[markdown] object MarkdownPreviewCache:
 

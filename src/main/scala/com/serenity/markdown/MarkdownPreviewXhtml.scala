@@ -11,14 +11,17 @@ import org.commonmark.Extension
 import org.commonmark.node.Image
 import org.commonmark.renderer.html.*
 
-/** Assembles the XHTML document (and the CommonMark `HtmlRenderer` that resolves relative image sources within it)
-  * that [[MarkdownDocumentPreview]] hands to flying-saucer for layout, including the themed stylesheet shared by the
-  * panel preview and the inline Lens.
+/** Assembles the XHTML document (and the CommonMark `HtmlRenderer` that resolves relative image sources within it) that
+  * [[MarkdownDocumentPreview]] hands to flying-saucer for layout, including the themed stylesheet shared by the panel
+  * preview and the inline Lens.
   */
 private[markdown] object MarkdownPreviewXhtml:
 
-  def htmlRenderer(extensions: java.util.List[Extension], defaultRenderer: HtmlRenderer, baseUri: Option[URI])
-    : HtmlRenderer =
+  def htmlRenderer(
+    extensions: java.util.List[Extension],
+    defaultRenderer: HtmlRenderer,
+    baseUri: Option[URI]
+  ): HtmlRenderer =
     baseUri match
       case None => defaultRenderer
       case Some(uri) =>

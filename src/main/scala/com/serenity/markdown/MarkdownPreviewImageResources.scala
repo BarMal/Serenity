@@ -1,7 +1,7 @@
 package com.serenity.markdown
 
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font, RenderingHints}
+import java.awt.{Font, RenderingHints}
 import java.io.{ByteArrayInputStream, StringReader}
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
@@ -17,10 +17,10 @@ import org.xhtmlrenderer.resource.ImageResource
 import org.xhtmlrenderer.swing.{AWTFSImageFactory, ImageResourceLoader, SwingReplacedElementFactory}
 import org.xml.sax.InputSource
 
-/** Turns the XHTML fragment produced for a preview into a laid-out image, and guards every image reference the
-  * fragment can contain along the way: local files are confined to the preview's resource root (defeating symlink and
-  * `..` traversal), remote and data-URI images never reach flying-saucer's decoder, and oversized payloads are
-  * rejected before decoding.
+/** Turns the XHTML fragment produced for a preview into a laid-out image, and guards every image reference the fragment
+  * can contain along the way: local files are confined to the preview's resource root (defeating symlink and `..`
+  * traversal), remote and data-URI images never reach flying-saucer's decoder, and oversized payloads are rejected
+  * before decoding.
   */
 private[markdown] object MarkdownPreviewImageResources:
 

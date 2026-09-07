@@ -2,9 +2,9 @@ package com.serenity.markdown
 
 import com.serenity.markdown.MarkdownDocumentPreview.InlinePreviewLine
 
-/** Renders a run of Markdown table source lines as a closed box-drawing table for the inline Lens, and identifies
-  * which source lines make up such a run. Kept separate from the rest of the inline preview pipeline because table
-  * layout (column widths, borders) is its own self-contained concern.
+/** Renders a run of Markdown table source lines as a closed box-drawing table for the inline Lens, and identifies which
+  * source lines make up such a run. Kept separate from the rest of the inline preview pipeline because table layout
+  * (column widths, borders) is its own self-contained concern.
   */
 private[markdown] object MarkdownInlineTablePreview:
 

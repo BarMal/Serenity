@@ -1,7 +1,7 @@
 package com.serenity.markdown
 
-import java.awt.image.BufferedImage
 import java.awt.Font
+import java.awt.image.BufferedImage
 import java.net.URI
 
 import scala.jdk.CollectionConverters.*
@@ -58,7 +58,11 @@ object MarkdownDocumentPreview:
 
   def renderHtmlFragment(source: String, title: String, baseUri: Option[URI] = None): String =
     val key =
-      MarkdownPreviewCache.HtmlFragmentCacheKey(MarkdownPreviewCache.SourceFingerprint.from(source), title, baseUri.map(_.toString))
+      MarkdownPreviewCache.HtmlFragmentCacheKey(
+        MarkdownPreviewCache.SourceFingerprint.from(source),
+        title,
+        baseUri.map(_.toString)
+      )
     MarkdownPreviewCache.htmlFragmentCache
       .synchronized {
         Option(MarkdownPreviewCache.htmlFragmentCache.get(key))
@@ -464,7 +468,14 @@ object MarkdownDocumentPreview:
   ): String =
     val fragment =
       s"<div class=\"inline-rows\">${rows.map(MarkdownPreviewXhtml.inlineRowHtml(_, sourceLines)).mkString}</div>"
-    MarkdownPreviewXhtml.renderXhtmlFragment(fragment, title, theme, font, panelChrome = false, Some(inlineLineHeightPx))
+    MarkdownPreviewXhtml.renderXhtmlFragment(
+      fragment,
+      title,
+      theme,
+      font,
+      panelChrome = false,
+      Some(inlineLineHeightPx)
+    )
 
   private[markdown] def normalizeInline(text: String): String =
     val withoutImages = """!\[([^\]]*)\]\(([^)]+)\)""".r.replaceAllIn(

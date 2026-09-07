@@ -14,7 +14,6 @@ main/scala/com/serenity/config/AppConfig.scala	method parse	98
 main/scala/com/serenity/config/ConfigManager.scala	file length	652
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	224
 main/scala/com/serenity/config/ConfigRegistry.scala	file length	665
-main/scala/com/serenity/markdown/MarkdownDocumentPreview.scala	file length	986
 main/scala/com/serenity/rope/Rope.scala	file length	647
 main/scala/com/serenity/session/SessionState.scala	file length	1030
 main/scala/com/serenity/spellcheck/SpellChecker.scala	file length	905
