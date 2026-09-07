@@ -2,9 +2,16 @@ package com.serenity.config
 
 import com.serenity.animation.*
 
-/** [[AppConfig]]'s animation/motion/transition builder methods, split out to keep that file under the architecture
-  * ratchet's file-length target. [[AppConfig]]'s companion re-exports these as extension methods, so `config.withXxx`
-  * call sites elsewhere in the codebase see no difference.
+/** Motion, animation and transition operations on [[AppConfig]].
+  *
+  * Every one of these reads or writes the motion hierarchy -- the preset baseline, the per-family speeds and transition
+  * kinds, and the legacy fields that mirror them -- which is one concern of its own, distinct from the plain
+  * field-setting builders on [[AppConfig]] itself.
+  *
+  * These are extension methods in their own object rather than members of [[AppConfig]], so a call site reaches them by
+  * importing this object: `import com.serenity.config.AppConfigMotionOps.*`. Scala 3 resolves an unqualified extension
+  * method from lexical scope or from the receiver type's implicit scope, and this object is neither -- the import is
+  * the whole mechanism, and it also records which files depend on motion.
   */
 object AppConfigMotionOps:
 

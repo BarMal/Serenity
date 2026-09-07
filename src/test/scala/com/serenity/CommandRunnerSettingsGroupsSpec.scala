@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.command.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset

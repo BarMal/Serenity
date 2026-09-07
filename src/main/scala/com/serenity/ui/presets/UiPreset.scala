@@ -12,6 +12,7 @@ import java.util.concurrent.locks.ReentrantLock
 import cats.effect.IO
 import com.serenity.animation.TransitionKind
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.io.AtomicFileWriter
 import com.serenity.session.given
 import com.serenity.state.models.*

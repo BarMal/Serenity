@@ -8,6 +8,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
 import com.serenity.config.AppConfig
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.input.{InputRouter, SystemClipboard}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator

@@ -336,12 +336,6 @@ final case class AppConfig(
 
 object AppConfig:
 
-  /** Animation/motion/transition builder methods, split into [[AppConfigMotionOps]] to keep this file under the
-    * architecture ratchet's file-length target -- re-exported here so `config.withXxx` call sites elsewhere see no
-    * difference.
-    */
-  export AppConfigMotionOps.*
-
   val MinElementTransitionSpeedScale: Double  = 0.0
   val MaxElementTransitionSpeedScale: Double  = 4.0
   val MinUiElementGap: Double                 = 0.0

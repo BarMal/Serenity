@@ -1,5 +1,6 @@
 package com.serenity.ui.tui
 
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.CursorInfoBarSegment
 
 import TuiScenarios.*

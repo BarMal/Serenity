@@ -1,9 +1,10 @@
 package com.serenity.config
 
-/** The keys [[SurfaceConfig.Schema]] recognises: the current spelling of every surface setting, the older spellings
-  * still read, and every setting's full set of accepted keys. Split out of [[SurfaceConfig]] to keep that file under
-  * the architecture ratchet's file-length target -- [[SurfaceConfig.Schema]] re-exports these members, so callers see
-  * no difference.
+/** Which config-file keys name a surface setting: the current spelling of each one, the older spellings still read, and
+  * the per-setting key sets [[SurfaceConfigSchemaParser]] dispatches on.
+  *
+  * Vocabulary only -- nothing here parses a value. [[handles]] is what a caller asks before handing a key to
+  * [[SurfaceConfigSchemaParser.parse]].
   */
 object SurfaceConfigSchemaKeys:
 

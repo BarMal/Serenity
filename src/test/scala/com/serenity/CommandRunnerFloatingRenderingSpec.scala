@@ -7,6 +7,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
 import com.serenity.command.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, BackgroundStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*

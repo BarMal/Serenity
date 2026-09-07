@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.AppConfig
+import com.serenity.config.AppConfigMotionOps.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

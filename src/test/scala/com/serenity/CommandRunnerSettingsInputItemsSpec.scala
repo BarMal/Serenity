@@ -12,6 +12,7 @@ import com.serenity.command.{
   UiPresetsIntent
 }
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

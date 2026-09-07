@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.app.{AlphaMode, LaunchOptions}
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

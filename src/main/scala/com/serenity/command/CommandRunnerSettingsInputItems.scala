@@ -2,6 +2,7 @@ package com.serenity.command
 
 import com.serenity.animation.WindowSitterConfig
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 
 /** Builds the flat list of command-runner settings input items from the current config.
   *

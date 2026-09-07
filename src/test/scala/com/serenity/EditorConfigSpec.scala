@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

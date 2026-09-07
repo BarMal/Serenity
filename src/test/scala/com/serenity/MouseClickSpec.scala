@@ -2,6 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.TextAreaInsets
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId

@@ -7,6 +7,7 @@ import scala.concurrent.duration.DurationInt
 import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope, WindowSitterAction, WindowSitterConfig}
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader

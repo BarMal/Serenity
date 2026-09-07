@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.command.{Command, CommandCategory, CommandIntent, MotionIntent, SettingsIntent}
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionAccessibility, MotionPreset}
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager

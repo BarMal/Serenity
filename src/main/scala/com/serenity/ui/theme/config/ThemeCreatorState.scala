@@ -85,7 +85,7 @@ object ThemeCreatorState:
       selectedIndex = 0
     )
 
-  final private[config] case class Descriptor(
+  final private case class Descriptor(
       path: String,
       label: String,
       read: ThemeConfig => String,
@@ -93,7 +93,7 @@ object ThemeCreatorState:
       isColor: Boolean = true
   )
 
-  val descriptors: List[Descriptor] =
+  private val descriptors: List[Descriptor] =
     List(
       Descriptor("theme.name", "Theme Name", _.name, (config, value) => config.copy(name = value), isColor = false),
       Descriptor("ui.foreground", "Foreground", _.ui.foreground, updateUi((ui, value) => ui.copy(foreground = value))),
