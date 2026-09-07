@@ -538,6 +538,18 @@ class Java2DRenderSurface(
     g.drawImage(image, px, py, pw, ph, Java2DRenderSurface.NoOpImageObserver)
     g.setClip(savedClip)
 
+  /** Blit a whole-surface layer buffer straight onto this surface's backing image at device resolution, 1:1, bypassing
+    * `g`'s cell-grid geometry and its `deviceScale` transform entirely. The layer buffer is produced by [[forLayer]] at
+    * exactly this surface's own backing dimensions (`deviceImageDimension(logicalSize, deviceScale)`), so a raw
+    * device-pixel copy reproduces it exactly -- see [[PixelDrawing.compositeFullSurfaceLayer]] for why routing it
+    * through [[drawImage]] instead would shrink it a little per composite.
+    */
+  override def compositeFullSurfaceLayer(layerImage: BufferedImage): Unit =
+    val rawGraphics = image.createGraphics()
+    try
+      val _ = rawGraphics.drawImage(layerImage, 0, 0, Java2DRenderSurface.NoOpImageObserver)
+    finally rawGraphics.dispose()
+
   def hideCursor(): Unit = ()
 
   def viewportWidth: Int                 = effectiveLogicalWidthPx / metrics.charWidth
