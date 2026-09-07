@@ -5,9 +5,9 @@ import java.nio.file.Path
 import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.syntax.foldable.*
+import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
-import com.serenity.config.PreferredWindowSize
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}

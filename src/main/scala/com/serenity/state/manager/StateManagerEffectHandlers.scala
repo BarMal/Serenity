@@ -15,7 +15,6 @@ import com.serenity.rope.*
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
-import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ThemeConfigWriter
 
 /** Workflow operations selected by command effects. */
@@ -103,7 +102,6 @@ final private[manager] class StateManagerEffectHandlers(
   private val richTextEffects = new StateManagerRichTextEffects(stateRef)
 
   private val projectLspEffects = new StateManagerProjectLspEffects(
-    stateRef,
     lspQueue,
     projectTaskFiberRef,
     projectTaskSemaphore,
@@ -406,7 +404,9 @@ final private[manager] class StateManagerEffectHandlers(
               val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
               val resized =
                 focused.runtime.viewportSize
-                  .map(viewportSize => com.serenity.ui.layout.LayoutEngine.syncViewportDimensions(focused, viewportSize))
+                  .map(viewportSize =>
+                    com.serenity.ui.layout.LayoutEngine.syncViewportDimensions(focused, viewportSize)
+                  )
                   .getOrElse(focused)
               validateAndUpdateState(resized, state).as(loadedBuffer)
             }

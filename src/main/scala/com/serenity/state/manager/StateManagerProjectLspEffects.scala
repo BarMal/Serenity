@@ -4,8 +4,8 @@ import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
-import cats.effect.{Deferred, IO, Ref}
 import cats.effect.std.Semaphore
+import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.{LspIntent, ProjectIntent}
 import com.serenity.io.FileUtils
 import com.serenity.lsp.LspEffect
@@ -14,11 +14,10 @@ import com.serenity.project.*
 import com.serenity.state.models.*
 import fs2.Stream
 
-/** Project-task execution (run/cancel a detected build/test command, piping its output into a pinned terminal
-  * panel) and LSP request dispatch (hover/completion/definition) for the focused buffer.
+/** Project-task execution (run/cancel a detected build/test command, piping its output into a pinned terminal panel)
+  * and LSP request dispatch (hover/completion/definition) for the focused buffer.
   */
 final private[manager] class StateManagerProjectLspEffects(
-    stateRef: Ref[IO, AppState],
     lspQueue: LspEffectQueue,
     projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
     projectTaskSemaphore: Semaphore[IO],

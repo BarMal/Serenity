@@ -133,8 +133,7 @@ final private[manager] class StateManagerReplaceWorkflow(
                     surfaceId,
                     workflow.copy(statusMessage = Some("No matches found"))
                   )
-                else
-                  replaceNextMatch(surfaceId, workflow, state, bufferId, buffer, matches)
+                else replaceNextMatch(surfaceId, workflow, state, bufferId, buffer, matches)
           case None =>
             updateReplaceWorkflowSurface(
               surfaceId,

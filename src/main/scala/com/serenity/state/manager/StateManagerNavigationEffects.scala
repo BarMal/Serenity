@@ -7,8 +7,8 @@ import com.serenity.rope.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Symbol
 
-/** Document navigation (bookmarks, symbols, comments, back/forward history) and the comment-lens/annotation
-  * mutations that go with it.
+/** Document navigation (bookmarks, symbols, comments, back/forward history) and the comment-lens/annotation mutations
+  * that go with it.
   */
 final private[manager] class StateManagerNavigationEffects(
     stateRef: Ref[IO, AppState],
@@ -34,9 +34,7 @@ final private[manager] class StateManagerNavigationEffects(
   private[manager] def interpretNavigation(intent: NavigationIntent, state: AppState): IO[Unit] =
     intent match
       case NavigationIntent.OpenGotoLine =>
-        updateState(current =>
-          com.serenity.state.reducers.ModalStateReducer.show(Modal.GotoLine(""), current).state
-        )
+        updateState(current => com.serenity.state.reducers.ModalStateReducer.show(Modal.GotoLine(""), current).state)
       case NavigationIntent.ToggleBookmark =>
         toggleBookmark(state)
       case NavigationIntent.NextBookmark =>

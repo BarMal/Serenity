@@ -11,8 +11,8 @@ import com.serenity.ui.layout.LayoutEngine
 import org.typelevel.log4cats.Logger
 
 /** Open/Save-As file workflow mechanics: opening the dialog, suggesting paths, and completing an Open. Save-As
-  * completion stays with [[StateManagerWorkflowCapability]] because it must coordinate with an in-flight close
-  * workflow (Save before close).
+  * completion stays with [[StateManagerWorkflowCapability]] because it must coordinate with an in-flight close workflow
+  * (Save before close).
   */
 final private[manager] class StateManagerFileWorkflow(
     stateRef: Ref[IO, AppState],
@@ -21,7 +21,7 @@ final private[manager] class StateManagerFileWorkflow(
     validateAndUpdateState: (AppState, AppState) => IO[Unit],
     updateFileWorkflowSurface: (SurfaceId, FileWorkflowState) => IO[Unit],
     fileWorkflowSurface: (AppState, SurfaceId) => Option[(UiSurface, FileWorkflowState)]
-)(using balance: com.serenity.rope.Balance):
+):
 
   private def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)

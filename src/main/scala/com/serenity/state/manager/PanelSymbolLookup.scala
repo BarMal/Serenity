@@ -4,8 +4,8 @@ import com.serenity.document.{DocumentNavigation, DocumentOutline}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Location, Symbol}
 
-/** Pure symbol-list lookups shared by panel population (outline/comments panels), UI preset restoration, and
-  * symbol navigation -- kept dependency-free so none of those concerns need an IO port just to read them.
+/** Pure symbol-list lookups shared by panel population (outline/comments panels), UI preset restoration, and symbol
+  * navigation -- kept dependency-free so none of those concerns need an IO port just to read them.
   */
 private[manager] object PanelSymbolLookup:
 

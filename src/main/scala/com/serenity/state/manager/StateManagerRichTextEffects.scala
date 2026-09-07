@@ -5,8 +5,8 @@ import com.serenity.command.RichTextIntent
 import com.serenity.richtext.*
 import com.serenity.state.models.*
 
-/** Applies rich-text formatting commands (marks, font, color, paragraph role/alignment) to the active editor
-  * selection, materializing a plain-text buffer's `RichTextDocument` on first use.
+/** Applies rich-text formatting commands (marks, font, color, paragraph role/alignment) to the active editor selection,
+  * materializing a plain-text buffer's `RichTextDocument` on first use.
   */
 final private[manager] class StateManagerRichTextEffects(stateRef: Ref[IO, AppState]):
 

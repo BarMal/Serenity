@@ -41,9 +41,6 @@ final private[manager] class StateManagerWorkflowCapability(
 
   private def ensureCommandRunnerSurface(state: AppState): AppState = operations.ensureCommandRunnerSurface(state)
 
-  private def trackRecentFile(current: List[Path], path: Path): List[Path] =
-    (path :: current.filterNot(_ == path)).take(20)
-
   private val fileWorkflow = new StateManagerFileWorkflow(
     stateRef,
     logger,

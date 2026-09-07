@@ -61,12 +61,6 @@ final private[manager] class StateManagerConfigEffects(
   private def updateAppearanceConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
 
-  private def updateDocumentDefaultsConfig(update: AppConfig => AppConfig): IO[AppConfig] =
-    applyConfigUpdate(update)
-
-  private def updateAppModeConfig(update: AppConfig => AppConfig): IO[AppConfig] =
-    applyConfigUpdate(update)
-
   private def updateMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     stateRef.get.flatMap { previousState =>
       applyConfigUpdate(update).flatTap(cancelDisabledMotion(previousState.persisted.config, _))
@@ -508,7 +502,9 @@ final private[manager] class StateManagerConfigEffects(
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match
       case GeneralSettingsIntent.OpenSettings =>
-        editor.updateState(current => CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance))
+        editor.updateState(current =>
+          CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
+        )
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.persisted.config)
       case GeneralSettingsIntent.SetMaterialPreset(preset) =>

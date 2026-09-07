@@ -6,8 +6,8 @@ import com.serenity.io.FileUtils
 import com.serenity.state.models.*
 import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfigWriter}
 
-/** Floating popup surfaces triggered by commands or effects: the theme picker/creator, theme switching, theme
-  * export, and the file-search overlay.
+/** Floating popup surfaces triggered by commands or effects: the theme picker/creator, theme switching, theme export,
+  * and the file-search overlay.
   */
 final private[manager] class StateManagerSurfacePopupEffects(
     stateRef: Ref[IO, AppState],
