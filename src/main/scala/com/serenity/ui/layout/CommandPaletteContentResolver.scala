@@ -351,7 +351,12 @@ private[layout] object CommandPaletteContentResolver:
       layout = OverlayRowLayout.Columns
     )
 
-  private[layout] def inputRow(
+  /** Renders an `InputItem` (label, hint, and current/edited value) as a single overlay row. Shared with
+    * `ContextualToolbarContentResolver`, which uses it verbatim for the toolbar's own dropdown input detail row -- both
+    * resolvers need the same label/hint/value/cursor layout for an editable field, so this is that one definition
+    * rather than two that could drift.
+    */
+  def inputRow(
     item: CommandSurfaceItem.InputItem,
     selected: Boolean,
     editingText: Option[String]
