@@ -101,7 +101,7 @@ final class UiScenarioDriver private (
 
   def advanceToSettled(maxTicks: Int = 256): IO[Boolean] =
     def loop(remaining: Int): IO[Boolean] =
-      stateManager.advanceAnimationsOnTick().flatMap { active =>
+      stateManager.animationTicker.advanceAnimationsOnTick.flatMap { active =>
         if !active then IO.pure(true)
         else if remaining <= 0 then IO.pure(false)
         else loop(remaining - 1)

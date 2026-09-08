@@ -31,7 +31,7 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
   private val comment = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "A note about hello")
 
   private def withCommentedBuffer(sm: StateManager): BufferId =
-    val bufferId = sm.createBuffer("hello world").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello world", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       val buffer = state.persisted.buffers(bufferId)

@@ -31,7 +31,7 @@ final private[manager] class StateManagerWorkflowCapability(
   private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     operations.validateAndUpdateState(newState, fallbackState)
 
-  private def createNewEmptyBuffer(): IO[BufferId] = editor.createNewEmptyBuffer()
+  private def createNewEmptyBuffer(): IO[BufferId] = editor.bufferManager.createNewEmptyBuffer
 
   private def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
 

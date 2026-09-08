@@ -29,7 +29,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     // Create buffer with long text
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -97,7 +97,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
-    val bufferId     = stateManager.createBuffer("test").unsafeRunSync()
+    val bufferId     = stateManager.bufferManager.createBuffer("test", None).unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     val paneId       = initialState.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()

@@ -33,7 +33,6 @@ class ActualStartupFlowSpec extends AnyFlatSpec with Matchers:
       viewportSize = ViewportSize(80, 24)
       initialState <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize

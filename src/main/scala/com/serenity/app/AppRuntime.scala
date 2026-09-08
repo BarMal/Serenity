@@ -161,7 +161,6 @@ object AppRuntime:
         startupTheme <- AppStartup.startupTheme(stateManager.sessionStartupInfo, themeManager)
         initialState <- AppStartup.initializeState(
           stateManager,
-          stateManager.sessionService,
           stateManager.sessionStartupInfo,
           startupTheme,
           initialViewportSize,
@@ -235,6 +234,7 @@ object AppRuntime:
 
                 val fastPhase = fastRenderPhase(
                   stateManager,
+                  stateManager.animationTicker,
                   fastModeSignal,
                   pendingDamage,
                   pendingPaintDamage,
@@ -409,7 +409,8 @@ object AppRuntime:
     )
 
   private[serenity] def fastRenderPhase(
-    stateManager: StateReader & AnimationTicker,
+    stateManager: StateReader,
+    animationTicker: AnimationTicker,
     fastModeSignal: SignallingRef[IO, Boolean],
     pendingDamage: Ref[IO, Damage],
     pendingPaintDamage: Ref[IO, Damage],
@@ -442,7 +443,7 @@ object AppRuntime:
                 else
                   animationTickCadence.modify(_.advance(interval)).flatMap { animationTicks =>
                     withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
-                      advanceAnimationsForCadence(animationTicks, stateManager, pendingPaintDamage)
+                      advanceAnimationsForCadence(animationTicks, stateManager, animationTicker, pendingPaintDamage)
                     )
                   }
               state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
@@ -637,7 +638,8 @@ object AppRuntime:
 
   private def advanceAnimationsForCadence(
     ticks: Int,
-    stateManager: StateReader & AnimationTicker,
+    stateManager: StateReader,
+    animationTicker: AnimationTicker,
     pendingPaintDamage: Ref[IO, Damage]
   )(using balance: com.serenity.rope.Balance): IO[Boolean] =
     if ticks <= 0 then
@@ -650,7 +652,7 @@ object AppRuntime:
         before           <- stateManager.getCurrentState
         beforeAnimations <- stateManager.getBufferAnimations
         stillActive <- (0 until ticks).toList.foldLeft(IO.pure(false)) { (previous, _) =>
-          previous.flatMap(_ => stateManager.advanceAnimationsOnTick())
+          previous.flatMap(_ => animationTicker.advanceAnimationsOnTick)
         }
         after           <- stateManager.getCurrentState
         afterAnimations <- stateManager.getBufferAnimations

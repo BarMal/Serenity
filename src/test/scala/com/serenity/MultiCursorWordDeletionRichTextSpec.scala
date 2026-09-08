@@ -30,7 +30,7 @@ class MultiCursorWordDeletionRichTextSpec extends AnyFlatSpec with Matchers:
 
   "a merged multi-cursor word deletion" should "keep richTextDocument in sync with the edited content" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.createBuffer("alpha beta gamma").unsafeRunSync()
+    val bufferId     = stateManager.bufferManager.createBuffer("alpha beta gamma", None).unsafeRunSync()
     stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
 
     // Populate richText.richTextDocument the same way any authoring session would: format a selection.

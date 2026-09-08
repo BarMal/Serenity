@@ -277,7 +277,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.sessionPersistence,
         operations
       )
-      _             <- composition.pinOrUpdateTerminalPanel("Running build task...", PanelPosition.Bottom, 14)
+      _ <- composition.panelManager.pinOrUpdateTerminalPanel("Running build task...", PanelPosition.Bottom, 14)
       taskDestroyed <- Deferred[IO, Unit]
       taskStarted   <- Deferred[IO, Unit]
       taskFinished  <- Deferred[IO, Unit]

@@ -41,7 +41,9 @@ final private[manager] class StateManagerEditorCapability(
   ): IO[Unit] =
     bufferAnimationsRef.update(update)
 
-  def advanceAnimationsOnTick(): IO[Boolean] =
+  val animationTicker: AnimationTicker = AnimationTicker(advanceAnimationsOnTick = advanceAnimationsOnTick())
+
+  private def advanceAnimationsOnTick(): IO[Boolean] =
     for
       state            <- stateRef.get
       bufferAnimations <- bufferAnimationsRef.get
@@ -96,7 +98,13 @@ final private[manager] class StateManagerEditorCapability(
     key.line >= viewport.topLine && key.line < viewport.topLine + viewport.visibleLines &&
       key.column >= viewport.leftColumn && key.column < viewport.leftColumn + viewport.visibleColumns
 
-  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId] =
+  val bufferManager: BufferManager = BufferManager(
+    createBuffer = createBuffer,
+    createNewEmptyBuffer = createNewEmptyBuffer(),
+    updateBuffer = updateBuffer
+  )
+
+  private def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
     stateRef.modify { state =>
       val bufferId = state.runtime.nextBufferId
       val buffer =
@@ -114,10 +122,10 @@ final private[manager] class StateManagerEditorCapability(
       (newState, bufferId)
     }
 
-  def createNewEmptyBuffer(): IO[BufferId] =
+  private def createNewEmptyBuffer(): IO[BufferId] =
     stateRef.modify(state => EditorState.createNewEmptyBuffer(state)(using balance))
 
-  def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
+  private def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
     stateRef
       .modify { state =>
         state.persisted.buffers.get(bufferId) match

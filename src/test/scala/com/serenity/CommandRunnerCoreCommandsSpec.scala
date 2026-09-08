@@ -154,7 +154,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "execute clipboard and select-all editor commands" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.createBuffer("Hello World").unsafeRunSync()
+    val bufferId     = stateManager.bufferManager.createBuffer("Hello World", None).unsafeRunSync()
     stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     stateManager
       .updateState { state =>
@@ -531,7 +531,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val targetPath   = Files.createTempDirectory("serenity-unsaved-save").resolve("draft.txt")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
 
-    stateManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()
+    stateManager.bufferManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "save", "save")
 
@@ -605,7 +605,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "open an unsaved-changes workflow for the close-all command when any affected buffer is dirty" in {
     val stateManager  = createStateManager()
-    val dirtyBufferId = stateManager.createBuffer("dirty buffer").unsafeRunSync()
+    val dirtyBufferId = stateManager.bufferManager.createBuffer("dirty buffer", None).unsafeRunSync()
 
     stateManager
       .updateState { state =>
@@ -633,7 +633,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "open an unsaved-changes workflow for the close-others command when any other buffer is dirty" in {
     val stateManager  = createStateManager()
-    val dirtyBufferId = stateManager.createBuffer("dirty buffer").unsafeRunSync()
+    val dirtyBufferId = stateManager.bufferManager.createBuffer("dirty buffer", None).unsafeRunSync()
 
     stateManager
       .updateState { state =>
@@ -1692,14 +1692,14 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val bufferId     = BufferId(0)
     val viewportSize = ViewportSize(120, 40)
 
-    stateManager.updateBuffer(bufferId, "saved session").unsafeRunSync()
+    stateManager.bufferManager.updateBuffer(bufferId, "saved session").unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.isNewEmpty shouldBe false
 
     executeCommandThroughRunner(stateManager, "save-session", "save-session")
     stateManager.sessionStartupInfo.sessionExists.unsafeRunSync() shouldBe true
 
     stateManager.handleViewportResize(viewportSize).unsafeRunSync()
-    stateManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
+    stateManager.bufferManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "restore-session", "restore-session")
     val restoredState = stateManager.getCurrentState.unsafeRunSync()
@@ -1718,10 +1718,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val startupViewport = ViewportSize(120, 40)
     val savedViewport   = ViewportSize(80, 24)
 
-    savedManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
+    savedManager.bufferManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
     executeCommandThroughRunner(savedManager, "save-session", "save-session")
     AppStartup
-      .initializeState(restored, restored.sessionService, restored.sessionStartupInfo, Theme.default, startupViewport)
+      .initializeState(restored, restored.sessionStartupInfo, Theme.default, startupViewport)
       .unsafeRunSync()
     restored.applyEvent(MoveDown).unsafeRunSync()
     restored.applyEvent(MoveDown).unsafeRunSync()
@@ -1843,12 +1843,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "focus the left panel from the command runner" in {
-    val stateManager = createStateManager()
-    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
+    val sm = createStateManager()
+    sm.panelManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "focus-left-panel", "focus-left-panel")
+    executeCommandThroughRunner(sm, "focus-left-panel", "focus-left-panel")
 
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val updatedState = sm.getCurrentState.unsafeRunSync()
     updatedState.persisted.focus shouldBe a[Focus.Surface]
     val focusedId = updatedState.persisted.focus match
       case Focus.Surface(id) => id
@@ -1857,12 +1857,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "unpin the left panel from the command runner" in {
-    val stateManager = createStateManager()
-    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
+    val sm = createStateManager()
+    sm.panelManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "unpin-left-panel", "unpin-left-panel")
+    executeCommandThroughRunner(sm, "unpin-left-panel", "unpin-left-panel")
 
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val updatedState = sm.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces.exists {
       _.presentation match
         case com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _) => true

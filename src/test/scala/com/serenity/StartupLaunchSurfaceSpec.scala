@@ -100,7 +100,6 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     AppStartup
       .initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         Theme.default,
         viewport
@@ -142,7 +141,6 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     AppStartup
       .initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         Theme.default,
         viewport

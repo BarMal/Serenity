@@ -36,7 +36,6 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       viewportSize = ViewportSize(80, 24)
       _ <- AppStartup.initializeState(
         stateManager1,
-        stateManager1.sessionService,
         stateManager1.sessionStartupInfo,
         theme,
         viewportSize
@@ -58,7 +57,6 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       )
       _ <- AppStartup.initializeState(
         stateManager3,
-        stateManager3.sessionService,
         stateManager3.sessionStartupInfo,
         theme,
         viewportSize
@@ -92,7 +90,6 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
 
       _ <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -146,7 +143,6 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       stateManager <- createStateManagerIO("StartupOptionsEndToEndSpec-workflow")
       _ <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         Theme.default,
         ViewportSize(80, 24)

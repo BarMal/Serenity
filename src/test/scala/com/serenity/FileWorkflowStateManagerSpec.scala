@@ -48,7 +48,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -92,7 +92,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         }
         .unsafeRunSync()
 
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -149,7 +149,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         }
         .unsafeRunSync()
 
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -220,7 +220,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       val stateManager = createStateManager()
       val initialState = stateManager.getCurrentState.unsafeRunSync()
 
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -253,7 +253,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -282,7 +282,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -313,7 +313,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -339,7 +339,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "avoid filesystem suggestions while editing a remote storage URI" in {
     val stateManager = createStateManager()
-    stateManager
+    stateManager.modalService
       .showModal(
         Modal.FileWorkflow(
           FileWorkflowState(
@@ -364,7 +364,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -385,7 +385,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "keep the modal open and surface a visible status when open target is remote storage" in {
     val stateManager = createStateManager()
-    stateManager
+    stateManager.modalService
       .showModal(
         Modal.FileWorkflow(
           FileWorkflowState(
@@ -415,7 +415,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
-    stateManager
+    stateManager.modalService
       .showModal(
         Modal.FileWorkflow(
           FileWorkflowState(
@@ -452,7 +452,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
         }
         .unsafeRunSync()
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(

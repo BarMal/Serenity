@@ -31,7 +31,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
 
   private def selectedStateManager(text: String, selection: Selection): (StateManager, BufferId) =
     val stateManager = createStateManager()
-    val bufferId     = stateManager.createBuffer(text).unsafeRunSync()
+    val bufferId     = stateManager.bufferManager.createBuffer(text, None).unsafeRunSync()
     stateManager.setBufferForPane(com.serenity.state.models.PaneId(0), bufferId).unsafeRunSync()
     stateManager
       .updateState { state =>
@@ -110,7 +110,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
 
   it should "apply a toggled mark at the cursor to subsequently entered text" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.createBuffer("alpha").unsafeRunSync()
+    val bufferId     = stateManager.bufferManager.createBuffer("alpha", None).unsafeRunSync()
     stateManager.setBufferForPane(com.serenity.state.models.PaneId(0), bufferId).unsafeRunSync()
     stateManager
       .updateState { state =>
@@ -157,7 +157,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
 
   it should "apply heading roles to the active cursor paragraph" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.createBuffer("Chapter One\nBody").unsafeRunSync()
+    val bufferId     = stateManager.bufferManager.createBuffer("Chapter One\nBody", None).unsafeRunSync()
     stateManager.setBufferForPane(com.serenity.state.models.PaneId(0), bufferId).unsafeRunSync()
     stateManager
       .updateState { state =>
@@ -291,7 +291,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
 
   it should "make formatted rich text headings available to document navigation" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.createBuffer("Chapter One\nBody").unsafeRunSync()
+    val bufferId     = stateManager.bufferManager.createBuffer("Chapter One\nBody", None).unsafeRunSync()
     stateManager.setBufferForPane(com.serenity.state.models.PaneId(0), bufferId).unsafeRunSync()
     stateManager
       .updateState { state =>

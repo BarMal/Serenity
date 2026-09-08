@@ -151,8 +151,7 @@ object AppStartup:
 
   /** Initialize the application state for first render using the active theme and current viewport size. */
   def initializeState(
-    stateManager: StateUpdater & StateReader & FileOpener,
-    sessionService: SessionService,
+    stateManager: StateManager,
     sessionStartupInfo: SessionStartupInfo,
     theme: Theme,
     initialViewportSize: ViewportSize,
@@ -179,13 +178,13 @@ object AppStartup:
               )
             )
           }
-          _     <- stateManager.openFile(path)
+          _     <- stateManager.fileOpener.openFile(path)
           state <- stateManager.getCurrentState
         yield state
       case None =>
         for
           startState <- startPageState(
-            sessionService,
+            stateManager.sessionService,
             sessionStartupInfo,
             theme,
             initialViewportSize,

@@ -128,7 +128,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       state.runtime.themeTransition shouldBe None
       state.runtime.surfaceAnimations shouldBe Map.empty
       state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
-      sm.advanceAnimationsOnTick().unsafeRunSync() shouldBe false
+      sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync() shouldBe false
     }
 
   it should "cancel only editor animations when the editor text family is disabled" in {
@@ -207,7 +207,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val surfaceId = state0.commandRunnerSurface.get.id
     val fadeLen   = state0.runtime.surfaceAnimations(surfaceId).bufferFadeLength
 
-    (1 to fadeLen).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
+    (1 to fadeLen).foreach(_ => sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync())
 
     val state1 = sm.getCurrentState.unsafeRunSync()
     state1.runtime.surfaceAnimations.get(surfaceId).map(_.phase) shouldBe Some(SurfacePhase.Visible)
@@ -220,7 +220,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val surfId  = state0.commandRunnerSurface.get.id
     val fadeLen = state0.runtime.surfaceAnimations(surfId).bufferFadeLength
 
-    (1 to fadeLen).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
+    (1 to fadeLen).foreach(_ => sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync())
 
     val state1 = sm.getCurrentState.unsafeRunSync()
     val anim   = state1.runtime.surfaceAnimations(surfId)
@@ -292,7 +292,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val openedState = sm.getCurrentState.unsafeRunSync()
     val surfaceId   = openedState.commandRunnerSurface.get.id
 
-    (1 to 3).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
+    (1 to 3).foreach(_ => sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync())
 
     val partialState       = sm.getCurrentState.unsafeRunSync()
     val partialFadeCell    = partialState.runtime.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
@@ -320,7 +320,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val ghost = closingState.runtime.uiSurfaces
       .find(_.content.isInstanceOf[SurfaceContent.GhostOverlay])
       .getOrElse(fail("Expected exiting command runner ghost"))
-    sm.advanceAnimationsOnTick().unsafeRunSync()
+    sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
     val ghostBackground = sm.getCurrentState
       .unsafeRunSync()
       .runtime
@@ -348,7 +348,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     // Advance far enough to exhaust exiting animation
-    (1 to 60).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
+    (1 to 60).foreach(_ => sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync())
 
     val state = sm.getCurrentState.unsafeRunSync()
     state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
@@ -393,7 +393,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val state0  = sm.getCurrentState.unsafeRunSync()
     val surfId  = state0.commandRunnerSurface.get.id
     val fadeLen = state0.runtime.surfaceAnimations.get(surfId).map(_.bufferFadeLength).getOrElse(0)
-    (1 to (fadeLen + 1)).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
+    (1 to (fadeLen + 1)).foreach(_ => sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync())
 
   // issue #931: category tabs are retired -- switching to a "Settings category" no longer browses settings groups.
   // "Open Settings" is the first item in a freshly opened, unsearched palette, so running it (Enter) is the one
@@ -403,4 +403,4 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
   private def clearBufferAnimations(sm: StateManager): Unit =
     // Advance until all buffer animations are complete
-    (1 to 30).foreach(_ => sm.advanceAnimationsOnTick().unsafeRunSync())
+    (1 to 30).foreach(_ => sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync())

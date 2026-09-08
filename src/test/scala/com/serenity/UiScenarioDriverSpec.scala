@@ -69,7 +69,6 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       AppStartup
         .initializeState(
           startupDriver.stateManager,
-          startupDriver.stateManager.sessionService,
           startupDriver.stateManager.sessionStartupInfo,
           theme,
           narrowEnvironment.viewport
@@ -159,7 +158,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
 
   private def setDocument(driver: UiScenarioDriver, content: String, language: LanguageId): Unit =
     val bufferId = driver.state.unsafeRunSync().focusedBufferId.getOrElse(fail("Expected a focused scenario buffer"))
-    driver.stateManager.updateBuffer(bufferId, content).unsafeRunSync()
+    driver.stateManager.bufferManager.updateBuffer(bufferId, content).unsafeRunSync()
     driver
       .updateState { state =>
         val buffer = state.persisted.buffers(bufferId)

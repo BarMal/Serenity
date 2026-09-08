@@ -37,9 +37,12 @@ trait StateUpdater:
   def updateState(update: AppState => AppState): IO[Unit]
   def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]
 
-/** Advances renderer-visible animation state. */
-trait AnimationTicker:
-  def advanceAnimationsOnTick(): IO[Boolean]
+/** Advances renderer-visible animation state.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class AnimationTicker(advanceAnimationsOnTick: IO[Boolean])
 
 /** Owns application shutdown and periodic session persistence.
   *
@@ -73,9 +76,12 @@ final case class SessionStartupInfo(
     sessionExists: IO[Boolean]
 )
 
-/** Opens a file into editor state. */
-trait FileOpener:
-  def openFile(filePath: Path): IO[Unit]
+/** Opens a file into editor state.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class FileOpener(openFile: Path => IO[Unit])
 
 /** Executes editor commands.
   *
@@ -91,11 +97,17 @@ final case class CommandExecutor(executeCommand: Command => IO[Unit])
   */
 final case class FocusManager(switchFocus: Focus => IO[Unit])
 
-/** Manages editor buffers. */
-trait BufferManager:
-  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
-  def createNewEmptyBuffer(): IO[BufferId]
-  def updateBuffer(bufferId: BufferId, content: String): IO[Unit]
+/** Manages editor buffers.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly. The former default on `createBuffer`'s `filePath`
+  * parameter can't survive as a case class field, so callers now pass `None` explicitly.
+  */
+final case class BufferManager(
+    createBuffer: (String, Option[Path]) => IO[BufferId],
+    createNewEmptyBuffer: IO[BufferId],
+    updateBuffer: (BufferId, String) => IO[Unit]
+)
 
 /** Manages editor panes, tabs, and splits. */
 trait PaneManager:
@@ -104,11 +116,16 @@ trait PaneManager:
   def switchToPane(paneId: PaneId): IO[Unit]
   def getTabOrder(): IO[List[PaneId]]
 
-/** Manages transient peek surfaces. */
-trait PeekManager:
-  def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
-  def dismissPeek(): IO[Unit]
-  def peekToPin(position: PanelPosition): IO[Unit]
+/** Manages transient peek surfaces.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class PeekManager(
+    showPeek: (PeekContent, CursorPosition) => IO[Unit],
+    dismissPeek: () => IO[Unit],
+    peekToPin: PanelPosition => IO[Unit]
+)
 
 /** Manages persisted editor sessions.
   *
@@ -121,33 +138,49 @@ final case class SessionService(
     clearSession: IO[Unit]
 )
 
-/** Manages pinned panels and the file explorer. */
-trait PanelManager:
-  def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
-  def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit]
-  def unpinPanel(target: PanelTarget): IO[Unit]
-  def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit]
-  def expandPinnedPanel(target: PanelTarget): IO[Unit]
-  def collapseExpandedPanel(): IO[Unit]
-  def switchToPinnedPanel(target: PanelTarget): IO[Unit]
-  def loadDirectoryTree(path: Path, files: List[String]): IO[Unit]
-  def selectFileInExplorer(filePath: Path): IO[Unit]
-  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit]
-  def dragFileToDirectory(sourceFile: Path, targetDir: Path): IO[Unit]
+/** Manages pinned panels and the file explorer.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class PanelManager(
+    pinPanel: (PanelContent, PanelPosition, Int) => IO[Unit],
+    pinOrUpdateTerminalPanel: (String, PanelPosition, Int) => IO[Unit],
+    unpinPanel: PanelTarget => IO[Unit],
+    movePinnedPanel: (SurfaceId, PanelPosition) => IO[Unit],
+    expandPinnedPanel: PanelTarget => IO[Unit],
+    collapseExpandedPanel: () => IO[Unit],
+    switchToPinnedPanel: PanelTarget => IO[Unit],
+    loadDirectoryTree: (Path, List[String]) => IO[Unit],
+    selectFileInExplorer: Path => IO[Unit],
+    resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
+    dragFileToDirectory: (Path, Path) => IO[Unit]
+)
 
-/** Manages modal surfaces. */
-trait ModalService:
-  def showModal(modal: Modal): IO[Unit]
-  def dismissModal(): IO[Unit]
+/** Manages modal surfaces.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class ModalService(
+    showModal: Modal => IO[Unit],
+    dismissModal: () => IO[Unit]
+)
 
-/** Manages buffer file paths and persistence. */
-trait FileService:
-  def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit]
-  def saveBuffer(bufferId: BufferId): IO[Unit]
-  def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit]
-  def markBufferSaved(bufferId: BufferId): IO[Unit]
-  def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean]
-  def getRecentFiles: IO[List[Path]]
+/** Manages buffer file paths and persistence.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly. Case class fields can't carry default parameter values,
+  * so `checkUnsavedChanges` takes `Option[BufferId]` rather than defaulting it to `None`.
+  */
+final case class FileService(
+    setBufferFilePath: (BufferId, Path) => IO[Unit],
+    saveBuffer: BufferId => IO[Unit],
+    saveBufferAs: (BufferId, Path) => IO[Unit],
+    markBufferSaved: BufferId => IO[Unit],
+    checkUnsavedChanges: Option[BufferId] => IO[Boolean],
+    getRecentFiles: IO[List[Path]]
+)
 
 /** Controls editor viewport scrolling.
   *
@@ -162,18 +195,7 @@ final case class ScrollManager(
     clickMinimap: (PaneId, Int) => IO[Unit]
 )
 
-trait StateManager
-    extends EventApplier,
-      StateReader,
-      StateUpdater,
-      AnimationTicker,
-      FileOpener,
-      BufferManager,
-      PaneManager,
-      PeekManager,
-      PanelManager,
-      ModalService,
-      FileService:
+trait StateManager extends EventApplier, StateReader, StateUpdater, PaneManager:
   def scrollManager: ScrollManager
   def sessionStartupInfo: SessionStartupInfo
   def focusManager: FocusManager
@@ -181,6 +203,13 @@ trait StateManager
   def runtimeLifecycle: RuntimeLifecycle
   def commandExecutor: CommandExecutor
   def sessionService: SessionService
+  def animationTicker: AnimationTicker
+  def bufferManager: BufferManager
+  def peekManager: PeekManager
+  def panelManager: PanelManager
+  def modalService: ModalService
+  def fileOpener: FileOpener
+  def fileService: FileService
 
 object StateManager:
 

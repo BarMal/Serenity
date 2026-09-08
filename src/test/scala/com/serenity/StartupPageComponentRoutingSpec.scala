@@ -33,7 +33,6 @@ class StartupPageComponentRoutingSpec extends AnyFlatSpec with Matchers:
       // Initialize startup state
       initialState <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize

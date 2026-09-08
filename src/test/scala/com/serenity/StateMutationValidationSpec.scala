@@ -46,7 +46,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
       Files.writeString(tempFile, "loaded from disk")
 
       val before = stateManager.getCurrentState.unsafeRunSync()
-      stateManager.openFile(tempFile).unsafeRunSync()
+      stateManager.fileOpener.openFile(tempFile).unsafeRunSync()
       val after = stateManager.getCurrentState.unsafeRunSync()
 
       after.isValid shouldBe true
@@ -74,7 +74,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         // Open the modal on an untouched, valid state -- the drift is introduced only after the modal is showing,
         // mirroring the many other unchecked `Ref.update` paths elsewhere in this codebase that could plausibly
         // desync `nextBufferId` between a validated commit and this workflow's own completion.
-        stateManager
+        stateManager.modalService
           .showModal(
             Modal.FileWorkflow(
               FileWorkflowState(mode = FileWorkflowMode.Open, filename = "notes.scala", path = tempRoot.toString)

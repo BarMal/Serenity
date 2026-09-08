@@ -50,7 +50,6 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       )
       firstInitial <- AppStartup.initializeState(
         firstManager,
-        firstManager.sessionService,
         firstManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -85,7 +84,6 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,
-        secondManager.sessionService,
         secondManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -129,7 +127,6 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       )
       firstInitial <- AppStartup.initializeState(
         firstManager,
-        firstManager.sessionService,
         firstManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -149,7 +146,6 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,
-        secondManager.sessionService,
         secondManager.sessionStartupInfo,
         theme,
         viewportSize,

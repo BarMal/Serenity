@@ -36,7 +36,6 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
       _ <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -73,7 +72,6 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
       _ <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -101,7 +99,6 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
       _ <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -127,7 +124,6 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
       _ <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize

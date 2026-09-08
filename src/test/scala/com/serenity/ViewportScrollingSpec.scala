@@ -29,7 +29,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -82,7 +82,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -133,7 +133,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -173,7 +173,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -226,7 +226,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -264,7 +264,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -298,7 +298,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     // cursor jump exercises the recentring math directly.
     val paragraph  = List.fill(30)("word").mkString(" ")
     val paragraphs = List.fill(6)(paragraph) :+ "end"
-    val bufferId   = stateManager.createBuffer(paragraphs.mkString("\n")).unsafeRunSync()
+    val bufferId   = stateManager.bufferManager.createBuffer(paragraphs.mkString("\n"), None).unsafeRunSync()
     val state      = stateManager.getCurrentState.unsafeRunSync()
     val paneId     = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -336,7 +336,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -379,7 +379,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -414,7 +414,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("Initial text").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("Initial text", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()

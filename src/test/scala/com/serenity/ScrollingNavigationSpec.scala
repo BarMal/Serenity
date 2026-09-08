@@ -34,7 +34,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       sm <- IO.pure(makeStateManager())
       // Given: Large file with many lines
       largeContent <- IO.pure((1 to 1000).map(i => s"Line $i with some content").mkString("\n"))
-      bufferId     <- sm.createBuffer(largeContent)
+      bufferId     <- sm.bufferManager.createBuffer(largeContent, None)
       state        <- sm.getCurrentState
       paneId       <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _            <- sm.setBufferForPane(paneId, bufferId)
@@ -74,7 +74,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
           "C" * 300
         ).mkString("\n")
       )
-      bufferId <- sm.createBuffer(wideContent)
+      bufferId <- sm.bufferManager.createBuffer(wideContent, None)
       state    <- sm.getCurrentState
       paneId   <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _        <- sm.setBufferForPane(paneId, bufferId)
@@ -116,7 +116,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
           current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false))
         )
       )
-      bufferId <- sm.createBuffer("iiiiiiiiWW")
+      bufferId <- sm.bufferManager.createBuffer("iiiiiiiiWW", None)
       state    <- sm.getCurrentState
       paneId   <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _        <- sm.setBufferForPane(paneId, bufferId)
@@ -155,7 +155,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
           current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false))
         )
       )
-      bufferId <- sm.createBuffer("iiiiiiiiWW")
+      bufferId <- sm.bufferManager.createBuffer("iiiiiiiiWW", None)
       state    <- sm.getCurrentState
       paneId   <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _        <- sm.setBufferForPane(paneId, bufferId)
@@ -202,7 +202,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
   it should "handle mouse wheel scrolling" in new ScrollFixture:
     // Given: File with content
     val content  = (1 to 100).map(i => s"Line $i").mkString("\n")
-    val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val paneId = state.persisted.layout.editorPanes.keys.head
@@ -233,7 +233,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
   it should "handle smooth scrolling animations" in new ScrollFixture:
     // Given: File with content
     val content  = (1 to 50).map(i => s"Line $i").mkString("\n")
-    val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val paneId = state.persisted.layout.editorPanes.keys.head
@@ -274,7 +274,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
   it should "handle goto line functionality" in new ScrollFixture:
     // Given: Large file
     val content  = (1 to 500).map(i => s"Line $i content").mkString("\n")
-    val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val paneId = state.persisted.layout.editorPanes.keys.head
@@ -314,7 +314,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
         else s"Line $i normal content"
       }
       .mkString("\n")
-    val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val paneId = state.persisted.layout.editorPanes.keys.head
@@ -360,7 +360,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
   it should "handle viewport synchronization across split panes" in new ScrollFixture:
     // Given: Same file in multiple panes
     val content  = (1 to 100).map(i => s"Line $i").mkString("\n")
-    val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     val pane1 = state.persisted.layout.editorPanes.keys.head
@@ -393,7 +393,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
   it should "handle minimap scrolling and navigation" in new ScrollFixture:
     // Given: Large file with minimap enabled
     val content  = (1 to 1000).map(i => s"Line $i").mkString("\n")
-    val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val paneId = state.persisted.layout.editorPanes.keys.head
@@ -423,7 +423,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
   it should "handle edge cases with scrolling bounds" in new ScrollFixture:
     // Given: Small file
     val content  = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
-    val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
 
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val paneId = state.persisted.layout.editorPanes.keys.head

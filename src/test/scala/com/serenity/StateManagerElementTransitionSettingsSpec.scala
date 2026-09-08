@@ -438,8 +438,8 @@ class StateManagerElementTransitionSettingsSpec extends AnyFlatSpec with Matcher
       .unsafeRunSync()
 
     val firstBufferId = stateManager.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
-    stateManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
-    val secondBufferId = stateManager.createBuffer("Second").unsafeRunSync()
+    stateManager.bufferManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
+    val secondBufferId = stateManager.bufferManager.createBuffer("Second", None).unsafeRunSync()
     stateManager
       .updateBufferAnimations { animations =>
         val current = animations.getOrElse(secondBufferId, com.serenity.animation.AnimationState.empty)

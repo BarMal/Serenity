@@ -32,7 +32,6 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       // Initialize startup state
       initialState <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -108,7 +107,6 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       )
       firstInitial <- AppStartup.initializeState(
         firstManager,
-        firstManager.sessionService,
         firstManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -130,7 +128,6 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,
-        secondManager.sessionService,
         secondManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -175,7 +172,6 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       )
       _ <- AppStartup.initializeState(
         firstManager,
-        firstManager.sessionService,
         firstManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -199,7 +195,6 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,
-        secondManager.sessionService,
         secondManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -249,7 +244,6 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       // Initialize startup state
       initialState <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize
@@ -277,7 +271,6 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
 
       initialState <- AppStartup.initializeState(
         stateManager,
-        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewportSize

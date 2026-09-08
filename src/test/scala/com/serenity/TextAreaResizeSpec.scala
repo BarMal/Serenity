@@ -20,8 +20,8 @@ class TextAreaResizeSpec extends AnyFlatSpec with Matchers with StateManagerTest
         )
       )
       .unsafeRunSync()
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 10).unsafeRunSync()
-    stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 20).unsafeRunSync()
+    stateManager.panelManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 10).unsafeRunSync()
+    stateManager.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 20).unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
 
     val before       = stateManager.getCurrentState.unsafeRunSync()
