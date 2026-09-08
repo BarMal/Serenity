@@ -377,7 +377,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     stateManager.setPaneProperties(pane2, _.copy(syncedScrolling = true)).unsafeRunSync() // ← Only set syncedScrolling
 
     // When: Scroll in first pane
-    stateManager.switchToPane(pane1).unsafeRunSync()
+    stateManager.paneManager.switchToPane(pane1).unsafeRunSync()
     stateManager.applyEvent(ScrollDown(10)).unsafeRunSync()
 
     // Then: Both panes should scroll if synchronized

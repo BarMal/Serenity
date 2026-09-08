@@ -33,7 +33,7 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
       _ <- stateManager.applyEvent(InsertChar('o'))
 
       // Set terminal size for testing
-      _ <- stateManager.handleViewportResize(ViewportSize(80, 24))
+      _ <- stateManager.paneManager.handleViewportResize(ViewportSize(80, 24))
 
       // Activate command runner
       _ <- stateManager.applyEvent(ToggleCommandRunner)
@@ -71,7 +71,7 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Set terminal size for consistent testing
-      _ <- stateManager.handleViewportResize(ViewportSize(80, 24))
+      _ <- stateManager.paneManager.handleViewportResize(ViewportSize(80, 24))
 
       // Create a buffer with multiple lines and position cursor in the middle
       _ <- stateManager.applyEvent(InsertChar('L'))

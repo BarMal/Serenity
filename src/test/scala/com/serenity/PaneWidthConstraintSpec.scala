@@ -184,7 +184,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     narrowState.persisted.buffers should have size 2
     narrowState.persisted.layout.editorPanes should have size 1
 
-    stateManager.handleViewportResize(wideTerminal).unsafeRunSync()
+    stateManager.paneManager.handleViewportResize(wideTerminal).unsafeRunSync()
 
     val widenedState = stateManager.getCurrentState.unsafeRunSync()
     widenedState.persisted.layout.editorPanes.keySet shouldBe narrowState.persisted.layout.editorPanes.keySet
@@ -215,7 +215,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
         .count(rect => rect.x >= wideLayout.editorPanelRect.x && rect.right <= wideLayout.editorPanelRect.right)
     visibleWidePanes.should(be >= 2)
 
-    stateManager.handleViewportResize(narrowTerminal).unsafeRunSync()
+    stateManager.paneManager.handleViewportResize(narrowTerminal).unsafeRunSync()
 
     val narrowState  = stateManager.getCurrentState.unsafeRunSync()
     val narrowLayout = LayoutEngine.calculateLayout(narrowState, narrowTerminal)
@@ -227,7 +227,7 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     visibleNarrowPanes.shouldBe(2)
     narrowState.persisted.layout.editorPanes.keySet shouldBe paneIds
 
-    stateManager.handleViewportResize(wideTerminal).unsafeRunSync()
+    stateManager.paneManager.handleViewportResize(wideTerminal).unsafeRunSync()
 
     val restoredState  = stateManager.getCurrentState.unsafeRunSync()
     val restoredLayout = LayoutEngine.calculateLayout(restoredState, wideTerminal)

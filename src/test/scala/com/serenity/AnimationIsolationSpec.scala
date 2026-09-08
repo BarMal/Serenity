@@ -53,7 +53,7 @@ class AnimationIsolationSpec extends AnyFlatSpec with Matchers:
     val buffer2Id      = twoBufferState.persisted.bufferOrder.last
     val originalPaneId = twoBufferState.persisted.layout.activeEditorPaneId.get
     stateManager.splitPaneHorizontal(originalPaneId, Some(buffer1Id)).unsafeRunSync()
-    stateManager.switchToPane(originalPaneId).unsafeRunSync()
+    stateManager.paneManager.switchToPane(originalPaneId).unsafeRunSync()
 
     // Explicitly split the workspace so both buffers have persistent views.
     stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes should have size 2

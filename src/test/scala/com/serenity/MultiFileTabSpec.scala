@@ -186,7 +186,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
     val singlePaneState = stateManager.getCurrentState.unsafeRunSync()
     val originalPaneId  = singlePaneState.persisted.layout.activeEditorPaneId.get
     stateManager.splitPaneHorizontal(originalPaneId, Some(initialBufferId)).unsafeRunSync()
-    stateManager.switchToPane(originalPaneId).unsafeRunSync()
+    stateManager.paneManager.switchToPane(originalPaneId).unsafeRunSync()
     val stateAfterNewTab = stateManager.getCurrentState.unsafeRunSync()
 
     // Then: The explicit split gives both buffers persistent views.
@@ -225,7 +225,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
     // When: Create a new pane (simulating Ctrl+T creating a new pane)
     // For now, we'll simulate this by creating a new pane manually
-    val newPaneId = stateManager.createPane().unsafeRunSync()
+    val newPaneId = stateManager.paneManager.createPane(None).unsafeRunSync()
 
     // Set the same buffer in the new pane
     stateManager.setBufferForPane(newPaneId, bufferId).unsafeRunSync()

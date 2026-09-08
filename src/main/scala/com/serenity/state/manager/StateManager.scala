@@ -109,12 +109,20 @@ final case class BufferManager(
     updateBuffer: (BufferId, String) => IO[Unit]
 )
 
-/** Manages editor panes, tabs, and splits. */
-trait PaneManager:
-  def handleViewportResize(newSize: ViewportSize): IO[Unit]
-  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
-  def switchToPane(paneId: PaneId): IO[Unit]
-  def getTabOrder(): IO[List[PaneId]]
+/** Manages editor panes, tabs, and splits.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly. Its methods are split across the viewport and editor
+  * capability classes, so the record is assembled in `StateManagerComposition` rather than in a single class. Case
+  * class fields can't carry default parameter values, so `createPane` takes `Option[BufferId]` rather than defaulting
+  * it to `None`.
+  */
+final case class PaneManager(
+    handleViewportResize: ViewportSize => IO[Unit],
+    createPane: Option[BufferId] => IO[PaneId],
+    switchToPane: PaneId => IO[Unit],
+    getTabOrder: () => IO[List[PaneId]]
+)
 
 /** Manages transient peek surfaces.
   *
@@ -195,7 +203,7 @@ final case class ScrollManager(
     clickMinimap: (PaneId, Int) => IO[Unit]
 )
 
-trait StateManager extends EventApplier, StateReader, StateUpdater, PaneManager:
+trait StateManager extends EventApplier, StateReader, StateUpdater:
   def scrollManager: ScrollManager
   def sessionStartupInfo: SessionStartupInfo
   def focusManager: FocusManager
@@ -210,6 +218,7 @@ trait StateManager extends EventApplier, StateReader, StateUpdater, PaneManager:
   def modalService: ModalService
   def fileOpener: FileOpener
   def fileService: FileService
+  def paneManager: PaneManager
 
 object StateManager:
 
