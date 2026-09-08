@@ -60,7 +60,11 @@ final private[manager] class StateManagerEventPipeline(
     }
 
   private def interpretEffect(effect: AppEffect): cats.effect.IO[Unit] =
-    effects.interpretEffect(effect) >> drainPendingOperations
+    effect match
+      case AppEffect.Undo(UndoEffect.RecordBoundary(bufferId, paneId, before, groupable)) =>
+        undoRecording.recordUndoBoundary(bufferId, paneId, before, groupable)
+      case other =>
+        effects.interpretEffect(other) >> drainPendingOperations
 
   private def interpretCommand(command: com.serenity.command.Command, state: AppState): cats.effect.IO[Unit] =
     effects.interpretCommand(command, state) >> drainPendingOperations
@@ -167,7 +171,6 @@ final private[manager] class StateManagerEventPipeline(
           if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
           else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))
         syncFocus >> handleEvent >>
-          undoRecording.recordUndoableEdit(event, prevState) >>
           Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
             lspDocumentSync.enqueueChangedLspDocuments(prevState)
           ) >>

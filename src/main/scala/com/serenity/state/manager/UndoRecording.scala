@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import scala.annotation.unused
 
 import cats.effect.{IO, Ref}
-import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, PendingGroup, UndoState}
 
@@ -14,38 +13,28 @@ private[manager] trait UndoRecordingPort:
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
 
 /** Records undoable content mutations and replays undo/redo history, independent of event dispatch and focus routing.
-  * `recordUndoableEdit` observes what a just-dispatched event changed in the focused buffer; `applyUndo` and
-  * `applyRedo` replay history entries back into state.
+  * `recordUndoBoundary` applies the fact a reducer already declared via
+  * `AppEffect.Undo(UndoEffect.RecordBoundary(...))` -- #1016: this class no longer decides which events are undoable or
+  * diffs buffer state to infer a change, since the reducer that made the edit is the only code with that knowledge.
+  * `applyUndo` and `applyRedo` replay history entries back into state.
   */
 final private[manager] class UndoRecording(port: UndoRecordingPort):
   import port.*
 
-  def recordUndoableEdit(event: Event, prevState: AppState): IO[Unit] =
-    focusedBufferAndPane(prevState) match
-      case None => IO.unit
-      case Some((bufferId, paneId, buffer)) =>
-        stateRef.get.flatMap { currentState =>
-          currentState.persisted.buffers.get(bufferId) match
-            case Some(currentBuffer) if isUndoableContentMutation(event) && bufferChanged(buffer, currentBuffer) =>
-              val beforeSnapshot = BufferSnapshot.fromBuffer(buffer)
-              event match
-                case InsertChar(_) | TabKey =>
-                  undoRef.update { undo =>
-                    val sameGroup = undo.pendingGroup.exists(g => g.bufferId == bufferId && g.paneId == paneId)
-                    if sameGroup then undo.clearRedo
-                    else
-                      val flushed  = undo.flushPendingGroup
-                      val newGroup = PendingGroup(bufferId, paneId, beforeSnapshot)
-                      flushed.copy(pendingGroup = Some(newGroup), redoStack = Nil)
-                  }
-                case _ =>
-                  undoRef.update { undo =>
-                    val flushed = undo.flushPendingGroup
-                    val entry   = HistoryEntry(bufferId, paneId, beforeSnapshot)
-                    flushed.pushUndo(entry)
-                  }
-            case _ => IO.unit
-        }
+  def recordUndoBoundary(bufferId: BufferId, paneId: PaneId, before: BufferSnapshot, groupable: Boolean): IO[Unit] =
+    undoRef.update { undo =>
+      if groupable then
+        val sameGroup = undo.pendingGroup.exists(g => g.bufferId == bufferId && g.paneId == paneId)
+        if sameGroup then undo.clearRedo
+        else
+          val flushed  = undo.flushPendingGroup
+          val newGroup = PendingGroup(bufferId, paneId, before)
+          flushed.copy(pendingGroup = Some(newGroup), redoStack = Nil)
+      else
+        val flushed = undo.flushPendingGroup
+        val entry   = HistoryEntry(bufferId, paneId, before)
+        flushed.pushUndo(entry)
+    }
 
   def applyUndo(@unused prevState: AppState): IO[Unit] =
     undoRef.get.flatMap { undo =>
@@ -93,27 +82,6 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
                   )
           }
     }
-
-  private def focusedBufferAndPane(state: AppState): Option[(BufferId, PaneId, Buffer)] =
-    state.persisted.focus match
-      case Focus.EditorPane(paneId) =>
-        state.persisted.layout.editorPanes.get(paneId).flatMap { pane =>
-          pane.bufferId.flatMap(state.persisted.buffers.get).map(buf => (buf.id, paneId, buf))
-        }
-      case _ => None
-
-  private def isUndoableContentMutation(event: Event): Boolean =
-    event match
-      case InsertChar(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward | DeleteWordBackward |
-          DeleteWordForward | NewLine | Enter | Paste | Cut =>
-        true
-      case _ => false
-
-  private def bufferChanged(before: Buffer, after: Buffer): Boolean =
-    before.document.content != after.document.content ||
-      before.editing.cursors != after.editing.cursors ||
-      before.editing.selection != after.editing.selection ||
-      before.editing.selections != after.editing.selections
 
   private def snapFocusToPane(state: AppState, paneId: PaneId): AppState =
     if state.persisted.focus == Focus.EditorPane(paneId) then state
