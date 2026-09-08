@@ -263,7 +263,7 @@ object AppRuntime:
     }
 
   private def runRuntimeLoops(
-    stateManager: StateReader & EventApplier & RuntimeLifecycle & LspEffectSource,
+    stateManager: StateManager,
     inputHandler: InputHandler[IO],
     awaitInputLoop: IO[Unit],
     renderLoop: Stream[IO, Unit],
@@ -284,7 +284,7 @@ object AppRuntime:
       ),
       superviseLoop("LSP loop", stateManager.forceQuit())(
         LspManager.run(
-          stateManager.lspEffectStream,
+          stateManager.lspEffectSource.lspEffectStream,
           stateManager.applyEvent,
           logger,
           appConfig.languageToolsConfig.lspUserConfig

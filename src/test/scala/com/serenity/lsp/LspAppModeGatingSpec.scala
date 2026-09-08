@@ -58,7 +58,8 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
       setBufferPath(stateManager, file)
       setLanguage(stateManager, LanguageId.Scala)
 
-      val effect = stateManager.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
+      val effect =
+        stateManager.lspEffectSource.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
       effect shouldBe LspEffect.FileOpened(file.toUri.toString, LanguageId.Scala, "")
     finally Files.deleteIfExists(file): Unit
   }
@@ -81,7 +82,13 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
       setLanguage(stateManager, LanguageId.Scala)
 
       val outcome =
-        stateManager.lspEffectStream.take(1).compile.lastOrError.timeout(500.millis).attempt.unsafeRunSync()
+        stateManager.lspEffectSource.lspEffectStream
+          .take(1)
+          .compile
+          .lastOrError
+          .timeout(500.millis)
+          .attempt
+          .unsafeRunSync()
       outcome.left.map(_.getClass) shouldBe Left(classOf[TimeoutException])
     finally Files.deleteIfExists(file): Unit
   }

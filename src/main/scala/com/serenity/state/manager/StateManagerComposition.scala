@@ -247,7 +247,9 @@ private[manager] class StateManagerComposition(
   export files.*
   export viewport.*
 
-  def lspEffectStream: Stream[IO, LspEffect] =
+  val lspEffectSource: LspEffectSource = LspEffectSource(lspEffectStream = lspEffectStream)
+
+  private def lspEffectStream: Stream[IO, LspEffect] =
     lspQueue.stream
       .interruptWhen(Stream.eval(quitSignal.get).as(true))
 

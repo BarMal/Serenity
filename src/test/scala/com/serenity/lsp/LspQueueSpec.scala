@@ -37,7 +37,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
 
-      val effects = sm.lspEffectStream
+      val effects = sm.lspEffectSource.lspEffectStream
         .take(1)
         .timeout(2.seconds)
         .compile
@@ -73,7 +73,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
 
-      val effects = sm.lspEffectStream
+      val effects = sm.lspEffectSource.lspEffectStream
         .interruptAfter(300.millis)
         .compile
         .toList
@@ -92,11 +92,11 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
 
-      sm.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync() should have size 1
+      sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync() should have size 1
 
       setBufferLanguageThroughRunner(sm, "lang-markdown")
 
-      val effects = sm.lspEffectStream
+      val effects = sm.lspEffectSource.lspEffectStream
         .take(2)
         .timeout(2.seconds)
         .compile
@@ -121,7 +121,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       sm.applyEvent(InsertChar('b')).unsafeRunSync()
       sm.applyEvent(InsertChar('c')).unsafeRunSync()
 
-      val effects = sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val effects = sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()
@@ -145,11 +145,11 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     Files.writeString(tempFile, "object Still")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
-      sm.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
+      sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
 
       sm.applyEvent(MoveRight).unsafeRunSync()
 
-      sm.lspEffectStream.interruptAfter(300.millis).compile.toList.unsafeRunSync() shouldBe empty
+      sm.lspEffectSource.lspEffectStream.interruptAfter(300.millis).compile.toList.unsafeRunSync() shouldBe empty
     finally
       Files.deleteIfExists(tempFile)
       sm.applyEvent(Quit).unsafeRunSync()
@@ -164,7 +164,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       (1 to 600).foreach(_ => sm.applyEvent(InsertChar('x')).unsafeRunSync())
 
-      val effects = sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val effects = sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()
@@ -189,14 +189,14 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     Files.writeString(source, "object Saved")
     try
       sm.applyEvent(LoadFile(source)).unsafeRunSync()
-      sm.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
+      sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
       val bufferId =
         sm.getCurrentState.unsafeRunSync().persisted.buffers.values.find(_.document.filePath.contains(source)).map(_.id)
 
       bufferId shouldBe defined
       sm.saveBufferAs(bufferId.get, target).unsafeRunSync()
 
-      sm.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync() shouldBe List(
+      sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync() shouldBe List(
         LspEffect.FileClosed(source.toUri.toString, LanguageId.Scala),
         LspEffect.FileOpened(target.toUri.toString, LanguageId.Markdown, "object Saved")
       )
