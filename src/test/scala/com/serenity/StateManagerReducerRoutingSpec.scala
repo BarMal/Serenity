@@ -298,7 +298,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
           surface.id
       }
       .get
-    stateManager.switchFocus(Focus.Surface(pinnedSurfaceId)).unsafeRunSync()
+    stateManager.focusManager.switchFocus(Focus.Surface(pinnedSurfaceId)).unsafeRunSync()
 
     stateManager.applyEvent(PanelInputEvent.ReturnFocus).unsafeRunSync()
 
