@@ -43,9 +43,6 @@ object AnimationConfig:
   /** Subtle transition for low-distraction surface changes. */
   val subtle: Option[AnimationConfig] = Some(Enabled.subtle)
 
-  /** Fast fade-in optimized for 16ms tick rate */
-  val fast: Option[AnimationConfig] = Some(Enabled.fast)
-
   /** Create custom animation configuration */
   def custom(durationMs: Int, tickRateMs: Int = 16): Option[AnimationConfig] =
     Some(Enabled.custom(durationMs, tickRateMs))
@@ -68,11 +65,6 @@ object AnimationConfig:
     val subtle: AnimationConfig = AnimationConfig(
       steps = 5,
       totalDuration = scala.concurrent.duration.Duration.fromNanos(80_000_000)
-    )
-
-    val fast: AnimationConfig = AnimationConfig(
-      steps = 4,
-      totalDuration = scala.concurrent.duration.Duration.fromNanos(64_000_000) // 64ms = 4 × 16ms
     )
 
     def custom(durationMs: Int, tickRateMs: Int = 16): AnimationConfig =

@@ -24,13 +24,6 @@ object ConfigManager:
   val defaultConfigPath: Path =
     Paths.get(System.getProperty("user.home"), ".serenity", "config.conf")
 
-  /** Available animation presets */
-  object Presets:
-    val none   = AppConfig.default.withoutCharacterAnimation
-    val quick  = AppConfig.default.withCharacterAnimation(AnimationConfig.Enabled.quick)
-    val smooth = AppConfig.default.withCharacterAnimation(AnimationConfig.Enabled.smooth)
-    val subtle = AppConfig.default.withCharacterAnimation(AnimationConfig.Enabled.subtle)
-
   /** Load configuration from file or return default */
   def loadConfig(configPath: Option[String] = None): AppConfig =
     loadConfigResult(configPath).config
