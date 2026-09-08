@@ -23,13 +23,13 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
   behavior of "Recent files"
 
   it should "return an empty list initially" in new RecentFilesFixture:
-    sm.getRecentFiles.unsafeRunSync() shouldBe Nil
+    sm.fileService.getRecentFiles.unsafeRunSync() shouldBe Nil
 
   it should "track a file path after saveBufferAs" in new RecentFilesFixture:
     val path = tmpFile("hello.scala")
     try
-      sm.saveBufferAs(initialBufferId, path).unsafeRunSync()
-      sm.getRecentFiles.unsafeRunSync() shouldBe List(path)
+      sm.fileService.saveBufferAs(initialBufferId, path).unsafeRunSync()
+      sm.fileService.getRecentFiles.unsafeRunSync() shouldBe List(path)
     finally
       Files.deleteIfExists(path)
       Files.deleteIfExists(tmpDir)
@@ -38,9 +38,9 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
     val pathA = tmpFile("a.scala")
     val pathB = tmpFile("b.scala")
     try
-      sm.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
-      sm.saveBufferAs(initialBufferId, pathB).unsafeRunSync()
-      sm.getRecentFiles.unsafeRunSync() shouldBe List(pathB, pathA)
+      sm.fileService.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
+      sm.fileService.saveBufferAs(initialBufferId, pathB).unsafeRunSync()
+      sm.fileService.getRecentFiles.unsafeRunSync() shouldBe List(pathB, pathA)
     finally
       Files.deleteIfExists(pathA)
       Files.deleteIfExists(pathB)
@@ -50,10 +50,10 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
     val pathA = tmpFile("a.scala")
     val pathB = tmpFile("b.scala")
     try
-      sm.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
-      sm.saveBufferAs(initialBufferId, pathB).unsafeRunSync()
-      sm.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
-      sm.getRecentFiles.unsafeRunSync() shouldBe List(pathA, pathB)
+      sm.fileService.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
+      sm.fileService.saveBufferAs(initialBufferId, pathB).unsafeRunSync()
+      sm.fileService.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
+      sm.fileService.getRecentFiles.unsafeRunSync() shouldBe List(pathA, pathB)
     finally
       Files.deleteIfExists(pathA)
       Files.deleteIfExists(pathB)

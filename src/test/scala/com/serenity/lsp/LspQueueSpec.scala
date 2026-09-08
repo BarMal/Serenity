@@ -194,7 +194,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
         sm.getCurrentState.unsafeRunSync().persisted.buffers.values.find(_.document.filePath.contains(source)).map(_.id)
 
       bufferId shouldBe defined
-      sm.saveBufferAs(bufferId.get, target).unsafeRunSync()
+      sm.fileService.saveBufferAs(bufferId.get, target).unsafeRunSync()
 
       sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync() shouldBe List(
         LspEffect.FileClosed(source.toUri.toString, LanguageId.Scala),
