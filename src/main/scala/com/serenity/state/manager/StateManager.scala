@@ -64,9 +64,12 @@ trait FileOpener:
 trait CommandExecutor:
   def executeCommand(command: Command): IO[Unit]
 
-/** Reads and changes editor focus. */
-trait FocusManager:
-  def switchFocus(newFocus: Focus): IO[Unit]
+/** Reads and changes editor focus.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class FocusManager(switchFocus: Focus => IO[Unit])
 
 /** Manages editor buffers. */
 trait BufferManager:
@@ -144,7 +147,6 @@ trait StateManager
       SessionStartupInfo,
       FileOpener,
       CommandExecutor,
-      FocusManager,
       BufferManager,
       PaneManager,
       PeekManager,
@@ -153,6 +155,7 @@ trait StateManager
       ModalService,
       FileService:
   def scrollManager: ScrollManager
+  def focusManager: FocusManager
 
 object StateManager:
 
