@@ -17,15 +17,11 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
 
   behavior of "Startup Options End-to-End"
 
-  final private case class TestFileDialog(openSelection: Option[java.nio.file.Path]) extends FileDialog:
-    override def chooseOpenFile(initialDirectory: Option[java.nio.file.Path]): IO[Option[java.nio.file.Path]] =
-      IO.pure(openSelection)
-
-    override def chooseSaveFile(
-      initialDirectory: Option[java.nio.file.Path],
-      suggestedFileName: Option[String]
-    ): IO[Option[java.nio.file.Path]] =
-      IO.pure(None)
+  private def testFileDialog(openSelection: Option[java.nio.file.Path]): FileDialog =
+    FileDialog(
+      chooseOpenFile = _ => IO.pure(openSelection),
+      chooseSaveFile = (_, _) => IO.pure(None)
+    )
 
   it should "handle available startup actions correctly" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
@@ -52,7 +48,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       // Test Option 2: Open File
       stateManager3 <- createStateManagerIO(
         "StartupOptionsEndToEndSpec",
-        fileDialog = Some(TestFileDialog(Some(selectedFile)))
+        fileDialog = Some(testFileDialog(Some(selectedFile)))
       )
       _             <- AppStartup.initializeState(stateManager3, theme, viewportSize)
       _             <- stateManager3.applyEvent(MoveDown) // Move to option 2

@@ -29,15 +29,14 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
-  final private case class TestFileDialog(
-      openSelection: Option[Path] = None,
-      saveSelection: Option[Path] = None
-  ) extends FileDialog:
-    override def chooseOpenFile(initialDirectory: Option[Path]): IO[Option[Path]] =
-      IO.pure(openSelection)
-
-    override def chooseSaveFile(initialDirectory: Option[Path], suggestedFileName: Option[String]): IO[Option[Path]] =
-      IO.pure(saveSelection)
+  private def testFileDialog(
+    openSelection: Option[Path] = None,
+    saveSelection: Option[Path] = None
+  ): FileDialog =
+    FileDialog(
+      chooseOpenFile = _ => IO.pure(openSelection),
+      chooseSaveFile = (_, _) => IO.pure(saveSelection)
+    )
 
   private def createStateManager(
     sessionRootOverride: Option[Path] = None,
@@ -369,7 +368,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "export the current theme through the native save-file dialog" in {
     val targetPath   = Files.createTempDirectory("serenity-theme-export").resolve("quiet-focus.conf")
-    val stateManager = createStateManager(fileDialog = Some(TestFileDialog(saveSelection = Some(targetPath))))
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
     val theme = Theme.light.copy(
       name = "quiet-focus",
       background = new java.awt.Color(0x112233),
@@ -424,7 +423,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "save the focused buffer through the native save-as file dialog" in {
     val targetPath   = Files.createTempDirectory("serenity-save-as").resolve("notes-copy.scala")
-    val stateManager = createStateManager(fileDialog = Some(TestFileDialog(saveSelection = Some(targetPath))))
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
     val bufferId     = BufferId(0)
     val filePath     = Path.of("temp", "notes.scala")
 
@@ -459,7 +458,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   it should "open a selected file through the native open-file dialog" in {
     val sourcePath = Files.createTempDirectory("serenity-open").resolve("notes.md")
     Files.writeString(sourcePath, "# Notes")
-    val stateManager = createStateManager(fileDialog = Some(TestFileDialog(openSelection = Some(sourcePath))))
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(openSelection = Some(sourcePath))))
     val viewportSize = ViewportSize(120, 40)
     stateManager.handleViewportResize(viewportSize).unsafeRunSync()
 
@@ -530,7 +529,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "save an unsaved buffer through the native save-as file dialog" in {
     val targetPath   = Files.createTempDirectory("serenity-unsaved-save").resolve("draft.txt")
-    val stateManager = createStateManager(fileDialog = Some(TestFileDialog(saveSelection = Some(targetPath))))
+    val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
 
     stateManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()
 

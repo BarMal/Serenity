@@ -17,15 +17,11 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
   behavior of "Startup Commands"
 
-  final private case class TestFileDialog(openSelection: Option[java.nio.file.Path]) extends FileDialog:
-    override def chooseOpenFile(initialDirectory: Option[java.nio.file.Path]): IO[Option[java.nio.file.Path]] =
-      IO.pure(openSelection)
-
-    override def chooseSaveFile(
-      initialDirectory: Option[java.nio.file.Path],
-      suggestedFileName: Option[String]
-    ): IO[Option[java.nio.file.Path]] =
-      IO.pure(None)
+  private def testFileDialog(openSelection: Option[java.nio.file.Path]): FileDialog =
+    FileDialog(
+      chooseOpenFile = _ => IO.pure(openSelection),
+      chooseSaveFile = (_, _) => IO.pure(None)
+    )
 
   it should "open the selected native-dialog file when Open file is selected" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
@@ -34,7 +30,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     java.nio.file.Files.writeString(selectedFile, "opened from startup")
 
     val program = for
-      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = Some(TestFileDialog(Some(selectedFile))))
+      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = Some(testFileDialog(Some(selectedFile))))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
@@ -65,7 +61,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = Some(TestFileDialog(None)))
+      stateManager <- createStateManagerIO("StartupCommandsSpec", fileDialog = Some(testFileDialog(None)))
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
