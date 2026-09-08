@@ -43,80 +43,63 @@ enum DocumentStorageError:
   *
   * Providers own their authentication, provider identifiers, and network implementation. Callers use locations,
   * document metadata, and typed outcomes only.
+  *
+  * A cold capability (user-initiated, not a per-frame/per-glyph boundary) expressed as a record of functions rather
+  * than a trait -- see #1017. A test double is a record literal, not a subclass; wrapping one in logging or retry is
+  * `copy(open = ...)`.
   */
-trait DocumentStorageProvider:
-
-  /** Stable provider identifier used in provider-neutral failures and configuration. */
-  def id: String
-
-  /** Whether this provider owns the supplied location. */
-  def supports(location: StorageLocation): Boolean
-
-  /** List direct children of a document directory. */
-  def list(directory: StorageLocation): Stream[IO, Either[DocumentStorageError, DocumentMetadata]]
-
-  /** Open a document and return the storage revision used for stale-save detection. */
-  def open(location: StorageLocation): IO[Either[DocumentStorageError, StoredDocument]]
-
-  /** Save document content, rejecting an out-of-date expected revision with [[DocumentStorageError.Conflict]]. */
-  def save(
-    location: StorageLocation,
-    content: String,
-    expectedRevision: Option[DocumentRevision]
-  ): IO[Either[DocumentStorageError, StoredDocument]]
-
-  /** Copy a document to another location handled by this provider. */
-  def copy(
-    source: StorageLocation,
-    destination: StorageLocation
-  ): IO[Either[DocumentStorageError, StoredDocument]]
+final case class DocumentStorageProvider(
+    /** Stable provider identifier used in provider-neutral failures and configuration. */
+    id: String,
+    /** Whether this provider owns the supplied location. */
+    supports: StorageLocation => Boolean,
+    /** List direct children of a document directory. */
+    list: StorageLocation => Stream[IO, Either[DocumentStorageError, DocumentMetadata]],
+    /** Open a document and return the storage revision used for stale-save detection. */
+    open: StorageLocation => IO[Either[DocumentStorageError, StoredDocument]],
+    /** Save document content, rejecting an out-of-date expected revision with [[DocumentStorageError.Conflict]]. */
+    save: (StorageLocation, String, Option[DocumentRevision]) => IO[Either[DocumentStorageError, StoredDocument]],
+    /** Copy a document to another location handled by this provider. */
+    copy: (StorageLocation, StorageLocation) => IO[Either[DocumentStorageError, StoredDocument]]
+)
 
 /** Local filesystem implementation of [[DocumentStorageProvider]].
   *
   * This adapter is intentionally independent from [[FileManager]] so its generic document contract does not alter
   * existing format-specific local open and save behavior.
   */
-final class LocalDocumentStorageProvider extends DocumentStorageProvider:
+object LocalDocumentStorageProvider:
 
-  override val id: String = "local"
-
-  override def supports(location: StorageLocation): Boolean =
-    location match
-      case StorageLocation.Local(_)  => true
-      case StorageLocation.Remote(_) => false
-
-  override def list(directory: StorageLocation): Stream[IO, Either[DocumentStorageError, DocumentMetadata]] =
-    localPath(directory) match
-      case Left(error) => Stream.emit(Left(error))
-      case Right(path) =>
-        Stream.eval(listLocal(path)).flatMap(Stream.emits)
-
-  override def open(location: StorageLocation): IO[Either[DocumentStorageError, StoredDocument]] =
-    localPath(location) match
-      case Left(error) => IO.pure(Left(error))
-      case Right(path) => readLocal(path, location)
-
-  override def save(
-    location: StorageLocation,
-    content: String,
-    expectedRevision: Option[DocumentRevision]
-  ): IO[Either[DocumentStorageError, StoredDocument]] =
-    localPath(location) match
-      case Left(error) => IO.pure(Left(error))
-      case Right(path) => saveLocal(path, location, content, expectedRevision)
-
-  override def copy(
-    source: StorageLocation,
-    destination: StorageLocation
-  ): IO[Either[DocumentStorageError, StoredDocument]] =
-    (localPath(source), localPath(destination)) match
-      case (Left(error), _) => IO.pure(Left(error))
-      case (_, Left(error)) => IO.pure(Left(error))
-      case (Right(sourcePath), Right(destinationPath)) =>
-        readLocal(sourcePath, source).flatMap {
-          case Left(error)     => IO.pure(Left(error))
-          case Right(document) => saveLocal(destinationPath, destination, document.content, None)
-        }
+  def apply(): DocumentStorageProvider =
+    DocumentStorageProvider(
+      id = "local",
+      supports = {
+        case StorageLocation.Local(_)  => true
+        case StorageLocation.Remote(_) => false
+      },
+      list = directory =>
+        localPath(directory) match
+          case Left(error) => Stream.emit(Left(error))
+          case Right(path) =>
+            Stream.eval(listLocal(path)).flatMap(Stream.emits),
+      open = location =>
+        localPath(location) match
+          case Left(error) => IO.pure(Left(error))
+          case Right(path) => readLocal(path, location),
+      save = (location, content, expectedRevision) =>
+        localPath(location) match
+          case Left(error) => IO.pure(Left(error))
+          case Right(path) => saveLocal(path, location, content, expectedRevision),
+      copy = (source, destination) =>
+        (localPath(source), localPath(destination)) match
+          case (Left(error), _) => IO.pure(Left(error))
+          case (_, Left(error)) => IO.pure(Left(error))
+          case (Right(sourcePath), Right(destinationPath)) =>
+            readLocal(sourcePath, source).flatMap {
+              case Left(error)     => IO.pure(Left(error))
+              case Right(document) => saveLocal(destinationPath, destination, document.content, None)
+            }
+    )
 
   private def localPath(location: StorageLocation): Either[DocumentStorageError, Path] =
     location match

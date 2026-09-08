@@ -92,7 +92,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     val directory   = Files.createTempDirectory("serenity-document-storage")
     val source      = directory.resolve("source.txt")
     val destination = directory.resolve("copy.txt")
-    val provider    = new LocalDocumentStorageProvider
+    val provider    = LocalDocumentStorageProvider()
 
     try
       Files.writeString(source, "initial")
@@ -117,7 +117,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "reject stale local saves with a conflict at the provider boundary" in {
     val path     = Files.createTempFile("serenity-document-storage-conflict", ".txt")
-    val provider = new LocalDocumentStorageProvider
+    val provider = LocalDocumentStorageProvider()
 
     try
       Files.writeString(path, "initial")
@@ -134,7 +134,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "leave remote locations unsupported until a provider is installed" in {
     val location = StorageLocation.Remote(java.net.URI.create("https://example.com/documents/notes.txt"))
-    val provider = new LocalDocumentStorageProvider
+    val provider = LocalDocumentStorageProvider()
 
     provider.open(location).unsafeRunSync() shouldBe Left(DocumentStorageError.UnsupportedLocation(location))
   }
