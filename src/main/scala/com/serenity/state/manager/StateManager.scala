@@ -65,9 +65,12 @@ final case class SessionStartupInfo(
     sessionExists: IO[Boolean]
 )
 
-/** Opens a file into editor state. */
-trait FileOpener:
-  def openFile(filePath: Path): IO[Unit]
+/** Opens a file into editor state.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class FileOpener(openFile: Path => IO[Unit])
 
 /** Executes editor commands. */
 trait CommandExecutor:
@@ -139,14 +142,20 @@ final case class ModalService(
     dismissModal: () => IO[Unit]
 )
 
-/** Manages buffer file paths and persistence. */
-trait FileService:
-  def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit]
-  def saveBuffer(bufferId: BufferId): IO[Unit]
-  def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit]
-  def markBufferSaved(bufferId: BufferId): IO[Unit]
-  def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean]
-  def getRecentFiles: IO[List[Path]]
+/** Manages buffer file paths and persistence.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly. Case class fields can't carry default parameter values,
+  * so `checkUnsavedChanges` takes `Option[BufferId]` rather than defaulting it to `None`.
+  */
+final case class FileService(
+    setBufferFilePath: (BufferId, Path) => IO[Unit],
+    saveBuffer: BufferId => IO[Unit],
+    saveBufferAs: (BufferId, Path) => IO[Unit],
+    markBufferSaved: BufferId => IO[Unit],
+    checkUnsavedChanges: Option[BufferId] => IO[Boolean],
+    getRecentFiles: IO[List[Path]]
+)
 
 /** Controls editor viewport scrolling.
   *
@@ -167,12 +176,10 @@ trait StateManager
       StateUpdater,
       AnimationTicker,
       RuntimeLifecycle,
-      FileOpener,
       CommandExecutor,
       BufferManager,
       PaneManager,
-      SessionService,
-      FileService:
+      SessionService:
   def scrollManager: ScrollManager
   def sessionStartupInfo: SessionStartupInfo
   def focusManager: FocusManager
@@ -180,6 +187,8 @@ trait StateManager
   def peekManager: PeekManager
   def panelManager: PanelManager
   def modalService: ModalService
+  def fileOpener: FileOpener
+  def fileService: FileService
 
 object StateManager:
 

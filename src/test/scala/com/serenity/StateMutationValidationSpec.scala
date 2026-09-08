@@ -46,7 +46,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
       Files.writeString(tempFile, "loaded from disk")
 
       val before = stateManager.getCurrentState.unsafeRunSync()
-      stateManager.openFile(tempFile).unsafeRunSync()
+      stateManager.fileOpener.openFile(tempFile).unsafeRunSync()
       val after = stateManager.getCurrentState.unsafeRunSync()
 
       after.isValid shouldBe true

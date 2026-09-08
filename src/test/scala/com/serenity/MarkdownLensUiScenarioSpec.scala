@@ -18,7 +18,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
   "Markdown Lens UI scenario" should "retain rendered content when input moves from heading into its paragraph" in {
     val driver  = UiScenarioDriver.create("markdown-lens").unsafeRunSync()
     val fixture = Paths.get(getClass.getResource("/ui-scenarios/markdown-lens.md").toURI)
-    driver.stateManager.openFile(fixture).unsafeRunSync()
+    driver.stateManager.fileOpener.openFile(fixture).unsafeRunSync()
     driver.stateManager
       .executeCommand(
         Command.typed(
@@ -118,7 +118,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
   private def markdownDriver(name: String): UiScenarioDriver =
     val driver  = UiScenarioDriver.create(name).unsafeRunSync()
     val fixture = Paths.get(getClass.getResource("/ui-scenarios/markdown-lens.md").toURI)
-    driver.stateManager.openFile(fixture).unsafeRunSync()
+    driver.stateManager.fileOpener.openFile(fixture).unsafeRunSync()
     driver.stateManager
       .executeCommand(
         Command.typed(
