@@ -8,7 +8,7 @@ import com.serenity.config.*
 private[command] object CommandRunnerSettingsTextDisplayItems:
 
   private[command] def lineNumbersOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsItems.enabledOptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "line-numbers",
       label = "Line Numbers",
       selectedIndex = optionSelections.getOrElse("line-numbers", 0),
@@ -18,7 +18,7 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
     )
 
   private[command] def wordCountOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsItems.enabledOptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "show-word-count",
       label = "Word Count",
       selectedIndex = optionSelections.getOrElse("show-word-count", 1),
@@ -28,7 +28,7 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
     )
 
   private[command] def gutterOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsItems.enabledOptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "gutter",
       label = "Gutter",
       selectedIndex = optionSelections.getOrElse("gutter", 0),
@@ -38,7 +38,7 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
     )
 
   private[command] def lineWrapOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsItems.enabledOptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "line-wrap",
       label = "Line Wrap",
       selectedIndex = optionSelections.getOrElse("line-wrap", optionSelections.getOrElse("word-wrap", 0)),
@@ -50,7 +50,7 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
   private[command] def visualLineNavigationOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsItems.enabledOptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "visual-line-navigation",
       label = "Visual Line Navigation",
       selectedIndex = optionSelections.getOrElse("visual-line-navigation", 0),
@@ -64,7 +64,7 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
   private[command] def typewriterScrollingOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsItems.enabledOptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "typewriter-scrolling",
       label = "Typewriter Scrolling",
       selectedIndex = optionSelections.getOrElse("typewriter-scrolling", 1),
@@ -78,7 +78,7 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
   private[command] def focusedTextBodyOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsItems.enabledOptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "focused-text-body",
       label = "Text Body Focus",
       selectedIndex = optionSelections.getOrElse("focused-text-body", 1),
@@ -90,7 +90,7 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
   private[command] def contextualToolbarOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsItems.enabledOptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "contextual-toolbar",
       label = "Contextual Toolbar",
       selectedIndex = optionSelections.getOrElse("contextual-toolbar", 0),
@@ -137,7 +137,7 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
   private[command] def commandRunnerKeyHintsOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsItems.enabledOptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "command-runner-key-hints",
       label = "Command Runner Key Hints",
       selectedIndex = optionSelections.getOrElse("command-runner-key-hints", 0),
