@@ -47,9 +47,12 @@ trait RuntimeLifecycle:
   def forceQuit(): IO[Unit]
   def intervalSaveStream: Stream[IO, Unit]
 
-/** Supplies effects for the language-server interpreter. */
-trait LspEffectSource:
-  def lspEffectStream: Stream[IO, LspEffect]
+/** Supplies effects for the language-server interpreter.
+  *
+  * A `StateManager` capability-record slice (see #1017): a case class holding the stream description directly instead
+  * of a trait mixed into `StateManager`.
+  */
+final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect])
 
 /** Reads persisted session metadata needed before startup restoration. */
 trait SessionStartupInfo:
@@ -143,7 +146,6 @@ trait StateManager
       StateUpdater,
       AnimationTicker,
       RuntimeLifecycle,
-      LspEffectSource,
       SessionStartupInfo,
       FileOpener,
       CommandExecutor,
@@ -156,6 +158,7 @@ trait StateManager
       FileService:
   def scrollManager: ScrollManager
   def focusManager: FocusManager
+  def lspEffectSource: LspEffectSource
 
 object StateManager:
 
