@@ -22,6 +22,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.{StateManager, StateUpdater}
 import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage}
+import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -1158,7 +1159,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       earlyRace shouldBe Right(())
       lateRace.isLeft shouldBe true
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    runVirtual(program)
   }
 
   it should "sleep for the cursor idle interval, not block, while the window is focused" in {
@@ -1173,7 +1174,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       )
     yield result shouldBe Left(())
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    runVirtual(program)
   }
 
   it should "never wake the idle tick in TUI blink mode -- the caret is delegated to the terminal, zero wakeups" in {
@@ -1190,7 +1191,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       )
     yield result shouldBe Right(())
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    runVirtual(program)
   }
 
   it should "still wake the idle tick in TUI breathe mode -- breathe stays the documented app-painted exception" in {
@@ -1206,7 +1207,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       )
     yield result shouldBe Left(())
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    runVirtual(program)
   }
 
   it should "skip idle cursor rendering entirely while unfocused, then resume once focus returns" in {
@@ -1254,7 +1255,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       callsWhileUnfocused shouldBe 0
       callsAfterFocus should be > 0
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    runVirtual(program)
   }
 
   it should "never render an idle cursor frame in TUI blink mode -- zero idle wakeups, terminal owns the caret" in {
@@ -1297,7 +1298,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       _     <- fiber.cancel
     yield calls shouldBe 0
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    runVirtual(program)
   }
 
   it should "keep rendering idle breathe frames in TUI mode -- breathe is app-painted, not delegated to the terminal" in {
@@ -1340,7 +1341,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       _     <- fiber.cancel
     yield calls should be > 0
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    runVirtual(program)
   }
 
   it should "pause idle cursor rendering while unfocused and resume once focus returns, via registerFocusCallback wiring" in {
@@ -1400,7 +1401,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       callsWhileUnfocused shouldBe 0
       callsAfterRefocus should be > 0
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    runVirtual(program)
   }
 
   it should "recover idle cursor render failures with phase and state diagnostics" in {
@@ -1453,7 +1454,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       failure.get.message should include("activeBuffer=none")
       failure.flatMap(_.error).map(_.getMessage) should contain("idle render failed")
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    runVirtual(program)
   }
 
   it should "log resize callback failures from the runtime bridge" in {
