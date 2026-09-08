@@ -35,6 +35,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
       finalState <- AppStartup.initializeState(
         stateManager,
+        stateManager.sessionStartupInfo,
         defaultTheme,
         initialViewportSize
       )
@@ -63,7 +64,13 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         themeManager <- IO.pure(AppThemeManager.create)
         defaultTheme <- themeManager.initializeWithTheme()
         stateManager <- StateManager.apply(logger)
-        finalState <- AppStartup.initializeState(stateManager, defaultTheme, initialViewportSize, isTuiMode = isTuiMode)
+        finalState <- AppStartup.initializeState(
+          stateManager,
+          stateManager.sessionStartupInfo,
+          defaultTheme,
+          initialViewportSize,
+          isTuiMode = isTuiMode
+        )
       yield finalState
 
     stateFor(isTuiMode = false).unsafeRunSync().runtime.isTuiMode shouldBe false
@@ -85,6 +92,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
       openedState <- AppStartup.initializeState(
         stateManager,
+        stateManager.sessionStartupInfo,
         defaultTheme,
         initialViewportSize,
         openPath = Some(file),
@@ -108,6 +116,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
       finalState <- AppStartup.initializeState(
         stateManager,
+        stateManager.sessionStartupInfo,
         defaultTheme,
         wideViewportSize
       )
@@ -141,6 +150,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         stateManager <- StateManager.apply(logger)
         finalState <- AppStartup.initializeState(
           stateManager,
+          stateManager.sessionStartupInfo,
           defaultTheme,
           initialViewportSize,
           openPath = Some(selectedFile)
@@ -204,9 +214,10 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         logger,
         sessionRootOverride = Some(sessionRoot)
       )
-      startupTheme <- AppStartup.startupTheme(secondManager, AppThemeManager.create)
+      startupTheme <- AppStartup.startupTheme(secondManager.sessionStartupInfo, AppThemeManager.create)
       finalState <- AppStartup.initializeState(
         secondManager,
+        secondManager.sessionStartupInfo,
         startupTheme,
         initialViewportSize
       )

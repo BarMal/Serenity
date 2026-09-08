@@ -394,10 +394,11 @@ object TuiSession:
         configPersistencePath = None,
         previewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
       )(logger)
-      theme    <- AppStartup.startupTheme(stateManager, AppThemeManager.create)
+      theme    <- AppStartup.startupTheme(stateManager.sessionStartupInfo, AppThemeManager.create)
       viewport <- shell.viewportSize
       initialState <- AppStartup.initializeState(
         stateManager,
+        stateManager.sessionStartupInfo,
         theme,
         viewport,
         terminalConfig,

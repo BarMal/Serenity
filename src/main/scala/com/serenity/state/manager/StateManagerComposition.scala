@@ -344,11 +344,10 @@ private[manager] class StateManagerComposition(
   def loadSession(): IO[Option[AppState]] =
     sessionManager.loadSession()
 
-  def currentSessionThemeName: IO[Option[String]] =
-    sessionManager.currentSessionThemeName
-
-  def sessionExists: IO[Boolean] =
-    sessionManager.sessionExists
+  val sessionStartupInfo: SessionStartupInfo = SessionStartupInfo(
+    currentSessionThemeName = sessionManager.currentSessionThemeName,
+    sessionExists = sessionManager.sessionExists
+  )
 
   def clearSession(): IO[Unit] =
     sessionManager.clearSession()
