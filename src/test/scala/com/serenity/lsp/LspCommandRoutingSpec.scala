@@ -59,7 +59,8 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
         )
         .unsafeRunSync()
 
-      val effect = stateManager.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
+      val effect =
+        stateManager.lspEffectSource.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
       effect shouldBe LspEffect.HoverRequested(
         uri = file.toUri.toString,
         languageId = LanguageId.Scala,
@@ -100,7 +101,8 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
         )
         .unsafeRunSync()
 
-      val effect = stateManager.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
+      val effect =
+        stateManager.lspEffectSource.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
       effect shouldBe LspEffect.DefinitionRequested(
         uri = file.toUri.toString,
         languageId = LanguageId.Scala,
@@ -138,7 +140,8 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
         )
         .unsafeRunSync()
 
-      val effect = stateManager.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
+      val effect =
+        stateManager.lspEffectSource.lspEffectStream.take(1).compile.lastOrError.timeout(3.seconds).unsafeRunSync()
       effect shouldBe LspEffect.CompletionRequested(
         uri = file.toUri.toString,
         languageId = LanguageId.Scala,
