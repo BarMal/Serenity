@@ -34,9 +34,7 @@ object ExternalToolClipboard:
   def apply(tool: ExternalClipboardTool): SystemClipboard[IO] = apply(tool, SystemProcessRunner)
 
   private[input] def apply(tool: ExternalClipboardTool, runner: ProcessRunner): SystemClipboard[IO] =
-    new SystemClipboard[IO]:
-      override def readText: IO[Option[String]] =
-        runner.run(tool.readCommand, None).map(Option(_)).handleError(_ => None)
-
-      override def writeText(text: String): IO[Unit] =
-        runner.run(tool.writeCommand, Some(text)).void.handleError(_ => ())
+    SystemClipboard(
+      readText = runner.run(tool.readCommand, None).map(Option(_)).handleError(_ => None),
+      writeText = text => runner.run(tool.writeCommand, Some(text)).void.handleError(_ => ())
+    )

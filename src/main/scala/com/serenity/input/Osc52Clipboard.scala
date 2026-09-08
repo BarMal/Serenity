@@ -17,14 +17,14 @@ object Osc52Clipboard:
     write: String => F[Unit],
     fallback: SystemClipboard[F],
     maxEncodedBytes: Int = Osc52.DefaultMaxEncodedBytes
-  ): SystemClipboard[F] = new SystemClipboard[F]:
-
-    override def readText: F[Option[String]] = fallback.readText
-
-    override def writeText(text: String): F[Unit] =
-      Osc52.encode(text, maxEncodedBytes) match
-        case Right(sequence) => write(sequence) >> fallback.writeText(text)
-        case Left(Osc52.PayloadTooLarge(encodedBytes, maxBytes)) =>
-          Logger[F].warn(
-            s"[CLIPBOARD] OSC 52 payload too large ($encodedBytes > $maxBytes encoded bytes); falling back"
-          ) >> fallback.writeText(text)
+  ): SystemClipboard[F] =
+    SystemClipboard(
+      readText = fallback.readText,
+      writeText = text =>
+        Osc52.encode(text, maxEncodedBytes) match
+          case Right(sequence) => write(sequence) >> fallback.writeText(text)
+          case Left(Osc52.PayloadTooLarge(encodedBytes, maxBytes)) =>
+            Logger[F].warn(
+              s"[CLIPBOARD] OSC 52 payload too large ($encodedBytes > $maxBytes encoded bytes); falling back"
+            ) >> fallback.writeText(text)
+    )
