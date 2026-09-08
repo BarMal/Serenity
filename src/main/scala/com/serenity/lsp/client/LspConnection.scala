@@ -89,6 +89,12 @@ class LspConnection private (
   private[lsp] def takeOutgoing: IO[Option[Json]] =
     sendQueue.take
 
+  /** Non-blocking: `None` means nothing is queued right now, distinguishing "no message was ever sent" from "one is on
+    * its way" without a time-based guess at how long to wait.
+    */
+  private[lsp] def tryTakeOutgoing: IO[Option[Option[Json]]] =
+    sendQueue.tryTake
+
   private[lsp] def pendingRequestCount: IO[Int] =
     pendingRef.get.map(_.size)
 

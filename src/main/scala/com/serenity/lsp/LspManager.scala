@@ -231,16 +231,18 @@ object LspManager:
       val key     = RequestKey(uri, kind)
       val context = RequestContext(version, anchor)
       requestContexts.update(_ + (key -> context)) >>
+        // Cancelling the previous in-flight request for this key (hover only -- see below) must complete before the
+        // new one is sent, not merely before this method returns: `Fiber#cancel` doesn't resolve until the
+        // cancelled fiber has finished unwinding, so sequencing it ahead of the new `sendRequest` guarantees any
+        // `$/cancelRequest` it triggers reaches the wire first. Racing the two (start the new fiber, cancel the old
+        // one alongside it) leaves the order of those two queue offers to fiber scheduling, and the new caller has
+        // no way to tell the resulting message apart from the request it is waiting for.
+        (if kind == RequestKind.Hover then
+           requestFibers.modify(fibers => (fibers - key, fibers.get(key))).flatMap(_.traverse_(_.cancel))
+         else IO.unit) >>
         ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, connectionProvider).flatMap {
           case Some((_, conn)) =>
-            supervisor.supervise(request(conn, context)).flatMap { fiber =>
-              requestFibers
-                .modify(fibers => (fibers.updated(key, fiber), fibers.get(key)))
-                .flatMap(previous =>
-                  if kind == RequestKind.Hover then previous.traverse_(_.cancel)
-                  else IO.unit
-                )
-            }
+            supervisor.supervise(request(conn, context)).flatMap(fiber => requestFibers.update(_.updated(key, fiber)))
           case None =>
             applyEvent(LspEvent.LspHoverReceived(s"No LSP server available for ${languageId.displayName}", anchor))
         }

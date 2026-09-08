@@ -3,12 +3,12 @@ package com.serenity.lsp
 import scala.concurrent.duration.*
 
 import cats.effect.std.Queue
-import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.LspConnection
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import com.serenity.state.models.CursorPosition
+import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
 import io.circe.Json
 import io.circe.syntax.*
@@ -48,11 +48,11 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   /** #1357: a bare `.start` here left `managerFiber` (and any LSP request it was supervising, including its own
     * internal 10s `sendRequest` timeout) running on the shared global runtime whenever a test's own IO chain exited
-    * before reaching `manager.stop` -- for instance the outer `.timeout(3.seconds)` firing under CI scheduling
-    * pressure. The leaked fiber would then surface an unrelated `LspRequestTimeout` failure up to 10 seconds later,
-    * attributed to whatever was running at that point. `Resource.make` guarantees `managerFiber.cancel` on every exit
-    * path (normal, error, or cancellation) rather than only the happy path `manager.stop` covered; cancelling a fiber
-    * that already finished via `manager.stop` is a no-op, so this changes nothing on that path.
+    * before reaching `manager.stop` -- for instance a test body erroring out early under CI scheduling pressure. The
+    * leaked fiber would then surface an unrelated `LspRequestTimeout` failure up to 10 seconds later, attributed to
+    * whatever was running at that point. `Resource.make` guarantees `managerFiber.cancel` on every exit path (normal,
+    * error, or cancellation) rather than only the happy path `manager.stop` covered; cancelling a fiber that already
+    * finished via `manager.stop` is a no-op, so this changes nothing on that path.
     */
   private def harness: Resource[IO, Harness] =
     for
@@ -92,7 +92,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     }
 
   private def noMessage(connection: LspConnection): IO[Unit] =
-    connection.takeOutgoing.timeoutTo(100.millis, IO.pure(None)).map(_ shouldBe None)
+    connection.tryTakeOutgoing.map(_ shouldBe None)
 
   private def requestId(message: Json): Long =
     message.hcursor.downField("id").as[Long].toOption.getOrElse(fail("Request was missing an id"))
@@ -107,108 +107,118 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       }
 
   "LspManager" should "send document changes while a hover response is pending" in
-    harness
-      .use { manager =>
-        for
-          _ <- open(manager)
-          _ <- manager.effects.offer(
-            Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1)))
-          )
-          hover <- takeMessage(manager.connection)
-          _ = hover.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/hover")
-          _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-          // The change supersedes the in-flight hover, so the manager cancels it -- and cancelling now tells the
-          // server to stop (#1285) before the new work goes out, rather than leaving it computing an answer nobody
-          // will read.
-          cancel <- takeMessage(manager.connection)
-          _ = cancel.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
-          _ = cancel.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(requestId(hover))
-          change <- takeMessage(manager.connection)
-          _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
-          _ <- manager.stop
-        yield succeed
-      }
-      .timeout(3.seconds)
-      .unsafeRunSync()
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager)
+            _ <- manager.effects.offer(
+              Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1)))
+            )
+            hover <- takeMessage(manager.connection)
+            _ = hover.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/hover")
+            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+            // The change supersedes the in-flight hover, so the manager cancels it -- and cancelling now tells the
+            // server to stop (#1285) before the new work goes out, rather than leaving it computing an answer nobody
+            // will read.
+            cancel <- takeMessage(manager.connection)
+            _ = cancel.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
+            _ = cancel.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(requestId(hover))
+            change <- takeMessage(manager.connection)
+            _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
+            _ <- manager.stop
+          yield succeed
+        }
+    )
 
   it should "discard a definition response after its document version changes" in {
     val anchor = CursorPosition(0, 1)
-    harness
-      .use { manager =>
-        for
-          _ <- open(manager)
-          _ <- manager.effects.offer(
-            Some(LspEffect.DefinitionRequested(uri, LanguageId.Scala, 0, 1, anchor, "Foo"))
-          )
-          request <- takeMessage(manager.connection)
-          _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-          _ <- takeMessage(manager.connection)
-          pending <- manager.connection.pendingRequestCount
-          _ = pending shouldBe 0
-          _ <- manager.connection.handleIncomingJson(
-            response(
-              requestId(request),
-              Json.obj(
-                "uri" -> uri.asJson,
-                "range" -> Json.obj(
-                  "start" -> Json.obj("line" -> 0.asJson, "character" -> 0.asJson),
-                  "end"   -> Json.obj("line" -> 0.asJson, "character" -> 3.asJson)
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager)
+            _ <- manager.effects.offer(
+              Some(LspEffect.DefinitionRequested(uri, LanguageId.Scala, 0, 1, anchor, "Foo"))
+            )
+            request <- takeMessage(manager.connection)
+            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+            _ <- takeMessage(manager.connection)
+            pending <- manager.connection.pendingRequestCount
+            _ = pending shouldBe 0
+            _ <- manager.connection.handleIncomingJson(
+              response(
+                requestId(request),
+                Json.obj(
+                  "uri" -> uri.asJson,
+                  "range" -> Json.obj(
+                    "start" -> Json.obj("line" -> 0.asJson, "character" -> 0.asJson),
+                    "end"   -> Json.obj("line" -> 0.asJson, "character" -> 3.asJson)
+                  )
                 )
               )
             )
-          )
-          events <- manager.events.get
-          _ = events shouldBe Nil
-          _ <- manager.stop
-        yield succeed
-      }
-      .timeout(3.seconds)
-      .unsafeRunSync()
+            events <- manager.events.get
+            _ = events shouldBe Nil
+            _ <- manager.stop
+          yield succeed
+        }
+    )
   }
 
   it should "cancel a superseded hover request and retain only the current anchor" in {
     val firstAnchor  = CursorPosition(0, 1)
     val secondAnchor = CursorPosition(0, 2)
-    harness
-      .use { manager =>
-        for
-          _ <- open(manager)
-          _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, firstAnchor)))
-          firstRequest <- takeMessage(manager.connection)
-          _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 2, secondAnchor)))
-          secondRequest <- takeMessage(manager.connection)
-          _ <- manager.connection.handleIncomingJson(
-            response(requestId(firstRequest), Json.obj("contents" -> "stale".asJson))
-          )
-          _ <- manager.connection.handleIncomingJson(
-            response(requestId(secondRequest), Json.obj("contents" -> "current".asJson))
-          )
-          _      <- manager.eventApplied.get
-          events <- manager.events.get
-          _ = events shouldBe List(LspEvent.LspHoverReceived("current", secondAnchor))
-          _ <- manager.stop
-        yield succeed
-      }
-      .timeout(3.seconds)
-      .unsafeRunSync()
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager)
+            _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, firstAnchor)))
+            firstRequest <- takeMessage(manager.connection)
+            _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 2, secondAnchor)))
+            // A second hover always supersedes an in-flight one (unconditionally, unlike definition requests), so the
+            // manager cancels the first before sending the second -- the same cancel-before-continuing shape as the
+            // FileChanged case above, and in the same order on the wire.
+            cancel <- takeMessage(manager.connection)
+            _ = cancel.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
+            _ = cancel.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(
+              requestId(firstRequest)
+            )
+            secondRequest <- takeMessage(manager.connection)
+            _ <- manager.connection.handleIncomingJson(
+              response(requestId(firstRequest), Json.obj("contents" -> "stale".asJson))
+            )
+            _ <- manager.connection.handleIncomingJson(
+              response(requestId(secondRequest), Json.obj("contents" -> "current".asJson))
+            )
+            _      <- manager.eventApplied.get
+            events <- manager.events.get
+            _ = events shouldBe List(LspEvent.LspHoverReceived("current", secondAnchor))
+            _ <- manager.stop
+          yield succeed
+        }
+    )
   }
 
   it should "cancel pending request fibers before releasing connections on shutdown" in
-    harness
-      .use { manager =>
-        for
-          _ <- open(manager)
-          _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1))))
-          _ <- takeMessage(manager.connection)
-          _ <- manager.stop
-          pending  <- manager.connection.pendingRequestCount
-          released <- manager.released.tryGet
-        yield
-          pending shouldBe 0
-          released shouldBe Some(())
-      }
-      .timeout(3.seconds)
-      .unsafeRunSync()
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager)
+            _ <- manager.effects.offer(
+              Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1)))
+            )
+            _        <- takeMessage(manager.connection)
+            _        <- manager.stop
+            pending  <- manager.connection.pendingRequestCount
+            released <- manager.released.tryGet
+          yield
+            pending shouldBe 0
+            released shouldBe Some(())
+        }
+    )
 
   it should "cancel a pending request instead of leaking it when the caller's IO chain is interrupted" in {
     // Fiber#cancel doesn't return until the cancelled fiber has actually finished unwinding, so checking
@@ -235,7 +245,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
         pending    <- connection.pendingRequestCount
       yield pending
 
-    val pendingAfterInterruption = program.timeout(3.seconds).unsafeRunSync()
+    val pendingAfterInterruption = runVirtual(program)
     pendingAfterInterruption shouldBe 0
   }
 
@@ -284,7 +294,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
         }
     yield result
 
-    program.timeout(3.seconds).unsafeRunSync()
+    runVirtual(program)
   }
 
   it should "route lifecycle notifications and releases to their workspace connection" in {
@@ -338,7 +348,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
         }
     yield result
 
-    program.timeout(5.seconds).unsafeRunSync()
+    runVirtual(program)
   }
 
   it should "evict the resolution cache for a document exactly when it closes" in {
@@ -377,7 +387,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
         }
     yield result
 
-    program.timeout(3.seconds).unsafeRunSync()
+    runVirtual(program)
   }
 
   it should "reuse a workspace connection until its last document closes" in {
@@ -429,7 +439,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
         }
     yield result
 
-    program.timeout(3.seconds).unsafeRunSync()
+    runVirtual(program)
   }
 
   it should "separate connections when a workspace resolves different server configurations" in {
@@ -478,5 +488,5 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
         }
     yield result
 
-    program.timeout(3.seconds).unsafeRunSync()
+    runVirtual(program)
   }
