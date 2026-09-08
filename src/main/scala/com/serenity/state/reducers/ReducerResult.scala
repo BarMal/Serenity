@@ -8,7 +8,8 @@ import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
-import com.serenity.state.models.{AppState, BufferId, SurfaceId}
+import com.serenity.state.models.{AppState, BufferId, PaneId, SurfaceId}
+import com.serenity.state.undo.BufferSnapshot
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfig
 
@@ -57,6 +58,15 @@ enum AnimationEffect:
   case ClearAll(bufferId: BufferId)
   case ClearOwner(bufferId: BufferId, owner: AnimationOwner)
 
+/** A reducer's own declaration that the edit it just performed is undoable, and whether it should coalesce into an
+  * already-open run of edits (consecutive character/tab insertion) rather than becoming its own undo step -- see #1016.
+  * `before` is the buffer as it was immediately prior to this edit; carried in the effect itself (rather than left for
+  * `UndoRecording` to infer from an event-type allowlist and a before/after diff) because interpretation runs after
+  * `AppState` has already been updated to the post-edit buffer.
+  */
+enum UndoEffect:
+  case RecordBoundary(bufferId: BufferId, paneId: PaneId, before: BufferSnapshot, groupable: Boolean)
+
 enum AppEffect:
   case CompleteQuit
   case ExecuteCommand(command: Command)
@@ -68,6 +78,7 @@ enum AppEffect:
   case Workflow(effect: WorkflowEffect)
   case LspQueue(effect: LspQueueEffect)
   case Animation(effect: AnimationEffect)
+  case Undo(effect: UndoEffect)
 
 final case class ReducerResult(
     state: AppState,

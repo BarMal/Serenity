@@ -22,6 +22,9 @@ final private[manager] class CommandEffectInterpreter(
       case AppEffect.Animation(value)      => dependencies.animation(value)
       case AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis) =>
         dependencies.scheduleCommandRunnerBindingExpiry(recordedAtMillis)
+      // Intercepted by StateManagerEventPipeline.interpretEffect before reaching this dispatcher (#1016) -- undo
+      // recording needs the UndoRecording instance the pipeline owns, which this interpreter has no access to.
+      case AppEffect.Undo(_) => IO.unit
 
 private[manager] object CommandEffectInterpreter:
 
