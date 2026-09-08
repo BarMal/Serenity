@@ -10,7 +10,7 @@ import com.serenity.state.models.*
   */
 private[reducers] object EditorNavigationEventReducer:
   import EditorCursorMovement.*
-  import EditorEventReducer.{CursorEventContext, countLines, findLineEnd, homeTarget, endTarget}
+  import EditorCursorSupport.{CursorEventContext, countLines, findLineEnd, homeTarget, endTarget}
 
   private val OriginCursor = CursorPosition(0, 0)
 

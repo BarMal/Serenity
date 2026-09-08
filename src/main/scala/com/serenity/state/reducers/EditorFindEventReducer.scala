@@ -10,7 +10,7 @@ import com.serenity.state.models.*
   */
 private[reducers] object EditorFindEventReducer:
 
-  def reduce(event: TextEntryEvent, ctx: EditorEventReducer.CursorEventContext): ReducerResult =
+  def reduce(event: TextEntryEvent, ctx: EditorCursorSupport.CursorEventContext): ReducerResult =
     import ctx.*
 
     def applyBuffer(f: Buffer => Buffer): ReducerResult =
