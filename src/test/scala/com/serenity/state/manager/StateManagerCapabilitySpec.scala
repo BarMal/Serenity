@@ -69,11 +69,11 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       sm => (sm.scrollManager, sm.focusManager, sm.fileOpener, sm.fileService)
     val _: StateManager => (PeekManager, PanelManager, ModalService) =
       sm => (sm.peekManager, sm.panelManager, sm.modalService)
-    val _: StateManager => (BufferManager, AnimationTicker) =
-      sm => (sm.bufferManager, sm.animationTicker)
+    val _: StateManager => (BufferManager, AnimationTicker, PaneManager) =
+      sm => (sm.bufferManager, sm.animationTicker, sm.paneManager)
     val _: StateManager => (RuntimeLifecycle, CommandExecutor, SessionService) =
       sm => (sm.runtimeLifecycle, sm.commandExecutor, sm.sessionService)
-    val _: StateManager => PaneManager = _.paneManager
+    summon[StateManager <:< StateEngine] // hot state engine: a mixed-in trait, not a record field (#1017)
     succeed
   }
 
@@ -448,7 +448,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val applied  = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val bufferAnimationsRef =
       Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
-    val capabilities = new StateReader with StateUpdater with EventApplier:
+    val capabilities = new StateEngine:
       def getCurrentState: IO[AppState]                                                 = stateRef.get
       def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
       def updateState(update: AppState => AppState): IO[Unit]                           = stateRef.update(update)

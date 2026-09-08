@@ -37,6 +37,18 @@ trait StateUpdater:
   def updateState(update: AppState => AppState): IO[Unit]
   def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]
 
+/** The hot-path state engine: reading, mutating, and applying events to `AppState`.
+  *
+  * Deliberately a cohesive trait, NOT a capability record (#1017). `getCurrentState`/`getBufferAnimations` are read on
+  * the per-frame render path (`AppRuntime.fastRenderPhase`), which #1017's acceptance criteria carve out from record
+  * conversion exactly as they do `RenderSurface` -- a trait method at a monomorphic call site stays JIT-inlinable where
+  * a record's function field would not. The three capabilities remain as sub-traits so narrow consumers can still
+  * depend on exactly what they use (`RenderController` on `EventApplier`, `ClipboardEventSync` on `StateReader`/
+  * `StateUpdater`); `StateEngine` names their union so the hot core is a single first-class type rather than an
+  * anonymous intersection. This is the record-of-records epic's one deliberate hot-core exception.
+  */
+trait StateEngine extends StateReader, StateUpdater, EventApplier
+
 /** Advances renderer-visible animation state.
   *
   * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
@@ -203,7 +215,7 @@ final case class ScrollManager(
     clickMinimap: (PaneId, Int) => IO[Unit]
 )
 
-trait StateManager extends EventApplier, StateReader, StateUpdater:
+trait StateManager extends StateEngine:
   def scrollManager: ScrollManager
   def sessionStartupInfo: SessionStartupInfo
   def focusManager: FocusManager
