@@ -8,7 +8,5 @@ object InProcessClipboard:
 
   def apply[F[_] : Sync]: F[SystemClipboard[F]] =
     Ref.of[F, Option[String]](None).map { ref =>
-      new SystemClipboard[F]:
-        override def readText: F[Option[String]]      = ref.get
-        override def writeText(text: String): F[Unit] = ref.set(Some(text))
+      SystemClipboard(readText = ref.get, writeText = text => ref.set(Some(text)))
     }

@@ -24,7 +24,7 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
     setCursor(0, 0)
     clipboard.seed("hello ")
 
-    ClipboardEventSync.beforeEvent(Paste, stateManager, clipboard).unsafeRunSync()
+    ClipboardEventSync.beforeEvent(Paste, stateManager, clipboard.instance).unsafeRunSync()
     stateManager.applyEvent(Paste).unsafeRunSync()
 
     getContent(bufferId) shouldBe "hello world"
@@ -33,7 +33,7 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
     setupBuffer("world")
     stateManager.updateState(s => s.copy(runtime = s.runtime.copy(clipboard = Some("existing")))).unsafeRunSync()
 
-    ClipboardEventSync.beforeEvent(Paste, stateManager, clipboard).unsafeRunSync()
+    ClipboardEventSync.beforeEvent(Paste, stateManager, clipboard.instance).unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().runtime.clipboard shouldBe Some("existing")
 
@@ -41,7 +41,7 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
     setupBuffer("copied line")
 
     stateManager.applyEvent(Copy).unsafeRunSync()
-    ClipboardEventSync.afterEvent(Copy, stateManager, clipboard).unsafeRunSync()
+    ClipboardEventSync.afterEvent(Copy, stateManager, clipboard.instance).unsafeRunSync()
 
     clipboard.snapshot shouldBe Some("copied line")
 
@@ -66,7 +66,7 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
     def getContent(bufferId: BufferId): String =
       stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect()
 
-  final class TestClipboard extends SystemClipboard[IO]:
+  final class TestClipboard:
     private val current = AtomicReference[Option[String]](None)
 
     def seed(text: String): Unit =
@@ -75,10 +75,7 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
     def snapshot: Option[String] =
       current.get()
 
-    override def readText: IO[Option[String]] =
-      IO.pure(current.get())
-
-    override def writeText(text: String): IO[Unit] =
-      IO {
-        current.set(Some(text))
-      }
+    val instance: SystemClipboard[IO] = SystemClipboard(
+      readText = IO(current.get()),
+      writeText = text => IO(current.set(Some(text)))
+    )

@@ -191,9 +191,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = IO.unit
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(translator)
-      clipboard = new SystemClipboard[IO]:
-        def readText: IO[Option[String]]      = IO.pure(None)
-        def writeText(text: String): IO[Unit] = IO.unit
+      clipboard                        = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       emitDamage: (Damage => IO[Unit]) = damage => pendingDamage.update(_ |+| damage) >> fastModeSignal.set(true)
       given Logger[IO]                 = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntime
@@ -471,9 +469,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           ]
         ): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit] = IO.unit
-      clipboard = new SystemClipboard[IO]:
-        def readText: IO[Option[String]]      = IO.pure(None)
-        def writeText(text: String): IO[Unit] = IO.unit
+      clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntime
         .inputEventPhase(
           stateManager,
@@ -519,9 +515,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           ]
         ): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit] = IO.unit
-      clipboard = new SystemClipboard[IO]:
-        def readText: IO[Option[String]]      = IO.pure(None)
-        def writeText(text: String): IO[Unit] = IO.unit
+      clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntime
         .inputEventPhase(
           stateManager,
@@ -663,9 +657,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
           ]
         ): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit] = IO.unit
-      clipboard = new SystemClipboard[IO]:
-        def readText: IO[Option[String]]      = IO.pure(None)
-        def writeText(text: String): IO[Unit] = IO.unit
+      clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntime
         .inputEventPhase(stateManager, router, clipboard, IO.unit, cursorVisible, breathIndex, (_: Damage) => IO.unit)(
           Stream.emit(OpenFind)

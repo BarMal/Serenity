@@ -458,10 +458,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         ]
       ): IO[Unit] = bufferAnimationsRef.update(update)
       def applyEvent(event: Event): IO[Unit] = applied.update(_ :+ event)
-    val router = InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default)).unsafeRunSync()
-    val clipboard = new SystemClipboard[IO]:
-      def readText: IO[Option[String]]      = IO.pure(Some("pasted"))
-      def writeText(text: String): IO[Unit] = IO.unit
+    val router        = InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default)).unsafeRunSync()
+    val clipboard     = SystemClipboard[IO](readText = IO.pure(Some("pasted")), writeText = _ => IO.unit)
     val cursorVisible = Ref.of[IO, Boolean](true).unsafeRunSync()
     val breathIndex   = Ref.of[IO, Int](0).unsafeRunSync()
 
