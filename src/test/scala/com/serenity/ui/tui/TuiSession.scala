@@ -188,7 +188,7 @@ final class TuiSession private (
     for
       before           <- state
       beforeAnimations <- stateManager.getBufferAnimations
-      stillActive      <- stateManager.advanceAnimationsOnTick()
+      stillActive      <- stateManager.animationTicker.advanceAnimationsOnTick
       after            <- state
       afterAnimations  <- stateManager.getBufferAnimations
       _ <- damage.update(_ |+| DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations))

@@ -22,13 +22,13 @@ class WordCountStateSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
 
-      bufferId     <- stateManager.createBuffer("one two three")
+      bufferId     <- stateManager.bufferManager.createBuffer("one two three", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       beforeEdit <- stateManager.getCurrentState
-      _          <- stateManager.updateBuffer(bufferId, "one two three four five")
+      _          <- stateManager.bufferManager.updateBuffer(bufferId, "one two three four five")
       afterEdit  <- stateManager.getCurrentState
     yield (beforeEdit, afterEdit)
 

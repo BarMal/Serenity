@@ -389,4 +389,4 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     def advanceAnimations(ticks: Int): Unit =
-      (1 to ticks).foreach(_ => stateManager.advanceAnimationsOnTick().unsafeRunSync())
+      (1 to ticks).foreach(_ => stateManager.animationTicker.advanceAnimationsOnTick.unsafeRunSync())

@@ -25,8 +25,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Given: Multiple panes
-      buffer1 <- stateManager.createBuffer("First buffer")
-      buffer2 <- stateManager.createBuffer("Second buffer")
+      buffer1 <- stateManager.bufferManager.createBuffer("First buffer", None)
+      buffer2 <- stateManager.bufferManager.createBuffer("Second buffer", None)
       pane2   <- stateManager.createPane(Some(buffer2))
 
       // When: Switch focus between panes
@@ -58,7 +58,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Given: Initial state with active pane
-      bufferId     <- stateManager.createBuffer("Some content")
+      bufferId     <- stateManager.bufferManager.createBuffer("Some content", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
 
@@ -92,7 +92,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Given: Active pane with cursor position
-      bufferId <- stateManager.createBuffer("Content")
+      bufferId <- stateManager.bufferManager.createBuffer("Content", None)
       cursor = CursorPosition(0, 3)
       content = PeekContent.DirectoryListing(
         java.nio.file.Paths.get("/test"),
@@ -145,8 +145,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain state consistency during rapid focus transitions" in new StateFixture:
     // Given: Multiple UI components
-    stateManager.createBuffer("Buffer 1").unsafeRunSync()
-    val buffer2 = stateManager.createBuffer("Buffer 2").unsafeRunSync()
+    stateManager.bufferManager.createBuffer("Buffer 1", None).unsafeRunSync()
+    val buffer2 = stateManager.bufferManager.createBuffer("Buffer 2", None).unsafeRunSync()
     val pane1   = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
     val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
@@ -185,7 +185,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
   it should "handle buffer lifecycle correctly" in new StateFixture:
     // Given: Create buffer and associate with pane
-    val bufferId     = stateManager.createBuffer("Initial content").unsafeRunSync()
+    val bufferId     = stateManager.bufferManager.createBuffer("Initial content", None).unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     val paneId       = initialState.persisted.layout.editorPanes.keys.head
 
@@ -207,8 +207,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
   it should "handle pane lifecycle correctly" in new StateFixture:
     // Given: Multiple panes
-    stateManager.createBuffer("Buffer 1").unsafeRunSync()
-    val buffer2 = stateManager.createBuffer("Buffer 2").unsafeRunSync()
+    stateManager.bufferManager.createBuffer("Buffer 1", None).unsafeRunSync()
+    val buffer2 = stateManager.bufferManager.createBuffer("Buffer 2", None).unsafeRunSync()
     val pane1   = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
     val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
@@ -232,8 +232,8 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
   it should "handle complex state validation scenarios" in new StateFixture:
     // Given: Create a complex state
-    stateManager.createBuffer("Buffer 1").unsafeRunSync()
-    val buffer2 = stateManager.createBuffer("Buffer 2").unsafeRunSync()
+    stateManager.bufferManager.createBuffer("Buffer 1", None).unsafeRunSync()
+    val buffer2 = stateManager.bufferManager.createBuffer("Buffer 2", None).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
     val pane2 = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
@@ -247,13 +247,13 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val afterSwitchState = stateManager.getCurrentState.unsafeRunSync()
     afterSwitchState.isValid shouldBe true
 
-    stateManager.createBuffer("Buffer 3").unsafeRunSync()
+    stateManager.bufferManager.createBuffer("Buffer 3", None).unsafeRunSync()
     val afterCreateState = stateManager.getCurrentState.unsafeRunSync()
     afterCreateState.isValid shouldBe true
 
   it should "handle state recovery from invalid transitions gracefully" in new StateFixture:
     // Given: Valid initial state
-    stateManager.createBuffer("Content").unsafeRunSync()
+    stateManager.bufferManager.createBuffer("Content", None).unsafeRunSync()
     val validState = stateManager.getCurrentState.unsafeRunSync()
     validState.isValid shouldBe true
 

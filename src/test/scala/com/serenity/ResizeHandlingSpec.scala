@@ -34,7 +34,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
-    val bufferId = stateManager.createBuffer("Initial content").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("Initial content", None).unsafeRunSync()
     stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // Get initial state and verify initial layout
@@ -163,7 +163,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val viewportSize = ViewportSize(120, 40)
     stateManager.applyEvent(ResizeEvent(viewportSize)).unsafeRunSync()
-    val bufferId = stateManager.createBuffer("assigned after resize").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("assigned after resize", None).unsafeRunSync()
     val paneId = stateManager.getCurrentState
       .unsafeRunSync()
       .persisted
@@ -192,7 +192,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     // Create a long line of text that will wrap differently at different widths
     val longText =
       "This is a very long line of text that should wrap differently when the terminal width changes and we need to test that the rope structure handles this properly"
-    val bufferId = stateManager.createBuffer(longText).unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer(longText, None).unsafeRunSync()
     stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // Start with narrow width (40 chars)

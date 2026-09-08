@@ -89,7 +89,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   "MouseClick" should "move cursor to the clicked buffer position" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("aaaa\nbbbb\ncccc\ndddd").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("aaaa\nbbbb\ncccc\ndddd", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -115,7 +115,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "move cursor to the first row of the content area" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -141,7 +141,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "not move the cursor for non-primary clicks" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -168,7 +168,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "consume workspace clicks, presses, and drags while a close confirmation is active" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha\nbeta\ngamma").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val close = UiSurface(
@@ -203,7 +203,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "route a click inside a close confirmation to its cancel action" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val close = UiSurface(
@@ -249,7 +249,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "route a reflowed close action inside a constrained modal frame" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     val viewport = ViewportSize(40, 4)
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
@@ -292,7 +292,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "route find and replace modal hit regions through their reducers" in {
     val findManager = makeStateManager()
-    val findBuffer  = findManager.createBuffer("needle\nneedle").unsafeRunSync()
+    val findBuffer  = findManager.bufferManager.createBuffer("needle\nneedle", None).unsafeRunSync()
     findManager.setBufferForPane(PaneId(0), findBuffer).unsafeRunSync()
     findManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val findSurface = UiSurface(
@@ -329,7 +329,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
         case _                                                            => None) shouldBe Some(0)
 
     val replaceManager = makeStateManager()
-    val replaceBuffer  = replaceManager.createBuffer("needle").unsafeRunSync()
+    val replaceBuffer  = replaceManager.bufferManager.createBuffer("needle", None).unsafeRunSync()
     replaceManager.setBufferForPane(PaneId(0), replaceBuffer).unsafeRunSync()
     replaceManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val replaceSurface = UiSurface(
@@ -377,7 +377,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
         case _ => None) shouldBe Some(ReplaceWorkflowScope.Selection)
 
     val fileManager = makeStateManager()
-    val fileBuffer  = fileManager.createBuffer("needle").unsafeRunSync()
+    val fileBuffer  = fileManager.bufferManager.createBuffer("needle", None).unsafeRunSync()
     fileManager.setBufferForPane(PaneId(0), fileBuffer).unsafeRunSync()
     fileManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val fileSurface = UiSurface(
@@ -438,7 +438,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "open an editor context menu on secondary click without moving the cursor" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -505,7 +505,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "execute the clicked context menu command against the target editor pane" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
@@ -533,7 +533,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "not select a context menu item when clicking a configured item gap" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState(state =>
       state.copy(persisted = state.persisted.copy(config = state.persisted.config.withCommandRunnerItemGapRows(1)))
@@ -562,7 +562,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "dismiss the context menu on Escape" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
@@ -576,7 +576,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "clamp column to line length when clicking past end of line" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hi\nworld").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hi\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -602,7 +602,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "track the editor position under the pointer on mouse move" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -627,7 +627,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "clear the editor hover target when the pointer leaves editor panes" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello\nworld").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
@@ -639,7 +639,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "ignore clicks in the pane header row" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
@@ -654,7 +654,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "ignore clicks in the spacer area outside any pane" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState(state =>
       state.copy(persisted =
@@ -674,7 +674,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "ignore clicks when terminal size has not been set" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("hello").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("hello", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     // No ResizeEvent applied — ViewportSize is None
 
@@ -691,7 +691,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     given org.typelevel.log4cats.Logger[IO] = org.typelevel.log4cats.slf4j.Slf4jLogger.getLogger[IO]
 
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("iW").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("iW", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -738,7 +738,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "create a selection while dragging inside an editor pane" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha\nbravo\ncharlie").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha\nbravo\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -769,7 +769,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "start a new drag selection from the latest press instead of reusing an old anchor" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha\nbravo\ncharlie").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha\nbravo\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -802,7 +802,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "select the clicked word on double click" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha beta gamma").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha beta gamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -832,7 +832,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "select the clicked word on double click without materialising the whole buffer" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha beta gamma").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha beta gamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -867,7 +867,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "select the clicked line on triple click" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -897,7 +897,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "extend the current selection from the existing anchor on shift-click" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -930,7 +930,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve the original anchor while extending with shift-drag" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -964,7 +964,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "collapse multi-cursor state to the clicked cursor" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha\nbeta\ngamma").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -1007,7 +1007,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
 
   it should "collapse multi-selection state to a single drag selection" in {
     val sm       = makeStateManager()
-    val bufferId = sm.createBuffer("alpha\nbeta\ngamma").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 2))
     val second   = Selection(CursorPosition(2, 0), CursorPosition(2, 2))
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
