@@ -111,7 +111,7 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     val initialPaneId   = singlePaneState.persisted.layout.activeEditorPaneId.get
     val firstBufferId   = singlePaneState.persisted.bufferOrder.head
     stateManager.splitPaneHorizontal(initialPaneId, Some(firstBufferId)).unsafeRunSync()
-    stateManager.switchToPane(initialPaneId).unsafeRunSync()
+    stateManager.paneManager.switchToPane(initialPaneId).unsafeRunSync()
     val stateWith2Buffers = stateManager.getCurrentState.unsafeRunSync()
 
     // Check we have 2 panes visible in wide terminal
@@ -242,7 +242,7 @@ class TabBufferNavigationBehaviorSpec extends AnyFlatSpec with Matchers:
     val singlePaneState = stateManager.getCurrentState.unsafeRunSync()
     val initialPaneId   = singlePaneState.persisted.layout.activeEditorPaneId.get
     stateManager.splitPaneHorizontal(initialPaneId, Some(singlePaneState.persisted.bufferOrder.head)).unsafeRunSync()
-    stateManager.switchToPane(initialPaneId).unsafeRunSync()
+    stateManager.paneManager.switchToPane(initialPaneId).unsafeRunSync()
     val stateWith2Buffers = stateManager.getCurrentState.unsafeRunSync()
 
     // Should have 2 panes, each with different buffers

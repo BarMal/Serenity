@@ -73,6 +73,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       sm => (sm.bufferManager, sm.animationTicker)
     val _: StateManager => (RuntimeLifecycle, CommandExecutor, SessionService) =
       sm => (sm.runtimeLifecycle, sm.commandExecutor, sm.sessionService)
+    val _: StateManager => PaneManager = _.paneManager
     succeed
   }
 

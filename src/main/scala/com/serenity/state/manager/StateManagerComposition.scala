@@ -242,10 +242,13 @@ private[manager] class StateManagerComposition(
     new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, events, effects)
   private val files = new StateManagerFileCapability(stateRef, effects)
 
-  export editor.*
+  // PaneManager's methods are excluded from the facade export and re-assembled into the `paneManager` record below,
+  // since #1017 replaces the mixed-in trait with a field. They stay public on the capability classes so this
+  // composition (and the workflow capability) can still call them directly.
+  export editor.{createPane as _, switchToPane as _, getTabOrder as _, *}
   export events.applyEvent
   export files.*
-  export viewport.*
+  export viewport.{handleViewportResize as _, *}
 
   val lspEffectSource: LspEffectSource = LspEffectSource(lspEffectStream = lspEffectStream)
 
@@ -296,6 +299,13 @@ private[manager] class StateManagerComposition(
   val modalService: ModalService = ModalService(
     showModal = modal => runSurfaceOperation(surfaces.showModal(modal)),
     dismissModal = () => runSurfaceOperation(surfaces.dismissModal())
+  )
+
+  val paneManager: PaneManager = PaneManager(
+    handleViewportResize = viewport.handleViewportResize,
+    createPane = bufferId => editor.createPane(bufferId),
+    switchToPane = editor.switchToPane,
+    getTabOrder = () => editor.getTabOrder()
   )
 
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =

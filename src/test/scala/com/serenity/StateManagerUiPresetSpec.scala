@@ -119,7 +119,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       )
     )
     store.upsert(preset).unsafeRunSync()
-    sm.handleViewportResize(ViewportSize(90, 28)).unsafeRunSync()
+    sm.paneManager.handleViewportResize(ViewportSize(90, 28)).unsafeRunSync()
 
     sm.executeCommand(
       Command.typed(

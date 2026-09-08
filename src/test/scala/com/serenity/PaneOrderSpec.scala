@@ -24,46 +24,46 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
   behavior of "Pane tab order"
 
   it should "return the initial pane in getTabOrder" in new PaneFixture:
-    sm.getTabOrder().unsafeRunSync() shouldBe List(pane0)
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0)
 
   it should "append new panes at the end when using createPane" in new PaneFixture:
-    val pane1 = sm.createPane().unsafeRunSync()
-    val pane2 = sm.createPane().unsafeRunSync()
-    sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, pane1, pane2)
+    val pane1 = sm.paneManager.createPane(None).unsafeRunSync()
+    val pane2 = sm.paneManager.createPane(None).unsafeRunSync()
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0, pane1, pane2)
 
   it should "insert a new pane immediately after the specified pane" in new PaneFixture:
-    val pane1   = sm.createPane().unsafeRunSync()
-    val pane2   = sm.createPane().unsafeRunSync()
+    val pane1   = sm.paneManager.createPane(None).unsafeRunSync()
+    val pane2   = sm.paneManager.createPane(None).unsafeRunSync()
     val newPane = sm.createPaneAfter(pane0).unsafeRunSync()
-    sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, newPane, pane1, pane2)
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0, newPane, pane1, pane2)
 
   it should "insert after the last pane when afterPaneId is the last pane" in new PaneFixture:
-    val pane1   = sm.createPane().unsafeRunSync()
+    val pane1   = sm.paneManager.createPane(None).unsafeRunSync()
     val newPane = sm.createPaneAfter(pane1).unsafeRunSync()
-    sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, pane1, newPane)
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0, pane1, newPane)
 
   it should "insert after a non-existent paneId by appending at the end" in new PaneFixture:
     val ghost   = PaneId(999)
     val newPane = sm.createPaneAfter(ghost).unsafeRunSync()
-    sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, newPane)
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0, newPane)
 
   it should "remove a closed pane from the tab order" in new PaneFixture:
-    val pane1 = sm.createPane().unsafeRunSync()
-    val pane2 = sm.createPane().unsafeRunSync()
+    val pane1 = sm.paneManager.createPane(None).unsafeRunSync()
+    val pane2 = sm.paneManager.createPane(None).unsafeRunSync()
     sm.closePane(pane1).unsafeRunSync()
-    sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, pane2)
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0, pane2)
 
   it should "insert splitPaneHorizontal result immediately after the split pane" in new PaneFixture:
-    val pane1 = sm.createPane().unsafeRunSync()
+    val pane1 = sm.paneManager.createPane(None).unsafeRunSync()
     val split = sm.splitPaneHorizontal(pane0).unsafeRunSync()
-    sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
 
   it should "split only the selected leaf and preserve its sibling split axis" in new PaneFixture:
-    val pane1 = sm.createPane().unsafeRunSync()
+    val pane1 = sm.paneManager.createPane(None).unsafeRunSync()
     val split = sm.splitPaneVertical(pane0).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
 
-    sm.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0, split, pane1)
     state.persisted.layout.workspaceTree.map(_.root) shouldBe Some(
       WorkspaceNode.Split(
         WorkspaceNodeId(s"split-${pane0.value}-${pane1.value}"),

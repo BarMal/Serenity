@@ -497,7 +497,7 @@ object UiScenarioDriver:
         initialConfig = configuredInitialConfig,
         uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default)
       )
-      _ <- manager.handleViewportResize(environment.viewport)
+      _ <- manager.paneManager.handleViewportResize(environment.viewport)
       _ <- manager.updateState(state =>
         state.copy(persisted = state.persisted.copy(theme = themeFor(environment.themeName)))
       )

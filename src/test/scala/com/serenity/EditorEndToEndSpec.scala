@@ -246,8 +246,8 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
     val buffer2 = stateManager.bufferManager.createBuffer("Buffer 2", None).unsafeRunSync()
 
     // When: Perform series of operations
-    val pane2 = stateManager.createPane(Some(buffer2)).unsafeRunSync()
-    stateManager.switchToPane(pane2).unsafeRunSync()
+    val pane2 = stateManager.paneManager.createPane(Some(buffer2)).unsafeRunSync()
+    stateManager.paneManager.switchToPane(pane2).unsafeRunSync()
     stateManager.bufferManager.updateBuffer(buffer1, "Updated content").unsafeRunSync()
 
     // Then: State should remain valid
