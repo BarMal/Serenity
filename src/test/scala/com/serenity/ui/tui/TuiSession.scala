@@ -1,11 +1,9 @@
 package com.serenity.ui.tui
 
-import java.io.{ByteArrayOutputStream, PipedInputStream, PipedOutputStream}
+import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.util.concurrent.Executors
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 
 import cats.effect.std.Queue
@@ -25,11 +23,11 @@ import org.jline.terminal.Size
 import org.jline.terminal.impl.DumbTerminal
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
-/** A running TUI session under test: a real JLine terminal over in-memory streams, wrapped in the real
-  * [[TerminalShell]], fed by the real [[TerminalInputHandler]], translated by the real `InputRouter`, applied to a real
-  * `StateManager` through `AppRuntime`'s own input phase, and painted by [[TuiRuntime]]'s own paint call onto a real
-  * [[TerminalRenderSurface]]. The only thing this harness supplies itself is the loop: everything a byte passes through
-  * on its way to a cell is production code.
+/** A running TUI session under test: a real JLine terminal over an in-memory [[FakeTerminalReader]], wrapped in the
+  * real [[TerminalShell]], fed by the real [[TerminalInputHandler]], translated by the real `InputRouter`, applied to a
+  * real `StateManager` through `AppRuntime`'s own input phase, and painted by [[TuiRuntime]]'s own paint call onto a
+  * real [[TerminalRenderSurface]]. The only thing this harness supplies itself is the loop: everything a byte passes
+  * through on its way to a cell is production code.
   *
   * Input is delivered synchronously. Each [[feed]] writes its bytes followed by a sentinel the input handler cannot
   * translate away, and returns once that sentinel has come back out the other end of the event pipeline -- so by the
@@ -41,8 +39,7 @@ final class TuiSession private (
     handler: TerminalInputHandler,
     surfaces: TuiRuntime.SurfaceHolder,
     output: ByteArrayOutputStream,
-    input: PipedOutputStream,
-    writeEc: ExecutionContext,
+    reader: FakeTerminalReader,
     terminal: DumbTerminal,
     sentinels: Queue[IO, Unit],
     appliedSignals: Queue[IO, Unit],
@@ -245,19 +242,10 @@ final class TuiSession private (
       _ <- screenRef.update(_.consume(fresh)).whenA(fresh.nonEmpty)
     yield fresh
 
-  /** `IO.blocking` deliberately not used here: it dispatches each call onto cats-effect's shared, elastic blocking
-    * pool, which can hand successive writes to different (and short-lived) threads. `PipedOutputStream`/
-    * `PipedInputStream` capture the thread identity of whichever thread last touched each side and treat a dead
-    * writer-side thread as a broken pipe on the next read -- so if the pooled thread that performed one write is reaped
-    * before the next, [[TerminalInputHandler]]'s read loop can see `java.io.IOException: Pipe broken` even though the
-    * session is still fully alive and nothing was closed. Routing every write through one dedicated, session-owned
-    * thread (`writeEc`) keeps the writer-side thread identity stable for the session's whole lifetime.
+  /** `reader.feed` only ever puts onto an in-memory queue (see [[FakeTerminalReader]]), so unlike a real OS pipe it
+    * carries no thread-identity requirement -- no dedicated writer thread is needed to keep it alive.
     */
-  private def write(bytes: Array[Byte]): IO[Unit] =
-    IO {
-      input.write(bytes)
-      input.flush()
-    }.evalOn(writeEc)
+  private def write(bytes: Array[Byte]): IO[Unit] = IO(reader.feed(bytes))
 
   private def awaitSentinel(key: TuiKey): IO[Unit] =
     sentinels.take
@@ -322,19 +310,13 @@ object TuiSession:
         .sorted(java.util.Comparator.reverseOrder[Path]())
         .forEach(path => scala.util.Try(Files.delete(path)).fold(_ => (), _ => ()))
 
-  final private case class Streams(terminal: DumbTerminal, input: PipedOutputStream, output: ByteArrayOutputStream)
-
-  /** A pipe wide enough that feeding a large paste or a long line never blocks the writer waiting on the reader. */
-  private val InputPipeBytes = 1 << 16
+  final private case class Streams(terminal: DumbTerminal, reader: FakeTerminalReader, output: ByteArrayOutputStream)
 
   private def openTerminal(size: ViewportSize): IO[Streams] =
-    IO.blocking {
-      val readEnd  = new PipedInputStream(InputPipeBytes)
-      val writeEnd = new PipedOutputStream(readEnd)
-      val output   = new ByteArrayOutputStream()
-      val terminal = new DumbTerminal("tui-session", "xterm-256color", readEnd, output, StandardCharsets.UTF_8)
-      terminal.setSize(new Size(size.width, size.height))
-      Streams(terminal, writeEnd, output)
+    IO {
+      val output             = new ByteArrayOutputStream()
+      val (terminal, reader) = FakeTerminalReader.dumbTerminal(new Size(size.width, size.height), output)
+      Streams(terminal, reader, output)
     }
 
   /** Start a session and tear it down afterwards: the terminal is restored through [[TerminalShell]]'s own release, the
@@ -350,20 +332,11 @@ object TuiSession:
         IO.blocking(deleteRecursively(root)).attempt.void
       )
       streams <- Resource.eval(openTerminal(environment.viewport))
-      writeEc <- dedicatedWriteExecutionContext
       shell   <- TerminalShell.forTerminal(streams.terminal)
-      built   <- Resource.eval(assemble(environment, workspace, streams, writeEc, shell))
+      built   <- Resource.eval(assemble(environment, workspace, streams, shell))
       _       <- Resource.make(built.consumer.start)((fiber: FiberIO[Unit]) => fiber.cancel)
       _       <- Resource.onFinalize(built.session.handlerShutdown)
     yield built.session
-
-  /** One thread, held for the session's whole lifetime, that every [[TuiSession.write]] call runs on -- see that
-    * method's doc comment for why a stable thread identity matters for the piped streams underneath the test terminal.
-    */
-  private def dedicatedWriteExecutionContext: Resource[IO, ExecutionContext] =
-    Resource
-      .make(IO(Executors.newSingleThreadExecutor()))(executor => IO(executor.shutdown()))
-      .map(ExecutionContext.fromExecutor)
 
   final private case class Built(session: TuiSession, consumer: IO[Unit])
 
@@ -371,7 +344,6 @@ object TuiSession:
     environment: TuiEnvironment,
     workspace: Path,
     streams: Streams,
-    writeEc: ExecutionContext,
     shell: TerminalShell
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: Balance): IO[Built] =
     val terminalConfig =
@@ -420,8 +392,7 @@ object TuiSession:
         handler = handler,
         surfaces = new TuiRuntime.SurfaceHolder(shell),
         output = streams.output,
-        input = streams.input,
-        writeEc = writeEc,
+        reader = streams.reader,
         terminal = streams.terminal,
         sentinels = sentinels,
         appliedSignals = appliedSignals,
