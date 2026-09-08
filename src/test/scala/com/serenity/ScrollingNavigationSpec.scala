@@ -97,7 +97,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
 
       // When: Scroll horizontally to bring cursor into view
-      _                <- sm.ensureCursorVisible(paneId)
+      _                <- sm.scrollManager.ensureCursorVisible(paneId)
       afterScrollState <- sm.getCurrentState
     yield
       // Then: Viewport should scroll horizontally
@@ -136,7 +136,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       }
       _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 4))
       _ <- sm.setCursorPosition(paneId, 0, 10)
-      _ <- sm.ensureCursorVisible(paneId)
+      _ <- sm.scrollManager.ensureCursorVisible(paneId)
       afterScrollState <- sm.getCurrentState
     yield
       val pane   = afterScrollState.persisted.layout.editorPanes(paneId)
@@ -244,7 +244,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     // When: Initiate smooth scroll to line 30
-    stateManager.smoothScrollTo(paneId, 30).unsafeRunSync()
+    stateManager.scrollManager.smoothScrollTo(paneId, 30).unsafeRunSync()
 
     // Then: Should start smooth scrolling animation
     val duringScrollState = stateManager.getCurrentState.unsafeRunSync()
@@ -252,7 +252,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     pane.smoothScrolling shouldBe Some(SmoothScrollState(targetTopLine = 30, progress = 0.0))
 
     // When: Progress smooth scroll animation
-    stateManager.progressSmoothScroll(paneId, 0.5).unsafeRunSync()
+    stateManager.scrollManager.progressSmoothScroll(paneId, 0.5).unsafeRunSync()
 
     // Then: Should be partially scrolled
     val halfwayState = stateManager.getCurrentState.unsafeRunSync()
@@ -262,7 +262,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     buffer2.viewport.topLine should be < 30
 
     // When: Complete smooth scroll
-    stateManager.progressSmoothScroll(paneId, 1.0).unsafeRunSync()
+    stateManager.scrollManager.progressSmoothScroll(paneId, 1.0).unsafeRunSync()
 
     // Then: Should reach target
     val finalState = stateManager.getCurrentState.unsafeRunSync()
@@ -411,7 +411,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // When: Click on minimap (simulate click at 50% down)
     val targetLine = 500 // Middle of file
-    stateManager.clickMinimap(paneId, targetLine).unsafeRunSync()
+    stateManager.scrollManager.clickMinimap(paneId, targetLine).unsafeRunSync()
 
     // Then: Should scroll to clicked location
     val afterClickState = stateManager.getCurrentState.unsafeRunSync()

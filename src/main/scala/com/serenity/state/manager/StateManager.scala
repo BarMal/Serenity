@@ -39,7 +39,6 @@ trait StateUpdater:
 
 /** Advances renderer-visible animation state. */
 trait AnimationTicker:
-  def advanceAnimationFrames(): IO[Unit]
   def advanceAnimationsOnTick(): IO[Boolean]
 
 /** Owns application shutdown and periodic session persistence. */
@@ -67,19 +66,16 @@ trait CommandExecutor:
 
 /** Reads and changes editor focus. */
 trait FocusManager:
-  def getCurrentFocus: IO[Focus]
   def switchFocus(newFocus: Focus): IO[Unit]
 
 /** Manages editor buffers. */
 trait BufferManager:
-  def getActiveBuffer: IO[Option[Buffer]]
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
   def createNewEmptyBuffer(): IO[BufferId]
   def updateBuffer(bufferId: BufferId, content: String): IO[Unit]
 
 /** Manages editor panes, tabs, and splits. */
 trait PaneManager:
-  def getActivePane: IO[Option[EditorPane]]
   def handleViewportResize(newSize: ViewportSize): IO[Unit]
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
   def switchToPane(paneId: PaneId): IO[Unit]
@@ -125,12 +121,18 @@ trait FileService:
   def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean]
   def getRecentFiles: IO[List[Path]]
 
-/** Controls editor viewport scrolling. */
-trait ScrollManager:
-  def ensureCursorVisible(paneId: PaneId): IO[Unit]
-  def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit]
-  def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit]
-  def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit]
+/** Controls editor viewport scrolling.
+  *
+  * A cold capability (user-initiated, not a per-frame/per-glyph boundary) expressed as a record of functions rather
+  * than a trait -- see #1017. The first slice of `StateManager`'s own 18-trait facade to convert: `StateManager` holds
+  * one of these as a field (a "record of records") instead of mixing this trait in directly.
+  */
+final case class ScrollManager(
+    ensureCursorVisible: PaneId => IO[Unit],
+    smoothScrollTo: (PaneId, Int) => IO[Unit],
+    progressSmoothScroll: (PaneId, Double) => IO[Unit],
+    clickMinimap: (PaneId, Int) => IO[Unit]
+)
 
 trait StateManager
     extends EventApplier,
@@ -149,8 +151,8 @@ trait StateManager
       SessionService,
       PanelManager,
       ModalService,
-      FileService,
-      ScrollManager
+      FileService:
+  def scrollManager: ScrollManager
 
 object StateManager:
 
