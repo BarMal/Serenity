@@ -28,7 +28,9 @@ final private[manager] class StateManagerEditorCapability(
 
   def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
 
-  def switchFocus(newFocus: Focus): IO[Unit] =
+  val focusManager: FocusManager = FocusManager(switchFocus = switchFocus)
+
+  private def switchFocus(newFocus: Focus): IO[Unit] =
     stateRef.update(state => state.copy(persisted = state.persisted.copy(focus = newFocus)))
 
   def updateState(update: AppState => AppState): IO[Unit] =
