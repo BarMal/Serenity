@@ -2,6 +2,8 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration.*
+
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
@@ -17,6 +19,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
+import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -328,15 +331,13 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     fixture.currentState.persisted.buffers(bufferId).document.language shouldBe Some(LanguageId.Python)
-    val opened = fixture.lspQueue.stream
-      .take(1)
-      .compile
-      .toList
-      .timeoutTo(
-        scala.concurrent.duration.DurationInt(1).second,
-        IO.pure(Nil)
-      )
-      .unsafeRunSync()
+    val opened = runVirtual(
+      fixture.lspQueue.stream
+        .take(1)
+        .compile
+        .toList
+        .timeoutTo(1.second, IO.pure(Nil))
+    )
     opened shouldBe List(LspEffect.FileOpened(path.toUri.toString, LanguageId.Python, "print(1)"))
   }
 
@@ -360,15 +361,13 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val opened = fixture.lspQueue.stream
-      .take(1)
-      .compile
-      .toList
-      .timeoutTo(
-        scala.concurrent.duration.DurationInt(1).second,
-        IO.pure(Nil)
-      )
-      .unsafeRunSync()
+    val opened = runVirtual(
+      fixture.lspQueue.stream
+        .take(1)
+        .compile
+        .toList
+        .timeoutTo(1.second, IO.pure(Nil))
+    )
     opened shouldBe Nil
   }
 
@@ -534,12 +533,13 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
 
     fixture.handlers.interpretEffect(AppEffect.LspQueue(LspQueueEffect.Enqueue(effect))).unsafeRunSync()
 
-    val received = fixture.lspQueue.stream
-      .take(1)
-      .compile
-      .toList
-      .timeoutTo(scala.concurrent.duration.DurationInt(1).second, IO.pure(Nil))
-      .unsafeRunSync()
+    val received = runVirtual(
+      fixture.lspQueue.stream
+        .take(1)
+        .compile
+        .toList
+        .timeoutTo(1.second, IO.pure(Nil))
+    )
     received shouldBe List(effect)
   }
 

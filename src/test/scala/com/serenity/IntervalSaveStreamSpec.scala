@@ -3,10 +3,10 @@ package com.serenity
 import scala.concurrent.duration.*
 
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
+import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -24,17 +24,10 @@ class IntervalSaveStreamSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      emitted <- stateManager.runtimeLifecycle.intervalSaveStream
-        .take(1)
-        .compile
-        .toList
-        .timeoutTo(
-          1.second,
-          IO.raiseError[List[Unit]](new AssertionError("Empty interval save stream did not terminate"))
-        )
+      emitted      <- stateManager.runtimeLifecycle.intervalSaveStream.take(1).compile.toList
     yield emitted shouldBe List.empty
 
-    program.unsafeRunSync()
+    runVirtual(program)
   }
 
   it should "emit on the configured interval when saveInterval is set" in {
@@ -48,5 +41,5 @@ class IntervalSaveStreamSpec extends AnyFlatSpec with Matchers:
       _            <- stateManager.runtimeLifecycle.intervalSaveStream.take(2).compile.drain
     yield succeed
 
-    program.unsafeRunSync()
+    runVirtual(program)
   }
