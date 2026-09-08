@@ -53,7 +53,7 @@ enum SessionFocus:
 
 object SessionLayout:
 
-  final private[session] case class Restored(layout: Layout, surfaces: List[UiSurface], nextSurfaceId: Int)
+  final case class Restored(layout: Layout, surfaces: List[UiSurface], nextSurfaceId: Int)
 
   def fromAppState(state: AppState): SessionLayout =
     val dockedPanels = state.pinnedSurfaces.flatMap { surface =>
@@ -91,7 +91,7 @@ object SessionLayout:
   def toLayout(sessionLayout: SessionLayout): Layout =
     restore(sessionLayout).layout
 
-  private[session] def restore(
+  def restore(
     sessionLayout: SessionLayout,
     validBufferIds: Option[Set[BufferId]] = None
   ): Restored =
