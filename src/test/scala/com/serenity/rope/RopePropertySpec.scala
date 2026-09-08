@@ -199,6 +199,20 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
     }
   }
 
+  /** #1063: `getLine` used to walk `Leaf`/`Node` directly (`appendLine`/`appendLeafLine`) while `linesIteratorFrom`
+    * streamed flattened chunks from `chunksInRange` (`nextLine`) -- two traversal styles answering the same "content of
+    * line N" question. `getLine` now delegates to `linesIteratorFrom`, so this locks the two call shapes in agreement
+    * across generated tree shapes rather than re-testing one definition against itself.
+    */
+  property("getLine agrees with linesIteratorFrom on every line, whatever the rope's shape") {
+    forAll(Generators.genMultilineText.flatMap(t => Generators.ropeOfShape(t).map(_ -> t))) { (rope, text) =>
+      val lines = text.split("\n", -1).toVector
+      lines.indices.foreach(i => rope.getLine(i) shouldBe rope.linesIteratorFrom(i).nextOption().map(_._2))
+      rope.getLine(lines.length) shouldBe None
+      rope.linesIteratorFrom(lines.length).nextOption() shouldBe None
+    }
+  }
+
   property("lineColumnToOffset and offsetToLineColumn are inverse over every valid offset") {
     forAll(Generators.genMultilineText.flatMap(t => Generators.ropeOfShape(t).map(_ -> t))) { (rope, text) =>
       (0 to text.length).foreach { offset =>

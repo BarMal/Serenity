@@ -746,13 +746,13 @@ class RopeSpec extends AnyFlatSpec with Matchers:
   //
   // One guarantee this test double could make before sealing is now narrower: sealing means we can no longer
   // construct a *genuine* third `Rope` implementation, so production helpers that pattern-match `case Leaf(v)`
-  // directly on a rope value (rather than calling its virtual methods) -- `Rope.leafValues`, `appendLine`,
-  // `lineColumnToOffsetIn`, `offsetToLineColumnIn` -- would now match this double structurally and silently take the
-  // Leaf fast path instead of hitting the guarded `index`/`collect` override. `getLine`/`lineColumnToOffset` (used by
-  // the "skip preceding rope branches" test below) are unaffected here because the traversal never recurses into
-  // this delegate's branch for that test's inputs -- the enclosing `Node` dispatches purely on `weight`/`newlineCount`
-  // /`endsWithNewline`, all ordinary virtual calls. No currently-exercised path in this file reaches the weakened
-  // case, but a future test that pattern-matches into this specific node would no longer be caught by the guard.
+  // directly on a rope value (rather than calling its virtual methods) -- `Rope.leafValues`, `lineColumnToOffsetIn`,
+  // `offsetToLineColumnIn`, `chunksInRange` (and so `getLine`/`linesFrom`/`linesIteratorFrom`/`searchAll`) -- would
+  // now match this double structurally and take the Leaf fast path instead of the guarded `index`/`collect`
+  // override. `getLine`/`lineColumnToOffset` (used by the "skip preceding rope branches" test below) are unaffected
+  // because the traversal never recurses into this delegate's branch -- the enclosing `Node` dispatches purely on
+  // `weight`/`newlineCount`/`endsWithNewline`, all ordinary virtual calls. A future test that pattern-matches into
+  // this specific node would no longer be caught by the guard.
   final class ExplodingIndexRope(delegate: Rope)(using Balance) extends Leaf(delegate.collect()):
     override def weight: Int =
       delegate.weight
