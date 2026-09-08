@@ -19,7 +19,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain immutable state throughout event processing" in new FunctionalFixture:
     // Given: Initial state
-    stateManager.createBuffer("Initial").unsafeRunSync()
+    stateManager.bufferManager.createBuffer("Initial", None).unsafeRunSync()
     val initialState         = stateManager.getCurrentState.unsafeRunSync()
     val initialStateSnapshot = initialState.copy() // Snapshot for comparison
 
@@ -40,7 +40,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "demonstrate referential transparency in event processing" in new FunctionalFixture:
     // Given: Same initial state and events
-    stateManager.createBuffer("Test").unsafeRunSync()
+    stateManager.bufferManager.createBuffer("Test", None).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync()
 
     // Create second state manager with same initial state
@@ -49,7 +49,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     val stateManager2 = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
-    stateManager2.createBuffer("Test").unsafeRunSync()
+    stateManager2.bufferManager.createBuffer("Test", None).unsafeRunSync()
     stateManager2.getCurrentState.unsafeRunSync()
 
     // When: Apply identical event sequences to both
@@ -73,7 +73,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "handle state transitions through monadic composition" in new FunctionalFixture:
     // Given: Initial state wrapped in IO
-    val bufferId = stateManager.createBuffer("monad").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("monad", None).unsafeRunSync()
     stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // When: Chain operations using IO monad
@@ -93,7 +93,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "demonstrate immutable data structure benefits" in new FunctionalFixture:
     // Given: Shared state between multiple "views"
-    val bufferId  = stateManager.createBuffer("Shared content").unsafeRunSync()
+    val bufferId  = stateManager.bufferManager.createBuffer("Shared content", None).unsafeRunSync()
     val baseState = stateManager.getCurrentState.unsafeRunSync()
 
     // When: Create multiple derived states (simulating undo/redo or multiple views)

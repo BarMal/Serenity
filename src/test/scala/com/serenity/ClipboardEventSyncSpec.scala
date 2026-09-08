@@ -56,7 +56,7 @@ class ClipboardEventSyncSpec extends AnyFlatSpec with Matchers:
     val clipboard: TestClipboard = new TestClipboard
 
     def setupBuffer(content: String): BufferId =
-      val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+      val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
       stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
       bufferId
 

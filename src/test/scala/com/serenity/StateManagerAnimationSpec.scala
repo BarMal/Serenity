@@ -26,7 +26,7 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
 
   "advanceAnimationsOnTick" should "return false immediately when no animations are active" in {
     val sm     = makeStateManager()
-    val result = sm.advanceAnimationsOnTick().unsafeRunSync()
+    val result = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
     result shouldBe false
   }
 
@@ -53,7 +53,7 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     )
     sm.updateBufferAnimations(_.updated(bufferId, animations)).unsafeRunSync()
 
-    val result = sm.advanceAnimationsOnTick().unsafeRunSync()
+    val result = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
     result shouldBe true
   }
 
@@ -80,22 +80,22 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     )
     sm.updateBufferAnimations(_.updated(bufferId, animations)).unsafeRunSync()
 
-    val result = sm.advanceAnimationsOnTick().unsafeRunSync()
+    val result = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
     result shouldBe false
   }
 
   it should "not modify animation state when called with no active animations" in {
     val sm                = makeStateManager()
     val bufferAnimsBefore = sm.getBufferAnimations.unsafeRunSync().view.mapValues(_.animations).toMap
-    sm.advanceAnimationsOnTick().unsafeRunSync()
+    sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
     val bufferAnimsAfter = sm.getBufferAnimations.unsafeRunSync().view.mapValues(_.animations).toMap
     bufferAnimsAfter shouldBe bufferAnimsBefore
   }
 
   it should "not copy inactive buffers while advancing another buffer animation" in {
     val sm               = makeStateManager()
-    val inactiveBufferId = sm.createBuffer("inactive").unsafeRunSync()
-    val activeBufferId   = sm.createBuffer("active").unsafeRunSync()
+    val inactiveBufferId = sm.bufferManager.createBuffer("inactive", None).unsafeRunSync()
+    val activeBufferId   = sm.bufferManager.createBuffer("active", None).unsafeRunSync()
 
     sm.updateBufferAnimations { _ =>
       Map(
@@ -114,7 +114,7 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     val inactiveBefore   = before.persisted.buffers(inactiveBufferId)
     val animationsBefore = sm.getBufferAnimations.unsafeRunSync()
 
-    sm.advanceAnimationsOnTick().unsafeRunSync()
+    sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     val after           = sm.getCurrentState.unsafeRunSync()
     val inactiveAfter   = after.persisted.buffers(inactiveBufferId)
@@ -138,7 +138,7 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
 
     val before = sm.getCurrentState.unsafeRunSync().runtime.companionSprite
 
-    val stillActive = sm.advanceAnimationsOnTick().unsafeRunSync()
+    val stillActive = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync().runtime.companionSprite
     stillActive shouldBe true
@@ -149,7 +149,7 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     val sm     = makeStateManager()
     val before = sm.getCurrentState.unsafeRunSync().runtime.companionSprite
 
-    sm.advanceAnimationsOnTick().unsafeRunSync()
+    sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().runtime.companionSprite shouldBe before
   }
@@ -163,7 +163,7 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     val sm = StateManager.apply(logger, initialConfig = config).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync().runtime.companionSprite
-    sm.advanceAnimationsOnTick().unsafeRunSync()
+    sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().runtime.companionSprite shouldBe before
   }
@@ -182,8 +182,8 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
 
     val firstBufferId = sm.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
-    sm.updateBuffer(firstBufferId, "First").unsafeRunSync()
-    val secondBufferId = sm.createBuffer("Second").unsafeRunSync()
+    sm.bufferManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
+    val secondBufferId = sm.bufferManager.createBuffer("Second", None).unsafeRunSync()
 
     sm.applyEvent(NextTab).unsafeRunSync()
 

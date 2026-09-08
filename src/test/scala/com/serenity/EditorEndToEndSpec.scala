@@ -242,13 +242,13 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain state validity throughout complex operations" in new EditorTestFixture:
     // Given: Initial valid state
-    val buffer1 = stateManager.createBuffer("Buffer 1").unsafeRunSync()
-    val buffer2 = stateManager.createBuffer("Buffer 2").unsafeRunSync()
+    val buffer1 = stateManager.bufferManager.createBuffer("Buffer 1", None).unsafeRunSync()
+    val buffer2 = stateManager.bufferManager.createBuffer("Buffer 2", None).unsafeRunSync()
 
     // When: Perform series of operations
     val pane2 = stateManager.createPane(Some(buffer2)).unsafeRunSync()
     stateManager.switchToPane(pane2).unsafeRunSync()
-    stateManager.updateBuffer(buffer1, "Updated content").unsafeRunSync()
+    stateManager.bufferManager.updateBuffer(buffer1, "Updated content").unsafeRunSync()
 
     // Then: State should remain valid
     val finalState = stateManager.getCurrentState.unsafeRunSync()
@@ -317,7 +317,7 @@ class EditorEndToEndSpec extends AnyFlatSpec with Matchers:
 
     def createBufferWithPane(content: String): Option[BufferId] =
       try
-        val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+        val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
         val state    = stateManager.getCurrentState.unsafeRunSync()
         val paneId   = state.persisted.layout.editorPanes.keys.head // Get default pane
         stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()

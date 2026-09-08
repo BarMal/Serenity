@@ -241,7 +241,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     private val activeBufferId = AtomicReference[BufferId](BufferId(0))
 
     def setupBuffer(content: String): BufferId =
-      val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+      val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
       activePaneId.set(state.persisted.layout.editorPanes.keys.head)
       activeBufferId.set(bufferId)

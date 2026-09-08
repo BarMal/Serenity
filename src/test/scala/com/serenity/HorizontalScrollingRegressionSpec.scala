@@ -20,7 +20,7 @@ class HorizontalScrollingRegressionSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("HorizontalScrollingRegression"))
     val stateManager        = StateManager.apply(logger).unsafeRunSync()
 
-    val bufferId = stateManager.createBuffer("").unsafeRunSync()
+    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()

@@ -63,7 +63,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
     awakened.glyph should not be WindowSitter.default.glyph
 
     Iterator
-      .continually(stateManager.advanceAnimationsOnTick().unsafeRunSync())
+      .continually(stateManager.animationTicker.advanceAnimationsOnTick.unsafeRunSync())
       .takeWhile(identity)
       .toList
 
@@ -171,8 +171,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       breathIndex          <- Ref.of[IO, Int](0)
       stateManager = new com.serenity.state.manager.StateReader
         with com.serenity.state.manager.StateUpdater
-        with com.serenity.state.manager.EventApplier
-        with com.serenity.state.manager.AnimationTicker:
+        with com.serenity.state.manager.EventApplier:
         def getCurrentState: IO[AppState]                                                 = IO.pure(state)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
@@ -182,9 +181,11 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
             com.serenity.animation.AnimationState
           ]
         ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit]     = IO.unit
-        def advanceAnimationFrames(): IO[Unit]     = IO.unit
-        def advanceAnimationsOnTick(): IO[Boolean] = animationTicks.updateAndGet(_ + 1).as(true)
+        def applyEvent(event: Event): IO[Unit] = IO.unit
+        def advanceAnimationFrames(): IO[Unit] = IO.unit
+      animationTicker = com.serenity.state.manager.AnimationTicker(
+        advanceAnimationsOnTick = animationTicks.updateAndGet(_ + 1).as(true)
+      )
       inputRouter = new InputRouter[IO, Event]:
         private val translator = new TextEntryTranslator(AppConfig.default)
 
@@ -209,6 +210,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       _ <- AppRuntime
         .fastRenderPhase(
           stateManager,
+          animationTicker,
           fastModeSignal,
           pendingDamage,
           pendingPaintDamage,
@@ -262,8 +264,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       cursorOnlyFrames     <- Ref.of[IO, Int](0)
       stateManager = new com.serenity.state.manager.StateReader
         with com.serenity.state.manager.StateUpdater
-        with com.serenity.state.manager.EventApplier
-        with com.serenity.state.manager.AnimationTicker:
+        with com.serenity.state.manager.EventApplier:
         def getCurrentState: IO[AppState]                                                 = IO.pure(state)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
@@ -273,13 +274,14 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
             com.serenity.animation.AnimationState
           ]
         ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit]     = IO.unit
-        def advanceAnimationFrames(): IO[Unit]     = IO.unit
-        def advanceAnimationsOnTick(): IO[Boolean] = IO.pure(true)
+        def applyEvent(event: Event): IO[Unit] = IO.unit
+        def advanceAnimationFrames(): IO[Unit] = IO.unit
+      animationTicker  = com.serenity.state.manager.AnimationTicker(advanceAnimationsOnTick = IO.pure(true))
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntime
         .fastRenderPhase(
           stateManager,
+          animationTicker,
           fastModeSignal,
           pendingDamage,
           pendingPaintDamage,
@@ -334,8 +336,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       cursorOnlyFrames     <- Ref.of[IO, Int](0)
       stateManager = new com.serenity.state.manager.StateReader
         with com.serenity.state.manager.StateUpdater
-        with com.serenity.state.manager.EventApplier
-        with com.serenity.state.manager.AnimationTicker:
+        with com.serenity.state.manager.EventApplier:
         def getCurrentState: IO[AppState]                                                 = IO.pure(state)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
@@ -345,13 +346,14 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
             com.serenity.animation.AnimationState
           ]
         ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit]     = IO.unit
-        def advanceAnimationFrames(): IO[Unit]     = IO.unit
-        def advanceAnimationsOnTick(): IO[Boolean] = IO.pure(true)
+        def applyEvent(event: Event): IO[Unit] = IO.unit
+        def advanceAnimationFrames(): IO[Unit] = IO.unit
+      animationTicker  = com.serenity.state.manager.AnimationTicker(advanceAnimationsOnTick = IO.pure(true))
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntime
         .fastRenderPhase(
           stateManager,
+          animationTicker,
           fastModeSignal,
           pendingDamage,
           pendingPaintDamage,

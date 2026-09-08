@@ -214,7 +214,7 @@ private[manager] class StateManagerComposition(
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
         workflow.beginCloseAction(scope, state)
       def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-        editor.createBuffer(content, filePath)
+        editor.bufferManager.createBuffer(content, filePath)
       def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
 
   private val eventUiPort: EventUiPort =

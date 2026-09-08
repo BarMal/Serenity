@@ -205,7 +205,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     def setupBuffer(content: String): BufferId =
-      val bufferId = stateManager.createBuffer(content).unsafeRunSync()
+      val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
       val paneId   = state.persisted.layout.editorPanes.keys.head
       stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()

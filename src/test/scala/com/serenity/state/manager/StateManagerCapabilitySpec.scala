@@ -64,16 +64,16 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     new StateManagerEventPipeline(statePort, effectPort, workflowPort, uiPort, operations)
 
   "StateManager" should "compose focused façade capabilities" in {
-    summon[StateManager <:< BufferManager]
     summon[StateManager <:< PaneManager]
     summon[StateManager <:< PeekManager]
     summon[StateManager <:< SessionService]
     summon[StateManager <:< PanelManager]
     summon[StateManager <:< ModalService]
     summon[StateManager <:< FileService]
-    // ScrollManager and FocusManager are #1017's capability-record slices: fields, not mixed-in traits.
+    // ScrollManager, FocusManager and BufferManager are #1017's capability-record slices: fields, not mixed-in traits.
     val _: StateManager => ScrollManager = _.scrollManager
     val _: StateManager => FocusManager  = _.focusManager
+    val _: StateManager => BufferManager = _.bufferManager
     succeed
   }
 

@@ -36,7 +36,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     val sm      = makeStateManager()
     val surface = new MockRenderSurface(80, 24)
 
-    val bufferId = sm.createNewEmptyBuffer().unsafeRunSync()
+    val bufferId = sm.bufferManager.createNewEmptyBuffer.unsafeRunSync()
     val state    = sm.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     sm.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -54,7 +54,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     val sm      = makeStateManager()
     val surface = new MockRenderSurface(80, 24)
 
-    val bufferId = sm.createBuffer("Hello, World!").unsafeRunSync()
+    val bufferId = sm.bufferManager.createBuffer("Hello, World!", None).unsafeRunSync()
     val state    = sm.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     sm.setBufferForPane(paneId, bufferId).unsafeRunSync()

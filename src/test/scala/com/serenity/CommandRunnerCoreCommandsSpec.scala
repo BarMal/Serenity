@@ -154,7 +154,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "execute clipboard and select-all editor commands" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.createBuffer("Hello World").unsafeRunSync()
+    val bufferId     = stateManager.bufferManager.createBuffer("Hello World", None).unsafeRunSync()
     stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     stateManager
       .updateState { state =>
@@ -531,7 +531,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val targetPath   = Files.createTempDirectory("serenity-unsaved-save").resolve("draft.txt")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
 
-    stateManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()
+    stateManager.bufferManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "save", "save")
 
@@ -605,7 +605,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "open an unsaved-changes workflow for the close-all command when any affected buffer is dirty" in {
     val stateManager  = createStateManager()
-    val dirtyBufferId = stateManager.createBuffer("dirty buffer").unsafeRunSync()
+    val dirtyBufferId = stateManager.bufferManager.createBuffer("dirty buffer", None).unsafeRunSync()
 
     stateManager
       .updateState { state =>
@@ -633,7 +633,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "open an unsaved-changes workflow for the close-others command when any other buffer is dirty" in {
     val stateManager  = createStateManager()
-    val dirtyBufferId = stateManager.createBuffer("dirty buffer").unsafeRunSync()
+    val dirtyBufferId = stateManager.bufferManager.createBuffer("dirty buffer", None).unsafeRunSync()
 
     stateManager
       .updateState { state =>
@@ -1692,14 +1692,14 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val bufferId     = BufferId(0)
     val viewportSize = ViewportSize(120, 40)
 
-    stateManager.updateBuffer(bufferId, "saved session").unsafeRunSync()
+    stateManager.bufferManager.updateBuffer(bufferId, "saved session").unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.isNewEmpty shouldBe false
 
     executeCommandThroughRunner(stateManager, "save-session", "save-session")
     stateManager.sessionStartupInfo.sessionExists.unsafeRunSync() shouldBe true
 
     stateManager.handleViewportResize(viewportSize).unsafeRunSync()
-    stateManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
+    stateManager.bufferManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "restore-session", "restore-session")
     val restoredState = stateManager.getCurrentState.unsafeRunSync()
@@ -1718,7 +1718,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val startupViewport = ViewportSize(120, 40)
     val savedViewport   = ViewportSize(80, 24)
 
-    savedManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
+    savedManager.bufferManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
     executeCommandThroughRunner(savedManager, "save-session", "save-session")
     AppStartup
       .initializeState(restoredManager, restoredManager.sessionStartupInfo, Theme.default, startupViewport)

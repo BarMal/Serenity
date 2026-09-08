@@ -37,9 +37,12 @@ trait StateUpdater:
   def updateState(update: AppState => AppState): IO[Unit]
   def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]
 
-/** Advances renderer-visible animation state. */
-trait AnimationTicker:
-  def advanceAnimationsOnTick(): IO[Boolean]
+/** Advances renderer-visible animation state.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class AnimationTicker(advanceAnimationsOnTick: IO[Boolean])
 
 /** Owns application shutdown and periodic session persistence. */
 trait RuntimeLifecycle:
@@ -80,11 +83,17 @@ trait CommandExecutor:
   */
 final case class FocusManager(switchFocus: Focus => IO[Unit])
 
-/** Manages editor buffers. */
-trait BufferManager:
-  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
-  def createNewEmptyBuffer(): IO[BufferId]
-  def updateBuffer(bufferId: BufferId, content: String): IO[Unit]
+/** Manages editor buffers.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly. The former default on `createBuffer`'s `filePath`
+  * parameter can't survive as a case class field, so callers now pass `None` explicitly.
+  */
+final case class BufferManager(
+    createBuffer: (String, Option[Path]) => IO[BufferId],
+    createNewEmptyBuffer: IO[BufferId],
+    updateBuffer: (BufferId, String) => IO[Unit]
+)
 
 /** Manages editor panes, tabs, and splits. */
 trait PaneManager:
@@ -150,11 +159,9 @@ trait StateManager
     extends EventApplier,
       StateReader,
       StateUpdater,
-      AnimationTicker,
       RuntimeLifecycle,
       FileOpener,
       CommandExecutor,
-      BufferManager,
       PaneManager,
       PeekManager,
       SessionService,
@@ -165,6 +172,8 @@ trait StateManager
   def sessionStartupInfo: SessionStartupInfo
   def focusManager: FocusManager
   def lspEffectSource: LspEffectSource
+  def animationTicker: AnimationTicker
+  def bufferManager: BufferManager
 
 object StateManager:
 
