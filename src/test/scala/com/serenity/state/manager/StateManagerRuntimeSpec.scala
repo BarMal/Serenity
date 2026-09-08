@@ -190,7 +190,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       _                         <- projectTaskFiberRef.set(Some(ManagedProjectTask(shutdownTaskFinished, shutdownTask)))
       _                         <- analysisStarted.get
       _                         <- documentAnalysisFiberRef.set(Some(pendingAnalysis))
-      _                         <- composition.forceQuit()
+      _                         <- composition.runtimeLifecycle.forceQuit
       shutdownChildWasDestroyed <- shutdownChildDestroyed.tryGet
       projectTaskAfterShutdown  <- projectTaskFiberRef.get
       analysisWasCancelled      <- analysisCancelled.tryGet

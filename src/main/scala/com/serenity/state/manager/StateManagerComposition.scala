@@ -253,7 +253,9 @@ private[manager] class StateManagerComposition(
     lspQueue.stream
       .interruptWhen(Stream.eval(quitSignal.get).as(true))
 
-  def executeCommand(command: com.serenity.command.Command): IO[Unit] =
+  val commandExecutor: CommandExecutor = CommandExecutor(executeCommand = executeCommand)
+
+  private def executeCommand(command: com.serenity.command.Command): IO[Unit] =
     stateRef.get.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingOperations
 
   private def drainPendingOperations: IO[Unit] =
@@ -335,13 +337,19 @@ private[manager] class StateManagerComposition(
   def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
   def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
 
-  def saveSession(): IO[Unit] =
+  val sessionService: SessionService = SessionService(
+    saveSession = saveSession,
+    loadSession = loadSession,
+    clearSession = sessionManager.clearSession()
+  )
+
+  private def saveSession: IO[Unit] =
     getCurrentState.flatMap { state =>
       sessionManager.saveSession(state, persistUnsavedBuffers = true) >>
         logger.info("[SESSION] Session saved")
     }.void
 
-  def loadSession(): IO[Option[AppState]] =
+  private def loadSession: IO[Option[AppState]] =
     sessionManager.loadSession()
 
   val sessionStartupInfo: SessionStartupInfo = SessionStartupInfo(
@@ -349,12 +357,13 @@ private[manager] class StateManagerComposition(
     sessionExists = sessionManager.sessionExists
   )
 
-  def clearSession(): IO[Unit] =
-    sessionManager.clearSession()
+  val runtimeLifecycle: RuntimeLifecycle = RuntimeLifecycle(
+    awaitQuit = quitSignal.get,
+    forceQuit = forceQuit,
+    intervalSaveStream = intervalSaveStream
+  )
 
-  def awaitQuit: IO[Unit] = quitSignal.get
-
-  def forceQuit(): IO[Unit] =
+  private def forceQuit: IO[Unit] =
     cancelProjectTask() >> operations.cancelDocumentAnalysis() >> stateRef.get.flatMap { state =>
       sessionPersistence
         .onAppClose(clearCloseActions(state))
@@ -365,7 +374,7 @@ private[manager] class StateManagerComposition(
   private def cancelProjectTask(): IO[Unit] =
     ProjectTaskOwnership.cancel(projectTaskFiberRef, projectTaskSemaphore).void
 
-  def intervalSaveStream: Stream[IO, Unit] =
+  private def intervalSaveStream: Stream[IO, Unit] =
     policy.saveInterval match
       case None => Stream.empty
       case Some(interval) =>

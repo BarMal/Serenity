@@ -480,6 +480,6 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface shouldBe None
     updatedState.persisted.buffers should not contain key(bufferId)
-    stateManager.awaitQuit.timeout(1.second).unsafeRunSync()
+    stateManager.runtimeLifecycle.awaitQuit.timeout(1.second).unsafeRunSync()
   }
 end CloseWorkflowStateManagerSpec

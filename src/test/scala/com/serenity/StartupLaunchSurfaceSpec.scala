@@ -97,7 +97,15 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     val codeMetrics  = CellMetrics(charWidth = 8, lineHeight = 12, ascent = 9)
     val uiMetrics    = CellMetrics(charWidth = 11, lineHeight = 24, ascent = 18)
 
-    AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, Theme.default, viewport).unsafeRunSync()
+    AppStartup
+      .initializeState(
+        stateManager,
+        stateManager.sessionService,
+        stateManager.sessionStartupInfo,
+        Theme.default,
+        viewport
+      )
+      .unsafeRunSync()
     val page = stateManager.getCurrentState
       .unsafeRunSync()
       .startPageSurface
@@ -131,7 +139,15 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     val codeMetrics  = CellMetrics(charWidth = 8, lineHeight = 12, ascent = 9)
     val uiMetrics    = CellMetrics(charWidth = 11, lineHeight = 24, ascent = 18)
 
-    AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, Theme.default, viewport).unsafeRunSync()
+    AppStartup
+      .initializeState(
+        stateManager,
+        stateManager.sessionService,
+        stateManager.sessionStartupInfo,
+        Theme.default,
+        viewport
+      )
+      .unsafeRunSync()
     val page = stateManager.getCurrentState
       .unsafeRunSync()
       .startPageSurface

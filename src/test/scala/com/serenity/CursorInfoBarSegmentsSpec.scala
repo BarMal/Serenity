@@ -25,15 +25,17 @@ class CursorInfoBarSegmentsSpec extends AnyFlatSpec with Matchers:
     StateManager.apply(logger).unsafeRunSync()
 
   private def execute(sm: StateManager, intent: CursorIntent): Unit =
-    sm.executeCommand(
-      Command.typed(
-        "test-cursor-intent",
-        "test",
-        CommandIntent.Settings(SettingsIntent.Cursor(intent)),
-        CommandCategory.Settings,
-        label = "test"
+    sm.commandExecutor
+      .executeCommand(
+        Command.typed(
+          "test-cursor-intent",
+          "test",
+          CommandIntent.Settings(SettingsIntent.Cursor(intent)),
+          CommandCategory.Settings,
+          label = "test"
+        )
       )
-    ).unsafeRunSync()
+      .unsafeRunSync()
 
   "AppConfig" should "default cursorInfoBarSegments to empty" in {
     AppConfig.default.cursorInfoBarSegments shouldBe Nil

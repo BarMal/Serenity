@@ -383,7 +383,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
       .surfaceConfig
       .commandRunnerShowKeyHints shouldBe true
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "command-runner-key-hints-off",
@@ -401,7 +401,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
       .surfaceConfig
       .commandRunnerShowKeyHints shouldBe false
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "command-runner-key-hints-on",
@@ -433,7 +433,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
   it should "set text display settings explicitly from stateful options" in {
     val stateManager = createStateManager()
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "line-numbers-off",
@@ -443,7 +443,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "gutter-off",
@@ -453,7 +453,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "word-wrap-off",
@@ -463,7 +463,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "focused-body-on",
@@ -473,7 +473,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "contextual-toolbar-off",
@@ -483,7 +483,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "contextual-toolbar-text-only",
@@ -504,7 +504,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     disabledState.persisted.config.surfaceConfig.contextualToolbarEnabled shouldBe false
     disabledState.persisted.config.surfaceConfig.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.TextOnly
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command
           .typed(
@@ -515,7 +515,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
           )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "gutter-on",
@@ -525,7 +525,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "word-wrap-on",
@@ -535,7 +535,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "focused-body-off",
@@ -545,7 +545,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "contextual-toolbar-on",
@@ -555,7 +555,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "contextual-toolbar-icon-text",

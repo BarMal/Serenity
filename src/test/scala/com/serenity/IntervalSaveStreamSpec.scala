@@ -24,7 +24,7 @@ class IntervalSaveStreamSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
-      emitted <- stateManager.intervalSaveStream
+      emitted <- stateManager.runtimeLifecycle.intervalSaveStream
         .take(1)
         .compile
         .toList
@@ -45,7 +45,7 @@ class IntervalSaveStreamSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger, policy)
-      _            <- stateManager.intervalSaveStream.take(2).compile.drain
+      _            <- stateManager.runtimeLifecycle.intervalSaveStream.take(2).compile.drain
     yield succeed
 
     program.unsafeRunSync()

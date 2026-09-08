@@ -61,7 +61,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         }
         .unsafeRunSync()
 
-      stateManager
+      stateManager.commandExecutor
         .executeCommand(
           Command.typed(
             "project-build",
@@ -93,7 +93,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "not run a project task while the app is in prose mode" in {
     val stateManager = createStateManager()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "app-mode-prose",
@@ -104,7 +104,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "project-run",

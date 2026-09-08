@@ -41,11 +41,19 @@ trait StateUpdater:
 trait AnimationTicker:
   def advanceAnimationsOnTick(): IO[Boolean]
 
-/** Owns application shutdown and periodic session persistence. */
-trait RuntimeLifecycle:
-  def awaitQuit: IO[Unit]
-  def forceQuit(): IO[Unit]
-  def intervalSaveStream: Stream[IO, Unit]
+/** Owns application shutdown and periodic session persistence.
+  *
+  * A capability record per #1017 -- see `ScrollManager` for the shape rationale. `StateManager` holds one of these as a
+  * field instead of mixing this trait in directly. `awaitQuit` and `intervalSaveStream` hold their descriptions
+  * directly (same as `LspEffectSource.lspEffectStream`); `forceQuit` does too, since every call site invokes it
+  * immediately rather than passing the unapplied function around, so a plain `IO[Unit]` field (not `() => IO[Unit]`)
+  * matches how it's actually used despite the trait's empty-parens method having declared it as a `def`.
+  */
+final case class RuntimeLifecycle(
+    awaitQuit: IO[Unit],
+    forceQuit: IO[Unit],
+    intervalSaveStream: Stream[IO, Unit]
+)
 
 /** Supplies effects for the language-server interpreter.
   *
@@ -69,9 +77,12 @@ final case class SessionStartupInfo(
 trait FileOpener:
   def openFile(filePath: Path): IO[Unit]
 
-/** Executes editor commands. */
-trait CommandExecutor:
-  def executeCommand(command: Command): IO[Unit]
+/** Executes editor commands.
+  *
+  * A capability record per #1017 -- see `ScrollManager` for the shape rationale. `StateManager` holds one of these as a
+  * field instead of mixing this trait in directly.
+  */
+final case class CommandExecutor(executeCommand: Command => IO[Unit])
 
 /** Reads and changes editor focus.
   *
@@ -99,11 +110,16 @@ trait PeekManager:
   def dismissPeek(): IO[Unit]
   def peekToPin(position: PanelPosition): IO[Unit]
 
-/** Manages persisted editor sessions. */
-trait SessionService:
-  def saveSession(): IO[Unit]
-  def loadSession(): IO[Option[AppState]]
-  def clearSession(): IO[Unit]
+/** Manages persisted editor sessions.
+  *
+  * A capability record per #1017 -- see `ScrollManager` for the shape rationale. `StateManager` holds one of these as a
+  * field instead of mixing this trait in directly.
+  */
+final case class SessionService(
+    saveSession: IO[Unit],
+    loadSession: IO[Option[AppState]],
+    clearSession: IO[Unit]
+)
 
 /** Manages pinned panels and the file explorer. */
 trait PanelManager:
@@ -151,13 +167,10 @@ trait StateManager
       StateReader,
       StateUpdater,
       AnimationTicker,
-      RuntimeLifecycle,
       FileOpener,
-      CommandExecutor,
       BufferManager,
       PaneManager,
       PeekManager,
-      SessionService,
       PanelManager,
       ModalService,
       FileService:
@@ -165,6 +178,9 @@ trait StateManager
   def sessionStartupInfo: SessionStartupInfo
   def focusManager: FocusManager
   def lspEffectSource: LspEffectSource
+  def runtimeLifecycle: RuntimeLifecycle
+  def commandExecutor: CommandExecutor
+  def sessionService: SessionService
 
 object StateManager:
 

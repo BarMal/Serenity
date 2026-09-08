@@ -190,7 +190,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "markdown-view-source",

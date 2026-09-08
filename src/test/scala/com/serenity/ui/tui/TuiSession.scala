@@ -398,6 +398,7 @@ object TuiSession:
       viewport <- shell.viewportSize
       initialState <- AppStartup.initializeState(
         stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         theme,
         viewport,

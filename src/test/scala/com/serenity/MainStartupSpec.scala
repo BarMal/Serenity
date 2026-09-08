@@ -35,6 +35,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
       finalState <- AppStartup.initializeState(
         stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         defaultTheme,
         initialViewportSize
@@ -66,6 +67,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         stateManager <- StateManager.apply(logger)
         finalState <- AppStartup.initializeState(
           stateManager,
+          stateManager.sessionService,
           stateManager.sessionStartupInfo,
           defaultTheme,
           initialViewportSize,
@@ -92,6 +94,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
       openedState <- AppStartup.initializeState(
         stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         defaultTheme,
         initialViewportSize,
@@ -116,6 +119,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
       finalState <- AppStartup.initializeState(
         stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         defaultTheme,
         wideViewportSize
@@ -150,6 +154,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         stateManager <- StateManager.apply(logger)
         finalState <- AppStartup.initializeState(
           stateManager,
+          stateManager.sessionService,
           stateManager.sessionStartupInfo,
           defaultTheme,
           initialViewportSize,
@@ -209,7 +214,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val program = for
       firstManager <- StateManager.apply(logger, sessionRootOverride = Some(sessionRoot))
       _ <- firstManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = Theme.light)))
-      _ <- firstManager.saveSession()
+      _ <- firstManager.sessionService.saveSession
       secondManager <- StateManager.apply(
         logger,
         sessionRootOverride = Some(sessionRoot)
@@ -217,6 +222,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       startupTheme <- AppStartup.startupTheme(secondManager.sessionStartupInfo, AppThemeManager.create)
       finalState <- AppStartup.initializeState(
         secondManager,
+        secondManager.sessionService,
         secondManager.sessionStartupInfo,
         startupTheme,
         initialViewportSize

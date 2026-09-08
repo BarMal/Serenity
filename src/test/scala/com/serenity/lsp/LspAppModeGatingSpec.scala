@@ -40,7 +40,7 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
   private def setLanguage(stateManager: StateManager, language: LanguageId): Unit =
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "set-buffer-language-scala",
@@ -68,7 +68,7 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     val file         = Files.createTempFile("lsp-mode-gating-prose", ".scala")
     try
-      stateManager
+      stateManager.commandExecutor
         .executeCommand(
           Command.typed(
             "app-mode-prose",

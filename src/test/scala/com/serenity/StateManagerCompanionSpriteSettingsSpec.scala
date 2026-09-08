@@ -28,7 +28,7 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
     StateManager(logger, initialConfig = initialConfig).unsafeRunSync()
 
   private def execute(stateManager: StateManager, intent: PanelChromeIntent): Unit =
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "companion-sprite-settings-spec",

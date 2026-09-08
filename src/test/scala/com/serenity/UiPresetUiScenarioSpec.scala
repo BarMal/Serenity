@@ -34,7 +34,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    driver.stateManager
+    driver.stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "save-scenario-preset",
@@ -125,7 +125,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
       CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetMaterialPreset(MaterialPreset.Solid)))
     )
     val changed = driver.renderFrame("changed-before-restart").unsafeRunSync()
-    driver.stateManager.saveSession().unsafeRunSync()
+    driver.stateManager.sessionService.saveSession.unsafeRunSync()
 
     val restarted = UiScenarioDriver
       .create("ui-preset-fresh-runtime", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))
@@ -163,7 +163,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   private def execute(driver: UiScenarioDriver, intent: CommandIntent): Unit =
-    driver.stateManager
+    driver.stateManager.commandExecutor
       .executeCommand(Command.typed("scenario-preset", "Scenario preset", intent, CommandCategory.Settings))
       .unsafeRunSync()
 

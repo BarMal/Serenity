@@ -34,7 +34,13 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
-      _ <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
+      _ <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionService,
+        stateManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _ <- stateManager.applyEvent(MoveDown)
 
       stateAfterNav <- stateManager.getCurrentState
@@ -65,7 +71,13 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
-      _          <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
+      _ <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionService,
+        stateManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(Enter)
       finalState <- stateManager.getCurrentState
@@ -87,7 +99,13 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
-      _          <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
+      _ <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionService,
+        stateManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _          <- stateManager.applyEvent(InsertChar('3'))
       finalState <- stateManager.getCurrentState
     yield
@@ -107,7 +125,13 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
-      _          <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
+      _ <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionService,
+        stateManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _          <- stateManager.applyEvent(Enter) // Select first option: New Session
       finalState <- stateManager.getCurrentState
     yield

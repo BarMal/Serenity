@@ -112,14 +112,16 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       activeState.runtime.uiSurfaces
         .exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
 
-      sm.executeCommand(
-        Command.typed(
-          "disable-motion",
-          "Disable motion",
-          intent,
-          CommandCategory.Settings
+      sm.commandExecutor
+        .executeCommand(
+          Command.typed(
+            "disable-motion",
+            "Disable motion",
+            intent,
+            CommandCategory.Settings
+          )
         )
-      ).unsafeRunSync()
+        .unsafeRunSync()
 
       val state = sm.getCurrentState.unsafeRunSync()
       sm.getBufferAnimations.unsafeRunSync().values.foreach(_.animations shouldBe Map.empty)
@@ -141,14 +143,16 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     advanceToVisible(sm)
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
-    sm.executeCommand(
-      Command.typed(
-        "editor-text-speed-scale",
-        "Set editor text speed scale",
-        CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(0.0))),
-        CommandCategory.Settings
+    sm.commandExecutor
+      .executeCommand(
+        Command.typed(
+          "editor-text-speed-scale",
+          "Set editor text speed scale",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(0.0))),
+          CommandCategory.Settings
+        )
       )
-    ).unsafeRunSync()
+      .unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
     sm.getBufferAnimations.unsafeRunSync().values.foreach(_.animations shouldBe Map.empty)

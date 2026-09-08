@@ -33,7 +33,7 @@ class StateManagerDefaultDocumentModeSpec extends AnyFlatSpec with Matchers:
   "StateManager default document mode commands" should "update the default document mode config" in {
     val stateManager = createStateManager()
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "default-document-mode-markdown",

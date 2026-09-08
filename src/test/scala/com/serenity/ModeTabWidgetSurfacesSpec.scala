@@ -39,7 +39,7 @@ class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers:
       CommandCategory.View
     )
 
-    stateManager.executeCommand(command).unsafeRunSync()
+    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
     val opened = stateManager.getCurrentState.unsafeRunSync()
     opened.runtime.uiSurfaces.exists {
       case surface =>
@@ -48,7 +48,7 @@ class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers:
           case _                            => false
     } shouldBe true
 
-    stateManager.executeCommand(command).unsafeRunSync()
+    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
     val closed = stateManager.getCurrentState.unsafeRunSync()
     closed.runtime.uiSurfaces.exists {
       case surface =>
@@ -67,7 +67,7 @@ class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers:
       CommandCategory.View
     )
 
-    stateManager.executeCommand(command).unsafeRunSync()
+    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
     val opened = stateManager.getCurrentState.unsafeRunSync()
     opened.runtime.uiSurfaces.exists {
       case surface =>
@@ -76,7 +76,7 @@ class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers:
           case _                                      => false
     } shouldBe true
 
-    stateManager.executeCommand(command).unsafeRunSync()
+    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
     val closed = stateManager.getCurrentState.unsafeRunSync()
     closed.runtime.uiSurfaces.exists {
       case surface =>
