@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Files
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
@@ -159,10 +159,10 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
   it should "export the current theme to the path chosen through the file dialog" in {
     val directory = Files.createTempDirectory("theme-export")
     try
-      val dialog = new FileDialog:
-        def chooseSaveFile(initialDirectory: Option[Path], suggestedFileName: Option[String]): IO[Option[Path]] =
-          IO.pure(suggestedFileName.map(directory.resolve))
-        def chooseOpenFile(initialDirectory: Option[Path]): IO[Option[Path]] = IO.pure(None)
+      val dialog = FileDialog(
+        chooseOpenFile = _ => IO.pure(None),
+        chooseSaveFile = (_, suggestedFileName) => IO.pure(suggestedFileName.map(directory.resolve))
+      )
 
       val fixture = harness(fileDialog = Some(dialog))
 

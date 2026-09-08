@@ -224,10 +224,10 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
     val directory = Files.createTempDirectory("effect-handlers-open")
     val target    = Files.writeString(directory.resolve("picked.txt"), "picked content")
     try
-      val dialog = new FileDialog:
-        def chooseOpenFile(initialDirectory: Option[Path]): IO[Option[Path]] = IO.pure(Some(target))
-        def chooseSaveFile(initialDirectory: Option[Path], suggestedFileName: Option[String]): IO[Option[Path]] =
-          IO.pure(None)
+      val dialog = FileDialog(
+        chooseOpenFile = _ => IO.pure(Some(target)),
+        chooseSaveFile = (_, _) => IO.pure(None)
+      )
       val fixture = harness(fileDialogOpt = Some(dialog))
 
       fixture.handlers
