@@ -205,12 +205,13 @@ sealed trait Rope(using balance: Balance):
   def lineCount: Int =
     newlineCount + 1
 
+  /** #1063: previously walked `Leaf`/`Node` directly via `appendLine`, duplicating the line-boundary scan
+    * `linesIteratorFrom` already does over flattened chunks. Delegating keeps the same cost shape -- one
+    * `lineColumnToOffset` descent plus a scan bounded by the line's own length -- without a second implementation of
+    * "find line N" to keep in sync.
+    */
   def getLine(lineIndex: Int): Option[String] =
-    if lineIndex < 0 || lineIndex > newlineCount then None
-    else
-      val value = new StringBuilder
-      appendLine(this, lineIndex, value)
-      Some(value.toString)
+    linesIteratorFrom(lineIndex).nextOption().map((_, line) => line)
 
   def linesFrom(lineIndex: Int, maxLines: Int): Vector[String] =
     linesIteratorFrom(lineIndex).take(maxLines).map(_._2).toVector
@@ -259,32 +260,6 @@ sealed trait Rope(using balance: Balance):
           case _                                        => false
 
     loop(0)
-
-  private def appendLine(rope: Rope, lineIndex: Int, value: StringBuilder): Unit =
-    rope match
-      case Leaf(leafValue) =>
-        appendLeafLine(leafValue, lineIndex, value)
-      case node: Node =>
-        if lineIndex < node.left.newlineCount then appendLine(node.left, lineIndex, value)
-        else if lineIndex > node.left.newlineCount then
-          appendLine(node.right, lineIndex - node.left.newlineCount, value)
-        else
-          if node.left.weight > 0 && !node.left.endsWithNewline then appendLine(node.left, lineIndex, value)
-          appendLine(node.right, 0, value)
-
-  private def appendLeafLine(leafValue: String, lineIndex: Int, value: StringBuilder): Unit =
-    @tailrec
-    def loop(offset: Int, currentLine: Int): Unit =
-      if offset < leafValue.length then
-        val char = leafValue.charAt(offset)
-        if currentLine == lineIndex then
-          if char != '\n' then
-            value.append(char)
-            loop(offset + 1, currentLine)
-        else if char == '\n' then loop(offset + 1, currentLine + 1)
-        else loop(offset + 1, currentLine)
-
-    loop(0, 0)
 
   final private case class LineTraversal(
       chunks: Iterator[(Int, String)],
