@@ -30,7 +30,12 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+      state <- AppStartup.startPageState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        com.serenity.ui.theme.Theme.dark,
+        ViewportSize(100, 30)
+      )
     yield
       val sceneBuilds = new AtomicInteger(0)
       val startupResult = RendererEntryPoints.withSceneIfNeeded(
@@ -52,7 +57,12 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+      state <- AppStartup.startPageState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        com.serenity.ui.theme.Theme.dark,
+        ViewportSize(100, 30)
+      )
     yield
       val surface = new MockRenderSurface(100, 30)
 
@@ -76,7 +86,12 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+      state <- AppStartup.startPageState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        com.serenity.ui.theme.Theme.dark,
+        ViewportSize(100, 30)
+      )
     yield
       val surface = new MockRenderSurface(100, 30)
       RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
@@ -116,7 +131,12 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+      state <- AppStartup.startPageState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        com.serenity.ui.theme.Theme.dark,
+        ViewportSize(100, 30)
+      )
     yield
       val surface     = new MockRenderSurface(100, 30)
       val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -154,7 +174,12 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+      state <- AppStartup.startPageState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        com.serenity.ui.theme.Theme.dark,
+        ViewportSize(100, 30)
+      )
     yield
       val surface     = new MockRenderSurface(100, 30)
       val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -190,7 +215,12 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      state        <- AppStartup.startPageState(stateManager, com.serenity.ui.theme.Theme.dark, ViewportSize(100, 30))
+      state <- AppStartup.startPageState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        com.serenity.ui.theme.Theme.dark,
+        ViewportSize(100, 30)
+      )
     yield
       val surface     = new MockRenderSurface(100, 30)
       val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)

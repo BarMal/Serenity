@@ -31,7 +31,7 @@ class ActualStartupFlowSpec extends AnyFlatSpec with Matchers:
       stateAfterCreation <- stateManager.getCurrentState
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
-      initialState  <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      initialState  <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
       _             <- stateManager.applyEvent(MoveDown)
       stateAfterNav <- stateManager.getCurrentState
       startPage = stateAfterNav.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page

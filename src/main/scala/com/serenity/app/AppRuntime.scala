@@ -158,9 +158,10 @@ object AppRuntime:
         stateManager <- makeStateManager.getOrElse(logger => StateManager.apply(logger, initialConfig = appConfig))(
           logger
         )
-        startupTheme <- AppStartup.startupTheme(stateManager, themeManager)
+        startupTheme <- AppStartup.startupTheme(stateManager.sessionStartupInfo, themeManager)
         initialState <- AppStartup.initializeState(
           stateManager,
+          stateManager.sessionStartupInfo,
           startupTheme,
           initialViewportSize,
           appConfig,
@@ -199,9 +200,7 @@ object AppRuntime:
             markdownPreviewCloseCallbackBridge(stateManager, resizeCallbackDispatcher)
           )
         )
-        animationTickCadence <- Ref.of[IO, AnimationTickCadence](
-          AnimationTickCadence.empty
-        )
+        animationTickCadence <- Ref.of[IO, AnimationTickCadence](AnimationTickCadence.empty)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
         inputFunnel = inputEventPhase(

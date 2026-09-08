@@ -51,10 +51,16 @@ trait RuntimeLifecycle:
 trait LspEffectSource:
   def lspEffectStream: Stream[IO, LspEffect]
 
-/** Reads persisted session metadata needed before startup restoration. */
-trait SessionStartupInfo:
-  def currentSessionThemeName: IO[Option[String]]
-  def sessionExists: IO[Boolean]
+/** Reads persisted session metadata needed before startup restoration.
+  *
+  * A cold capability expressed as a record of functions rather than a trait -- see #1017, following `ScrollManager`'s
+  * precedent. `StateManager` holds one of these as a field (a "record of records") instead of mixing this trait in
+  * directly.
+  */
+final case class SessionStartupInfo(
+    currentSessionThemeName: IO[Option[String]],
+    sessionExists: IO[Boolean]
+)
 
 /** Opens a file into editor state. */
 trait FileOpener:
@@ -141,7 +147,6 @@ trait StateManager
       AnimationTicker,
       RuntimeLifecycle,
       LspEffectSource,
-      SessionStartupInfo,
       FileOpener,
       CommandExecutor,
       FocusManager,
@@ -153,6 +158,7 @@ trait StateManager
       ModalService,
       FileService:
   def scrollManager: ScrollManager
+  def sessionStartupInfo: SessionStartupInfo
 
 object StateManager:
 

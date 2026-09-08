@@ -99,7 +99,8 @@ object AppStartup:
     )
 
   def startPageState(
-    stateManager: SessionStartupInfo & SessionService,
+    stateManager: SessionService,
+    sessionStartupInfo: SessionStartupInfo,
     theme: Theme,
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default,
@@ -108,7 +109,7 @@ object AppStartup:
     configNotice: Option[String] = None
   ): IO[AppState] =
     for
-      sessionExists <- stateManager.sessionExists
+      sessionExists <- sessionStartupInfo.sessionExists
       recentFiles   <- stateManager.loadSession().map(_.fold(Nil)(_.persisted.recentFiles))
       readableRecentFiles <- IO.blocking(
         recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
@@ -139,18 +140,19 @@ object AppStartup:
 
   /** Resolve the theme to use for startup before a saved session is restored. */
   def startupTheme(
-    stateManager: SessionStartupInfo,
+    sessionStartupInfo: SessionStartupInfo,
     themeManager: AppThemeManager,
     fallbackThemeName: String = "dark"
   ): IO[Theme] =
     for
-      savedThemeName <- stateManager.currentSessionThemeName
+      savedThemeName <- sessionStartupInfo.currentSessionThemeName
       theme          <- themeManager.initializeWithTheme(savedThemeName.getOrElse(fallbackThemeName))
     yield theme
 
   /** Initialize the application state for first render using the active theme and current viewport size. */
   def initializeState(
-    stateManager: StateUpdater & StateReader & FileOpener & SessionStartupInfo & SessionService,
+    stateManager: StateUpdater & StateReader & FileOpener & SessionService,
+    sessionStartupInfo: SessionStartupInfo,
     theme: Theme,
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default,
@@ -183,6 +185,7 @@ object AppStartup:
         for
           startState <- startPageState(
             stateManager,
+            sessionStartupInfo,
             theme,
             initialViewportSize,
             appConfig,

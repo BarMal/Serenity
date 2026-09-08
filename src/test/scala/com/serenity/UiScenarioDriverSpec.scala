@@ -66,7 +66,14 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
 
       val narrowEnvironment = environment.copy(viewport = ViewportSize(48, 16))
       val startupDriver     = UiScenarioDriver.create(s"semantic-$themeName-startup", narrowEnvironment).unsafeRunSync()
-      AppStartup.initializeState(startupDriver.stateManager, theme, narrowEnvironment.viewport).unsafeRunSync()
+      AppStartup
+        .initializeState(
+          startupDriver.stateManager,
+          startupDriver.stateManager.sessionStartupInfo,
+          theme,
+          narrowEnvironment.viewport
+        )
+        .unsafeRunSync()
       val startup = startupDriver.renderFrame("startup").unsafeRunSync()
       startup.evidence.drawnText.map(_.text).mkString(" ") should include("Welcome to Serenity")
       startup.evidence.layoutViolations shouldBe empty

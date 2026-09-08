@@ -34,7 +34,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       stateManager1 <- createStateManagerIO("StartupOptionsEndToEndSpec")
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
-      _ <- AppStartup.initializeState(stateManager1, theme, viewportSize)
+      _ <- AppStartup.initializeState(stateManager1, stateManager1.sessionStartupInfo, theme, viewportSize)
       // Option 1 is selected by default, just press Enter
       _               <- stateManager1.applyEvent(Enter)
       newSessionState <- stateManager1.getCurrentState
@@ -50,7 +50,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         "StartupOptionsEndToEndSpec",
         fileDialog = Some(testFileDialog(Some(selectedFile)))
       )
-      _             <- AppStartup.initializeState(stateManager3, theme, viewportSize)
+      _             <- AppStartup.initializeState(stateManager3, stateManager3.sessionStartupInfo, theme, viewportSize)
       _             <- stateManager3.applyEvent(MoveDown) // Move to option 2
       _             <- stateManager3.applyEvent(Enter)
       openFileState <- stateManager3.getCurrentState
@@ -78,7 +78,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
-      _ <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      _ <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
 
       // Test full navigation cycle
       // Start at option 0
@@ -126,11 +126,16 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
 
     val program = for
       stateManager <- createStateManagerIO("StartupOptionsEndToEndSpec-workflow")
-      _            <- AppStartup.initializeState(stateManager, Theme.default, ViewportSize(80, 24))
-      _            <- stateManager.applyEvent(MoveDown)
-      _            <- stateManager.applyEvent(MoveDown)
-      _            <- stateManager.applyEvent(Enter)
-      state        <- stateManager.getCurrentState
+      _ <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        Theme.default,
+        ViewportSize(80, 24)
+      )
+      _     <- stateManager.applyEvent(MoveDown)
+      _     <- stateManager.applyEvent(MoveDown)
+      _     <- stateManager.applyEvent(Enter)
+      state <- stateManager.getCurrentState
     yield state
 
     val state = program.unsafeRunSync()

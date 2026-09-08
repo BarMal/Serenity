@@ -48,7 +48,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         testLogger("SessionResumeIntegrationSpec-first"),
         sessionRootOverride = Some(sessionRoot)
       )
-      firstInitial <- AppStartup.initializeState(firstManager, theme, viewportSize)
+      firstInitial <- AppStartup.initializeState(firstManager, firstManager.sessionStartupInfo, theme, viewportSize)
       _ = firstInitial.startPageSurface should be(defined)
 
       // Select "New document" (index 0, the default selection) from the startup page.
@@ -77,7 +77,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         testLogger("SessionResumeIntegrationSpec-second"),
         sessionRootOverride = Some(sessionRoot)
       )
-      secondInitial <- AppStartup.initializeState(secondManager, theme, viewportSize)
+      secondInitial <- AppStartup.initializeState(secondManager, secondManager.sessionStartupInfo, theme, viewportSize)
       _            = secondInitial.startPageSurface should be(defined)
       startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       restoreIndex = startPage.launchActions.indexWhere(_.id == "restore-session")
@@ -115,7 +115,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         testLogger("SessionResumeIntegrationSpec-runtime-first"),
         sessionRootOverride = Some(sessionRoot)
       )
-      firstInitial <- AppStartup.initializeState(firstManager, theme, viewportSize)
+      firstInitial <- AppStartup.initializeState(firstManager, firstManager.sessionStartupInfo, theme, viewportSize)
       _ = firstInitial.startPageSurface should be(defined)
       _ <- firstManager.applyEvent(Enter)
       _ <- "hello".toList.traverse_(c => firstManager.applyEvent(InsertChar(c)))
@@ -131,6 +131,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,
+        secondManager.sessionStartupInfo,
         theme,
         viewportSize,
         isTuiMode = true,

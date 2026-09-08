@@ -1696,7 +1696,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.isNewEmpty shouldBe false
 
     executeCommandThroughRunner(stateManager, "save-session", "save-session")
-    stateManager.sessionExists.unsafeRunSync() shouldBe true
+    stateManager.sessionStartupInfo.sessionExists.unsafeRunSync() shouldBe true
 
     stateManager.handleViewportResize(viewportSize).unsafeRunSync()
     stateManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
@@ -1707,7 +1707,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     assertActiveBufferFitsViewport(restoredState, viewportSize)
 
     executeCommandThroughRunner(stateManager, "clear-session", "clear-session")
-    stateManager.sessionExists.unsafeRunSync() shouldBe false
+    stateManager.sessionStartupInfo.sessionExists.unsafeRunSync() shouldBe false
   }
 
   it should "restore a startup session into the current startup viewport" in {
@@ -1720,8 +1720,9 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     savedManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
     executeCommandThroughRunner(savedManager, "save-session", "save-session")
-
-    AppStartup.initializeState(restoredManager, Theme.default, startupViewport).unsafeRunSync()
+    AppStartup
+      .initializeState(restoredManager, restoredManager.sessionStartupInfo, Theme.default, startupViewport)
+      .unsafeRunSync()
     restoredManager.applyEvent(MoveDown).unsafeRunSync()
     restoredManager.applyEvent(MoveDown).unsafeRunSync()
     restoredManager.applyEvent(Enter).unsafeRunSync()

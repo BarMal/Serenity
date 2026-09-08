@@ -31,7 +31,7 @@ class StartupPageComponentRoutingSpec extends AnyFlatSpec with Matchers:
       viewportSize = ViewportSize(80, 24)
 
       // Initialize startup state
-      initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      initialState <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
 
       // Verify the startup state
       _ = initialState.persisted.focus shouldBe Focus.Surface(SurfaceId("surface-0"))

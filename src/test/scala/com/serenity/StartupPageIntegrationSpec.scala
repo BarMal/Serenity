@@ -30,7 +30,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       viewportSize = ViewportSize(80, 24)
 
       // Initialize startup state
-      initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      initialState <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
 
       // Verify we start with startup page focused
       _         = initialState.persisted.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
@@ -100,7 +100,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         testLogger("StartupPageIntegrationSpec-empty-session-first"),
         sessionRootOverride = Some(sessionRoot)
       )
-      firstInitial <- AppStartup.initializeState(firstManager, theme, viewportSize)
+      firstInitial <- AppStartup.initializeState(firstManager, firstManager.sessionStartupInfo, theme, viewportSize)
       _ = firstInitial.startPageSurface should be(defined)
       _ = firstInitial.persisted.buffers shouldBe empty
 
@@ -116,7 +116,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         testLogger("StartupPageIntegrationSpec-empty-session-second"),
         sessionRootOverride = Some(sessionRoot)
       )
-      secondInitial <- AppStartup.initializeState(secondManager, theme, viewportSize)
+      secondInitial <- AppStartup.initializeState(secondManager, secondManager.sessionStartupInfo, theme, viewportSize)
       _            = secondInitial.startPageSurface should be(defined)
       startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       restoreIndex = startPage.launchActions.indexWhere(_.id == "restore-session")
@@ -155,7 +155,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         testLogger("StartupPageIntegrationSpec-open-recent-first"),
         sessionRootOverride = Some(sessionRoot)
       )
-      _ <- AppStartup.initializeState(firstManager, theme, viewportSize)
+      _ <- AppStartup.initializeState(firstManager, firstManager.sessionStartupInfo, theme, viewportSize)
       openRecentSeed = com.serenity.command.Command.typed(
         "open-recent-seed",
         "Open the file so it is tracked as recent",
@@ -173,7 +173,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         testLogger("StartupPageIntegrationSpec-open-recent-second"),
         sessionRootOverride = Some(sessionRoot)
       )
-      secondInitial <- AppStartup.initializeState(secondManager, theme, viewportSize)
+      secondInitial <- AppStartup.initializeState(secondManager, secondManager.sessionStartupInfo, theme, viewportSize)
       _           = secondInitial.startPageSurface should be(defined)
       startPage   = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       recentIndex = startPage.launchActions.indexWhere(_.id.startsWith("recent:"))
@@ -217,7 +217,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       viewportSize = ViewportSize(80, 24)
 
       // Initialize startup state
-      initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      initialState <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
       _ = initialState.startPageSurface should be(defined)
 
       // Press escape to dismiss
@@ -239,7 +239,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
-      initialState <- AppStartup.initializeState(stateManager, theme, viewportSize)
+      initialState <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
       _ = initialState.startPageSurface should be(defined)
 
       // "Open file or folder" is at index 1; navigate to it and confirm.
