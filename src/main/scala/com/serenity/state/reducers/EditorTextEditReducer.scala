@@ -12,7 +12,7 @@ import com.serenity.state.models.*
 private[reducers] object EditorTextEditReducer:
   import EditorCursorMovement.*
   import EditorEditSupport.*
-  import EditorEventReducer.{CursorEventContext, TabInsertion}
+  import EditorCursorSupport.{CursorEventContext, TabInsertion}
 
   def reduce(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
     import ctx.*

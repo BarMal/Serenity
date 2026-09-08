@@ -12,7 +12,7 @@ import com.serenity.state.models.*
 private[reducers] object EditorClipboardEventReducer:
   import EditorCursorMovement.*
   import EditorEditSupport.*
-  import EditorEventReducer.CursorEventContext
+  import EditorCursorSupport.CursorEventContext
 
   def reduce(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
     event match

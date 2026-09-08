@@ -153,7 +153,7 @@ private[reducers] object EditorCursorMovement:
     // The window has to reach a whole screenful in the direction of travel, which the default geometry only covers
     // downwards.
     val geometry =
-      if EditorEventReducer.useVisualLineNavigation(currentState) then
+      if EditorCursorSupport.useVisualLineNavigation(currentState) then
         com.serenity.state.manager.EditorGeometryProducer
           .forPane(currentState, paneId, rowsAbove = visibleRows)
           .map(_.navigation)
