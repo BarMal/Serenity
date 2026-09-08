@@ -53,7 +53,7 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -88,7 +88,7 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(
@@ -124,7 +124,7 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
 
     try
       val stateManager = createStateManager()
-      stateManager
+      stateManager.modalService
         .showModal(
           Modal.FileWorkflow(
             FileWorkflowState(

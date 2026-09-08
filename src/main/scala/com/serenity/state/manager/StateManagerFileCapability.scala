@@ -71,23 +71,34 @@ final private[manager] class StateManagerFileCapability(
     effects.saveBufferAsEffect
   )
 
-  def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =
+  private def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =
     fileFacade.setBufferFilePath(bufferId, filePath)
 
-  def openFile(filePath: Path): IO[Unit] =
+  private def openFile(filePath: Path): IO[Unit] =
     fileFacade.openFile(filePath)
 
-  def saveBuffer(bufferId: BufferId): IO[Unit] =
+  private def saveBuffer(bufferId: BufferId): IO[Unit] =
     fileFacade.saveBuffer(bufferId)
 
-  def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit] =
+  private def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit] =
     fileFacade.saveBufferAs(bufferId, filePath)
 
-  def markBufferSaved(bufferId: BufferId): IO[Unit] =
+  private def markBufferSaved(bufferId: BufferId): IO[Unit] =
     fileFacade.markBufferSaved(bufferId)
 
-  def checkUnsavedChanges(bufferId: Option[BufferId] = None): IO[Boolean] =
+  private def checkUnsavedChanges(bufferId: Option[BufferId]): IO[Boolean] =
     fileFacade.checkUnsavedChanges(bufferId)
 
-  def getRecentFiles: IO[List[java.nio.file.Path]] =
+  private def getRecentFiles: IO[List[java.nio.file.Path]] =
     fileFacade.getRecentFiles
+
+  val fileOpener: FileOpener = FileOpener(openFile = openFile)
+
+  val fileService: FileService = FileService(
+    setBufferFilePath = setBufferFilePath,
+    saveBuffer = saveBuffer,
+    saveBufferAs = saveBufferAs,
+    markBufferSaved = markBufferSaved,
+    checkUnsavedChanges = checkUnsavedChanges,
+    getRecentFiles = getRecentFiles
+  )

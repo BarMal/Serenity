@@ -1843,12 +1843,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "focus the left panel from the command runner" in {
-    val stateManager = createStateManager()
-    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
+    val sm = createStateManager()
+    sm.panelManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "focus-left-panel", "focus-left-panel")
+    executeCommandThroughRunner(sm, "focus-left-panel", "focus-left-panel")
 
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val updatedState = sm.getCurrentState.unsafeRunSync()
     updatedState.persisted.focus shouldBe a[Focus.Surface]
     val focusedId = updatedState.persisted.focus match
       case Focus.Surface(id) => id
@@ -1857,12 +1857,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "unpin the left panel from the command runner" in {
-    val stateManager = createStateManager()
-    stateManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
+    val sm = createStateManager()
+    sm.panelManager.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "unpin-left-panel", "unpin-left-panel")
+    executeCommandThroughRunner(sm, "unpin-left-panel", "unpin-left-panel")
 
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val updatedState = sm.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces.exists {
       _.presentation match
         case com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _) => true
