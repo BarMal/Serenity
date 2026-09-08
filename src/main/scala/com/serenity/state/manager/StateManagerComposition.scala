@@ -269,30 +269,32 @@ private[manager] class StateManagerComposition(
   private def runSurfaceOperation(operation: IO[Unit]): IO[Unit] =
     operation >> drainPendingOperations
 
-  def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
-    runSurfaceOperation(surfaces.showPeek(content, at))
-  def dismissPeek(): IO[Unit]                      = runSurfaceOperation(surfaces.dismissPeek())
-  def peekToPin(position: PanelPosition): IO[Unit] = runSurfaceOperation(surfaces.peekToPin(position))
-  def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
-    runSurfaceOperation(surfaces.pinPanel(content, position, size))
-  def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
-    runSurfaceOperation(surfaces.pinOrUpdateTerminalPanel(text, position, size))
-  def unpinPanel(target: PanelTarget): IO[Unit] = runSurfaceOperation(surfaces.unpinPanel(target))
-  def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit] =
-    runSurfaceOperation(surfaces.movePinnedPanel(surfaceId, position))
-  def expandPinnedPanel(target: PanelTarget): IO[Unit] = runSurfaceOperation(surfaces.expandPinnedPanel(target))
-  def collapseExpandedPanel(): IO[Unit]                = runSurfaceOperation(surfaces.collapseExpandedPanel())
-  def showModal(modal: Modal): IO[Unit]                = runSurfaceOperation(surfaces.showModal(modal))
-  def dismissModal(): IO[Unit]                         = runSurfaceOperation(surfaces.dismissModal())
-  def switchToPinnedPanel(target: PanelTarget): IO[Unit] =
-    runSurfaceOperation(surfaces.switchToPinnedPanel(target))
-  def loadDirectoryTree(path: Path, files: List[String]): IO[Unit] =
-    runSurfaceOperation(surfaces.loadDirectoryTree(path, files))
-  def selectFileInExplorer(filePath: Path): IO[Unit] = runSurfaceOperation(surfaces.selectFileInExplorer(filePath))
-  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
-    runSurfaceOperation(surfaces.resizePinnedPanel(target, newSize))
-  def dragFileToDirectory(sourceFile: Path, targetDir: Path): IO[Unit] =
-    runSurfaceOperation(surfaces.dragFileToDirectory(sourceFile, targetDir))
+  val peekManager: PeekManager = PeekManager(
+    showPeek = (content, at) => runSurfaceOperation(surfaces.showPeek(content, at)),
+    dismissPeek = () => runSurfaceOperation(surfaces.dismissPeek()),
+    peekToPin = position => runSurfaceOperation(surfaces.peekToPin(position))
+  )
+
+  val panelManager: PanelManager = PanelManager(
+    pinPanel = (content, position, size) => runSurfaceOperation(surfaces.pinPanel(content, position, size)),
+    pinOrUpdateTerminalPanel =
+      (text, position, size) => runSurfaceOperation(surfaces.pinOrUpdateTerminalPanel(text, position, size)),
+    unpinPanel = target => runSurfaceOperation(surfaces.unpinPanel(target)),
+    movePinnedPanel = (surfaceId, position) => runSurfaceOperation(surfaces.movePinnedPanel(surfaceId, position)),
+    expandPinnedPanel = target => runSurfaceOperation(surfaces.expandPinnedPanel(target)),
+    collapseExpandedPanel = () => runSurfaceOperation(surfaces.collapseExpandedPanel()),
+    switchToPinnedPanel = target => runSurfaceOperation(surfaces.switchToPinnedPanel(target)),
+    loadDirectoryTree = (path, files) => runSurfaceOperation(surfaces.loadDirectoryTree(path, files)),
+    selectFileInExplorer = filePath => runSurfaceOperation(surfaces.selectFileInExplorer(filePath)),
+    resizePinnedPanel = (target, newSize) => runSurfaceOperation(surfaces.resizePinnedPanel(target, newSize)),
+    dragFileToDirectory =
+      (sourceFile, targetDir) => runSurfaceOperation(surfaces.dragFileToDirectory(sourceFile, targetDir))
+  )
+
+  val modalService: ModalService = ModalService(
+    showModal = modal => runSurfaceOperation(surfaces.showModal(modal)),
+    dismissModal = () => runSurfaceOperation(surfaces.dismissModal())
+  )
 
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     events.validateAndUpdateState(newState, fallbackState)

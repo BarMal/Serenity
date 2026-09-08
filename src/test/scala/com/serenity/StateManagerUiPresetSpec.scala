@@ -67,7 +67,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     val size  = PreferredWindowSize(1500, 950)
     val sm    = managerWithStore(store, IO.pure(Some(size)))
 
-    sm.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 12).unsafeRunSync()
+    sm.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 12).unsafeRunSync()
     sm.updateState(state =>
       state.copy(
         persisted = state.persisted.copy(

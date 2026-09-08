@@ -74,7 +74,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         // Open the modal on an untouched, valid state -- the drift is introduced only after the modal is showing,
         // mirroring the many other unchecked `Ref.update` paths elsewhere in this codebase that could plausibly
         // desync `nextBufferId` between a validated commit and this workflow's own completion.
-        stateManager
+        stateManager.modalService
           .showModal(
             Modal.FileWorkflow(
               FileWorkflowState(mode = FileWorkflowMode.Open, filename = "notes.scala", path = tempRoot.toString)
