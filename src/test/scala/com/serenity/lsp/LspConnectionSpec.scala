@@ -8,6 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.lsp.client.{LspConnection, LspProtocol}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity}
+import com.serenity.testkit.VirtualTime.runVirtual
 import io.circe.Json
 import io.circe.parser.parse
 import io.circe.syntax.*
@@ -109,7 +110,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
     yield result.left.toOption shouldBe defined).timeout(testTimeout).unsafeRunSync()
 
   "LspConnection.sendRequest" should "time out and remove pending requests when the server does not respond" in
-    (for
+    runVirtual(for
       conn <- makeConnection(shortTimeout)
       requestFiber <- conn
         .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
@@ -120,11 +121,10 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
       pendingCount <- conn.pendingRequestCount
     yield
       result.left.toOption.map(_.getMessage).getOrElse("") should include("LSP request timed out: scala initialize")
-      pendingCount shouldBe 0
-    ).timeout(testTimeout).unsafeRunSync()
+      pendingCount shouldBe 0)
 
   it should "ignore delayed responses after the original request timed out" in
-    (for
+    runVirtual(for
       conn <- makeConnection(shortTimeout)
       requestFiber <- conn
         .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
@@ -139,7 +139,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
         Json.obj("jsonrpc" -> "2.0".asJson, "id" -> requestId.asJson, "result" -> Json.obj())
       )
       pendingCount <- conn.pendingRequestCount
-    yield pendingCount shouldBe 0).timeout(testTimeout).unsafeRunSync()
+    yield pendingCount shouldBe 0)
 
   it should "remove pending requests when a waiting fiber is canceled" in
     (for
@@ -169,7 +169,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
     ).timeout(testTimeout).unsafeRunSync()
 
   it should "tell the server to stop when a request times out" in
-    (for
+    runVirtual(for
       conn <- makeConnection(shortTimeout)
       requestFiber <- conn
         .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
@@ -185,8 +185,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
     yield
       result.isLeft shouldBe true
       cancelJson.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
-      cancelJson.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(requestId)
-    ).timeout(testTimeout).unsafeRunSync()
+      cancelJson.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(requestId))
 
   "LspConnection.processIncoming" should "route publishDiagnostics to the callback" in
     (for

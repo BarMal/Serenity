@@ -13,6 +13,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.BufferId
+import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -82,13 +83,14 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
       setLanguage(stateManager, LanguageId.Scala)
 
       val outcome =
-        stateManager.lspEffectSource.lspEffectStream
-          .take(1)
-          .compile
-          .lastOrError
-          .timeout(500.millis)
-          .attempt
-          .unsafeRunSync()
+        runVirtual(
+          stateManager.lspEffectSource.lspEffectStream
+            .take(1)
+            .compile
+            .lastOrError
+            .timeout(500.millis)
+            .attempt
+        )
       outcome.left.map(_.getClass) shouldBe Left(classOf[TimeoutException])
     finally Files.deleteIfExists(file): Unit
   }

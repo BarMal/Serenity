@@ -13,6 +13,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskKind, ProjectTaskTerminal}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.layout.{PanelPosition, PeekContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -250,6 +251,6 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.peeks.get.unsafeRunSync() shouldBe List(
       (PeekContent.QuickInfo("LSP requests need a saved buffer with a language mode."), cursor)
     )
-    val nothingEnqueued = fixture.lspQueue.stream.take(1).timeout(200.millis).compile.toList.attempt.unsafeRunSync()
+    val nothingEnqueued = runVirtual(fixture.lspQueue.stream.take(1).timeout(200.millis).compile.toList.attempt)
     nothingEnqueued.isLeft shouldBe true
   }
