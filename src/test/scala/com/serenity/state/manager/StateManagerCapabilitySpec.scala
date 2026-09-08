@@ -70,10 +70,10 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     summon[StateManager <:< SessionService]
     summon[StateManager <:< PanelManager]
     summon[StateManager <:< ModalService]
-    summon[StateManager <:< FileService]
-    // ScrollManager and FocusManager are #1017's capability-record slices: fields, not mixed-in traits.
-    val _: StateManager => ScrollManager = _.scrollManager
-    val _: StateManager => FocusManager  = _.focusManager
+    // ScrollManager, FocusManager, FileOpener, and FileService are #1017's capability-record slices: fields, not
+    // mixed-in traits.
+    val _: StateManager => (ScrollManager, FocusManager, FileOpener, FileService) =
+      sm => (sm.scrollManager, sm.focusManager, sm.fileOpener, sm.fileService)
     succeed
   }
 

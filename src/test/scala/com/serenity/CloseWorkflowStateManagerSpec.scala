@@ -257,8 +257,8 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    stateManager.checkUnsavedChanges(Some(bufferId)).unsafeRunSync() shouldBe true
-    stateManager.checkUnsavedChanges().unsafeRunSync() shouldBe true
+    stateManager.fileService.checkUnsavedChanges(Some(bufferId)).unsafeRunSync() shouldBe true
+    stateManager.fileService.checkUnsavedChanges(None).unsafeRunSync() shouldBe true
   }
 
   it should "cancel the close workflow without closing the dirty buffer" in {
