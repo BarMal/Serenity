@@ -169,9 +169,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       requestedDelays      <- Ref.of[IO, Vector[FiniteDuration]](Vector.empty)
       cursorVisible        <- Ref.of[IO, Boolean](true)
       breathIndex          <- Ref.of[IO, Int](0)
-      stateManager = new com.serenity.state.manager.StateReader
-        with com.serenity.state.manager.StateUpdater
-        with com.serenity.state.manager.EventApplier:
+      stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState]                                                 = IO.pure(state)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
@@ -262,9 +260,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       pendingPaintDamage   <- Ref.of[IO, Damage](Damage.Nothing)
       animationTickCadence <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
       cursorOnlyFrames     <- Ref.of[IO, Int](0)
-      stateManager = new com.serenity.state.manager.StateReader
-        with com.serenity.state.manager.StateUpdater
-        with com.serenity.state.manager.EventApplier:
+      stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState]                                                 = IO.pure(state)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
@@ -334,9 +330,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
       animationTickCadence <- Ref.of[IO, AppRuntime.AnimationTickCadence](AppRuntime.AnimationTickCadence.empty)
       fullFrames           <- Ref.of[IO, Int](0)
       cursorOnlyFrames     <- Ref.of[IO, Int](0)
-      stateManager = new com.serenity.state.manager.StateReader
-        with com.serenity.state.manager.StateUpdater
-        with com.serenity.state.manager.EventApplier:
+      stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState]                                                 = IO.pure(state)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
@@ -458,9 +452,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = refreshes.update(_ + 1)
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
-      stateManager = new com.serenity.state.manager.StateReader
-        with com.serenity.state.manager.StateUpdater
-        with com.serenity.state.manager.EventApplier:
+      stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState]                                                 = IO.pure(AppState.initial)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
@@ -504,9 +496,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = IO.unit
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
-      stateManager = new com.serenity.state.manager.StateReader
-        with com.serenity.state.manager.StateUpdater
-        with com.serenity.state.manager.EventApplier:
+      stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState]                                                 = IO.pure(AppState.initial)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
@@ -646,9 +636,7 @@ class AppRuntimeSpec extends AnyFlatSpec with Matchers:
         def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = refreshes.update(_ + 1)
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
-      stateManager = new com.serenity.state.manager.StateReader
-        with com.serenity.state.manager.StateUpdater
-        with com.serenity.state.manager.EventApplier:
+      stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState]                                                 = IO.pure(AppState.initial)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
