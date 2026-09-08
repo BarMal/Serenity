@@ -19,7 +19,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
       currentValue = sitterConfig.frames.mkString(","),
       isDecimal = false,
       parse = text =>
-        CommandRunnerSettingsInputItems
+        CommandRunnerSettingsTextParsing
           .nonEmptyCommaList(text)
           .map(values =>
             CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFrames(values.toVector)))

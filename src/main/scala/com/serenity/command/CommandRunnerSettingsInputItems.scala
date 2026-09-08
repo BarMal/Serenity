@@ -7,15 +7,15 @@ import com.serenity.config.AppConfigMotionOps.*
 /** Builds the flat list of command-runner settings input items from the current config.
   *
   * `build` delegates each settings category to a sibling `CommandRunnerSettings*Items` object in this package -- split
-  * out to keep every file under the architecture size targets. The small text-parsing helpers below stay here,
-  * `private[command]`, since they are shared across those siblings.
+  * out to keep every file under the architecture size targets. [[CommandRunnerSettingsTextParsing]] holds the small
+  * text-parsing helpers shared across this object and those siblings alike.
   */
 object CommandRunnerSettingsInputItems:
 
   def parseRichTextFontFamily(text: String): Option[CommandIntent] =
-    nonEmptyText(text).map(commandIntentArg =>
-      CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily(commandIntentArg))
-    )
+    CommandRunnerSettingsTextParsing
+      .nonEmptyText(text)
+      .map(commandIntentArg => CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily(commandIntentArg)))
 
   def parseRichTextColor(text: String): Option[CommandIntent] =
     normalizeHexColor(text).map(commandIntentArg =>
@@ -97,9 +97,9 @@ object CommandRunnerSettingsInputItems:
         currentValue = "",
         isDecimal = false,
         parse = text =>
-          nonEmptyText(text).map(commandIntentArg =>
-            CommandIntent.Comments(CommentsIntent.AddDocumentComment(commandIntentArg))
-          ),
+          CommandRunnerSettingsTextParsing
+            .nonEmptyText(text)
+            .map(commandIntentArg => CommandIntent.Comments(CommentsIntent.AddDocumentComment(commandIntentArg))),
         category = CommandCategory.Edit,
         acceptsFreeText = true
       )
@@ -150,19 +150,6 @@ object CommandRunnerSettingsInputItems:
       ) ++
       CommandRunnerSettingsKeymapItems.buildKeymapInputItems(v.inputConfig)
 
-  private[command] def nonEmptyText(text: String): Option[String] =
-    Option(text.trim).filter(_.nonEmpty)
-
-  private[command] def namedPair(text: String): Option[(String, String)] =
-    text.split("->", 2).toList match
-      case source :: target :: Nil =>
-        for
-          normalizedSource <- nonEmptyText(source)
-          normalizedTarget <- nonEmptyText(target)
-        yield (normalizedSource, normalizedTarget)
-      case _ =>
-        None
-
   private[command] def normalizeHexColor(text: String): Option[String] =
     val normalized = text.trim.stripPrefix("#")
     Option
@@ -172,25 +159,6 @@ object CommandRunnerSettingsInputItems:
     char.isDigit ||
       (char >= 'a' && char <= 'f') ||
       (char >= 'A' && char <= 'F')
-
-  private[command] def nonEmptyCommaList(text: String): Option[List[String]] =
-    Option(commaList(text)).filter(_.nonEmpty)
-
-  private[command] def commaList(text: String): List[String] =
-    text
-      .split(",")
-      .toList
-      .map(_.trim.toLowerCase)
-      .filter(_.nonEmpty)
-      .distinct
-
-  private[command] def commaListPreserveCase(text: String): List[String] =
-    text
-      .split(",")
-      .toList
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .distinct
 
   private[command] def formatDecimal(value: Double): String =
     if value.isWhole then value.toLong.toString else value.toString

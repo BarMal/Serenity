@@ -80,7 +80,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
       currentValue = spellCheck.languages.mkString(","),
       isDecimal = false,
       parse = text =>
-        CommandRunnerSettingsInputItems
+        CommandRunnerSettingsTextParsing
           .nonEmptyCommaList(text)
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckLanguages(commandIntentArg)))
@@ -98,7 +98,9 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
         Some(
           CommandIntent.Settings(
             SettingsIntent.SpellCheck(
-              SpellCheckIntent.SetSpellCheckDictionaryPaths(CommandRunnerSettingsInputItems.commaListPreserveCase(text))
+              SpellCheckIntent.SetSpellCheckDictionaryPaths(
+                CommandRunnerSettingsTextParsing.commaListPreserveCase(text)
+              )
             )
           )
         ),
@@ -116,7 +118,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
           CommandIntent
             .Settings(
               SettingsIntent.SpellCheck(
-                SpellCheckIntent.SetSpellCheckWords(CommandRunnerSettingsInputItems.commaList(text))
+                SpellCheckIntent.SetSpellCheckWords(CommandRunnerSettingsTextParsing.commaList(text))
               )
             )
         ),

@@ -9,8 +9,8 @@ import com.serenity.ui.presets.UiPreset
   *
   * Cursor, motion, appearance, panel, and text-display settings items live in sibling `CommandRunnerSettings*Items`
   * objects in this package -- split out to keep every file under the architecture size targets.
-  * `boundedOptionIndex`/`enabledOptionItem` stay here, `private[command]`, since this is the object most of those
-  * siblings already depend on.
+  * [[CommandRunnerSettingsOptionItemHelpers]] holds `boundedOptionIndex`/`enabledOptionItem`, shared by this object and
+  * those siblings alike.
   */
 object CommandRunnerSettingsItems:
 
@@ -38,14 +38,19 @@ object CommandRunnerSettingsItems:
       optionSelections
         .get("ui-preset-custom")
         .filter(_ => customOptions.nonEmpty)
-        .map(index => builtInOptions.size + boundedOptionIndex(index, customOptions))
-        .getOrElse(boundedOptionIndex(optionSelections.getOrElse("ui-preset-built-in", 0), builtInOptions))
+        .map(index =>
+          builtInOptions.size + CommandRunnerSettingsOptionItemHelpers.boundedOptionIndex(index, customOptions)
+        )
+        .getOrElse(
+          CommandRunnerSettingsOptionItemHelpers
+            .boundedOptionIndex(optionSelections.getOrElse("ui-preset-built-in", 0), builtInOptions)
+        )
 
     CommandSurfaceItem.OptionItem(
       id = "ui-preset-select",
       label = "Select Preset",
       options = options,
-      selectedIndex = boundedOptionIndex(selectedIndex, options),
+      selectedIndex = CommandRunnerSettingsOptionItemHelpers.boundedOptionIndex(selectedIndex, options),
       category = CommandCategory.Settings,
       hint = Some("Built-in and saved presets")
     )
@@ -131,30 +136,6 @@ object CommandRunnerSettingsItems:
       hint = Some("Check prose buffers")
     )
 
-  private[command] def boundedOptionIndex(index: Int, options: List[CommandOption]): Int =
-    if options.isEmpty then 0
-    else index.max(0).min(options.length - 1)
-
-  private[command] def enabledOptionItem(
-    id: String,
-    label: String,
-    selectedIndex: Int,
-    enabledIntent: CommandIntent,
-    disabledIntent: CommandIntent,
-    hint: String
-  ): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
-      id = id,
-      label = label,
-      options = List(
-        CommandOption("On", enabledIntent),
-        CommandOption("Off", disabledIntent)
-      ),
-      selectedIndex = selectedIndex,
-      category = CommandCategory.Settings,
-      hint = Some(hint)
-    )
-
   private[command] def normalizedUiPresetNames(names: List[String]): List[String] =
     names
       .map(_.trim)
@@ -233,7 +214,8 @@ object CommandRunnerSettingsItems:
       id = "text-scale-mode",
       label = "Text Scale Mode",
       options = options,
-      selectedIndex = boundedOptionIndex(optionSelections.getOrElse("text-scale-mode", 0), options),
+      selectedIndex = CommandRunnerSettingsOptionItemHelpers
+        .boundedOptionIndex(optionSelections.getOrElse("text-scale-mode", 0), options),
       category = CommandCategory.Settings,
       hint = Some("How font sizes adapt to the display")
     )

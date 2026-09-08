@@ -42,7 +42,7 @@ private[command] object CommandRunnerSettingsCursorItems:
     // `wordCountOptionItem`. Command descriptions/hints use the shorter segment name on its own instead.
     val toggleItems = segmentDefinitions.map {
       case (segment, shortLabel, optionId) =>
-        CommandRunnerSettingsItems.enabledOptionItem(
+        CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
           id = optionId,
           label = s"Info Bar: $shortLabel",
           selectedIndex = optionSelections.getOrElse(optionId, 1),

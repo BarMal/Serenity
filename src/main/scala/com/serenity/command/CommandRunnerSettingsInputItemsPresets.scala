@@ -13,7 +13,7 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
       currentValue = "",
       isDecimal = false,
       parse = text =>
-        CommandRunnerSettingsInputItems
+        CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew(commandIntentArg))),
       category = CommandCategory.Settings,
@@ -26,7 +26,7 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
       currentValue = "",
       isDecimal = false,
       parse = text =>
-        CommandRunnerSettingsInputItems
+        CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(commandIntentArg))),
       category = CommandCategory.Settings,
@@ -39,7 +39,7 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
       currentValue = "",
       isDecimal = false,
       parse = text =>
-        CommandRunnerSettingsInputItems
+        CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset(commandIntentArg))),
       category = CommandCategory.Settings,
@@ -52,7 +52,7 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
       currentValue = "",
       isDecimal = false,
       parse = text =>
-        CommandRunnerSettingsInputItems.namedPair(text).map {
+        CommandRunnerSettingsTextParsing.namedPair(text).map {
           case (sourceName, targetName) =>
             CommandIntent.UiPresets(UiPresetsIntent.DuplicateUiPreset(sourceName, targetName))
         },
@@ -69,7 +69,7 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
       currentValue = "",
       isDecimal = false,
       parse = text =>
-        CommandRunnerSettingsInputItems.namedPair(text).map {
+        CommandRunnerSettingsTextParsing.namedPair(text).map {
           case (sourceName, targetName) =>
             CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset(sourceName, targetName))
         },
@@ -83,7 +83,7 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
       currentValue = "",
       isDecimal = false,
       parse = text =>
-        CommandRunnerSettingsInputItems
+        CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset(commandIntentArg))),
       category = CommandCategory.Settings,
@@ -96,7 +96,7 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
       currentValue = "",
       isDecimal = false,
       parse = text =>
-        CommandRunnerSettingsInputItems
+        CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.ResetUiPreset(commandIntentArg))),
       category = CommandCategory.Settings,

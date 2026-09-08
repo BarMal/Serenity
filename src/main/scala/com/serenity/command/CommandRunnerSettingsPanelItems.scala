@@ -98,7 +98,8 @@ private[command] object CommandRunnerSettingsPanelItems:
       id = id,
       label = label,
       options = options,
-      selectedIndex = CommandRunnerSettingsItems.boundedOptionIndex(optionSelections.getOrElse(id, 0), options),
+      selectedIndex =
+        CommandRunnerSettingsOptionItemHelpers.boundedOptionIndex(optionSelections.getOrElse(id, 0), options),
       category = CommandCategory.Settings,
       hint = Some("Pin this panel to an edge")
     )
