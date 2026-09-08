@@ -21,7 +21,14 @@ final private[manager] class StateManagerViewportCapability(
   ): IO[Unit] =
     effects.updateFontConfig(update)
 
-  def ensureCursorVisible(paneId: PaneId): IO[Unit] =
+  val scrollManager: ScrollManager = ScrollManager(
+    ensureCursorVisible = ensureCursorVisible,
+    smoothScrollTo = smoothScrollTo,
+    progressSmoothScroll = progressSmoothScroll,
+    clickMinimap = clickMinimap
+  )
+
+  private def ensureCursorVisible(paneId: PaneId): IO[Unit] =
     stateRef.update { state =>
       Focused.bufferOf(state, paneId) match
         case Some(buffer) =>
@@ -31,7 +38,7 @@ final private[manager] class StateManagerViewportCapability(
         case None => state
     }
 
-  def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit] =
+  private def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit] =
     stateRef.update { state =>
       state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
@@ -48,7 +55,7 @@ final private[manager] class StateManagerViewportCapability(
         case None => state
     }
 
-  def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit] =
+  private def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit] =
     stateRef.update { state =>
       state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
@@ -81,7 +88,7 @@ final private[manager] class StateManagerViewportCapability(
         case None => state
     }
 
-  def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit] =
+  private def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit] =
     stateRef.update { state =>
       state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>

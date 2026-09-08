@@ -28,8 +28,6 @@ final private[manager] class StateManagerEditorCapability(
 
   def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
 
-  def getCurrentFocus: IO[Focus] = stateRef.get.map(_.persisted.focus)
-
   def switchFocus(newFocus: Focus): IO[Unit] =
     stateRef.update(state => state.copy(persisted = state.persisted.copy(focus = newFocus)))
 
@@ -40,16 +38,6 @@ final private[manager] class StateManagerEditorCapability(
     update: Map[BufferId, com.serenity.animation.AnimationState] => Map[BufferId, com.serenity.animation.AnimationState]
   ): IO[Unit] =
     bufferAnimationsRef.update(update)
-
-  def advanceAnimationFrames(): IO[Unit] =
-    bufferAnimationsRef.update(
-      _.view
-        .mapValues { animations =>
-          val advanced = animations.advanceAnimations()
-          if advanced eq animations then animations else advanced
-        }
-        .toMap
-    )
 
   def advanceAnimationsOnTick(): IO[Boolean] =
     for
@@ -105,16 +93,6 @@ final private[manager] class StateManagerEditorCapability(
   private def isWithinViewport(viewport: Viewport)(key: CharacterKey): Boolean =
     key.line >= viewport.topLine && key.line < viewport.topLine + viewport.visibleLines &&
       key.column >= viewport.leftColumn && key.column < viewport.leftColumn + viewport.visibleColumns
-
-  def getActiveBuffer: IO[Option[Buffer]] =
-    for
-      state      <- stateRef.get
-      activePane <- getActivePane
-      buffer = activePane.flatMap(pane => pane.bufferId.flatMap(state.persisted.buffers.get))
-    yield buffer
-
-  def getActivePane: IO[Option[EditorPane]] =
-    stateRef.get.map(state => state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get))
 
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId] =
     stateRef.modify { state =>
