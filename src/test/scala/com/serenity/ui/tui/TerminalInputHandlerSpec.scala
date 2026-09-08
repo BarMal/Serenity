@@ -1,8 +1,8 @@
 package com.serenity.ui.tui
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, PipedInputStream, PipedOutputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 
 import scala.concurrent.duration.*
 
@@ -19,11 +19,19 @@ import org.jline.utils.NonBlockingReader
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Covers #1108's JLine wiring shell over `TerminalInputDecoder`: real key/mouse/paste byte sequences fed through a
-  * real JLine `DumbTerminal` (streams-backed, the same harness `TerminalShellSpec` uses for #1107), decoded to the same
-  * events the real translator stack (`InputRouter` + a `Translator[Event]`) would produce for the equivalent
-  * `KeyStrokeInfo` -- the same one `SwingInputHandlerSpec` exercises for the AWT path -- plus EOF-to-graceful-
-  * shutdown.
+/** Covers #1108's JLine wiring shell over `TerminalInputDecoder`: real key/mouse/paste byte sequences, fed through
+  * [[FakeReader]] in place of a real terminal's input, decoded to the same events the real translator stack
+  * (`InputRouter` + a `Translator[Event]`) would produce for the equivalent `KeyStrokeInfo` -- the same one
+  * `SwingInputHandlerSpec` exercises for the AWT path -- plus EOF-to-graceful-shutdown.
+  *
+  * #1314/#1358: earlier versions of this spec read through a real `DumbTerminal`, in several cases backed by a live
+  * `PipedInputStream`/`PipedOutputStream` pair written to after the handler was already running. A `DumbTerminal` spins
+  * up its own background pump thread eagerly at construction (regardless of whether its reader is ever used), so a
+  * still-open real OS pipe plus that thread is exactly the two-party combination `NonBlockingInputStreamImpl` could
+  * observe as a closed pipe under full-suite scheduling pressure ("Pipe broken"), and was independently the source of a
+  * real race in the ESC-disambiguation test (#1314): the reader fiber itself could be starved past its deadline.
+  * `FakeReader` below replaces all of that with an in-memory queue -- no OS pipe, no extra thread, bytes delivered
+  * exactly when a test calls `feed`.
   */
 class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
 
@@ -41,18 +49,56 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   private def bytes(s: String): Array[Byte] = s.getBytes(StandardCharsets.UTF_8)
   private def csi(s: String): Array[Byte]   = esc +: bytes(s"[$s")
 
-  private def dumbTerminal(input: Array[Byte]): DumbTerminal =
-    val in       = new ByteArrayInputStream(input)
-    val out      = new ByteArrayOutputStream()
-    val terminal = new DumbTerminal("test", "xterm-256color", in, out, StandardCharsets.UTF_8)
+  /** A `Terminal` used only for its `.writer()` (`TerminalInputHandler.create` writes mode-toggle escape sequences to
+    * it on setup/teardown) -- the handler never calls `.reader()` once `readerOverride` is supplied, so this always
+    * wraps an immediately-EOF empty stream rather than any real or live input.
+    */
+  private def structuralTerminal(): DumbTerminal =
+    val terminal =
+      new DumbTerminal(
+        "test",
+        "xterm-256color",
+        new ByteArrayInputStream(Array.emptyByteArray),
+        new ByteArrayOutputStream(),
+        StandardCharsets.UTF_8
+      )
     terminal.setSize(new Size(80, 24))
     terminal
 
+  /** A deterministic double for JLine's `NonBlockingReader`, backed by an in-memory queue instead of a real OS pipe --
+    * see the class docstring for why. Reads behave like a real, healthy terminal: bytes already queued resolve
+    * immediately, and only a genuinely empty queue blocks (or, for a timed read, waits out the deadline) -- unlike
+    * [[NonTtyPipeReader]] below, which exists specifically to emulate a *misbehaving* timed read.
+    */
+  final private class FakeReader extends NonBlockingReader:
+    private val chars            = new LinkedBlockingQueue[Int]()
+    private val EofSentinel: Int = NonBlockingReader.EOF
+
+    def feed(input: Array[Byte]): Unit = input.foreach(b => chars.put(b & 0xff))
+    def feedEof(): Unit                = chars.put(EofSentinel)
+
+    override def read(timeout: Long, isPeek: Boolean): Int =
+      val next =
+        if timeout <= 0 then chars.take()
+        else Option(chars.poll(timeout, TimeUnit.MILLISECONDS)).getOrElse(NonBlockingReader.READ_EXPIRED)
+      if next == EofSentinel then
+        chars.put(EofSentinel) // leave EOF latched for any subsequent read
+        NonBlockingReader.EOF
+      else next
+
+    override def readBuffered(b: Array[Char], off: Int, len: Int, timeout: Long): Int =
+      throw new UnsupportedOperationException("not used by the handler's read loop")
+
+    override def shutdown(): Unit = ()
+
   private def handlerFor(input: Array[Byte]): IO[(TerminalInputHandler, SystemClipboard[IO])] =
+    val reader = new FakeReader
+    reader.feed(input)
+    reader.feedEof()
     for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(dumbTerminal(input), router, clipboard)
+      handler   <- TerminalInputHandler.create(structuralTerminal(), router, clipboard, readerOverride = Some(reader))
     yield (handler, clipboard)
 
   private def eventsFrom(input: Array[Byte], count: Int): List[Event] =
@@ -123,11 +169,14 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   }
 
   "a kitty-protocol bare Ctrl press, release, press" should "double-tap-emit InputKey.Ctrl via the shared detector" in {
-    val input = csi("57442u") ++ csi("57442;1:3u") ++ csi("57442u")
+    val input  = csi("57442u") ++ csi("57442;1:3u") ++ csi("57442u")
+    val reader = new FakeReader
+    reader.feed(input)
+    reader.feedEof()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(dumbTerminal(input), router, clipboard)
+      handler   <- TerminalInputHandler.create(structuralTerminal(), router, clipboard, readerOverride = Some(reader))
       strokes   <- handler.keyStrokeInfoStream.take(1).compile.toList
     yield strokes
 
@@ -136,11 +185,14 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   }
 
   "a kitty-protocol Ctrl press with no release before the second press" should "not fire the double-tap" in {
-    val input = csi("57442u") ++ csi("57442u") ++ bytes("a")
+    val input  = csi("57442u") ++ csi("57442u") ++ bytes("a")
+    val reader = new FakeReader
+    reader.feed(input)
+    reader.feedEof()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(dumbTerminal(input), router, clipboard)
+      handler   <- TerminalInputHandler.create(structuralTerminal(), router, clipboard, readerOverride = Some(reader))
       strokes   <- handler.keyStrokeInfoStream.take(1).compile.toList
     yield strokes
 
@@ -154,10 +206,12 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "terminate the raw keyStrokeInfoStream with an EOF KeyStrokeInfo" in {
+    val reader = new FakeReader
+    reader.feedEof()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(dumbTerminal(Array.emptyByteArray), router, clipboard)
+      handler   <- TerminalInputHandler.create(structuralTerminal(), router, clipboard, readerOverride = Some(reader))
       strokes   <- handler.keyStrokeInfoStream.compile.toList
     yield strokes
 
@@ -165,43 +219,22 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       List(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
   }
 
-  /** Never yields a byte and never reaches EOF on its own -- unlike the empty `ByteArrayInputStream` the other specs
-    * use, which EOFs immediately and would otherwise race `shutdown`'s cancellation against the read loop's own natural
-    * EOF-driven completion. This is what a real, still-open terminal's stdin looks like between keystrokes: the read
-    * loop is genuinely blocked in `reader.read()`, so only cancellation can end it.
-    */
-  private def blockingForever(): java.io.InputStream = new java.io.InputStream:
-    override def read(): Int =
-      Thread.sleep(Long.MaxValue)
-      -1
-
-  private def blockingDumbTerminal(): DumbTerminal =
-    val terminal =
-      new DumbTerminal("test", "xterm-256color", blockingForever(), new ByteArrayOutputStream(), StandardCharsets.UTF_8)
-    terminal.setSize(new Size(80, 24))
-    terminal
-
   // ===Terminal focus reporting (CSI ?1004h/l, #1171): CSI I/CSI O decode to a side-channel focus callback, not the
-  // ordinary key/event streams -- fed through a live pipe so bytes only arrive after the callback is registered,
+  // ordinary key/event streams -- fed through the fake reader so bytes only arrive after the callback is registered,
   // avoiding a race against the read loop's own start.===
 
-  private def livePipeTerminal(): (DumbTerminal, PipedOutputStream) =
-    val pipeIn  = new PipedInputStream()
-    val pipeOut = new PipedOutputStream(pipeIn)
-    val terminal =
-      new DumbTerminal("test", "xterm-256color", pipeIn, new ByteArrayOutputStream(), StandardCharsets.UTF_8)
-    terminal.setSize(new Size(80, 24))
-    (terminal, pipeOut)
+  private def fakeTerminalWithReader(): (DumbTerminal, FakeReader) =
+    (structuralTerminal(), new FakeReader)
 
   private def focusCallbackResultFor(inputAfterRegistration: Array[Byte]): Option[Boolean] =
-    val (terminal, pipeOut) = livePipeTerminal()
+    val (terminal, reader) = fakeTerminalWithReader()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(terminal, router, clipboard)
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard, readerOverride = Some(reader))
       flag      <- cats.effect.Ref.of[IO, Option[Boolean]](None)
       _         <- IO(handler.registerFocusCallback(focused => flag.set(Some(focused)).unsafeRunAndForget()))
-      _         <- IO(pipeOut.write(inputAfterRegistration)) >> IO(pipeOut.flush())
+      _         <- IO(reader.feed(inputAfterRegistration))
       _         <- IO.sleep(100.millis)
       value     <- flag.get
     yield value
@@ -216,12 +249,12 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   }
 
   "a focus-out sequence" should "not appear on the ordinary event stream" in {
-    val (terminal, pipeOut) = livePipeTerminal()
+    val (terminal, reader) = fakeTerminalWithReader()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(terminal, router, clipboard)
-      _         <- IO(pipeOut.write(csi("O") ++ bytes("a"))) >> IO(pipeOut.flush())
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard, readerOverride = Some(reader))
+      _         <- IO(reader.feed(csi("O") ++ bytes("a")))
       events    <- handler.eventStream.take(1).compile.toList
     yield events
 
@@ -231,13 +264,22 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   }
 
   "shutdown" should "terminate the event stream without waiting for EOF" in {
+    // A `FakeReader` that is never fed never reaches EOF on its own -- unlike the other specs' immediately-EOF empty
+    // input, which would otherwise race `shutdown`'s cancellation against the read loop's own natural EOF-driven
+    // completion. This is what a real, still-open terminal's stdin looks like between keystrokes: the read loop is
+    // genuinely blocked in `reader.read()`, so only cancellation can end it.
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(blockingDumbTerminal(), router, clipboard)
-      _         <- IO.sleep(50.millis) // let the read loop actually start blocking in `reader.read()` first
-      _         <- handler.shutdown
-      events    <- handler.eventStream.compile.toList
+      handler <- TerminalInputHandler.create(
+        structuralTerminal(),
+        router,
+        clipboard,
+        readerOverride = Some(new FakeReader)
+      )
+      _      <- IO.sleep(50.millis) // let the read loop actually start blocking in `reader.read()` first
+      _      <- handler.shutdown
+      events <- handler.eventStream.compile.toList
     yield events
 
     program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe Nil
@@ -254,19 +296,24 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     *
     * The read loop's job is what this holds: a sequence the terminal has already sent decodes as one sequence -- the
     * loop assembles the present bytes rather than splitting them -- because the timed read finds `[A` before the
-    * deadline. It runs at the production default (50ms); a near-zero deadline can't decide this reliably, because
-    * JLine's `NonBlockingReader` delivers bytes via a background pump thread, and under full-suite load on a two-core
-    * runner that thread can be starved past a 1ms window even though the bytes are already flushed -- which is a
-    * scheduling artifact of the test harness, not the read loop splitting a sequence it should have kept whole.
+    * deadline. It runs at the production default (50ms); a near-zero deadline can't decide this reliably. `FakeReader`
+    * removes the scheduling artifact a real JLine background pump thread could add on top (#1314) -- the bytes are
+    * simply in the queue the moment `feed` returns.
     */
   "an escape sequence the terminal has already sent" should "decode as one sequence within the disambiguation deadline" in {
-    val (terminal, pipeOut) = livePipeTerminal()
+    val (terminal, reader) = fakeTerminalWithReader()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(terminal, router, clipboard, escDeadline = 50.millis)
-      _         <- IO(pipeOut.write(csi("A"))) >> IO(pipeOut.flush())
-      events    <- handler.eventStream.take(1).compile.toList
+      handler <- TerminalInputHandler.create(
+        terminal,
+        router,
+        clipboard,
+        escDeadline = 50.millis,
+        readerOverride = Some(reader)
+      )
+      _      <- IO(reader.feed(csi("A")))
+      events <- handler.eventStream.take(1).compile.toList
     yield events
 
     program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
@@ -276,12 +323,12 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
 
   /** And the deadline still does its own job: an `ESC` that nothing follows is a bare Escape. */
   "a lone ESC with nothing following" should "still resolve to Escape once the deadline passes" in {
-    val (terminal, pipeOut) = livePipeTerminal()
+    val (terminal, reader) = fakeTerminalWithReader()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(terminal, router, clipboard)
-      _         <- IO(pipeOut.write(Array(esc))) >> IO(pipeOut.flush())
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard, readerOverride = Some(reader))
+      _         <- IO(reader.feed(Array(esc)))
       events    <- handler.eventStream.take(1).compile.toList
     yield events
 
@@ -292,13 +339,13 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
 
   /** A sequence split across two writes, as a slow pty can deliver it, is still one sequence. */
   "an escape sequence split across two writes" should "decode as one sequence" in {
-    val (terminal, pipeOut) = livePipeTerminal()
+    val (terminal, reader) = fakeTerminalWithReader()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(terminal, router, clipboard)
-      _         <- IO(pipeOut.write(Array(esc))) >> IO(pipeOut.flush())
-      _         <- IO(pipeOut.write(bytes("[A"))) >> IO(pipeOut.flush())
+      handler   <- TerminalInputHandler.create(terminal, router, clipboard, readerOverride = Some(reader))
+      _         <- IO(reader.feed(Array(esc)))
+      _         <- IO(reader.feed(bytes("[A")))
       events    <- handler.eventStream.take(1).compile.toList
     yield events
 
@@ -345,7 +392,7 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
       handler <- TerminalInputHandler.create(
-        dumbTerminal(Array.emptyByteArray),
+        structuralTerminal(),
         router,
         clipboard,
         readerOverride = Some(reader)
