@@ -131,8 +131,8 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   it should "update the project terminal panel in place rather than pinning a new surface each refresh" in {
     val stateManager = createStateManager()
 
-    stateManager.pinOrUpdateTerminalPanel("first output", PanelPosition.Bottom, 14).unsafeRunSync()
-    stateManager.pinOrUpdateTerminalPanel("second output", PanelPosition.Bottom, 14).unsafeRunSync()
+    stateManager.panelManager.pinOrUpdateTerminalPanel("first output", PanelPosition.Bottom, 14).unsafeRunSync()
+    stateManager.panelManager.pinOrUpdateTerminalPanel("second output", PanelPosition.Bottom, 14).unsafeRunSync()
 
     val terminalSurfaces = stateManager.getCurrentState
       .unsafeRunSync()

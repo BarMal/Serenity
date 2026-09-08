@@ -34,7 +34,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
   "ViewIntent.SetPanelSize" should "grow a pinned panel by the given delta" in {
     val stateManager = createStateManager()
-    stateManager
+    stateManager.panelManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/tmp")), None),
         PanelPosition.Left,
@@ -51,7 +51,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
   it should "shrink a pinned panel by a negative delta" in {
     val stateManager = createStateManager()
-    stateManager
+    stateManager.panelManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/tmp")), None),
         PanelPosition.Left,
@@ -68,7 +68,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
   it should "clamp shrinking at the minimum panel size rather than going to zero or negative" in {
     val stateManager = createStateManager()
-    stateManager
+    stateManager.panelManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/tmp")), None),
         PanelPosition.Left,

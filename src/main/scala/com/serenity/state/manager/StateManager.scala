@@ -93,11 +93,16 @@ trait PaneManager:
   def switchToPane(paneId: PaneId): IO[Unit]
   def getTabOrder(): IO[List[PaneId]]
 
-/** Manages transient peek surfaces. */
-trait PeekManager:
-  def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
-  def dismissPeek(): IO[Unit]
-  def peekToPin(position: PanelPosition): IO[Unit]
+/** Manages transient peek surfaces.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class PeekManager(
+    showPeek: (PeekContent, CursorPosition) => IO[Unit],
+    dismissPeek: () => IO[Unit],
+    peekToPin: PanelPosition => IO[Unit]
+)
 
 /** Manages persisted editor sessions. */
 trait SessionService:
@@ -105,24 +110,34 @@ trait SessionService:
   def loadSession(): IO[Option[AppState]]
   def clearSession(): IO[Unit]
 
-/** Manages pinned panels and the file explorer. */
-trait PanelManager:
-  def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
-  def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit]
-  def unpinPanel(target: PanelTarget): IO[Unit]
-  def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit]
-  def expandPinnedPanel(target: PanelTarget): IO[Unit]
-  def collapseExpandedPanel(): IO[Unit]
-  def switchToPinnedPanel(target: PanelTarget): IO[Unit]
-  def loadDirectoryTree(path: Path, files: List[String]): IO[Unit]
-  def selectFileInExplorer(filePath: Path): IO[Unit]
-  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit]
-  def dragFileToDirectory(sourceFile: Path, targetDir: Path): IO[Unit]
+/** Manages pinned panels and the file explorer.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class PanelManager(
+    pinPanel: (PanelContent, PanelPosition, Int) => IO[Unit],
+    pinOrUpdateTerminalPanel: (String, PanelPosition, Int) => IO[Unit],
+    unpinPanel: PanelTarget => IO[Unit],
+    movePinnedPanel: (SurfaceId, PanelPosition) => IO[Unit],
+    expandPinnedPanel: PanelTarget => IO[Unit],
+    collapseExpandedPanel: () => IO[Unit],
+    switchToPinnedPanel: PanelTarget => IO[Unit],
+    loadDirectoryTree: (Path, List[String]) => IO[Unit],
+    selectFileInExplorer: Path => IO[Unit],
+    resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
+    dragFileToDirectory: (Path, Path) => IO[Unit]
+)
 
-/** Manages modal surfaces. */
-trait ModalService:
-  def showModal(modal: Modal): IO[Unit]
-  def dismissModal(): IO[Unit]
+/** Manages modal surfaces.
+  *
+  * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
+  * these as a field instead of mixing this trait in directly.
+  */
+final case class ModalService(
+    showModal: Modal => IO[Unit],
+    dismissModal: () => IO[Unit]
+)
 
 /** Manages buffer file paths and persistence. */
 trait FileService:
@@ -156,15 +171,15 @@ trait StateManager
       CommandExecutor,
       BufferManager,
       PaneManager,
-      PeekManager,
       SessionService,
-      PanelManager,
-      ModalService,
       FileService:
   def scrollManager: ScrollManager
   def sessionStartupInfo: SessionStartupInfo
   def focusManager: FocusManager
   def lspEffectSource: LspEffectSource
+  def peekManager: PeekManager
+  def panelManager: PanelManager
+  def modalService: ModalService
 
 object StateManager:
 

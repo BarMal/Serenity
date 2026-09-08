@@ -64,7 +64,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
       // When: Show modal
       modal = Modal.Custom("test-modal", "test")
-      _ <- stateManager.showModal(modal)
+      _ <- stateManager.modalService.showModal(modal)
 
       // Then: Focus should be on the modal surface
       modalState <- stateManager.getCurrentState
@@ -73,7 +73,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       _            = modalState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
 
       // When: Dismiss modal
-      _ <- stateManager.dismissModal()
+      _ <- stateManager.modalService.dismissModal()
 
       // Then: Focus should return to pane
       finalState <- stateManager.getCurrentState
@@ -103,7 +103,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       )
 
       // When: Show peek overlay
-      _ <- stateManager.showPeek(content, cursor)
+      _ <- stateManager.peekManager.showPeek(content, cursor)
 
       // Then: Focus should be on the peek surface
       peekState <- stateManager.getCurrentState
@@ -122,7 +122,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       _ = peekSurface.get.presentation shouldBe SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
 
       // When: Dismiss peek overlay
-      _ <- stateManager.dismissPeek()
+      _ <- stateManager.peekManager.dismissPeek()
 
       // Then: Focus should return to editor pane
       finalState <- stateManager.getCurrentState
@@ -161,10 +161,10 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
     // When: Rapid state transitions
     stateManager.switchToPane(pane2).unsafeRunSync()
-    stateManager.showModal(modal).unsafeRunSync()
-    stateManager.dismissModal().unsafeRunSync()
-    stateManager.showPeek(peekContent, CursorPosition(0, 0)).unsafeRunSync()
-    stateManager.dismissPeek().unsafeRunSync()
+    stateManager.modalService.showModal(modal).unsafeRunSync()
+    stateManager.modalService.dismissModal().unsafeRunSync()
+    stateManager.peekManager.showPeek(peekContent, CursorPosition(0, 0)).unsafeRunSync()
+    stateManager.peekManager.dismissPeek().unsafeRunSync()
     stateManager.switchToPane(pane1).unsafeRunSync()
 
     // Then: Final state should be valid
