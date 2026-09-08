@@ -19,7 +19,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver  = UiScenarioDriver.create("markdown-lens").unsafeRunSync()
     val fixture = Paths.get(getClass.getResource("/ui-scenarios/markdown-lens.md").toURI)
     driver.stateManager.fileOpener.openFile(fixture).unsafeRunSync()
-    driver.stateManager
+    driver.stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "inline-lens",
@@ -119,7 +119,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver  = UiScenarioDriver.create(name).unsafeRunSync()
     val fixture = Paths.get(getClass.getResource("/ui-scenarios/markdown-lens.md").toURI)
     driver.stateManager.fileOpener.openFile(fixture).unsafeRunSync()
-    driver.stateManager
+    driver.stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "inline-lens",

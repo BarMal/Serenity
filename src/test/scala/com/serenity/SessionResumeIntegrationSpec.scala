@@ -48,7 +48,12 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         testLogger("SessionResumeIntegrationSpec-first"),
         sessionRootOverride = Some(sessionRoot)
       )
-      firstInitial <- AppStartup.initializeState(firstManager, firstManager.sessionStartupInfo, theme, viewportSize)
+      firstInitial <- AppStartup.initializeState(
+        firstManager,
+        firstManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _ = firstInitial.startPageSurface should be(defined)
 
       // Select "New document" (index 0, the default selection) from the startup page.
@@ -68,7 +73,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered in CommandRegistry.default"))
-      _ <- firstManager.executeCommand(saveSessionCommand)
+      _ <- firstManager.commandExecutor.executeCommand(saveSessionCommand)
 
       // ---- Close Serenity: nothing further happens on firstManager, simulating quit. ----
 
@@ -77,7 +82,12 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         testLogger("SessionResumeIntegrationSpec-second"),
         sessionRootOverride = Some(sessionRoot)
       )
-      secondInitial <- AppStartup.initializeState(secondManager, secondManager.sessionStartupInfo, theme, viewportSize)
+      secondInitial <- AppStartup.initializeState(
+        secondManager,
+        secondManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _            = secondInitial.startPageSurface should be(defined)
       startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       restoreIndex = startPage.launchActions.indexWhere(_.id == "restore-session")
@@ -115,14 +125,19 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         testLogger("SessionResumeIntegrationSpec-runtime-first"),
         sessionRootOverride = Some(sessionRoot)
       )
-      firstInitial <- AppStartup.initializeState(firstManager, firstManager.sessionStartupInfo, theme, viewportSize)
+      firstInitial <- AppStartup.initializeState(
+        firstManager,
+        firstManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _ = firstInitial.startPageSurface should be(defined)
       _ <- firstManager.applyEvent(Enter)
       _ <- "hello".toList.traverse_(c => firstManager.applyEvent(InsertChar(c)))
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered"))
-      _ <- firstManager.executeCommand(saveSessionCommand)
+      _ <- firstManager.commandExecutor.executeCommand(saveSessionCommand)
 
       // ---- Second launch: TUI mode with ModifyOtherKeys tier -- both are "never persisted" and must survive restore. ----
       secondManager <- StateManager.apply(

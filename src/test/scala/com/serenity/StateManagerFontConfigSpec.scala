@@ -107,7 +107,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
         )
         .unsafeRunSync()
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "text-scale-auto",
@@ -164,7 +164,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-    val loaded = stateManager.loadSession().unsafeRunSync()
+    val loaded = stateManager.sessionService.loadSession.unsafeRunSync()
 
     loaded.map(_.persisted.config.editorConfig.fontConfig.uiFontFamily) shouldBe Some(expectedFont)
   }

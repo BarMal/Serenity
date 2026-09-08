@@ -54,7 +54,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
     val boldCommand = CommandRegistry.withToggleUI.findCommand("bold").getOrElse(fail("missing bold"))
-    stateManager.executeCommand(boldCommand).unsafeRunSync()
+    stateManager.commandExecutor.executeCommand(boldCommand).unsafeRunSync()
 
   private def setCursorAndSelection(
     stateManager: StateManager,

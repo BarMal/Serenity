@@ -30,7 +30,7 @@ class StateManagerAppModeSpec extends AnyFlatSpec with Matchers:
   it should "switch to prose mode via the app-mode-prose command" in {
     val stateManager = createStateManager()
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "app-mode-prose",
@@ -47,7 +47,7 @@ class StateManagerAppModeSpec extends AnyFlatSpec with Matchers:
   it should "switch back to code mode via the app-mode-code command" in {
     val stateManager = createStateManager()
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "app-mode-prose",
@@ -57,7 +57,7 @@ class StateManagerAppModeSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "app-mode-code",

@@ -55,6 +55,6 @@ class MotionUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   private def execute(driver: UiScenarioDriver, intent: CommandIntent): Unit =
-    driver.stateManager
+    driver.stateManager.commandExecutor
       .executeCommand(Command.typed("scenario-motion", "Scenario motion", intent, CommandCategory.Settings))
       .unsafeRunSync()

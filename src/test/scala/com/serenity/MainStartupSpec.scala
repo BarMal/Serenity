@@ -209,7 +209,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val program = for
       firstManager <- StateManager.apply(logger, sessionRootOverride = Some(sessionRoot))
       _ <- firstManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = Theme.light)))
-      _ <- firstManager.saveSession()
+      _ <- firstManager.sessionService.saveSession
       secondManager <- StateManager.apply(
         logger,
         sessionRootOverride = Some(sessionRoot)

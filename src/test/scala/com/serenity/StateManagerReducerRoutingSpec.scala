@@ -51,7 +51,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
 
     stateManager.applyEvent(Quit).unsafeRunSync()
-    stateManager.awaitQuit.unsafeRunSync()
+    stateManager.runtimeLifecycle.awaitQuit.unsafeRunSync()
 
     succeed
   }

@@ -99,7 +99,7 @@ object AppStartup:
     )
 
   def startPageState(
-    stateManager: SessionService,
+    sessionService: SessionService,
     sessionStartupInfo: SessionStartupInfo,
     theme: Theme,
     initialViewportSize: ViewportSize,
@@ -110,7 +110,7 @@ object AppStartup:
   ): IO[AppState] =
     for
       sessionExists <- sessionStartupInfo.sessionExists
-      recentFiles   <- stateManager.loadSession().map(_.fold(Nil)(_.persisted.recentFiles))
+      recentFiles   <- sessionService.loadSession.map(_.fold(Nil)(_.persisted.recentFiles))
       readableRecentFiles <- IO.blocking(
         recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
       )
@@ -184,7 +184,7 @@ object AppStartup:
       case None =>
         for
           startState <- startPageState(
-            stateManager,
+            stateManager.sessionService,
             sessionStartupInfo,
             theme,
             initialViewportSize,

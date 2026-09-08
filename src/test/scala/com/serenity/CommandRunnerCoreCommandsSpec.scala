@@ -1713,7 +1713,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
   it should "restore a startup session into the current startup viewport" in {
     val sessionRoot     = Files.createTempDirectory("serenity-startup-session")
     val savedManager    = createStateManager(Some(sessionRoot))
-    val restoredManager = createStateManager(Some(sessionRoot))
+    val restored        = createStateManager(Some(sessionRoot))
     val bufferId        = BufferId(0)
     val startupViewport = ViewportSize(120, 40)
     val savedViewport   = ViewportSize(80, 24)
@@ -1721,13 +1721,13 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     savedManager.bufferManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
     executeCommandThroughRunner(savedManager, "save-session", "save-session")
     AppStartup
-      .initializeState(restoredManager, restoredManager.sessionStartupInfo, Theme.default, startupViewport)
+      .initializeState(restored, restored.sessionStartupInfo, Theme.default, startupViewport)
       .unsafeRunSync()
-    restoredManager.applyEvent(MoveDown).unsafeRunSync()
-    restoredManager.applyEvent(MoveDown).unsafeRunSync()
-    restoredManager.applyEvent(Enter).unsafeRunSync()
+    restored.applyEvent(MoveDown).unsafeRunSync()
+    restored.applyEvent(MoveDown).unsafeRunSync()
+    restored.applyEvent(Enter).unsafeRunSync()
 
-    val restoredState = restoredManager.getCurrentState.unsafeRunSync()
+    val restoredState = restored.getCurrentState.unsafeRunSync()
     restoredState.persisted.buffers(bufferId).document.content.collect() shouldBe "startup session"
     restoredState.persisted.buffers(bufferId).viewport.visibleColumns should not be savedViewport.width
     restoredState.persisted.buffers(bufferId).viewport.visibleLines should not be savedViewport.height

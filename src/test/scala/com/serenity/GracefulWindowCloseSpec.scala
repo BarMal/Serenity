@@ -33,7 +33,7 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
     val program = for
       awaiting <- Deferred[IO, Unit]
       _ <- (
-        awaiting.complete(()) >> sm.awaitQuit,
+        awaiting.complete(()) >> sm.runtimeLifecycle.awaitQuit,
         awaiting.get >> sm.applyEvent(Quit)
       ).parMapN((_, _) => ())
     yield ()
@@ -65,8 +65,8 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
     val program = for
       awaiting <- Deferred[IO, Unit]
       _ <- (
-        awaiting.complete(()) >> sm.awaitQuit,
-        awaiting.get >> sm.forceQuit()
+        awaiting.complete(()) >> sm.runtimeLifecycle.awaitQuit,
+        awaiting.get >> sm.runtimeLifecycle.forceQuit
       ).parMapN((_, _) => ())
     yield ()
 

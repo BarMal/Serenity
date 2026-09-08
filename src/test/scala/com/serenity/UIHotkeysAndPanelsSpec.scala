@@ -339,7 +339,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   it should "expand and collapse a pinned panel through commands" in new UIFixture:
     stateManager.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10).unsafeRunSync()
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "expand-bottom-panel",
@@ -354,7 +354,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
     )
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "collapse-expanded-panel",

@@ -30,7 +30,12 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       viewportSize = ViewportSize(80, 24)
 
       // Initialize startup state
-      initialState <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
+      initialState <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
 
       // Verify we start with startup page focused
       _         = initialState.persisted.focus shouldBe Focus.Surface(SurfaceId("surface-0"))
@@ -100,7 +105,12 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         testLogger("StartupPageIntegrationSpec-empty-session-first"),
         sessionRootOverride = Some(sessionRoot)
       )
-      firstInitial <- AppStartup.initializeState(firstManager, firstManager.sessionStartupInfo, theme, viewportSize)
+      firstInitial <- AppStartup.initializeState(
+        firstManager,
+        firstManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _ = firstInitial.startPageSurface should be(defined)
       _ = firstInitial.persisted.buffers shouldBe empty
 
@@ -109,14 +119,19 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered in CommandRegistry.default"))
-      _ <- firstManager.executeCommand(saveSessionCommand)
+      _ <- firstManager.commandExecutor.executeCommand(saveSessionCommand)
 
       // ---- Open again: a brand-new StateManager over the same session root, exactly like a fresh process launch. ----
       secondManager <- StateManager.apply(
         testLogger("StartupPageIntegrationSpec-empty-session-second"),
         sessionRootOverride = Some(sessionRoot)
       )
-      secondInitial <- AppStartup.initializeState(secondManager, secondManager.sessionStartupInfo, theme, viewportSize)
+      secondInitial <- AppStartup.initializeState(
+        secondManager,
+        secondManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _            = secondInitial.startPageSurface should be(defined)
       startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       restoreIndex = startPage.launchActions.indexWhere(_.id == "restore-session")
@@ -155,17 +170,22 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         testLogger("StartupPageIntegrationSpec-open-recent-first"),
         sessionRootOverride = Some(sessionRoot)
       )
-      _ <- AppStartup.initializeState(firstManager, firstManager.sessionStartupInfo, theme, viewportSize)
+      _ <- AppStartup.initializeState(
+        firstManager,
+        firstManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       openRecentSeed = com.serenity.command.Command.typed(
         "open-recent-seed",
         "Open the file so it is tracked as recent",
         com.serenity.command.CommandIntent.File(com.serenity.command.FileIntent.OpenRecentFile(recentFile))
       )
-      _ <- firstManager.executeCommand(openRecentSeed)
+      _ <- firstManager.commandExecutor.executeCommand(openRecentSeed)
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered in CommandRegistry.default"))
-      _ <- firstManager.executeCommand(saveSessionCommand)
+      _ <- firstManager.commandExecutor.executeCommand(saveSessionCommand)
 
       // ---- Open again: a brand-new StateManager, exactly like a fresh process launch. The saved file is now
       // offered as a "recent" entry on the startup page (the same entry the user selects). ----
@@ -173,7 +193,12 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         testLogger("StartupPageIntegrationSpec-open-recent-second"),
         sessionRootOverride = Some(sessionRoot)
       )
-      secondInitial <- AppStartup.initializeState(secondManager, secondManager.sessionStartupInfo, theme, viewportSize)
+      secondInitial <- AppStartup.initializeState(
+        secondManager,
+        secondManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _           = secondInitial.startPageSurface should be(defined)
       startPage   = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       recentIndex = startPage.launchActions.indexWhere(_.id.startsWith("recent:"))
@@ -217,7 +242,12 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       viewportSize = ViewportSize(80, 24)
 
       // Initialize startup state
-      initialState <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
+      initialState <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _ = initialState.startPageSurface should be(defined)
 
       // Press escape to dismiss
@@ -239,7 +269,12 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 
-      initialState <- AppStartup.initializeState(stateManager, stateManager.sessionStartupInfo, theme, viewportSize)
+      initialState <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        theme,
+        viewportSize
+      )
       _ = initialState.startPageSurface should be(defined)
 
       // "Open file or folder" is at index 1; navigate to it and confirm.

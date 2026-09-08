@@ -270,19 +270,19 @@ object AppRuntime:
     awaitExternalQuit: IO[Unit],
     appConfig: AppConfig
   )(using logger: Logger[IO]): IO[Unit] =
-    val quitSignal = stateManager.awaitQuit.attempt
+    val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
       awaitInputLoop,
-      superviseLoop("render loop", stateManager.forceQuit())(renderLoop.interruptWhen(quitSignal).compile.drain),
-      stateManager.awaitQuit,
-      superviseLoop("interval save loop", stateManager.forceQuit())(stateManager.intervalSaveStream.compile.drain),
-      superviseLoop("external quit coordinator", stateManager.forceQuit())(
-        coordinateExternalQuit(awaitExternalQuit, stateManager.forceQuit(), stateManager.awaitQuit)
+      superviseLoop("render loop", lifecycle.forceQuit)(renderLoop.interruptWhen(quitSignal).compile.drain),
+      lifecycle.awaitQuit,
+      superviseLoop("interval save loop", lifecycle.forceQuit)(lifecycle.intervalSaveStream.compile.drain),
+      superviseLoop("external quit coordinator", lifecycle.forceQuit)(
+        coordinateExternalQuit(awaitExternalQuit, lifecycle.forceQuit, lifecycle.awaitQuit)
       ),
-      superviseLoop("input shutdown", stateManager.forceQuit())(
-        shutdownInputAfterQuit(stateManager.awaitQuit, inputHandler.shutdown)
+      superviseLoop("input shutdown", lifecycle.forceQuit)(
+        shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
       ),
-      superviseLoop("LSP loop", stateManager.forceQuit())(
+      superviseLoop("LSP loop", lifecycle.forceQuit)(
         LspManager.run(
           stateManager.lspEffectSource.lspEffectStream,
           stateManager.applyEvent,
@@ -293,12 +293,12 @@ object AppRuntime:
     ).parMapN((_, _, _, _, _, _, _) => ())
 
   private def runInputLoop(
-    stateManager: StateReader & EventApplier & RuntimeLifecycle,
+    stateManager: StateManager,
     inputHandler: InputHandler[IO],
     inputFunnel: Stream[IO, Event] => Stream[IO, Unit]
   )(using logger: Logger[IO]): IO[Unit] =
-    val quitSignal = stateManager.awaitQuit.attempt
-    superviseLoop("input loop", stateManager.forceQuit())(
+    val quitSignal = stateManager.runtimeLifecycle.awaitQuit.attempt
+    superviseLoop("input loop", stateManager.runtimeLifecycle.forceQuit)(
       inputHandler.eventStream
         .evalTap(event =>
           stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.persisted.focus, logger))

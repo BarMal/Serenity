@@ -31,7 +31,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
-        stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         com.serenity.ui.theme.Theme.dark,
         ViewportSize(100, 30)
@@ -58,7 +58,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
-        stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         com.serenity.ui.theme.Theme.dark,
         ViewportSize(100, 30)
@@ -87,7 +87,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
-        stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         com.serenity.ui.theme.Theme.dark,
         ViewportSize(100, 30)
@@ -132,7 +132,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
-        stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         com.serenity.ui.theme.Theme.dark,
         ViewportSize(100, 30)
@@ -175,7 +175,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
-        stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         com.serenity.ui.theme.Theme.dark,
         ViewportSize(100, 30)
@@ -216,7 +216,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       state <- AppStartup.startPageState(
-        stateManager,
+        stateManager.sessionService,
         stateManager.sessionStartupInfo,
         com.serenity.ui.theme.Theme.dark,
         ViewportSize(100, 30)

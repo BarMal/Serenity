@@ -43,7 +43,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val panelId = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.head.id
 
-    stateManager.executeCommand(resizeCommand(panelId, 6)).unsafeRunSync()
+    stateManager.commandExecutor.executeCommand(resizeCommand(panelId, 6)).unsafeRunSync()
 
     val resized = stateManager.getCurrentState.unsafeRunSync().surfaceById(panelId).map(_.presentation)
     resized shouldBe Some(SurfacePresentation.Pinned(PanelPosition.Left, 30))
@@ -60,7 +60,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val panelId = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.head.id
 
-    stateManager.executeCommand(resizeCommand(panelId, -6)).unsafeRunSync()
+    stateManager.commandExecutor.executeCommand(resizeCommand(panelId, -6)).unsafeRunSync()
 
     val resized = stateManager.getCurrentState.unsafeRunSync().surfaceById(panelId).map(_.presentation)
     resized shouldBe Some(SurfacePresentation.Pinned(PanelPosition.Left, 18))
@@ -77,7 +77,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val panelId = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.head.id
 
-    stateManager.executeCommand(resizeCommand(panelId, -100)).unsafeRunSync()
+    stateManager.commandExecutor.executeCommand(resizeCommand(panelId, -100)).unsafeRunSync()
 
     val resized = stateManager.getCurrentState.unsafeRunSync().surfaceById(panelId).map(_.presentation)
     resized shouldBe Some(SurfacePresentation.Pinned(PanelPosition.Left, 4))
@@ -87,7 +87,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     val before       = stateManager.getCurrentState.unsafeRunSync()
 
-    stateManager
+    stateManager.commandExecutor
       .executeCommand(resizeCommand(com.serenity.state.models.SurfaceId("missing"), 6))
       .unsafeRunSync()
 
