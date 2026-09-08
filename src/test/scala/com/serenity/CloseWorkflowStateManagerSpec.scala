@@ -21,15 +21,11 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
-  final private case class TestFileDialog(saveSelection: Option[java.nio.file.Path]) extends FileDialog:
-    override def chooseOpenFile(initialDirectory: Option[java.nio.file.Path]): IO[Option[java.nio.file.Path]] =
-      IO.pure(None)
-
-    override def chooseSaveFile(
-      initialDirectory: Option[java.nio.file.Path],
-      suggestedFileName: Option[String]
-    ): IO[Option[java.nio.file.Path]] =
-      IO.pure(saveSelection)
+  private def testFileDialog(saveSelection: Option[java.nio.file.Path]): FileDialog =
+    FileDialog(
+      chooseOpenFile = _ => IO.pure(None),
+      chooseSaveFile = (_, _) => IO.pure(saveSelection)
+    )
 
   private def createStateManager(fileDialog: Option[FileDialog] = None): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CloseWorkflowStateManagerSpec"))
@@ -334,7 +330,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val bufferId   = BufferId(0)
 
     try
-      val stateManager = createStateManager(Some(TestFileDialog(Some(targetFile))))
+      val stateManager = createStateManager(Some(testFileDialog(Some(targetFile))))
       stateManager
         .updateState { state =>
           val buffer = state.persisted
@@ -366,7 +362,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep the close workflow open when native save-as is cancelled" in {
-    val stateManager = createStateManager(Some(TestFileDialog(None)))
+    val stateManager = createStateManager(Some(testFileDialog(None)))
     val bufferId     = BufferId(0)
 
     stateManager

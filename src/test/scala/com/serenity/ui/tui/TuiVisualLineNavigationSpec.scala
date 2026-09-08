@@ -6,7 +6,7 @@ import TuiScenarios.*
 
 /** What "navigate by visual line" actually does in a wrapped terminal document, setting by setting.
   *
-  * `EditorEventReducer.useVisualLineNavigation` gates on `wordWrapEnabled && visualLineCursorNavigation`, so there are
+  * `EditorCursorSupport.useVisualLineNavigation` gates on `wordWrapEnabled && visualLineCursorNavigation`, so there are
   * three cases worth pinning: both on (visual rows), the navigation flag off (logical lines), and word wrap off
   * (logical lines, because there are no visual rows to speak of). Up and Down honour all three.
   *

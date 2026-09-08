@@ -3,7 +3,9 @@ package com.serenity.ui.tui
 import java.io.{ByteArrayOutputStream, PipedInputStream, PipedOutputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.util.concurrent.Executors
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 
 import cats.effect.std.Queue
@@ -40,6 +42,7 @@ final class TuiSession private (
     surfaces: TuiRuntime.SurfaceHolder,
     output: ByteArrayOutputStream,
     input: PipedOutputStream,
+    writeEc: ExecutionContext,
     terminal: DumbTerminal,
     sentinels: Queue[IO, Unit],
     appliedSignals: Queue[IO, Unit],
@@ -242,11 +245,19 @@ final class TuiSession private (
       _ <- screenRef.update(_.consume(fresh)).whenA(fresh.nonEmpty)
     yield fresh
 
+  /** `IO.blocking` deliberately not used here: it dispatches each call onto cats-effect's shared, elastic blocking
+    * pool, which can hand successive writes to different (and short-lived) threads. `PipedOutputStream`/
+    * `PipedInputStream` capture the thread identity of whichever thread last touched each side and treat a dead
+    * writer-side thread as a broken pipe on the next read -- so if the pooled thread that performed one write is reaped
+    * before the next, [[TerminalInputHandler]]'s read loop can see `java.io.IOException: Pipe broken` even though the
+    * session is still fully alive and nothing was closed. Routing every write through one dedicated, session-owned
+    * thread (`writeEc`) keeps the writer-side thread identity stable for the session's whole lifetime.
+    */
   private def write(bytes: Array[Byte]): IO[Unit] =
-    IO.blocking {
+    IO {
       input.write(bytes)
       input.flush()
-    }
+    }.evalOn(writeEc)
 
   private def awaitSentinel(key: TuiKey): IO[Unit] =
     sentinels.take
@@ -339,11 +350,20 @@ object TuiSession:
         IO.blocking(deleteRecursively(root)).attempt.void
       )
       streams <- Resource.eval(openTerminal(environment.viewport))
+      writeEc <- dedicatedWriteExecutionContext
       shell   <- TerminalShell.forTerminal(streams.terminal)
-      built   <- Resource.eval(assemble(environment, workspace, streams, shell))
+      built   <- Resource.eval(assemble(environment, workspace, streams, writeEc, shell))
       _       <- Resource.make(built.consumer.start)((fiber: FiberIO[Unit]) => fiber.cancel)
       _       <- Resource.onFinalize(built.session.handlerShutdown)
     yield built.session
+
+  /** One thread, held for the session's whole lifetime, that every [[TuiSession.write]] call runs on -- see that
+    * method's doc comment for why a stable thread identity matters for the piped streams underneath the test terminal.
+    */
+  private def dedicatedWriteExecutionContext: Resource[IO, ExecutionContext] =
+    Resource
+      .make(IO(Executors.newSingleThreadExecutor()))(executor => IO(executor.shutdown()))
+      .map(ExecutionContext.fromExecutor)
 
   final private case class Built(session: TuiSession, consumer: IO[Unit])
 
@@ -351,6 +371,7 @@ object TuiSession:
     environment: TuiEnvironment,
     workspace: Path,
     streams: Streams,
+    writeEc: ExecutionContext,
     shell: TerminalShell
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: Balance): IO[Built] =
     val terminalConfig =
@@ -399,6 +420,7 @@ object TuiSession:
         surfaces = new TuiRuntime.SurfaceHolder(shell),
         output = streams.output,
         input = streams.input,
+        writeEc = writeEc,
         terminal = streams.terminal,
         sentinels = sentinels,
         appliedSignals = appliedSignals,

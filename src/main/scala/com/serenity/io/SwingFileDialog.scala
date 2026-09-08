@@ -14,15 +14,18 @@ import com.sun.jna.platform.win32.COM.Unknown
 import com.sun.jna.platform.win32.{Guid, Ole32}
 import com.sun.jna.ptr.{IntByReference, PointerByReference}
 
-class SwingFileDialog(parent: Component) extends FileDialog:
+object SwingFileDialog:
 
-  override def chooseOpenFile(initialDirectory: Option[Path]): IO[Option[Path]] =
-    choose(AwtFileDialog.LOAD, initialDirectory, None, _.showOpenDialog(parent))
-
-  override def chooseSaveFile(initialDirectory: Option[Path], suggestedFileName: Option[String]): IO[Option[Path]] =
-    choose(AwtFileDialog.SAVE, initialDirectory, suggestedFileName, _.showSaveDialog(parent))
+  def apply(parent: Component): FileDialog =
+    FileDialog(
+      chooseOpenFile =
+        initialDirectory => choose(parent, AwtFileDialog.LOAD, initialDirectory, None, _.showOpenDialog(parent)),
+      chooseSaveFile = (initialDirectory, suggestedFileName) =>
+        choose(parent, AwtFileDialog.SAVE, initialDirectory, suggestedFileName, _.showSaveDialog(parent))
+    )
 
   private def choose(
+    parent: Component,
     mode: Int,
     initialDirectory: Option[Path],
     suggestedFileName: Option[String],
@@ -52,8 +55,6 @@ class SwingFileDialog(parent: Component) extends FileDialog:
 
       selectedPath.get()
     }
-
-object SwingFileDialog:
 
   enum Backend:
     case WindowsModern

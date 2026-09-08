@@ -5,6 +5,7 @@ import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.*
 import com.serenity.state.models.*
+import com.serenity.state.undo.BufferSnapshot
 
 /** Low-level infrastructure shared by every family of [[EditorEventReducer]] event handling: applying one or many
   * [[MultiCursorEdit]]s to a buffer's content, rich text document, comments and animations in lockstep. Extracted from
@@ -44,6 +45,21 @@ private[reducers] object EditorEditSupport:
 
   def animationMergeEffects(bufferId: BufferId, delta: Map[CharacterKey, AnimatedCell]): List[AppEffect] =
     if delta.isEmpty then Nil else List(AppEffect.Animation(AnimationEffect.Merge(bufferId, delta)))
+
+  /** Declares the edit(s) just performed as undoable -- see #1016. `before` is the buffer as it stood immediately
+    * before this call's edits; every caller already has it in scope as the receiver it edited. `groupable` mirrors
+    * whether the triggering event was a character/tab insertion, the only two event kinds a consecutive run of which
+    * coalesces into one undo step.
+    */
+  def undoBoundaryEffects(
+    bufferId: BufferId,
+    paneId: PaneId,
+    before: Buffer,
+    edits: List[MultiCursorEdit],
+    groupable: Boolean
+  ): List[AppEffect] =
+    if edits.isEmpty then Nil
+    else List(AppEffect.Undo(UndoEffect.RecordBoundary(bufferId, paneId, BufferSnapshot.fromBuffer(before), groupable)))
 
   private def toTextEdit(edit: MultiCursorEdit): TextEdit =
     TextEdit(edit.start, edit.end, edit.insertedText)

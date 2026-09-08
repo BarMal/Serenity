@@ -12,76 +12,82 @@ import com.serenity.state.models.*
 private[reducers] object EditorTextEditReducer:
   import EditorCursorMovement.*
   import EditorEditSupport.*
-  import EditorEventReducer.{CursorEventContext, TabInsertion}
+  import EditorCursorSupport.{CursorEventContext, TabInsertion}
 
   def reduce(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
     import ctx.*
 
     /** Like a plain buffer update, but `f` also reports the edits it made, so their animations can be remapped in the
-      * presentation layer (`#1001`) instead of inside `Buffer` itself.
+      * presentation layer (`#1001`) instead of inside `Buffer` itself. `groupable` mirrors the calling event: whether a
+      * consecutive run of edits like this one coalesces into one undo step (#1016).
       */
-    def applyEditedBuffer(f: Buffer => (Buffer, List[MultiCursorEdit])): ReducerResult =
+    def applyEditedBuffer(groupable: Boolean)(f: Buffer => (Buffer, List[MultiCursorEdit])): ReducerResult =
       val (updated, edits) = f(buffer)
       ReducerResult(
         Focused.replaceBuffer(currentState, updated),
-        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits)
+        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
+          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable)
       )
 
     event match
       case InsertChar(char) =>
-        if hasSelection then applyEditedBuffer(applyMultiSelectionReplacement(_, char.toString))
-        else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, char.toString))
-        else insertAtCursor(buffer, head, char.toString, currentState)
+        if hasSelection then applyEditedBuffer(groupable = true)(applyMultiSelectionReplacement(_, char.toString))
+        else if isMulti then applyEditedBuffer(groupable = true)(applyMultiCursorInsertion(_, char.toString))
+        else insertAtCursor(buffer, head, char.toString, currentState, paneId, groupable = true)
 
       case TabKey =>
         if hasSelection then
           val (updated, edits, delta) = applyLineIndent(buffer, currentState, selectionLines(buffer))
           val effects =
             animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-              animationMergeEffects(buffer.id, delta)
+              animationMergeEffects(buffer.id, delta) ++
+              undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = true)
           ReducerResult(Focused.replaceBuffer(currentState, updated), effects)
-        else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, TabInsertion))
-        else insertAtCursor(buffer, head, TabInsertion, currentState)
+        else if isMulti then applyEditedBuffer(groupable = true)(applyMultiCursorInsertion(_, TabInsertion))
+        else insertAtCursor(buffer, head, TabInsertion, currentState, paneId, groupable = true)
 
       case NewLine | Enter =>
-        if hasSelection then applyEditedBuffer(applyMultiSelectionReplacement(_, "\n"))
-        else if isMulti then applyEditedBuffer(applyMultiCursorInsertion(_, "\n"))
-        else insertAtCursor(buffer, head, "\n", currentState)
+        if hasSelection then applyEditedBuffer(groupable = false)(applyMultiSelectionReplacement(_, "\n"))
+        else if isMulti then applyEditedBuffer(groupable = false)(applyMultiCursorInsertion(_, "\n"))
+        else insertAtCursor(buffer, head, "\n", currentState, paneId, groupable = false)
 
       case ReverseTabKey =>
         val targetLines =
           if hasSelection then selectionLines(buffer)
           else if isMulti then distinctCursorLines(buffer)
           else List(head.line)
-        applyEditedBuffer(applyLineUnindent(_, targetLines))
+        applyEditedBuffer(groupable = false)(applyLineUnindent(_, targetLines))
 
       case DeleteBackward =>
-        if hasSelection then applyEditedBuffer(deleteSelectedRanges)
-        else if isMulti then applyEditedBuffer(applyMultiCursorDeletion(_, backward = true))
-        else reduceDeletion(buffer, currentState, graphemeBackwardDeletion(_, head))
+        if hasSelection then applyEditedBuffer(groupable = false)(deleteSelectedRanges)
+        else if isMulti then applyEditedBuffer(groupable = false)(applyMultiCursorDeletion(_, backward = true))
+        else reduceDeletion(buffer, currentState, paneId, graphemeBackwardDeletion(_, head))
 
       case DeleteForward =>
-        if hasSelection then applyEditedBuffer(deleteSelectedRanges)
-        else if isMulti then applyEditedBuffer(applyMultiCursorDeletion(_, backward = false))
-        else reduceDeletion(buffer, currentState, graphemeForwardDeletion(_, head))
+        if hasSelection then applyEditedBuffer(groupable = false)(deleteSelectedRanges)
+        else if isMulti then applyEditedBuffer(groupable = false)(applyMultiCursorDeletion(_, backward = false))
+        else reduceDeletion(buffer, currentState, paneId, graphemeForwardDeletion(_, head))
 
       case DeleteWordBackward =>
-        if hasSelection then applyEditedBuffer(deleteSelectedRanges)
-        else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = true))
-        else reduceDeletion(buffer, currentState, wordBackwardDeletion(_, head))
+        if hasSelection then applyEditedBuffer(groupable = false)(deleteSelectedRanges)
+        else if isMulti then applyEditedBuffer(groupable = false)(applyMultiCursorWordDeletion(_, backward = true))
+        else reduceDeletion(buffer, currentState, paneId, wordBackwardDeletion(_, head))
 
       case DeleteWordForward =>
-        if hasSelection then applyEditedBuffer(deleteSelectedRanges)
-        else if isMulti then applyEditedBuffer(applyMultiCursorWordDeletion(_, backward = false))
-        else reduceDeletion(buffer, currentState, wordForwardDeletion(_, head))
+        if hasSelection then applyEditedBuffer(groupable = false)(deleteSelectedRanges)
+        else if isMulti then applyEditedBuffer(groupable = false)(applyMultiCursorWordDeletion(_, backward = false))
+        else reduceDeletion(buffer, currentState, paneId, wordForwardDeletion(_, head))
 
       case _ =>
         ReducerResult.noEffects(currentState)
 
-  /** All four deletions share a selection arm and differ only in the range they delete when there is none. */
+  /** All four deletions share a selection arm and differ only in the range they delete when there is none. Deletions
+    * are never groupable (#1016) -- only a run of character/tab insertions coalesces into one undo step.
+    */
   private def reduceDeletion(
     buffer: Buffer,
     currentState: AppState,
+    paneId: PaneId,
     withoutSelection: Buffer => Option[(Buffer, MultiCursorEdit)]
   ): ReducerResult =
     ReducerResult.fromTransition(
@@ -92,7 +98,12 @@ private[reducers] object EditorTextEditReducer:
           case None            => withoutSelection(current)
         result match
           case Some((updated, edit)) =>
-            (updated, animationRemapEffects(buffer.id, current.document.content, updated.document.content, List(edit)))
+            val edits = List(edit)
+            (
+              updated,
+              animationRemapEffects(buffer.id, current.document.content, updated.document.content, edits) ++
+                undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+            )
           case None => (current, Nil)
       }
     )
@@ -197,16 +208,20 @@ private[reducers] object EditorTextEditReducer:
     buffer: Buffer,
     cursor: CursorPosition,
     text: String,
-    currentState: AppState
+    currentState: AppState,
+    paneId: PaneId,
+    groupable: Boolean
   ): ReducerResult =
     ReducerResult.fromTransition(
       currentState,
       Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
         val (replaced, edit)  = replaceSelectionOrInsert(current, cursor, text)
         val (animated, delta) = addInsertionAnimations(replaced, currentState, List(edit))
+        val edits             = List(edit)
         val effects =
-          animationRemapEffects(buffer.id, current.document.content, animated.document.content, List(edit)) ++
-            animationMergeEffects(buffer.id, delta)
+          animationRemapEffects(buffer.id, current.document.content, animated.document.content, edits) ++
+            animationMergeEffects(buffer.id, delta) ++
+            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable)
         (animated, effects)
       }
     )

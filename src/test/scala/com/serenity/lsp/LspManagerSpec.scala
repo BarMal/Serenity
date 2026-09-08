@@ -46,13 +46,21 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     def stop: IO[Unit] =
       effects.offer(None) >> managerFiber.joinWithNever
 
-  private def harness: IO[Harness] =
+  /** #1357: a bare `.start` here left `managerFiber` (and any LSP request it was supervising, including its own
+    * internal 10s `sendRequest` timeout) running on the shared global runtime whenever a test's own IO chain exited
+    * before reaching `manager.stop` -- for instance the outer `.timeout(3.seconds)` firing under CI scheduling
+    * pressure. The leaked fiber would then surface an unrelated `LspRequestTimeout` failure up to 10 seconds later,
+    * attributed to whatever was running at that point. `Resource.make` guarantees `managerFiber.cancel` on every exit
+    * path (normal, error, or cancellation) rather than only the happy path `manager.stop` covered; cancelling a fiber
+    * that already finished via `manager.stop` is a no-op, so this changes nothing on that path.
+    */
+  private def harness: Resource[IO, Harness] =
     for
-      effects      <- Queue.unbounded[IO, Option[LspEffect]]
-      events       <- Ref.of[IO, List[Event]](Nil)
-      eventApplied <- Deferred[IO, Unit]
-      connection   <- LspConnection.create(LanguageId.Scala, logger)
-      released     <- Deferred[IO, Unit]
+      effects      <- Resource.eval(Queue.unbounded[IO, Option[LspEffect]])
+      events       <- Resource.eval(Ref.of[IO, List[Event]](Nil))
+      eventApplied <- Resource.eval(Deferred[IO, Unit])
+      connection   <- Resource.eval(LspConnection.create(LanguageId.Scala, logger))
+      released     <- Resource.eval(Deferred[IO, Unit])
       provider = new LspManager.ConnectionProvider:
         def resolve(
           languageId: LanguageId,
@@ -60,14 +68,16 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
           onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] =
           IO.pure(Some(resolvedConnection("file:///workspace", connection, released.complete(()).void)))
-      managerFiber <- LspManager
-        .runWithProvider(
-          Stream.fromQueueNoneTerminated(effects),
-          event => events.update(_ :+ event) >> eventApplied.complete(()).void,
-          logger,
-          provider
-        )
-        .start
+      managerFiber <- Resource.make(
+        LspManager
+          .runWithProvider(
+            Stream.fromQueueNoneTerminated(effects),
+            event => events.update(_ :+ event) >> eventApplied.complete(()).void,
+            logger,
+            provider
+          )
+          .start
+      )(_.cancel)
     yield Harness(effects, events, eventApplied, connection, released, managerFiber)
 
   private def takeMessage(connection: LspConnection): IO[Json] =
@@ -97,92 +107,137 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       }
 
   "LspManager" should "send document changes while a hover response is pending" in
-    (for
-      manager <- harness
-      _       <- open(manager)
-      _ <- manager.effects.offer(
-        Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1)))
-      )
-      hover <- takeMessage(manager.connection)
-      _ = hover.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/hover")
-      _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-      // The change supersedes the in-flight hover, so the manager cancels it -- and cancelling now tells the server
-      // to stop (#1285) before the new work goes out, rather than leaving it computing an answer nobody will read.
-      cancel <- takeMessage(manager.connection)
-      _ = cancel.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
-      _ = cancel.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(requestId(hover))
-      change <- takeMessage(manager.connection)
-      _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
-      _ <- manager.stop
-    yield succeed).timeout(3.seconds).unsafeRunSync()
+    harness
+      .use { manager =>
+        for
+          _ <- open(manager)
+          _ <- manager.effects.offer(
+            Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1)))
+          )
+          hover <- takeMessage(manager.connection)
+          _ = hover.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/hover")
+          _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+          // The change supersedes the in-flight hover, so the manager cancels it -- and cancelling now tells the
+          // server to stop (#1285) before the new work goes out, rather than leaving it computing an answer nobody
+          // will read.
+          cancel <- takeMessage(manager.connection)
+          _ = cancel.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
+          _ = cancel.hcursor.downField("params").downField("id").as[Long].toOption shouldBe Some(requestId(hover))
+          change <- takeMessage(manager.connection)
+          _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
+          _ <- manager.stop
+        yield succeed
+      }
+      .timeout(3.seconds)
+      .unsafeRunSync()
 
   it should "discard a definition response after its document version changes" in {
     val anchor = CursorPosition(0, 1)
-    (for
-      manager <- harness
-      _       <- open(manager)
-      _ <- manager.effects.offer(
-        Some(LspEffect.DefinitionRequested(uri, LanguageId.Scala, 0, 1, anchor, "Foo"))
-      )
-      request <- takeMessage(manager.connection)
-      _       <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-      _       <- takeMessage(manager.connection)
-      pending <- manager.connection.pendingRequestCount
-      _ = pending shouldBe 0
-      _ <- manager.connection.handleIncomingJson(
-        response(
-          requestId(request),
-          Json.obj(
-            "uri" -> uri.asJson,
-            "range" -> Json.obj(
-              "start" -> Json.obj("line" -> 0.asJson, "character" -> 0.asJson),
-              "end"   -> Json.obj("line" -> 0.asJson, "character" -> 3.asJson)
+    harness
+      .use { manager =>
+        for
+          _ <- open(manager)
+          _ <- manager.effects.offer(
+            Some(LspEffect.DefinitionRequested(uri, LanguageId.Scala, 0, 1, anchor, "Foo"))
+          )
+          request <- takeMessage(manager.connection)
+          _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+          _ <- takeMessage(manager.connection)
+          pending <- manager.connection.pendingRequestCount
+          _ = pending shouldBe 0
+          _ <- manager.connection.handleIncomingJson(
+            response(
+              requestId(request),
+              Json.obj(
+                "uri" -> uri.asJson,
+                "range" -> Json.obj(
+                  "start" -> Json.obj("line" -> 0.asJson, "character" -> 0.asJson),
+                  "end"   -> Json.obj("line" -> 0.asJson, "character" -> 3.asJson)
+                )
+              )
             )
           )
-        )
-      )
-      events <- manager.events.get
-      _ = events shouldBe Nil
-      _ <- manager.stop
-    yield succeed).timeout(3.seconds).unsafeRunSync()
+          events <- manager.events.get
+          _ = events shouldBe Nil
+          _ <- manager.stop
+        yield succeed
+      }
+      .timeout(3.seconds)
+      .unsafeRunSync()
   }
 
   it should "cancel a superseded hover request and retain only the current anchor" in {
     val firstAnchor  = CursorPosition(0, 1)
     val secondAnchor = CursorPosition(0, 2)
-    (for
-      manager       <- harness
-      _             <- open(manager)
-      _             <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, firstAnchor)))
-      firstRequest  <- takeMessage(manager.connection)
-      _             <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 2, secondAnchor)))
-      secondRequest <- takeMessage(manager.connection)
-      _ <- manager.connection.handleIncomingJson(
-        response(requestId(firstRequest), Json.obj("contents" -> "stale".asJson))
-      )
-      _ <- manager.connection.handleIncomingJson(
-        response(requestId(secondRequest), Json.obj("contents" -> "current".asJson))
-      )
-      _      <- manager.eventApplied.get
-      events <- manager.events.get
-      _ = events shouldBe List(LspEvent.LspHoverReceived("current", secondAnchor))
-      _ <- manager.stop
-    yield succeed).timeout(3.seconds).unsafeRunSync()
+    harness
+      .use { manager =>
+        for
+          _ <- open(manager)
+          _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, firstAnchor)))
+          firstRequest <- takeMessage(manager.connection)
+          _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 2, secondAnchor)))
+          secondRequest <- takeMessage(manager.connection)
+          _ <- manager.connection.handleIncomingJson(
+            response(requestId(firstRequest), Json.obj("contents" -> "stale".asJson))
+          )
+          _ <- manager.connection.handleIncomingJson(
+            response(requestId(secondRequest), Json.obj("contents" -> "current".asJson))
+          )
+          _      <- manager.eventApplied.get
+          events <- manager.events.get
+          _ = events shouldBe List(LspEvent.LspHoverReceived("current", secondAnchor))
+          _ <- manager.stop
+        yield succeed
+      }
+      .timeout(3.seconds)
+      .unsafeRunSync()
   }
 
   it should "cancel pending request fibers before releasing connections on shutdown" in
-    (for
-      manager <- harness
-      _       <- open(manager)
-      _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1))))
-      _ <- takeMessage(manager.connection)
-      _ <- manager.stop
-      pending  <- manager.connection.pendingRequestCount
-      released <- manager.released.tryGet
-    yield
-      pending shouldBe 0
-      released shouldBe Some(())
-    ).timeout(3.seconds).unsafeRunSync()
+    harness
+      .use { manager =>
+        for
+          _ <- open(manager)
+          _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1))))
+          _ <- takeMessage(manager.connection)
+          _ <- manager.stop
+          pending  <- manager.connection.pendingRequestCount
+          released <- manager.released.tryGet
+        yield
+          pending shouldBe 0
+          released shouldBe Some(())
+      }
+      .timeout(3.seconds)
+      .unsafeRunSync()
+
+  it should "cancel a pending request instead of leaking it when the caller's IO chain is interrupted" in {
+    // Fiber#cancel doesn't return until the cancelled fiber has actually finished unwinding, so checking
+    // `pendingRequestCount` only after `harness.use` itself returns (rather than from inside its body) is what
+    // proves `Resource.make(...)(_.cancel)` really ran -- not merely that the internal 200ms timeout below fired.
+    val program: IO[Int] =
+      for
+        connectionRef <- Ref.of[IO, Option[LspConnection]](None)
+        _ <- harness.use { manager =>
+          connectionRef.set(Some(manager.connection)) >>
+            (for
+              _ <- open(manager)
+              _ <- manager.effects.offer(
+                Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1)))
+              )
+              // Consume the outgoing hover request so it's genuinely pending on the connection, then hang --
+              // standing in for any test step slow enough to blow its own deadline under CI load, before ever
+              // reaching `stop`.
+              _ <- takeMessage(manager.connection)
+              _ <- IO.never
+            yield ()).timeout(200.millis).attempt.void
+        }
+        connection <- connectionRef.get.map(_.getOrElse(fail("harness never ran")))
+        pending    <- connection.pendingRequestCount
+      yield pending
+
+    val pendingAfterInterruption = program.timeout(3.seconds).unsafeRunSync()
+    pendingAfterInterruption shouldBe 0
+  }
 
   it should "create separate connections for same-language documents in different workspaces" in {
     val firstUri  = "file:///workspace-one/Foo.scala"
@@ -209,18 +264,25 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
                 )
               )
             )
-      managerFiber <- LspManager
-        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
-        .start
-      _                    <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
-      _                    <- takeMessage(firstConnection)
-      _                    <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
-      _                    <- bothConnected.get
-      _                    <- takeMessage(secondConnection)
-      _                    <- effects.offer(None)
-      _                    <- managerFiber.joinWithNever
-      attemptedConnections <- connected.get
-    yield attemptedConnections shouldBe List(firstUri, secondUri)
+      result <- Resource
+        .make(
+          LspManager
+            .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+            .start
+        )(_.cancel)
+        .use { managerFiber =>
+          for
+            _                    <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+            _                    <- takeMessage(firstConnection)
+            _                    <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+            _                    <- bothConnected.get
+            _                    <- takeMessage(secondConnection)
+            _                    <- effects.offer(None)
+            _                    <- managerFiber.joinWithNever
+            attemptedConnections <- connected.get
+          yield attemptedConnections shouldBe List(firstUri, secondUri)
+        }
+    yield result
 
     program.timeout(3.seconds).unsafeRunSync()
   }
@@ -244,30 +306,37 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             if fileUri == firstUri then ("file:///workspace-one", firstConnection, firstReleased.complete(()).void)
             else ("file:///workspace-two", secondConnection, secondReleased.complete(()).void)
           IO.pure(Some(resolvedConnection(rootUri, connection, release)))
-      managerFiber <- LspManager
-        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
-        .start
-      _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
-      _ <- expectNotification(firstConnection, "textDocument/didOpen", firstUri)
-      _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
-      _ <- expectNotification(secondConnection, "textDocument/didOpen", secondUri)
-      _ <- effects.offer(Some(LspEffect.FileChanged(firstUri, LanguageId.Scala, "object Foo2", version = 2)))
-      _ <- expectNotification(firstConnection, "textDocument/didChange", firstUri)
-      _ <- noMessage(secondConnection)
-      _ <- effects.offer(Some(LspEffect.FileChanged(secondUri, LanguageId.Scala, "object Bar2", version = 2)))
-      _ <- expectNotification(secondConnection, "textDocument/didChange", secondUri)
-      _ <- noMessage(firstConnection)
-      _ <- effects.offer(Some(LspEffect.FileClosed(firstUri, LanguageId.Scala)))
-      _ <- expectNotification(firstConnection, "textDocument/didClose", firstUri)
-      _ <- firstReleased.get
-      _ <- secondReleased.tryGet.map(_ shouldBe None)
-      _ <- noMessage(secondConnection)
-      _ <- effects.offer(Some(LspEffect.FileClosed(secondUri, LanguageId.Scala)))
-      _ <- expectNotification(secondConnection, "textDocument/didClose", secondUri)
-      _ <- secondReleased.get
-      _ <- effects.offer(None)
-      _ <- managerFiber.joinWithNever
-    yield succeed
+      result <- Resource
+        .make(
+          LspManager
+            .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+            .start
+        )(_.cancel)
+        .use { managerFiber =>
+          for
+            _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+            _ <- expectNotification(firstConnection, "textDocument/didOpen", firstUri)
+            _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+            _ <- expectNotification(secondConnection, "textDocument/didOpen", secondUri)
+            _ <- effects.offer(Some(LspEffect.FileChanged(firstUri, LanguageId.Scala, "object Foo2", version = 2)))
+            _ <- expectNotification(firstConnection, "textDocument/didChange", firstUri)
+            _ <- noMessage(secondConnection)
+            _ <- effects.offer(Some(LspEffect.FileChanged(secondUri, LanguageId.Scala, "object Bar2", version = 2)))
+            _ <- expectNotification(secondConnection, "textDocument/didChange", secondUri)
+            _ <- noMessage(firstConnection)
+            _ <- effects.offer(Some(LspEffect.FileClosed(firstUri, LanguageId.Scala)))
+            _ <- expectNotification(firstConnection, "textDocument/didClose", firstUri)
+            _ <- firstReleased.get
+            _ <- secondReleased.tryGet.map(_ shouldBe None)
+            _ <- noMessage(secondConnection)
+            _ <- effects.offer(Some(LspEffect.FileClosed(secondUri, LanguageId.Scala)))
+            _ <- expectNotification(secondConnection, "textDocument/didClose", secondUri)
+            _ <- secondReleased.get
+            _ <- effects.offer(None)
+            _ <- managerFiber.joinWithNever
+          yield succeed
+        }
+    yield result
 
     program.timeout(5.seconds).unsafeRunSync()
   }
@@ -286,20 +355,27 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
           IO.pure(Some(resolvedConnection("file:///workspace", connection)))
         override def evictResolution(languageId: LanguageId, fileUri: String): IO[Unit] =
           evictions.update(_ :+ (languageId -> fileUri))
-      managerFiber <- LspManager
-        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
-        .start
-      _           <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
-      _           <- takeMessage(connection)
-      beforeClose <- evictions.get
-      _           <- effects.offer(Some(LspEffect.FileClosed(uri, LanguageId.Scala)))
-      _           <- takeMessage(connection)
-      afterClose  <- evictions.get
-      _           <- effects.offer(None)
-      _           <- managerFiber.joinWithNever
-    yield
-      beforeClose shouldBe Nil
-      afterClose shouldBe List(LanguageId.Scala -> uri)
+      result <- Resource
+        .make(
+          LspManager
+            .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+            .start
+        )(_.cancel)
+        .use { managerFiber =>
+          for
+            _           <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
+            _           <- takeMessage(connection)
+            beforeClose <- evictions.get
+            _           <- effects.offer(Some(LspEffect.FileClosed(uri, LanguageId.Scala)))
+            _           <- takeMessage(connection)
+            afterClose  <- evictions.get
+            _           <- effects.offer(None)
+            _           <- managerFiber.joinWithNever
+          yield
+            beforeClose shouldBe Nil
+            afterClose shouldBe List(LanguageId.Scala -> uri)
+        }
+    yield result
 
     program.timeout(3.seconds).unsafeRunSync()
   }
@@ -326,25 +402,32 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
               )
             )
           )
-      managerFiber <- LspManager
-        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
-        .start
-      _             <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
-      _             <- takeMessage(connection)
-      _             <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
-      _             <- takeMessage(connection)
-      _             <- effects.offer(Some(LspEffect.FileClosed(firstUri, LanguageId.Scala)))
-      _             <- takeMessage(connection)
-      firstRelease  <- released.tryGet
-      _             <- effects.offer(Some(LspEffect.FileClosed(secondUri, LanguageId.Scala)))
-      _             <- takeMessage(connection)
-      _             <- released.get
-      _             <- effects.offer(None)
-      _             <- managerFiber.joinWithNever
-      acquiredCount <- acquired.get
-    yield
-      firstRelease shouldBe None
-      acquiredCount shouldBe 1
+      result <- Resource
+        .make(
+          LspManager
+            .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+            .start
+        )(_.cancel)
+        .use { managerFiber =>
+          for
+            _             <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+            _             <- takeMessage(connection)
+            _             <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+            _             <- takeMessage(connection)
+            _             <- effects.offer(Some(LspEffect.FileClosed(firstUri, LanguageId.Scala)))
+            _             <- takeMessage(connection)
+            firstRelease  <- released.tryGet
+            _             <- effects.offer(Some(LspEffect.FileClosed(secondUri, LanguageId.Scala)))
+            _             <- takeMessage(connection)
+            _             <- released.get
+            _             <- effects.offer(None)
+            _             <- managerFiber.joinWithNever
+            acquiredCount <- acquired.get
+          yield
+            firstRelease shouldBe None
+            acquiredCount shouldBe 1
+        }
+    yield result
 
     program.timeout(3.seconds).unsafeRunSync()
   }
@@ -376,17 +459,24 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
                 )
               )
             )
-      managerFiber <- LspManager
-        .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
-        .start
-      _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
-      _ <- takeMessage(firstConnection)
-      _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
-      _ <- connected.get
-      _ <- takeMessage(secondConnection)
-      _ <- effects.offer(None)
-      _ <- managerFiber.joinWithNever
-    yield succeed
+      result <- Resource
+        .make(
+          LspManager
+            .runWithProvider(Stream.fromQueueNoneTerminated(effects), _ => IO.unit, logger, provider)
+            .start
+        )(_.cancel)
+        .use { managerFiber =>
+          for
+            _ <- effects.offer(Some(LspEffect.FileOpened(firstUri, LanguageId.Scala, "object Foo")))
+            _ <- takeMessage(firstConnection)
+            _ <- effects.offer(Some(LspEffect.FileOpened(secondUri, LanguageId.Scala, "object Bar")))
+            _ <- connected.get
+            _ <- takeMessage(secondConnection)
+            _ <- effects.offer(None)
+            _ <- managerFiber.joinWithNever
+          yield succeed
+        }
+    yield result
 
     program.timeout(3.seconds).unsafeRunSync()
   }
