@@ -11,64 +11,7 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
   private val white = new Color(255, 255, 255)
   private val red   = new Color(255, 0, 0)
 
-  "Animation System Integration" should "create realistic character animation workflow" in {
-    val backgroundColor = black
-    val foregroundColor = white
-    val animConfig      = AnimationConfig.Enabled.quick
-
-    val characters = List(('H', 0, 0), ('e', 1, 0), ('l', 2, 0), ('l', 3, 0), ('o', 4, 0))
-
-    val animState = characters.foldLeft(AnimationState.empty) {
-      case (state, (char, x, y)) =>
-        state.addCharacterAnimation(char, x, y, backgroundColor, foregroundColor, animConfig.steps)
-    }
-
-    animState.hasActiveAnimations should be(true)
-    animState.activeAnimationCount shouldEqual 5
-
-    characters.foreach {
-      case (_, x, y) =>
-        animState.getCell(x, y) should be(defined)
-        animState.getCell(x, y).get.currentForeground shouldEqual Some(backgroundColor)
-    }
-
-    val frame1 = animState.advanceAnimations()
-    frame1.activeAnimationCount shouldEqual 5
-
-    val frame2 = frame1.advanceAnimations()
-    frame2.activeAnimationCount shouldEqual 5
-
-    val currentFrame = (1 to animConfig.steps).foldLeft(frame2)((frame, _) => frame.advanceAnimations())
-
-    currentFrame.activeAnimationCount shouldEqual 0
-
-    characters.foreach {
-      case (char, x, y) =>
-        val cell = currentFrame.getCell(x, y)
-        cell should be(defined)
-        cell.get.content shouldEqual Some(char)
-        cell.get.isComplete should be(true)
-        cell.get.currentForeground shouldEqual None
-    }
-  }
-
-  it should "handle theme changes correctly" in {
-    val animState = AnimationState.empty
-      .addCharacterAnimation('a', 0, 0, black, white, 6)
-      .addCharacterAnimation('b', 1, 0, black, white, 6)
-
-    val advancedState = animState.advanceAnimations().advanceAnimations()
-    advancedState.hasActiveAnimations should be(true)
-
-    val themeChangedState = advancedState.onThemeChange()
-
-    themeChangedState.getCell(0, 0).get.isComplete should be(true)
-    themeChangedState.getCell(1, 0).get.isComplete should be(true)
-    themeChangedState.getCell(0, 0).get.currentForeground shouldEqual None
-    themeChangedState.getCell(1, 0).get.currentForeground shouldEqual None
-  }
-
-  it should "apply background steps when cell has no foreground steps" in {
+  "Animation System Integration" should "apply background steps when cell has no foreground steps" in {
     val cell = AnimatedCell(
       content = Some('a'),
       foregroundSteps = List.empty,

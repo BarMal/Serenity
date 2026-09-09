@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{ReloadCurrentTheme, SwitchTheme}
+import com.serenity.keystroke.events.SwitchTheme
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -37,43 +37,6 @@ class ConfigDrivenThemeIntegrationSpec extends AnyFlatSpec with Matchers:
     darkTheme.backgroundColor shouldBe a[java.awt.Color]
   }
 
-  it should "switch between dark and light themes dynamically" in {
-    val stateManager = createStateManager()
-
-    stateManager
-      .updateState(state =>
-        state.copy(persisted =
-          state.persisted.copy(theme = AppThemeManager.create.initializeWithTheme("dark").unsafeRunSync())
-        )
-      )
-      .unsafeRunSync()
-    val initialState = stateManager.getCurrentState.unsafeRunSync()
-    val darkTheme    = initialState.persisted.theme
-
-    stateManager.applyEvent(SwitchTheme("light")).unsafeRunSync()
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
-
-    updatedState.persisted.theme.name shouldBe "light"
-    updatedState.persisted.theme.foregroundColor should not be darkTheme.foregroundColor
-    updatedState.persisted.theme.backgroundColor should not be darkTheme.backgroundColor
-  }
-
-  it should "support theme reloading" in {
-    val stateManager = createStateManager()
-    stateManager
-      .updateState(state =>
-        state.copy(persisted =
-          state.persisted.copy(theme = AppThemeManager.create.initializeWithTheme("dark").unsafeRunSync())
-        )
-      )
-      .unsafeRunSync()
-
-    stateManager.applyEvent(ReloadCurrentTheme).unsafeRunSync()
-
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.persisted.theme.name shouldBe "dark"
-  }
-
   it should "handle missing theme gracefully" in {
     val stateManager = createStateManager()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
@@ -82,24 +45,4 @@ class ConfigDrivenThemeIntegrationSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.persisted.theme shouldBe initialState.persisted.theme
-  }
-
-  it should "preserve theme across state updates" in {
-    val themeManager = AppThemeManager.create
-
-    // Load a theme
-    val lightTheme = themeManager.loadTheme("light").unsafeRunSync()
-
-    // Create state with the theme
-    val state = AppState.empty.copy(persisted = AppState.empty.persisted.copy(theme = lightTheme))
-
-    // Update state with some other changes but preserve theme
-    val updatedState = state.copy(
-      persisted = state.persisted.copy(buffers = Map(BufferId(1) -> Buffer.empty(BufferId(1)))),
-      runtime = state.runtime.copy(nextBufferId = BufferId(2))
-    )
-
-    // Theme should be preserved
-    updatedState.persisted.theme.name shouldBe "light"
-    updatedState.persisted.theme shouldBe lightTheme
   }

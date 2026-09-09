@@ -39,14 +39,19 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep application hotkeys in the application event family" in {
-    val openPalette = translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
-    val quit        = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
+    val openPalette   = translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
+    val quitFromEof   = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
+    val quitFromCtrlQ = translator.translate(KeyStrokeInfo(InputKey.Character, Some('q'), Set(Modifier.Ctrl)))
 
     openPalette shouldBe ToggleCommandRunner
     openPalette.isInstanceOf[AppEvent] shouldBe true
 
-    quit shouldBe Quit
-    quit.isInstanceOf[AppEvent] shouldBe true
+    // EOF (e.g. a piped/redirected terminal closing) and Ctrl+Q both route to the same
+    // graceful-shutdown event.
+    quitFromEof shouldBe Quit
+    quitFromEof.isInstanceOf[AppEvent] shouldBe true
+    quitFromCtrlQ shouldBe Quit
+    quitFromCtrlQ.isInstanceOf[AppEvent] shouldBe true
   }
 
   it should "translate the save hotkey into a file-save event" in {
