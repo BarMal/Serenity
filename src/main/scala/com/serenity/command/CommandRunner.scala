@@ -355,6 +355,8 @@ object CommandRunner:
       "next-tab"     -> HotkeyAction.NextTab,
       "previous-tab" -> HotkeyAction.PreviousTab,
       "close"        -> HotkeyAction.CloseTab,
+      "split-pane-horizontal" -> HotkeyAction.SplitPaneHorizontal,
+      "split-pane-vertical"   -> HotkeyAction.SplitPaneVertical,
       "find"         -> HotkeyAction.Find,
       "replace"      -> HotkeyAction.Replace,
       "copy"         -> HotkeyAction.Copy,

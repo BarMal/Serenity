@@ -166,6 +166,7 @@ object CommandRegistry:
       CommandRegistryViewSettingsCommands.themeAndViewCommands ++
       CommandRegistryViewSettingsCommands.markdownAndModeCommands ++
       CommandRegistryPanelProjectCommands.panelFocusCommands ++
+      CommandRegistryPanelProjectCommands.paneCommands ++
       CommandRegistryPanelProjectCommands.projectCommands ++
       builtInPresetCommands ++ languageCommands
 

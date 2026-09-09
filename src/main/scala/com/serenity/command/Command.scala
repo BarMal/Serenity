@@ -95,6 +95,8 @@ enum ThemeIntent:
 enum ViewIntent:
   case NextTab
   case PreviousTab
+  case SplitPaneHorizontal
+  case SplitPaneVertical
   case FocusPanel(position: PanelPosition)
   case UnpinPanel(position: PanelPosition)
   case ExpandPanel(position: PanelPosition)
