@@ -4,7 +4,6 @@ import com.serenity.command.{CommandRegistry, CommandSurfaceItem}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, ModalStateReducer}
 import com.serenity.ui.layout.{PanelPosition, ViewportSize}
@@ -160,17 +159,34 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "close the focused pane on ClosePane" in {
-    val wideViewport = ViewportSize(200, 24)
-    val twoPaneState = EditorState.openNewTab(
-      AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(wideViewport)))
+    val secondPaneId = PaneId(1)
+    val splitTree = AppState.initial.persisted.layout.effectiveWorkspaceTree
+      .flatMap(
+        _.split(
+          PaneId(0),
+          secondPaneId,
+          com.serenity.ui.layout.SplitAxis.Horizontal,
+          com.serenity.ui.layout.WorkspaceNodeId("split-0-1"),
+          com.serenity.ui.layout.WorkspaceNodeId("editor-1")
+        )
+      )
+      .getOrElse(fail("expected workspace split"))
+    val twoPaneState = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes =
+            AppState.initial.persisted.layout.editorPanes.updated(secondPaneId, EditorPane.empty(secondPaneId)),
+          paneOrder = splitTree.paneIds,
+          workspaceTree = Some(splitTree),
+          activeEditorPaneId = Some(secondPaneId)
+        ),
+        focus = Focus.EditorPane(secondPaneId)
+      )
     )
-    val focusedPaneId = twoPaneState.persisted.layout.activeEditorPaneId.getOrElse(fail("expected an active pane"))
-    twoPaneState.persisted.layout.editorPanes.keySet should have size 2
 
     val result = AppEventReducer.reduce(ClosePane, twoPaneState, registry)
 
-    result.state.persisted.layout.editorPanes.keySet shouldBe
-      twoPaneState.persisted.layout.editorPanes.keySet - focusedPaneId
+    result.state.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0))
     result.effects shouldBe Nil
   }
 
