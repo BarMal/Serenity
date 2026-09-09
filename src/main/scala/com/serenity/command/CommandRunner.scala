@@ -346,25 +346,27 @@ object CommandRunner:
 
   private[command] def commandBindings(config: AppConfig): Map[String, String] =
     Map(
-      "save"         -> HotkeyAction.Save,
-      "save-as"      -> HotkeyAction.SaveAs,
-      "open"         -> HotkeyAction.OpenFile,
-      "file-search"  -> HotkeyAction.FileSearch,
-      "quit"         -> HotkeyAction.Quit,
-      "new"          -> HotkeyAction.NewTab,
-      "next-tab"     -> HotkeyAction.NextTab,
-      "previous-tab" -> HotkeyAction.PreviousTab,
-      "close"        -> HotkeyAction.CloseTab,
-      "close-pane"   -> HotkeyAction.ClosePane,
-      "find"         -> HotkeyAction.Find,
-      "replace"      -> HotkeyAction.Replace,
-      "copy"         -> HotkeyAction.Copy,
-      "cut"          -> HotkeyAction.Cut,
-      "paste"        -> HotkeyAction.Paste,
-      "select-all"   -> HotkeyAction.SelectAll,
-      "undo"         -> HotkeyAction.Undo,
-      "redo"         -> HotkeyAction.Redo,
-      "goto-line"    -> HotkeyAction.GoToLine
+      "save"                  -> HotkeyAction.Save,
+      "save-as"               -> HotkeyAction.SaveAs,
+      "open"                  -> HotkeyAction.OpenFile,
+      "file-search"           -> HotkeyAction.FileSearch,
+      "quit"                  -> HotkeyAction.Quit,
+      "new"                   -> HotkeyAction.NewTab,
+      "next-tab"              -> HotkeyAction.NextTab,
+      "previous-tab"          -> HotkeyAction.PreviousTab,
+      "close"                 -> HotkeyAction.CloseTab,
+      "split-pane-horizontal" -> HotkeyAction.SplitPaneHorizontal,
+      "split-pane-vertical"   -> HotkeyAction.SplitPaneVertical,
+      "close-pane"            -> HotkeyAction.ClosePane,
+      "find"                  -> HotkeyAction.Find,
+      "replace"               -> HotkeyAction.Replace,
+      "copy"                  -> HotkeyAction.Copy,
+      "cut"                   -> HotkeyAction.Cut,
+      "paste"                 -> HotkeyAction.Paste,
+      "select-all"            -> HotkeyAction.SelectAll,
+      "undo"                  -> HotkeyAction.Undo,
+      "redo"                  -> HotkeyAction.Redo,
+      "goto-line"             -> HotkeyAction.GoToLine
     ).flatMap {
       case (commandName, action) =>
         config.inputConfig.hotkeyConfig.bindingsFor(action).headOption.map(trigger => commandName -> trigger.render)

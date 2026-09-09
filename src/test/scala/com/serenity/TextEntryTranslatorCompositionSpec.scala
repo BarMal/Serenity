@@ -38,6 +38,17 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     ctrlReverseTab shouldBe PreviousTab
   }
 
+  it should "translate the split-pane hotkeys into pane-split events" in {
+    val horizontal = translator.translate(KeyStrokeInfo(InputKey.Character, Some('d'), Set(Modifier.Ctrl)))
+    val vertical =
+      translator.translate(KeyStrokeInfo(InputKey.Character, Some('d'), Set(Modifier.Ctrl, Modifier.Shift)))
+
+    horizontal shouldBe SplitPaneHorizontal
+    horizontal.isInstanceOf[AppEvent] shouldBe true
+    vertical shouldBe SplitPaneVertical
+    vertical.isInstanceOf[AppEvent] shouldBe true
+  }
+
   it should "keep application hotkeys in the application event family" in {
     val openPalette   = translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
     val quitFromEof   = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))

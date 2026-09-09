@@ -20,6 +20,8 @@ enum HotkeyAction:
   case ToggleContextualToolbar
   case NewTab
   case CloseTab
+  case SplitPaneHorizontal
+  case SplitPaneVertical
   case ClosePane
   case FileSearch
   case NextTab
@@ -46,6 +48,8 @@ enum HotkeyAction:
       case ToggleContextualToolbar  => "contextual_toolbar"
       case NewTab                   => "new_tab"
       case CloseTab                 => "close_tab"
+      case SplitPaneHorizontal      => "split_pane_horizontal"
+      case SplitPaneVertical        => "split_pane_vertical"
       case ClosePane                => "close_pane"
       case FileSearch               => "file_search"
       case NextTab                  => "next_tab"
@@ -327,6 +331,12 @@ object HotkeyConfig:
       ),
       HotkeyAction.NewTab   -> List(primary('t')),
       HotkeyAction.CloseTab -> List(primary('w')),
+      // Mirrors macOS Terminal.app/iTerm2's own Cmd+D / Cmd+Shift+D split convention -- the vertical dividing line
+      // ("side by side" panes, this codebase's `SplitAxis.Horizontal`) on the plain key, the horizontal dividing line
+      // ("stacked" panes, `SplitAxis.Vertical`) on its shifted variant, same shift-for-the-broader/secondary-variant
+      // pattern as `FileSearch` over `Find` and `ToggleContextualToolbar` over `NewTab` below.
+      HotkeyAction.SplitPaneHorizontal -> List(primary('d')),
+      HotkeyAction.SplitPaneVertical   -> List(primary('d', shift = true)),
       // Shift-for-the-broader-scope variant of CloseTab, same pattern as FileSearch over Find and
       // ToggleContextualToolbar over NewTab above: closing a pane is a bigger action than closing one of its tabs.
       HotkeyAction.ClosePane  -> List(primary('w', shift = true)),

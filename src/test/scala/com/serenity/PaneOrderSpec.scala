@@ -21,6 +21,12 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     val sm: StateManager    = StateManager.apply(logger).unsafeRunSync()
     val pane0: PaneId       = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
 
+  /** Every split axis in the tree, outermost first. */
+  private def treeAxes(node: WorkspaceNode): List[SplitAxis] =
+    node match
+      case split: WorkspaceNode.Split => split.splitAxis :: (treeAxes(split.first) ++ treeAxes(split.second))
+      case _                          => Nil
+
   behavior of "Pane tab order"
 
   it should "return the initial pane in getTabOrder" in new PaneFixture:
@@ -100,6 +106,43 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     state.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane0))
     state.persisted.layout.activeEditorPaneId shouldBe Some(pane0)
     state.commandRunnerSurface shouldBe defined
+
+  it should "split the active pane via the real SplitPaneHorizontal/SplitPaneVertical user events" in new PaneFixture:
+    val bufferId =
+      sm.getCurrentState.unsafeRunSync().persisted.layout.editorPanes(pane0).bufferId.getOrElse(fail("expected buffer"))
+
+    sm.applyEvent(com.serenity.keystroke.events.SplitPaneHorizontal).unsafeRunSync()
+    val afterHorizontal = sm.getCurrentState.unsafeRunSync()
+    val splitPane =
+      afterHorizontal.persisted.layout.activeEditorPaneId.getOrElse(fail("expected an active pane"))
+
+    afterHorizontal.persisted.layout.editorPanes.keySet shouldBe Set(pane0, splitPane)
+    afterHorizontal.persisted.layout.editorPanes(splitPane).bufferId shouldBe Some(bufferId)
+    afterHorizontal.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(SplitAxis.Horizontal))
+
+    sm.applyEvent(com.serenity.keystroke.events.SplitPaneVertical).unsafeRunSync()
+    val afterVertical = sm.getCurrentState.unsafeRunSync()
+
+    afterVertical.persisted.layout.editorPanes.keySet should have size 3
+    // The second split nests inside the leaf it targeted (`splitPane`), so the vertical axis shows up on that
+    // inner split, not the tree's outer root -- which stays Horizontal, same as the sibling-preserving test above.
+    treeAxes(afterVertical.persisted.layout.workspaceTree.getOrElse(fail("expected workspace tree")).root) shouldBe
+      List(SplitAxis.Horizontal, SplitAxis.Vertical)
+
+  it should "split the active pane via the command palette's Split Pane Horizontally/Vertically commands" in new PaneFixture:
+    val registry = com.serenity.command.CommandRegistry.withToggleUI
+
+    sm.commandExecutor
+      .executeCommand(registry.findCommand("split-pane-horizontal").getOrElse(fail("missing split-pane-horizontal")))
+      .unsafeRunSync()
+    val afterHorizontal = sm.getCurrentState.unsafeRunSync()
+    afterHorizontal.persisted.layout.editorPanes.keySet should have size 2
+
+    sm.commandExecutor
+      .executeCommand(registry.findCommand("split-pane-vertical").getOrElse(fail("missing split-pane-vertical")))
+      .unsafeRunSync()
+    val afterVertical = sm.getCurrentState.unsafeRunSync()
+    afterVertical.persisted.layout.editorPanes.keySet should have size 3
 
   it should "resize the owning split ratio with clamping" in new PaneFixture:
     val pane1   = sm.splitPaneHorizontal(pane0).unsafeRunSync()

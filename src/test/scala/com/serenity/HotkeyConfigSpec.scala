@@ -195,6 +195,17 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     HotkeyConfig.defaultBindingsFor("Linux") should contain key HotkeyAction.ToggleShortcutsHelp
   }
 
+  it should "bind pane splitting to Ctrl+D (horizontal) and Ctrl+Shift+D (vertical) on every platform" in
+    List("Linux", "Windows", "Mac OS X").foreach { osName =>
+      val bindings   = HotkeyConfig.defaultBindingsFor(osName)
+      val modifier   = if osName == "Mac OS X" then "meta" else "ctrl"
+      val horizontal = bindings(HotkeyAction.SplitPaneHorizontal).map(_.render)
+      val vertical   = bindings(HotkeyAction.SplitPaneVertical).map(_.render)
+
+      horizontal shouldBe List(s"$modifier+d")
+      vertical shouldBe List(s"$modifier+shift+d")
+    }
+
   it should "bind pane closing to Ctrl+Shift+W (Cmd+Shift+W on macOS), the broader-scope variant of Close Tab" in
     List("Linux", "Windows", "Mac OS X").foreach { osName =>
       val bindings = HotkeyConfig.defaultBindingsFor(osName)

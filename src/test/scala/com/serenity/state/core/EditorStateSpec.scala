@@ -119,6 +119,74 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     updatedState.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
+  "EditorState.splitFocusedPane" should "split the focused pane, carrying its buffer into the new pane" in {
+    import com.serenity.ui.layout.{SplitAxis, WorkspaceNode, WorkspaceNodeId}
+
+    val updatedState = EditorState.splitFocusedPane(AppState.initial, SplitAxis.Horizontal)
+
+    updatedState.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0), PaneId(1))
+    updatedState.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(0))
+    updatedState.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(1))
+    updatedState.persisted.focus shouldBe Focus.EditorPane(PaneId(1))
+    updatedState.persisted.layout.paneOrder shouldBe List(PaneId(0), PaneId(1))
+    updatedState.runtime.nextPaneId shouldBe PaneId(2)
+    updatedState.persisted.layout.workspaceTree shouldBe Some(
+      com.serenity.ui.layout.WorkspaceTree(
+        WorkspaceNode.Split(
+          WorkspaceNodeId("split-0-1"),
+          SplitAxis.Horizontal,
+          0.5,
+          WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)),
+          WorkspaceNode.Leaf(WorkspaceNodeId("editor-1"), PaneId(1))
+        )
+      )
+    )
+  }
+
+  it should "split along the requested axis" in {
+    val updatedState = EditorState.splitFocusedPane(AppState.initial, com.serenity.ui.layout.SplitAxis.Vertical)
+
+    updatedState.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(
+      Some(com.serenity.ui.layout.SplitAxis.Vertical)
+    )
+  }
+
+  it should "create an empty new pane when the focused pane has no buffer" in {
+    val emptyPaneState = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.empty(PaneId(0)))
+        )
+      )
+    )
+
+    val updatedState = EditorState.splitFocusedPane(emptyPaneState, com.serenity.ui.layout.SplitAxis.Horizontal)
+
+    updatedState.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe None
+  }
+
+  it should "target the active pane when focus is on a surface rather than an editor pane" in {
+    val (withSurfaceId, surfaceId) = AppState.initial.allocateSurfaceId
+    val focusedOnSurface =
+      withSurfaceId.copy(persisted = withSurfaceId.persisted.copy(focus = Focus.Surface(surfaceId)))
+
+    val updatedState = EditorState.splitFocusedPane(focusedOnSurface, com.serenity.ui.layout.SplitAxis.Horizontal)
+
+    updatedState.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0), PaneId(1))
+    updatedState.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(0))
+  }
+
+  it should "leave state unchanged when there is no pane to target" in {
+    val noPaneState = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        layout = AppState.initial.persisted.layout.copy(activeEditorPaneId = None),
+        focus = Focus.Surface(SurfaceId("surface-999"))
+      )
+    )
+
+    EditorState.splitFocusedPane(noPaneState, com.serenity.ui.layout.SplitAxis.Horizontal) shouldBe noPaneState
+  }
+
   "EditorState.removeFocusedPane" should "remove the focused pane and re-focus the next available one" in {
     val withSecondPane = addPane(AppState.initial, PaneId(0), PaneId(1), BufferId(0))
     val focused = withSecondPane.copy(persisted =

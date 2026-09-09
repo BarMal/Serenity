@@ -6,6 +6,7 @@ import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
+import com.serenity.ui.layout.SplitAxis
 
 object AppEventReducer:
 
@@ -44,6 +45,12 @@ object AppEventReducer:
 
       case CloseTab =>
         ReducerResult.noEffects(closeTabState(state, registry))
+
+      case SplitPaneHorizontal =>
+        ReducerResult.noEffects(EditorState.splitFocusedPane(state, SplitAxis.Horizontal))
+
+      case SplitPaneVertical =>
+        ReducerResult.noEffects(EditorState.splitFocusedPane(state, SplitAxis.Vertical))
 
       case ClosePane =>
         ReducerResult.noEffects(EditorState.removeFocusedPane(state))
