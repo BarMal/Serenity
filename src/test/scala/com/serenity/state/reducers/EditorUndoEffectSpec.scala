@@ -3,7 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.undo.BufferSnapshot
+import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,15 +27,21 @@ class EditorUndoEffectSpec extends AnyFlatSpec with Matchers with OptionValues:
   private def recordedBoundary(effects: List[AppEffect]): Option[UndoEffect.RecordBoundary] =
     effects.collectFirst { case AppEffect.Undo(boundary: UndoEffect.RecordBoundary) => boundary }
 
+  private def bufferEditEntry(boundary: UndoEffect.RecordBoundary): HistoryEntry.BufferEdit =
+    boundary.entry match
+      case bufferEdit: HistoryEntry.BufferEdit => bufferEdit
+      case other                               => fail(s"expected a HistoryEntry.BufferEdit, got $other")
+
   "InsertChar" should "emit a groupable undo boundary snapshotting the pre-edit buffer" in {
     val before = stateWith("hi", CursorPosition(0, 2))
     val result = EditorEventReducer.reduce(InsertChar('!'), paneId, before)
 
     val boundary = recordedBoundary(result.effects).value
-    boundary.bufferId shouldBe bufferId
-    boundary.paneId shouldBe paneId
+    val entry    = bufferEditEntry(boundary)
+    entry.bufferId shouldBe bufferId
+    entry.paneId shouldBe paneId
     boundary.groupable shouldBe true
-    boundary.before shouldBe BufferSnapshot.fromBuffer(before.persisted.buffers(bufferId))
+    entry.snapshot shouldBe BufferSnapshot.fromBuffer(before.persisted.buffers(bufferId))
   }
 
   "DeleteBackward" should "emit a non-groupable undo boundary" in {
@@ -44,7 +50,7 @@ class EditorUndoEffectSpec extends AnyFlatSpec with Matchers with OptionValues:
     val boundary = recordedBoundary(result.effects).value
 
     boundary.groupable shouldBe false
-    boundary.before shouldBe BufferSnapshot.fromBuffer(before.persisted.buffers(bufferId))
+    bufferEditEntry(boundary).snapshot shouldBe BufferSnapshot.fromBuffer(before.persisted.buffers(bufferId))
   }
 
   "NewLine" should "emit a non-groupable undo boundary" in {

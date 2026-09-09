@@ -5,7 +5,7 @@ import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.*
 import com.serenity.state.models.*
-import com.serenity.state.undo.BufferSnapshot
+import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
 
 /** Low-level infrastructure shared by every family of [[EditorEventReducer]] event handling: applying one or many
   * [[MultiCursorEdit]]s to a buffer's content, rich text document, comments and animations in lockstep. Extracted from
@@ -59,7 +59,9 @@ private[reducers] object EditorEditSupport:
     groupable: Boolean
   ): List[AppEffect] =
     if edits.isEmpty then Nil
-    else List(AppEffect.Undo(UndoEffect.RecordBoundary(bufferId, paneId, BufferSnapshot.fromBuffer(before), groupable)))
+    else
+      val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(before))
+      List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)))
 
   private def toTextEdit(edit: MultiCursorEdit): TextEdit =
     TextEdit(edit.start, edit.end, edit.insertedText)
