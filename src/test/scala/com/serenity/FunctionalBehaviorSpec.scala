@@ -40,17 +40,19 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "demonstrate referential transparency in event processing" in new FunctionalFixture:
     // Given: Same initial state and events
-    stateManager.bufferManager.createBuffer("Test", None).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync()
+    val bufferId1 = stateManager.bufferManager.createBuffer("Test", None).unsafeRunSync()
+    val state1    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId1   = state1.persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId1, bufferId1).unsafeRunSync()
 
     // Create second state manager with same initial state
-//    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-//    val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager2 = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
-    stateManager2.bufferManager.createBuffer("Test", None).unsafeRunSync()
-    stateManager2.getCurrentState.unsafeRunSync()
+    val bufferId2 = stateManager2.bufferManager.createBuffer("Test", None).unsafeRunSync()
+    val state2    = stateManager2.getCurrentState.unsafeRunSync()
+    val paneId2   = state2.persisted.layout.editorPanes.keys.head
+    stateManager2.setBufferForPane(paneId2, bufferId2).unsafeRunSync()
 
     // When: Apply identical event sequences to both
     val eventSequence = List(
@@ -63,13 +65,16 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     eventSequence.foreach(stateManager.applyEvent(_).unsafeRunSync())
     eventSequence.foreach(stateManager2.applyEvent(_).unsafeRunSync())
 
-    // Then: Final states should be equivalent (referential transparency)
+    // Then: Final states should be equivalent (referential transparency), including
+    // cursor position — not just content, so a nondeterministic cursor placement
+    // bug would fail this test even though the resulting text still matches.
     val final1 = stateManager.getCurrentState.unsafeRunSync()
     val final2 = stateManager2.getCurrentState.unsafeRunSync()
 
-    // Content should be identical
-    final1.persisted.buffers.headOption.map(_._2.document.content.collect()) shouldBe
-      final2.persisted.buffers.headOption.map(_._2.document.content.collect())
+    final1.persisted.buffers(bufferId1).document.content.collect() shouldBe
+      final2.persisted.buffers(bufferId2).document.content.collect()
+    final1.persisted.buffers(bufferId1).editing.cursors shouldBe
+      final2.persisted.buffers(bufferId2).editing.cursors
 
   it should "handle state transitions through monadic composition" in new FunctionalFixture:
     // Given: Initial state wrapped in IO
@@ -115,16 +120,6 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     state1.persisted.buffers(bufferId).document.content.collect() shouldBe "Shared content"
     state2.persisted.buffers(bufferId).document.content.collect() shouldBe "Shared content - modified"
     state3.persisted.buffers(bufferId).document.content.collect() shouldBe "Shared content - enhanced"
-
-    // Memory sharing through structural sharing (rope benefits)
-    state1.persisted
-      .buffers(bufferId)
-      .document
-      .content should not be theSameInstanceAs(state2.persisted.buffers(bufferId).document.content)
-    state2.persisted
-      .buffers(bufferId)
-      .document
-      .content should not be theSameInstanceAs(state3.persisted.buffers(bufferId).document.content)
 
   trait FunctionalFixture:
 
