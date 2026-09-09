@@ -355,6 +355,7 @@ object CommandRunner:
       "next-tab"     -> HotkeyAction.NextTab,
       "previous-tab" -> HotkeyAction.PreviousTab,
       "close"        -> HotkeyAction.CloseTab,
+      "close-pane"   -> HotkeyAction.ClosePane,
       "find"         -> HotkeyAction.Find,
       "replace"      -> HotkeyAction.Replace,
       "copy"         -> HotkeyAction.Copy,

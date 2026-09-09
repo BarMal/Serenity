@@ -54,6 +54,15 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     quitFromCtrlQ.isInstanceOf[AppEvent] shouldBe true
   }
 
+  it should "translate the close-pane hotkey into a ClosePane event, distinct from Ctrl+W's CloseTab" in {
+    val closeTab  = translator.translate(KeyStrokeInfo(InputKey.Character, Some('w'), Set(Modifier.Ctrl)))
+    val closePane = translator.translate(KeyStrokeInfo(InputKey.Character, Some('w'), Set(Modifier.Ctrl, Modifier.Shift)))
+
+    closeTab shouldBe CloseTab
+    closePane shouldBe ClosePane
+    closePane.isInstanceOf[AppEvent] shouldBe true
+  }
+
   it should "translate the save hotkey into a file-save event" in {
     val save = translator.translate(KeyStrokeInfo(InputKey.Character, Some('s'), Set(Modifier.Ctrl)))
 

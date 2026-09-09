@@ -44,6 +44,8 @@ final private[manager] class StateManagerPanelEffects(
         stateRef.update(com.serenity.state.core.EditorState.navigateToNextBuffer)
       case ViewIntent.PreviousTab =>
         stateRef.update(com.serenity.state.core.EditorState.navigateToPreviousBuffer)
+      case ViewIntent.ClosePane =>
+        stateRef.update(com.serenity.state.core.EditorState.removeFocusedPane)
       case ViewIntent.PinExplorerPanel =>
         setPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))
       case ViewIntent.PinOutlinePanel =>

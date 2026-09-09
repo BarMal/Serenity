@@ -4,6 +4,7 @@ import com.serenity.command.{CommandRegistry, CommandSurfaceItem}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
+import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, ModalStateReducer}
 import com.serenity.ui.layout.{PanelPosition, ViewportSize}
@@ -155,6 +156,21 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     state.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1))
     state.focusedBufferId shouldBe Some(BufferId(1))
     state.persisted.buffers(BufferId(1)).document.isNewEmpty shouldBe true
+    result.effects shouldBe Nil
+  }
+
+  it should "close the focused pane on ClosePane" in {
+    val wideViewport = ViewportSize(200, 24)
+    val twoPaneState = EditorState.openNewTab(
+      AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(wideViewport)))
+    )
+    val focusedPaneId = twoPaneState.persisted.layout.activeEditorPaneId.getOrElse(fail("expected an active pane"))
+    twoPaneState.persisted.layout.editorPanes.keySet should have size 2
+
+    val result = AppEventReducer.reduce(ClosePane, twoPaneState, registry)
+
+    result.state.persisted.layout.editorPanes.keySet shouldBe
+      twoPaneState.persisted.layout.editorPanes.keySet - focusedPaneId
     result.effects shouldBe Nil
   }
 

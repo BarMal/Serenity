@@ -117,4 +117,23 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
       WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.value}"), pane1)
     )
 
+  it should "close the focused pane via the real ClosePane user event" in new PaneFixture:
+    val pane1 = sm.paneManager.createPane(None).unsafeRunSync()
+    sm.paneManager.switchToPane(pane1).unsafeRunSync()
+
+    sm.applyEvent(com.serenity.keystroke.events.ClosePane).unsafeRunSync()
+
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0)
+
+  it should "close the focused pane via the command palette's Close Pane command" in new PaneFixture:
+    val pane1 = sm.paneManager.createPane(None).unsafeRunSync()
+    sm.paneManager.switchToPane(pane1).unsafeRunSync()
+    val registry = com.serenity.command.CommandRegistry.withToggleUI
+
+    sm.commandExecutor
+      .executeCommand(registry.findCommand("close-pane").getOrElse(fail("missing close-pane")))
+      .unsafeRunSync()
+
+    sm.paneManager.getTabOrder().unsafeRunSync() shouldBe List(pane0)
+
 end PaneOrderSpec

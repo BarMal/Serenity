@@ -21,6 +21,7 @@ object TextHotkeyConverters:
     HotkeyAction.ToggleContextualToolbar  -> ToggleContextualToolbar,
     HotkeyAction.NewTab                   -> NewTab,
     HotkeyAction.CloseTab                 -> CloseTab,
+    HotkeyAction.ClosePane                -> ClosePane,
     HotkeyAction.FileSearch               -> FileSearch,
     HotkeyAction.PreviousTab              -> PreviousTab,
     HotkeyAction.NextTab                  -> NextTab,

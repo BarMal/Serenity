@@ -81,6 +81,16 @@ private[command] object CommandRegistryPanelProjectCommands:
     )
   )
 
+  private[command] def paneCommands: List[Command] = List(
+    Command.typed(
+      "close-pane",
+      "Close the focused editor pane.",
+      CommandIntent.View(ViewIntent.ClosePane),
+      CommandCategory.View,
+      label = "Close Pane"
+    )
+  )
+
   private[command] def projectCommands: List[Command] = List(
     Command.typed(
       "project-build",

@@ -156,6 +156,22 @@ object EditorState:
             state.runtime.copy(focusHistory = state.runtime.focusHistory.filterNot(_ == Focus.EditorPane(paneId)))
         )
 
+  /** Removes the currently focused (or active, if focus is elsewhere -- e.g. a surface) editor pane. A no-op if there
+    * is no pane to target.
+    */
+  def removeFocusedPane(state: AppState): AppState =
+    focusedPaneId(state) match
+      case Some(paneId) => removePane(state, paneId)
+      case None         => state
+
+  /** The pane a global, focus-independent pane action (split, close, directional-focus-move) should target: the
+    * focused editor pane, or -- when focus is elsewhere, e.g. a surface -- the last active one.
+    */
+  private def focusedPaneId(state: AppState): Option[PaneId] =
+    state.persisted.focus match
+      case Focus.EditorPane(paneId) => Some(paneId)
+      case _                        => state.persisted.layout.activeEditorPaneId
+
   private def assignBuffersToPanes(state: AppState, focusedBufferId: Option[BufferId]): AppState =
     val targetFocusedBuffer = focusedBufferId.orElse(state.focusedBufferId)
     targetFocusedBuffer match

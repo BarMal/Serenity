@@ -22,6 +22,7 @@ case object ToggleRecentFilesInMode extends GlobalAppEvent // issue #1307
 final case class TogglePanel(id: PanelId) extends GlobalAppEvent
 case object NewTab                        extends GlobalAppEvent // Ctrl+T
 case object CloseTab                      extends GlobalAppEvent // Ctrl+W
+case object ClosePane                     extends GlobalAppEvent // Ctrl+Shift+W
 case object NextTab                       extends GlobalAppEvent // Ctrl+Tab
 case object PreviousTab                   extends GlobalAppEvent // Ctrl+Shift+Tab
 case object FileSearch                    extends GlobalAppEvent // Ctrl+Shift+F

@@ -45,6 +45,9 @@ object AppEventReducer:
       case CloseTab =>
         ReducerResult.noEffects(closeTabState(state, registry))
 
+      case ClosePane =>
+        ReducerResult.noEffects(EditorState.removeFocusedPane(state))
+
       case NextTab =>
         ReducerResult.noEffects(EditorState.navigateToNextBuffer(state))
 
