@@ -5,7 +5,8 @@ import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, AppEventReducer, ModalStateReducer}
+import com.serenity.state.reducers.{AppEffect, AppEventReducer, ModalStateReducer, UndoEffect}
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.{PanelPosition, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -209,6 +210,27 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = AppEventReducer.reduce(ClosePane, twoPaneState, registry)
 
     result.state.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0))
+    result.effects shouldBe List(
+      AppEffect.Undo(
+        UndoEffect.RecordBoundary(
+          HistoryEntry.PaneClose(twoPaneState.persisted.layout, twoPaneState.persisted.focus),
+          groupable = false
+        )
+      )
+    )
+  }
+
+  it should "emit no undo effect on ClosePane when there is no pane to remove" in {
+    val noPaneState = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        layout = AppState.initial.persisted.layout.copy(activeEditorPaneId = None),
+        focus = Focus.Surface(SurfaceId("surface-999"))
+      )
+    )
+
+    val result = AppEventReducer.reduce(ClosePane, noPaneState, registry)
+
+    result.state shouldBe noPaneState
     result.effects shouldBe Nil
   }
 
