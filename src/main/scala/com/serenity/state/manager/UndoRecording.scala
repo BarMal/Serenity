@@ -24,7 +24,8 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
     undoRef.update { undo =>
       (groupable, entry) match
         case (true, bufferEdit: HistoryEntry.BufferEdit) =>
-          val sameGroup = undo.pendingGroup.exists(g => g.bufferId == bufferEdit.bufferId && g.paneId == bufferEdit.paneId)
+          val sameGroup =
+            undo.pendingGroup.exists(g => g.bufferId == bufferEdit.bufferId && g.paneId == bufferEdit.paneId)
           if sameGroup then undo.clearRedo
           else undo.flushPendingGroup.copy(pendingGroup = Some(bufferEdit), redoStack = Nil)
         case _ =>

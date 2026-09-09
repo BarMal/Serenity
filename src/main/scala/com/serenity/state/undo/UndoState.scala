@@ -68,11 +68,12 @@ object HistoryEntry:
 
   /** A buffer's content, as it stood at some point -- the only kind of undo entry before #1016 widened this type. */
   final case class BufferEdit(bufferId: BufferId, paneId: PaneId, snapshot: BufferSnapshot) extends HistoryEntry:
+
     def restore(state: AppState): Option[(AppState, HistoryEntry)] =
       state.persisted.buffers.get(bufferId).map { current =>
-        val inverse         = BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(current))
-        val restoredBuffer  = snapshot.restoreInto(current)
-        val snappedState    = snapFocusToPane(state, paneId)
+        val inverse        = BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(current))
+        val restoredBuffer = snapshot.restoreInto(current)
+        val snappedState   = snapFocusToPane(state, paneId)
         val restoredState = snappedState.copy(persisted =
           snappedState.persisted.copy(buffers = snappedState.persisted.buffers + (bufferId -> restoredBuffer))
         )
@@ -85,6 +86,7 @@ object HistoryEntry:
     * a buffer snapshot: cheap regardless of how many buffers are open, unlike a full `AppState` snapshot would be.
     */
   final case class PaneClose(layout: Layout, focus: Focus) extends HistoryEntry:
+
     def restore(state: AppState): Option[(AppState, HistoryEntry)] =
       val inverse = PaneClose(state.persisted.layout, state.persisted.focus)
       Some(state.copy(persisted = state.persisted.copy(layout = layout, focus = focus)) -> inverse)

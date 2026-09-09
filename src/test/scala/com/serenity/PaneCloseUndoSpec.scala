@@ -20,8 +20,9 @@ class PaneCloseUndoSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   trait PaneFixture:
-    val sm: StateManager = StateManager.apply(LoggerFactory[IO].getLogger(using LoggerName("PaneCloseUndoSpec"))).unsafeRunSync()
-    val pane0: PaneId     = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
+    val sm: StateManager =
+      StateManager.apply(LoggerFactory[IO].getLogger(using LoggerName("PaneCloseUndoSpec"))).unsafeRunSync()
+    val pane0: PaneId = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
 
   behavior of "Undoing a pane close"
 

@@ -40,7 +40,8 @@ class HistoryEntrySpec extends AnyFlatSpec with Matchers with OptionValues:
       AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer), focus = Focus.EditorPane(PaneId(1)))
     )
 
-    val (restoredState, _) = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(buffer)).restore(state).value
+    val (restoredState, _) =
+      HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(buffer)).restore(state).value
 
     restoredState.persisted.focus shouldBe Focus.EditorPane(paneId)
     restoredState.persisted.layout.activeEditorPaneId shouldBe Some(paneId)
