@@ -7,7 +7,8 @@ import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{ReducerResult, SystemEventReducer}
+import com.serenity.state.reducers.{AppEffect, ReducerResult, SystemEventReducer, UndoEffect}
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -64,7 +65,9 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
       AppState.initial
     )
 
-    result.effects shouldBe Nil
+    result.effects shouldBe List(
+      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(AppState.initial), groupable = false))
+    )
     result.state.pinnedSurfaces should have size 1
     result.state.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Left, 30)
     result.state.pinnedSurfaces.head.content shouldBe

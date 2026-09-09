@@ -10,6 +10,7 @@ import com.serenity.keystroke.events.{Event, ExplorerEvent}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.state.reducers.PanelStateReducer
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.{DirEntry, PanelPosition, PanelTarget, SplitAxis}
 import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 
@@ -30,7 +31,8 @@ final private[manager] class StateManagerPanelEffects(
     collapseExpandedPanel: () => IO[Unit],
     switchToPinnedPanel: PanelTarget => IO[Unit],
     resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
-    cancelProjectTaskSilently: IO[Unit]
+    cancelProjectTaskSilently: IO[Unit],
+    recordUndoBoundary: (HistoryEntry, Boolean) => IO[Unit]
 ):
 
   /** Floor for command/keyboard panel resize (issue #1310) -- prevents a panel from shrinking to zero or negative
@@ -122,7 +124,7 @@ final private[manager] class StateManagerPanelEffects(
   private def setPanelPin(kind: PanelKind, position: Option[PanelPosition]): IO[Unit] =
     val updateEffect = position match
       case None =>
-        updatePanelState(removePanelKind(kind))
+        updatePanelStateWithUndo(removePanelKind(kind))
       case Some(targetPosition) =>
         pinPanelKind(kind, targetPosition)
     updateEffect >> refreshCommandRunnerPanelSelections
@@ -150,7 +152,9 @@ final private[manager] class StateManagerPanelEffects(
         stateRef.get.flatMap { state =>
           newestPanelKindSurface(kind, state) match
             case Some(surface) =>
-              updatePanelState(upsertPanelKind(kind, surface.content, position, defaultPanelSize(kind, position)))
+              updatePanelStateWithUndo(
+                upsertPanelKind(kind, surface.content, position, defaultPanelSize(kind, position))
+              )
             case None =>
               FileUtils.getCurrentDirectory.flatMap(path =>
                 pinExplorerPanelEffect(position, path, defaultPanelSize(kind, position))
@@ -159,7 +163,7 @@ final private[manager] class StateManagerPanelEffects(
       case PanelKind.Outline =>
         stateRef.get.flatMap { state =>
           val symbols = PanelSymbolLookup.outlineSymbols(state)
-          updatePanelState(
+          updatePanelStateWithUndo(
             upsertPanelKind(
               kind,
               SurfaceContent.Outline(symbols, PanelSymbolLookup.currentSymbolActiveLocation(symbols, state)),
@@ -171,7 +175,7 @@ final private[manager] class StateManagerPanelEffects(
       case PanelKind.Comments =>
         stateRef.get.flatMap { state =>
           val symbols = PanelSymbolLookup.commentPanelSymbols(state)
-          updatePanelState(
+          updatePanelStateWithUndo(
             upsertPanelKind(
               kind,
               SurfaceContent.Comments(symbols, PanelSymbolLookup.currentSymbolActiveLocation(symbols, state)),
@@ -181,14 +185,14 @@ final private[manager] class StateManagerPanelEffects(
           )
         }
       case PanelKind.Diagnostics =>
-        updatePanelState(
+        updatePanelStateWithUndo(
           upsertPanelKind(kind, SurfaceContent.Diagnostics(Nil), position, defaultPanelSize(kind, position))
         )
       case PanelKind.MarkdownPreview =>
         stateRef.get.flatMap { state =>
           markdownPreviewContent(state) match
             case Some(content) =>
-              updatePanelState(upsertPanelKind(kind, content, position, defaultPanelSize(kind, position)))
+              updatePanelStateWithUndo(upsertPanelKind(kind, content, position, defaultPanelSize(kind, position)))
             case None =>
               logger.debug("[CMD] Markdown preview requested without an active Markdown buffer")
         }
@@ -240,6 +244,21 @@ final private[manager] class StateManagerPanelEffects(
     stateRef.get.flatMap { state =>
       val updated = update(state)
       validateAndUpdateState(updated, state)
+    }
+
+  /** Same as `updatePanelState`, but also declares the change as an undo boundary (#1016 PR4). Used only by the
+    * kind-based pin/unpin mutations (`setPanelPin`/`pinPanelKind`) -- the structural pin/unpin change the acceptance
+    * criterion names -- and not by `movePanelKind`'s same-edge reordering, which is a view adjustment to an
+    * already-pinned panel rather than a pin/unpin. A no-op update (e.g. unpinning a kind that isn't pinned) records
+    * nothing, mirroring `AppEventReducer.closePaneResult`'s guard for pane close.
+    */
+  private def updatePanelStateWithUndo(update: AppState => AppState): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      val updated = update(state)
+      if updated == state then validateAndUpdateState(updated, state)
+      else
+        val entry = HistoryEntry.PanelChange.capture(state)
+        validateAndUpdateState(updated, state) >> recordUndoBoundary(entry, false)
     }
 
   private def removePanelKind(kind: PanelKind)(state: AppState): AppState =

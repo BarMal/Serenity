@@ -1,24 +1,32 @@
 package com.serenity.state.reducers
 
 import com.serenity.state.models.*
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition, WorkspaceNodeId, WorkspaceTree}
 
 object PanelStateReducer:
 
+  /** Pin/unpin declare their own undo boundary (#1016 PR4) -- the same "the code that performs the change declares it"
+    * principle #1361 applied to buffer edits, generalized here to the non-reducer-only panel-pin surface. Move, resize,
+    * and expand/collapse are left non-undoable: they're view adjustments to an already-pinned panel, not the pin/unpin
+    * structural change the acceptance criterion names.
+    */
   def pin(content: PanelContent, position: PanelPosition, size: Int, state: AppState): ReducerResult =
+    val undoEntry                = HistoryEntry.PanelChange.capture(state)
     val (stateWithId, surfaceId) = state.allocateSurfaceId
     val panel                    = UiSurface.fromPanelContent(surfaceId, content, position, size)
     val workspaceTree = stateWithId.persisted.layout.effectiveWorkspaceTree.flatMap { tree =>
       tree.dock(surfaceId, position, nextSplitId(tree, surfaceId), WorkspaceNodeId(s"dock-${surfaceId.value}"))
     }
-    ReducerResult.noEffects(
+    ReducerResult.withEffect(
       stateWithId.copy(
         persisted = stateWithId.persisted.copy(
           layout = stateWithId.persisted.layout
             .copy(workspaceTree = workspaceTree.orElse(stateWithId.persisted.layout.workspaceTree))
         ),
         runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ panel)
-      )
+      ),
+      AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, groupable = false))
     )
 
   def focus(surfaceId: SurfaceId, state: AppState): ReducerResult =
@@ -65,6 +73,7 @@ object PanelStateReducer:
   def unpin(surfaceId: SurfaceId, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
       case Some(surface) =>
+        val undoEntry = HistoryEntry.PanelChange.capture(state)
         val nextFocus =
           if state.persisted.focus == Focus.Surface(surface.id) then fallbackEditorFocus(state)
           else state.persisted.focus
@@ -72,7 +81,7 @@ object PanelStateReducer:
         val maximized = state.persisted.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
           state.persisted.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).contains(surfaceId)
         )
-        ReducerResult.noEffects(
+        ReducerResult.withEffect(
           state.copy(
             persisted = state.persisted.copy(
               layout = state.persisted.layout.copy(
@@ -82,7 +91,8 @@ object PanelStateReducer:
               focus = nextFocus
             ),
             runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id))
-          )
+          ),
+          AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, groupable = false))
         )
       case None =>
         ReducerResult.noEffects(state)
