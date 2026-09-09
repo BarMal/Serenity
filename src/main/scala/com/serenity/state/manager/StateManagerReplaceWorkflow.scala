@@ -305,7 +305,7 @@ final private[manager] class StateManagerReplaceWorkflow(
       case Some(paneId) =>
         undoRef.update { undo =>
           val flushed = undo.flushPendingGroup
-          val entry   = HistoryEntry(bufferId, paneId, BufferSnapshot.fromBuffer(buffer))
+          val entry   = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(buffer))
           flushed.pushUndo(entry)
         }
       case None =>

@@ -2,6 +2,7 @@ package com.serenity.state.undo
 
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
+import com.serenity.ui.layout.Layout
 
 final case class BufferSnapshot(
     content: Rope,
@@ -49,38 +50,68 @@ object BufferSnapshot:
       isNewEmpty = buffer.document.isNewEmpty
     )
 
-/** A snapshot of a buffer at a point in time, sufficient to restore that state. Used for both undo and redo stacks.
+/** One undoable/redoable change (#1016), self-contained: restoring it needs nothing but the entry and the current
+  * `AppState`. Each case owns exactly the state its declaring site (a reducer, or a direct call site like the replace
+  * workflow) had in scope when it made the change -- never a whole-`AppState` snapshot, which would retain every open
+  * buffer per entry.
   */
-final case class HistoryEntry(
-    bufferId: BufferId,
-    paneId: PaneId,
-    snapshot: BufferSnapshot
-)
+sealed trait HistoryEntry:
 
-/** An open group accumulating consecutive InsertChar events. Holds the before-state (content and cursor prior to the
-  * first char in the run). Sealed when a non-InsertChar mutation event arrives, or on undo/redo.
-  */
-final case class PendingGroup(
-    bufferId: BufferId,
-    paneId: PaneId,
-    beforeSnapshot: BufferSnapshot
-)
+  /** Restores this entry into `state`, returning the updated state and the entry capturing what was there immediately
+    * before restoring -- the inverse, to push onto the opposite stack. `None` if this entry's target no longer exists
+    * (e.g. its buffer was since closed) -- the entry is then left in place rather than dropped, matching how a stale
+    * redo/undo step already behaved before this type existed.
+    */
+  def restore(state: AppState): Option[(AppState, HistoryEntry)]
+
+object HistoryEntry:
+
+  /** A buffer's content, as it stood at some point -- the only kind of undo entry before #1016 widened this type. */
+  final case class BufferEdit(bufferId: BufferId, paneId: PaneId, snapshot: BufferSnapshot) extends HistoryEntry:
+    def restore(state: AppState): Option[(AppState, HistoryEntry)] =
+      state.persisted.buffers.get(bufferId).map { current =>
+        val inverse         = BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(current))
+        val restoredBuffer  = snapshot.restoreInto(current)
+        val snappedState    = snapFocusToPane(state, paneId)
+        val restoredState = snappedState.copy(persisted =
+          snappedState.persisted.copy(buffers = snappedState.persisted.buffers + (bufferId -> restoredBuffer))
+        )
+        (restoredState, inverse)
+      }
+
+  /** A pane's removal (#1016): captures the whole pre-removal `Layout` rather than just the one pane, since removing a
+    * pane can also collapse its parent split and reassign `activeEditorPaneId`/focus -- restoring needs the topology
+    * that produces, not just the leaf. Panes reference buffers by id, not content, so this is a topology snapshot, not
+    * a buffer snapshot: cheap regardless of how many buffers are open, unlike a full `AppState` snapshot would be.
+    */
+  final case class PaneClose(layout: Layout, focus: Focus) extends HistoryEntry:
+    def restore(state: AppState): Option[(AppState, HistoryEntry)] =
+      val inverse = PaneClose(state.persisted.layout, state.persisted.focus)
+      Some(state.copy(persisted = state.persisted.copy(layout = layout, focus = focus)) -> inverse)
+
+  private def snapFocusToPane(state: AppState, paneId: PaneId): AppState =
+    if state.persisted.focus == Focus.EditorPane(paneId) then state
+    else
+      state.copy(persisted =
+        state.persisted.copy(
+          focus = Focus.EditorPane(paneId),
+          layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId))
+        )
+      )
 
 /** Full undo/redo state, held separately from AppState in StateManager. Never persisted to disk — always starts fresh.
   */
 final case class UndoState(
     undoStack: List[HistoryEntry] = Nil,
     redoStack: List[HistoryEntry] = Nil,
-    pendingGroup: Option[PendingGroup] = None,
+    pendingGroup: Option[HistoryEntry.BufferEdit] = None,
     maxUndoDepth: Int = UndoState.DefaultMaxUndoDepth
 ):
 
   def flushPendingGroup: UndoState =
     pendingGroup match
-      case None => this
-      case Some(group) =>
-        val entry = HistoryEntry(group.bufferId, group.paneId, group.beforeSnapshot)
-        pushUndo(entry, clearRedo = false).copy(pendingGroup = None)
+      case None        => this
+      case Some(entry) => pushUndo(entry, clearRedo = false).copy(pendingGroup = None)
 
   def clearRedo: UndoState = copy(redoStack = Nil)
 

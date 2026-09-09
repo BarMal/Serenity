@@ -6,6 +6,7 @@ import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.SplitAxis
 
 object AppEventReducer:
@@ -53,7 +54,7 @@ object AppEventReducer:
         ReducerResult.noEffects(EditorState.splitFocusedPane(state, SplitAxis.Vertical))
 
       case ClosePane =>
-        ReducerResult.noEffects(EditorState.removeFocusedPane(state))
+        closePaneResult(state)
 
       case NextTab =>
         ReducerResult.noEffects(EditorState.navigateToNextBuffer(state))
@@ -332,6 +333,17 @@ object AppEventReducer:
             state.copy(runtime = state.runtime.copy(uiSurfaces = upsertSurface(state.runtime.uiSurfaces, surface)))
           case None =>
             state
+
+  /** Declares a pane's removal as undoable at the point of change (#1016), the same way `EditorEditSupport` does for
+    * buffer edits: capturing the pre-removal `Layout`/`Focus` before calling the already-correct `removeFocusedPane`,
+    * and skipping the effect entirely when there was no pane to remove (`removeFocusedPane` left state unchanged).
+    */
+  private def closePaneResult(state: AppState): ReducerResult =
+    val updatedState = EditorState.removeFocusedPane(state)
+    if updatedState == state then ReducerResult.noEffects(state)
+    else
+      val entry = HistoryEntry.PaneClose(state.persisted.layout, state.persisted.focus)
+      ReducerResult.withEffect(updatedState, AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable = false)))
 
   private def closeTabState(state: AppState, registry: CommandRegistry): AppState =
     val closedState = EditorState.closeFocusedTab(state)

@@ -8,8 +8,8 @@ import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
-import com.serenity.state.models.{AppState, BufferId, PaneId, SurfaceId}
-import com.serenity.state.undo.BufferSnapshot
+import com.serenity.state.models.{AppState, BufferId, SurfaceId}
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfig
 
@@ -58,14 +58,15 @@ enum AnimationEffect:
   case ClearAll(bufferId: BufferId)
   case ClearOwner(bufferId: BufferId, owner: AnimationOwner)
 
-/** A reducer's own declaration that the edit it just performed is undoable, and whether it should coalesce into an
-  * already-open run of edits (consecutive character/tab insertion) rather than becoming its own undo step -- see #1016.
-  * `before` is the buffer as it was immediately prior to this edit; carried in the effect itself (rather than left for
-  * `UndoRecording` to infer from an event-type allowlist and a before/after diff) because interpretation runs after
-  * `AppState` has already been updated to the post-edit buffer.
+/** A reducer's own declaration that the change it just performed is undoable, carrying the [[HistoryEntry]] that
+  * restores it -- see #1016. `groupable` marks whether this should coalesce into an already-open run of edits
+  * (consecutive character/tab insertion) rather than becoming its own undo step; only ever true for a
+  * `HistoryEntry.BufferEdit`. The entry captures state as it was immediately prior to this change -- carried in the
+  * effect itself (rather than left for `UndoRecording` to infer from an event-type allowlist and a before/after diff)
+  * because interpretation runs after `AppState` has already been updated to the post-change state.
   */
 enum UndoEffect:
-  case RecordBoundary(bufferId: BufferId, paneId: PaneId, before: BufferSnapshot, groupable: Boolean)
+  case RecordBoundary(entry: HistoryEntry, groupable: Boolean)
 
 enum AppEffect:
   case CompleteQuit

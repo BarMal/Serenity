@@ -1,10 +1,8 @@
 package com.serenity.state.manager
 
-import scala.annotation.unused
-
 import cats.effect.{IO, Ref}
 import com.serenity.state.models.*
-import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, PendingGroup, UndoState}
+import com.serenity.state.undo.{HistoryEntry, UndoState}
 
 /** State the event pipeline exposes for recording and replaying undo/redo history. */
 private[manager] trait UndoRecordingPort:
@@ -12,83 +10,52 @@ private[manager] trait UndoRecordingPort:
   def undoRef: Ref[IO, UndoState]
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
 
-/** Records undoable content mutations and replays undo/redo history, independent of event dispatch and focus routing.
-  * `recordUndoBoundary` applies the fact a reducer already declared via
-  * `AppEffect.Undo(UndoEffect.RecordBoundary(...))` -- #1016: this class no longer decides which events are undoable or
-  * diffs buffer state to infer a change, since the reducer that made the edit is the only code with that knowledge.
-  * `applyUndo` and `applyRedo` replay history entries back into state.
+/** Records undoable changes and replays undo/redo history, independent of event dispatch and focus routing.
+  * `recordUndoBoundary` applies the fact a reducer (or other direct call site, e.g. the replace workflow) already
+  * declared via `AppEffect.Undo(UndoEffect.RecordBoundary(...))` -- #1016: this class no longer decides which events
+  * are undoable or diffs state to infer a change, since the code that made the change is the only code with that
+  * knowledge. `applyUndo` and `applyRedo` replay history entries back into state via `HistoryEntry.restore`, agnostic
+  * to which kind of entry (buffer edit, pane close, ...) they're replaying.
   */
 final private[manager] class UndoRecording(port: UndoRecordingPort):
   import port.*
 
-  def recordUndoBoundary(bufferId: BufferId, paneId: PaneId, before: BufferSnapshot, groupable: Boolean): IO[Unit] =
+  def recordUndoBoundary(entry: HistoryEntry, groupable: Boolean): IO[Unit] =
     undoRef.update { undo =>
-      if groupable then
-        val sameGroup = undo.pendingGroup.exists(g => g.bufferId == bufferId && g.paneId == paneId)
-        if sameGroup then undo.clearRedo
-        else
-          val flushed  = undo.flushPendingGroup
-          val newGroup = PendingGroup(bufferId, paneId, before)
-          flushed.copy(pendingGroup = Some(newGroup), redoStack = Nil)
-      else
-        val flushed = undo.flushPendingGroup
-        val entry   = HistoryEntry(bufferId, paneId, before)
-        flushed.pushUndo(entry)
+      (groupable, entry) match
+        case (true, bufferEdit: HistoryEntry.BufferEdit) =>
+          val sameGroup = undo.pendingGroup.exists(g => g.bufferId == bufferEdit.bufferId && g.paneId == bufferEdit.paneId)
+          if sameGroup then undo.clearRedo
+          else undo.flushPendingGroup.copy(pendingGroup = Some(bufferEdit), redoStack = Nil)
+        case _ =>
+          undo.flushPendingGroup.pushUndo(entry)
     }
 
-  def applyUndo(@unused prevState: AppState): IO[Unit] =
+  def applyUndo(@annotation.unused prevState: AppState): IO[Unit] =
     undoRef.get.flatMap { undo =>
       val flushed = undo.flushPendingGroup
       flushed.undoStack match
         case Nil => IO.unit
         case entry :: rest =>
-          stateRef.get.flatMap { state =>
-            state.persisted.buffers.get(entry.bufferId) match
-              case None => IO.unit
-              case Some(current) =>
-                val redoEntry      = HistoryEntry(entry.bufferId, entry.paneId, BufferSnapshot.fromBuffer(current))
-                val restoredBuffer = entry.snapshot.restoreInto(current)
-                val snappedState   = snapFocusToPane(state, entry.paneId)
-                undoRef.set(flushed.copy(undoStack = rest).pushRedo(redoEntry)) >>
-                  validateAndUpdateState(
-                    snappedState.copy(persisted =
-                      snappedState.persisted
-                        .copy(buffers = snappedState.persisted.buffers + (entry.bufferId -> restoredBuffer))
-                    ),
-                    state
-                  )
-          }
+          restoreAndPush(entry, state => flushed.copy(undoStack = rest).pushRedo(state))
     }
 
-  def applyRedo(@unused prevState: AppState): IO[Unit] =
+  def applyRedo(@annotation.unused prevState: AppState): IO[Unit] =
     undoRef.get.flatMap { undo =>
       undo.redoStack match
         case Nil => IO.unit
         case entry :: rest =>
-          stateRef.get.flatMap { state =>
-            state.persisted.buffers.get(entry.bufferId) match
-              case None => IO.unit
-              case Some(current) =>
-                val undoEntry      = HistoryEntry(entry.bufferId, entry.paneId, BufferSnapshot.fromBuffer(current))
-                val restoredBuffer = entry.snapshot.restoreInto(current)
-                val snappedState   = snapFocusToPane(state, entry.paneId)
-                undoRef.set(undo.copy(redoStack = rest).pushUndo(undoEntry, clearRedo = false)) >>
-                  validateAndUpdateState(
-                    snappedState.copy(persisted =
-                      snappedState.persisted
-                        .copy(buffers = snappedState.persisted.buffers + (entry.bufferId -> restoredBuffer))
-                    ),
-                    state
-                  )
-          }
+          restoreAndPush(entry, inverse => undo.copy(redoStack = rest).pushUndo(inverse, clearRedo = false))
     }
 
-  private def snapFocusToPane(state: AppState, paneId: PaneId): AppState =
-    if state.persisted.focus == Focus.EditorPane(paneId) then state
-    else
-      state.copy(persisted =
-        state.persisted.copy(
-          focus = Focus.EditorPane(paneId),
-          layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId))
-        )
-      )
+  /** Restores `entry` into the current state and commits both the new `UndoState` (via `nextUndoState`, applied to the
+    * inverse entry `HistoryEntry.restore` hands back) and the new `AppState`. A missing target (`restore` returning
+    * `None`) is a no-op that leaves the stack untouched, same as before this type existed.
+    */
+  private def restoreAndPush(entry: HistoryEntry, nextUndoState: HistoryEntry => UndoState): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      entry.restore(state) match
+        case None => IO.unit
+        case Some((restoredState, inverse)) =>
+          undoRef.set(nextUndoState(inverse)) >> validateAndUpdateState(restoredState, state)
+    }
