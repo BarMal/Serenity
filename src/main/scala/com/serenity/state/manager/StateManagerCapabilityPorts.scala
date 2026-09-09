@@ -94,24 +94,18 @@ private[manager] trait EventStatePort:
   def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
   def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]]
 
-/** Effects and commands triggered by event routing. */
-private[manager] trait EventEffectPort:
-  def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit]
-  def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit]
-  def executeCommand(command: com.serenity.command.Command): IO[Unit]
+/** Effects and commands triggered by event routing, as a capability record rather than a trait -- nothing here breaks a
+  * construction-order cycle (#1389), so mockability is the only reason this needs an interface at all, and a record
+  * fakes trivially without one (#1017).
+  */
+final private[manager] case class EventEffectPort(
+    interpretEffect: com.serenity.state.reducers.AppEffect => IO[Unit],
+    interpretCommand: (com.serenity.command.Command, AppState) => IO[Unit],
+    executeCommand: com.serenity.command.Command => IO[Unit]
+)
 
 /** Workflow operations requested by event routing. */
 private[manager] trait EventWorkflowPort:
   def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
   def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId]
-
-/** UI configuration operations requested by event routing. */
-private[manager] trait EventUiPort:
-  def uiPresetStore: UiPresetStore
-
-  def updateConfig(
-    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
-  ): IO[com.serenity.config.AppConfig]
-
-  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit]

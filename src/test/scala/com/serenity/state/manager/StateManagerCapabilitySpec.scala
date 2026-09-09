@@ -45,23 +45,28 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       val documentAnalysisFiberRef = currentFiberRef
       val mouseTargetCacheRef      = currentCacheRef
       val bufferAnimationsRef      = currentBufferAnimationsRef
-    val effectPort = new EventEffectPort:
-      def interpretEffect(effect: AppEffect): IO[Unit]                                       = runEffect(effect)
-      def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] = IO.unit
-      def executeCommand(command: com.serenity.command.Command): IO[Unit]                    = IO.unit
+    val effectPort = EventEffectPort(
+      interpretEffect = runEffect,
+      interpretCommand = (_, _) => IO.unit,
+      executeCommand = _ => IO.unit
+    )
     val workflowPort = new EventWorkflowPort:
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit
       def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] = IO.pure(BufferId(0))
       def createPane(bufferId: Option[BufferId]): IO[PaneId]                  = IO.pure(PaneId(0))
-    val uiPort = new EventUiPort:
-      val uiPresetStore = UiPresetStore(Path.of("target", "state-manager-capability-spec.json"))
-      def updateConfig(update: AppConfig => AppConfig): IO[AppConfig] =
+    new StateManagerEventPipeline(
+      statePort,
+      effectPort,
+      workflowPort,
+      UiPresetStore(Path.of("target", "state-manager-capability-spec.json")),
+      update =>
         currentStateRef.modify(state =>
           val config = update(state.persisted.config)
           (state.copy(persisted = state.persisted.copy(config = config)), config)
-        )
-      def resizePinnedPanel(target: com.serenity.ui.layout.PanelTarget, newSize: Int): IO[Unit] = IO.unit
-    new StateManagerEventPipeline(statePort, effectPort, workflowPort, uiPort, operations)
+        ),
+      (_, _) => IO.unit,
+      operations
+    )
 
   "StateManager" should "compose focused façade capabilities" in {
     // All of these are #1017's capability-record slices: fields, not mixed-in traits.
@@ -173,21 +178,21 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       compositionRoot.indexOf("private val effectSurfacePort"),
       compositionRoot.indexOf("private val effectFilePort")
     )
-    val workflowPort = compositionRoot.slice(
-      compositionRoot.indexOf("private val workflowPort"),
-      compositionRoot.indexOf("private val surfacePort")
+    val effectModalWorkflowPort = compositionRoot.slice(
+      compositionRoot.indexOf("private val effectModalWorkflowPort"),
+      compositionRoot.indexOf("private val effects")
     )
-    val surfacePort = compositionRoot.slice(
-      compositionRoot.indexOf("private val surfacePort"),
-      compositionRoot.indexOf("private val viewportPort")
+    val eventWorkflowPort = compositionRoot.slice(
+      compositionRoot.indexOf("private val eventWorkflowPort"),
+      compositionRoot.indexOf("private val events")
     )
 
     compositionRoot should include("StateManagerOperationBoundary")
     effectEditorPort should not include "events."
     effectSurfacePort should not include "events."
-    workflowPort should not include "effects."
-    workflowPort should not include "events."
-    surfacePort should not include "events."
+    effectModalWorkflowPort should not include "effects."
+    effectModalWorkflowPort should not include "events."
+    eventWorkflowPort should not include "effects."
     effectHandlers should include("enqueueEvent")
     effectHandlers should not include "applyEvent("
   }
