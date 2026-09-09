@@ -3,14 +3,17 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
+import cats.syntax.foldable.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{ModalStateReducer, PanelStateReducer, PeekStateReducer}
+import com.serenity.state.reducers.{AppEffect, ModalStateReducer, PanelStateReducer, PeekStateReducer, UndoEffect}
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerSurfaceCapability(
     stateRef: cats.effect.Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
-    operations: StateManagerOperationBoundary
+    operations: StateManagerOperationBoundary,
+    recordUndoBoundary: (HistoryEntry, Boolean) => IO[Unit]
 ):
 
   private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
@@ -18,6 +21,17 @@ final private[manager] class StateManagerSurfaceCapability(
 
   private def applyAnimationHooks(previousState: AppState): IO[Unit] =
     operations.enqueueAnimationHooks(previousState)
+
+  /** Applies whatever a [[PanelStateReducer]] result declared -- #1016 PR4: these calls used to take only `.state` and
+    * drop `.effects`, so a reducer that's already the right shape to declare undo had nothing that interpreted it.
+    * `PanelStateReducer` only ever emits `Undo`, but this stays a generic fold rather than special-cased to that one
+    * effect, so a future effect added there doesn't silently get dropped again.
+    */
+  private def interpretEffects(effects: List[AppEffect]): IO[Unit] =
+    effects.traverse_ {
+      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)) => recordUndoBoundary(entry, groupable)
+      case _                                                           => IO.unit
+    }
 
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.show(content, at, state).state, state))
@@ -33,8 +47,10 @@ final private[manager] class StateManagerSurfaceCapability(
 
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
     stateRef.get.flatMap { state =>
-      validateAndUpdateState(PanelStateReducer.pin(content, position, size, state).state, state)
+      val result = PanelStateReducer.pin(content, position, size, state)
+      validateAndUpdateState(result.state, state)
         .flatMap(_ => applyAnimationHooks(state))
+        .flatMap(_ => interpretEffects(result.effects))
     }
 
   // A target that resolves to no panel (a `ByPosition` side holding nothing pinned, or an `ById` surface that isn't
@@ -57,15 +73,18 @@ final private[manager] class StateManagerSurfaceCapability(
               case _                                => false
           case _ => false
       }
-      val updated = existing match
+      val (updated, effects) = existing match
         case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, _), _)) =>
           val nextSurface = surface.copy(content = SurfaceContent.Terminal(text, text.length))
           state.copy(runtime =
             state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
-          )
+          ) -> Nil
         case _ =>
-          PanelStateReducer.pin(content, position, size, state).state
-      validateAndUpdateState(updated, state).flatMap(_ => applyAnimationHooks(state))
+          val result = PanelStateReducer.pin(content, position, size, state)
+          result.state -> result.effects
+      validateAndUpdateState(updated, state)
+        .flatMap(_ => applyAnimationHooks(state))
+        .flatMap(_ => interpretEffects(effects))
     }
 
   def unpinPanel(target: PanelTarget): IO[Unit] =
@@ -75,12 +94,15 @@ final private[manager] class StateManagerSurfaceCapability(
         case PanelTarget.ByPosition(position) => PanelStateReducer.unpin(position, state)
       validateAndUpdateState(result.state, state)
         .flatMap(_ => applyAnimationHooks(state))
+        .flatMap(_ => interpretEffects(result.effects))
     }
 
   def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit] =
     stateRef.get.flatMap { state =>
-      validateAndUpdateState(PanelStateReducer.move(surfaceId, position, state).state, state)
+      val result = PanelStateReducer.move(surfaceId, position, state)
+      validateAndUpdateState(result.state, state)
         .flatMap(_ => applyAnimationHooks(state))
+        .flatMap(_ => interpretEffects(result.effects))
     }
 
   def expandPinnedPanel(target: PanelTarget): IO[Unit] =
@@ -89,7 +111,7 @@ final private[manager] class StateManagerSurfaceCapability(
         case PanelTarget.ById(surfaceId)      => PanelStateReducer.expand(surfaceId, state)
         case PanelTarget.ByPosition(position) => PanelStateReducer.expand(position, state)
       validateAndUpdateState(result.state, state)
-        .flatMap(_ => applyAnimationHooks(state))
+        .flatMap(_ => interpretEffects(result.effects))
     }
 
   def collapseExpandedPanel(): IO[Unit] =
@@ -129,7 +151,7 @@ final private[manager] class StateManagerSurfaceCapability(
           case _ =>
             false
       }
-      val updated =
+      val (updated, effects) =
         maybeExistingExplorer match
           case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, size), _)) =>
             val nextSurface = surface.copy(
@@ -138,12 +160,15 @@ final private[manager] class StateManagerSurfaceCapability(
             )
             state.copy(runtime =
               state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
-            )
+            ) -> Nil
           case Some(_) =>
-            state
+            state -> Nil
           case None =>
-            PanelStateReducer.pin(content, PanelPosition.Left, 30, state).state
-      validateAndUpdateState(updated, state).flatMap(_ => applyAnimationHooks(state))
+            val result = PanelStateReducer.pin(content, PanelPosition.Left, 30, state)
+            result.state -> result.effects
+      validateAndUpdateState(updated, state)
+        .flatMap(_ => applyAnimationHooks(state))
+        .flatMap(_ => interpretEffects(effects))
     }
 
   def selectFileInExplorer(targetPath: Path): IO[Unit] =
@@ -180,6 +205,7 @@ final private[manager] class StateManagerSurfaceCapability(
         case PanelTarget.ById(surfaceId)      => PanelStateReducer.resize(surfaceId, newSize, state)
         case PanelTarget.ByPosition(position) => PanelStateReducer.resize(position, newSize, state)
       validateAndUpdateState(result.state, state)
+        .flatMap(_ => interpretEffects(result.effects))
     }
 
   def dragFileToDirectory(src: Path, targetDir: Path): IO[Unit] =

@@ -46,7 +46,8 @@ final private[manager] class StateManagerEventPipeline(
       com.serenity.config.AppConfig
     ],
     resizePinnedPanel: (com.serenity.ui.layout.PanelTarget, Int) => cats.effect.IO[Unit],
-    operations: StateManagerOperationBoundary
+    operations: StateManagerOperationBoundary,
+    undoRecording: UndoRecording
 )(using balance: com.serenity.rope.Balance):
 
   import state.*
@@ -80,12 +81,6 @@ final private[manager] class StateManagerEventPipeline(
       StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
     def rebalancePanes(): cats.effect.IO[Unit] =
       stateRef.update(s => AppEventReducer.rebalancePanes(s, s.focusedBufferId)))
-
-  private val undoRecording = new UndoRecording(new UndoRecordingPort:
-    def stateRef: cats.effect.Ref[cats.effect.IO, AppState]                         = state.stateRef
-    def undoRef: cats.effect.Ref[cats.effect.IO, com.serenity.state.undo.UndoState] = state.undoRef
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
-      StateManagerEventPipeline.this.validateAndUpdateState(newState, fallbackState))
 
   private val lspDocumentSync = new LspDocumentSync(new LspDocumentSyncPort:
     def stateRef: cats.effect.Ref[cats.effect.IO, AppState]      = state.stateRef

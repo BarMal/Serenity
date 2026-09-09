@@ -125,7 +125,8 @@ final private[manager] class StateManagerEffectHandlers(
     () => collapseExpandedPanel(),
     switchToPinnedPanel,
     resizePinnedPanel,
-    projectLspEffects.cancelProjectTaskSilently
+    projectLspEffects.cancelProjectTaskSilently,
+    recordUndoBoundary
   )
 
   private val uiPresetEffects = new StateManagerUiPresetEffects(

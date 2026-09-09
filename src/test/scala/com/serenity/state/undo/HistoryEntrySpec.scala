@@ -88,3 +88,37 @@ class HistoryEntrySpec extends AnyFlatSpec with Matchers with OptionValues:
     restoredState.persisted.focus shouldBe twoPaneFocus
     inverse shouldBe HistoryEntry.PaneClose(closedLayout, closedFocus)
   }
+
+  "HistoryEntry.PanelChange.restore" should "restore the pre-change surfaces, workspace tree, and focus, capturing the current ones as the inverse" in {
+    val panelSurface = UiSurface.fromPanelContent(
+      SurfaceId("outline"),
+      com.serenity.ui.layout.PanelContent.Outline(Nil),
+      com.serenity.ui.layout.PanelPosition.Right,
+      30
+    )
+    val beforeChange = HistoryEntry.PanelChange(
+      uiSurfaces = Nil,
+      workspaceTree = AppState.initial.persisted.layout.workspaceTree,
+      maximizedWorkspaceNodeId = None,
+      focus = AppState.initial.persisted.focus
+    )
+    val stateAfterPin = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(panelSurface.id)),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(panelSurface))
+    )
+
+    val (restoredState, inverse) = beforeChange.restore(stateAfterPin).value
+
+    restoredState.runtime.uiSurfaces shouldBe Nil
+    restoredState.persisted.focus shouldBe AppState.initial.persisted.focus
+    inverse shouldBe a[HistoryEntry.PanelChange]
+    val inversePanelChange = inverse.asInstanceOf[HistoryEntry.PanelChange]
+    inversePanelChange.uiSurfaces shouldBe List(panelSurface)
+    inversePanelChange.focus shouldBe Focus.Surface(panelSurface.id)
+  }
+
+  it should "always succeed, unlike a buffer edit whose target may no longer exist" in {
+    val entry = HistoryEntry.PanelChange.capture(AppState.initial)
+
+    entry.restore(AppState.initial) shouldBe defined
+  }

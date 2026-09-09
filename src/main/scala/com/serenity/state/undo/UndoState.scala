@@ -2,7 +2,7 @@ package com.serenity.state.undo
 
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
-import com.serenity.ui.layout.Layout
+import com.serenity.ui.layout.{Layout, WorkspaceNodeId, WorkspaceTree}
 
 final case class BufferSnapshot(
     content: Rope,
@@ -90,6 +90,42 @@ object HistoryEntry:
     def restore(state: AppState): Option[(AppState, HistoryEntry)] =
       val inverse = PaneClose(state.persisted.layout, state.persisted.focus)
       Some(state.copy(persisted = state.persisted.copy(layout = layout, focus = focus)) -> inverse)
+
+  /** A pinned-panel layout change (#1016 PR4): pin, unpin, or any other change to which panels are pinned and how
+    * they're docked. Captures the whole pre-change `uiSurfaces`/`workspaceTree`/`maximizedWorkspaceNodeId`/`focus`
+    * rather than a diff of just the one panel touched, mirroring `PaneClose` -- these fields reference surface content
+    * by id/kind, not buffer content, so this stays a topology snapshot regardless of how many panels are pinned.
+    */
+  final case class PanelChange(
+      uiSurfaces: List[UiSurface],
+      workspaceTree: Option[WorkspaceTree],
+      maximizedWorkspaceNodeId: Option[WorkspaceNodeId],
+      focus: Focus
+  ) extends HistoryEntry:
+
+    def restore(state: AppState): Option[(AppState, HistoryEntry)] =
+      val inverse = PanelChange.capture(state)
+      val restoredState = state.copy(
+        persisted = state.persisted.copy(
+          layout = state.persisted.layout.copy(
+            workspaceTree = workspaceTree,
+            maximizedWorkspaceNodeId = maximizedWorkspaceNodeId
+          ),
+          focus = focus
+        ),
+        runtime = state.runtime.copy(uiSurfaces = uiSurfaces)
+      )
+      Some(restoredState -> inverse)
+
+  object PanelChange:
+
+    def capture(state: AppState): PanelChange =
+      PanelChange(
+        state.runtime.uiSurfaces,
+        state.persisted.layout.workspaceTree,
+        state.persisted.layout.maximizedWorkspaceNodeId,
+        state.persisted.focus
+      )
 
   private def snapFocusToPane(state: AppState, paneId: PaneId): AppState =
     if state.persisted.focus == Focus.EditorPane(paneId) then state

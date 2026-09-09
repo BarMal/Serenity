@@ -120,6 +120,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
         callsVar.update(_ :+ s"switchToPinnedPanel:$target")
       def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
         callsVar.update(_ :+ s"resizePinnedPanel:$target:$newSize")
+      def recordUndoBoundary(entry: com.serenity.state.undo.HistoryEntry, groupable: Boolean): IO[Unit] =
+        callsVar.update(_ :+ s"recordUndoBoundary:$groupable")
 
     val files = new EffectFilePort:
       val fileDialog  = fileDialogOpt

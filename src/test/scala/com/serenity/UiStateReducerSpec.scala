@@ -4,7 +4,8 @@ import java.nio.file.Paths
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{ModalStateReducer, PanelStateReducer, PeekStateReducer}
+import com.serenity.state.reducers.{AppEffect, ModalStateReducer, PanelStateReducer, PeekStateReducer, UndoEffect}
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -120,6 +121,20 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
       _.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24)
     ) shouldBe false
     unpinned.state.persisted.focus shouldBe Focus.EditorPane(paneId)
+  }
+
+  it should "declare an undo boundary for pin and unpin (#1016 PR4), capturing the pre-change state" in {
+    val content = PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/tmp")), None)
+
+    val pinned = PanelStateReducer.pin(content, PanelPosition.Left, 24, baseState)
+    pinned.effects shouldBe List(
+      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(baseState), groupable = false))
+    )
+
+    val unpinned = PanelStateReducer.unpin(PanelPosition.Left, pinned.state)
+    unpinned.effects shouldBe List(
+      AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(pinned.state), groupable = false))
+    )
   }
 
   it should "expand and collapse a pinned panel without losing its original position and size" in {

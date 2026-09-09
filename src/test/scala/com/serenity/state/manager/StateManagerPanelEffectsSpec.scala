@@ -67,7 +67,8 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
         () => calls.update(_ :+ "collapse"),
         target => calls.update(_ :+ s"switch:$target"),
         (target, size) => calls.update(_ :+ s"resize:$target:$size"),
-        calls.update(_ :+ "cancel-project-task")
+        calls.update(_ :+ "cancel-project-task"),
+        (_, groupable) => calls.update(_ :+ s"record-undo:$groupable")
       )
     )
 

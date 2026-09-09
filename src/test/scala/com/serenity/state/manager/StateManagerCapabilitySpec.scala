@@ -39,12 +39,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val currentBufferAnimationsRef =
       Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
     val statePort = new EventStatePort:
-      val stateRef                 = currentStateRef
-      val undoRef                  = currentUndoRef
-      val logger                   = currentLogger
-      val documentAnalysisFiberRef = currentFiberRef
-      val mouseTargetCacheRef      = currentCacheRef
-      val bufferAnimationsRef      = currentBufferAnimationsRef
+      val stateRef = currentStateRef; val logger = currentLogger; val documentAnalysisFiberRef = currentFiberRef
+      val mouseTargetCacheRef = currentCacheRef; val bufferAnimationsRef = currentBufferAnimationsRef
     val effectPort = EventEffectPort(
       interpretEffect = runEffect,
       interpretCommand = (_, _) => IO.unit,
@@ -54,6 +50,9 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit
       def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] = IO.pure(BufferId(0))
       def createPane(bufferId: Option[BufferId]): IO[PaneId]                  = IO.pure(PaneId(0))
+    val undoRecording = new UndoRecording(new UndoRecordingPort:
+      val stateRef = currentStateRef; val undoRef = currentUndoRef
+      export operations.validateAndUpdateState)
     new StateManagerEventPipeline(
       statePort,
       effectPort,
@@ -65,7 +64,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
           (state.copy(persisted = state.persisted.copy(config = config)), config)
         ),
       (_, _) => IO.unit,
-      operations
+      operations,
+      undoRecording
     )
 
   "StateManager" should "compose focused façade capabilities" in {

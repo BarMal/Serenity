@@ -89,6 +89,16 @@ private[manager] class StateManagerComposition(
     val stateRef            = runtimeStateRef
     val bufferAnimationsRef = runtimeBufferAnimationsRef)
 
+  // Built here, before `effects` and `events`, same reasoning as `animations` above: `StateManagerPanelEffects`
+  // (owned by `effects`) and `StateManagerSurfaceCapability` (`surfaces`, below) both need to record undo boundaries
+  // for panel pin/unpin (#1016 PR4), and `events` already needed `UndoRecording` for Undo/Redo dispatch -- a single
+  // instance shared by all three, rather than `events` building its own as it used to.
+  private val undoRecording = new UndoRecording(new UndoRecordingPort:
+    val stateRef = runtimeStateRef
+    val undoRef  = runtimeUndoRef
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      operations.validateAndUpdateState(newState, fallbackState))
+
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = runtimeStateRef
     val themeNamesRef           = runtimeThemeNamesRef
@@ -114,7 +124,8 @@ private[manager] class StateManagerComposition(
     def scheduleDocumentAnalysis(): IO[Unit]                     = operations.scheduleDocumentAnalysis()
     def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
 
-  private val surfaces = new StateManagerSurfaceCapability(stateRef, logger, operations)
+  private val surfaces =
+    new StateManagerSurfaceCapability(stateRef, logger, operations, undoRecording.recordUndoBoundary)
 
   private val editor = new StateManagerEditorCapability(
     runtimeStateRef,
@@ -149,6 +160,8 @@ private[manager] class StateManagerComposition(
     def switchToPinnedPanel(target: PanelTarget): IO[Unit] = surfaces.switchToPinnedPanel(target)
     def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
       surfaces.resizePinnedPanel(target, newSize)
+    def recordUndoBoundary(entry: com.serenity.state.undo.HistoryEntry, groupable: Boolean): IO[Unit] =
+      undoRecording.recordUndoBoundary(entry, groupable)
 
   private val effectFilePort: EffectFilePort = new EffectFilePort:
     val fileDialog                                             = runtimeFileDialog
@@ -204,7 +217,6 @@ private[manager] class StateManagerComposition(
   private val eventStatePort: EventStatePort =
     new EventStatePort:
       val stateRef                 = runtimeStateRef
-      val undoRef                  = runtimeUndoRef
       val logger                   = runtimeLogger
       val documentAnalysisFiberRef = runtimeDocumentAnalysisFiberRef
       val mouseTargetCacheRef      = runtimeMouseTargetCacheRef
@@ -232,7 +244,8 @@ private[manager] class StateManagerComposition(
       runtimeUiPresetStore,
       effects.updateConfig,
       surfaces.resizePinnedPanel,
-      operations
+      operations,
+      undoRecording
     )
 
   private val viewport =
