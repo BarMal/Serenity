@@ -8,7 +8,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
-import com.serenity.ui.presets.UiPreset
+import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 
 /** Minimal state boundary for resize routing. */
 private[manager] trait ResizeEventPort:
@@ -41,12 +41,15 @@ final private[manager] class StateManagerEventPipeline(
     state: EventStatePort,
     effects: EventEffectPort,
     workflow: EventWorkflowPort,
-    ui: EventUiPort,
+    uiPresetStore: UiPresetStore,
+    updateConfig: (com.serenity.config.AppConfig => com.serenity.config.AppConfig) => cats.effect.IO[
+      com.serenity.config.AppConfig
+    ],
+    resizePinnedPanel: (com.serenity.ui.layout.PanelTarget, Int) => cats.effect.IO[Unit],
     operations: StateManagerOperationBoundary
 )(using balance: com.serenity.rope.Balance):
 
   import state.*
-  import ui.*
   import workflow.*
 
   private def drainPendingOperations: cats.effect.IO[Unit] =
@@ -138,9 +141,10 @@ final private[manager] class StateManagerEventPipeline(
       StateManagerEventPipeline.this.validateAndUpdateState(newState, fallbackState)
     def updateConfig(
       update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
-    ): cats.effect.IO[com.serenity.config.AppConfig] = ui.updateConfig(update)
+    ): cats.effect.IO[com.serenity.config.AppConfig] =
+      StateManagerEventPipeline.this.updateConfig(update)
     def resizePinnedPanel(target: com.serenity.ui.layout.PanelTarget, newSize: Int): cats.effect.IO[Unit] =
-      ui.resizePinnedPanel(target, newSize))
+      StateManagerEventPipeline.this.resizePinnedPanel(target, newSize))
 
   private val commentLensMouseHitTesting = new CommentLensMouseHitTesting(
     new CommentLensMouseHitTestingPort:

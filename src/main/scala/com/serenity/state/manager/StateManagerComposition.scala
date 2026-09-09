@@ -79,11 +79,12 @@ private[manager] class StateManagerComposition(
       runtimeLspQueue
     )
 
-  // Stateless facade over stateRef/bufferAnimationsRef -- shared by `editor` (which the old
-  // EditorCapabilityPort routed through `events` for no functional reason, the only edge in the
-  // effects -> workflow -> editor -> events -> effects cycle that forced deferred `def` port wiring)
-  // and by `events`, which builds its own copy from the same refs. Constructing it here breaks that
-  // cycle so every component below can be built directly, in dependency order, with plain `val`s.
+  // Stateless facade over stateRef/bufferAnimationsRef -- shared by `editor` and `events`, which
+  // otherwise would each build their own copy from the same refs. `editor` used to reach it through
+  // `events` instead (the only forward edge in the effects -> workflow -> editor -> events -> effects
+  // cycle this used to close); extracting it here removed that edge. What's left below is a DAG, not
+  // a cycle -- `effects` has no dependency on `events` at all (#1389), so building it in dependency
+  // order needs correct `val` placement, not a `lazy val` or deferred `def` port.
   private val animations = new AnimationChoreography(new AnimationChoreographyPort:
     val stateRef            = runtimeStateRef
     val bufferAnimationsRef = runtimeBufferAnimationsRef)
@@ -191,42 +192,6 @@ private[manager] class StateManagerComposition(
     def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
     def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
 
-  private val eventStatePort: EventStatePort =
-    new EventStatePort:
-      val stateRef                 = runtimeStateRef
-      val undoRef                  = runtimeUndoRef
-      val logger                   = runtimeLogger
-      val documentAnalysisFiberRef = runtimeDocumentAnalysisFiberRef
-      val mouseTargetCacheRef      = runtimeMouseTargetCacheRef
-      val bufferAnimationsRef      = runtimeBufferAnimationsRef
-
-  private val eventEffectPort: EventEffectPort =
-    new EventEffectPort:
-      def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
-        effects.interpretEffect(effect)
-      def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =
-        effects.interpretCommand(command, state)
-      def executeCommand(command: com.serenity.command.Command): IO[Unit] =
-        runtimeStateRef.get.flatMap(state => effects.interpretCommand(command, state))
-
-  private val eventWorkflowPort: EventWorkflowPort =
-    new EventWorkflowPort:
-      def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
-        workflow.beginCloseAction(scope, state)
-      def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-        editor.bufferManager.createBuffer(content, filePath)
-      def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
-
-  private val eventUiPort: EventUiPort =
-    new EventUiPort:
-      val uiPresetStore = runtimeUiPresetStore
-      def updateConfig(
-        update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
-      ): IO[com.serenity.config.AppConfig] =
-        effects.updateConfig(update)
-      def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
-        surfaces.resizePinnedPanel(target, newSize)
-
   private val effects = new StateManagerEffectHandlers(
     effectRuntimePort,
     effectEditorPort,
@@ -236,8 +201,40 @@ private[manager] class StateManagerComposition(
     effectModalWorkflowPort
   )
 
+  private val eventStatePort: EventStatePort =
+    new EventStatePort:
+      val stateRef                 = runtimeStateRef
+      val undoRef                  = runtimeUndoRef
+      val logger                   = runtimeLogger
+      val documentAnalysisFiberRef = runtimeDocumentAnalysisFiberRef
+      val mouseTargetCacheRef      = runtimeMouseTargetCacheRef
+      val bufferAnimationsRef      = runtimeBufferAnimationsRef
+
+  private val eventEffectPort: EventEffectPort = EventEffectPort(
+    interpretEffect = effects.interpretEffect,
+    interpretCommand = effects.interpretCommand,
+    executeCommand = command => runtimeStateRef.get.flatMap(state => effects.interpretCommand(command, state))
+  )
+
+  private val eventWorkflowPort: EventWorkflowPort =
+    new EventWorkflowPort:
+      def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+        workflow.beginCloseAction(scope, state)
+      def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
+        editor.bufferManager.createBuffer(content, filePath)
+      def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
+
   private val events =
-    new StateManagerEventPipeline(eventStatePort, eventEffectPort, eventWorkflowPort, eventUiPort, operations)
+    new StateManagerEventPipeline(
+      eventStatePort,
+      eventEffectPort,
+      eventWorkflowPort,
+      runtimeUiPresetStore,
+      effects.updateConfig,
+      surfaces.resizePinnedPanel,
+      operations
+    )
+
   private val viewport =
     new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, events, effects)
   private val files = new StateManagerFileCapability(stateRef, effects)
