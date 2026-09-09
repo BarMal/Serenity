@@ -153,8 +153,7 @@ object RendererFramePlanner:
     framePlan: Option[FramePlan],
     damage: Damage
   ): Unit =
-    val modalSurfaceId = currentModalSurfaceId(state)
-    val modalDamage    = modalSurfaceId.fold(Damage.Nothing: Damage)(id => Damage.narrowToSurface(damage, id))
+    val modalDamage = currentModalDamage(state, damage)
     val layers = List(
       Layer(ChromeLayerId, zOrder = 0, LayerEffect.identity, damage),
       Layer(EditorContentLayerId, zOrder = 1, LayerEffect.identity, damage),
@@ -184,12 +183,17 @@ object RendererFramePlanner:
     )
     LayerCompositor.orderedForComposite(layers).foreach(layer => paintByLayer(layer.id)())
 
-  /** The `SurfaceId` of the surface currently presented as [[SurfacePresentation.Modal]], if any -- at most one is ever
-    * open at a time. `None` means the modal layer has nothing to paint this frame, matching `renderModalLayer`'s own
-    * `scene.modalBackdrop.foreach` no-op.
+  /** Whether the modal layer needs repainting this frame -- `Damage.Nothing` means it doesn't, matching
+    * `renderModalLayer`'s own `scene.modalBackdrop.foreach` no-op. `runtime.modalStack` (#814) can hold more than one
+    * dialog (a confirmation opened on top of another), so this checks every dialog currently open rather than assuming
+    * at most one -- any one of them being named by `damage` (or `damage` being `Everything`) makes the whole layer
+    * dirty, since `renderModalLayer` repaints the entire stack together, not dialog-by-dialog.
     */
-  private def currentModalSurfaceId(state: AppState): Option[SurfaceId] =
-    state.runtime.uiSurfaces.collectFirst { case UiSurface(id, _, SurfacePresentation.Modal, _) => id }
+  private def currentModalDamage(state: AppState, damage: Damage): Damage =
+    state.runtime.modalStack
+      .map(dialog => Damage.narrowToSurface(damage, dialog.id))
+      .find(_ != Damage.Nothing)
+      .getOrElse(Damage.Nothing)
 
   /** Paint the modal layer, reusing its last-painted buffer instead of repainting when it's safe to: the surface
     * supports [[LayerBufferSupport]] (GUI/Java2D only -- a `TerminalRenderSurface` reports `layerBuffers = None` and

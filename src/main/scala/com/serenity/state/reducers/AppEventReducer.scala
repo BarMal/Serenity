@@ -114,7 +114,10 @@ object AppEventReducer:
     stateWithId
       .copy(
         runtime = stateWithId.runtime.copy(
-          uiSurfaces = upsertSurface(clearedSurfaces, surface)
+          uiSurfaces = upsertSurface(clearedSurfaces, surface),
+          // A blocking dialog (#814) is content-modal in the same sense isModalWorkflow's uiSurfaces filter already
+          // was -- the command runner takes over the screen, so nothing it replaces should keep competing for it.
+          modalStack = Nil
         )
       )
       .pushFocus(Focus.Surface(surfaceId))

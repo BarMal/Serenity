@@ -88,18 +88,16 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
       stateManager.applyEvent(DeleteBackward).unsafeRunSync()
       stateManager.applyEvent(Undo).unsafeRunSync()
 
-      val modal = UiSurface(
+      val modal = ModalDialog(
         SurfaceId("close-confirmation"),
-        SurfaceContent.ModalWorkflow(
-          Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
-        ),
-        SurfacePresentation.Modal
+        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+        ModalPlacement.Centered
       )
       stateManager
         .updateState(state =>
           state.copy(
-            runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ modal),
-            persisted = state.persisted.copy(focus = Focus.Surface(modal.id))
+            runtime = state.runtime.copy(modalStack = state.runtime.modalStack :+ modal),
+            persisted = state.persisted.copy(focus = Focus.Modal)
           )
         )
         .unsafeRunSync()
@@ -126,9 +124,11 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 40))).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface.flatMap(_.content match
-      case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow.selectedChoice)
-      case _ => None) shouldBe Some(CloseWorkflowChoice.Discard)
+    updatedState.topModal.map(_.modal match
+      case Modal.CloseWorkflow(workflow) => workflow.selectedChoice
+      case other                         => fail(s"Expected close workflow, got $other")) shouldBe Some(
+      CloseWorkflowChoice.Discard
+    )
     updatedState.runtime.viewportSize shouldBe Some(ViewportSize(120, 40))
   }
 
@@ -225,9 +225,9 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(TabKey).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface.flatMap(_.content match
-      case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.activeField)
-      case _                                                          => None) shouldBe Some(FileWorkflowField.Path)
+    updatedState.topModal.flatMap(_.modal match
+      case Modal.FileWorkflow(workflow) => Some(workflow.activeField)
+      case _                            => None) shouldBe Some(FileWorkflowField.Path)
   }
 
   it should "apply only the latest deferred find query" in {

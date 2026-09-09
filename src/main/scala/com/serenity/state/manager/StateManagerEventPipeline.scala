@@ -316,6 +316,10 @@ final private[manager] class StateManagerEventPipeline(
   private def getLocalHandlerForFocus(focus: Focus, state: AppState): LocalEventHandler =
     focus match
       case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId)(using balance)
+      case Focus.Modal =>
+        state.topModal match
+          case None         => NoOpLocalEventHandler
+          case Some(dialog) => FocusHandlerRouting.forModalType(ModalMouseHitTesting.modalType(dialog.modal))
       case Focus.Surface(surfaceId) =>
         state.surfaceById(surfaceId) match
           case None =>
@@ -324,7 +328,7 @@ final private[manager] class StateManagerEventPipeline(
             surface.presentation match
               case SurfacePresentation.Pinned(position, _)   => FocusHandlerRouting.forPinnedPanel(position)
               case SurfacePresentation.Expanded(position, _) => FocusHandlerRouting.forPinnedPanel(position)
-              case SurfacePresentation.Modal | SurfacePresentation.Floating(_, _) =>
+              case SurfacePresentation.Floating(_, _) =>
                 FocusHandlerRouting.forSurfaceContent(surface.content)
 
   private[manager] def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =

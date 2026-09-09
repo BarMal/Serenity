@@ -171,17 +171,15 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val bufferId = sm.bufferManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
-    val close = UiSurface(
+    val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
-      ),
-      SurfacePresentation.Modal
+      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+      ModalPlacement.Centered
     )
     sm.updateState(state =>
       state.copy(
-        persisted = state.persisted.copy(focus = Focus.Surface(close.id)),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ close)
+        persisted = state.persisted.copy(focus = Focus.Modal),
+        runtime = state.runtime.copy(modalStack = state.runtime.modalStack :+ close)
       )
     ).unsafeRunSync()
 
@@ -197,8 +195,8 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val after = sm.getCurrentState.unsafeRunSync()
     after.persisted.buffers(bufferId).editing.cursors shouldBe before.persisted.buffers(bufferId).editing.cursors
     after.persisted.buffers(bufferId).primarySelection shouldBe before.persisted.buffers(bufferId).primarySelection
-    after.persisted.focus shouldBe Focus.Surface(close.id)
-    after.topBlockingModalSurface.map(_.id) shouldBe Some(close.id)
+    after.persisted.focus shouldBe Focus.Modal
+    after.topModal.map(_.id) shouldBe Some(close.id)
   }
 
   it should "route a click inside a close confirmation to its cancel action" in {
@@ -206,17 +204,15 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val bufferId = sm.bufferManager.createBuffer("alpha", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
-    val close = UiSurface(
+    val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
-      ),
-      SurfacePresentation.Modal
+      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+      ModalPlacement.Centered
     )
     sm.updateState(state =>
       state.copy(
-        persisted = state.persisted.copy(focus = Focus.Surface(close.id)),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ close)
+        persisted = state.persisted.copy(focus = Focus.Modal),
+        runtime = state.runtime.copy(modalStack = state.runtime.modalStack :+ close)
       )
     ).unsafeRunSync()
 
@@ -243,7 +239,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(cancelX, choicesY)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
-    after.topModalSurface shouldBe None
+    after.topModal shouldBe None
     after.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
@@ -254,15 +250,11 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     val viewport = ViewportSize(40, 4)
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     val workflow = CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")
-    val close = UiSurface(
-      SurfaceId("close-constrained"),
-      SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
-      SurfacePresentation.Modal
-    )
+    val close    = ModalDialog(SurfaceId("close-constrained"), Modal.CloseWorkflow(workflow), ModalPlacement.Centered)
     sm.updateState(state =>
       state.copy(
-        persisted = state.persisted.copy(focus = Focus.Surface(close.id)),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ close)
+        persisted = state.persisted.copy(focus = Focus.Modal),
+        runtime = state.runtime.copy(modalStack = state.runtime.modalStack :+ close)
       )
     ).unsafeRunSync()
 
@@ -286,7 +278,7 @@ class MouseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(cancel.rect.x.toInt, cancel.rect.y.toInt)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
-    after.topModalSurface shouldBe None
+    after.topModal shouldBe None
     after.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 

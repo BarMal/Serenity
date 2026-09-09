@@ -9,9 +9,9 @@ object ModalEventReducer:
 
   def selectCloseWorkflowChoice(choice: CloseWorkflowChoice, currentState: AppState): ReducerResult =
     currentModal(currentState) match
-      case Some((surface, Modal.CloseWorkflow(workflow))) =>
+      case Some((id, Modal.CloseWorkflow(workflow))) =>
         ReducerResult.noEffects(
-          updateModal(currentState, surface, Modal.CloseWorkflow(workflow.copy(selectedChoice = choice)))
+          updateModal(currentState, id, Modal.CloseWorkflow(workflow.copy(selectedChoice = choice)))
         )
       case _ =>
         ReducerResult.noEffects(currentState)
@@ -39,28 +39,28 @@ object ModalEventReducer:
       case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
       case ModalInsertChar(char) if char.isDigit =>
         currentModal(currentState) match
-          case Some((surface, Modal.GotoLine(input))) =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.GotoLine(input + char)))
+          case Some((id, Modal.GotoLine(input))) =>
+            ReducerResult.noEffects(updateModal(currentState, id, Modal.GotoLine(input + char)))
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.GotoLine(input))) if input.nonEmpty =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.GotoLine(input.dropRight(1))))
+          case Some((id, Modal.GotoLine(input))) if input.nonEmpty =>
+            ReducerResult.noEffects(updateModal(currentState, id, Modal.GotoLine(input.dropRight(1))))
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteForward =>
         ReducerResult.noEffects(currentState)
       case ModalDeleteWordBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.GotoLine(input))) =>
+          case Some((id, Modal.GotoLine(input))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.GotoLine(TextEditing.deleteWordBackward(input)))
+              updateModal(currentState, id, Modal.GotoLine(TextEditing.deleteWordBackward(input)))
             )
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteWordForward =>
         currentModal(currentState) match
-          case Some((surface, Modal.GotoLine(input))) =>
+          case Some((id, Modal.GotoLine(input))) =>
             ReducerResult.noEffects(
-              updateModal(currentState, surface, Modal.GotoLine(TextEditing.deleteWordForward(input)))
+              updateModal(currentState, id, Modal.GotoLine(TextEditing.deleteWordForward(input)))
             )
           case _ => ReducerResult.noEffects(currentState)
       case ModalSubmit =>
@@ -83,51 +83,51 @@ object ModalEventReducer:
       case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
       case ModalInsertChar(char) =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, _, _))) =>
-            updateFindQuery(currentState, surface, query + char)
+          case Some((id, Modal.Find(query, _, _))) =>
+            updateFindQuery(currentState, id, query + char)
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, _, _))) if query.nonEmpty =>
-            updateFindQuery(currentState, surface, query.dropRight(1))
+          case Some((id, Modal.Find(query, _, _))) if query.nonEmpty =>
+            updateFindQuery(currentState, id, query.dropRight(1))
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteForward =>
         ReducerResult.noEffects(currentState)
       case ModalDeleteWordBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, _, _))) =>
-            updateFindQuery(currentState, surface, TextEditing.deleteWordBackward(query))
+          case Some((id, Modal.Find(query, _, _))) =>
+            updateFindQuery(currentState, id, TextEditing.deleteWordBackward(query))
           case _ => ReducerResult.noEffects(currentState)
       case ModalDeleteWordForward =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, _, _))) =>
-            updateFindQuery(currentState, surface, TextEditing.deleteWordForward(query))
+          case Some((id, Modal.Find(query, _, _))) =>
+            updateFindQuery(currentState, id, TextEditing.deleteWordForward(query))
           case _ => ReducerResult.noEffects(currentState)
       case ModalFindNext | ModalNavigate(Direction.Down) | ModalNavigate(Direction.Right) =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
-            ReducerResult.noEffects(updateFindSelection(currentState, surface, query, results, currentIndex + 1))
+          case Some((id, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
+            ReducerResult.noEffects(updateFindSelection(currentState, id, query, results, currentIndex + 1))
           case _ => ReducerResult.noEffects(currentState)
       case ModalNavigate(Direction.Up) | ModalNavigate(Direction.Left) =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
-            ReducerResult.noEffects(updateFindSelection(currentState, surface, query, results, currentIndex - 1))
+          case Some((id, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
+            ReducerResult.noEffects(updateFindSelection(currentState, id, query, results, currentIndex - 1))
           case _ => ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
+          case Some((id, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
             val nextIndex =
               if results.nonEmpty then currentIndex + 1
               else 0
-            ReducerResult.noEffects(updateFindSelection(currentState, surface, query, results, nextIndex))
+            ReducerResult.noEffects(updateFindSelection(currentState, id, query, results, nextIndex))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalClick(_, Some(actionId)) if actionId.startsWith("find-result-") =>
         currentModal(currentState) match
-          case Some((surface, Modal.Find(query, results, _))) if query.nonEmpty =>
+          case Some((id, Modal.Find(query, results, _))) if query.nonEmpty =>
             actionId.stripPrefix("find-result-").toIntOption match
               case Some(index) if index >= 0 && index < results.length =>
-                ReducerResult.noEffects(updateFindSelection(currentState, surface, query, results, index))
+                ReducerResult.noEffects(updateFindSelection(currentState, id, query, results, index))
               case _ => ReducerResult.noEffects(currentState)
           case _ => ReducerResult.noEffects(currentState)
       case ModalClick(_, _) =>
@@ -140,113 +140,114 @@ object ModalEventReducer:
       case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
       case ModalInsertChar(char) =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
+          case Some((id, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.appendToActiveField(char))),
-              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
+              updateModal(currentState, id, Modal.FileWorkflow(workflow.appendToActiveField(char))),
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalDeleteBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
+          case Some((id, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteFromActiveField)),
-              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
+              updateModal(currentState, id, Modal.FileWorkflow(workflow.deleteFromActiveField)),
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalDeleteForward =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
+          case Some((id, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteForwardFromActiveField)),
-              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
+              updateModal(currentState, id, Modal.FileWorkflow(workflow.deleteForwardFromActiveField)),
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalDeleteWordBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
+          case Some((id, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteWordBackwardFromActiveField)),
-              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
+              updateModal(currentState, id, Modal.FileWorkflow(workflow.deleteWordBackwardFromActiveField)),
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalDeleteWordForward =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
+          case Some((id, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.deleteWordForwardFromActiveField)),
-              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
+              updateModal(currentState, id, Modal.FileWorkflow(workflow.deleteWordForwardFromActiveField)),
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalNextField =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow))) if workflow.suggestions.nonEmpty =>
+          case Some((id, Modal.FileWorkflow(workflow))) if workflow.suggestions.nonEmpty =>
             val effect =
-              if workflow.acceptedSuggestionOpensFile then WorkflowEffect.SubmitFileWorkflow(surface.id)
-              else WorkflowEffect.RefreshFileWorkflow(surface.id)
-            val updated = updateModal(currentState, surface, Modal.FileWorkflow(workflow.applySelectedSuggestion))
+              if workflow.acceptedSuggestionOpensFile then WorkflowEffect.SubmitFileWorkflow(id)
+              else WorkflowEffect.RefreshFileWorkflow(id)
+            val updated = updateModal(currentState, id, Modal.FileWorkflow(workflow.applySelectedSuggestion))
             ReducerResult.withEffect(updated, AppEffect.Workflow(effect))
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
+          case Some((id, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.switchField(1))),
-              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
+              updateModal(currentState, id, Modal.FileWorkflow(workflow.switchField(1))),
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalPreviousField =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
+          case Some((id, Modal.FileWorkflow(workflow))) =>
             ReducerResult.withEffect(
-              updateModal(currentState, surface, Modal.FileWorkflow(workflow.switchField(-1))),
-              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id))
+              updateModal(currentState, id, Modal.FileWorkflow(workflow.switchField(-1))),
+              AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalNavigate(Direction.Up) =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow: SaveAsFileWorkflowState)))
+          case Some((id, Modal.FileWorkflow(workflow: SaveAsFileWorkflowState)))
               if workflow.activeField == FileWorkflowField.Format =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.cycleFormat(-1))))
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.moveSuggestion(-1))))
+            ReducerResult.noEffects(updateModal(currentState, id, Modal.FileWorkflow(workflow.cycleFormat(-1))))
+          case Some((id, Modal.FileWorkflow(workflow))) =>
+            ReducerResult.noEffects(updateModal(currentState, id, Modal.FileWorkflow(workflow.moveSuggestion(-1))))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalNavigate(Direction.Down) =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow: SaveAsFileWorkflowState)))
+          case Some((id, Modal.FileWorkflow(workflow: SaveAsFileWorkflowState)))
               if workflow.activeField == FileWorkflowField.Format =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.cycleFormat(1))))
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.FileWorkflow(workflow.moveSuggestion(1))))
+            ReducerResult.noEffects(updateModal(currentState, id, Modal.FileWorkflow(workflow.cycleFormat(1))))
+          case Some((id, Modal.FileWorkflow(workflow))) =>
+            ReducerResult.noEffects(updateModal(currentState, id, Modal.FileWorkflow(workflow.moveSuggestion(1))))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(_))) =>
-            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitFileWorkflow(surface.id)))
+          case Some((id, Modal.FileWorkflow(_))) =>
+            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitFileWorkflow(id)))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalCreateDirectory =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow)))
+          case Some((id, Modal.FileWorkflow(workflow)))
               if workflow.mode == FileWorkflowMode.SaveAs && workflow.missingPathSegments.nonEmpty =>
             ReducerResult.withEffect(
               currentState,
-              AppEffect.Workflow(WorkflowEffect.CreateFileWorkflowDirectories(surface.id))
+              AppEffect.Workflow(WorkflowEffect.CreateFileWorkflowDirectories(id))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalClick(focusId, actionId) =>
         currentModal(currentState) match
-          case Some((surface, Modal.FileWorkflow(workflow))) =>
+          case Some((id, Modal.FileWorkflow(workflow))) =>
             val updated = actionId match
-              case Some(id) if id.startsWith("file-suggestion-") =>
-                id.stripPrefix("file-suggestion-")
+              case Some(suggestionId) if suggestionId.startsWith("file-suggestion-") =>
+                suggestionId
+                  .stripPrefix("file-suggestion-")
                   .toIntOption
                   .filter(index => index >= 0 && index < workflow.suggestions.length)
                   .map(index => workflow.updated(selectedSuggestionIndex = index, statusMessage = None))
@@ -256,9 +257,9 @@ object ModalEventReducer:
               case "path"     => Some(workflow.updated(activeField = FileWorkflowField.Path, statusMessage = None))
               case _          => None
             val nextState =
-              updateModal(currentState, surface, Modal.FileWorkflow(updated.orElse(fieldUpdated).getOrElse(workflow)))
+              updateModal(currentState, id, Modal.FileWorkflow(updated.orElse(fieldUpdated).getOrElse(workflow)))
             if fieldUpdated.nonEmpty then
-              ReducerResult.withEffect(nextState, AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(surface.id)))
+              ReducerResult.withEffect(nextState, AppEffect.Workflow(WorkflowEffect.RefreshFileWorkflow(id)))
             else ReducerResult.noEffects(nextState)
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -271,25 +272,25 @@ object ModalEventReducer:
         ReducerResult.noEffects(cancelCloseWorkflow(currentState))
       case ModalNextField | ModalNavigate(Direction.Right) | ModalNavigate(Direction.Down) =>
         currentModal(currentState) match
-          case Some((surface, Modal.CloseWorkflow(workflow))) =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.CloseWorkflow(workflow.moveChoice(1))))
+          case Some((id, Modal.CloseWorkflow(workflow))) =>
+            ReducerResult.noEffects(updateModal(currentState, id, Modal.CloseWorkflow(workflow.moveChoice(1))))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalPreviousField | ModalNavigate(Direction.Left) | ModalNavigate(Direction.Up) =>
         currentModal(currentState) match
-          case Some((surface, Modal.CloseWorkflow(workflow))) =>
-            ReducerResult.noEffects(updateModal(currentState, surface, Modal.CloseWorkflow(workflow.moveChoice(-1))))
+          case Some((id, Modal.CloseWorkflow(workflow))) =>
+            ReducerResult.noEffects(updateModal(currentState, id, Modal.CloseWorkflow(workflow.moveChoice(-1))))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match
-          case Some((surface, Modal.CloseWorkflow(_))) =>
-            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitCloseWorkflow(surface.id)))
+          case Some((id, Modal.CloseWorkflow(_))) =>
+            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitCloseWorkflow(id)))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalClick(_, Some(actionId)) =>
         currentModal(currentState) match
-          case Some((surface, Modal.CloseWorkflow(workflow))) =>
+          case Some((id, Modal.CloseWorkflow(workflow))) =>
             val choice = actionId match
               case "close-save"    => Some(CloseWorkflowChoice.Save)
               case "close-discard" => Some(CloseWorkflowChoice.Discard)
@@ -299,7 +300,7 @@ object ModalEventReducer:
               choice.fold(currentState)(selected =>
                 updateModal(
                   currentState,
-                  surface,
+                  id,
                   Modal.CloseWorkflow(workflow.copy(selectedChoice = selected))
                 )
               )
@@ -317,101 +318,101 @@ object ModalEventReducer:
         ReducerResult.noEffects(dismissToPane(currentState))
       case ModalInsertChar(char) =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.appendToActiveField(char))
+              updateReplaceWorkflow(currentState, id, workflow.appendToActiveField(char))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalDeleteBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.deleteFromActiveField)
+              updateReplaceWorkflow(currentState, id, workflow.deleteFromActiveField)
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalDeleteForward =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.deleteForwardFromActiveField)
+              updateReplaceWorkflow(currentState, id, workflow.deleteForwardFromActiveField)
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalDeleteWordBackward =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.deleteWordBackwardFromActiveField)
+              updateReplaceWorkflow(currentState, id, workflow.deleteWordBackwardFromActiveField)
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalDeleteWordForward =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.deleteWordForwardFromActiveField)
+              updateReplaceWorkflow(currentState, id, workflow.deleteWordForwardFromActiveField)
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalNextField =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.switchField(1))
+              updateReplaceWorkflow(currentState, id, workflow.switchField(1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalPreviousField =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.switchField(-1))
+              updateReplaceWorkflow(currentState, id, workflow.switchField(-1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalNavigate(Direction.Left) =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.moveAction(-1))
+              updateReplaceWorkflow(currentState, id, workflow.moveAction(-1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalNavigate(Direction.Right) =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.moveAction(1))
+              updateReplaceWorkflow(currentState, id, workflow.moveAction(1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalNavigate(Direction.Up) =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.moveScope(-1))
+              updateReplaceWorkflow(currentState, id, workflow.moveScope(-1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalNavigate(Direction.Down) =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, workflow.moveScope(1))
+              updateReplaceWorkflow(currentState, id, workflow.moveScope(1))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalSubmit =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(_))) =>
-            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitReplaceWorkflow(surface.id)))
+          case Some((id, Modal.ReplaceWorkflow(_))) =>
+            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitReplaceWorkflow(id)))
           case _ =>
             ReducerResult.noEffects(currentState)
       case ModalClick(focusId, actionId) =>
         currentModal(currentState) match
-          case Some((surface, Modal.ReplaceWorkflow(workflow))) =>
+          case Some((id, Modal.ReplaceWorkflow(workflow))) =>
             val clicked = actionId match
               case Some("replace-next")      => Some(workflow.copy(selectedAction = ReplaceWorkflowAction.ReplaceNext))
               case Some("replace-all")       => Some(workflow.copy(selectedAction = ReplaceWorkflowAction.ReplaceAll))
@@ -423,7 +424,7 @@ object ModalEventReducer:
               case "replace" => Some(workflow.copy(activeField = ReplaceWorkflowField.ReplaceWith))
               case _         => None
             ReducerResult.noEffects(
-              updateReplaceWorkflow(currentState, surface, clicked.orElse(field).getOrElse(workflow))
+              updateReplaceWorkflow(currentState, id, clicked.orElse(field).getOrElse(workflow))
             )
           case _ =>
             ReducerResult.noEffects(currentState)
@@ -432,10 +433,10 @@ object ModalEventReducer:
 
   private def updateReplaceWorkflow(
     state: AppState,
-    surface: UiSurface,
+    id: SurfaceId,
     workflow: ReplaceWorkflowState
   ): AppState =
-    updateModal(state, surface, Modal.ReplaceWorkflow(withReplacePreview(state, workflow)))
+    updateModal(state, id, Modal.ReplaceWorkflow(withReplacePreview(state, workflow)))
 
   private def withReplacePreview(state: AppState, workflow: ReplaceWorkflowState): ReplaceWorkflowState =
     if workflow.findText.isEmpty then workflow.copy(statusMessage = None)
@@ -488,30 +489,33 @@ object ModalEventReducer:
       insideScope && isWholeGraphemeMatch(buffer.document.content, offset, findText.length)
     }
 
-  private def updateFindQuery(state: AppState, surface: UiSurface, query: String): ReducerResult =
-    surface.content match
-      case SurfaceContent.ModalWorkflow(Modal.Find(currentQuery, _, _)) if currentQuery == query =>
-        ReducerResult.noEffects(state)
-      case _ =>
-        val queryState = updateModal(state, surface, Modal.Find(query, Nil, 0))
-        val clearedState = activeBufferId(queryState)
-          .map(bufferId => clearFindState(queryState, bufferId))
-          .getOrElse(queryState)
-        if query.isEmpty then ReducerResult.noEffects(clearedState)
-        else
-          (for
-            bufferId <- activeBufferId(clearedState)
-            buffer   <- clearedState.persisted.buffers.get(bufferId)
-          yield ReducerResult.withEffect(
-            clearedState,
-            AppEffect.Workflow(
-              WorkflowEffect.RefreshFind(FindSearchRequest(surface.id, bufferId, query, buffer.document.content))
-            )
-          )).getOrElse(ReducerResult.noEffects(clearedState))
+  private def updateFindQuery(state: AppState, id: SurfaceId, query: String): ReducerResult =
+    val currentQueryMatches = state
+      .surfaceById(id)
+      .exists(_.content match
+        case SurfaceContent.ModalWorkflow(Modal.Find(currentQuery, _, _)) => currentQuery == query
+        case _                                                            => false)
+    if currentQueryMatches then ReducerResult.noEffects(state)
+    else
+      val queryState = updateModal(state, id, Modal.Find(query, Nil, 0))
+      val clearedState = activeBufferId(queryState)
+        .map(bufferId => clearFindState(queryState, bufferId))
+        .getOrElse(queryState)
+      if query.isEmpty then ReducerResult.noEffects(clearedState)
+      else
+        (for
+          bufferId <- activeBufferId(clearedState)
+          buffer   <- clearedState.persisted.buffers.get(bufferId)
+        yield ReducerResult.withEffect(
+          clearedState,
+          AppEffect.Workflow(
+            WorkflowEffect.RefreshFind(FindSearchRequest(id, bufferId, query, buffer.document.content))
+          )
+        )).getOrElse(ReducerResult.noEffects(clearedState))
 
   private def updateFindSelection(
     state: AppState,
-    surface: UiSurface,
+    id: SurfaceId,
     query: String,
     results: List[FindResult],
     requestedIndex: Int
@@ -519,7 +523,7 @@ object ModalEventReducer:
     val resultSet = FindResultSet.normalized(query, results, requestedIndex)
     val modalState = updateModal(
       state,
-      surface,
+      id,
       Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex)
     )
 
@@ -543,7 +547,7 @@ object ModalEventReducer:
     if !modalIsCurrent || !contentIsCurrent || !activeBufferId(state).contains(request.bufferId) then state
     else
       state.runtime.uiSurfaces.find(_.id == request.surfaceId) match
-        case Some(surface) => updateFindSelection(state, surface, request.query, results, requestedIndex = 0)
+        case Some(surface) => updateFindSelection(state, surface.id, request.query, results, requestedIndex = 0)
         case None          => state
 
   private def isWholeGraphemeMatch(content: Rope, offset: Int, length: Int): Boolean =
@@ -625,15 +629,26 @@ object ModalEventReducer:
       case None =>
         state.dismissTopModal
 
-  private def currentModal(state: AppState): Option[(UiSurface, Modal)] =
-    state.topModalSurface.orElse(state.activeSurface).flatMap { surface =>
-      surface.content match
-        case SurfaceContent.ModalWorkflow(modal) => Some((surface, modal))
-        case _                                   => None
-    }
+  /** The id/payload owning input: a blocking `ModalDialog` (#814) if open, else the focused modeless workflow. */
+  private def currentModal(state: AppState): Option[(SurfaceId, Modal)] =
+    state.topModal
+      .map(dialog => (dialog.id, dialog.modal))
+      .orElse(state.activeSurface.flatMap {
+        case UiSurface(id, SurfaceContent.ModalWorkflow(modal), _, _) => Some((id, modal))
+        case _                                                        => None
+      })
 
-  private def updateModal(state: AppState, surface: UiSurface, modal: Modal): AppState =
-    val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(modal))
-    state.copy(runtime =
-      state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
-    )
+  private def updateModal(state: AppState, id: SurfaceId, modal: Modal): AppState =
+    state.topModal.filter(_.id == id) match
+      case Some(dialog) =>
+        state.copy(runtime =
+          state.runtime.copy(modalStack = state.runtime.modalStack.dropRight(1) :+ dialog.copy(modal = modal))
+        )
+      case None =>
+        state.runtime.uiSurfaces.find(_.id == id) match
+          case Some(surface) =>
+            val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(modal))
+            state.copy(runtime =
+              state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == id) :+ updatedSurface)
+            )
+          case None => state

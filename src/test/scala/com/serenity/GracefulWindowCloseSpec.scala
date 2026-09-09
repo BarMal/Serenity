@@ -52,7 +52,7 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
     // Dirty buffer means close workflow is shown, app is NOT quit yet
-    state.modalSurface shouldBe defined
+    state.topModal shouldBe defined
     state.persisted.buffers.get(bufferId).exists(_.document.isDirty) shouldBe true
   }
 

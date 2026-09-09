@@ -449,7 +449,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    updatedState.modalSurface shouldBe None
+    updatedState.topModal shouldBe None
     updatedState.persisted.buffers(bufferId).document.filePath shouldBe Some(targetPath)
     updatedState.persisted.buffers(bufferId).document.isDirty shouldBe false
     Files.readString(targetPath) shouldBe "saved through dialog"
@@ -466,7 +466,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    updatedState.modalSurface shouldBe None
+    updatedState.topModal shouldBe None
     val openedBuffer = updatedState.persisted.buffers.values.find(_.document.filePath.contains(sourcePath))
     openedBuffer.map(_.document.content.collect()) shouldBe Some("# Notes")
     openedBuffer.flatMap(_.document.language) shouldBe Some(LanguageId.Markdown)
@@ -503,10 +503,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "save-as", "save-as")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    val workflow = updatedState.modalSurface
-      .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(w)) => Some(w)
-        case _                                                   => None)
+    val workflow = updatedState.topModal
+      .flatMap(_.modal match
+        case Modal.FileWorkflow(w) => Some(w)
+        case _                     => None)
       .getOrElse(fail("Expected active file workflow modal"))
     workflow.mode shouldBe FileWorkflowMode.SaveAs
     workflow.filename shouldBe "notes.scala"
@@ -519,10 +519,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "open", "open")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    val workflow = updatedState.modalSurface
-      .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(w)) => Some(w)
-        case _                                                   => None)
+    val workflow = updatedState.topModal
+      .flatMap(_.modal match
+        case Modal.FileWorkflow(w) => Some(w)
+        case _                     => None)
       .getOrElse(fail("Expected active file workflow modal"))
     workflow.mode shouldBe FileWorkflowMode.Open
   }
@@ -537,7 +537,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    updatedState.modalSurface shouldBe None
+    updatedState.topModal shouldBe None
     updatedState.persisted.buffers(BufferId(0)).document.filePath shouldBe Some(targetPath)
     updatedState.persisted.buffers(BufferId(0)).document.isDirty shouldBe false
     Files.readString(targetPath) shouldBe "draft body"
@@ -560,12 +560,12 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    updatedState.modalSurface
-      .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-        case _                                                           => None)
+    updatedState.topModal
+      .flatMap(_.modal match
+        case Modal.CloseWorkflow(workflow) => Some(workflow)
+        case _                             => None)
       .map(_.scope) shouldBe Some(CloseScope.Current)
-    updatedState.persisted.focus shouldBe Focus.Surface(updatedState.modalSurface.get.id)
+    updatedState.persisted.focus shouldBe Focus.Modal
   }
 
   it should "open an unsaved-changes workflow for the close command when an untitled buffer was edited back to empty" in {
@@ -596,10 +596,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
     updatedState.persisted.buffers.contains(bufferId) shouldBe true
-    updatedState.modalSurface
-      .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-        case _                                                           => None)
+    updatedState.topModal
+      .flatMap(_.modal match
+        case Modal.CloseWorkflow(workflow) => Some(workflow)
+        case _                             => None)
       .map(workflow => (workflow.scope, workflow.currentBufferId)) shouldBe Some((CloseScope.Current, bufferId))
   }
 
@@ -624,10 +624,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "close-all", "close-all")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface
-      .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-        case _                                                           => None)
+    updatedState.topModal
+      .flatMap(_.modal match
+        case Modal.CloseWorkflow(workflow) => Some(workflow)
+        case _                             => None)
       .map(_.scope) shouldBe Some(CloseScope.All)
   }
 
@@ -652,10 +652,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "close-others", "close-others")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface
-      .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-        case _                                                           => None)
+    updatedState.topModal
+      .flatMap(_.modal match
+        case Modal.CloseWorkflow(workflow) => Some(workflow)
+        case _                             => None)
       .map(_.scope) shouldBe Some(CloseScope.Others)
   }
 
@@ -675,10 +675,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "quit", "quit")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface
-      .flatMap(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-        case _                                                           => None)
+    updatedState.topModal
+      .flatMap(_.modal match
+        case Modal.CloseWorkflow(workflow) => Some(workflow)
+        case _                             => None)
       .map(_.scope) shouldBe Some(CloseScope.Quit)
   }
 

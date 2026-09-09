@@ -23,7 +23,7 @@ final private[manager] class StateManagerFileWorkflow(
     fileManager: FileManager,
     validateAndUpdateState: (AppState, AppState) => IO[Unit],
     updateFileWorkflowSurface: (SurfaceId, FileWorkflowState) => IO[Unit],
-    fileWorkflowSurface: (AppState, SurfaceId) => Option[(UiSurface, FileWorkflowState)],
+    fileWorkflowSurface: (AppState, SurfaceId) => Option[FileWorkflowState],
     activeEditorBufferId: AppState => Option[BufferId],
     saveBufferAs: (BufferId, Path) => IO[Unit],
     afterSaveAsCompleted: (SurfaceId, BufferId) => IO[Unit]
@@ -72,19 +72,19 @@ final private[manager] class StateManagerFileWorkflow(
       val predictedState = ModalStateReducer.show(Modal.FileWorkflow(workflow), state).state
       logger.info(
         s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
-          s"surfaceId=${predictedState.modalSurface.map(_.id).getOrElse("none")} focus=${predictedState.persisted.focus}"
+          s"surfaceId=${predictedState.topModal.map(_.id).getOrElse("none")} focus=${predictedState.persisted.focus}"
       ) >>
         stateRef.update(current => ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state) >>
         // Populate the open dialog's directory listing immediately so it never appears as an empty, hung modal (#1289).
         IO.whenA(mode == FileWorkflowMode.Open)(
-          stateRef.get.flatMap(_.modalSurface.fold(IO.unit)(surface => refreshFileWorkflowEffect(surface.id)))
+          stateRef.get.flatMap(_.topModal.fold(IO.unit)(dialog => refreshFileWorkflowEffect(dialog.id)))
         )
     }
 
   private[manager] def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       fileWorkflowSurface(state, surfaceId) match
-        case Some((_, workflow)) =>
+        case Some(workflow) =>
           refreshWorkflowState(workflow).flatMap(refreshed => updateFileWorkflowSurface(surfaceId, refreshed))
         case None =>
           IO.unit
@@ -93,7 +93,7 @@ final private[manager] class StateManagerFileWorkflow(
   private[manager] def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       fileWorkflowSurface(state, surfaceId) match
-        case Some((_, workflow)) =>
+        case Some(workflow) =>
           workflow match
             case openWorkflow: OpenFileWorkflowState =>
               completeOpenWorkflow(surfaceId, openWorkflow)
@@ -248,7 +248,7 @@ final private[manager] class StateManagerFileWorkflow(
                           targetPath
                         )
                       ),
-                      runtime = state.runtime.copy(uiSurfaces = List.empty)
+                      runtime = state.runtime.copy(uiSurfaces = List.empty, modalStack = Nil)
                     )
                     val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
                     val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
@@ -271,7 +271,7 @@ final private[manager] class StateManagerFileWorkflow(
   private[manager] def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       fileWorkflowSurface(state, surfaceId) match
-        case Some((_, saveAsWorkflow: SaveAsFileWorkflowState)) if saveAsWorkflow.missingPathSegments.nonEmpty =>
+        case Some(saveAsWorkflow: SaveAsFileWorkflowState) if saveAsWorkflow.missingPathSegments.nonEmpty =>
           saveAsWorkflow.updated(confirmCreateDirectories = true) match
             case confirmed: SaveAsFileWorkflowState => completeSaveAsWorkflow(surfaceId, confirmed, state)
             case _                                  => IO.unit

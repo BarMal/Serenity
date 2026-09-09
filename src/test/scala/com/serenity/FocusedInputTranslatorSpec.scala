@@ -256,16 +256,14 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   it should "treat Enter and Tab as modal form actions in modal focus" in {
     val modalState = editorState.copy(
       persisted = editorState.persisted.copy(
-        focus = Focus.Surface(SurfaceId("file-modal"))
+        focus = Focus.Modal
       ),
       runtime = editorState.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
+        modalStack = List(
+          ModalDialog(
             SurfaceId("file-modal"),
-            SurfaceContent.ModalWorkflow(
-              Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
-            ),
-            SurfacePresentation.Modal
+            Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open)),
+            ModalPlacement.Centered
           )
         )
       )
@@ -281,16 +279,14 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   it should "prevent global commands from reaching the editor through a blocking close confirmation" in {
     val closeState = editorState.copy(
       persisted = editorState.persisted.copy(
-        focus = Focus.Surface(SurfaceId("close-confirmation"))
+        focus = Focus.Modal
       ),
       runtime = editorState.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
+        modalStack = List(
+          ModalDialog(
             SurfaceId("close-confirmation"),
-            SurfaceContent.ModalWorkflow(
-              Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
-            ),
-            SurfacePresentation.Modal
+            Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+            ModalPlacement.Centered
           )
         )
       )

@@ -60,15 +60,20 @@ final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort
   def modalHitAt(click: MouseClick, state: AppState): Option[(Modal, SurfaceHitRegion)] =
     for
       viewportSize <- state.runtime.viewportSize
-      surface      <- state.topModalSurface.orElse(focusedFloatingModalWorkflow(state))
+      (id, modal) <- state.topModal
+        .map(dialog => (dialog.id, dialog.modal))
+        .orElse(
+          focusedFloatingModalWorkflow(state).flatMap(surface =>
+            surface.content match
+              case SurfaceContent.ModalWorkflow(modal) => Some((surface.id, modal))
+              case _                                   => None
+          )
+        )
       node <- UiSceneSnapshot
         .from(state, viewportSize)
         .nodesInPaintOrder
-        .find(_.id == SceneNodeId.Surface(surface.id))
+        .find(_.id == SceneNodeId.Surface(id))
       _ <- Option.when(node.frameRect.contains(click.col, click.row))(())
-      modal <- surface.content match
-        case SurfaceContent.ModalWorkflow(modal) => Some(modal)
-        case _                                   => None
       targetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
       hit <- ModalSurfaceComposition
         .forModal(modal, node.frameRect, targetRows)

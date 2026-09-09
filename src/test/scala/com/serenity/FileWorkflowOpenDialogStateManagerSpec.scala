@@ -28,11 +28,11 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
   private def currentWorkflow(stateManager: StateManager): FileWorkflowState =
     stateManager.getCurrentState
       .unsafeRunSync()
-      .modalSurface
+      .topModal
       .flatMap {
-        _.content match
-          case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
-          case _                                                          => None
+        _.modal match
+          case Modal.FileWorkflow(workflow) => Some(workflow)
+          case _                            => None
       }
       .getOrElse(fail("Expected active file workflow modal"))
 
@@ -109,7 +109,7 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
 
       val finalState   = stateManager.getCurrentState.unsafeRunSync()
       val openedBuffer = finalState.persisted.buffers.values.find(_.document.filePath.contains(textFile))
-      finalState.modalSurface shouldBe None
+      finalState.topModal shouldBe None
       openedBuffer.map(_.document.content.collect()) shouldBe Some("tab-opened content")
     finally
       Files.deleteIfExists(textFile)

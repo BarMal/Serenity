@@ -158,6 +158,10 @@ object UiSceneSnapshot:
     val focused = focus match
       case Focus.EditorPane(paneId) => SceneNodeId.EditorPane(paneId)
       case Focus.Surface(surfaceId) => SceneNodeId.Surface(surfaceId)
+      // Only reachable if focus says Modal with no modal actually open (see the `modal.nonEmpty` short-circuit
+      // above, which is the normal path whenever a dialog is open) -- ModalBackdrop is never itself a member of
+      // `nodes`, so this always falls through to the unfocused ordering below rather than matching anything.
+      case Focus.Modal => SceneNodeId.ModalBackdrop
     Option.when(nodeIds.contains(focused))(focused).toList ++ nodeIds.filterNot(_ == focused)
 
   private def workspaceSurfaceNodes(
@@ -189,7 +193,6 @@ object UiSceneSnapshot:
         case ((surfaceId, frame), offset) =>
           state
             .surfaceById(surfaceId)
-            .filterNot(surface => state.blockingModalSurfaces.exists(_.id == surface.id))
             .map(_ => surfaceNode(surfaceId, SceneLayer.Floating, frame, initialZIndex + offset))
       }
 
@@ -198,11 +201,11 @@ object UiSceneSnapshot:
     calculatedLayout: CalculatedLayout,
     initialZIndex: Int
   ): List[SceneNode] =
-    state.modalSurfaces.zipWithIndex.map { (surface, offset) =>
+    state.runtime.modalStack.zipWithIndex.map { (dialog, offset) =>
       surfaceNode(
-        surface.id,
+        dialog.id,
         SceneLayer.Modal,
-        LayoutEngine.calculateModalRect(surface, state, calculatedLayout),
+        LayoutEngine.calculateModalRect(dialog, state, calculatedLayout),
         initialZIndex + offset
       )
     }

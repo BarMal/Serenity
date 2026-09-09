@@ -89,6 +89,9 @@ object SessionState:
       .filter {
         case Focus.EditorPane(paneId) => layout.editorPanes.contains(paneId)
         case Focus.Surface(surfaceId) => restoredLayout.surfaces.exists(_.id == surfaceId)
+        // Unreachable in practice: SessionFocus.toFocus never produces Focus.Modal (modal dialogs aren't persisted,
+        // see SessionFocus.fromFocus), but no modal is ever open immediately after a session restore regardless.
+        case Focus.Modal => false
       }
       .getOrElse(
         layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(Focus.EditorPane(PaneId(0)))

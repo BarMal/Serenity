@@ -59,11 +59,11 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   private def currentCloseWorkflow(stateManager: StateManager) =
     stateManager.getCurrentState
       .unsafeRunSync()
-      .modalSurface
+      .topModal
       .flatMap {
-        _.content match
-          case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-          case _                                                           => None
+        _.modal match
+          case Modal.CloseWorkflow(workflow) => Some(workflow)
+          case _                             => None
       }
       .getOrElse(fail("Expected active close workflow modal"))
 
@@ -85,7 +85,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface shouldBe None
+    updatedState.topModal shouldBe None
     updatedState.persisted.buffers should not contain key(bufferId)
   }
 
@@ -96,7 +96,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(CloseTab).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface shouldBe None
+    updatedState.topModal shouldBe None
     updatedState.persisted.buffers should not contain key(bufferId)
   }
 
@@ -230,7 +230,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface shouldBe None
+    updatedState.topModal shouldBe None
     updatedState.persisted.buffers should not contain key(bufferId)
   }
 
@@ -280,7 +280,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface shouldBe None
+    updatedState.topModal shouldBe None
     updatedState.persisted.buffers should contain key bufferId
     updatedState.persisted.buffers(bufferId).document.isDirty shouldBe true
     updatedState.persisted.focus shouldBe Focus.EditorPane(updatedState.persisted.layout.activeEditorPaneId.get)
@@ -315,7 +315,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       stateManager.applyEvent(Enter).unsafeRunSync()
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.modalSurface shouldBe None
+      updatedState.topModal shouldBe None
       updatedState.persisted.buffers should not contain key(bufferId)
       Files.readString(targetFile) shouldBe "object Notes"
     finally
@@ -352,7 +352,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       stateManager.applyEvent(Enter).unsafeRunSync()
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.modalSurface shouldBe None
+      updatedState.topModal shouldBe None
       updatedState.persisted.buffers should not contain key(bufferId)
       Files.readString(targetFile) shouldBe "object Notes"
     finally
@@ -478,7 +478,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.modalSurface shouldBe None
+    updatedState.topModal shouldBe None
     updatedState.persisted.buffers should not contain key(bufferId)
     stateManager.runtimeLifecycle.awaitQuit.timeout(1.second).unsafeRunSync()
   }

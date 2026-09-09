@@ -131,18 +131,16 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val src   = root.resolve("src")
     val tree  = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
     val panel = explorerSurface(tree, selectedPath = Some(root))
-    val close = UiSurface(
+    val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
-      ),
-      SurfacePresentation.Modal
+      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")),
+      ModalPlacement.Centered
     )
     val sm = makeStateManager()
     sm.updateState(state =>
       state.copy(
-        persisted = state.persisted.copy(focus = Focus.Surface(close.id)),
-        runtime = state.runtime.copy(uiSurfaces = List(panel, close))
+        persisted = state.persisted.copy(focus = Focus.Modal),
+        runtime = state.runtime.copy(uiSurfaces = List(panel), modalStack = List(close))
       )
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
@@ -152,7 +150,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
-    after.persisted.focus shouldBe Focus.Surface(close.id)
+    after.persisted.focus shouldBe Focus.Modal
     after.surfaceById(panel.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(root)))
   }
 

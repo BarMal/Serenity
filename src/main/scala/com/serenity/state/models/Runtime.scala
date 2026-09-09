@@ -9,6 +9,9 @@ import com.serenity.ui.layout.{ScreenPosition, ViewportSize}
 /** State that is never persisted -- reset to defaults (or recomputed) on every session restore. */
 final case class Runtime(
     uiSurfaces: List[UiSurface] = List.empty,
+    // The explicit modal layer (#814): blocking dialogs (ModalStateReducer.isBlocking), ordered parent-to-topmost.
+    // Structurally separate from uiSurfaces -- never persisted, matching every other transient dialog.
+    modalStack: List[ModalDialog] = List.empty,
     actionStack: List[AppAction] = Nil,
     viewportSize: Option[ViewportSize] = None,
     nextBufferId: BufferId = BufferId(0),

@@ -163,7 +163,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
             ghostId,
             SurfaceContent
               .GhostOverlay(SurfaceContent.Diagnostics(Nil), com.serenity.ui.layout.LayoutRect(0, 0, 10, 10)),
-            SurfacePresentation.Modal
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         ),
         windowSitter = com.serenity.animation.WindowSitter.fromConfig(AppConfig.default.windowSitterConfig)
@@ -189,7 +189,13 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     val toolbar   = ContextualToolbarState()
     val state = AppState.initial.copy(
       runtime = AppState.initial.runtime.copy(uiSurfaces =
-        List(UiSurface(toolbarId, SurfaceContent.ContextualToolbar(toolbar), SurfacePresentation.Modal))
+        List(
+          UiSurface(
+            toolbarId,
+            SurfaceContent.ContextualToolbar(toolbar),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        )
       )
     )
     val fixture = harness(state)

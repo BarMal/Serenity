@@ -180,16 +180,36 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+    def isBlockingModal(modal: Modal): Boolean = modal match
+      case _: Modal.CloseWorkflow | _: Modal.FileWorkflow => true
+      case _                                              => false
+
     cases.foreach {
       case (surfaceId, modal) =>
         val initialState = AppState.initial
-        val state = initialState.copy(
-          persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
-          runtime = initialState.runtime.copy(
-            uiSurfaces = List(UiSurface(surfaceId, SurfaceContent.ModalWorkflow(modal), SurfacePresentation.Modal)),
-            viewportSize = Some(viewport)
-          )
-        )
+        val state =
+          if isBlockingModal(modal) then
+            initialState.copy(
+              persisted = initialState.persisted.copy(focus = Focus.Modal),
+              runtime = initialState.runtime.copy(
+                modalStack = List(ModalDialog(surfaceId, modal, ModalPlacement.Centered)),
+                viewportSize = Some(viewport)
+              )
+            )
+          else
+            initialState.copy(
+              persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
+              runtime = initialState.runtime.copy(
+                uiSurfaces = List(
+                  UiSurface(
+                    surfaceId,
+                    SurfaceContent.ModalWorkflow(modal),
+                    SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+                  )
+                ),
+                viewportSize = Some(viewport)
+              )
+            )
         val snapshot = AccessibilitySnapshot.from(state, viewport)
         val frame =
           snapshot.nodes.find(_.id == s"surface:${surfaceId.value}").map(_.bounds).getOrElse(fail("Expected modal"))
@@ -221,20 +241,16 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val modalId      = SurfaceId("replace")
     val initialState = AppState.initial
     val state = initialState.copy(
-      persisted = initialState.persisted.copy(focus = Focus.Surface(modalId)),
+      persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
         uiSurfaces = List(
           UiSurface(
             floatingId,
             SurfaceContent.CommandPalette(CommandRunner.empty),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          ),
-          UiSurface(
-            modalId,
-            SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState())),
-            SurfacePresentation.Modal
           )
-        )
+        ),
+        modalStack = List(ModalDialog(modalId, Modal.ReplaceWorkflow(ReplaceWorkflowState()), ModalPlacement.Centered))
       )
     )
 
@@ -256,15 +272,9 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     )
     val initialState = AppState.initial
     val state = initialState.copy(
-      persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
+      persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            surfaceId,
-            SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
-            SurfacePresentation.Modal
-          )
-        ),
+        modalStack = List(ModalDialog(surfaceId, Modal.CloseWorkflow(workflow), ModalPlacement.Centered)),
         viewportSize = Some(viewport)
       )
     )
@@ -296,15 +306,9 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val constrainedViewport = ViewportSize(40, 4)
     val initialState        = AppState.initial
     val state = initialState.copy(
-      persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
+      persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            surfaceId,
-            SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
-            SurfacePresentation.Modal
-          )
-        ),
+        modalStack = List(ModalDialog(surfaceId, Modal.CloseWorkflow(workflow), ModalPlacement.Centered)),
         viewportSize = Some(constrainedViewport)
       )
     )

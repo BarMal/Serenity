@@ -281,7 +281,42 @@ object DamageProducer:
         before.runtime.surfaceAnimations != after.runtime.surfaceAnimations ||
         before.persisted.focus != after.persisted.focus
     then Damage.Everything
-    else uiSurfacesDamage(before, after)
+    else
+      val uiSurfacesChanged = before.runtime.uiSurfaces != after.runtime.uiSurfaces
+      val modalStackChanged = before.runtime.modalStack != after.runtime.modalStack
+      // The single-target narrow-damage carve-out only holds when exactly one domain changed in isolation -- the same
+      // conservative rule `singleSurfaceOnlyContentChange` already applies within uiSurfaces itself. uiSurfaces and
+      // modalStack changing in the same transition is exactly the "more than one thing changed" case that rules out,
+      // so it reports Everything rather than naively combining two independently-narrow damages.
+      (uiSurfacesChanged, modalStackChanged) match
+        case (false, false) => Damage.Nothing
+        case (true, false)  => uiSurfacesDamage(before, after)
+        case (false, true)  => modalStackDamage(before, after)
+        case (true, true)   => Damage.Everything
+
+  /** `runtime.modalStack` (#814) lives outside `uiSurfaces`, so [[uiSurfacesDamage]] cannot see it change -- and unlike
+    * every other surface transition, opening a second blocking dialog on top of an already-open one leaves
+    * `persisted.focus` at `Focus.Modal` on both sides (it has no payload to distinguish which dialog), so the
+    * `focus != focus` early-exit above cannot catch it either. This is that transition's own signal.
+    */
+  private def modalStackDamage(before: AppState, after: AppState): Damage =
+    if before.runtime.modalStack == after.runtime.modalStack then Damage.Nothing
+    else
+      singleModalOnlyContentChange(before, after) match
+        case Some(dialogId) => Damage.Surface(dialogId)
+        case None           => Damage.Everything
+
+  /** `Some(id)` when the modal stack differs only in the `modal` payload of the one dialog identified by `id` -- same
+    * dialogs, same order, nothing opened or closed alongside it. Any broader difference reports `None`.
+    */
+  private def singleModalOnlyContentChange(before: AppState, after: AppState): Option[SurfaceId] =
+    if before.runtime.modalStack.map(_.id) != after.runtime.modalStack.map(_.id) then None
+    else
+      val beforeById = before.runtime.modalStack.map(dialog => dialog.id -> dialog).toMap
+      val afterById  = after.runtime.modalStack.map(dialog => dialog.id -> dialog).toMap
+      beforeById.keySet.filter(id => beforeById(id) != afterById(id)).toList match
+        case List(onlyChangedId) => Some(onlyChangedId)
+        case _                   => None
 
   private def uiSurfacesDamage(before: AppState, after: AppState): Damage =
     if before.runtime.uiSurfaces == after.runtime.uiSurfaces then Damage.Nothing
@@ -308,7 +343,6 @@ object DamageProducer:
     */
   private def samePresentationKind(before: SurfacePresentation, after: SurfacePresentation): Boolean =
     (before, after) match
-      case (SurfacePresentation.Modal, SurfacePresentation.Modal)             => true
       case (_: SurfacePresentation.Pinned, _: SurfacePresentation.Pinned)     => true
       case (_: SurfacePresentation.Floating, _: SurfacePresentation.Floating) => true
       case (_: SurfacePresentation.Expanded, _: SurfacePresentation.Expanded) => true

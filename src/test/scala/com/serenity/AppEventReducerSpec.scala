@@ -88,18 +88,17 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
         base
       )
       .state
-    val modalSurfaceId = withModal.modalSurface.get.id
-    withModal.persisted.focus shouldBe Focus.Surface(modalSurfaceId)
+    withModal.persisted.focus shouldBe Focus.Modal
 
     val withRunner = AppEventReducer.reduce(ToggleCommandRunner, withModal, registry)
-    withRunner.state.modalSurface shouldBe None
+    withRunner.state.topModal shouldBe None
     withRunner.state.commandRunnerSurface shouldBe defined
 
     val closed = AppEventReducer.reduce(ToggleCommandRunner, withRunner.state, registry)
 
     closed.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     closed.state.commandRunnerSurface shouldBe None
-    closed.state.modalSurface shouldBe None
+    closed.state.topModal shouldBe None
   }
 
   it should "not accumulate duplicate entries in focusHistory" in {
@@ -382,7 +381,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val startPageSurface = UiSurface(
       id = startPageId,
       content = SurfaceContent.StartPage(StartupPage("Serenity")),
-      presentation = SurfacePresentation.Modal
+      presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val initialState = withId.copy(runtime = withId.runtime.copy(uiSurfaces = List(startPageSurface)))
 
@@ -461,7 +460,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val startPageSurface = UiSurface(
       id = startPageId,
       content = SurfaceContent.StartPage(StartupPage("Serenity")),
-      presentation = SurfacePresentation.Modal
+      presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val initialState  = withId.copy(runtime = withId.runtime.copy(uiSurfaces = List(startPageSurface)))
     val panelRegistry = PanelRegistry(List(paletteRegistration("outline")))

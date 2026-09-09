@@ -242,6 +242,7 @@ object SessionFocus:
     focus match
       case Focus.EditorPane(paneId) => Some(SessionFocus.EditorPane(paneId.value))
       case Focus.Surface(_)         => None // Don't persist surface focus
+      case Focus.Modal              => None // Modal dialogs (#814) are transient, never persisted
 
   def toFocus(sessionFocus: SessionFocus): Focus =
     sessionFocus match

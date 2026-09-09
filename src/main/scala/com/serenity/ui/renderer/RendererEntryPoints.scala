@@ -25,9 +25,13 @@ object RendererEntryPoints:
         )
 
   private def startPageOnly(state: AppState): Option[StartupPage] =
-    state.runtime.uiSurfaces match
-      case List(UiSurface(_, SurfaceContent.StartPage(page), _, _)) => Some(page)
-      case _                                                        => None
+    // A blocking dialog (#814) painted from the startup page (#1289) needs the full frame path, since that's the one
+    // that paints the modal layer -- the fast path below skips straight to the start page frame and nothing else.
+    if state.runtime.modalStack.nonEmpty then None
+    else
+      state.runtime.uiSurfaces match
+        case List(UiSurface(_, SurfaceContent.StartPage(page), _, _)) => Some(page)
+        case _                                                        => None
 
   def renderStartPageFrame(
     state: AppState,

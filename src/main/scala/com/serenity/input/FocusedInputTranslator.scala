@@ -32,8 +32,6 @@ object FocusedInputTranslator:
                 pinnedPanelTranslator
               case com.serenity.state.models.SurfacePresentation.Expanded(_, _) =>
                 pinnedPanelTranslator
-              case com.serenity.state.models.SurfacePresentation.Modal =>
-                formTranslator
               case _ =>
                 surface.content match
                   case SurfaceContent.CommandPalette(_)    => commandRunnerTranslator

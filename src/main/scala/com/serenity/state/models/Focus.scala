@@ -3,6 +3,7 @@ package com.serenity.state.models
 enum Focus:
   case EditorPane(paneId: PaneId)
   case Surface(surfaceId: SurfaceId)
+  case Modal
 
 enum ModalType:
   case GotoLine

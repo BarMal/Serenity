@@ -163,7 +163,7 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
     val replaceSurface = UiSurface(
       SurfaceId("replace"),
       SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState())),
-      SurfacePresentation.Modal
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val replaceState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(focus = Focus.Surface(replaceSurface.id)),
@@ -176,48 +176,44 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => Some(workflow.selectedScope)
       case _ => None) shouldBe Some(ReplaceWorkflowScope.Selection)
 
-    val fileSurface = UiSurface(
+    val fileDialog = ModalDialog(
       SurfaceId("file"),
-      SurfaceContent.ModalWorkflow(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            suggestions = List(FileWorkflowSuggestion("one"), FileWorkflowSuggestion("two"))
-          )
+      Modal.FileWorkflow(
+        FileWorkflowState(
+          mode = FileWorkflowMode.Open,
+          suggestions = List(FileWorkflowSuggestion("one"), FileWorkflowSuggestion("two"))
         )
       ),
-      SurfacePresentation.Modal
+      ModalPlacement.Centered
     )
     val fileState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(fileSurface.id)),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(fileSurface))
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(modalStack = List(fileDialog))
     )
     val selectedFile = ModalEventReducer
       .reduce(ModalType.FileWorkflow, ModalClick("file-suggestion-1", Some("file-suggestion-1")), fileState)
       .state
-    selectedFile.modalSurface.flatMap(_.content match
-      case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow.selectedSuggestionIndex)
-      case _                                                          => None) shouldBe Some(1)
+    selectedFile.topModal.map(_.modal match
+      case Modal.FileWorkflow(workflow) => workflow.selectedSuggestionIndex
+      case other                        => fail(s"Expected file workflow, got $other")) shouldBe Some(1)
   }
 
   it should "emit CreateFileWorkflowDirectories only for a save-as workflow with missing directories" in {
-    val saveAsWithMissingDirs = UiSurface(
+    val saveAsWithMissingDirs = ModalDialog(
       SurfaceId("save-as"),
-      SurfaceContent.ModalWorkflow(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.SaveAs,
-            filename = "notes.scala",
-            path = "/tmp/project/new/nested",
-            missingPathSegments = List("new", "nested")
-          )
+      Modal.FileWorkflow(
+        FileWorkflowState(
+          mode = FileWorkflowMode.SaveAs,
+          filename = "notes.scala",
+          path = "/tmp/project/new/nested",
+          missingPathSegments = List("new", "nested")
         )
       ),
-      SurfacePresentation.Modal
+      ModalPlacement.Centered
     )
     val readyState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(saveAsWithMissingDirs.id)),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(saveAsWithMissingDirs))
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(modalStack = List(saveAsWithMissingDirs))
     )
 
     val result = ModalEventReducer.reduce(ModalType.FileWorkflow, ModalCreateDirectory, readyState)
@@ -225,33 +221,31 @@ class ModalEventReducerSpec extends AnyFlatSpec with Matchers:
       AppEffect.Workflow(WorkflowEffect.CreateFileWorkflowDirectories(SurfaceId("save-as")))
     )
 
-    val openWithMissingDirs = UiSurface(
+    val openWithMissingDirs = ModalDialog(
       SurfaceId("open"),
-      SurfaceContent.ModalWorkflow(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            path = "/tmp/project/new/nested",
-            missingPathSegments = List("new", "nested")
-          )
+      Modal.FileWorkflow(
+        FileWorkflowState(
+          mode = FileWorkflowMode.Open,
+          path = "/tmp/project/new/nested",
+          missingPathSegments = List("new", "nested")
         )
       ),
-      SurfacePresentation.Modal
+      ModalPlacement.Centered
     )
     val openState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(openWithMissingDirs.id)),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(openWithMissingDirs))
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(modalStack = List(openWithMissingDirs))
     )
     ModalEventReducer.reduce(ModalType.FileWorkflow, ModalCreateDirectory, openState).effects shouldBe Nil
 
-    val saveAsWithoutMissingDirs = UiSurface(
+    val saveAsWithoutMissingDirs = ModalDialog(
       SurfaceId("save-as-clean"),
-      SurfaceContent.ModalWorkflow(Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.SaveAs))),
-      SurfacePresentation.Modal
+      Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.SaveAs)),
+      ModalPlacement.Centered
     )
     val cleanState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(saveAsWithoutMissingDirs.id)),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(saveAsWithoutMissingDirs))
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(modalStack = List(saveAsWithoutMissingDirs))
     )
     ModalEventReducer.reduce(ModalType.FileWorkflow, ModalCreateDirectory, cleanState).effects shouldBe Nil
   }

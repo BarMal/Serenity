@@ -69,15 +69,18 @@ final private[manager] class StateManagerOperationBoundary private (
       )
       .pushFocus(Focus.Surface(surfaceId))
 
+  private def currentModalId(state: AppState): Option[SurfaceId] =
+    state.topModal.map(_.id).orElse(state.modalSurface.map(_.id))
+
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     AppStateValidation.validated(normalizeCommandRunnerFocus(newState)) match
       case Right(validState) =>
         val modalTransitionLog =
-          (fallbackState.modalSurface, validState.modalSurface) match
+          (currentModalId(fallbackState), currentModalId(validState)) match
             case (before, after) if before != after =>
               logger.info(
-                s"[STATE MODAL] before=${before.map(_.id).getOrElse("none")} " +
-                  s"after=${after.map(_.id).getOrElse("none")} focus=${validState.persisted.focus}"
+                s"[STATE MODAL] before=${before.getOrElse("none")} " +
+                  s"after=${after.getOrElse("none")} focus=${validState.persisted.focus}"
               )
             case _ => IO.unit
         modalTransitionLog >> stateRef.set(validState) >> scheduleDocumentAnalysis()

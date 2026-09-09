@@ -39,14 +39,8 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = layout
       ),
-      runtime = base.runtime.copy(uiSurfaces =
-        List(
-          UiSurface(
-            surfaceId,
-            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)),
-            SurfacePresentation.Modal
-          )
-        )
+      runtime = base.runtime.copy(modalStack =
+        List(ModalDialog(surfaceId, Modal.FileWorkflow(workflow), ModalPlacement.Centered))
       )
     )
 
@@ -61,10 +55,11 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
     def currentWorkflow: FileWorkflowState =
       stateRef.get
         .unsafeRunSync()
-        .surfaceById(surfaceId)
-        .map(_.content)
-        .collect { case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => workflow }
-        .getOrElse(fail("Expected the file workflow surface to still be present"))
+        .runtime
+        .modalStack
+        .find(_.id == surfaceId)
+        .collect { case ModalDialog(_, Modal.FileWorkflow(workflow), _) => workflow }
+        .getOrElse(fail("Expected the file workflow dialog to still be present"))
 
   private def harness(workflow: FileWorkflowState, saveResult: IO[Unit] = IO.unit, focusedPane: Boolean = true) =
     val stateRef  = Ref.of[IO, AppState](stateWith(workflow, focusedPane)).unsafeRunSync()
@@ -74,18 +69,15 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
 
     def updateSurface(id: SurfaceId, updated: FileWorkflowState): IO[Unit] =
       stateRef.update { state =>
-        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-          case surface if surface.id == id =>
-            surface.copy(content = SurfaceContent.ModalWorkflow(Modal.FileWorkflow(updated)))
-          case other => other
+        state.copy(runtime = state.runtime.copy(modalStack = state.runtime.modalStack.map {
+          case dialog if dialog.id == id => dialog.copy(modal = Modal.FileWorkflow(updated))
+          case other                     => other
         }))
       }
 
-    def workflowSurface(state: AppState, id: SurfaceId): Option[(UiSurface, FileWorkflowState)] =
-      state.surfaceById(id).flatMap { surface =>
-        surface.content match
-          case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(current)) => Some((surface, current))
-          case _                                                         => None
+    def workflowSurface(state: AppState, id: SurfaceId): Option[FileWorkflowState] =
+      state.runtime.modalStack.find(_.id == id).collect {
+        case ModalDialog(_, Modal.FileWorkflow(current), _) => current
       }
 
     new Harness(

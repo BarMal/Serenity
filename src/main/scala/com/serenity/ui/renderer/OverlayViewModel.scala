@@ -75,7 +75,11 @@ object OverlayViewModel:
     val belowCursor      = belowCursorStack.headOption
     val modal = scene.toList.flatMap(_.modal).flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
-        state.surfaceById(surfaceId).flatMap(surface => buildView(surface, state, Some(node.frameRect), false, 0.0))
+        state.surfaceById(surfaceId) match
+          case Some(surface) => buildView(surface, state, Some(node.frameRect), false, 0.0)
+          case None          =>
+            // A blocking ModalDialog (#814) -- not a UiSurface, but shares the SceneNodeId.Surface id scheme.
+            state.runtime.modalStack.find(_.id == surfaceId).flatMap(buildModalView(_, state, node.frameRect))
       case _ => None
     }
 
@@ -147,6 +151,30 @@ object OverlayViewModel:
             )
           }
         }
+
+  private def buildModalView(dialog: ModalDialog, state: AppState, rect: LayoutRect): Option[TextOverlayView] =
+    val content = SurfaceContent.ModalWorkflow(dialog.modal)
+    val animState =
+      state.runtime.surfaceAnimations.get(dialog.id).map(_.animationState).getOrElse(AnimationState.empty)
+    contentView(content, state, rect).map { resolved =>
+      TextOverlayView(
+        rect = rect,
+        contentRect = Some(com.serenity.ui.layout.SurfaceFrameLayout.forContent(rect, content).contentRect),
+        borderCells = com.serenity.ui.layout.SurfaceFrameLayout.borderCellsFor(content),
+        animationState = animState,
+        alphaMultiplier = 1.0f,
+        title = resolved.title,
+        header = resolved.header,
+        rows = resolved.rows,
+        footer = resolved.footer,
+        keyHintRow = resolved.keyHintRow,
+        itemGapRows = itemGapRowsFor(content, state),
+        itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity),
+        verticalOffsetRows = 0.0,
+        surfaceId = Some(dialog.id),
+        composition = compositionFor(content, rect, state)
+      )
+    }
 
   private def preferredFloatingSurface(
     state: AppState,

@@ -130,10 +130,10 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
       stateManager.commandExecutor.executeCommand(closeAllCommand).unsafeRunSync()
 
       val afterFirstPrompt = stateManager.getCurrentState.unsafeRunSync()
-      afterFirstPrompt.modalSurface.flatMap {
-        _.content match
-          case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
-          case _                                                           => None
+      afterFirstPrompt.topModal.flatMap {
+        _.modal match
+          case Modal.CloseWorkflow(workflow) => Some(workflow)
+          case _                             => None
       } match
         case Some(workflow) =>
           workflow.currentBufferId shouldBe BufferId(0)
