@@ -346,22 +346,20 @@ object ConfigRegistry:
     field("visual.flair.level")(
       enumerated(VisualFlairLevel.fromConfigKey, _.configKey)
     )(_.visualFlairLevel, (config, value) => config.withVisualFlairLevel(value)),
+    // #1316: no preferred size to update yet means there is nothing to update -- inventing the other dimension made a
+    // width-only edit fabricate a height nobody asked for.
     named("window.preferred.width", "preferredWindowWidth", "window_preferred_width")(int.orEmpty)(
       _.preferredWindowSize.map(_.width),
       (config, value) =>
         value.fold(config)(width =>
-          config.withPreferredWindowSize(
-            config.preferredWindowSize.getOrElse(PreferredWindowSize(width, 768)).copy(width = width)
-          )
+          config.preferredWindowSize.fold(config)(size => config.withPreferredWindowSize(size.copy(width = width)))
         )
     ),
     named("window.preferred.height", "preferredWindowHeight", "window_preferred_height")(int.orEmpty)(
       _.preferredWindowSize.map(_.height),
       (config, value) =>
         value.fold(config)(height =>
-          config.withPreferredWindowSize(
-            config.preferredWindowSize.getOrElse(PreferredWindowSize(1024, height)).copy(height = height)
-          )
+          config.preferredWindowSize.fold(config)(size => config.withPreferredWindowSize(size.copy(height = height)))
         )
     ),
 
