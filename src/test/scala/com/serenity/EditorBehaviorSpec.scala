@@ -596,6 +596,34 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
       java.nio.file.Files.readString(savePath) shouldBe "Original content + mods"
     finally java.nio.file.Files.deleteIfExists(savePath)
 
+  it should "insert correctly at the end of a very long single line" in new EditorFixture:
+    val longLine = "a" * 10000
+    val bufferId = stateManager.bufferManager.createBuffer(longLine, None).unsafeRunSync()
+    val state    = stateManager.getCurrentState.unsafeRunSync()
+    val paneId   = state.persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 0, longLine.length).unsafeRunSync()
+
+    stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
+
+    val finalContent = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect()
+    finalContent.length shouldBe 10001
+    finalContent.last shouldBe 'X'
+
+  it should "insert correctly at the end of a buffer with many lines" in new EditorFixture:
+    val manyLines = (1 to 1000).map(i => s"Line $i").mkString("\n")
+    val bufferId  = stateManager.bufferManager.createBuffer(manyLines, None).unsafeRunSync()
+    val state     = stateManager.getCurrentState.unsafeRunSync()
+    val paneId    = state.persisted.layout.editorPanes.keys.head
+    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
+    stateManager.setCursorPosition(paneId, 999, "Line 1000".length).unsafeRunSync()
+
+    stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
+
+    val finalContent = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect()
+    finalContent should endWith("Line 1000!")
+    finalContent.count(_ == '\n') shouldBe 999
+
   trait EditorFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))

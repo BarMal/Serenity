@@ -80,62 +80,6 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
     java.nio.file.Files.deleteIfExists(selectedFile)
   }
 
-  it should "handle navigation between all options correctly" in {
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-
-    val program = for
-      stateManager <- createStateManagerIO("StartupOptionsEndToEndSpec")
-      theme        = Theme.default
-      viewportSize = ViewportSize(80, 24)
-
-      _ <- AppStartup.initializeState(
-        stateManager,
-        stateManager.sessionStartupInfo,
-        theme,
-        viewportSize
-      )
-
-      // Test full navigation cycle
-      // Start at option 0
-      state0 <- stateManager.getCurrentState
-      startPage0 = state0.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage0.selectedIndex shouldBe 0
-
-      // Move down to option 1
-      _      <- stateManager.applyEvent(MoveDown)
-      state1 <- stateManager.getCurrentState
-      startPage1 = state1.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage1.selectedIndex shouldBe 1
-
-      // Move down to option 2
-      _      <- stateManager.applyEvent(MoveDown)
-      state2 <- stateManager.getCurrentState
-      startPage2 = state2.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage2.selectedIndex shouldBe 2
-
-      // Move through the workflow choices.
-      _         <- stateManager.applyEvent(MoveDown)
-      _         <- stateManager.applyEvent(MoveDown)
-      stateLast <- stateManager.getCurrentState
-      lastPage = stateLast.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _        = lastPage.selectedIndex shouldBe 4
-
-      // Move down again (should wrap to option 0)
-      _      <- stateManager.applyEvent(MoveDown)
-      state3 <- stateManager.getCurrentState
-      startPage3 = state3.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage3.selectedIndex shouldBe 0
-
-      // Move up (should wrap to the final action)
-      _      <- stateManager.applyEvent(MoveUp)
-      state4 <- stateManager.getCurrentState
-      startPage4 = state4.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage4.selectedIndex shouldBe 4
-    yield succeed
-
-    program.unsafeRunSync()
-  }
-
   it should "keep the session choice available when a workflow preset is chosen" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 

@@ -48,6 +48,17 @@ class BundledThemesSpec extends AnyFlatSpec with Matchers:
     errorColor.style.isUnderlined shouldBe true
   }
 
+  "Bundled dark and light themes" should "use visibly different colors from each other" in {
+    val manager = new ConfigurableThemeManager(new ThemeConfigLoader())
+
+    val darkTheme  = manager.loadThemeFromResource("themes/dark.conf").unsafeRunSync()
+    val lightTheme = manager.loadThemeFromResource("themes/light.conf").unsafeRunSync()
+
+    darkTheme.backgroundColor should not be lightTheme.backgroundColor
+    darkTheme.colorFor(SyntaxElement.Keyword).foreground should not be
+      lightTheme.colorFor(SyntaxElement.Keyword).foreground
+  }
+
   "Hex color parsing" should "work with theme configurations" in {
     val configString = """
       theme {
