@@ -1,6 +1,5 @@
 package com.serenity.ui.tui
 
-import java.io.{PipedInputStream, PipedOutputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
@@ -9,7 +8,6 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
-import org.jline.terminal.impl.DumbTerminal
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -32,13 +30,10 @@ class CompanionSpriteTuiScenarioSpec extends AnyFlatSpec with Matchers with Even
   implicit override val patienceConfig: PatienceConfig = PatienceConfig(timeout = Span(15, Seconds))
 
   "the companion sprite pane" should "paint real half-block glyphs onto the terminal when enabled" in {
-    val file        = Files.createTempFile("companion-sprite-tui-spec", ".md")
-    val sessionRoot = Files.createTempDirectory("companion-sprite-tui-spec-session")
-    val out         = new java.io.ByteArrayOutputStream()
-    val pipeIn      = new PipedInputStream()
-    val pipeOut     = new PipedOutputStream(pipeIn)
-    val terminal    = new DumbTerminal("test", "xterm-256color", pipeIn, out, StandardCharsets.UTF_8)
-    terminal.setSize(new org.jline.terminal.Size(160, 40))
+    val file               = Files.createTempFile("companion-sprite-tui-spec", ".md")
+    val sessionRoot        = Files.createTempDirectory("companion-sprite-tui-spec-session")
+    val out                = new java.io.ByteArrayOutputStream()
+    val (terminal, reader) = FakeTerminalReader.dumbTerminal(new org.jline.terminal.Size(160, 40), out)
 
     val config = AppConfig.default.withCompanionSpriteConfig(
       AppConfig.default.companionSpriteConfig.copy(enabled = true)
@@ -65,19 +60,15 @@ class CompanionSpriteTuiScenarioSpec extends AnyFlatSpec with Matchers with Even
       glyphCells should not be empty
     }
 
-    pipeOut.write(Array(17: Byte)) // Ctrl+Q
-    pipeOut.flush()
+    reader.feed(Array(17: Byte)) // Ctrl+Q
     fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
   }
 
   it should "not paint any half-block glyphs when disabled" in {
-    val file        = Files.createTempFile("companion-sprite-tui-disabled-spec", ".md")
-    val sessionRoot = Files.createTempDirectory("companion-sprite-tui-disabled-spec-session")
-    val out         = new java.io.ByteArrayOutputStream()
-    val pipeIn      = new PipedInputStream()
-    val pipeOut     = new PipedOutputStream(pipeIn)
-    val terminal    = new DumbTerminal("test", "xterm-256color", pipeIn, out, StandardCharsets.UTF_8)
-    terminal.setSize(new org.jline.terminal.Size(160, 40))
+    val file               = Files.createTempFile("companion-sprite-tui-disabled-spec", ".md")
+    val sessionRoot        = Files.createTempDirectory("companion-sprite-tui-disabled-spec-session")
+    val out                = new java.io.ByteArrayOutputStream()
+    val (terminal, reader) = FakeTerminalReader.dumbTerminal(new org.jline.terminal.Size(160, 40), out)
 
     val program = TuiRuntime.run(
       shell = TerminalShell.forTerminal(terminal),
@@ -102,7 +93,6 @@ class CompanionSpriteTuiScenarioSpec extends AnyFlatSpec with Matchers with Even
     yield (col, row)
     glyphCells shouldBe empty
 
-    pipeOut.write(Array(17: Byte))
-    pipeOut.flush()
+    reader.feed(Array(17: Byte))
     fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
   }

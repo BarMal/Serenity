@@ -1,6 +1,6 @@
 package com.serenity.ui.tui
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, PipedInputStream, PipedOutputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
@@ -52,22 +52,17 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
   final private class LiveHarness(
       val terminal: Terminal,
-      private val pipeOut: PipedOutputStream,
+      private val reader: FakeTerminalReader,
       private val out: ByteArrayOutputStream
   ):
     def written: String = out.toString(StandardCharsets.UTF_8)
 
-    def send(bytes: Array[Byte]): Unit =
-      pipeOut.write(bytes)
-      pipeOut.flush()
+    def send(bytes: Array[Byte]): Unit = reader.feed(bytes)
 
   private def liveInputTerminal(): LiveHarness =
-    val pipeIn   = new PipedInputStream()
-    val pipeOut  = new PipedOutputStream(pipeIn)
-    val out      = new ByteArrayOutputStream()
-    val terminal = new DumbTerminal("test", "xterm-256color", pipeIn, out, StandardCharsets.UTF_8)
-    terminal.setSize(new org.jline.terminal.Size(80, 24))
-    new LiveHarness(terminal, pipeOut, out)
+    val out                = new ByteArrayOutputStream()
+    val (terminal, reader) = FakeTerminalReader.dumbTerminal(new org.jline.terminal.Size(80, 24), out)
+    new LiveHarness(terminal, reader, out)
 
   "TuiRuntime.run" should "run a full edit/save session in a terminal and restore it on Ctrl+Q quit" in {
     val file = Files.createTempFile("tui-runtime-spec", ".md")
