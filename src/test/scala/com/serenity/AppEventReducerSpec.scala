@@ -164,7 +164,9 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     state.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0), PaneId(1))
     state.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(0))
-    state.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(com.serenity.ui.layout.SplitAxis.Horizontal))
+    state.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(
+      Some(com.serenity.ui.layout.SplitAxis.Horizontal)
+    )
     state.persisted.focus shouldBe Focus.EditorPane(PaneId(1))
     result.effects shouldBe Nil
   }

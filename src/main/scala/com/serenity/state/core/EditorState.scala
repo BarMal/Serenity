@@ -195,8 +195,8 @@ object EditorState:
             )
           }
 
-  /** The pane a global, focus-independent pane action (split, close, directional-focus-move) should target: the
-    * focused editor pane, or -- when focus is elsewhere, e.g. a surface -- the last active one.
+  /** The pane a global, focus-independent pane action (split, close, directional-focus-move) should target: the focused
+    * editor pane, or -- when focus is elsewhere, e.g. a surface -- the last active one.
     */
   private def focusedPaneId(state: AppState): Option[PaneId] =
     state.persisted.focus match

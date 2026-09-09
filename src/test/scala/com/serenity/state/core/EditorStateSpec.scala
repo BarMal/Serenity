@@ -167,7 +167,8 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
 
   it should "target the active pane when focus is on a surface rather than an editor pane" in {
     val (withSurfaceId, surfaceId) = AppState.initial.allocateSurfaceId
-    val focusedOnSurface = withSurfaceId.copy(persisted = withSurfaceId.persisted.copy(focus = Focus.Surface(surfaceId)))
+    val focusedOnSurface =
+      withSurfaceId.copy(persisted = withSurfaceId.persisted.copy(focus = Focus.Surface(surfaceId)))
 
     val updatedState = EditorState.splitFocusedPane(focusedOnSurface, com.serenity.ui.layout.SplitAxis.Horizontal)
 
