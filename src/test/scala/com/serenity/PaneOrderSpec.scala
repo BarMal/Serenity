@@ -21,6 +21,12 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     val sm: StateManager    = StateManager.apply(logger).unsafeRunSync()
     val pane0: PaneId       = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
 
+  /** Every split axis in the tree, outermost first. */
+  private def treeAxes(node: WorkspaceNode): List[SplitAxis] =
+    node match
+      case split: WorkspaceNode.Split => split.splitAxis :: (treeAxes(split.first) ++ treeAxes(split.second))
+      case _                          => Nil
+
   behavior of "Pane tab order"
 
   it should "return the initial pane in getTabOrder" in new PaneFixture:
@@ -118,7 +124,10 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     val afterVertical = sm.getCurrentState.unsafeRunSync()
 
     afterVertical.persisted.layout.editorPanes.keySet should have size 3
-    afterVertical.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(SplitAxis.Vertical))
+    // The second split nests inside the leaf it targeted (`splitPane`), so the vertical axis shows up on that
+    // inner split, not the tree's outer root -- which stays Horizontal, same as the sibling-preserving test above.
+    treeAxes(afterVertical.persisted.layout.workspaceTree.getOrElse(fail("expected workspace tree")).root) shouldBe
+      List(SplitAxis.Horizontal, SplitAxis.Vertical)
 
   it should "split the active pane via the command palette's Split Pane Horizontally/Vertically commands" in new PaneFixture:
     val registry = com.serenity.command.CommandRegistry.withToggleUI
