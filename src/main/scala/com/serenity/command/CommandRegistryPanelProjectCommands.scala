@@ -81,6 +81,23 @@ private[command] object CommandRegistryPanelProjectCommands:
     )
   )
 
+  private[command] def paneCommands: List[Command] = List(
+    Command.typed(
+      "split-pane-horizontal",
+      "Split the focused editor pane horizontally, carrying its buffer into the new pane.",
+      CommandIntent.View(ViewIntent.SplitPaneHorizontal),
+      CommandCategory.View,
+      label = "Split Pane Horizontally"
+    ),
+    Command.typed(
+      "split-pane-vertical",
+      "Split the focused editor pane vertically, carrying its buffer into the new pane.",
+      CommandIntent.View(ViewIntent.SplitPaneVertical),
+      CommandCategory.View,
+      label = "Split Pane Vertically"
+    )
+  )
+
   private[command] def projectCommands: List[Command] = List(
     Command.typed(
       "project-build",

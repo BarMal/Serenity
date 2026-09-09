@@ -4,7 +4,7 @@ import com.serenity.config.DefaultDocumentMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 
 object EditorState:
 
@@ -155,6 +155,53 @@ object EditorState:
           runtime =
             state.runtime.copy(focusHistory = state.runtime.focusHistory.filterNot(_ == Focus.EditorPane(paneId)))
         )
+
+  /** Splits the currently focused (or active, if focus is elsewhere -- e.g. a surface) editor pane along `axis`,
+    * carrying its buffer into the new pane so both show the same file, mirroring every mainstream editor's split
+    * behaviour. The new pane becomes focused/active, matching `insertPane`'s own convention.
+    */
+  def splitFocusedPane(state: AppState, axis: SplitAxis): AppState =
+    focusedPaneId(state) match
+      case None => state
+      case Some(paneId) =>
+        val newPaneId = state.runtime.nextPaneId
+        val newPane =
+          state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId) match
+            case Some(bufferId) => EditorPane.withBuffer(newPaneId, bufferId)
+            case None           => EditorPane.empty(newPaneId)
+
+        state.persisted.layout.effectiveWorkspaceTree
+          .flatMap(
+            _.split(
+              paneId,
+              newPaneId,
+              axis,
+              WorkspaceNodeId(s"split-${paneId.value}-${newPaneId.value}"),
+              WorkspaceNodeId(s"editor-${newPaneId.value}")
+            )
+          )
+          .fold(state) { tree =>
+            state.copy(
+              persisted = state.persisted.copy(
+                layout = state.persisted.layout.copy(
+                  editorPanes = state.persisted.layout.editorPanes.updated(newPaneId, newPane),
+                  activeEditorPaneId = Some(newPaneId),
+                  paneOrder = tree.paneIds,
+                  workspaceTree = Some(tree)
+                ),
+                focus = Focus.EditorPane(newPaneId)
+              ),
+              runtime = state.runtime.copy(nextPaneId = PaneId(newPaneId.value + 1))
+            )
+          }
+
+  /** The pane a global, focus-independent pane action (split, close, directional-focus-move) should target: the focused
+    * editor pane, or -- when focus is elsewhere, e.g. a surface -- the last active one.
+    */
+  private def focusedPaneId(state: AppState): Option[PaneId] =
+    state.persisted.focus match
+      case Focus.EditorPane(paneId) => Some(paneId)
+      case _                        => state.persisted.layout.activeEditorPaneId
 
   private def assignBuffersToPanes(state: AppState, focusedBufferId: Option[BufferId]): AppState =
     val targetFocusedBuffer = focusedBufferId.orElse(state.focusedBufferId)

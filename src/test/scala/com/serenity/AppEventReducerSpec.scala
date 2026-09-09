@@ -158,6 +158,28 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     result.effects shouldBe Nil
   }
 
+  it should "split the focused pane horizontally, carrying its buffer, on SplitPaneHorizontal" in {
+    val result = AppEventReducer.reduce(SplitPaneHorizontal, AppState.initial, registry)
+    val state  = result.state
+
+    state.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0), PaneId(1))
+    state.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(0))
+    state.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(
+      Some(com.serenity.ui.layout.SplitAxis.Horizontal)
+    )
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(1))
+    result.effects shouldBe Nil
+  }
+
+  it should "split the focused pane vertically on SplitPaneVertical" in {
+    val result = AppEventReducer.reduce(SplitPaneVertical, AppState.initial, registry)
+    val state  = result.state
+
+    state.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0), PaneId(1))
+    state.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(com.serenity.ui.layout.SplitAxis.Vertical))
+    result.effects shouldBe Nil
+  }
+
   it should "navigate to the next and previous buffer according to buffer order" in {
     val newTabState = AppEventReducer.reduce(NewTab, AppState.initial, registry).state
     val stateWithBuffers =

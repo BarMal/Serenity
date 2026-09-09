@@ -10,7 +10,7 @@ import com.serenity.keystroke.events.{Event, ExplorerEvent}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.state.reducers.PanelStateReducer
-import com.serenity.ui.layout.{DirEntry, PanelPosition, PanelTarget}
+import com.serenity.ui.layout.{DirEntry, PanelPosition, PanelTarget, SplitAxis}
 import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 
 /** Pinned-panel management: pinning/unpinning/moving/resizing the explorer, outline, comments, diagnostics, and
@@ -44,6 +44,10 @@ final private[manager] class StateManagerPanelEffects(
         stateRef.update(com.serenity.state.core.EditorState.navigateToNextBuffer)
       case ViewIntent.PreviousTab =>
         stateRef.update(com.serenity.state.core.EditorState.navigateToPreviousBuffer)
+      case ViewIntent.SplitPaneHorizontal =>
+        stateRef.update(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Horizontal))
+      case ViewIntent.SplitPaneVertical =>
+        stateRef.update(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Vertical))
       case ViewIntent.PinExplorerPanel =>
         setPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))
       case ViewIntent.PinOutlinePanel =>
