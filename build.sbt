@@ -166,8 +166,27 @@ lazy val root = (project in file("."))
     Test / testOptions ++= Seq(
       Tests.Setup(() => System.setProperty("serenity.test.ephemeralSessions", "true")),
       Tests.Cleanup(() => System.clearProperty("serenity.test.ephemeralSessions"))
-    )
+    ),
+    // Real-OS-boundary specs (a genuine loopback socket, a genuine sun.misc.Signal.raise -- see
+    // com.serenity.testkit.RealBoundaryTest's doc comment) are excluded from `sbt test`'s discovery of the whole
+    // suite, but not from `testOnly`: this is scoped to the `test` task specifically (`Test / test / testOptions`),
+    // one level more specific than the plain `Test / testOptions` above that `testOnly` still falls back to
+    // unfiltered, so `realBoundaryTest` below can name these two specs directly and still run them.
+    Test / test / testOptions := (Test / testOptions).value :+
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest")
   )
+
+// Runs only the two real-OS-boundary specs (a real loopback socket, a real OS signal delivered via
+// sun.misc.Signal.raise) that `sbt test` excludes -- see RealBoundaryTest's doc comment for why they must stay out
+// of the fast parallel suite. Named directly rather than by tag, since `Test / test`'s "-l" exclusion above does not
+// apply to `testOnly`.
+lazy val realBoundaryTest = taskKey[Unit]("Run the real-OS-boundary integration specs excluded from `sbt test`")
+
+realBoundaryTest := (Test / testOnly)
+  .toTask(
+    " com.serenity.lsp.LspConnectionRealSocketIntegrationSpec com.serenity.ui.tui.TerminalShellRealSignalIntegrationSpec"
+  )
+  .value
 
 libraryDependencies ++= Seq(
   "org.typelevel"         %% "cats-effect"     % "3.7.1",
