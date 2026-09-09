@@ -43,8 +43,9 @@ class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail("height parse"))
 
     chromeConfig.windowConfig.shouldBe(WindowConfig(chromeMode = WindowChromeMode.Custom))
-    widthConfig.preferredWindowSize.shouldBe(Some(PreferredWindowSize(400, 768)))
-    heightConfig.preferredWindowSize.shouldBe(Some(PreferredWindowSize(1024, 300)))
+    // #1316: restoring one dimension with no preferred size yet to update is a no-op, not a fabricated companion.
+    widthConfig.preferredWindowSize.shouldBe(None)
+    heightConfig.preferredWindowSize.shouldBe(None)
     ConfigRegistry.read(AppConfig.default, "window.chrome", "unknown").shouldBe(None)
   }
 

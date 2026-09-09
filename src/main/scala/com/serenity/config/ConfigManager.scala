@@ -290,7 +290,7 @@ object ConfigManager:
 
     val scaled       = inferTextScaleMode(parsed, entries)
     val withLists    = applyHoconLists(scaled, source)
-    val withLspLists = applyHoconLspLists(withLists, source)
+    val withLspLists = PreferredWindowSizeParsing.applied(applyHoconLspLists(withLists, source), source)
     HotkeyConfig
       .fromBindings(withLspLists.inputConfig.hotkeyConfig.bindings)
       .fold(_ => withLspLists.withHotkeyConfig(HotkeyConfig()), withLspLists.withHotkeyConfig)

@@ -188,11 +188,15 @@ final case class AppConfig(
   def withContextualToolbarDisplayMode(mode: ToolbarDisplayMode): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(contextualToolbarDisplayMode = mode))
 
+  // #1316: re-assigning a setting its own current value is not customising it -- flip the preset only when the value
+  // actually changes, so putting back what was already there is a no-op.
   def withBlurRadius(r: Float): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(blurRadius = r, materialPreset = MaterialPreset.Custom))
+    if surfaceConfig.blurRadius == r then this
+    else withSurfaceConfig(surfaceConfig.copy(blurRadius = r, materialPreset = MaterialPreset.Custom))
 
   def withBackgroundStyle(style: BackgroundStyle): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(backgroundStyle = style, materialPreset = MaterialPreset.Custom))
+    if surfaceConfig.backgroundStyle == style then this
+    else withSurfaceConfig(surfaceConfig.copy(backgroundStyle = style, materialPreset = MaterialPreset.Custom))
 
   def withMaterialPreset(preset: MaterialPreset): AppConfig =
     preset match
