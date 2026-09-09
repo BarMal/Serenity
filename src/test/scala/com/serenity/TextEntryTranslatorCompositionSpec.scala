@@ -39,8 +39,8 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep application hotkeys in the application event family" in {
-    val openPalette = translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
-    val quitFromEof  = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
+    val openPalette   = translator.translate(KeyStrokeInfo(InputKey.Character, Some('p'), Set(Modifier.Ctrl)))
+    val quitFromEof   = translator.translate(KeyStrokeInfo(InputKey.EOF, None, Set.empty))
     val quitFromCtrlQ = translator.translate(KeyStrokeInfo(InputKey.Character, Some('q'), Set(Modifier.Ctrl)))
 
     openPalette shouldBe ToggleCommandRunner

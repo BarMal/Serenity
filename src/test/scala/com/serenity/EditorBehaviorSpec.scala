@@ -606,7 +606,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
 
-    val finalContent = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect()
+    val finalContent =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect()
     finalContent.length shouldBe 10001
     finalContent.last shouldBe 'X'
 
@@ -620,7 +621,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(InsertChar('!')).unsafeRunSync()
 
-    val finalContent = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect()
+    val finalContent =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect()
     finalContent should endWith("Line 1000!")
     finalContent.count(_ == '\n') shouldBe 999
 
