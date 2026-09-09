@@ -1,6 +1,6 @@
 package com.serenity.ui.tui
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, PipedInputStream, PipedOutputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
 
 import scala.concurrent.duration.*
@@ -50,30 +50,17 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers:
     */
   final private class LiveHarness(
       val terminal: Terminal,
-      private val pipeOut: PipedOutputStream,
+      private val reader: FakeTerminalReader,
       private val out: ByteArrayOutputStream
   ):
     def written: String = out.toString(StandardCharsets.UTF_8)
 
-    def send(bytes: Array[Byte]): Unit =
-      pipeOut.write(bytes)
-      pipeOut.flush()
-
-    /** Closes the write end from the same (short-lived) thread that sent it, so JLine's `NonBlockingReader` background
-      * thread sees a clean EOF on its next read instead of `PipedInputStream`'s "Write end dead" `IOException` once
-      * that sending thread has terminated -- `send`'s own thread going away otherwise races the reader thread that
-      * keeps polling the pipe for more input after negotiation's confirmation window closes.
-      */
-    def closeSendEnd(): Unit = pipeOut.close()
+    def send(bytes: Array[Byte]): Unit = reader.feed(bytes)
 
   private def liveTerminal(): LiveHarness =
-    val pipeIn  = new PipedInputStream()
-    val pipeOut = new PipedOutputStream(pipeIn)
-    val out     = new ByteArrayOutputStream()
-    val terminal =
-      new DumbTerminal("test", "xterm-256color", pipeIn, out, StandardCharsets.UTF_8)
-    terminal.setSize(new org.jline.terminal.Size(80, 24))
-    new LiveHarness(terminal, pipeOut, out)
+    val out                = new ByteArrayOutputStream()
+    val (terminal, reader) = FakeTerminalReader.dumbTerminal(new org.jline.terminal.Size(80, 24), out)
+    new LiveHarness(terminal, reader, out)
 
   "acquiring the shell" should "enter raw mode, the alternate screen, and hide the cursor" in {
     val harness  = dumbTerminal()
@@ -265,7 +252,6 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers:
     val sender = new Thread(() =>
       awaitQueryWritten()
       harness.send(reply)
-      harness.closeSendEnd()
     )
     sender.setDaemon(true)
     sender.start()
