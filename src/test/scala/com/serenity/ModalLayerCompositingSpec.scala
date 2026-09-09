@@ -22,16 +22,14 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
   private val viewport = ViewportSize(80, 24)
   private val modalId  = SurfaceId("close-confirmation")
 
-  private def modalSurface: UiSurface =
-    UiSurface(
+  private def modalDialog: ModalDialog =
+    ModalDialog(
       modalId,
-      SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
-      ),
-      SurfacePresentation.Modal
+      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+      ModalPlacement.Centered
     )
 
-  private def stateWith(content: String, modal: UiSurface): AppState =
+  private def stateWith(content: String, modal: ModalDialog): AppState =
     val buffer = Buffer.fromString(bufferId, content)
     AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
@@ -42,14 +40,14 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
           activeEditorPaneId = Some(paneId),
           paneOrder = List(paneId)
         ),
-        focus = Focus.Surface(modal.id)
+        focus = Focus.Modal
       ),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(modal))
+      runtime = AppState.initial.runtime.copy(modalStack = List(modal))
     )
 
   "RendererEntryPoints.render" should "not repaint the modal layer's own buffer when only editor content changed" in {
     val surface = new CountingLayerBufferSurface(80, 24)
-    val before  = stateWith("alpha\nbeta\ngamma", modalSurface)
+    val before  = stateWith("alpha\nbeta\ngamma", modalDialog)
 
     RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newLayerSurfaceCalls.get() shouldBe 1
@@ -89,17 +87,14 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
   it should "repaint the modal layer's buffer when only the modal's own content changes" in {
     val surface = new CountingLayerBufferSurface(80, 24)
-    val before  = stateWith("alpha\nbeta\ngamma", modalSurface)
+    val before  = stateWith("alpha\nbeta\ngamma", modalDialog)
 
     RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
-    val changedModal = modalSurface.copy(content =
-      SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "renamed.scala"))
-      )
-    )
-    val after = before.copy(runtime = before.runtime.copy(uiSurfaces = List(changedModal)))
+    val changedModal =
+      modalDialog.copy(modal = Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "renamed.scala")))
+    val after = before.copy(runtime = before.runtime.copy(modalStack = List(changedModal)))
 
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage shouldBe Damage.Surface(modalId)
@@ -109,9 +104,37 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surface.newLayerSurfaceCalls.get() shouldBe 2
   }
 
+  it should "repaint the modal layer when the bottom of a two-deep modal stack changes, not just the top (#814)" in {
+    val surface = new CountingLayerBufferSurface(80, 24)
+    val parent  = modalDialog
+    val childId = SurfaceId("save-before-close")
+    val child = ModalDialog(
+      childId,
+      Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "notes.scala")),
+      ModalPlacement.Centered
+    )
+    val before          = stateWith("alpha\nbeta\ngamma", parent)
+    val beforeWithStack = before.copy(runtime = before.runtime.copy(modalStack = List(parent, child)))
+
+    RendererEntryPoints.render(beforeWithStack, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    surface.newLayerSurfaceCalls.get() shouldBe 1
+
+    // Only the bottom (parent) dialog's content changes; the top (child) is untouched.
+    val changedParent =
+      parent.copy(modal = Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "renamed.scala")))
+    val after = beforeWithStack.copy(runtime = beforeWithStack.runtime.copy(modalStack = List(changedParent, child)))
+
+    val transitionDamage = DamageProducer.forTransition(beforeWithStack, after)
+    transitionDamage shouldBe Damage.Surface(parent.id)
+
+    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+
+    surface.newLayerSurfaceCalls.get() shouldBe 2
+  }
+
   it should "reuse the cached modal buffer's pixels: composited output matches a fresh repaint" in {
     val surface = new CountingLayerBufferSurface(80, 24)
-    val state   = stateWith("alpha\nbeta\ngamma", modalSurface)
+    val state   = stateWith("alpha\nbeta\ngamma", modalDialog)
 
     RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything)
     val firstDrawImageCalls = surface.drawImageCalls.size

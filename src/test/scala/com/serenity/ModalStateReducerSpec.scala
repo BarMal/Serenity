@@ -13,35 +13,33 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
   private val closeWorkflow =
     Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
 
-  "ModalStateReducer" should "keep a blocking confirmation above its parent and restore parent focus on dismissal" in {
-    val parent = UiSurface(
-      SurfaceId("parent"),
-      SurfaceContent.ModalWorkflow(closeWorkflow),
-      SurfacePresentation.Modal
-    )
-    val initialState = AppState.initial
-    val parentState = initialState.copy(
-      persisted = initialState.persisted.copy(focus = Focus.Surface(parent.id)),
-      runtime = initialState.runtime.copy(uiSurfaces = List(parent))
-    )
+  "ModalStateReducer" should "keep a blocking confirmation above its parent on an explicit modal layer, outside uiSurfaces" in {
+    val parentShown = ModalStateReducer.show(closeWorkflow, AppState.initial).state
+    val childShown  = ModalStateReducer.show(closeWorkflow, parentShown).state
 
-    val shown     = ModalStateReducer.show(closeWorkflow, parentState).state
-    val child     = shown.topBlockingModalSurface.getOrElse(fail("expected child confirmation"))
-    val dismissed = ModalStateReducer.dismiss(shown).state
+    val Seq(parent, child) = childShown.runtime.modalStack: @unchecked
 
     child.id should not be parent.id
-    child.presentation shouldBe SurfacePresentation.Modal
-    shown.modalSurfaces.map(_.id) shouldBe List(parent.id, child.id)
-    shown.blockingModalSurfaces.map(_.id) shouldBe List(parent.id, child.id)
-    shown.persisted.focus shouldBe Focus.Surface(child.id)
-    dismissed.blockingModalSurfaces.map(_.id) shouldBe List(parent.id)
-    dismissed.persisted.focus shouldBe Focus.Surface(parent.id)
+    childShown.runtime.modalStack.map(_.id) shouldBe List(parent.id, child.id)
+    childShown.persisted.focus shouldBe Focus.Modal
+    // The modal layer is structurally outside uiSurfaces, not a tagged member of it (#814's outcome).
+    childShown.runtime.uiSurfaces shouldBe empty
+
+    val dismissedChild = ModalStateReducer.dismiss(childShown).state
+    dismissedChild.runtime.modalStack.map(_.id) shouldBe List(parent.id)
+    // A dialog remains open, so focus scope stays at the modal layer rather than escaping to whatever was behind it.
+    dismissedChild.persisted.focus shouldBe Focus.Modal
+
+    val dismissedParent = ModalStateReducer.dismiss(dismissedChild).state
+    dismissedParent.runtime.modalStack shouldBe empty
+    // The last dialog closed: focus scope releases back to what was focused before any modal opened.
+    dismissedParent.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "keep non-blocking find workflows on the floating layer" in {
     val shown = ModalStateReducer.show(Modal.Find("", Nil, 0), AppState.initial).state
 
-    shown.blockingModalSurfaces shouldBe Nil
+    shown.runtime.modalStack shouldBe Nil
     shown.modalSurface.map(_.id) shouldBe shown.floatingSurfaces.headOption.map(_.id)
   }
 
@@ -51,12 +49,13 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
     ModalStateReducer.show(Modal.Find("", Nil, 0), blocking).state shouldBe blocking
   }
 
-  it should "use Modal presentation for FileWorkflow so the open dialog is always centered and visible" in {
+  it should "put FileWorkflow on the modal layer, centered, so the open dialog is always visible" in {
     val fileWorkflow = Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open))
     val shown        = ModalStateReducer.show(fileWorkflow, AppState.initial).state
 
-    shown.blockingModalSurfaces should have size 1
-    shown.blockingModalSurfaces.head.presentation shouldBe SurfacePresentation.Modal
+    shown.runtime.modalStack should have size 1
+    shown.runtime.modalStack.head.modal shouldBe fileWorkflow
+    shown.runtime.modalStack.head.placement shouldBe ModalPlacement.Centered
   }
 
   it should "block a non-blocking modal while a file dialog is open" in {

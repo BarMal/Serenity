@@ -44,9 +44,9 @@ object AccessibilitySnapshot:
     previous: Option[AccessibilitySnapshot] = None
   ): AccessibilitySnapshot =
     val scene = UiSceneSnapshot.from(state, viewport)
-    val visibleNodes = state.topModalSurface match
-      case Some(surface) => scene.modal.filter(_.id == SceneNodeId.Surface(surface.id))
-      case None          => scene.nodesInPaintOrder
+    val visibleNodes = state.topModal match
+      case Some(dialog) => scene.modal.filter(_.id == SceneNodeId.Surface(dialog.id))
+      case None         => scene.nodesInPaintOrder
     val nodes = visibleNodes.flatMap(nodeFor(state, _)) ++ surfaceControls(state, visibleNodes)
     AccessibilitySnapshot(nodes, announcements(previous, nodes))
 
@@ -77,24 +77,46 @@ object AccessibilitySnapshot:
       case SceneNodeId.EditorPaneHeader(_) => None
       case SceneNodeId.ModalBackdrop       => None
       case SceneNodeId.Surface(surfaceId) =>
-        state.surfaceById(surfaceId).map { surface =>
-          AccessibleNode(
-            s"surface:${surfaceId.value}",
-            surfaceRole(surface.content),
-            surfaceName(surface.content),
-            surfaceValue(surface.content),
-            selected = false,
-            focused = state.persisted.focus == Focus.Surface(surfaceId),
-            node.frameRect
-          )
-        }
+        state.surfaceById(surfaceId) match
+          case Some(surface) =>
+            Some(
+              AccessibleNode(
+                s"surface:${surfaceId.value}",
+                surfaceRole(surface.content),
+                surfaceName(surface.content),
+                surfaceValue(surface.content),
+                selected = false,
+                focused = state.persisted.focus == Focus.Surface(surfaceId),
+                node.frameRect
+              )
+            )
+          case None =>
+            // A blocking ModalDialog (#814) -- not a UiSurface, but shares the SceneNodeId.Surface id scheme, and
+            // its role/name/value/status come from the same pure SurfaceContent mapping a modeless ModalWorkflow uses.
+            state.runtime.modalStack.find(_.id == surfaceId).map { dialog =>
+              val content = SurfaceContent.ModalWorkflow(dialog.modal)
+              AccessibleNode(
+                s"surface:${surfaceId.value}",
+                surfaceRole(content),
+                surfaceName(content),
+                surfaceValue(content),
+                selected = false,
+                focused = state.persisted.focus == Focus.Modal,
+                node.frameRect
+              )
+            }
 
   private def surfaceControls(state: AppState, nodes: List[SceneNode]): List[AccessibleNode] =
     nodes.flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
-        state.surfaceById(surfaceId).toList.flatMap { surface =>
-          controlsFor(surface, node.frameRect, state) ++ statusFor(surface, node.frameRect)
-        }
+        state.surfaceById(surfaceId) match
+          case Some(surface) =>
+            controlsFor(surface, node.frameRect, state) ++ statusFor(surfaceId, surface.content, node.frameRect)
+          case None =>
+            state.runtime.modalStack.find(_.id == surfaceId).toList.flatMap { dialog =>
+              modalControls(dialog.id, dialog.modal, node.frameRect, state) ++
+                statusFor(dialog.id, SurfaceContent.ModalWorkflow(dialog.modal), node.frameRect)
+            }
       case _ => Nil
     }
 
@@ -120,10 +142,10 @@ object AccessibilitySnapshot:
       case content if isPinned(surface.presentation)      => pinnedControls(surface.id, content, frameRect, state)
       case _                                              => Nil
 
-  private def statusFor(surface: UiSurface, frameRect: LayoutRect): List[AccessibleNode] =
-    statusMessage(surface.content).toList.map { message =>
+  private def statusFor(surfaceId: SurfaceId, content: SurfaceContent, frameRect: LayoutRect): List[AccessibleNode] =
+    statusMessage(content).toList.map { message =>
       AccessibleNode(
-        s"surface:${surface.id.value}/status",
+        s"surface:${surfaceId.value}/status",
         AccessibilityRole.Status,
         "Status",
         Some(message),
@@ -258,7 +280,11 @@ object AccessibilitySnapshot:
               hit.semanticLabel,
               value,
               box.selected,
-              state.persisted.focus == Focus.Surface(surfaceId) && box.selected,
+              // Modeless modal workflows focus as `Focus.Surface(surfaceId)`; blocking ModalDialogs (#814) focus as
+              // the id-less `Focus.Modal` instead -- `visibleNodes` only ever surfaces the one open dialog's node, so
+              // `Focus.Modal` unambiguously means *this* surfaceId when it matches.
+              (state.persisted.focus == Focus
+                .Surface(surfaceId) || state.persisted.focus == Focus.Modal) && box.selected,
               LayoutRect(hit.rect.x.toInt, hit.rect.y.toInt, hit.rect.width.toInt, hit.rect.height.toInt)
             )
           }

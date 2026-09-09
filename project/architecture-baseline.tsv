@@ -11,8 +11,8 @@ main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseIt
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	713
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method reduceActive	360
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitSubmenu	104
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	639
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	130
+main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	654
+main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	131
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
 main/scala/com/serenity/ui/presets/UiPreset.scala	file length	885
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	615
@@ -29,14 +29,14 @@ test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1283
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
 test/scala/com/serenity/EditorEventReducerSpec.scala	file length	2296
 test/scala/com/serenity/FileHandlingSpec.scala	file length	625
-test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	661
+test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	657
 test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	638
 test/scala/com/serenity/LayoutContractSpec.scala	file length	963
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	728
 test/scala/com/serenity/LineWrappingSpec.scala	file length	747
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745
-test/scala/com/serenity/ModalEventReducerSpec.scala	file length	1131
-test/scala/com/serenity/MouseClickSpec.scala	file length	1063
+test/scala/com/serenity/ModalEventReducerSpec.scala	file length	1125
+test/scala/com/serenity/MouseClickSpec.scala	file length	1055
 test/scala/com/serenity/RendererMarkdownLensSpec.scala	file length	889
 test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	637
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	714
@@ -50,6 +50,6 @@ test/scala/com/serenity/UiPresetSpec.scala	file length	700
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320
 test/scala/com/serenity/rope/RopeSpec.scala	file length	847
-test/scala/com/serenity/state/manager/DamageProducerSpec.scala	file length	923
+test/scala/com/serenity/state/manager/DamageProducerSpec.scala	file length	904
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	663
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	91

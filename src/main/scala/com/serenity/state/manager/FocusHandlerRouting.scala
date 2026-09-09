@@ -56,7 +56,7 @@ private[manager] object FocusHandlerRouting:
       case PanelPosition.Bottom => pinnedBottom
       case PanelPosition.Top    => pinnedTop
 
-  private def forModalType(modalType: ModalType): LocalEventHandler =
+  private[manager] def forModalType(modalType: ModalType): LocalEventHandler =
     modalType match
       case ModalType.GotoLine        => modalGotoLine
       case ModalType.Find            => modalFind
@@ -65,11 +65,9 @@ private[manager] object FocusHandlerRouting:
       case ModalType.CloseWorkflow   => modalCloseWorkflow
       case custom: ModalType.Custom  => new ModalComponent(custom)
 
-  /** The handler for a Modal- or Floating-presented surface, keyed purely by its content.
-    *
-    * `SurfacePresentation.Modal` surfaces are only ever constructed with `SurfaceContent.ModalWorkflow` (see
-    * `ModalStateReducer.show`), so this single content-keyed table correctly serves both presentations -- there is no
-    * separate Modal-only routing decision to keep in sync.
+  /** The handler for a Floating-presented surface, keyed purely by its content. Blocking dialogs (#814) are no longer
+    * `UiSurface`s at all -- they live on `runtime.modalStack` and focus as `Focus.Modal`, routed by
+    * `StateManagerEventPipeline.getLocalHandlerForFocus` via `forModalType` directly, not through this table.
     */
   private[manager] def forSurfaceContent(content: SurfaceContent): LocalEventHandler =
     content match

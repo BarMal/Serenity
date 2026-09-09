@@ -33,11 +33,11 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   private def currentWorkflow(stateManager: StateManager): FileWorkflowState =
     stateManager.getCurrentState
       .unsafeRunSync()
-      .modalSurface
+      .topModal
       .flatMap {
-        _.content match
-          case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some(workflow)
-          case _                                                          => None
+        _.modal match
+          case Modal.FileWorkflow(workflow) => Some(workflow)
+          case _                            => None
       }
       .getOrElse(fail("Expected active file workflow modal"))
 
@@ -120,7 +120,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       stateManager.applyEvent(Enter).unsafeRunSync()
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.modalSurface shouldBe None
+      updatedState.topModal shouldBe None
       Files.readString(targetFile) shouldBe bufferText
       updatedState.persisted.buffers(bufferId).document.filePath shouldBe Some(targetFile)
       updatedState.persisted.buffers(bufferId).document.isDirty shouldBe false
@@ -170,7 +170,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       stateManager.applyEvent(ModalCreateDirectory).unsafeRunSync()
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.modalSurface shouldBe None
+      updatedState.topModal shouldBe None
       Files.readString(targetFile) shouldBe bufferText
       updatedState.persisted.buffers(bufferId).document.filePath shouldBe Some(targetFile)
       updatedState.persisted.buffers(bufferId).document.isDirty shouldBe false
@@ -235,7 +235,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       stateManager.applyEvent(Enter).unsafeRunSync()
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.modalSurface shouldBe None
+      updatedState.topModal shouldBe None
       updatedState.persisted.bufferOrder should have size (initialState.persisted.bufferOrder.size + 1)
       val openedBufferId = updatedState.persisted.bufferOrder.last
       updatedState.focusedBufferId shouldBe Some(openedBufferId)

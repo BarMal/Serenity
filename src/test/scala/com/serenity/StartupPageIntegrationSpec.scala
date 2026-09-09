@@ -285,8 +285,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       // Startup page remains visible -- the dialog opened on top of it.
       _ = state.startPageSurface should be(defined)
       // The file dialog is a blocking modal: centered and always visible regardless of editor state.
-      _ = state.blockingModalSurfaces should have size 1
-      _ = state.blockingModalSurfaces.head.presentation shouldBe SurfacePresentation.Modal
+      _ = state.runtime.modalStack should have size 1
+      _ = state.runtime.modalStack.head.placement shouldBe ModalPlacement.Centered
     yield ()
 
     program.unsafeRunSync()

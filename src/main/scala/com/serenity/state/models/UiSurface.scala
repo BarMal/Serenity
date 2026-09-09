@@ -223,7 +223,6 @@ enum SurfacePlacement:
 
 enum SurfacePresentation:
   case Floating(anchor: Option[CursorPosition], placement: SurfacePlacement)
-  case Modal
   case Pinned(position: PanelPosition, size: Int)
   case Expanded(originalPosition: PanelPosition, originalSize: Int)
 

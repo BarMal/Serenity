@@ -127,7 +127,7 @@ final private[manager] class StateManagerWorkflowCapability(
   private[manager] def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
       closeWorkflowSurface(state, surfaceId) match
-        case Some((_, workflow)) =>
+        case Some(workflow) =>
           workflow.selectedChoice match
             case CloseWorkflowChoice.Cancel =>
               dismissSurfaceAndFocusEditor(surfaceId) >>
@@ -203,10 +203,18 @@ final private[manager] class StateManagerWorkflowCapability(
     state.copy(runtime = state.runtime.copy(actionStack = Nil))
 
   protected def dismissModalSurface(state: AppState): AppState =
-    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot {
-      case UiSurface(_, SurfaceContent.ModalWorkflow(_), _, _) => true
-      case _                                                   => false
-    }))
+    state.copy(runtime =
+      state.runtime.copy(
+        uiSurfaces = state.runtime.uiSurfaces.filterNot {
+          case UiSurface(_, SurfaceContent.ModalWorkflow(_), _, _) => true
+          case _                                                   => false
+        },
+        // CloseWorkflow/FileWorkflow (#814) live here instead of uiSurfaces -- every caller of this function is
+        // finishing a close/save workflow chain (including a Save-As dialog nested on top of a close confirmation),
+        // so clearing the whole stack matches the uiSurfaces filter's original "every ModalWorkflow surface" intent.
+        modalStack = Nil
+      )
+    )
 
   private[manager] def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     fileWorkflow.refreshFileWorkflowEffect(surfaceId)
@@ -292,14 +300,15 @@ final private[manager] class StateManagerWorkflowCapability(
 
   protected def updateFileWorkflowSurface(surfaceId: SurfaceId, workflow: FileWorkflowState): IO[Unit] =
     stateRef.update { state =>
-      state.surfaceById(surfaceId) match
-        case Some(surface) =>
-          val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)))
-          state.copy(runtime =
-            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId) :+ updatedSurface)
+      if state.runtime.modalStack.exists(_.id == surfaceId) then
+        state.copy(runtime =
+          state.runtime.copy(modalStack =
+            state.runtime.modalStack.map(dialog =>
+              if dialog.id == surfaceId then dialog.copy(modal = Modal.FileWorkflow(workflow)) else dialog
+            )
           )
-        case None =>
-          state
+        )
+      else state
     }
 
   protected def updateReplaceWorkflowSurface(surfaceId: SurfaceId, workflow: ReplaceWorkflowState): IO[Unit] =
@@ -316,25 +325,26 @@ final private[manager] class StateManagerWorkflowCapability(
 
   protected def dismissSurfaceAndFocusEditor(surfaceId: SurfaceId): IO[Unit] =
     stateRef.update { state =>
-      val baseState =
-        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId)))
+      val baseState = state.copy(runtime =
+        state.runtime.copy(
+          uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId),
+          modalStack = state.runtime.modalStack.filterNot(_.id == surfaceId)
+        )
+      )
       state.persisted.layout.activeEditorPaneId match
         case Some(paneId) => baseState.copy(persisted = baseState.persisted.copy(focus = Focus.EditorPane(paneId)))
         case None         => baseState
     }
 
-  protected def fileWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[(UiSurface, FileWorkflowState)] =
-    state.surfaceById(surfaceId).flatMap { surface =>
-      surface.content match
-        case SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)) => Some((surface, workflow))
-        case _                                                          => None
+  protected def fileWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[FileWorkflowState] =
+    state.runtime.modalStack.find(_.id == surfaceId).collect {
+      case ModalDialog(_, Modal.FileWorkflow(workflow), _) =>
+        workflow
     }
 
-  protected def closeWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[(UiSurface, CloseWorkflowState)] =
-    state.surfaceById(surfaceId).flatMap { surface =>
-      surface.content match
-        case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some((surface, workflow))
-        case _                                                           => None
+  protected def closeWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[CloseWorkflowState] =
+    state.runtime.modalStack.find(_.id == surfaceId).collect {
+      case ModalDialog(_, Modal.CloseWorkflow(workflow), _) => workflow
     }
 
   /** Every branch here ends its own structural commit unchecked (session deserialization, or the buffer/pane creation

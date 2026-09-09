@@ -306,10 +306,14 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
-  it should "report Everything when a floating/pinned/modal surface appears" in {
-    val before  = stateWithContent("alpha")
-    val surface = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
-    val after   = before.copy(runtime = before.runtime.copy(uiSurfaces = surface :: before.runtime.uiSurfaces))
+  it should "report Everything when a floating/pinned surface appears" in {
+    val before = stateWithContent("alpha")
+    val surface = UiSurface(
+      SurfaceId("palette"),
+      SurfaceContent.Comments(Nil),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val after = before.copy(runtime = before.runtime.copy(uiSurfaces = surface :: before.runtime.uiSurfaces))
 
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
@@ -322,17 +326,6 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     )
     val bare   = stateWithContent("alpha")
     val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
-    val after = before.copy(runtime =
-      before.runtime.copy(uiSurfaces = List(surface.copy(content = SurfaceContent.Diagnostics(Nil))))
-    )
-
-    DamageProducer.forTransition(before, after) shouldBe Damage.Surface(SurfaceId("palette"))
-  }
-
-  it should "report Damage.Surface scoped to the modal when only its own content changes" in {
-    val surface = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
-    val bare    = stateWithContent("alpha")
-    val before  = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
     val after = before.copy(runtime =
       before.runtime.copy(uiSurfaces = List(surface.copy(content = SurfaceContent.Diagnostics(Nil))))
     )
@@ -366,28 +359,11 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.Surface(SurfaceId("outline"))
   }
 
-  it should "report Everything when the modal changes alongside another surface" in {
-    val modal = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
-    val pinned = UiSurface(
-      SurfaceId("outline"),
-      SurfaceContent.Outline(Nil),
-      SurfacePresentation.Pinned(PanelPosition.Left, 20)
-    )
+  it should "report Everything when a surface's presentation kind changes" in {
+    val surface =
+      UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Pinned(PanelPosition.Left, 20))
     val bare   = stateWithContent("alpha")
-    val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(modal, pinned)))
-    val after = before.copy(runtime =
-      before.runtime.copy(uiSurfaces =
-        List(modal.copy(content = SurfaceContent.Diagnostics(Nil)), pinned.copy(dismissOnMove = true))
-      )
-    )
-
-    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
-  }
-
-  it should "report Everything when a surface's presentation changes away from Modal" in {
-    val surface = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
-    val bare    = stateWithContent("alpha")
-    val before  = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
+    val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
     val after = before.copy(runtime =
       before.runtime.copy(uiSurfaces =
         List(surface.copy(presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)))
@@ -405,12 +381,17 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
-  it should "report no damage from uiSurfaces or focus when neither changes" in {
-    val surface = UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Modal)
-    val bare    = stateWithContent("alpha")
+  it should "report no damage from uiSurfaces, modalStack or focus when neither changes" in {
+    val surface = UiSurface(
+      SurfaceId("palette"),
+      SurfaceContent.Comments(Nil),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    )
+    val dialog = ModalDialog(SurfaceId("goto"), Modal.GotoLine(""), ModalPlacement.Centered)
+    val bare   = stateWithContent("alpha")
     val state = bare.copy(
-      persisted = bare.persisted.copy(focus = Focus.Surface(SurfaceId("palette"))),
-      runtime = bare.runtime.copy(uiSurfaces = List(surface))
+      persisted = bare.persisted.copy(focus = Focus.Modal),
+      runtime = bare.runtime.copy(uiSurfaces = List(surface), modalStack = List(dialog))
     )
 
     DamageProducer.forTransition(state, state) shouldBe Damage.Nothing

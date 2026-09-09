@@ -156,16 +156,14 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "dim the workspace behind a blocking modal without depending on motion settings" in {
-    val close = UiSurface(
+    val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala"))
-      ),
-      SurfacePresentation.Modal
+      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+      ModalPlacement.Centered
     )
     val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(close.id)),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(close))
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(modalStack = List(close))
     )
     val surface = new MockRenderSurface(100, 30)
 
@@ -190,7 +188,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     val modalId   = SurfaceId("surface-1")
     val state = AppState.empty.copy(
       persisted = AppState.empty.persisted.copy(
-        focus = Focus.Surface(modalId),
+        focus = Focus.Modal,
         theme = Theme.light
       ),
       runtime = AppState.empty.runtime.copy(
@@ -199,16 +197,16 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
             startupId,
             SurfaceContent.StartPage(startPage),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          ),
-          UiSurface(modalId, SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)), SurfacePresentation.Modal)
-        )
+          )
+        ),
+        modalStack = List(ModalDialog(modalId, Modal.FileWorkflow(workflow), ModalPlacement.Centered))
       )
     )
     val viewportSize = ViewportSize(100, 30)
     val surface      = new MockRenderSurface(100, 30)
     val layout       = LayoutEngine.calculateLayout(state, viewportSize)
-    val modalSurface = state.runtime.uiSurfaces.find(_.id == modalId).getOrElse(fail("Expected modal surface"))
-    val modalRect    = LayoutEngine.calculateModalRect(modalSurface, state, layout)
+    val modalDialog  = state.runtime.modalStack.find(_.id == modalId).getOrElse(fail("Expected modal dialog"))
+    val modalRect    = LayoutEngine.calculateModalRect(modalDialog, state, layout)
 
     RendererEntryPoints.render(state, cursorVisible = true, surface, viewportSize)
 

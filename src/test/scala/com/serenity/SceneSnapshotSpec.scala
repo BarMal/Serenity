@@ -175,16 +175,14 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "place blocking close workflows above the workspace with a backdrop" in {
-    val close = UiSurface(
+    val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
-      ),
-      SurfacePresentation.Modal
+      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")),
+      ModalPlacement.Centered
     )
     val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(close.id)),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(close))
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(modalStack = List(close))
     )
 
     val scene = UiSceneSnapshot.from(state, viewport)
@@ -202,16 +200,14 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.QuickInfo("map"),
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.AboveCursor)
     )
-    val close = UiSurface(
+    val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
-      ),
-      SurfacePresentation.Modal
+      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")),
+      ModalPlacement.Centered
     )
     val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(close.id)),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(floating, close))
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(uiSurfaces = List(floating), modalStack = List(close))
     )
 
     val scene = UiSceneSnapshot.from(state, viewport)

@@ -294,34 +294,31 @@ final case class AppState(
       case _                                      => false
     }
 
-  /** Modal surfaces ordered from their parent to the topmost child. */
-  def modalSurfaces: List[UiSurface] =
-    runtime.uiSurfaces.collect { case surface @ UiSurface(_, _, SurfacePresentation.Modal, _) => surface }
+  /** The topmost dialog on the explicit modal layer (#814), if any. */
+  def topModal: Option[ModalDialog] =
+    runtime.modalStack.lastOption
 
-  /** Compatibility alias for callers that still name modal ownership as blocking. */
-  def blockingModalSurfaces: List[UiSurface] =
-    modalSurfaces
-
-  /** The only modal workflow permitted to receive input while a confirmation is open. */
-  def topBlockingModalSurface: Option[UiSurface] =
-    blockingModalSurfaces.lastOption
-
-  def topModalSurface: Option[UiSurface] =
-    modalSurfaces.lastOption
-
-  /** The active modal workflow, retaining modeless workflow lookup during migration. */
+  /** The active *modeless* modal workflow surface (GotoLine/Find/ReplaceWorkflow/Custom) -- blocking dialogs live on
+    * `runtime.modalStack` instead, see `topModal`.
+    */
   def modalSurface: Option[UiSurface] =
-    topModalSurface.orElse(runtime.uiSurfaces.reverse.find(isModalWorkflow))
+    runtime.uiSurfaces.reverse.find(isModalWorkflow)
 
   def hasBlockingModal: Boolean =
-    topBlockingModalSurface.nonEmpty
+    runtime.modalStack.nonEmpty
 
-  /** Remove the topmost modal workflow and restore the focus that opened it. */
+  /** Remove the topmost modal dialog (or, absent one, the focused modeless modal workflow surface) and restore the
+    * focus that opened it.
+    */
   def dismissTopModal: AppState =
-    topModalSurface.orElse(activeSurface.filter(isModalWorkflow)) match
-      case Some(surface) =>
-        copy(runtime = runtime.copy(uiSurfaces = runtime.uiSurfaces.filterNot(_.id == surface.id))).popFocus
-      case None => this
+    topModal match
+      case Some(_) =>
+        copy(runtime = runtime.copy(modalStack = runtime.modalStack.dropRight(1))).popFocus
+      case None =>
+        activeSurface.filter(isModalWorkflow) match
+          case Some(surface) =>
+            copy(runtime = runtime.copy(uiSurfaces = runtime.uiSurfaces.filterNot(_.id == surface.id))).popFocus
+          case None => this
 
   def peekSurface: Option[UiSurface] =
     runtime.uiSurfaces.find {
@@ -354,6 +351,8 @@ final case class AppState(
       case head :: tail =>
         head match
           case Focus.Surface(sid) if surfaceById(sid).isEmpty =>
+            copy(runtime = runtime.copy(focusHistory = tail)).popFocus
+          case Focus.Modal if runtime.modalStack.isEmpty =>
             copy(runtime = runtime.copy(focusHistory = tail)).popFocus
           case validFocus =>
             copy(persisted = persisted.copy(focus = validFocus), runtime = runtime.copy(focusHistory = tail))

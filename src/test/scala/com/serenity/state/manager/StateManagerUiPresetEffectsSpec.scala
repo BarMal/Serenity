@@ -97,7 +97,11 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     */
   private def commandPaletteState(base: AppState = AppState.initial): AppState =
     val surface =
-      UiSurface(SurfaceId("palette"), SurfaceContent.CommandPalette(CommandRunner.empty), SurfacePresentation.Modal)
+      UiSurface(
+        SurfaceId("palette"),
+        SurfaceContent.CommandPalette(CommandRunner.empty),
+        SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+      )
     base.copy(runtime = base.runtime.copy(uiSurfaces = base.runtime.uiSurfaces :+ surface))
 
   "StateManagerUiPresetEffects" should "ignore SaveUiPresetAsNew with a blank name" in {

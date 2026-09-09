@@ -23,14 +23,10 @@ class ModalEventReducerFileOpenSpec extends AnyFlatSpec with Matchers:
       )
     )
     val initialState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("file-workflow"))),
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
       runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("file-workflow"),
-            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(initialWorkflow)),
-            SurfacePresentation.Modal
-          )
+        modalStack = List(
+          ModalDialog(SurfaceId("file-workflow"), Modal.FileWorkflow(initialWorkflow), ModalPlacement.Centered)
         )
       )
     )
@@ -38,9 +34,7 @@ class ModalEventReducerFileOpenSpec extends AnyFlatSpec with Matchers:
     val result = ModalEventReducer.reduce(ModalType.FileWorkflow, TabKey, initialState)
 
     result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.SubmitFileWorkflow(SurfaceId("file-workflow"))))
-    result.state.modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(
-        Modal.FileWorkflow(initialWorkflow.copy(path = "/tmp/notes.txt"))
-      )
+    result.state.topModal.map(_.modal) shouldBe Some(
+      Modal.FileWorkflow(initialWorkflow.copy(path = "/tmp/notes.txt"))
     )
   }

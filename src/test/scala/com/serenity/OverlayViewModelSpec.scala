@@ -369,16 +369,10 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val workflow  = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        focus = Focus.Surface(surfaceId)
+        focus = Focus.Modal
       ),
       runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            surfaceId,
-            SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)),
-            SurfacePresentation.Modal
-          )
-        )
+        modalStack = List(ModalDialog(surfaceId, Modal.CloseWorkflow(workflow), ModalPlacement.Centered))
       )
     )
     val scene   = UiSceneSnapshot.from(state, ViewportSize(80, 24))
