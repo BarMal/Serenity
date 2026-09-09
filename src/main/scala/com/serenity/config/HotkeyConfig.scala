@@ -339,7 +339,7 @@ object HotkeyConfig:
       HotkeyAction.SplitPaneVertical   -> List(primary('d', shift = true)),
       // Shift-for-the-broader-scope variant of CloseTab, same pattern as FileSearch over Find and
       // ToggleContextualToolbar over NewTab above: closing a pane is a bigger action than closing one of its tabs.
-      HotkeyAction.ClosePane  -> List(primary('w', shift = true)),
+      HotkeyAction.ClosePane -> List(primary('w', shift = true)),
       HotkeyAction.FileSearch -> List(
         primary('f', shift = true)
       ),

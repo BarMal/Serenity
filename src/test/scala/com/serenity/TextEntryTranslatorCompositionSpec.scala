@@ -66,8 +66,9 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "translate the close-pane hotkey into a ClosePane event, distinct from Ctrl+W's CloseTab" in {
-    val closeTab  = translator.translate(KeyStrokeInfo(InputKey.Character, Some('w'), Set(Modifier.Ctrl)))
-    val closePane = translator.translate(KeyStrokeInfo(InputKey.Character, Some('w'), Set(Modifier.Ctrl, Modifier.Shift)))
+    val closeTab = translator.translate(KeyStrokeInfo(InputKey.Character, Some('w'), Set(Modifier.Ctrl)))
+    val closePane =
+      translator.translate(KeyStrokeInfo(InputKey.Character, Some('w'), Set(Modifier.Ctrl, Modifier.Shift)))
 
     closeTab shouldBe CloseTab
     closePane shouldBe ClosePane
