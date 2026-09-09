@@ -90,11 +90,13 @@ final private[manager] class StateManagerWorkflowCapability(
     dirtyBufferIds match
       case Nil =>
         val finalState = clearCloseActions(stateAfterClean)
-        stateRef.set(finalState) >>
-          IO.whenA(scope == CloseScope.Quit)(
-            sessionPersistence.onAppClose(finalState) >>
-              quitSignal.complete(()).attempt.void
-          )
+        validateAndUpdateState(finalState, state) >>
+          stateRef.get.flatMap { committed =>
+            IO.whenA(scope == CloseScope.Quit)(
+              sessionPersistence.onAppClose(committed) >>
+                quitSignal.complete(()).attempt.void
+            )
+          }
       case currentBufferId :: remaining =>
         promptCloseWorkflow(
           stateAfterClean,
@@ -120,7 +122,7 @@ final private[manager] class StateManagerWorkflowCapability(
     val focusedState = focusBufferForWorkflow(state, workflow.currentBufferId)
     val modalState =
       ModalStateReducer.show(Modal.CloseWorkflow(workflow), withCloseAction(focusedState, workflow)).state
-    stateRef.set(modalState)
+    validateAndUpdateState(modalState, state)
 
   private[manager] def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
@@ -129,11 +131,12 @@ final private[manager] class StateManagerWorkflowCapability(
           workflow.selectedChoice match
             case CloseWorkflowChoice.Cancel =>
               dismissSurfaceAndFocusEditor(surfaceId) >>
-                stateRef.update(clearCloseActions)
+                stateRef.get.flatMap(current => validateAndUpdateState(clearCloseActions(current), current))
             case CloseWorkflowChoice.Discard =>
               val dismissedState = clearCloseActions(dismissModalSurface(state))
               val nextState      = closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
-              stateRef.set(nextState) >> continueCloseWorkflow(workflow, nextState)
+              validateAndUpdateState(nextState, state) >>
+                stateRef.get.flatMap(committed => continueCloseWorkflow(workflow, committed))
             case CloseWorkflowChoice.Save =>
               state.persisted.buffers.get(workflow.currentBufferId) match
                 case Some(buffer) if buffer.document.filePath.isDefined =>
@@ -141,12 +144,13 @@ final private[manager] class StateManagerWorkflowCapability(
                     stateRef.get.flatMap { savedState =>
                       val dismissedState = clearCloseActions(dismissModalSurface(savedState))
                       val nextState      = closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
-                      stateRef.set(nextState) >> continueCloseWorkflow(workflow, nextState)
+                      validateAndUpdateState(nextState, savedState) >>
+                        stateRef.get.flatMap(committed => continueCloseWorkflow(workflow, committed))
                     }
                 case Some(_) =>
                   requestSaveAsFileDialog(state, Some(workflow.currentBufferId))
                 case None =>
-                  stateRef.set(clearCloseActions(dismissModalSurface(state)))
+                  validateAndUpdateState(clearCloseActions(dismissModalSurface(state)), state)
         case None =>
           IO.unit
     }
@@ -165,11 +169,13 @@ final private[manager] class StateManagerWorkflowCapability(
         )
       case Nil =>
         val finalState = clearCloseActions(state)
-        stateRef.set(finalState) >>
-          IO.whenA(workflow.scope == CloseScope.Quit)(
-            sessionPersistence.onAppClose(finalState) >>
-              quitSignal.complete(()).attempt.void
-          )
+        validateAndUpdateState(finalState, state) >>
+          stateRef.get.flatMap { committed =>
+            IO.whenA(workflow.scope == CloseScope.Quit)(
+              sessionPersistence.onAppClose(committed) >>
+                quitSignal.complete(()).attempt.void
+            )
+          }
 
   protected def focusBufferForWorkflow(state: AppState, bufferId: BufferId): AppState =
     EditorState.focusBuffer(EditorState.rebalancePanes(state, Some(bufferId)), bufferId)
@@ -229,7 +235,8 @@ final private[manager] class StateManagerWorkflowCapability(
           val nextState =
             if closeWorkflow.scope == CloseScope.Quit then dismissedState
             else closeBufferUsingExistingFlow(dismissedState, bufferId)
-          stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
+          validateAndUpdateState(nextState, savedState) >>
+            stateRef.get.flatMap(committed => continueCloseWorkflow(closeWorkflow, committed))
         case _ =>
           dismissSurfaceAndFocusEditor(surfaceId)
     }
@@ -272,7 +279,8 @@ final private[manager] class StateManagerWorkflowCapability(
           val nextState =
             if closeWorkflow.scope == CloseScope.Quit then dismissedState
             else closeBufferUsingExistingFlow(dismissedState, bufferId)
-          stateRef.set(nextState) >> continueCloseWorkflow(closeWorkflow, nextState)
+          validateAndUpdateState(nextState, savedState) >>
+            stateRef.get.flatMap(committed => continueCloseWorkflow(closeWorkflow, committed))
         case None =>
           IO.unit
     }
@@ -329,12 +337,21 @@ final private[manager] class StateManagerWorkflowCapability(
         case _                                                           => None
     }
 
+  /** Every branch here ends its own structural commit unchecked (session deserialization, or the buffer/pane creation
+    * in `createDefaultStartupBuffer`), with nothing downstream re-validating the result -- unlike, say,
+    * `ComponentResult.Dismiss`'s equivalent buffer/pane creation, whose caller re-validates the composed result before
+    * committing (`StateManagerEventPipeline.applyEvent`). A corrupted or hand-edited session file, restored unchecked
+    * on literal app startup, is exactly the kind of public mutation path #858 asks every commit to go through, so each
+    * branch below re-validates its own final result rather than trusting the unchecked intermediate steps.
+    */
   private[manager] def restoreStartupSession(): IO[Unit] =
     logger.info("[CMD] Session restore requested") >>
       loadSession().flatMap {
         case Some(restoredState) if restoredState.persisted.bufferOrder.nonEmpty =>
           logger.info("[CMD] Session loaded successfully") >>
-            updateState(current => restoreSessionIntoCurrentViewport(restoredState, current))
+            stateRef.get.flatMap(current =>
+              validateAndUpdateState(restoreSessionIntoCurrentViewport(restoredState, current), current)
+            )
         case Some(_) =>
           logger.info("[CMD] Session loaded with no buffers - creating default session") >>
             createDefaultStartupBuffer()
@@ -344,16 +361,21 @@ final private[manager] class StateManagerWorkflowCapability(
       }
 
   private def createDefaultStartupBuffer(): IO[Unit] =
-    updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
-      createNewEmptyBuffer().flatMap { bufferId =>
-        updateState(s => s.copy(persisted = s.persisted.copy(bufferOrder = s.persisted.bufferOrder :+ bufferId))) >>
-          createPane(Some(bufferId)).flatMap(paneId => switchToPane(paneId))
-      }
+    stateRef.get.flatMap { before =>
+      updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
+        createNewEmptyBuffer().flatMap { bufferId =>
+          updateState(s => s.copy(persisted = s.persisted.copy(bufferOrder = s.persisted.bufferOrder :+ bufferId))) >>
+            createPane(Some(bufferId)).flatMap { paneId =>
+              switchToPane(paneId) >>
+                stateRef.get.flatMap(finalState => validateAndUpdateState(finalState, before))
+            }
+        }
+    }
 
   private[manager] def createStartupSession(): IO[Unit] =
-    updateState { state =>
-      val opened = EditorState.openNewTab(state)
-      opened.copy(runtime = opened.runtime.copy(uiSurfaces = List.empty))
+    stateRef.get.flatMap { before =>
+      val opened = EditorState.openNewTab(before)
+      validateAndUpdateState(opened.copy(runtime = opened.runtime.copy(uiSurfaces = List.empty)), before)
     }
 
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =

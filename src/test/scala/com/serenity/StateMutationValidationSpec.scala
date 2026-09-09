@@ -4,7 +4,8 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.Enter
+import com.serenity.command.CommandRegistry
+import com.serenity.keystroke.events.{Enter, TabKey}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -97,4 +98,69 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
       finally
         Files.deleteIfExists(targetFile)
         Files.deleteIfExists(tempRoot)
+    }
+
+  /** #1183 item 1: the close-workflow family (`beginCloseAction`, `promptCloseWorkflow`, `submitCloseWorkflowEffect`,
+    * `continueCloseWorkflow`) commits every step via direct `stateRef.set`, bypassing `validateAndUpdateState`
+    * entirely. A close-all/close-others/quit sequence queues each dirty buffer's id in `CloseWorkflowState
+    * .remainingBufferIds`, captured once when the sequence begins; if a queued buffer is no longer live by the time
+    * `continueCloseWorkflow` resumes for it (some other unchecked mutation path removed it in the meantime -- exactly
+    * the class of drift this suite already proves for `nextBufferId`), `promptCloseWorkflow`'s call to
+    * `EditorState.rebalancePanes`/`assignBuffersToPanes` (see `EditorState.scala`'s `case None` branch, which assigns
+    * `pane.copy(bufferId = Some(focusedBufferId))` without checking the buffer still exists) commits a pane pointing at
+    * a nonexistent buffer -- with no `closeFocusedTab`/`removeBuffer` call afterward to clean it up, unlike the
+    * discard/save branches that immediately close the buffer they just focused.
+    */
+  "A close-all workflow" should
+    "not commit a pane referencing a buffer removed from under a still-queued close step" in {
+      val stateManager   = createStateManager()
+      val secondBufferId = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
+      val closeAllCommand = CommandRegistry.default
+        .findCommand("close-all")
+        .getOrElse(fail("\"close-all\" command not registered in CommandRegistry.default"))
+
+      stateManager
+        .updateState { state =>
+          val dirtyBuffers =
+            state.persisted.buffers.view.mapValues(b => b.copy(document = b.document.copy(isDirty = true))).toMap
+          state.copy(persisted = state.persisted.copy(buffers = dirtyBuffers))
+        }
+        .unsafeRunSync()
+
+      stateManager.commandExecutor.executeCommand(closeAllCommand).unsafeRunSync()
+
+      val afterFirstPrompt = stateManager.getCurrentState.unsafeRunSync()
+      afterFirstPrompt.modalSurface.flatMap {
+        _.content match
+          case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow)
+          case _                                                           => None
+      } match
+        case Some(workflow) =>
+          workflow.currentBufferId shouldBe BufferId(0)
+          workflow.remainingBufferIds shouldBe List(secondBufferId)
+        case None => fail("Expected a close-workflow modal for the first dirty buffer")
+
+      // Drift: the second buffer -- still queued in `remainingBufferIds` -- disappears from `persisted.buffers` out
+      // from under the in-flight close-all sequence, simulating some other unchecked mutation path having removed it.
+      stateManager
+        .updateState { state =>
+          state.copy(persisted =
+            state.persisted.copy(
+              buffers = state.persisted.buffers - secondBufferId,
+              bufferOrder = state.persisted.bufferOrder.filterNot(_ == secondBufferId)
+            )
+          )
+        }
+        .unsafeRunSync()
+
+      // Discard the (still-live) first buffer, which resumes the close-all sequence onto the now-stale second one.
+      stateManager.applyEvent(TabKey).unsafeRunSync()
+      stateManager.applyEvent(Enter).unsafeRunSync()
+
+      val after = stateManager.getCurrentState.unsafeRunSync()
+      after.isValid shouldBe true
+      AppStateValidation.validationErrors(after) shouldBe empty
+      after.persisted.layout.editorPanes.values.foreach { pane =>
+        pane.bufferId.foreach(bufferId => after.persisted.buffers should contain key bufferId)
+      }
     }
