@@ -52,6 +52,9 @@ object AppEventReducer:
       case SplitPaneVertical =>
         ReducerResult.noEffects(EditorState.splitFocusedPane(state, SplitAxis.Vertical))
 
+      case ClosePane =>
+        ReducerResult.noEffects(EditorState.removeFocusedPane(state))
+
       case NextTab =>
         ReducerResult.noEffects(EditorState.navigateToNextBuffer(state))
 

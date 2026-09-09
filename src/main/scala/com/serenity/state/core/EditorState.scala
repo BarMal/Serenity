@@ -195,6 +195,14 @@ object EditorState:
             )
           }
 
+  /** Removes the currently focused (or active, if focus is elsewhere -- e.g. a surface) editor pane. A no-op if there
+    * is no pane to target.
+    */
+  def removeFocusedPane(state: AppState): AppState =
+    focusedPaneId(state) match
+      case Some(paneId) => removePane(state, paneId)
+      case None         => state
+
   /** The pane a global, focus-independent pane action (split, close, directional-focus-move) should target: the focused
     * editor pane, or -- when focus is elsewhere, e.g. a surface -- the last active one.
     */

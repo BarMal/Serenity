@@ -22,6 +22,7 @@ enum HotkeyAction:
   case CloseTab
   case SplitPaneHorizontal
   case SplitPaneVertical
+  case ClosePane
   case FileSearch
   case NextTab
   case PreviousTab
@@ -49,6 +50,7 @@ enum HotkeyAction:
       case CloseTab                 => "close_tab"
       case SplitPaneHorizontal      => "split_pane_horizontal"
       case SplitPaneVertical        => "split_pane_vertical"
+      case ClosePane                => "close_pane"
       case FileSearch               => "file_search"
       case NextTab                  => "next_tab"
       case PreviousTab              => "previous_tab"
@@ -335,6 +337,9 @@ object HotkeyConfig:
       // pattern as `FileSearch` over `Find` and `ToggleContextualToolbar` over `NewTab` below.
       HotkeyAction.SplitPaneHorizontal -> List(primary('d')),
       HotkeyAction.SplitPaneVertical   -> List(primary('d', shift = true)),
+      // Shift-for-the-broader-scope variant of CloseTab, same pattern as FileSearch over Find and
+      // ToggleContextualToolbar over NewTab above: closing a pane is a bigger action than closing one of its tabs.
+      HotkeyAction.ClosePane -> List(primary('w', shift = true)),
       HotkeyAction.FileSearch -> List(
         primary('f', shift = true)
       ),

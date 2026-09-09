@@ -187,6 +187,48 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     EditorState.splitFocusedPane(noPaneState, com.serenity.ui.layout.SplitAxis.Horizontal) shouldBe noPaneState
   }
 
+  "EditorState.removeFocusedPane" should "remove the focused pane and re-focus the next available one" in {
+    val withSecondPane = addPane(AppState.initial, PaneId(0), PaneId(1), BufferId(0))
+    val focused = withSecondPane.copy(persisted =
+      withSecondPane.persisted.copy(
+        layout = withSecondPane.persisted.layout.copy(activeEditorPaneId = Some(PaneId(1))),
+        focus = Focus.EditorPane(PaneId(1))
+      )
+    )
+
+    val updatedState = EditorState.removeFocusedPane(focused)
+
+    updatedState.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0))
+    updatedState.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(0))
+    updatedState.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
+  it should "target the active pane when focus is on a surface rather than an editor pane" in {
+    val withSecondPane             = addPane(AppState.initial, PaneId(0), PaneId(1), BufferId(0))
+    val (withSurfaceId, surfaceId) = withSecondPane.allocateSurfaceId
+    val focusedOnSurface = withSurfaceId.copy(persisted =
+      withSurfaceId.persisted.copy(
+        layout = withSurfaceId.persisted.layout.copy(activeEditorPaneId = Some(PaneId(1))),
+        focus = Focus.Surface(surfaceId)
+      )
+    )
+
+    val updatedState = EditorState.removeFocusedPane(focusedOnSurface)
+
+    updatedState.persisted.layout.editorPanes.keySet shouldBe Set(PaneId(0))
+  }
+
+  it should "leave state unchanged when there is no pane to target" in {
+    val noPaneState = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        layout = AppState.initial.persisted.layout.copy(activeEditorPaneId = None),
+        focus = Focus.Surface(SurfaceId("surface-999"))
+      )
+    )
+
+    EditorState.removeFocusedPane(noPaneState) shouldBe noPaneState
+  }
+
   "EditorState.closeFocusedTab" should "keep a single pane and focus the remaining buffer when other tabs exist" in {
     val constrainedViewport = ViewportSize(80, 24)
     val withThreeBuffers = EditorState.openNewTab(

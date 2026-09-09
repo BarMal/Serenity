@@ -206,6 +206,14 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
       vertical shouldBe List(s"$modifier+shift+d")
     }
 
+  it should "bind pane closing to Ctrl+Shift+W (Cmd+Shift+W on macOS), the broader-scope variant of Close Tab" in
+    List("Linux", "Windows", "Mac OS X").foreach { osName =>
+      val bindings = HotkeyConfig.defaultBindingsFor(osName)
+      val modifier = if osName == "Mac OS X" then "meta" else "ctrl"
+
+      bindings(HotkeyAction.ClosePane).map(_.render) shouldBe List(s"$modifier+shift+w")
+    }
+
   it should "round-trip the toggle_shortcuts_help config key" in {
     val configFile = Files.createTempFile("serenity-toggle-shortcuts-help", ".conf")
     Files.writeString(configFile, "hotkey.toggle_shortcuts_help = ctrl+alt+k\n")

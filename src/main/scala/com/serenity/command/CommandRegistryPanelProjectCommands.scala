@@ -95,6 +95,13 @@ private[command] object CommandRegistryPanelProjectCommands:
       CommandIntent.View(ViewIntent.SplitPaneVertical),
       CommandCategory.View,
       label = "Split Pane Vertically"
+    ),
+    Command.typed(
+      "close-pane",
+      "Close the focused editor pane.",
+      CommandIntent.View(ViewIntent.ClosePane),
+      CommandCategory.View,
+      label = "Close Pane"
     )
   )
 

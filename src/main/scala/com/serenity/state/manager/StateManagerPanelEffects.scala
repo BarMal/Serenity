@@ -48,6 +48,8 @@ final private[manager] class StateManagerPanelEffects(
         stateRef.update(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Horizontal))
       case ViewIntent.SplitPaneVertical =>
         stateRef.update(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Vertical))
+      case ViewIntent.ClosePane =>
+        stateRef.update(com.serenity.state.core.EditorState.removeFocusedPane)
       case ViewIntent.PinExplorerPanel =>
         setPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))
       case ViewIntent.PinOutlinePanel =>

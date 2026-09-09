@@ -24,6 +24,7 @@ case object NewTab                        extends GlobalAppEvent // Ctrl+T
 case object CloseTab                      extends GlobalAppEvent // Ctrl+W
 case object SplitPaneHorizontal           extends GlobalAppEvent // Ctrl+D
 case object SplitPaneVertical             extends GlobalAppEvent // Ctrl+Shift+D
+case object ClosePane                     extends GlobalAppEvent // Ctrl+Shift+W
 case object NextTab                       extends GlobalAppEvent // Ctrl+Tab
 case object PreviousTab                   extends GlobalAppEvent // Ctrl+Shift+Tab
 case object FileSearch                    extends GlobalAppEvent // Ctrl+Shift+F
