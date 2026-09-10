@@ -16,7 +16,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.state.undo.UndoState
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -554,7 +554,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         layout = com.serenity.ui.layout.Layout(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId)
       )

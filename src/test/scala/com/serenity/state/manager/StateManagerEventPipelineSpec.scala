@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.Layout
+import com.serenity.ui.layout.{Layout, SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -31,7 +31,17 @@ class StateManagerEventPipelineSpec extends AnyFlatSpec with Matchers:
             paneB -> EditorPane.withBuffer(paneB, bufferB)
           ),
           activeEditorPaneId = Some(focusedPane),
-          paneOrder = List(paneA, paneB)
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("editors"),
+                SplitAxis.Horizontal,
+                0.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneA.value}"), paneA),
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneB.value}"), paneB)
+              )
+            )
+          )
         ),
         focus = Focus.EditorPane(focusedPane)
       )

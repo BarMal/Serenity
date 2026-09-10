@@ -4,7 +4,6 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{
   AppState,
   AppStateValidation,
-  EditorPane,
   PaneId,
   SurfaceContent,
   SurfaceId,
@@ -13,8 +12,8 @@ import com.serenity.state.models.{
 }
 import com.serenity.ui.layout.{
   Layout,
-  PaneSplitDirection,
   PanelPosition,
+  SessionDockedPanel,
   SplitAxis,
   WorkspaceNode,
   WorkspaceNodeId,
@@ -51,31 +50,17 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "convert legacy ordered panes into an equivalent uniform split tree" in {
-    val tree = WorkspaceTree.fromLegacy(
-      List(PaneId(0), PaneId(1), PaneId(2)),
-      PaneSplitDirection.Horizontal
-    )
+  // `WorkspaceTree.fromLegacy` and `Layout.paneOrder`/`splitDirection`/`effectiveWorkspaceTree` (the flat pane-strip
+  // compatibility layer) were removed entirely (#821): `Layout.workspaceTree` is now always current whenever any
+  // editor pane exists, so there is no more "adapt a flat order/direction into a tree on demand" behaviour to cover.
+  // The one surviving piece of that machinery -- seeding a uniform split tree from an ordered pane list, now always
+  // horizontal with no direction parameter -- lives on as `SessionDockedPanel.fallbackWorkspaceTree`'s last-resort
+  // seed, covered below.
+  it should "convert ordered panes into an equivalent uniform horizontal split tree (session/preset fallback seed)" in {
+    val tree = SessionDockedPanel.fallbackWorkspaceTree(List(PaneId(0), PaneId(1), PaneId(2)), Nil)
 
     tree.map(_.paneIds) shouldBe Some(List(PaneId(0), PaneId(1), PaneId(2)))
     tree.flatMap(_.root.axis) shouldBe Some(SplitAxis.Horizontal)
-  }
-
-  it should "adapt legacy layouts in memory without changing their flat pane order" in {
-    val panes = Map(
-      PaneId(0) -> EditorPane.empty(PaneId(0)),
-      PaneId(1) -> EditorPane.empty(PaneId(1))
-    )
-    val layout = Layout(
-      editorPanes = panes,
-      activeEditorPaneId = Some(PaneId(0)),
-      paneOrder = List(PaneId(1), PaneId(0)),
-      splitDirection = PaneSplitDirection.Vertical
-    )
-
-    layout.orderedPaneIds shouldBe List(PaneId(1), PaneId(0))
-    layout.effectiveWorkspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(1), PaneId(0)))
-    layout.effectiveWorkspaceTree.flatMap(_.root.axis) shouldBe Some(SplitAxis.Vertical)
   }
 
   it should "initialize the default layout as one explicit editor leaf" in {

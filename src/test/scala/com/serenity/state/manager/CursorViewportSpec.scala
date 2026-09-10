@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -25,7 +26,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId)
       )

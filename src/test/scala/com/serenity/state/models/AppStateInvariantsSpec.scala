@@ -32,27 +32,10 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     AppStateValidation.validationErrors(invalid) should contain("Active editor pane does not exist: 999")
   }
 
-  behavior of "pane order"
-
-  it should "reject duplicate pane-order entries" in {
-    val base = AppState.initial
-    val invalid = base.copy(persisted =
-      base.persisted.copy(layout = base.persisted.layout.copy(paneOrder = List(PaneId(0), PaneId(0))))
-    )
-
-    invalid.isValid shouldBe false
-    AppStateValidation.validationErrors(invalid) should contain("Pane order contains duplicate entries: 0")
-  }
-
-  it should "reject pane-order entries referencing a pane that no longer exists" in {
-    val base = AppState.initial
-    val invalid = base.copy(persisted =
-      base.persisted.copy(layout = base.persisted.layout.copy(paneOrder = List(PaneId(0), PaneId(7))))
-    )
-
-    invalid.isValid shouldBe false
-    AppStateValidation.validationErrors(invalid) should contain("Pane order references non-existent panes: 7")
-  }
+  // The dedicated "pane order" duplicate/stale-entry checks that used to live here were removed alongside
+  // `Layout.paneOrder` itself (#821): pane order is now derived solely from `workspaceTree`, whose own structural
+  // invariants (`WorkspaceTree.validationErrors` -- duplicate node/pane/surface IDs, missing/unknown panes) are
+  // covered by `WorkspaceTreeSpec` and `StateTransitionSpec`.
 
   behavior of "buffer order"
 

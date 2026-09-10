@@ -4,6 +4,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, EditorPane, PaneId}
+import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -33,7 +34,7 @@ class CommandRunnerCloseAnimationPerformanceSpec extends AnyFlatSpec with Matche
             layout = state.persisted.layout.copy(
               editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
               activeEditorPaneId = Some(paneId),
-              paneOrder = List(paneId)
+              workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
             )
           )
         )

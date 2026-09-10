@@ -5,7 +5,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
-import com.serenity.ui.layout.{Layout, ViewportSize}
+import com.serenity.ui.layout.{Layout, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -83,7 +83,7 @@ class EditorLargeJsonNavigationSpec extends AnyFlatSpec with Matchers:
         layout = Layout(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         )
       ),
       runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(100, 30)))

@@ -43,7 +43,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
         theme = Theme.light
@@ -86,7 +86,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         theme = Theme.light
       ),
@@ -266,7 +266,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout = com.serenity.ui.layout.Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
         theme = Theme.light
@@ -300,7 +300,17 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
             PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
           ),
           activeEditorPaneId = Some(PaneId(1)),
-          paneOrder = List(PaneId(0), PaneId(1))
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("editors"),
+                SplitAxis.Horizontal,
+                0.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)),
+                WorkspaceNode.Leaf(WorkspaceNodeId("editor-1"), PaneId(1))
+              )
+            )
+          )
         ),
         focus = Focus.EditorPane(PaneId(1)),
         theme = Theme.light
@@ -331,7 +341,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
           layout = AppState.initial.persisted.layout.copy(
             editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
             activeEditorPaneId = Some(PaneId(0)),
-            paneOrder = List(PaneId(0))
+            workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
           ),
           focus = Focus.EditorPane(PaneId(0)),
           config = AppState.initial.persisted.config
@@ -372,7 +382,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
         theme = Theme.light
@@ -449,7 +459,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config
@@ -485,7 +495,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config
@@ -518,7 +528,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config
@@ -550,7 +560,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config

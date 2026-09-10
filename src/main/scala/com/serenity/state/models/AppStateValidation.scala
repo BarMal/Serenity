@@ -1,9 +1,7 @@
 package com.serenity.state.models
 
-import com.serenity.ui.layout.{SplitAxis, WorkspaceNodeId, WorkspaceTree}
-
-/** Invariant checking and workspace-tree reconciliation for [[AppState]], pulled out of that file to keep it under the
-  * architecture ratchet's file-length target. Pure functions over an [[AppState]] snapshot -- no state of their own.
+/** Invariant checking for [[AppState]], pulled out of that file to keep it under the architecture ratchet's
+  * file-length target. Pure functions over an [[AppState]] snapshot -- no state of their own.
   */
 object AppStateValidation:
 
@@ -117,55 +115,5 @@ object AppStateValidation:
       .sortBy(_.toString)
 
   def validated(state: AppState): Either[List[String], AppState] =
-    val reconciled = reconcileWorkspaceTree(state)
-    val errors     = validationErrors(reconciled)
-    if errors.isEmpty then Right(reconciled) else Left(errors)
-
-  /** Reconciles the workspace tree's editor-pane leaves against `Layout.editorPanes`/`paneOrder` -- pruning panes the
-    * tree still lists but the layout no longer has, and adding panes the layout has gained since the tree was last
-    * current (e.g. a raw pane split/addition that hasn't gone through tree-aware machinery). Docked-surface placement
-    * is deliberately NOT reconciled here (issue #817): `PanelStateReducer` and every other pin/unpin path now mutate
-    * the tree directly at the point of change, so a docked surface is either correctly placed by its own mutator or
-    * flagged as an error by [[validationErrors]] -- never silently re-derived from `uiSurfaces` behind the scenes.
-    */
-  private def reconcileWorkspaceTree(state: AppState): AppState =
-    state.persisted.layout.workspaceTree match
-      case None                                                      => state
-      case Some(tree) if workspaceTreeAlreadyReconciled(state, tree) => state
-      case Some(tree) =>
-        val paneIds = state.persisted.layout.editorPanes.keySet
-        val prunedPanes = tree.paneIds
-          .filterNot(paneIds.contains)
-          .foldLeft(Option(tree)) {
-            case (Some(currentTree), paneId) => currentTree.remove(paneId)
-            case (None, _)                   => None
-          }
-        val paneReconciledTree = state.persisted.layout.paneOrder
-          .filter(paneIds.contains)
-          .foldLeft(prunedPanes) {
-            case (Some(currentTree), paneId) if !currentTree.paneIds.contains(paneId) =>
-              val splitId = WorkspaceNodeId(s"reconcile-pane-${paneId.value}")
-              currentTree
-                .split(
-                  currentTree.paneIds.lastOption.getOrElse(paneId),
-                  paneId,
-                  SplitAxis.fromLegacy(state.persisted.layout.splitDirection),
-                  splitId,
-                  WorkspaceNodeId(s"reconcile-pane-leaf-${paneId.value}")
-                )
-            case (currentTree, _) => currentTree
-          }
-          .getOrElse(tree)
-        state.copy(persisted =
-          state.persisted.copy(layout =
-            state.persisted.layout
-              .copy(workspaceTree = Some(paneReconciledTree), paneOrder = paneReconciledTree.paneIds)
-          )
-        )
-
-  // Cheap pre-check for the common case where no pane change requires rebuilding the tree, so events that don't
-  // touch panes (e.g. command-palette navigation, or any docked-surface pin/unpin -- already tree-direct) skip the
-  // reconciliation pass.
-  private def workspaceTreeAlreadyReconciled(state: AppState, tree: WorkspaceTree): Boolean =
-    tree.paneIds.toSet == state.persisted.layout.editorPanes.keySet &&
-      state.persisted.layout.paneOrder.filter(state.persisted.layout.editorPanes.keySet.contains) == tree.paneIds
+    val errors = validationErrors(state)
+    if errors.isEmpty then Right(state) else Left(errors)

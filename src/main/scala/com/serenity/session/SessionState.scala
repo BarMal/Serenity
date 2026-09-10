@@ -27,9 +27,10 @@ final case class SessionState(
 
 object SessionState:
 
-  /** Schema version 2 adds workspace trees, docked panel snapshots, and maximised-node identity. Version-1 sessions
-    * continue to decode through `paneOrder` and `splitDirection`, which are converted to an equivalent tree in memory.
-    * Invalid version-2 trees fall back to that legacy topology while preserving buffers and supported panel content.
+  /** Schema version 2 adds workspace trees, docked panel snapshots, and maximised-node identity. A version-1 session's
+    * `editorPanes` array order (or, if present, its legacy `paneOrder` key -- see `SessionJsonCodecs`) seeds a simple
+    * left-to-right split tree at restore time. Invalid version-2 trees fall back to that same seed while preserving
+    * buffers and supported panel content.
     */
   val CurrentSchemaVersion: Int = 2
 

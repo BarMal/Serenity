@@ -3,7 +3,7 @@ package com.serenity.session
 import com.serenity.config.AppConfig
 import com.serenity.richtext.*
 import com.serenity.ui.layout.given
-import com.serenity.ui.layout.{PaneSplitDirection, SessionDockedPanel, SessionWorkspaceNode}
+import com.serenity.ui.layout.{SessionDockedPanel, SessionWorkspaceNode}
 import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 
@@ -16,22 +16,30 @@ given Decoder[SessionEditorPane] = deriveDecoder
 
 given Decoder[SessionLayout] = Decoder.instance { cursor =>
   for
-    editorPanes              <- cursor.get[List[SessionEditorPane]]("editorPanes")
+    editorPanesRaw            <- cursor.get[List[SessionEditorPane]]("editorPanes")
     activeEditorPaneId       <- cursor.get[Option[Int]]("activeEditorPaneId")
-    paneOrder                <- cursor.getOrElse[List[Int]]("paneOrder")(Nil)
-    splitDirection           <- cursor.getOrElse[String]("splitDirection")(PaneSplitDirection.Horizontal.toString)
+    legacyPaneOrder          <- cursor.getOrElse[List[Int]]("paneOrder")(Nil)
     workspaceTree            <- cursor.getOrElse[Option[SessionWorkspaceNode]]("workspaceTree")(None)
     maximizedWorkspaceNodeId <- cursor.getOrElse[Option[String]]("maximizedWorkspaceNodeId")(None)
     persistedPanels          <- cursor.getOrElse[List[Json]]("dockedPanels")(Nil)
-  yield SessionLayout(
-    editorPanes,
-    activeEditorPaneId,
-    paneOrder,
-    splitDirection,
-    workspaceTree,
-    maximizedWorkspaceNodeId,
-    persistedPanels.flatMap(_.as[SessionDockedPanel].toOption)
-  )
+  yield
+    // Old session files (schema 1, before #820) ordered editorPanes via a separate `paneOrder` key rather than the
+    // array order itself; reorder here so the JSON array order (now the sole order signal, #821) matches what the
+    // old field would have produced, without carrying `paneOrder` forward as a model field.
+    val orderedByLegacyField =
+      if legacyPaneOrder.isEmpty then editorPanesRaw
+      else
+        val byId = editorPanesRaw.map(pane => pane.id -> pane).toMap
+        val requested = legacyPaneOrder.flatMap(byId.get)
+        val missing   = editorPanesRaw.filterNot(pane => legacyPaneOrder.contains(pane.id))
+        requested ++ missing
+    SessionLayout(
+      orderedByLegacyField,
+      activeEditorPaneId,
+      workspaceTree,
+      maximizedWorkspaceNodeId,
+      persistedPanels.flatMap(_.as[SessionDockedPanel].toOption)
+    )
 }
 
 given Encoder[SessionFocus] = deriveEncoder

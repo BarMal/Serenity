@@ -458,8 +458,7 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
       before.persisted.copy(layout =
         before.persisted.layout.copy(
           editorPanes =
-            before.persisted.layout.editorPanes.updated(secondId, EditorPane.withBuffer(secondId, bufferId)),
-          paneOrder = before.persisted.layout.paneOrder :+ secondId
+            before.persisted.layout.editorPanes.updated(secondId, EditorPane.withBuffer(secondId, bufferId))
         )
       )
     )

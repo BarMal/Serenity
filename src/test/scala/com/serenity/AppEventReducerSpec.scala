@@ -177,7 +177,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "close the focused pane on ClosePane" in {
     val secondPaneId = PaneId(1)
-    val splitTree = AppState.initial.persisted.layout.effectiveWorkspaceTree
+    val splitTree = AppState.initial.persisted.layout.workspaceTree
       .flatMap(
         _.split(
           PaneId(0),
@@ -193,7 +193,6 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes =
             AppState.initial.persisted.layout.editorPanes.updated(secondPaneId, EditorPane.empty(secondPaneId)),
-          paneOrder = splitTree.paneIds,
           workspaceTree = Some(splitTree),
           activeEditorPaneId = Some(secondPaneId)
         ),

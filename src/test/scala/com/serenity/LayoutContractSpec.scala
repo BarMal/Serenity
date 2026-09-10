@@ -110,8 +110,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
@@ -143,8 +142,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.Surface(SurfaceId("quick-info"))
       ),
@@ -186,8 +184,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
@@ -314,8 +311,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
@@ -375,8 +371,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.Surface(commandRunner.id)
       ),
@@ -578,8 +573,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.Surface(commandRunner.id)
       ),
@@ -646,8 +640,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-          activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          activeEditorPaneId = Some(paneId)
         )
       )
     )
@@ -703,8 +696,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-          activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          activeEditorPaneId = Some(paneId)
         )
       )
     )
@@ -744,8 +736,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.Surface(commandRunner.id)
       ),
@@ -817,8 +808,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.Surface(commandRunner.id)
       ),
@@ -860,8 +850,17 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         layout = Layout(
           editorPanes = Map(PaneId(0) -> firstPane, PaneId(1) -> secondPane),
           activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0), PaneId(1)),
-          splitDirection = PaneSplitDirection.Vertical
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("editors"),
+                SplitAxis.Vertical,
+                0.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)),
+                WorkspaceNode.Leaf(WorkspaceNodeId("editor-1"), PaneId(1))
+              )
+            )
+          )
         )
       )
     )
@@ -905,8 +904,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.Surface(commandRunner.id)
       ),

@@ -84,8 +84,17 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
             secondPaneId -> EditorPane.withBuffer(secondPaneId, secondBuffer.id)
           ),
           activeEditorPaneId = Some(firstPaneId),
-          paneOrder = List(firstPaneId, secondPaneId),
-          splitDirection = PaneSplitDirection.Horizontal
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("editors"),
+                SplitAxis.Horizontal,
+                0.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${firstPaneId.value}"), firstPaneId),
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${secondPaneId.value}"), secondPaneId)
+              )
+            )
+          )
         ),
         focus = Focus.EditorPane(firstPaneId)
       ),
@@ -272,7 +281,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
         layout = Layout(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         )
       ),
       runtime = com.serenity.state.models.AppState.initial.runtime.copy(

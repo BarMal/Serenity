@@ -73,7 +73,6 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
         layout = Layout(
           editorPanes = Map(pane0 -> EditorPane.empty(pane0), pane1 -> EditorPane.empty(pane1)),
           activeEditorPaneId = Some(pane0),
-          paneOrder = List(pane0, pane1),
           workspaceTree = Some(nestedTree)
         )
       ),
@@ -114,7 +113,17 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
         layout = Layout(
           editorPanes = Map(pane0 -> EditorPane.withBuffer(pane0, bufferId), pane1 -> EditorPane.empty(pane1)),
           activeEditorPaneId = Some(pane0),
-          paneOrder = List(pane0, pane1)
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("initial-editors"),
+                SplitAxis.Horizontal,
+                0.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0),
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.value}"), pane1)
+              )
+            )
+          )
         )
       ),
       runtime = AppState.initial.runtime.copy(nextPaneId = PaneId(2))
@@ -192,7 +201,7 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
         layout = Layout(
           editorPanes = Map(pane0 -> EditorPane.empty(pane0)),
           activeEditorPaneId = Some(pane0),
-          paneOrder = List(pane0)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0)))
         )
       )
     )

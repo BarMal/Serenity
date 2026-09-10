@@ -200,7 +200,7 @@ final private[manager] class StateManagerEditorCapability(
     val updatedTree =
       targetPaneId match
         case Some(target) =>
-          state.persisted.layout.effectiveWorkspaceTree.flatMap(
+          state.persisted.layout.workspaceTree.flatMap(
             _.split(
               target,
               paneId,
@@ -219,7 +219,6 @@ final private[manager] class StateManagerEditorCapability(
             layout = state.persisted.layout.copy(
               editorPanes = state.persisted.layout.editorPanes.updated(paneId, pane),
               activeEditorPaneId = Some(paneId),
-              paneOrder = tree.paneIds,
               workspaceTree = Some(tree)
             ),
             focus = Focus.EditorPane(paneId)

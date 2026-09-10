@@ -109,7 +109,17 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
             pane1 -> EditorPane.empty(pane1)
           ),
           activeEditorPaneId = Some(pane0),
-          paneOrder = List(pane0, pane1)
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("editors"),
+                SplitAxis.Horizontal,
+                0.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0),
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.value}"), pane1)
+              )
+            )
+          )
         )
       ),
       runtime = AppState.initial.runtime.copy(nextPaneId = PaneId(2))
@@ -414,7 +424,17 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
             pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
           ),
           activeEditorPaneId = Some(pane1),
-          paneOrder = List(pane0, pane1)
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("editors"),
+                SplitAxis.Horizontal,
+                0.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0),
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.value}"), pane1)
+              )
+            )
+          )
         ),
         focus = Focus.EditorPane(pane1)
       ),
@@ -426,7 +446,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     restored.persisted.layout.editorPanes should have size 1
     restored.persisted.layout.activeEditorPaneId shouldBe Some(pane1)
-    restored.persisted.layout.paneOrder shouldBe List(pane1)
+    restored.persisted.layout.orderedPaneIds shouldBe List(pane1)
     restored.persisted.layout.editorPanes(pane1).bufferId shouldBe Some(secondaryBufferId)
     restored.persisted.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
     restored.persisted.bufferOrder shouldBe List(primaryBufferId, secondaryBufferId)
@@ -443,7 +463,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
         layout = Layout(
           editorPanes = Map(pane0 -> EditorPane.withBuffer(pane0, primaryBufferId)),
           activeEditorPaneId = Some(pane0),
-          paneOrder = List(pane0)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0)))
         )
       ),
       runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(2), nextPaneId = PaneId(1))
@@ -459,7 +479,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val restored = UiPreset.applyToState(preset, state, Theme.dark)
 
     restored.persisted.layout.editorPanes should have size 2
-    restored.persisted.layout.paneOrder shouldBe List(PaneId(0), PaneId(1))
+    restored.persisted.layout.orderedPaneIds shouldBe List(PaneId(0), PaneId(1))
     restored.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe Some(primaryBufferId)
     restored.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(secondaryBufferId)
     restored.runtime.nextPaneId shouldBe PaneId(2)

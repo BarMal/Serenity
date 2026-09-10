@@ -3,7 +3,6 @@ package com.serenity.session
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{
   Layout,
-  PaneSplitDirection,
   SessionDockedPanel,
   SessionWorkspaceNode,
   WorkspaceNodeId,
@@ -15,8 +14,6 @@ import com.serenity.ui.layout.{
 final case class SessionLayout(
     editorPanes: List[SessionEditorPane],
     activeEditorPaneId: Option[Int],
-    paneOrder: List[Int] = Nil,
-    splitDirection: String = PaneSplitDirection.Horizontal.toString,
     workspaceTree: Option[SessionWorkspaceNode] = None,
     maximizedWorkspaceNodeId: Option[String] = None,
     dockedPanels: List[SessionDockedPanel] = Nil
@@ -50,9 +47,7 @@ object SessionLayout:
   def fromLayout(layout: Layout): SessionLayout =
     SessionLayout(
       editorPanes = orderedPanes(layout).map(SessionEditorPane.fromEditorPane),
-      activeEditorPaneId = layout.activeEditorPaneId.map(_.value),
-      paneOrder = layout.paneOrder.map(_.value),
-      splitDirection = layout.splitDirection.toString
+      activeEditorPaneId = layout.activeEditorPaneId.map(_.value)
     )
 
   private def orderedPanes(layout: Layout): List[EditorPane] =
@@ -79,9 +74,8 @@ object SessionLayout:
     val editorPanes =
       if decodedEditorPanes.nonEmpty then decodedEditorPanes
       else Map(PaneId(0) -> EditorPane.empty(PaneId(0)))
-    val splitDirection = PaneSplitDirection.fromString(sessionLayout.splitDirection)
     val orderedPaneIds =
-      val requested = sessionLayout.paneOrder.map(PaneId.apply).filter(editorPanes.contains)
+      val requested = sessionLayout.editorPanes.map(pane => PaneId(pane.id)).filter(editorPanes.contains)
       requested ++ editorPanes.keys.toList.filterNot(requested.contains).sortBy(_.value)
     val surfaces = sessionLayout.dockedPanels.foldLeft(List.empty[UiSurface]) { (restored, persisted) =>
       val surface = persisted.panel.toUiSurface(SurfaceId(persisted.surfaceId))
@@ -93,7 +87,7 @@ object SessionLayout:
       .map(WorkspaceTree.apply)
       .filter(_.validationErrors(editorPanes.keySet, pinnedSurfaceIds).isEmpty)
     val fallbackTree =
-      SessionDockedPanel.fallbackWorkspaceTree(orderedPaneIds, splitDirection, sessionLayout.dockedPanels)
+      SessionDockedPanel.fallbackWorkspaceTree(orderedPaneIds, sessionLayout.dockedPanels)
     val workspaceTree = decodedTree.orElse(fallbackTree)
     val maximized = sessionLayout.maximizedWorkspaceNodeId
       .map(WorkspaceNodeId.apply)
@@ -105,8 +99,6 @@ object SessionLayout:
     val layout = Layout(
       editorPanes = editorPanes,
       activeEditorPaneId = activeEditorPaneId,
-      paneOrder = orderedPaneIds,
-      splitDirection = splitDirection,
       workspaceTree = workspaceTree,
       maximizedWorkspaceNodeId = maximized
     )

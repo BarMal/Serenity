@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, LayoutEngine, PixelRect, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, LayoutEngine, PixelRect, TextLayoutSnapshot, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -35,7 +35,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId),
         theme = Theme.light

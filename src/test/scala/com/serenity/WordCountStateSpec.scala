@@ -53,8 +53,7 @@ class WordCountStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.EditorPane(PaneId(0))
       )
@@ -75,8 +74,7 @@ class WordCountStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0))
         ),
         focus = Focus.EditorPane(PaneId(0))
       )

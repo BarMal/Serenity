@@ -21,7 +21,7 @@ object PanelStateReducer:
     val undoEntry                = HistoryEntry.PanelChange.capture(state)
     val (stateWithId, surfaceId) = state.allocateSurfaceId
     val panel                    = UiSurface.fromPanelContent(surfaceId, content)
-    val workspaceTree = stateWithId.persisted.layout.effectiveWorkspaceTree.flatMap { tree =>
+    val workspaceTree = stateWithId.persisted.layout.workspaceTree.flatMap { tree =>
       val (splitId, leafId) = tree.nextDockIds(surfaceId)
       tree.dockSized(surfaceId, position, splitId, leafId, size, stateWithId.runtime.viewportSize)
     }
@@ -178,7 +178,7 @@ object PanelStateReducer:
     activeFloatingSurface(state)
       .flatMap(toPinnedSurface)
       .map { panel =>
-        val tree = state.persisted.layout.effectiveWorkspaceTree.flatMap { workspaceTree =>
+        val tree = state.persisted.layout.workspaceTree.flatMap { workspaceTree =>
           val (splitId, leafId) = workspaceTree.nextDockIds(panel.id)
           workspaceTree.dockSized(panel.id, position, splitId, leafId, PeekToPinDefaultSize, state.runtime.viewportSize)
         }

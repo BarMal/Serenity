@@ -60,7 +60,7 @@ class HistoryEntrySpec extends AnyFlatSpec with Matchers with OptionValues:
     val closedFocus  = AppState.initial.persisted.focus
 
     val secondPane = PaneId(1)
-    val splitTree = closedLayout.effectiveWorkspaceTree
+    val splitTree = closedLayout.workspaceTree
       .flatMap(
         _.split(
           PaneId(0),
@@ -73,7 +73,6 @@ class HistoryEntrySpec extends AnyFlatSpec with Matchers with OptionValues:
       .value
     val twoPaneLayout = closedLayout.copy(
       editorPanes = closedLayout.editorPanes.updated(secondPane, EditorPane.empty(secondPane)),
-      paneOrder = splitTree.paneIds,
       workspaceTree = Some(splitTree),
       activeEditorPaneId = Some(secondPane)
     )

@@ -492,7 +492,6 @@ object UiPreset:
 
     val fallbackTree = SessionDockedPanel.fallbackWorkspaceTree(
       state.persisted.layout.orderedPaneIds,
-      state.persisted.layout.splitDirection,
       preset.dockedPanels
     )
 
@@ -567,12 +566,35 @@ object UiPreset:
       case _ =>
         nextActivePaneId.map(Focus.EditorPane.apply).getOrElse(state.persisted.focus)
 
+    val droppedPaneIds = state.persisted.layout.editorPanes.keySet -- targetPaneIds.toSet
+    val treeWithNewPanes = newPaneIds.foldLeft(state.persisted.layout.workspaceTree) { (tree, newPaneId) =>
+      val anchorPaneId = tree.map(_.paneIds).getOrElse(Nil).lastOption.orElse(existingTargetPaneIds.lastOption)
+      anchorPaneId match
+        case Some(anchor) =>
+          tree
+            .flatMap(
+              _.split(
+                anchor,
+                newPaneId,
+                SplitAxis.Horizontal,
+                WorkspaceNodeId(s"resize-split-${anchor.value}-${newPaneId.value}"),
+                WorkspaceNodeId(s"editor-${newPaneId.value}")
+              )
+            )
+            .orElse(Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${newPaneId.value}"), newPaneId))))
+        case None =>
+          Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${newPaneId.value}"), newPaneId)))
+    }
+    val finalTree = droppedPaneIds.foldLeft(treeWithNewPanes) { (tree, droppedId) =>
+      tree.flatMap(_.remove(droppedId)).orElse(tree)
+    }
+
     state.copy(
       persisted = state.persisted.copy(
         layout = state.persisted.layout.copy(
           editorPanes = resizedPanes,
           activeEditorPaneId = nextActivePaneId,
-          paneOrder = targetPaneIds
+          workspaceTree = finalTree
         ),
         focus = nextFocus
       ),

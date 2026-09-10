@@ -16,7 +16,6 @@ import com.serenity.session.{SessionBuffer, SessionFindResult, SessionFindState,
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{
   Layout,
-  PaneSplitDirection,
   PanelContent,
   PanelPosition,
   SessionWorkspaceNode,
@@ -1076,7 +1075,17 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         layout = Layout(
           editorPanes = Map(pane1.id -> pane1, pane2.id -> pane2),
           activeEditorPaneId = Some(pane2.id),
-          paneOrder = List(pane2.id, pane1.id)
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("editors"),
+                SplitAxis.Horizontal,
+                0.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane2.id.value}"), pane2.id),
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.id.value}"), pane1.id)
+              )
+            )
+          )
         )
       )
     )
@@ -1087,16 +1096,24 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     sessionState.layout.editorPanes.map(_.id) shouldBe List(2, 1)
   }
 
-  it should "preserve pane split direction through round trip" in {
+  it should "preserve pane split axis through round trip" in {
     val pane1 = EditorPane.empty(PaneId(1))
     val pane2 = EditorPane.empty(PaneId(2))
+    val tree = WorkspaceTree(
+      WorkspaceNode.Split(
+        WorkspaceNodeId("editors"),
+        SplitAxis.Vertical,
+        0.5,
+        WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.id.value}"), pane1.id),
+        WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane2.id.value}"), pane2.id)
+      )
+    )
     val appState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         layout = Layout(
           editorPanes = Map(pane1.id -> pane1, pane2.id -> pane2),
           activeEditorPaneId = Some(pane2.id),
-          paneOrder = List(pane1.id, pane2.id),
-          splitDirection = PaneSplitDirection.Vertical
+          workspaceTree = Some(tree)
         ),
         focus = Focus.EditorPane(pane2.id)
       )
@@ -1105,8 +1122,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val sessionState = SessionState.fromAppState(appState)
     val restored     = SessionState.toAppState(sessionState, Theme.default)
 
-    sessionState.layout.splitDirection shouldBe "Vertical"
-    restored.persisted.layout.splitDirection shouldBe PaneSplitDirection.Vertical
+    restored.persisted.layout.workspaceTree.flatMap(_.root.axis) shouldBe Some(SplitAxis.Vertical)
   }
 
   it should "round-trip nested workspace trees, docked panels on every edge, and maximisation" in {
@@ -1144,7 +1160,6 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
             pane1 -> EditorPane.empty(pane1)
           ),
           activeEditorPaneId = Some(pane0),
-          paneOrder = List(pane0, pane1),
           workspaceTree = Some(workspaceTree),
           maximizedWorkspaceNodeId = workspaceTree.nodeIdForSurface(panels(2).id)
         )
@@ -1171,16 +1186,24 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     encoded.hcursor.downField("schemaVersion").as[Int] shouldBe Right(SessionState.CurrentSchemaVersion)
   }
 
-  it should "migrate schema-v1 flat pane layouts into an equivalent workspace tree" in {
+  it should "migrate schema-v1 flat pane layouts into an equivalent (horizontal) workspace tree" in {
     val pane0 = PaneId(0)
     val pane1 = PaneId(1)
+    val sourceTree = WorkspaceTree(
+      WorkspaceNode.Split(
+        WorkspaceNodeId("editors"),
+        SplitAxis.Vertical,
+        0.5,
+        WorkspaceNode.Leaf(WorkspaceNodeId("editor-1"), pane1),
+        WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), pane0)
+      )
+    )
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         layout = Layout(
           editorPanes = Map(pane0 -> EditorPane.empty(pane0), pane1 -> EditorPane.empty(pane1)),
           activeEditorPaneId = Some(pane1),
-          paneOrder = List(pane1, pane0),
-          splitDirection = PaneSplitDirection.Vertical
+          workspaceTree = Some(sourceTree)
         ),
         focus = Focus.EditorPane(pane1)
       ),
@@ -1208,8 +1231,10 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .map(SessionState.toAppState(_, Theme.default))
       .getOrElse(fail("schema-v1 session should decode"))
 
+    // Schema-v1 files carried no `PaneSplitDirection` after #821; the pane order is preserved, but the seeded
+    // fallback tree always builds a horizontal split (see `WorkspaceSnapshot.linearWorkspaceTree`).
     restored.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane1, pane0))
-    restored.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(SplitAxis.Vertical))
+    restored.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(SplitAxis.Horizontal))
     restored.persisted.layout.maximizedWorkspaceNodeId shouldBe None
     restored.isValid shouldBe true
   }
@@ -1261,7 +1286,6 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       layout = session.layout.copy(
         editorPanes = Nil,
         activeEditorPaneId = None,
-        paneOrder = Nil,
         workspaceTree = None
       ),
       focus = None
