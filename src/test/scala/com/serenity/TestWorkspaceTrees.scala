@@ -27,4 +27,4 @@ object TestWorkspaceTrees:
             build(next, tail)
           )
 
-    WorkspaceTree(build(paneIds.head, paneIds.tail))
+    WorkspaceTree(build(paneIds.head, paneIds.tail.toList))
