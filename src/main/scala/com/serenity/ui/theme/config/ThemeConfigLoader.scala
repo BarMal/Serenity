@@ -9,9 +9,9 @@ import pureconfig.error.ConfigReaderFailures
 object ThemeConfigLoader:
 
   /** Fallback returned by `listBundledThemes` when the bundled `themes/` resource directory can't be read as a
-    * filesystem path (e.g. running from a packaged JAR). Derived from `DefaultThemes.allInternal` so it can never
-    * name a theme that isn't actually registered internally -- it previously hardcoded `List("dark", "light")`,
-    * names that no longer match any internal theme key (issue #1429).
+    * filesystem path (e.g. running from a packaged JAR). Derived from `DefaultThemes.allInternal` so it can never name
+    * a theme that isn't actually registered internally -- it previously hardcoded `List("dark", "light")`, names that
+    * no longer match any internal theme key (issue #1429).
     */
   def bundledThemesFallback: List[String] =
     com.serenity.ui.theme.DefaultThemes.allInternal.keys.toList.sorted

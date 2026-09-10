@@ -157,16 +157,16 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "bound the block-comment scan distance instead of walking the whole document (#1417)" in {
-    val cursorLine  = 10000
-    val totalLines  = 20000
+    val cursorLine = 10000
+    val totalLines = 20000
     // Generous relative to the production probe window: catches a regression back to an unbounded scan (which would
     // read line 0 and/or the last line) without hard-coupling the test to the exact bound chosen in production code.
-    val probeMargin = 1000
+    val probeMargin  = 1000
     val allowedLines = (cursorLine - probeMargin to cursorLine + probeMargin).toSet
 
-    val source = (0 until totalLines).map(line => s"val value$line = $line").mkString("\n")
+    val source         = (0 until totalLines).map(line => s"val value$line = $line").mkString("\n")
     val guardedContent = GuardedGetLineRope(Rope(source), allowedLines)
-    val base            = Buffer.fromString(BufferId(1), "")
+    val base           = Buffer.fromString(BufferId(1), "")
     val buffer = base
       .copy(
         document = base.document.copy(content = guardedContent, language = Some(LanguageId.Scala)),

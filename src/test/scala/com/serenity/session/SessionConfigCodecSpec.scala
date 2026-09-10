@@ -51,10 +51,12 @@ class SessionConfigCodecSpec extends AnyFlatSpec with Matchers with ScalaCheckPr
   it should "log a warning naming the field and value when a composite field fails to decode, and still fall back" in {
     val encoded = SessionConfigCodec.encode(AppConfig.default)
     val malformed = Json.fromJsonObject(
-      encoded.asObject.getOrElse(fail("SessionConfigCodec.encode did not produce a JSON object")).add(
-        "motionPreset",
-        Json.fromString("not-a-real-motion-preset")
-      )
+      encoded.asObject
+        .getOrElse(fail("SessionConfigCodec.encode did not produce a JSON object"))
+        .add(
+          "motionPreset",
+          Json.fromString("not-a-real-motion-preset")
+        )
     )
 
     val decoded = SessionConfigCodec.decode(malformed.hcursor)
@@ -70,9 +72,11 @@ class SessionConfigCodecSpec extends AnyFlatSpec with Matchers with ScalaCheckPr
   it should "leave the config field untouched, not just logged, when a composite field is missing entirely" in {
     val encoded = SessionConfigCodec.encode(AppConfig.default)
     val withoutField = Json.fromJsonObject(
-      encoded.asObject.getOrElse(fail("SessionConfigCodec.encode did not produce a JSON object")).remove(
-        "motionPreset"
-      )
+      encoded.asObject
+        .getOrElse(fail("SessionConfigCodec.encode did not produce a JSON object"))
+        .remove(
+          "motionPreset"
+        )
     )
 
     SessionConfigCodec.decode(withoutField.hcursor) shouldBe AppConfig.default

@@ -3,9 +3,9 @@ package com.serenity.spellcheck
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Regression coverage for #1415: `compoundMemberCandidates` must no longer linear-scan the whole merged dictionary
-  * for every candidate segment. These tests exercise `matches` (the object's only public entry point) directly against
-  * a synthetic tens-of-thousands-word dictionary, so a regression back to a full scan shows up as this suite taking
+/** Regression coverage for #1415: `compoundMemberCandidates` must no longer linear-scan the whole merged dictionary for
+  * every candidate segment. These tests exercise `matches` (the object's only public entry point) directly against a
+  * synthetic tens-of-thousands-word dictionary, so a regression back to a full scan shows up as this suite taking
   * noticeably longer -- timings are logged for manual before/after comparison per `docs/performance-benchmarks.md`'s
   * convention, not hard-asserted, since wall-clock assertions are unreliable on shared CI hardware.
   */

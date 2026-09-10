@@ -2,8 +2,8 @@ package com.serenity.ui.theme.config
 
 import com.serenity.ui.theme.SyntaxElement
 
-/** One optional `SyntaxColors` field: which slot it reads/writes, its HOCON path and creator-UI label, and the
-  * fallback value used when the field is absent from config.
+/** One optional `SyntaxColors` field: which slot it reads/writes, its HOCON path and creator-UI label, and the fallback
+  * value used when the field is absent from config.
   */
 final case class SyntaxFieldSchema(
     element: SyntaxElement,
@@ -14,16 +14,16 @@ final case class SyntaxFieldSchema(
     default: SyntaxElementConfig
 )
 
-/** Canonical list of `SyntaxColors`' five optional fields (`typ`, `delimiter`, `whitespace`, `error`, `normal`),
-  * with the fallback each one takes when a theme config omits it.
+/** Canonical list of `SyntaxColors`' five optional fields (`typ`, `delimiter`, `whitespace`, `error`, `normal`), with
+  * the fallback each one takes when a theme config omits it.
   *
   * `ConfigurableThemeManager` (config -> domain), `ThemeConfigWriter` (domain -> config -> text) and
-  * `ThemeCreatorState` (creator UI rows) each independently re-declared this same five-element list and its
-  * defaults, and those copies had drifted out of sync with each other (issue #1410) -- e.g. the `normal` fallback
-  * was `"#F5F7FA"` in one place and the theme's own `ui.foreground` in another. This is now the one place that
-  * list is declared; the defaults below are `ConfigurableThemeManager`'s previous values, since that module is
-  * what actually determines the color rendered for a config missing one of these fields, so keeping them exactly
-  * as they were changes duplication, not behavior.
+  * `ThemeCreatorState` (creator UI rows) each independently re-declared this same five-element list and its defaults,
+  * and those copies had drifted out of sync with each other (issue #1410) -- e.g. the `normal` fallback was `"#F5F7FA"`
+  * in one place and the theme's own `ui.foreground` in another. This is now the one place that list is declared; the
+  * defaults below are `ConfigurableThemeManager`'s previous values, since that module is what actually determines the
+  * color rendered for a config missing one of these fields, so keeping them exactly as they were changes duplication,
+  * not behavior.
   */
 object ThemeFieldSchema:
 

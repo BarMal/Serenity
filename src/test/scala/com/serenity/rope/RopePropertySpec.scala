@@ -79,15 +79,11 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
     * exercises that boundary case for shapes no hand-written fixture would think to try.
     */
   property("wordCount agrees with Rope.countWordRuns on the source text, whatever the rope's shape") {
-    forAll(Generators.ropeWithText) { (rope, text) =>
-      rope.wordCount shouldBe Rope.countWordRuns(text)
-    }
+    forAll(Generators.ropeWithText)((rope, text) => rope.wordCount shouldBe Rope.countWordRuns(text))
   }
 
   property("nonWhitespaceCount agrees with a non-whitespace character count, whatever the rope's shape") {
-    forAll(Generators.ropeWithText) { (rope, text) =>
-      rope.nonWhitespaceCount shouldBe text.count(!_.isWhitespace)
-    }
+    forAll(Generators.ropeWithText)((rope, text) => rope.nonWhitespaceCount shouldBe text.count(!_.isWhitespace))
   }
 
   property("startsWithWordChar and endsWithWordChar agree with the text's edge characters, whatever the rope's shape") {

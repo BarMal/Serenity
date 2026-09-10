@@ -20,16 +20,16 @@ object ThemeManager:
 
   private type HighlightKey = (String, Theme, Option[LanguageId], LexState)
 
-  /** Bounded, `Ref`-backed replacement for the previous `LinkedHashMap` + `synchronized` highlight/lex caches
-    * (issue #1412). `highlightLine`/`lineStartStates` stay plain synchronous `def`s: both are called from deep
-    * inside the Java2D/terminal paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its own thread
-    * rather than running inside an IO fiber, so making them return `IO` would mean threading `IO` through the
-    * entire rendering call graph -- well beyond this package, and out of scope for this issue. `unsafeRunSync()`
-    * below bridges that synchronous boundary to `Ref`'s `IO`-typed API; a `Ref` get/update is a plain in-memory
-    * compare-and-set with no real suspension, so this carries none of the thread-pool-exhaustion risk
-    * `unsafeRunSync` usually warrants elsewhere. Eviction here is bounded-FIFO (oldest inserted, not oldest
-    * accessed) rather than the previous access-order LRU -- a deliberate simplification, since a `ListMap` has no
-    * cheap way to bump an existing key to "most recently used" without an extra write on every cache *hit* too.
+  /** Bounded, `Ref`-backed replacement for the previous `LinkedHashMap` + `synchronized` highlight/lex caches (issue
+    * #1412). `highlightLine`/`lineStartStates` stay plain synchronous `def`s: both are called from deep inside the
+    * Java2D/terminal paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its own thread rather than
+    * running inside an IO fiber, so making them return `IO` would mean threading `IO` through the entire rendering call
+    * graph -- well beyond this package, and out of scope for this issue. `unsafeRunSync()` below bridges that
+    * synchronous boundary to `Ref`'s `IO`-typed API; a `Ref` get/update is a plain in-memory compare-and-set with no
+    * real suspension, so this carries none of the thread-pool-exhaustion risk `unsafeRunSync` usually warrants
+    * elsewhere. Eviction here is bounded-FIFO (oldest inserted, not oldest accessed) rather than the previous
+    * access-order LRU -- a deliberate simplification, since a `ListMap` has no cheap way to bump an existing key to
+    * "most recently used" without an extra write on every cache *hit* too.
     */
   private val highlightCacheRef: Ref[IO, ListMap[HighlightKey, List[StyledText]]] =
     Ref.unsafe(ListMap.empty)

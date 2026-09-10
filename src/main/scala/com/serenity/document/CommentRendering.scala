@@ -163,9 +163,9 @@ object CommentRendering:
         Nil
 
   /** Bounds `blockCommentRange`'s backward/forward scan, mirroring `MarkdownBlockLens`'s `fenceProbeWindow` pattern: an
-    * unterminated or absent block-comment marker near the cursor would otherwise walk the entire document -- twice,
-    * on every cursor move (issue #1417). A comment spanning more lines than this in either direction from the cursor
-    * is not found; that trade-off is the point of a bound.
+    * unterminated or absent block-comment marker near the cursor would otherwise walk the entire document -- twice, on
+    * every cursor move (issue #1417). A comment spanning more lines than this in either direction from the cursor is
+    * not found; that trade-off is the point of a bound.
     */
   private val BlockCommentProbeWindow = 512
 

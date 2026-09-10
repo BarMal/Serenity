@@ -9,9 +9,9 @@ import com.serenity.ui.theme.{Theme, ThemeManager}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Covers the `Ref`-backed replacement for `ThemeManager`'s `LinkedHashMap`+`synchronized` highlight/lex caches
-  * (issue #1412): repeated calls still hit the memoized result, concurrent callers don't corrupt it, and pushing
-  * past the bounded cache size doesn't lose correctness for the most recently computed entries.
+/** Covers the `Ref`-backed replacement for `ThemeManager`'s `LinkedHashMap`+`synchronized` highlight/lex caches (issue
+  * #1412): repeated calls still hit the memoized result, concurrent callers don't corrupt it, and pushing past the
+  * bounded cache size doesn't lose correctness for the most recently computed entries.
   */
 class ThemeManagerCacheSpec extends AnyFlatSpec with Matchers:
 

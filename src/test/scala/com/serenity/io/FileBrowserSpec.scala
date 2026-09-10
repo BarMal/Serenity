@@ -2,9 +2,9 @@ package com.serenity.io
 
 import java.nio.file.{Files, Path}
 
-import cats.effect.{IO, Ref}
 import cats.effect.syntax.all.*
 import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,8 +29,8 @@ class FileBrowserSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll:
     (0 until fileCount).foreach(index => Files.writeString(tempDir.resolve(f"file-$index%04d.txt"), "x"))
     (0 until dirCount).foreach(index => Files.createDirectory(tempDir.resolve(f"dir-$index%04d")))
 
-    val start   = System.nanoTime()
-    val entries = FileBrowser.listDirectory(tempDir).unsafeRunSync()
+    val start         = System.nanoTime()
+    val entries       = FileBrowser.listDirectory(tempDir).unsafeRunSync()
     val elapsedMillis = (System.nanoTime() - start) / 1000000L
     info(s"listDirectory over ${fileCount + dirCount} entries took ${elapsedMillis}ms")
 

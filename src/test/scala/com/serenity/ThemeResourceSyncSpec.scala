@@ -5,10 +5,9 @@ import com.serenity.ui.theme.config.{ThemeConfig, ThemeConfigLoader}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Guards against `themes/dark.conf`/`themes/light.conf` drifting from `ThemeConfig.defaultDark`/`defaultLight`,
-  * which they are generated from -- see issue #1410. Only `name` is expected to differ, since the bundled
-  * resource themes are loaded under the names "dark"/"light" while the internal constants are
-  * "default-dark"/"default-light".
+/** Guards against `themes/dark.conf`/`themes/light.conf` drifting from `ThemeConfig.defaultDark`/`defaultLight`, which
+  * they are generated from -- see issue #1410. Only `name` is expected to differ, since the bundled resource themes are
+  * loaded under the names "dark"/"light" while the internal constants are "default-dark"/"default-light".
   */
 class ThemeResourceSyncSpec extends AnyFlatSpec with Matchers:
 

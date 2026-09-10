@@ -4,10 +4,10 @@ import com.serenity.config.AppConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** `CommandRunner.commandBindings` hand-maintains a `Map[String, HotkeyAction]` keyed by command-name string
-  * literals that must stay in sync with the `name`s declared independently across the `CommandRegistry*Commands`
-  * files (issue #1426). Nothing links a key here to a registered `Command` at compile time, so a rename on either
-  * side would silently desync; this test catches that instead.
+/** `CommandRunner.commandBindings` hand-maintains a `Map[String, HotkeyAction]` keyed by command-name string literals
+  * that must stay in sync with the `name`s declared independently across the `CommandRegistry*Commands` files (issue
+  * #1426). Nothing links a key here to a registered `Command` at compile time, so a rename on either side would
+  * silently desync; this test catches that instead.
   */
 class CommandRunnerCommandBindingsSpec extends AnyFlatSpec with Matchers:
 
@@ -17,4 +17,3 @@ class CommandRunnerCommandBindingsSpec extends AnyFlatSpec with Matchers:
 
     boundNames.diff(registeredNames) shouldBe Set.empty
   }
-

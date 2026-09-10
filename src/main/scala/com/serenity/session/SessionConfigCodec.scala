@@ -42,16 +42,18 @@ final case class SessionField[A](key: String, get: AppConfig => A, set: (AppConf
     val stored = cursor.downField(key)
     if !stored.succeeded then config
     else
-      stored.as(using decoder).fold(
-        failure =>
-          sessionFieldLogger.warn(
-            s"[SESSION] Failed to decode field '$key' from ${stored.focus.map(_.noSpaces).getOrElse("<unknown>")}: " +
-              s"${failure.getMessage}; keeping existing value"
-          )
-          config
-        ,
-        value => set(config, value)
-      )
+      stored
+        .as(using decoder)
+        .fold(
+          failure =>
+            sessionFieldLogger.warn(
+              s"[SESSION] Failed to decode field '$key' from ${stored.focus.map(_.noSpaces).getOrElse("<unknown>")}: " +
+                s"${failure.getMessage}; keeping existing value"
+            )
+            config
+          ,
+          value => set(config, value)
+        )
 
 /** How an `AppConfig` is written into a session file and read back out.
   *

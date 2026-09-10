@@ -16,8 +16,8 @@ final case class FileEntry(
 /** Stateless directory listing -- the only file-browsing workflow production code uses. */
 object FileBrowser:
 
-  /** Upper bound on in-flight `createFileEntry` calls per `listDirectory` (issue #1416): high enough to overlap a
-    * large directory's blocking stat calls, low enough not to flood the filesystem/thread pool for very large ones.
+  /** Upper bound on in-flight `createFileEntry` calls per `listDirectory` (issue #1416): high enough to overlap a large
+    * directory's blocking stat calls, low enough not to flood the filesystem/thread pool for very large ones.
     */
   private[io] val MaxConcurrentEntries = 32
 

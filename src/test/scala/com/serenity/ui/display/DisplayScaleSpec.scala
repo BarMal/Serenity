@@ -2,10 +2,9 @@ package com.serenity.ui.display
 
 import java.awt.{Component, GraphicsEnvironment}
 
+import com.serenity.ui.display.DisplayScale.DeviceScale
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import com.serenity.ui.display.DisplayScale.DeviceScale
 
 class DisplayScaleSpec extends AnyFlatSpec with Matchers:
 
@@ -55,7 +54,10 @@ class DisplayScaleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "match the local default screen device's transform scale in a non-headless environment" in {
-    assume(!GraphicsEnvironment.isHeadless, "This test only exercises the successful AWT lookup when a display is present")
+    assume(
+      !GraphicsEnvironment.isHeadless,
+      "This test only exercises the successful AWT lookup when a display is present"
+    )
 
     val config    = GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice.getDefaultConfiguration
     val transform = config.getDefaultTransform

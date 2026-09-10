@@ -23,9 +23,7 @@ private[spellcheck] object HunspellCompoundMatcher:
   ): Boolean =
     compoundRules.nonEmpty && {
       val index = buildCandidateIndex(compoundWordFlags)
-      compoundRules.exists { pattern =>
-        compoundMatches(tokenizeCompoundPattern(pattern), word, index, compoundMin)
-      }
+      compoundRules.exists(pattern => compoundMatches(tokenizeCompoundPattern(pattern), word, index, compoundMin))
     }
 
   /** Every dictionary word bucketed by its first character, built once per [[matches]] call and threaded through the
@@ -33,7 +31,9 @@ private[spellcheck] object HunspellCompoundMatcher:
     * call performs each narrow their scan to words that could plausibly match, rather than re-walking the whole
     * dictionary per lookup (issue #1415).
     */
-  private def buildCandidateIndex(compoundWordFlags: Map[String, Set[String]]): Map[Char, Vector[(String, Set[String])]] =
+  private def buildCandidateIndex(
+    compoundWordFlags: Map[String, Set[String]]
+  ): Map[Char, Vector[(String, Set[String])]] =
     compoundWordFlags.iterator
       .filter { case (word, _) => word.nonEmpty }
       .toVector
@@ -77,10 +77,14 @@ private[spellcheck] object HunspellCompoundMatcher:
   ): List[String] =
     if remaining.isEmpty then Nil
     else
-      index.getOrElse(remaining.head, Vector.empty).iterator.collect {
-        case (word, flags) if word.length >= compoundMin && flags.contains(flag) && remaining.startsWith(word) =>
-          remaining.drop(word.length)
-      }.toList
+      index
+        .getOrElse(remaining.head, Vector.empty)
+        .iterator
+        .collect {
+          case (word, flags) if word.length >= compoundMin && flags.contains(flag) && remaining.startsWith(word) =>
+            remaining.drop(word.length)
+        }
+        .toList
 
   /** Matches `remaining` against a COMPOUNDRULE pattern's tokens, recursively segmenting it into dictionary words
     * flagged for each token in turn; succeeds only when every token is satisfied and the entire candidate is consumed.

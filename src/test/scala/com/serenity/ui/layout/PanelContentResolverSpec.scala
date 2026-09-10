@@ -257,7 +257,8 @@ class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
   "resolveShortcutsHelp" should "render every layout kind identically -- group headings followed by entries" in {
     val groups = List(ShortcutHelpGroup("Global", List(ShortcutHelpEntry("Save", "ctrl+s"))))
 
-    val floating = PanelContentResolver.resolveShortcutsHelp(LayoutRect(0, 0, 10, 20), SurfaceRenderMode.Floating, groups)
+    val floating =
+      PanelContentResolver.resolveShortcutsHelp(LayoutRect(0, 0, 10, 20), SurfaceRenderMode.Floating, groups)
     // Width alone would classify as SurfaceLayoutKind.Compact, but resolveShortcutsHelp never branches on layout
     // kind (unlike its siblings above) -- only `rect.height` bounds the row count, so a narrow-but-tall rect still
     // renders identically to a wide one.

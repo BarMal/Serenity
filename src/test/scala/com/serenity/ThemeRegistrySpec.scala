@@ -7,9 +7,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Covers issue #1429: `ThemeRegistry.getThemesBySource` reuses the module's one `ThemeConfigLoader` instead of
-  * constructing new ones inline, its union/sort logic agrees with `getAvailableThemeNames`'s, and
-  * `ThemeConfigLoader`'s bundled-themes fallback names track the actual internal theme keys instead of the stale
-  * `"dark"`/`"light"` literals.
+  * constructing new ones inline, its union/sort logic agrees with `getAvailableThemeNames`'s, and `ThemeConfigLoader`'s
+  * bundled-themes fallback names track the actual internal theme keys instead of the stale `"dark"`/`"light"` literals.
   */
 class ThemeRegistrySpec extends AnyFlatSpec with Matchers:
 

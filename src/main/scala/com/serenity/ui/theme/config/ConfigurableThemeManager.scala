@@ -10,14 +10,14 @@ object ConfigurableThemeManager:
 
   def configToTheme(config: ThemeConfig): Either[String, Theme] =
     for
-      foreground  <- ColorParser.parseColor(config.ui.foreground)
-      background  <- ColorParser.parseColor(config.ui.background)
-      cursor      <- ColorParser.parseColor(config.ui.cursor)
-      highlighted <- convertUiToken(config.ui.highlighted)
-      menuItem    <- convertUiToken(config.ui.menuItem)
-      panel       <- convertUiToken(config.ui.panel)
-      error       <- convertUiToken(config.ui.error)
-      warning     <- convertUiToken(config.ui.warning.getOrElse(ThemeFieldSchema.warningDefault))
+      foreground   <- ColorParser.parseColor(config.ui.foreground)
+      background   <- ColorParser.parseColor(config.ui.background)
+      cursor       <- ColorParser.parseColor(config.ui.cursor)
+      highlighted  <- convertUiToken(config.ui.highlighted)
+      menuItem     <- convertUiToken(config.ui.menuItem)
+      panel        <- convertUiToken(config.ui.panel)
+      error        <- convertUiToken(config.ui.error)
+      warning      <- convertUiToken(config.ui.warning.getOrElse(ThemeFieldSchema.warningDefault))
       border       <- ColorParser.parseColor(config.ui.border)
       panelBorder  <- parseOptionalColor(config.ui.panelBorder, border)
       margin       <- parseOptionalColor(config.ui.margin, background)
@@ -75,9 +75,8 @@ object ConfigurableThemeManager:
       (SyntaxElement.Operator, syntax.operator),
       (SyntaxElement.Identifier, syntax.identifier)
     )
-    val optional = ThemeFieldSchema.syntaxFields.map { field =>
-      (field.element, field.select(syntax).getOrElse(field.default))
-    }
+    val optional =
+      ThemeFieldSchema.syntaxFields.map(field => (field.element, field.select(syntax).getOrElse(field.default)))
     val conversions = mandatory ++ optional
 
     val results = conversions.map {

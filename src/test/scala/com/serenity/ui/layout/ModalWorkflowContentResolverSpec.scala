@@ -5,9 +5,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Dedicated unit coverage for `ModalWorkflowContentResolver` (issue #1421). `SurfaceContentResolverSpec` covers the
-  * find/replace/file-workflow/close-workflow branches through `SurfaceContentResolver.resolve`, but never the
-  * fallback `modalLines` path -- `Modal.GotoLine` and `Modal.Custom` never appear there at all. Lives in this package
-  * because the resolver is `private[layout]`.
+  * find/replace/file-workflow/close-workflow branches through `SurfaceContentResolver.resolve`, but never the fallback
+  * `modalLines` path -- `Modal.GotoLine` and `Modal.Custom` never appear there at all. Lives in this package because
+  * the resolver is `private[layout]`.
   */
 class ModalWorkflowContentResolverSpec extends AnyFlatSpec with Matchers:
 
@@ -128,7 +128,8 @@ class ModalWorkflowContentResolverSpec extends AnyFlatSpec with Matchers:
       mode = FileWorkflowMode.Open,
       filename = "",
       path = "/tmp",
-      suggestions = List(FileWorkflowSuggestion("file.txt", isDirectory = false), FileWorkflowSuggestion("dir", isDirectory = true))
+      suggestions =
+        List(FileWorkflowSuggestion("file.txt", isDirectory = false), FileWorkflowSuggestion("dir", isDirectory = true))
     )
 
     val resolved = ModalWorkflowContentResolver.resolve(

@@ -17,7 +17,8 @@ class PickerContentResolverSpec extends AnyFlatSpec with Matchers:
   // ── resolveThemePicker ──────────────────────────────────────────────────────
 
   "resolveThemePicker" should "window rows around the selected theme" in {
-    val state = ThemePickerState(List("dark", "light", "mocha", "forest", "paper"), selectedIndex = 4, originalTheme = "dark")
+    val state =
+      ThemePickerState(List("dark", "light", "mocha", "forest", "paper"), selectedIndex = 4, originalTheme = "dark")
 
     val resolved = PickerContentResolver.resolveThemePicker(state, LayoutRect(0, 0, 30, 5), SurfaceRenderMode.Floating)
 
@@ -37,7 +38,8 @@ class PickerContentResolverSpec extends AnyFlatSpec with Matchers:
   "resolveThemeCreator" should "render each row as label/path/value columns, selecting the current row" in {
     val state = ThemeCreatorState.fromTheme(Theme.dark).copy(selectedIndex = 1)
 
-    val resolved = PickerContentResolver.resolveThemeCreator(state, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
+    val resolved =
+      PickerContentResolver.resolveThemeCreator(state, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
 
     resolved.title shouldBe None
     resolved.header.map(_.plainText) shouldBe Some("theme creator")
@@ -52,7 +54,8 @@ class PickerContentResolverSpec extends AnyFlatSpec with Matchers:
       .selectPath("ui.foreground")
       .replaceSelectedValue("not-a-color")
 
-    val resolved = PickerContentResolver.resolveThemeCreator(invalidColorState, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
+    val resolved =
+      PickerContentResolver.resolveThemeCreator(invalidColorState, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
 
     val row = resolved.rows.find(_.plainText.startsWith("Foreground")).getOrElse(fail("Expected a Foreground row"))
     row.segments.last.tone shouldBe OverlayTone.Error
@@ -61,15 +64,17 @@ class PickerContentResolverSpec extends AnyFlatSpec with Matchers:
   it should "render the status message footer in red" in {
     val state = ThemeCreatorState.fromTheme(Theme.dark).withStatus("Invalid color")
 
-    val resolved = PickerContentResolver.resolveThemeCreator(state, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
+    val resolved =
+      PickerContentResolver.resolveThemeCreator(state, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
 
     resolved.footer.map(_.plainText) shouldBe Some("Invalid color")
     resolved.footer.flatMap(_.foregroundColor) shouldBe Some(java.awt.Color.RED)
   }
 
   it should "omit the footer when there is no status message" in {
-    val state    = ThemeCreatorState.fromTheme(Theme.dark)
-    val resolved = PickerContentResolver.resolveThemeCreator(state, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
+    val state = ThemeCreatorState.fromTheme(Theme.dark)
+    val resolved =
+      PickerContentResolver.resolveThemeCreator(state, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
 
     resolved.footer shouldBe None
   }
@@ -101,7 +106,12 @@ class PickerContentResolverSpec extends AnyFlatSpec with Matchers:
       items = List(ContextMenuItem(save.name, save.label, save))
     )
 
-    val resolved = PickerContentResolver.resolveContextMenu(menu, LayoutRect(0, 0, 28, 8), SurfaceRenderMode.Pinned, itemGapRows = 0.0)
+    val resolved = PickerContentResolver.resolveContextMenu(
+      menu,
+      LayoutRect(0, 0, 28, 8),
+      SurfaceRenderMode.Pinned,
+      itemGapRows = 0.0
+    )
 
     resolved.title shouldBe Some("editor")
     resolved.header.map(_.plainText) shouldBe Some("editor")
@@ -110,7 +120,12 @@ class PickerContentResolverSpec extends AnyFlatSpec with Matchers:
   it should "omit the footer entirely for an empty menu" in {
     val menu = ContextMenu(title = "empty", targetFocus = Focus.EditorPane(PaneId(0)), items = Nil)
 
-    val resolved = PickerContentResolver.resolveContextMenu(menu, LayoutRect(0, 0, 28, 8), SurfaceRenderMode.Floating, itemGapRows = 0.0)
+    val resolved = PickerContentResolver.resolveContextMenu(
+      menu,
+      LayoutRect(0, 0, 28, 8),
+      SurfaceRenderMode.Floating,
+      itemGapRows = 0.0
+    )
 
     resolved.rows shouldBe Nil
     resolved.footer shouldBe None

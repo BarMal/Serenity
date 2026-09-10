@@ -5,9 +5,9 @@ package com.serenity.config
   *
   * The material/post-processing/display/command-runner/text-area/viewport settings this used to also cover are gone
   * (#1406) -- [[ConfigRegistry]] already owned parsing, validation and writing for every one of them end-to-end, so
-  * [[ConfigManager.parseConfig]] never actually reached this module's copy (`ConfigRegistry.find` is tried first).
-  * What is left is genuinely load-bearing: the motion hierarchy has no [[ConfigField]] of its own to read it back with
-  * (see [[ConfigGroups]], which only writes it), so this is still the one place that parses it.
+  * [[ConfigManager.parseConfig]] never actually reached this module's copy (`ConfigRegistry.find` is tried first). What
+  * is left is genuinely load-bearing: the motion hierarchy has no [[ConfigField]] of its own to read it back with (see
+  * [[ConfigGroups]], which only writes it), so this is still the one place that parses it.
   *
   * Vocabulary only -- nothing here parses a value. [[handles]] is what a caller asks before handing a key to
   * [[SurfaceConfigSchemaParser.parse]].

@@ -1,7 +1,7 @@
 package com.serenity.ui.renderer
 
-import java.awt.image.BufferedImage
 import java.awt.Font
+import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.MockRenderSurface
@@ -11,11 +11,11 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Covers the [[RendererFrameState]] caches that #1411 moved off `java.util.WeakHashMap` + `synchronized` onto a
-  * `Ref[IO, ...]`-backed, capacity-bounded store: the public per-surface/per-screen accessors behave exactly as
-  * before (round trip, "first time" reporting, forgetting), and the bounded eviction that now stands in for
-  * `WeakHashMap`'s GC-driven eviction is itself exercised -- an evicted identity must fall back to the same
-  * "never tracked" behaviour an identity this module has genuinely never seen falls back to, since that is what
-  * makes eviction safe rather than merely convenient.
+  * `Ref[IO, ...]`-backed, capacity-bounded store: the public per-surface/per-screen accessors behave exactly as before
+  * (round trip, "first time" reporting, forgetting), and the bounded eviction that now stands in for `WeakHashMap`'s
+  * GC-driven eviction is itself exercised -- an evicted identity must fall back to the same "never tracked" behaviour
+  * an identity this module has genuinely never seen falls back to, since that is what makes eviction safe rather than
+  * merely convenient.
   */
 class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
 
@@ -38,7 +38,7 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
   )
 
   "accumulateBufferDamage / drainBufferDamage" should "report Everything the first time an identity is drained" in {
-    val s = surface()
+    val s   = surface()
     val key = s.persistentContentKey.get
     RendererFrameState.accumulateBufferDamage(None, Damage.BufferRows(BufferId(1), Set(0)))
     RendererFrameState.drainBufferDamage(None, key) shouldBe Damage.Everything
@@ -55,10 +55,10 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "scope accumulation to identities tracked for the same screen" in {
-    val s1 = surface()
-    val s2 = surface()
-    val k1 = s1.persistentContentKey.get
-    val k2 = s2.persistentContentKey.get
+    val s1      = surface()
+    val s2      = surface()
+    val k1      = s1.persistentContentKey.get
+    val k2      = s2.persistentContentKey.get
     val outputA = frameOutput(new Object)
     val outputB = frameOutput(new Object)
     RendererFrameState.drainBufferDamage(Some(outputA), k1)
@@ -71,20 +71,20 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
   }
 
   "drawStateChanged" should "report a change the first time a persistence key is seen" in {
-    val s = surface()
+    val s   = surface()
     val key = s.persistentContentKey.get
     RendererFrameState.drawStateChanged(key, Set(PaneId(1)), someInputs) shouldBe true
   }
 
   it should "report no change when paneIds and inputs are identical to the last call" in {
-    val s = surface()
+    val s   = surface()
     val key = s.persistentContentKey.get
     RendererFrameState.drawStateChanged(key, Set(PaneId(1)), someInputs)
     RendererFrameState.drawStateChanged(key, Set(PaneId(1)), someInputs) shouldBe false
   }
 
   it should "report a change when the pane set differs" in {
-    val s = surface()
+    val s   = surface()
     val key = s.persistentContentKey.get
     RendererFrameState.drawStateChanged(key, Set(PaneId(1)), someInputs)
     RendererFrameState.drawStateChanged(key, Set(PaneId(1), PaneId(2)), someInputs) shouldBe true
@@ -140,8 +140,8 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
   }
 
   "forgetPreviousFrameState" should "drop remembered floating rects for the key" in {
-    val s   = surface()
-    val key = s.persistentContentKey.get
+    val s     = surface()
+    val key   = s.persistentContentKey.get
     val rects = Map(SurfaceId("a") -> com.serenity.ui.layout.PixelRect(0, 0, 1, 1))
     RendererFrameState.rememberFloatingSurfaceRects(s, rects)
     RendererFrameState.previousFloatingSurfaceRectsFor(key) shouldBe rects
@@ -152,8 +152,8 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
   }
 
   "forgetBufferState / forgetScreenState" should "make a previously tracked identity look untracked again" in {
-    val s   = surface()
-    val key = s.persistentContentKey.get
+    val s      = surface()
+    val key    = s.persistentContentKey.get
     val output = frameOutput(new Object)
     RendererFrameState.drainBufferDamage(Some(output), key)
     RendererFrameState.drawStateChanged(key, Set(PaneId(1)), someInputs)

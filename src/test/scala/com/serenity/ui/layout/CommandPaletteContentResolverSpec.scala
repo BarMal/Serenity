@@ -6,8 +6,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Dedicated unit coverage for `CommandPaletteContentResolver` (issue #1421). `SurfaceContentResolverSpec` covers most
-  * of this behavior indirectly through `SurfaceContentResolver.resolve`, but never names this object directly. Lives
-  * in this package because the resolver is `private[layout]`.
+  * of this behavior indirectly through `SurfaceContentResolver.resolve`, but never names this object directly. Lives in
+  * this package because the resolver is `private[layout]`.
   */
 class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
 
@@ -69,7 +69,12 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
   it should "tag search results with their category once a search term is present" in {
     val commands = List(
       Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile), CommandCategory.File),
-      Command.typed("close", "Close current file", CommandIntent.File(FileIntent.CloseCurrentFile), CommandCategory.File)
+      Command.typed(
+        "close",
+        "Close current file",
+        CommandIntent.File(FileIntent.CloseCurrentFile),
+        CommandCategory.File
+      )
     )
     val runner = CommandRunner.empty
       .activate(CommandRegistry(commands), AppConfig.default)
@@ -158,7 +163,10 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
       hint = "Points",
       currentValue = "12",
       isDecimal = true,
-      parse = text => text.toFloatOption.filter(_ >= 1.0f).map(size => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(size))),
+      parse = text =>
+        text.toFloatOption
+          .filter(_ >= 1.0f)
+          .map(size => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(size))),
       category = CommandCategory.Edit
     )
 
@@ -177,7 +185,10 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
       hint = "Points",
       currentValue = "12",
       isDecimal = true,
-      parse = text => text.toFloatOption.filter(_ >= 1.0f).map(size => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(size))),
+      parse = text =>
+        text.toFloatOption
+          .filter(_ >= 1.0f)
+          .map(size => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(size))),
       category = CommandCategory.Edit
     )
 

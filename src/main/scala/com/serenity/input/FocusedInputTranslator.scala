@@ -7,8 +7,8 @@ import com.serenity.state.models.{AppState, SurfaceContent}
 
 object FocusedInputTranslator:
 
-  /** The fixed set of per-focus translators, built once per distinct [[AppConfig]] identity rather than on every
-    * input event -- construction is what flattens each translator's local keymap, the expensive part (issue #1409).
+  /** The fixed set of per-focus translators, built once per distinct [[AppConfig]] identity rather than on every input
+    * event -- construction is what flattens each translator's local keymap, the expensive part (issue #1409).
     * `forState` picks one of these (or composes it with the global hotkey translator) based on the rest of the
     * `AppState`, which changes far more often than the config does.
     */
@@ -22,6 +22,7 @@ object FocusedInputTranslator:
   )
 
   object TranslatorSet:
+
     def forConfig(config: AppConfig): TranslatorSet =
       TranslatorSet(
         new EditorInputTranslator(config),

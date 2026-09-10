@@ -174,7 +174,8 @@ final private[manager] class StateManagerSurfaceCapability(
               val newSurface = surface.copy(content = newContent)
               Some(
                 state.copy(runtime =
-                  state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(newSurface))
+                  state.runtime
+                    .copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(newSurface))
                 )
               )
             case _ => None

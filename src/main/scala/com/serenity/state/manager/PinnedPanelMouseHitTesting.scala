@@ -144,7 +144,8 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     focusPanel: Boolean
   ): AppState =
     val updatedContent = SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path))
-    val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == hit.surface.id)(_.copy(content = updatedContent))
+    val updatedSurfaces =
+      state.runtime.uiSurfaces.replacedWhere(_.id == hit.surface.id)(_.copy(content = updatedContent))
     val nextFocus = if focusPanel then Focus.Surface(hit.surface.id) else state.persisted.focus
     state.copy(
       persisted = state.persisted.copy(focus = nextFocus),

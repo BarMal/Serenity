@@ -1,10 +1,10 @@
 package com.serenity.state.models
 
-/** Shared helpers for the "find the item matching a predicate (typically an id) and replace it" shape duplicated
-  * across `state/reducers`, `StateManager*` capability files, and `state/components` (issue #1419). Two variants
-  * exist because call sites genuinely differ on whether the replaced item should keep its position or move to the
-  * end of the list: for `Runtime.uiSurfaces` specifically, list order doubles as z-order (`AppState.modalSurface`
-  * reads `uiSurfaces.reverse.find`, and `StateManagerSurfaceCapability`'s pin/update flows rely on
+/** Shared helpers for the "find the item matching a predicate (typically an id) and replace it" shape duplicated across
+  * `state/reducers`, `StateManager*` capability files, and `state/components` (issue #1419). Two variants exist because
+  * call sites genuinely differ on whether the replaced item should keep its position or move to the end of the list:
+  * for `Runtime.uiSurfaces` specifically, list order doubles as z-order (`AppState.modalSurface` reads
+  * `uiSurfaces.reverse.find`, and `StateManagerSurfaceCapability`'s pin/update flows rely on
   * `pinnedSurfaces.reverse.find` to mean "most recently touched"), so moving a replaced surface to the end is a
   * deliberate "bring to front" -- not an oversight to unify away. This only collects the two shapes under one name
   * each; it does not change which call sites use which.

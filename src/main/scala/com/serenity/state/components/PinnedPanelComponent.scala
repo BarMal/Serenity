@@ -178,5 +178,7 @@ class PinnedPanelComponent(
 
   private def replaceSurface(currentState: AppState, updated: com.serenity.state.models.UiSurface): AppState =
     currentState.copy(runtime =
-      currentState.runtime.copy(uiSurfaces = currentState.runtime.uiSurfaces.movedToEndWhere(_.id == updated.id)(updated))
+      currentState.runtime.copy(uiSurfaces =
+        currentState.runtime.uiSurfaces.movedToEndWhere(_.id == updated.id)(updated)
+      )
     )

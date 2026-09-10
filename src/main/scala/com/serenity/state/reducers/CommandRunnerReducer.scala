@@ -45,18 +45,18 @@ object CommandRunnerReducer:
 
   private def reduceActive(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
     event match
-      case RunnerDismiss                               => reduceDismiss(state)
-      case RunnerSubmit                                => reduceSubmit(state)
-      case RunnerInsertChar(char)                       => reduceInsertChar(char, state, registry)
-      case RunnerRecordBinding(info, recordedAtMillis) => recordBinding(state, info, recordedAtMillis)
+      case RunnerDismiss                                   => reduceDismiss(state)
+      case RunnerSubmit                                    => reduceSubmit(state)
+      case RunnerInsertChar(char)                          => reduceInsertChar(char, state, registry)
+      case RunnerRecordBinding(info, recordedAtMillis)     => recordBinding(state, info, recordedAtMillis)
       case RunnerBindingRecordingExpired(recordedAtMillis) => expireRecordedBinding(state, recordedAtMillis)
-      case RunnerDeleteBackward                        => reduceDeleteBackward(state, registry)
-      case RunnerDeleteForward                         => reduceDeleteForward(state)
-      case RunnerDeleteWordBackward                    => reduceDeleteWordBackward(state, registry)
-      case RunnerDeleteWordForward                     => reduceDeleteWordForward(state, registry)
-      case RunnerPaste                                 => reducePaste(state, registry)
-      case RunnerNavigate(Direction.Up)                => reduceVerticalNavigate(-1, state)
-      case RunnerNavigate(Direction.Down)               => reduceVerticalNavigate(1, state)
+      case RunnerDeleteBackward                            => reduceDeleteBackward(state, registry)
+      case RunnerDeleteForward                             => reduceDeleteForward(state)
+      case RunnerDeleteWordBackward                        => reduceDeleteWordBackward(state, registry)
+      case RunnerDeleteWordForward                         => reduceDeleteWordForward(state, registry)
+      case RunnerPaste                                     => reducePaste(state, registry)
+      case RunnerNavigate(Direction.Up)                    => reduceVerticalNavigate(-1, state)
+      case RunnerNavigate(Direction.Down)                  => reduceVerticalNavigate(1, state)
       case RunnerSelectVisibleItem(index) =>
         ReducerResult.noEffects(replaceRunner(state, _.withSelectedVisibleIndex(index)))
       case RunnerSelectSubmenuItem(index) =>

@@ -381,9 +381,8 @@ object AppRuntime:
       yield ()
     }.drain
 
-  /** Keyed on `AppConfig` identity (structural equality): the focused-translator set changes only when the config
-    * does, far less often than every keystroke/mouse-move that flows through `refreshFocusedInputTranslator`
-    * (issue #1409).
+  /** Keyed on `AppConfig` identity (structural equality): the focused-translator set changes only when the config does,
+    * far less often than every keystroke/mouse-move that flows through `refreshFocusedInputTranslator` (issue #1409).
     */
   private[serenity] type FocusedTranslatorCacheEntry = (AppConfig, FocusedInputTranslator.TranslatorSet)
 

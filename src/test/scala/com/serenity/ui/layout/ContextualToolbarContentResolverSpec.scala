@@ -91,13 +91,16 @@ class ContextualToolbarContentResolverSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render dropdown options as Distributed detail rows, marking the selected option" in {
-    val rect          = LayoutRect(0, 0, 80, 8)
-    val toolbarState  = ContextualToolbarState(detailState = Some(ContextualToolbarDetailState.Dropdown("font-family", 0)))
-    val closed        = ContextualToolbarContentResolver.resolve(ContextualToolbarState(), proseState, rect, SurfaceRenderMode.Floating)
-    val resolved      = ContextualToolbarContentResolver.resolve(toolbarState, proseState, rect, SurfaceRenderMode.Floating)
+    val rect = LayoutRect(0, 0, 80, 8)
+    val toolbarState =
+      ContextualToolbarState(detailState = Some(ContextualToolbarDetailState.Dropdown("font-family", 0)))
+    val closed =
+      ContextualToolbarContentResolver.resolve(ContextualToolbarState(), proseState, rect, SurfaceRenderMode.Floating)
+    val resolved = ContextualToolbarContentResolver.resolve(toolbarState, proseState, rect, SurfaceRenderMode.Floating)
 
-    val items    = ContextualToolbar.itemsFor(proseState)
-    val dropdown = ContextualToolbar.dropdownItem("font-family", items).getOrElse(fail("Expected a font-family dropdown"))
+    val items = ContextualToolbar.itemsFor(proseState)
+    val dropdown =
+      ContextualToolbar.dropdownItem("font-family", items).getOrElse(fail("Expected a font-family dropdown"))
     val expectedFirstOption = dropdown.optionItem.options.headOption.map(_.label)
 
     // The installed-font option list is host-dependent (as many entries as system font families) and can wrap into

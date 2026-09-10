@@ -3,9 +3,8 @@ package com.serenity.ui.renderer
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
-import cats.effect.{IO, Ref}
 import cats.effect.unsafe.implicits.global
-
+import cats.effect.{IO, Ref}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -142,8 +141,8 @@ final private class BoundedRefCache[K, V](capacity: Int):
   def remove(key: K): Unit =
     state.update(c => Contents(c.entries - key, c.order.filterNot(_ == key))).unsafeRunSync()
 
-  /** Rewrites every entry at once (e.g. folding damage into several tracked identities together) rather than one key
-    * at a time.
+  /** Rewrites every entry at once (e.g. folding damage into several tracked identities together) rather than one key at
+    * a time.
     */
   def replaceAll(f: Map[K, V] => Map[K, V]): Unit =
     modify(entries => (f(entries), ()))
@@ -155,31 +154,31 @@ final private class BoundedRefCache[K, V](capacity: Int):
     state
       .modify { c =>
         val (nextEntries, result) = f(c.entries)
-        val nextOrder             = c.order.filter(nextEntries.contains) ++ nextEntries.keySet.diff(c.order.toSet).toVector
+        val nextOrder = c.order.filter(nextEntries.contains) ++ nextEntries.keySet.diff(c.order.toSet).toVector
         (bounded(Contents(nextEntries, nextOrder)), result)
       }
       .unsafeRunSync()
 
 /** Per-frame caches consulted across the whole module: the prepared render plan a cursor-only redraw can reuse, the
   * accumulated repaint damage a persisting surface hasn't drawn yet, and the previous frame's floating-panel rects/pane
-  * snapshots later frames diff against. All the module's mutable bookkeeping lives here, behind [[BoundedRefCache]],
-  * in one place, regardless of which render entry point or frame-planning step reads or updates it.
+  * snapshots later frames diff against. All the module's mutable bookkeeping lives here, behind [[BoundedRefCache]], in
+  * one place, regardless of which render entry point or frame-planning step reads or updates it.
   */
 object RendererFrameState:
 
   /** Per-cache capacity for every [[BoundedRefCache]] below. These caches are process-wide singletons keyed by object
     * identity (`SurfaceContentIdentity`, `ScreenIdentity`, `RenderSurface`) with no notion of when their key is done
-    * being useful -- the retired `WeakHashMap`s handled that by letting an entry disappear once nothing else in the
-    * app referenced its key, which also kept a recycled image-pool identity or a long-lived test run's surfaces from
+    * being useful -- the retired `WeakHashMap`s handled that by letting an entry disappear once nothing else in the app
+    * referenced its key, which also kept a recycled image-pool identity or a long-lived test run's surfaces from
     * pinning cache entries forever. A `Ref`-backed `Map` cannot observe reachability the way a weak key can, so this
     * bounds growth the other safe way instead: capping each cache to its most recently *written* entries and evicting
     * the rest. Eviction is safe (not just convenient) because every reader here already treats an untracked identity
     * exactly like one that has never been seen -- `drainBufferDamage`/`drainScreenDamage` report `Damage.Everything`,
     * `drawStateChanged`/`screenPaneIdsChanged` report a change, and a cached layer image simply isn't reused. So an
-    * evicted-but-still-live surface costs one extra full redraw the next time it's touched, not incorrect output.
-    * 64 mirrors the bound [[com.serenity.state.manager.AuthoritativeUiScene]]'s own `prepared` cache already uses for
-    * the same "no real bound, but must not grow forever" reason, comfortably above the handful of surfaces/screens a
-    * single window (or a single test) ever has live at once.
+    * evicted-but-still-live surface costs one extra full redraw the next time it's touched, not incorrect output. 64
+    * mirrors the bound [[com.serenity.state.manager.AuthoritativeUiScene]]'s own `prepared` cache already uses for the
+    * same "no real bound, but must not grow forever" reason, comfortably above the handful of surfaces/screens a single
+    * window (or a single test) ever has live at once.
     */
   val PerCacheCapacity: Int = 64
 
@@ -381,7 +380,7 @@ object RendererFrameState:
       case Some(value) =>
         val wasTracked = screenDamage.get(value.screenToken).isDefined
         val observed = screenDamage.modify { tracked =>
-          val current       = tracked.getOrElse(value.screenToken, Damage.Nothing)
+          val current      = tracked.getOrElse(value.screenToken, Damage.Nothing)
           val (obs, reset) = DamageAccumulator.observeScreenPublish(current)
           (tracked.updated(value.screenToken, reset), obs)
         }
