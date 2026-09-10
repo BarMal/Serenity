@@ -9,10 +9,9 @@ import scala.util.Try
 import scala.util.control.NonFatal
 
 import cats.effect.IO
-import com.serenity.animation.{AnimationConfig, WindowSitterAction}
+import com.serenity.animation.AnimationConfig
 import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValue, ConfigValueType}
 import org.slf4j.LoggerFactory
@@ -130,24 +129,6 @@ object ConfigManager:
               .getOrElse(config)
           case "editor.minimum_pane_width" | "editor.minimum.pane.width" | "editor_minimum_pane_width" =>
             value.trim.toIntOption.map(config.withMinimumPaneWidth).getOrElse(config)
-          case "font.code.family" | "font_code_family" =>
-            config.withFontConfig(config.editorConfig.fontConfig.copy(codeFontFamily = value.trim))
-          case "font.text.family" | "font_text_family" =>
-            config.withFontConfig(config.editorConfig.fontConfig.copy(textFontFamily = value.trim))
-          case "font.ui.family" | "font_ui_family" =>
-            val family =
-              if value.trim == "${font.text.family}" then config.editorConfig.fontConfig.textFontFamily else value.trim
-            config.withFontConfig(config.editorConfig.fontConfig.copy(uiFontFamily = family))
-          case "font.code.size" | "font_code_size" =>
-            value.trim.toFloatOption
-              .map(size => config.withFontConfig(config.editorConfig.fontConfig.copy(fontSize = clampFontSize(size))))
-              .getOrElse(config)
-          case "font.text.size" | "font.prose.size" | "font_text_size" | "font_prose_size" =>
-            value.trim.toFloatOption
-              .map(size =>
-                config.withFontConfig(config.editorConfig.fontConfig.copy(textFontSize = clampFontSize(size)))
-              )
-              .getOrElse(config)
           case "font.size" | "font_size" =>
             value.trim.toFloatOption
               .map(size =>
@@ -157,48 +138,6 @@ object ConfigManager:
                 )
               )
               .getOrElse(config)
-          case "font.ui.size" | "font_ui_size" =>
-            value.trim.toFloatOption
-              .map(size => config.withFontConfig(config.editorConfig.fontConfig.copy(uiFontSize = clampFontSize(size))))
-              .getOrElse(config)
-          case "font.scale.mode" | "font_scale_mode" =>
-            // Only the mode. Automatic scaling derives its multiplier rather than reading one, but resolving it here
-            // depended on this key being folded after `font.text_scale`, which is an ordering the key names happened to
-            // give rather than one anything stated. `resolveAutoTextScale` runs once the whole file has been read.
-            parseTextScaleMode(value.trim)
-              .map(mode => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMode = mode)))
-              .getOrElse(config)
-          case "font.text_scale" | "font.text.scale" | "font_text_scale" =>
-            // Only the multiplier. Inferring "manual" from a non-default multiplier is for files that never say what the
-            // mode is (see `inferTextScaleMode` below); doing it here overrode an explicit `font.scale.mode = off`,
-            // because entries are folded in key order and the multiplier's key sorts after the mode's.
-            parseTextScaleMultiplier(value.trim)
-              .map(scale => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMultiplier = scale)))
-              .getOrElse(config)
-          case "font.code.ligatures" | "font_code_ligatures" =>
-            value.trim.toLowerCase match
-              case "true" | "on" | "enabled" =>
-                config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = true))
-              case "false" | "off" | "disabled" =>
-                config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = false))
-              case _ =>
-                config
-          case "font.text.ligatures" | "font.prose.ligatures" | "font_text_ligatures" | "font_prose_ligatures" =>
-            value.trim.toLowerCase match
-              case "true" | "on" | "enabled" =>
-                config.withFontConfig(config.editorConfig.fontConfig.copy(textLigatures = true))
-              case "false" | "off" | "disabled" =>
-                config.withFontConfig(config.editorConfig.fontConfig.copy(textLigatures = false))
-              case _ =>
-                config
-          case "font.ui.ligatures" | "font_ui_ligatures" =>
-            value.trim.toLowerCase match
-              case "true" | "on" | "enabled" =>
-                config.withFontConfig(config.editorConfig.fontConfig.copy(uiLigatures = true))
-              case "false" | "off" | "disabled" =>
-                config.withFontConfig(config.editorConfig.fontConfig.copy(uiLigatures = false))
-              case _ =>
-                config
           case "font.ligatures" | "font_ligatures" =>
             value.trim.toLowerCase match
               case "true" | "on" | "enabled" =>
@@ -208,39 +147,8 @@ object ConfigManager:
                   .withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = false, textLigatures = false))
               case _ =>
                 config
-          case "interface.density" | "interface_density" =>
-            InterfaceDensity.fromConfigKey(value).map(config.withInterfaceDensity).getOrElse(config)
-          case "ui.element_gap" | "ui.element.gap" | "ui_element_gap" =>
-            parseUiElementGap(value.trim).map(config.withUiElementGap).getOrElse(config)
-          case "ui.corner_radius" | "ui.corner.radius" | "ui_corner_radius" =>
-            parseUiCornerRadiusPx(value.trim).map(config.withUiCornerRadiusPx).getOrElse(config)
-          case "ui.outline_thickness" | "ui.outline.thickness" | "ui_outline_thickness" =>
-            parseUiOutlineThicknessPx(value.trim).map(config.withUiOutlineThicknessPx).getOrElse(config)
           case key if SurfaceConfigSchemaKeys.handles(key) =>
             SurfaceConfigSchemaParser.parse(config, key, value).getOrElse(config)
-          case "window.sitter.enabled" =>
-            parseBoolean(value)
-              .map(enabled => config.withWindowSitterConfig(config.windowSitterConfig.copy(enabled = enabled)))
-              .getOrElse(config)
-          case "window.sitter.action" =>
-            WindowSitterAction
-              .fromConfigKey(value)
-              .map(action => config.withWindowSitterConfig(config.windowSitterConfig.copy(action = action)))
-              .getOrElse(config)
-          case "window.sitter.frames" =>
-            config.withWindowSitterConfig(config.windowSitterConfig.copy(frames = value.split(",").toVector))
-          case "window.sitter.active_ticks" =>
-            value.toIntOption
-              .map(ticks => config.withWindowSitterConfig(config.windowSitterConfig.copy(activeTicks = ticks)))
-              .getOrElse(config)
-          case "window.sitter.fast_active_ticks" =>
-            value.toIntOption
-              .map(ticks => config.withWindowSitterConfig(config.windowSitterConfig.copy(fastActiveTicks = ticks)))
-              .getOrElse(config)
-          case "window.sitter.fast_typing_threshold_ms" =>
-            value.toIntOption
-              .map(ms => config.withWindowSitterConfig(config.windowSitterConfig.copy(fastTypingThresholdMs = ms)))
-              .getOrElse(config)
           case lspKey if lspKey.startsWith("lsp.") =>
             parseLspConfigEntry(config, lspKey, value.trim)
           case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
@@ -582,32 +490,6 @@ object ConfigManager:
     config.withFontConfig(withMode.resolveAutoTextScale(1.0))
 
   private val textScaleModeKeys: Set[String] = Set("font.scale.mode", "font_scale_mode")
-
-  private def parseTextScaleMode(value: String): Option[TextScaleMode] =
-    value.toLowerCase match
-      case "auto"                      => Some(TextScaleMode.Auto)
-      case "manual" | "custom"         => Some(TextScaleMode.Manual)
-      case "off" | "none" | "disabled" => Some(TextScaleMode.Off)
-      case _                           => None
-
-  private def parseTextScaleMultiplier(value: String): Option[Double] =
-    value.toDoubleOption
-      .filter(scale => scale >= FontLoader.FontConfig.MinTextScale && scale <= FontLoader.FontConfig.MaxTextScale)
-
-  private def parseUiElementGap(value: String): Option[Double] =
-    value.toDoubleOption.filter(gap =>
-      gap.isFinite && gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap
-    )
-
-  private def parseUiCornerRadiusPx(value: String): Option[Int] =
-    value.toIntOption.filter(radius =>
-      radius >= AppConfig.MinUiCornerRadiusPx && radius <= AppConfig.MaxUiCornerRadiusPx
-    )
-
-  private def parseUiOutlineThicknessPx(value: String): Option[Int] =
-    value.toIntOption.filter(thickness =>
-      thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
-    )
 
   private def parseLspConfigEntry(config: AppConfig, key: String, value: String): AppConfig =
     key.split("\\.", 3).toList match
