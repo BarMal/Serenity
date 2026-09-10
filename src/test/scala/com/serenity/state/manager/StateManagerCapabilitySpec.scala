@@ -532,7 +532,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
           UiSurface(
             SurfaceId("markdown-preview"),
             SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
-            SurfacePresentation.Pinned(com.serenity.ui.layout.PanelPosition.Right, 40)
+            SurfacePresentation.Docked
           )
         )
       )

@@ -1,7 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
-import com.serenity.state.models.{AppState, SurfaceContent, SurfacePresentation}
+import com.serenity.state.models.{AppState, SurfaceContent}
 import com.serenity.ui.layout.*
 
 object SystemEventReducer:
@@ -62,11 +62,9 @@ object SystemEventReducer:
     entries: List[com.serenity.ui.layout.DirEntry]
   ): AppState =
     state.pinnedSurfaces
-      .find {
-        _.presentation match
-          case SurfacePresentation.Pinned(pos, _) if pos == position => true
-          case _                                                     => false
-      }
+      .find(surface =>
+        state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position)
+      )
       .map { surface =>
         val updatedSurface = surface.content match
           case SurfaceContent.DirectoryTree(tree, selectedPath) =>

@@ -274,9 +274,8 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
   private def animatedPanelSurfaces(state: AppState): List[UiSurface] =
     state.runtime.uiSurfaces.filter {
       _.presentation match
-        case SurfacePresentation.Pinned(_, _)   => true
-        case SurfacePresentation.Expanded(_, _) => true
-        case _                                  => false
+        case SurfacePresentation.Docked => true
+        case _                          => false
     }
 
   private def applyPinnedPanelOpenAnimation(surface: UiSurface): IO[Unit] =

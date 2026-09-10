@@ -49,7 +49,7 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
     val surface = state.runtime.uiSurfaces.find(_.id == SurfaceId.CompanionSprite)
     surface shouldBe defined
     surface.get.content shouldBe SurfaceContent.CompanionSprite
-    surface.get.presentation shouldBe a[SurfacePresentation.Pinned]
+    surface.get.presentation shouldBe SurfacePresentation.Docked
   }
 
   it should "remove the companion pane surface when disabled again" in {
@@ -74,7 +74,9 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
 
     val state   = stateManager.getCurrentState.unsafeRunSync()
     val surface = state.runtime.uiSurfaces.find(_.id == SurfaceId.CompanionSprite).get
-    surface.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Bottom, 12)
+    surface.presentation shouldBe SurfacePresentation.Docked
+    state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)) shouldBe Some(PanelPosition.Bottom)
+    com.serenity.state.reducers.PanelStateReducer.currentSize(surface.id, state) shouldBe Some(12)
   }
 
   "PanelChromeIntent.SetVisualFlairLevel" should "persist the level" in {

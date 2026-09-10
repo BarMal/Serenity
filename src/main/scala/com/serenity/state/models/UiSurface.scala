@@ -223,8 +223,13 @@ enum SurfacePlacement:
 
 enum SurfacePresentation:
   case Floating(anchor: Option[CursorPosition], placement: SurfacePlacement)
-  case Pinned(position: PanelPosition, size: Int)
-  case Expanded(originalPosition: PanelPosition, originalSize: Int)
+
+  /** A surface docked into the workspace tree (issue #817) -- carries no position or size of its own: both are owned
+    * exclusively by `Layout.workspaceTree` (a `WorkspaceNode.DockedSurface`'s position, and its owning
+    * `WorkspaceNode.Split.ratio` for size), the single source of truth for every docked surface's placement.
+    * "Expanded/maximized" is likewise owned solely by `Layout.maximizedWorkspaceNodeId`, not a separate presentation.
+    */
+  case Docked
 
 /** Whether the above-cursor comment lens is a passive, read-only display or the existing always-editable draft state
   * (#1222). `ReadOnly` is only reachable by clicking a highlighted comment range in floating display mode; a further
@@ -321,14 +326,9 @@ object UiSurface:
     */
   val CursorInfoBarSurfaceId: SurfaceId = SurfaceId("cursor-info-bar")
 
-  def fromPanelContent(
-    id: SurfaceId,
-    content: PanelContent,
-    position: PanelPosition,
-    size: Int
-  ): UiSurface =
+  def fromPanelContent(id: SurfaceId, content: PanelContent): UiSurface =
     UiSurface(
       id = id,
       content = content.asSurfaceContent,
-      presentation = SurfacePresentation.Pinned(position, size)
+      presentation = SurfacePresentation.Docked
     )

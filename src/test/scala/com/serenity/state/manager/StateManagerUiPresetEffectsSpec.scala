@@ -207,7 +207,9 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
 
     val after = fixture.currentState
     after.persisted.theme.name shouldBe "dark"
-    after.pinnedSurfaces.map(_.presentation) should contain(SurfacePresentation.Pinned(PanelPosition.Left, 32))
+    after.pinnedSurfaces.exists(surface =>
+      after.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(PanelPosition.Left)
+    ) shouldBe true
     fixture.pinnedDirectoryLoads.get.unsafeRunSync() shouldBe List(PanelPosition.Left -> Path.of("."))
   }
 

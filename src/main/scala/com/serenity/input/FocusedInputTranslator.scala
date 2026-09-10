@@ -28,9 +28,7 @@ object FocusedInputTranslator:
         state.activeSurface match
           case Some(surface) =>
             surface.presentation match
-              case com.serenity.state.models.SurfacePresentation.Pinned(_, _) =>
-                pinnedPanelTranslator
-              case com.serenity.state.models.SurfacePresentation.Expanded(_, _) =>
+              case com.serenity.state.models.SurfacePresentation.Docked =>
                 pinnedPanelTranslator
               case _ =>
                 surface.content match

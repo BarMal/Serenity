@@ -172,36 +172,21 @@ final case class AppState(
         case _                                  => false
     }
 
+  /** Every docked surface, in the workspace tree's own order -- the tree (issue #817) is the sole authority for which
+    * surfaces are pinned and where, so this reads it directly rather than filtering `runtime.uiSurfaces` by
+    * presentation. A `Docked` surface absent from the tree is invalid state, caught by `AppStateValidation`, not a
+    * surface this still reports as pinned.
+    */
   def pinnedSurfaces: List[UiSurface] =
-    val storedPinned = runtime.uiSurfaces.filter {
-      _.presentation match
-        case SurfacePresentation.Pinned(_, _) => true
-        case _                                => false
-    }
-    val orderedStored = persisted.layout.workspaceTree match
-      case Some(tree) =>
-        tree.dockedSurfaceIds.flatMap(surfaceId => storedPinned.find(_.id == surfaceId)) ++
-          storedPinned.filterNot(surface => tree.dockedSurfaceIds.contains(surface.id))
-      case None =>
-        storedPinned
-    orderedStored ++ cursorInfoBarSurface.filter {
-      _.presentation match
-        case SurfacePresentation.Pinned(_, _) => true
-        case _                                => false
-    }
+    persisted.layout.workspaceTree.fold(List.empty[UiSurface])(_.dockedSurfaceIds.flatMap(surfaceById))
 
   def expandedPanelSurface: Option[UiSurface] =
-    val maximized = for
+    for
       tree      <- persisted.layout.workspaceTree
       nodeId    <- persisted.layout.maximizedWorkspaceNodeId
       surfaceId <- tree.surfaceIdForNode(nodeId)
       surface   <- surfaceById(surfaceId)
     yield surface
-    maximized.orElse(runtime.uiSurfaces.find {
-      _.presentation match
-        case SurfacePresentation.Expanded(_, _) => true
-        case _                                  => false
-    })
 
   def surfaceById(surfaceId: SurfaceId): Option[UiSurface] =
     runtime.uiSurfaces.find(_.id == surfaceId).orElse(cursorInfoBarSurface.filter(_.id == surfaceId))
@@ -397,12 +382,13 @@ object AppState:
     val initialBufferId = BufferId(0)
     val initialBuffer   = Buffer.newEmpty(initialBufferId)
     val initialPane     = EditorPane.withBuffer(PaneId(0), initialBufferId)
-    val layout = Layout(
+    val baseLayout = Layout(
       editorPanes = Map(PaneId(0) -> initialPane),
       activeEditorPaneId = Some(PaneId(0)),
       paneOrder = List(PaneId(0)),
       workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
     )
+    val layout = dockCompanionSprite(baseLayout, config)
     AppState(
       persisted = Persisted(
         layout = layout,
@@ -425,7 +411,7 @@ object AppState:
   def empty(config: AppConfig): AppState =
     AppState(
       persisted = Persisted(
-        layout = Layout.empty,
+        layout = dockCompanionSprite(Layout.empty, config),
         buffers = Map.empty,
         focus = Focus.EditorPane(PaneId(0)),
         config = config
@@ -442,17 +428,39 @@ object AppState:
     * setting already on shows the pane immediately rather than only after the toggle is next flipped during the
     * session.
     */
-  private def companionSpriteSurfaces(config: AppConfig): List[UiSurface] =
+  def companionSpriteSurfaces(config: AppConfig): List[UiSurface] =
     Option
       .when(config.companionSpriteConfig.enabled && config.visualFlairLevel != VisualFlairLevel.Off) {
         UiSurface(
           id = SurfaceId.CompanionSprite,
           content = SurfaceContent.CompanionSprite,
-          presentation =
-            SurfacePresentation.Pinned(config.companionSpriteConfig.position, config.companionSpriteConfig.size)
+          presentation = SurfacePresentation.Docked
         )
       }
       .toList
+
+  /** Docks the companion sprite surface (if enabled) into `layout`'s workspace tree at its configured edge and size --
+    * the tree is the sole record of a docked surface's position and size (issue #817), so a surface built with
+    * `SurfacePresentation.Docked` needs an explicit tree entry, not just a place in `uiSurfaces`. A no-op when the
+    * sprite is disabled, `layout` carries no tree yet (`Layout.empty`), or it's already docked (idempotent, so a caller
+    * that isn't sure which applies -- e.g. `AppStartup.initializeState`'s open-path-at-startup flow, where
+    * `AppState.empty`'s companion sprite surface predates the real workspace tree `fileOpener.openFile` builds -- can
+    * call it unconditionally once that tree exists).
+    */
+  def dockCompanionSprite(layout: Layout, config: AppConfig): Layout =
+    companionSpriteSurfaces(config).headOption match
+      case None => layout
+      case Some(surface) =>
+        layout.workspaceTree match
+          case None => layout
+          case Some(tree) =>
+            val position          = config.companionSpriteConfig.position
+            val (splitId, leafId) = tree.nextDockIds(surface.id)
+            // No viewport is known this early in startup -- `dockSized` (via `allocationRatio`) falls back to an
+            // assumed total, the same fallback a `pin` call would hit in the same no-viewport-yet situation.
+            val docked =
+              tree.dockSized(surface.id, position, splitId, leafId, config.companionSpriteConfig.size, None)
+            layout.copy(workspaceTree = docked.orElse(layout.workspaceTree))
 
 enum AppAction:
   case CloseWorkflow(workflow: CloseWorkflowState)

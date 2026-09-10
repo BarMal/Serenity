@@ -69,7 +69,14 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
       AppEffect.Undo(UndoEffect.RecordBoundary(HistoryEntry.PanelChange.capture(AppState.initial), groupable = false))
     )
     result.state.pinnedSurfaces should have size 1
-    result.state.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Left, 30)
+    result.state.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Docked
+    result.state.persisted.layout.workspaceTree.flatMap(
+      _.positionForSurface(result.state.pinnedSurfaces.head.id)
+    ) shouldBe Some(PanelPosition.Left)
+    com.serenity.state.reducers.PanelStateReducer.currentSize(
+      result.state.pinnedSurfaces.head.id,
+      result.state
+    ) shouldBe Some(30)
     result.state.pinnedSurfaces.head.content shouldBe
       SurfaceContent.DirectoryTree(
         com.serenity.ui.layout.DirectoryTreeData(rootPath, entries = Map(rootPath -> entries)),
@@ -86,20 +93,15 @@ class SystemEventReducerSpec extends AnyFlatSpec with Matchers:
     val nestedEntries = List(
       DirEntry(selectedPath.resolve("Main.scala"), "Main.scala", isDirectory = false)
     )
-    val initialState = AppState.initial.copy(
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          com.serenity.state.models.UiSurface.fromPanelContent(
-            com.serenity.state.models.SurfaceId("left-panel"),
-            com.serenity.ui.layout.PanelContent.DirectoryTree(
-              com.serenity.ui.layout.DirectoryTreeData(rootPath, entries = Map(rootPath -> initialEntries)),
-              Some(selectedPath)
-            ),
-            PanelPosition.Left,
-            24
-          )
-        )
-      )
+    val initialState = DockedPanelFixtures.dock(
+      AppState.initial,
+      com.serenity.state.models.SurfaceId("left-panel"),
+      com.serenity.ui.layout.PanelContent.DirectoryTree(
+        com.serenity.ui.layout.DirectoryTreeData(rootPath, entries = Map(rootPath -> initialEntries)),
+        Some(selectedPath)
+      ),
+      PanelPosition.Left,
+      24
     )
 
     val result = SystemEventReducer.reduce(

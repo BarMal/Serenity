@@ -330,9 +330,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         uiSurfaces = List(
           UiSurface.fromPanelContent(
             SurfaceId("left-panel"),
-            PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
-            PanelPosition.Left,
-            24
+            PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None)
           )
         )
       )
@@ -591,9 +589,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         uiSurfaces = List(
           UiSurface.fromPanelContent(
             SurfaceId("left-panel"),
-            PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
-            PanelPosition.Left,
-            24
+            PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None)
           )
         )
       )

@@ -133,12 +133,12 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val splitState = stateManager.getCurrentState.unsafeRunSync()
     splitState.persisted.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
     splitState.pinnedSurfaces.collectFirst {
-      case UiSurface(
-            _,
-            SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
-            SurfacePresentation.Pinned(PanelPosition.Right, 40),
-            _
-          ) =>
+      case surface @ UiSurface(_, SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"), _, _)
+          if splitState.persisted.layout.workspaceTree
+            .flatMap(_.positionForSurface(surface.id))
+            .contains(
+              PanelPosition.Right
+            ) =>
         true
     } shouldBe Some(true)
 
@@ -167,24 +167,22 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
 
     stateManager
       .updateState { state =>
-        state.copy(
-          persisted = state.persisted.copy(
-            config = state.persisted.config.withMarkdownViewMode(MarkdownViewMode.SplitPreview),
-            focus = Focus.Surface(SurfaceId("outline"))
-          ),
-          runtime = state.runtime.copy(
-            uiSurfaces = state.runtime.uiSurfaces ++ List(
-              UiSurface(
-                SurfaceId("outline"),
-                SurfaceContent.Outline(Nil),
-                SurfacePresentation.Pinned(PanelPosition.Right, 30)
-              ),
-              UiSurface(
-                SurfaceId("markdown-preview"),
-                SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
-                SurfacePresentation.Pinned(PanelPosition.Right, 40)
-              )
+        val docked = DockedPanelFixtures.dockAllContent(
+          state,
+          List(
+            (SurfaceId("outline"), SurfaceContent.Outline(Nil), PanelPosition.Right, 30),
+            (
+              SurfaceId("markdown-preview"),
+              SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
+              PanelPosition.Right,
+              40
             )
+          )
+        )
+        docked.copy(persisted =
+          docked.persisted.copy(
+            config = docked.persisted.config.withMarkdownViewMode(MarkdownViewMode.SplitPreview),
+            focus = Focus.Surface(SurfaceId("outline"))
           )
         )
       }
@@ -210,7 +208,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
   it should "render split previews as a Java2D markdown image" in {
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
-    val state = AppState.empty.copy(
+    val baseState = AppState.empty.copy(
       persisted = AppState.empty.persisted.copy(
         buffers = Map(
           bufferId -> {
@@ -229,15 +227,14 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
           .withGutter(false)
           .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
       ),
-      runtime = AppState.empty.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("markdown-preview"),
-            SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
-            SurfacePresentation.Pinned(PanelPosition.Right, 40)
-          )
-        )
-      )
+      runtime = AppState.empty.runtime
+    )
+    val state = DockedPanelFixtures.dock(
+      baseState,
+      SurfaceId("markdown-preview"),
+      SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+      PanelPosition.Right,
+      40
     )
     val surface = new MockRenderSurface(120, 32)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
@@ -489,7 +486,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
   private def markdownPreviewPanelState(source: String, cursor: CursorPosition): AppState =
     val bufferId = BufferId(1)
     val paneId   = PaneId(1)
-    AppState.empty.copy(
+    val baseState = AppState.empty.copy(
       persisted = AppState.empty.persisted.copy(
         buffers = Map(
           bufferId -> {
@@ -513,15 +510,14 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
           .withGutter(false)
           .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
       ),
-      runtime = AppState.empty.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("markdown-preview"),
-            SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
-            SurfacePresentation.Pinned(PanelPosition.Right, 40)
-          )
-        )
-      )
+      runtime = AppState.empty.runtime
+    )
+    DockedPanelFixtures.dock(
+      baseState,
+      SurfaceId("markdown-preview"),
+      SurfaceContent.MarkdownPreview(bufferId, "notes.md"),
+      PanelPosition.Right,
+      40
     )
 
   private def renderSplitPreviewImage(state: AppState): java.awt.image.BufferedImage =

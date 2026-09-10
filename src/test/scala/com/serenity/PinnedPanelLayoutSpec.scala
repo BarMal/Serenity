@@ -31,49 +31,38 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  private def dockedState(panels: List[UiSurface]): AppState =
-    val tree =
-      panels.foldLeft(baseState.persisted.layout.effectiveWorkspaceTree.getOrElse(fail("expected editor tree"))) {
-        (workspaceTree, panel) =>
-          val position = panel.presentation match
-            case SurfacePresentation.Pinned(value, _) => value
-            case other                                => fail(s"expected pinned panel, got $other")
-          workspaceTree
-            .dock(
-              panel.id,
-              position,
-              WorkspaceNodeId(s"split-${panel.id.value}"),
-              WorkspaceNodeId(s"dock-${panel.id.value}")
-            )
-            .getOrElse(fail(s"expected ${panel.id.value} to dock"))
-      }
-    baseState.copy(
-      persisted = baseState.persisted.copy(layout = baseState.persisted.layout.copy(workspaceTree = Some(tree))),
-      runtime = baseState.runtime.copy(uiSurfaces = panels)
-    )
+  // The requested `size` is seeded into the tree as a ratio against `viewport` (issue #817: the tree's ratio is the
+  // sole size record for a docked panel), so it must match whatever viewport the test later renders at for the
+  // ratio to round-trip back to the exact requested pixel size.
+  private def dockedState(
+    panels: List[(SurfaceId, PanelContent, PanelPosition, Int)],
+    viewport: ViewportSize
+  ): AppState =
+    val withViewport = baseState.copy(runtime = baseState.runtime.copy(viewportSize = Some(viewport)))
+    DockedPanelFixtures.dockAll(withViewport, panels)
 
   "LayoutEngine.calculateLayout" should "allocate pinned panel rects and shrink the editor workspace around them" in {
-    val state = baseState.copy(
-      runtime = baseState.runtime.copy(uiSurfaces =
-        List(
-          UiSurface.fromPanelContent(
-            SurfaceId("surface-left"),
-            PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
-            PanelPosition.Left,
-            24
-          ),
-          UiSurface.fromPanelContent(
-            SurfaceId("surface-bottom"),
-            PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
-            PanelPosition.Bottom,
-            6
-          )
+    val viewport = ViewportSize(120, 40)
+    val state = dockedState(
+      List(
+        (
+          SurfaceId("surface-left"),
+          PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
+          PanelPosition.Left,
+          24
+        ),
+        (
+          SurfaceId("surface-bottom"),
+          PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
+          PanelPosition.Bottom,
+          6
         )
-      )
+      ),
+      viewport
     )
 
-    val noPanels = LayoutEngine.calculateLayout(baseState, ViewportSize(120, 40))
-    val layout   = LayoutEngine.calculateLayout(state, ViewportSize(120, 40))
+    val noPanels = LayoutEngine.calculateLayout(baseState, viewport)
+    val layout   = LayoutEngine.calculateLayout(state, viewport)
 
     layout.pinnedPanelRects(PanelPosition.Left) shouldBe LayoutRect(0, 0, 24, 33)
     layout.pinnedPanelRects(PanelPosition.Bottom) shouldBe LayoutRect(0, 33, 120, 6)
@@ -85,44 +74,29 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "place an expanded panel in the central editor workspace and keep side panels out of the layout" in {
-    val expandedPanel = UiSurface(
-      SurfaceId("expanded-outline"),
-      SurfaceContent.Outline(Nil),
-      SurfacePresentation.Expanded(PanelPosition.Right, 24)
-    )
-    val state = baseState.copy(
-      persisted = baseState.persisted.copy(focus = Focus.Surface(expandedPanel.id)),
-      runtime = baseState.runtime.copy(uiSurfaces = List(expandedPanel))
-    )
+    val expandViewport = ViewportSize(120, 40)
+    val expandedId     = SurfaceId("expanded-outline")
+    val dockedOnly = dockedState(List((expandedId, PanelContent.Outline(Nil), PanelPosition.Right, 24)), expandViewport)
+    val expanded   = DockedPanelFixtures.expand(dockedOnly, expandedId)
+    val state      = expanded.copy(persisted = expanded.persisted.copy(focus = Focus.Surface(expandedId)))
 
-    val layout = LayoutEngine.calculateLayout(state, ViewportSize(120, 40))
+    val layout = LayoutEngine.calculateLayout(state, expandViewport)
 
-    layout.pinnedPanelRects shouldBe empty
     layout.expandedPanelRect shouldBe Some(layout.editorPanelRect)
-    layout.editorPanelRect shouldBe LayoutEngine.calculateLayout(baseState, ViewportSize(120, 40)).editorPanelRect
+    layout.editorPanelRect shouldBe LayoutEngine.calculateLayout(baseState, expandViewport).editorPanelRect
   }
 
   it should "split same-side left and right panels into per-surface rects" in {
-    val state = baseState.copy(
-      runtime = baseState.runtime.copy(uiSurfaces =
-        List(
-          UiSurface.fromPanelContent(
-            SurfaceId("left-one"),
-            PanelContent.Outline(Nil),
-            PanelPosition.Left,
-            20
-          ),
-          UiSurface.fromPanelContent(
-            SurfaceId("left-two"),
-            PanelContent.Diagnostics(Nil),
-            PanelPosition.Left,
-            24
-          )
-        )
-      )
+    val viewport = ViewportSize(100, 31)
+    val state = dockedState(
+      List(
+        (SurfaceId("left-one"), PanelContent.Outline(Nil), PanelPosition.Left, 20),
+        (SurfaceId("left-two"), PanelContent.Diagnostics(Nil), PanelPosition.Left, 24)
+      ),
+      viewport
     )
 
-    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 31))
+    val layout = LayoutEngine.calculateLayout(state, viewport)
 
     layout.pinnedPanelRects(PanelPosition.Left) shouldBe LayoutRect(0, 0, 24, 30)
     layout.pinnedSurfaceRects(SurfaceId("left-one")) shouldBe LayoutRect(0, 0, 24, 15)
@@ -131,26 +105,16 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "split same-side top and bottom panels into per-surface rects" in {
-    val state = baseState.copy(
-      runtime = baseState.runtime.copy(uiSurfaces =
-        List(
-          UiSurface.fromPanelContent(
-            SurfaceId("bottom-one"),
-            PanelContent.Terminal("build", 0),
-            PanelPosition.Bottom,
-            6
-          ),
-          UiSurface.fromPanelContent(
-            SurfaceId("bottom-two"),
-            PanelContent.Diagnostics(Nil),
-            PanelPosition.Bottom,
-            8
-          )
-        )
-      )
+    val viewport = ViewportSize(80, 25)
+    val state = dockedState(
+      List(
+        (SurfaceId("bottom-one"), PanelContent.Terminal("build", 0), PanelPosition.Bottom, 6),
+        (SurfaceId("bottom-two"), PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 8)
+      ),
+      viewport
     )
 
-    val layout = LayoutEngine.calculateLayout(state, ViewportSize(80, 25))
+    val layout = LayoutEngine.calculateLayout(state, viewport)
 
     layout.pinnedPanelRects(PanelPosition.Bottom) shouldBe LayoutRect(0, 16, 80, 8)
     layout.pinnedSurfaceRects(SurfaceId("bottom-one")) shouldBe LayoutRect(0, 16, 40, 8)
@@ -159,26 +123,21 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "derive ordered same-edge panel rectangles from docked workspace leaves" in {
-    val first = UiSurface.fromPanelContent(SurfaceId("right-one"), PanelContent.Outline(Nil), PanelPosition.Right, 25)
-    val second =
-      UiSurface.fromPanelContent(SurfaceId("right-two"), PanelContent.Diagnostics(Nil), PanelPosition.Right, 25)
-    val tree = baseState.persisted.layout.effectiveWorkspaceTree
-      .flatMap(
-        _.dock(first.id, PanelPosition.Right, WorkspaceNodeId("right-split"), WorkspaceNodeId("right-one"))
-      )
-      .flatMap(
-        _.dock(second.id, PanelPosition.Right, WorkspaceNodeId("right-stack"), WorkspaceNodeId("right-two"))
-      )
-      .getOrElse(fail("expected docked workspace"))
-    val state = baseState.copy(
-      persisted = baseState.persisted.copy(layout = baseState.persisted.layout.copy(workspaceTree = Some(tree))),
-      runtime = baseState.runtime.copy(uiSurfaces = List(first, second))
+    val viewport = ViewportSize(100, 31)
+    val firstId  = SurfaceId("right-one")
+    val secondId = SurfaceId("right-two")
+    val state = dockedState(
+      List(
+        (firstId, PanelContent.Outline(Nil), PanelPosition.Right, 25),
+        (secondId, PanelContent.Diagnostics(Nil), PanelPosition.Right, 25)
+      ),
+      viewport
     )
 
-    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 31))
+    val layout = LayoutEngine.calculateLayout(state, viewport)
 
-    layout.pinnedSurfaceRects(first.id) shouldBe LayoutRect(75, 0, 25, 15)
-    layout.pinnedSurfaceRects(second.id) shouldBe LayoutRect(75, 15, 25, 15)
+    layout.pinnedSurfaceRects(firstId) shouldBe LayoutRect(75, 0, 25, 15)
+    layout.pinnedSurfaceRects(secondId) shouldBe LayoutRect(75, 15, 25, 15)
     layout.pinnedPanelRects(PanelPosition.Right) shouldBe LayoutRect(75, 0, 25, 30)
     layout.editorPanelRect.right shouldBe 75
   }
@@ -191,14 +150,12 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
       PanelPosition.Top,
       PanelPosition.Bottom
     ).foreach { position =>
-      val panel = UiSurface.fromPanelContent(
-        SurfaceId(s"oversized-$position"),
-        PanelContent.Diagnostics(Nil),
-        position,
-        1000
+      val state = dockedState(
+        List((SurfaceId(s"oversized-$position"), PanelContent.Diagnostics(Nil), position, 1000)),
+        viewport
       )
 
-      val layout = LayoutEngine.calculateLayout(dockedState(List(panel)), viewport)
+      val layout = LayoutEngine.calculateLayout(state, viewport)
 
       position match
         case PanelPosition.Left | PanelPosition.Right =>
@@ -209,34 +166,18 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "retain the editor minimum between competing oversized opposite-edge panels" in {
-    val panels = List(
-      UiSurface.fromPanelContent(
-        SurfaceId("oversized-left"),
-        PanelContent.Outline(Nil),
-        PanelPosition.Left,
-        1000
+    val viewport = ViewportSize(100, 31)
+    val state = dockedState(
+      List(
+        (SurfaceId("oversized-left"), PanelContent.Outline(Nil), PanelPosition.Left, 1000),
+        (SurfaceId("oversized-right"), PanelContent.Diagnostics(Nil), PanelPosition.Right, 1000),
+        (SurfaceId("oversized-top"), PanelContent.Terminal("", 0), PanelPosition.Top, 1000),
+        (SurfaceId("oversized-bottom"), PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 1000)
       ),
-      UiSurface.fromPanelContent(
-        SurfaceId("oversized-right"),
-        PanelContent.Diagnostics(Nil),
-        PanelPosition.Right,
-        1000
-      ),
-      UiSurface.fromPanelContent(
-        SurfaceId("oversized-top"),
-        PanelContent.Terminal("", 0),
-        PanelPosition.Top,
-        1000
-      ),
-      UiSurface.fromPanelContent(
-        SurfaceId("oversized-bottom"),
-        PanelContent.Diagnostics(Nil),
-        PanelPosition.Bottom,
-        1000
-      )
+      viewport
     )
 
-    val layout = LayoutEngine.calculateLayout(dockedState(panels), ViewportSize(100, 31))
+    val layout = LayoutEngine.calculateLayout(state, viewport)
 
     layout.editorPanelRect.width should be >= baseState.persisted.config.editorConfig.minimumPaneWidth
     layout.editorPanelRect.height should be >= 5

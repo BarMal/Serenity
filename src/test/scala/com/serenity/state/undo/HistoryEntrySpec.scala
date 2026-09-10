@@ -92,9 +92,7 @@ class HistoryEntrySpec extends AnyFlatSpec with Matchers with OptionValues:
   "HistoryEntry.PanelChange.restore" should "restore the pre-change surfaces, workspace tree, and focus, capturing the current ones as the inverse" in {
     val panelSurface = UiSurface.fromPanelContent(
       SurfaceId("outline"),
-      com.serenity.ui.layout.PanelContent.Outline(Nil),
-      com.serenity.ui.layout.PanelPosition.Right,
-      30
+      com.serenity.ui.layout.PanelContent.Outline(Nil)
     )
     val beforeChange = HistoryEntry.PanelChange(
       uiSurfaces = Nil,

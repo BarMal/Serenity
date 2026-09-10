@@ -32,7 +32,7 @@ object AppStateValidation:
     }
     state.persisted.layout.workspaceTree.foreach { tree =>
       val pinnedSurfaceIds = state.runtime.uiSurfaces.collect {
-        case UiSurface(id, _, SurfacePresentation.Pinned(_, _), _) => id
+        case UiSurface(id, _, SurfacePresentation.Docked, _) => id
       }.toSet
       errors ++= tree.validationErrors(state.persisted.layout.editorPanes.keySet, pinnedSurfaceIds)
       state.persisted.focus match
@@ -129,6 +129,13 @@ object AppStateValidation:
     val errors     = validationErrors(reconciled)
     if errors.isEmpty then Right(reconciled) else Left(errors)
 
+  /** Reconciles the workspace tree's editor-pane leaves against `Layout.editorPanes`/`paneOrder` -- pruning panes the
+    * tree still lists but the layout no longer has, and adding panes the layout has gained since the tree was last
+    * current (e.g. a raw pane split/addition that hasn't gone through tree-aware machinery). Docked-surface placement
+    * is deliberately NOT reconciled here (issue #817): `PanelStateReducer` and every other pin/unpin path now mutate
+    * the tree directly at the point of change, so a docked surface is either correctly placed by its own mutator or
+    * flagged as an error by [[validationErrors]] -- never silently re-derived from `uiSurfaces` behind the scenes.
+    */
   private def reconcileWorkspaceTree(state: AppState): AppState =
     state.persisted.layout.workspaceTree match
       case None                                                      => state
@@ -157,63 +164,16 @@ object AppStateValidation:
             case (currentTree, _) => currentTree
           }
           .getOrElse(tree)
-        val pinned = state.runtime.uiSurfaces.collect {
-          case UiSurface(id, _, SurfacePresentation.Pinned(position, _), _) => id -> position
-        }
-        val pinnedIds = pinned.map(_._1).toSet
-        val prunedTree = paneReconciledTree.dockedSurfaceIds
-          .filterNot(pinnedIds.contains)
-          .foldLeft(paneReconciledTree) {
-            case (currentTree, surfaceId) =>
-              currentTree.removeSurface(surfaceId).getOrElse(currentTree)
-          }
-        val reconciledTree = pinned.zipWithIndex.foldLeft(prunedTree) {
-          case (currentTree, ((surfaceId, position), index)) =>
-            if currentTree.dockedSurfaceIds.contains(surfaceId) then
-              if currentTree.positionForSurface(surfaceId).contains(position) then currentTree
-              else
-                currentTree
-                  .moveSurface(surfaceId, position, WorkspaceNodeId(s"reconcile-dock-$index-${surfaceId.value}"))
-                  .getOrElse(currentTree)
-            else
-              val splitId = WorkspaceNodeId(s"dock-${surfaceId.value}")
-              val leafId  = WorkspaceNodeId(s"dock-leaf-${surfaceId.value}")
-              currentTree.dock(surfaceId, position, splitId, leafId).getOrElse(currentTree)
-        }
-        val orderedTree = pinned
-          .groupBy(_._2)
-          .foldLeft(reconciledTree) {
-            case (currentTree, (position, surfacesAtPosition)) =>
-              val desiredOrder = surfacesAtPosition.map(_._1)
-              val currentOrder = currentTree.dockedSurfaceIds.filter { surfaceId =>
-                currentTree.positionForSurface(surfaceId).contains(position)
-              }
-              if currentOrder == desiredOrder then currentTree
-              else
-                desiredOrder.zipWithIndex.foldLeft(currentTree) {
-                  case (tree, (surfaceId, index)) =>
-                    tree
-                      .moveSurface(
-                        surfaceId,
-                        position,
-                        WorkspaceNodeId(s"reconcile-order-${position.toString.toLowerCase}-$index-${surfaceId.value}")
-                      )
-                      .getOrElse(tree)
-                }
-          }
         state.copy(persisted =
           state.persisted.copy(layout =
-            state.persisted.layout.copy(workspaceTree = Some(orderedTree), paneOrder = orderedTree.paneIds)
+            state.persisted.layout
+              .copy(workspaceTree = Some(paneReconciledTree), paneOrder = paneReconciledTree.paneIds)
           )
         )
 
-  // Cheap pre-check for the common case where no pane or pinned-surface change requires rebuilding the tree,
-  // so events that don't touch panes/docking (e.g. command-palette navigation) skip the full reconciliation pass.
+  // Cheap pre-check for the common case where no pane change requires rebuilding the tree, so events that don't
+  // touch panes (e.g. command-palette navigation, or any docked-surface pin/unpin -- already tree-direct) skip the
+  // reconciliation pass.
   private def workspaceTreeAlreadyReconciled(state: AppState, tree: WorkspaceTree): Boolean =
-    tree.dockedSurfaceIds.isEmpty &&
-      !state.runtime.uiSurfaces.exists {
-        case UiSurface(_, _, SurfacePresentation.Pinned(_, _), _) => true
-        case _                                                    => false
-      } &&
-      tree.paneIds.toSet == state.persisted.layout.editorPanes.keySet &&
+    tree.paneIds.toSet == state.persisted.layout.editorPanes.keySet &&
       state.persisted.layout.paneOrder.filter(state.persisted.layout.editorPanes.keySet.contains) == tree.paneIds

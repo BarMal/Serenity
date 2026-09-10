@@ -108,18 +108,22 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     val content = PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/tmp")), None)
 
     val pinned = PanelStateReducer.pin(content, PanelPosition.Left, 24, baseState)
-    val pinnedSurface =
-      pinned.state.runtime.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24))
+    val pinnedSurface = pinned.state.pinnedSurfaces.find(surface =>
+      pinned.state.persisted.layout.workspaceTree
+        .flatMap(_.positionForSurface(surface.id))
+        .contains(
+          PanelPosition.Left
+        )
+    )
     pinnedSurface shouldBe defined
     pinnedSurface.get.content shouldBe SurfaceContent.DirectoryTree(DirectoryTreeData(Paths.get("/tmp")), None)
+    PanelStateReducer.currentSize(pinnedSurface.get.id, pinned.state) shouldBe Some(24)
 
     val focused = PanelStateReducer.focus(PanelPosition.Left, pinned.state)
     focused.state.persisted.focus shouldBe Focus.Surface(pinnedSurface.get.id)
 
     val unpinned = PanelStateReducer.unpin(PanelPosition.Left, focused.state)
-    unpinned.state.runtime.uiSurfaces.exists(
-      _.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 24)
-    ) shouldBe false
+    unpinned.state.pinnedSurfaces shouldBe empty
     unpinned.state.persisted.focus shouldBe Focus.EditorPane(paneId)
   }
 
@@ -144,9 +148,9 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
     val expanded = PanelStateReducer.expand(PanelPosition.Right, pinned).state
 
-    expanded.surfaceById(panelId).map(_.presentation) shouldBe Some(
-      SurfacePresentation.Pinned(PanelPosition.Right, 28)
-    )
+    expanded.surfaceById(panelId).map(_.presentation) shouldBe Some(SurfacePresentation.Docked)
+    expanded.persisted.layout.workspaceTree.flatMap(_.positionForSurface(panelId)) shouldBe Some(PanelPosition.Right)
+    PanelStateReducer.currentSize(panelId, expanded) shouldBe Some(28)
     expanded.persisted.focus shouldBe Focus.Surface(panelId)
     expanded.pinnedSurfaces.map(_.id) shouldBe List(panelId)
     expanded.persisted.layout.maximizedWorkspaceNodeId shouldBe
@@ -154,9 +158,9 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
     val collapsed = PanelStateReducer.collapseExpandedPanel(expanded).state
 
-    collapsed.surfaceById(panelId).map(_.presentation) shouldBe Some(
-      SurfacePresentation.Pinned(PanelPosition.Right, 28)
-    )
+    collapsed.surfaceById(panelId).map(_.presentation) shouldBe Some(SurfacePresentation.Docked)
+    collapsed.persisted.layout.workspaceTree.flatMap(_.positionForSurface(panelId)) shouldBe Some(PanelPosition.Right)
+    PanelStateReducer.currentSize(panelId, collapsed) shouldBe Some(28)
     collapsed.persisted.layout.maximizedWorkspaceNodeId shouldBe None
     collapsed.persisted.focus shouldBe Focus.Surface(panelId)
   }
@@ -190,11 +194,17 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
     val pinned = PanelStateReducer.pinPeekOverlay(PanelPosition.Right, peekState)
 
-    val pinnedSurface =
-      pinned.state.runtime.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Right, 30))
+    val pinnedSurface = pinned.state.pinnedSurfaces.find(surface =>
+      pinned.state.persisted.layout.workspaceTree
+        .flatMap(_.positionForSurface(surface.id))
+        .contains(
+          PanelPosition.Right
+        )
+    )
     pinnedSurface shouldBe defined
     pinned.state.persisted.focus shouldBe Focus.Surface(pinnedSurface.get.id)
     pinnedSurface.get.id shouldBe surface.id
+    PanelStateReducer.currentSize(pinnedSurface.get.id, pinned.state) shouldBe Some(30)
     pinnedSurface.get.content shouldBe
       SurfaceContent.DirectoryTree(
         DirectoryTreeData(
@@ -223,11 +233,17 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
 
     val pinned = PanelStateReducer.pinActiveFloatingSurface(PanelPosition.Left, floatingState)
 
-    val pinnedSurface =
-      pinned.state.runtime.uiSurfaces.find(_.presentation == SurfacePresentation.Pinned(PanelPosition.Left, 30))
+    val pinnedSurface = pinned.state.pinnedSurfaces.find(surface =>
+      pinned.state.persisted.layout.workspaceTree
+        .flatMap(_.positionForSurface(surface.id))
+        .contains(
+          PanelPosition.Left
+        )
+    )
     pinnedSurface shouldBe defined
     pinned.state.persisted.focus shouldBe Focus.Surface(pinnedSurface.get.id)
     pinnedSurface.get.id shouldBe surface.id
+    PanelStateReducer.currentSize(pinnedSurface.get.id, pinned.state) shouldBe Some(30)
     pinnedSurface.get.content shouldBe
       SurfaceContent.DirectoryTree(
         DirectoryTreeData(

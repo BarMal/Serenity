@@ -17,24 +17,22 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
   private val viewport = ViewportSize(100, 32)
 
   "UiSceneSnapshot" should "describe editor panes, pinned panels, and floating surfaces in paint order" in {
-    val paneId = PaneId(0)
-    val panel = UiSurface(
-      SurfaceId("outline"),
-      SurfaceContent.Outline(Nil),
-      SurfacePresentation.Pinned(PanelPosition.Left, 20)
-    )
+    val paneId  = PaneId(0)
+    val panelId = SurfaceId("outline")
     val floating = UiSurface(
       SurfaceId("quick-info"),
       SurfaceContent.QuickInfo("map"),
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.AboveCursor)
     )
-    val state = AppState.initial.copy(runtime = AppState.initial.runtime.copy(uiSurfaces = List(panel, floating)))
+    val docked =
+      DockedPanelFixtures.dock(AppState.initial, panelId, SurfaceContent.Outline(Nil), PanelPosition.Left, 20)
+    val state = docked.copy(runtime = docked.runtime.copy(uiSurfaces = docked.runtime.uiSurfaces :+ floating))
 
     val scene = UiSceneSnapshot.from(state, viewport)
 
     scene.workspace.map(_.id) should contain(SceneNodeId.EditorPane(paneId))
     scene.workspace.map(_.id) should contain(SceneNodeId.EditorPaneHeader(paneId))
-    scene.workspace.map(_.id) should contain(SceneNodeId.Surface(panel.id))
+    scene.workspace.map(_.id) should contain(SceneNodeId.Surface(panelId))
     scene.floating.map(_.id) shouldBe List(SceneNodeId.Surface(floating.id))
     scene.nodesInPaintOrder.map(_.layer) shouldBe List(
       SceneLayer.Workspace,
@@ -51,7 +49,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     val panel = UiSurface(
       SurfaceId("outline"),
       SurfaceContent.Outline(Nil),
-      SurfacePresentation.Pinned(PanelPosition.Right, 20)
+      SurfacePresentation.Docked
     )
     val tree = AppState.initial.persisted.layout.effectiveWorkspaceTree
       .flatMap(
@@ -264,22 +262,18 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "characterize an expanded surface as a workspace node and focus target" in {
-    val surface = UiSurface(
-      SurfaceId("diagnostics"),
-      SurfaceContent.Diagnostics(Nil),
-      SurfacePresentation.Expanded(PanelPosition.Right, 22)
-    )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.Surface(surface.id)),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
-    )
+    val surfaceId = SurfaceId("diagnostics")
+    val docked =
+      DockedPanelFixtures.dock(AppState.initial, surfaceId, SurfaceContent.Diagnostics(Nil), PanelPosition.Right, 22)
+    val expandedState = DockedPanelFixtures.expand(docked, surfaceId)
+    val state         = expandedState.copy(persisted = expandedState.persisted.copy(focus = Focus.Surface(surfaceId)))
 
     val scene = UiSceneSnapshot.from(state, viewport)
     val expanded =
-      scene.workspace.find(_.id == SceneNodeId.Surface(surface.id)).getOrElse(fail("expected expanded surface"))
+      scene.workspace.find(_.id == SceneNodeId.Surface(surfaceId)).getOrElse(fail("expected expanded surface"))
 
     scene.calculatedLayout.expandedPanelRect shouldBe Some(expanded.frameRect)
-    scene.focusOrder.headOption shouldBe Some(SceneNodeId.Surface(surface.id))
+    scene.focusOrder.headOption shouldBe Some(SceneNodeId.Surface(surfaceId))
   }
 
   it should "expose the calculated layout as a temporary compatibility adapter" in {

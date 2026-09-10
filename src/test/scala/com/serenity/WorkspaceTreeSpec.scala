@@ -90,17 +90,28 @@ class WorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "reconcile pinned surfaces added to an explicit default tree" in {
+  it should "flag a docked surface absent from the workspace tree as invalid (issue #817)" in {
+    // The tree is the sole record of docked placement -- unlike the old reconciliation pass, validation no longer
+    // derives a tree entry for a `Docked` surface that wasn't placed there by its own pin path (`PanelStateReducer`
+    // et al.), so an orphaned one is a genuine error, not something silently repaired.
     val state = AppState.initial.copy(
       runtime = AppState.initial.runtime.copy(
         uiSurfaces = List(
-          UiSurface(
-            SurfaceId("surface-0"),
-            SurfaceContent.Outline(Nil, None),
-            SurfacePresentation.Pinned(PanelPosition.Left, 30)
-          )
+          UiSurface(SurfaceId("surface-0"), SurfaceContent.Outline(Nil, None), SurfacePresentation.Docked)
         )
       )
+    )
+
+    AppStateValidation.validated(state).isLeft shouldBe true
+  }
+
+  it should "keep a surface docked via its pin path covered by the workspace tree" in {
+    val state = DockedPanelFixtures.dock(
+      AppState.initial,
+      SurfaceId("surface-0"),
+      SurfaceContent.Outline(Nil, None),
+      PanelPosition.Left,
+      30
     )
 
     AppStateValidation.validated(state).map(_.persisted.layout.workspaceTree.map(_.dockedSurfaceIds)) shouldBe Right(

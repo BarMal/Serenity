@@ -403,7 +403,7 @@ object UiPreset:
       UiSurface(
         id = id,
         content = content.toSurfaceContent,
-        presentation = SurfacePresentation.Pinned(position, size)
+        presentation = SurfacePresentation.Docked
       )
 
   enum PanelContentSnapshot:
@@ -441,10 +441,18 @@ object UiPreset:
 
   object PinnedPanel:
 
-    def fromSurface(surface: UiSurface): Option[PinnedPanel] =
+    /** Reads a docked surface's position and size back through the workspace tree (issue #817: the sole record of
+      * both), rather than from any position/size carried on the surface itself.
+      */
+    def fromSurface(surface: UiSurface, state: AppState): Option[PinnedPanel] =
       surface.presentation match
-        case SurfacePresentation.Pinned(position, size) =>
-          fromSurfaceContent(surface.content, position, size)
+        case SurfacePresentation.Docked =>
+          for
+            tree     <- state.persisted.layout.workspaceTree
+            position <- tree.positionForSurface(surface.id)
+            size     <- tree.currentSize(surface.id, state.runtime.viewportSize)
+            panel    <- fromSurfaceContent(surface.content, position, size)
+          yield panel
         case _ =>
           None
 
@@ -500,7 +508,7 @@ object UiPreset:
         )
       ),
       themeName = state.persisted.theme.name,
-      pinnedPanels = state.pinnedSurfaces.flatMap(PinnedPanel.fromSurface),
+      pinnedPanels = state.pinnedSurfaces.flatMap(PinnedPanel.fromSurface(_, state)),
       targetEditorPaneCount = Option(state.persisted.layout.editorPanes.size).filter(_ > 0)
     )
 
@@ -514,8 +522,14 @@ object UiPreset:
   private def applyToState(preset: UiPreset, state: AppState, theme: Theme, config: AppConfig): AppState =
     val unpinnedSurfaces = state.runtime.uiSurfaces.filter {
       _.presentation match
-        case SurfacePresentation.Pinned(_, _) => false
-        case _                                => true
+        case SurfacePresentation.Docked => false
+        case _                          => true
+    }
+    // The old pinned panels are wholly replaced by `preset.pinnedPanels` below -- prune them from the tree here
+    // (issue #817: the sole record of docked placement) rather than leaving stale entries for a later pass to notice.
+    val prunedIds = state.pinnedSurfaces.map(_.id).toSet
+    val prunedTree = prunedIds.foldLeft(state.persisted.layout.workspaceTree) { (tree, id) =>
+      tree.flatMap(_.removeSurface(id)).orElse(tree)
     }
 
     val withoutPinnedFocus =
@@ -525,21 +539,35 @@ object UiPreset:
         case _ =>
           state.persisted.focus
 
-    val (stateWithPanels, restoredPanels) =
+    val (stateWithPanels, restoredPanels, treeWithPanels) =
       preset.pinnedPanels.foldLeft(
-        (state.copy(runtime = state.runtime.copy(uiSurfaces = unpinnedSurfaces)), List.empty[UiSurface])
+        (state.copy(runtime = state.runtime.copy(uiSurfaces = unpinnedSurfaces)), List.empty[UiSurface], prunedTree)
       ) {
-        case ((currentState, panels), panel) =>
+        case ((currentState, panels, tree), panel) =>
           val (nextState, surfaceId) = currentState.allocateSurfaceId
           val surface                = panel.toUiSurface(surfaceId)
-          (nextState, panels :+ surface)
+          val dockedTree = tree.flatMap { workspaceTree =>
+            val (splitId, leafId) = workspaceTree.nextDockIds(surfaceId)
+            workspaceTree.dockSized(
+              surfaceId,
+              panel.position,
+              splitId,
+              leafId,
+              panel.size,
+              nextState.runtime.viewportSize
+            )
+          }
+          (nextState, panels :+ surface, dockedTree.orElse(tree))
       }
 
     val restoredState = stateWithPanels.copy(
       persisted = stateWithPanels.persisted.copy(
         config = config,
         theme = theme,
-        focus = withoutPinnedFocus
+        focus = withoutPinnedFocus,
+        layout = stateWithPanels.persisted.layout.copy(
+          workspaceTree = treeWithPanels.orElse(stateWithPanels.persisted.layout.workspaceTree)
+        )
       ),
       runtime = stateWithPanels.runtime.copy(
         uiSurfaces = unpinnedSurfaces ++ restoredPanels,

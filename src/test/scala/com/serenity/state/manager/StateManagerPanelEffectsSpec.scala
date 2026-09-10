@@ -73,10 +73,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     )
 
   private def pinnedState(id: SurfaceId, content: SurfaceContent, position: PanelPosition, size: Int): AppState =
-    AppState.initial.copy(runtime =
-      AppState.initial.runtime
-        .copy(uiSurfaces = List(UiSurface(id, content, SurfacePresentation.Pinned(position, size))))
-    )
+    com.serenity.DockedPanelFixtures.dock(AppState.initial, id, content, position, size)
 
   "StateManagerPanelEffects" should "resize a pinned panel by delta through the shared resize path" in {
     val id      = SurfaceId("explorer")
@@ -109,8 +106,16 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.panels.interpret(ViewIntent.PinDiagnosticsPanel, AppState.initial).unsafeRunSync()
 
-    val pinned = fixture.currentSurfaces.filter(_.content == SurfaceContent.Diagnostics(Nil))
-    pinned.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Bottom, 10))
+    val currentState = fixture.stateRef.get.unsafeRunSync()
+    val pinned       = fixture.currentSurfaces.filter(_.content == SurfaceContent.Diagnostics(Nil))
+    pinned.map(_.presentation) shouldBe List(SurfacePresentation.Docked)
+    pinned.map(surface =>
+      currentState.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id))
+    ) shouldBe
+      List(Some(PanelPosition.Bottom))
+    pinned.map(surface =>
+      com.serenity.state.reducers.PanelStateReducer.currentSize(surface.id, currentState)
+    ) shouldBe List(Some(10))
   }
 
   it should "replace rather than duplicate a panel kind that is already pinned" in {
@@ -118,11 +123,22 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.panels.interpret(ViewIntent.PinDiagnosticsPanel, AppState.initial).unsafeRunSync()
     fixture.panels
-      .interpret(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Right)), AppState.initial)
+      .interpret(
+        ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Right)),
+        fixture.stateRef.get.unsafeRunSync()
+      )
       .unsafeRunSync()
 
-    val pinned = fixture.currentSurfaces.filter(_.content == SurfaceContent.Diagnostics(Nil))
-    pinned.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 30))
+    val currentState = fixture.stateRef.get.unsafeRunSync()
+    val pinned       = fixture.currentSurfaces.filter(_.content == SurfaceContent.Diagnostics(Nil))
+    pinned.map(_.presentation) shouldBe List(SurfacePresentation.Docked)
+    pinned.map(surface =>
+      currentState.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id))
+    ) shouldBe
+      List(Some(PanelPosition.Right))
+    pinned.map(surface =>
+      com.serenity.state.reducers.PanelStateReducer.currentSize(surface.id, currentState)
+    ) shouldBe List(Some(30))
   }
 
   it should "remove a pinned panel kind when its position is cleared" in {

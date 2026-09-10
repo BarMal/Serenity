@@ -334,12 +334,24 @@ object EditorLayoutContract:
       headerRect: Option[LayoutRect]
   )
 
-  def panelRectFor(surface: UiSurface, calculatedLayout: CalculatedLayout): Option[LayoutRect] =
+  /** A docked surface's rendered rect -- the expanded/maximized one if it's currently expanded (issue #817:
+    * `Layout.maximizedWorkspaceNodeId`, not a separate presentation), its own docked rect otherwise. `None` for a
+    * surface that isn't docked.
+    */
+  def panelRectFor(surface: UiSurface, state: AppState, calculatedLayout: CalculatedLayout): Option[LayoutRect] =
     surface.presentation match
-      case SurfacePresentation.Pinned(position, _) =>
-        calculatedLayout.pinnedSurfaceRects.get(surface.id).orElse(calculatedLayout.pinnedPanelRects.get(position))
-      case SurfacePresentation.Expanded(_, _) =>
-        calculatedLayout.expandedPanelRect
+      case SurfacePresentation.Docked =>
+        if state.expandedPanelSurface.exists(_.id == surface.id) then calculatedLayout.expandedPanelRect
+        else
+          calculatedLayout.pinnedSurfaceRects
+            .get(surface.id)
+            .orElse(
+              state.persisted.layout.workspaceTree
+                .flatMap(_.positionForSurface(surface.id))
+                .flatMap(
+                  calculatedLayout.pinnedPanelRects.get
+                )
+            )
       case _ =>
         None
 
@@ -373,15 +385,8 @@ object EditorLayoutContract:
       InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity).overlayGapRows,
       math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
     )
-    val panelGeometryById = (state.pinnedSurfaces ++ state.runtime.uiSurfaces.filter {
-      _.presentation match
-        case SurfacePresentation.Expanded(_, _) => true
-        case _                                  => false
-    }).flatMap { surface =>
-      val panelRect =
-        if state.expandedPanelSurface.exists(_.id == surface.id) then calculatedLayout.expandedPanelRect
-        else panelRectFor(surface, calculatedLayout)
-      panelRect.map(rect => surface.id -> pinnedGeometry(surface, rect, state))
+    val panelGeometryById = state.pinnedSurfaces.flatMap { surface =>
+      panelRectFor(surface, state, calculatedLayout).map(rect => surface.id -> pinnedGeometry(surface, rect, state))
     }.toMap
     val maximizedSurfaceIds = state.expandedPanelSurface.toSet.map(_.id)
     val pinnedSurfaceIds    = calculatedLayout.pinnedSurfaceRects.keySet -- maximizedSurfaceIds

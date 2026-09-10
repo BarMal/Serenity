@@ -386,8 +386,8 @@ object AccessibilitySnapshot:
 
   private def isPinned(presentation: SurfacePresentation): Boolean =
     presentation match
-      case SurfacePresentation.Pinned(_, _) | SurfacePresentation.Expanded(_, _) => true
-      case _                                                                     => false
+      case SurfacePresentation.Docked => true
+      case _                          => false
 
   private def itemLabel(item: CommandSurfaceItem): String =
     item match

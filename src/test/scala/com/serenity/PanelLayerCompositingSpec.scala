@@ -32,9 +32,16 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   private val floatingId = SurfaceId("peek")
 
   private def pinnedPanel: UiSurface =
-    UiSurface.fromPanelContent(
+    UiSurface.fromPanelContent(pinnedId, PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None))
+
+  /** Like `stateWith`, but also docks `pinnedPanel` into a real workspace tree at Left (issue #817: `pinnedSurfaces`,
+    * and everything the renderer paints from it, now reads the tree -- a surface merely appended to `uiSurfaces`
+    * without a tree entry is invisible to it).
+    */
+  private def stateWithPinnedPanel(content: String, blurOff: Boolean = true): AppState =
+    DockedPanelFixtures.dockExisting(
+      stateWith(content, List(pinnedPanel), blurOff),
       pinnedId,
-      PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
       PanelPosition.Left,
       24
     )
@@ -86,7 +93,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
   "RendererEntryPoints.render" should "not repaint a pinned panel's own buffer when only editor content changed and blur is off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = true)
+    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
 
     RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -106,7 +113,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
   it should "repaint a pinned panel's buffer when only its own content changes and blur is off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = true)
+    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
 
     RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -123,7 +130,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
   it should "repaint a pinned panel with active blur whenever anything elsewhere in the frame changed" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = false)
+    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false)
 
     RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -140,7 +147,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
   it should "reuse a blurred pinned panel's cached buffer on a truly clean re-render" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val state   = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = false)
+    val state   = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false)
 
     RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything)
     val firstDrawImageCalls = surface.drawImageCalls.size
@@ -162,12 +169,14 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "not repaint an expanded panel's own buffer when only editor content changed and blur is off" in {
     val surface    = new CountingLayerBufferSurface(120, 40)
     val expandedId = SurfaceId("expanded-outline")
-    val expanded = UiSurface(
+    val docked = DockedPanelFixtures.dock(
+      stateWith("alpha\nbeta\ngamma", Nil, blurOff = true),
       expandedId,
       SurfaceContent.Outline(Nil),
-      SurfacePresentation.Expanded(PanelPosition.Right, 22)
+      PanelPosition.Right,
+      22
     )
-    val before = stateWith("alpha\nbeta\ngamma", List(expanded), blurOff = true)
+    val before = DockedPanelFixtures.expand(docked, expandedId)
 
     RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -192,7 +201,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     // execution alongside another spec painting a same-named panel. This reproduces that cross-surface interaction
     // deterministically, without depending on real thread scheduling.
     val surfaceA = new CountingLayerBufferSurface(120, 40)
-    val before   = stateWith("alpha\nbeta\ngamma", List(pinnedPanel), blurOff = true)
+    val before   = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
 
     RendererEntryPoints.render(before, cursorVisible = false, surfaceA, viewport, None, Damage.Everything)
     surfaceA.newSeededLayerSurfaceCalls.get() shouldBe 1

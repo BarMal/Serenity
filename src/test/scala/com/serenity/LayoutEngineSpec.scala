@@ -166,92 +166,83 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "apply text area insets inside the workspace without resizing pinned panels or line numbers" in {
-    val buffer = Buffer.fromString(BufferId(0), "one\ntwo\nthree")
-    val state = AppState.initial.copy(
+    val renderViewport = ViewportSize(100, 30)
+    val buffer         = Buffer.fromString(BufferId(0), "one\ntwo\nthree")
+    val baseState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         config =
           AppConfig.default.withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15))
       ),
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("left-panel"),
-            SurfaceContent.Outline(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Left, 10)
-          ),
-          UiSurface(
-            SurfaceId("right-panel"),
-            SurfaceContent.Diagnostics(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Right, 20)
-          )
-        )
+      runtime = AppState.initial.runtime.copy(viewportSize = Some(renderViewport))
+    )
+    val state = DockedPanelFixtures.dockAllContent(
+      baseState,
+      List(
+        (SurfaceId("left-panel"), SurfaceContent.Outline(Nil), PanelPosition.Left, 10),
+        (SurfaceId("right-panel"), SurfaceContent.Diagnostics(Nil), PanelPosition.Right, 20)
       )
     )
 
-    val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val calculatedLayout = LayoutEngine.calculateLayout(state, renderViewport)
     val paneLayouts      = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
 
-    calculatedLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe 10
+    // The aggressive text area insets here (left 10%, right 20%) push `minimumEditorWorkspaceWidth` (issue #817's
+    // `calculateWorkspaceNodeRects` minimum-width protection) up to 76 cells against this 100-cell viewport, so the
+    // Left panel's requested width of 10 is clamped down to make room for the editor's minimum -- not a result of
+    // its dock order or nesting. Right, needing no such headroom, keeps its exact requested width.
+    calculatedLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe 4
     calculatedLayout.pinnedPanelRects(PanelPosition.Right).width shouldBe 20
-    calculatedLayout.leftSpacerRect shouldBe LayoutRect(10, 0, 7, 29)
-    calculatedLayout.rightSpacerRect shouldBe LayoutRect(66, 0, 14, 29)
-    calculatedLayout.topSpacerRect shouldBe LayoutRect(17, 1, 49, 2)
-    calculatedLayout.bottomSpacerRect shouldBe LayoutRect(17, 25, 49, 4)
-    calculatedLayout.lineNumberRect shouldBe Some(LayoutRect(17, 3, 3, 22))
-    calculatedLayout.editorPanelRect shouldBe LayoutRect(20, 0, 46, 29)
+    calculatedLayout.leftSpacerRect shouldBe LayoutRect(4, 0, 7, 29)
+    calculatedLayout.rightSpacerRect shouldBe LayoutRect(65, 0, 15, 29)
+    calculatedLayout.topSpacerRect shouldBe LayoutRect(11, 1, 54, 2)
+    calculatedLayout.bottomSpacerRect shouldBe LayoutRect(11, 25, 54, 4)
+    calculatedLayout.lineNumberRect shouldBe Some(LayoutRect(11, 3, 3, 22))
+    calculatedLayout.editorPanelRect shouldBe LayoutRect(14, 0, 51, 29)
     LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0)).headerRect shouldBe
-      LayoutRect(10, 0, 70, 1)
+      LayoutRect(4, 0, 76, 1)
     LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0)).topSpacerRect shouldBe
-      LayoutRect(20, 1, 46, 2)
+      LayoutRect(14, 1, 51, 2)
     LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0)).contentRect shouldBe
-      LayoutRect(20, 3, 46, 22)
+      LayoutRect(14, 3, 51, 22)
     paneLayouts(PaneId(0)) shouldBe calculatedLayout.editorPanelRect
   }
 
   it should "apply configured gaps between pinned panels and the editor workspace" in {
-    val state = AppState.initial.copy(
+    val renderViewport = ViewportSize(100, 30)
+    val baseState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
           .withLineNumbers(false)
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
           .withUiElementGap(2)
       ),
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("left-panel"),
-            SurfaceContent.Outline(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Left, 10)
-          ),
-          UiSurface(
-            SurfaceId("right-panel"),
-            SurfaceContent.Diagnostics(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Right, 20)
-          ),
-          UiSurface(
-            SurfaceId("top-panel"),
-            SurfaceContent.Terminal("Build", 0),
-            SurfacePresentation.Pinned(PanelPosition.Top, 3)
-          ),
-          UiSurface(
-            SurfaceId("bottom-panel"),
-            SurfaceContent.Diagnostics(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Bottom, 4)
-          )
-        )
+      runtime = AppState.initial.runtime.copy(viewportSize = Some(renderViewport))
+    )
+    val state = DockedPanelFixtures.dockAllContent(
+      baseState,
+      List(
+        (SurfaceId("left-panel"), SurfaceContent.Outline(Nil), PanelPosition.Left, 10),
+        (SurfaceId("right-panel"), SurfaceContent.Diagnostics(Nil), PanelPosition.Right, 20),
+        (SurfaceId("top-panel"), SurfaceContent.Terminal("Build", 0), PanelPosition.Top, 3),
+        (SurfaceId("bottom-panel"), SurfaceContent.Diagnostics(Nil), PanelPosition.Bottom, 4)
       )
     )
 
-    val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val calculatedLayout = LayoutEngine.calculateLayout(state, renderViewport)
 
-    calculatedLayout.pinnedPanelRects(PanelPosition.Left) shouldBe LayoutRect(0, 3, 10, 22)
-    calculatedLayout.pinnedPanelRects(PanelPosition.Right) shouldBe LayoutRect(80, 3, 20, 22)
-    calculatedLayout.pinnedPanelRects(PanelPosition.Top) shouldBe LayoutRect(0, 0, 100, 3)
+    // Each docked panel's ratio (issue #817: the sole size record) is relative to its own owning split, not the full
+    // viewport. Docked in Left, Right, Top, Bottom order, Left and Top each end up nested under a later sibling's
+    // split -- `WorkspaceTree.dockSized` re-seeds the previously-docked opposite-edge surface's ratio from its own
+    // ancestor-aware absolute size (`WorkspaceTree.currentSize`/`allocationRatio`) after each such dock, so every
+    // panel keeps its exact requested extent regardless of dock order or resulting nesting depth.
+    calculatedLayout.pinnedPanelRects(PanelPosition.Left) shouldBe LayoutRect(0, 2, 10, 23)
+    calculatedLayout.pinnedPanelRects(PanelPosition.Right) shouldBe LayoutRect(80, 2, 20, 23)
+    calculatedLayout.pinnedPanelRects(PanelPosition.Top) shouldBe LayoutRect(0, 0, 100, 2)
     calculatedLayout.pinnedPanelRects(PanelPosition.Bottom) shouldBe LayoutRect(0, 25, 100, 4)
     calculatedLayout.editorPanelRect.x shouldBe 12
-    calculatedLayout.editorPanelRect.y shouldBe 5
-    calculatedLayout.editorPanelRect.height shouldBe 18
+    calculatedLayout.editorPanelRect.y shouldBe 4
+    calculatedLayout.editorPanelRect.height shouldBe 19
     calculatedLayout.editorPanelRect.right shouldBe 78
     calculatedLayout.editorPanelRect.bottom shouldBe 23
   }

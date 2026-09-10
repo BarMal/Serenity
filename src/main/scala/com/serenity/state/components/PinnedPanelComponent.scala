@@ -14,12 +14,7 @@ class PinnedPanelComponent(
     PanelInputEvent.fromEvent(event)
 
   protected def processTypedEvent(event: PanelInputEvent, currentState: AppState): ComponentResult =
-    currentState.runtime.uiSurfaces.find {
-      _.presentation match
-        case SurfacePresentation.Pinned(pos, _) if pos == position   => true
-        case SurfacePresentation.Expanded(pos, _) if pos == position => true
-        case _                                                       => false
-    } match
+    currentState.runtime.uiSurfaces.find(isPinnedAtPosition(_, currentState)) match
       case Some(_) =>
         processPanelEvent(event, currentState)
       case None => ComponentResult.noChange
@@ -163,24 +158,23 @@ class PinnedPanelComponent(
       .getOrElse(0)
 
   private def activeDirectorySurface(currentState: AppState) =
-    focusedPinnedSurface(currentState).orElse(currentState.runtime.uiSurfaces.reverse.find {
-      _.presentation match
-        case SurfacePresentation.Pinned(pos, _) if pos == position   => true
-        case SurfacePresentation.Expanded(pos, _) if pos == position => true
-        case _                                                       => false
-    })
+    focusedPinnedSurface(currentState).orElse(
+      currentState.runtime.uiSurfaces.reverse.find(isPinnedAtPosition(_, currentState))
+    )
 
   private def focusedPinnedSurface(currentState: AppState) =
     currentState.persisted.focus match
       case Focus.Surface(surfaceId) =>
-        currentState.surfaceById(surfaceId).filter { surface =>
-          surface.presentation match
-            case SurfacePresentation.Pinned(pos, _) if pos == position   => true
-            case SurfacePresentation.Expanded(pos, _) if pos == position => true
-            case _                                                       => false
-        }
+        currentState.surfaceById(surfaceId).filter(isPinnedAtPosition(_, currentState))
       case _ =>
         None
+
+  private def isPinnedAtPosition(surface: com.serenity.state.models.UiSurface, currentState: AppState): Boolean =
+    surface.presentation match
+      case SurfacePresentation.Docked =>
+        currentState.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position)
+      case _ =>
+        false
 
   private def replaceSurface(currentState: AppState, updated: com.serenity.state.models.UiSurface): AppState =
     currentState.copy(runtime =

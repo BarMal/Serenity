@@ -189,9 +189,9 @@ final private[manager] class StateManagerUiPresetEffects(
     val commentSymbolsList = PanelSymbolLookup.commentPanelSymbols(state)
     val commentActive      = PanelSymbolLookup.currentSymbolActiveLocation(commentSymbolsList, state)
     val hydratedSurfaces = state.runtime.uiSurfaces.map {
-      case surface @ UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Pinned(_, _), _) =>
+      case surface @ UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Docked, _) =>
         surface.copy(content = SurfaceContent.Outline(outlineSymbolsList, outlineActive))
-      case surface @ UiSurface(_, SurfaceContent.Comments(_, _), SurfacePresentation.Pinned(_, _), _) =>
+      case surface @ UiSurface(_, SurfaceContent.Comments(_, _), SurfacePresentation.Docked, _) =>
         surface.copy(content = SurfaceContent.Comments(commentSymbolsList, commentActive))
       case surface =>
         surface

@@ -41,7 +41,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
 
   it should "keep editor, panel, line-number, and gutter rectangles within their owned viewport regions" in
     List(InterfaceDensity.Compact, InterfaceDensity.Comfortable, InterfaceDensity.Spacious).foreach { density =>
-      val state = AppState.initial.copy(
+      val configuredState = AppState.initial.copy(
         persisted = AppState.initial.persisted.copy(
           config = AppConfig.default
             .withInterfaceDensity(density)
@@ -49,30 +49,15 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
             .withGutter(true)
             .withTextAreaInsets(TextAreaInsets(left = 0.05, right = 0.10))
             .withUiElementGap(2)
-        ),
-        runtime = AppState.initial.runtime.copy(
-          uiSurfaces = List(
-            UiSurface(
-              SurfaceId("left-panel"),
-              SurfaceContent.Outline(Nil),
-              SurfacePresentation.Pinned(PanelPosition.Left, 14)
-            ),
-            UiSurface(
-              SurfaceId("right-panel"),
-              SurfaceContent.Diagnostics(Nil),
-              SurfacePresentation.Pinned(PanelPosition.Right, 18)
-            ),
-            UiSurface(
-              SurfaceId("top-panel"),
-              SurfaceContent.Terminal("Build", 0),
-              SurfacePresentation.Pinned(PanelPosition.Top, 4)
-            ),
-            UiSurface(
-              SurfaceId("bottom-panel"),
-              SurfaceContent.Diagnostics(Nil),
-              SurfacePresentation.Pinned(PanelPosition.Bottom, 5)
-            )
-          )
+        )
+      )
+      val state = DockedPanelFixtures.dockAllContent(
+        configuredState,
+        List(
+          (SurfaceId("left-panel"), SurfaceContent.Outline(Nil), PanelPosition.Left, 14),
+          (SurfaceId("right-panel"), SurfaceContent.Diagnostics(Nil), PanelPosition.Right, 18),
+          (SurfaceId("top-panel"), SurfaceContent.Terminal("Build", 0), PanelPosition.Top, 4),
+          (SurfaceId("bottom-panel"), SurfaceContent.Diagnostics(Nil), PanelPosition.Bottom, 5)
         )
       )
       val layout          = LayoutEngine.calculateLayout(state, viewport)
@@ -228,27 +213,20 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   it should "reserve configured gaps before clamping oversized pinned side panels" in {
     val constrainedViewport = ViewportSize(20, 8)
     val gap                 = 2
-    val state = AppState.initial.copy(
+    val configuredState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
           .withLineNumbers(false)
           .withGutter(false)
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
           .withUiElementGap(gap)
-      ),
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("left-panel"),
-            SurfaceContent.Outline(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Left, 15)
-          ),
-          UiSurface(
-            SurfaceId("right-panel"),
-            SurfaceContent.Diagnostics(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Right, 10)
-          )
-        )
+      )
+    )
+    val state = DockedPanelFixtures.dockAllContent(
+      configuredState,
+      List(
+        (SurfaceId("left-panel"), SurfaceContent.Outline(Nil), PanelPosition.Left, 15),
+        (SurfaceId("right-panel"), SurfaceContent.Diagnostics(Nil), PanelPosition.Right, 10)
       )
     )
 
@@ -267,27 +245,20 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   it should "reserve configured gaps before clamping oversized pinned top and bottom panels" in {
     val constrainedViewport = ViewportSize(18, 9)
     val gap                 = 2
-    val state = AppState.initial.copy(
+    val configuredState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
           .withLineNumbers(false)
           .withGutter(false)
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0))
           .withUiElementGap(gap)
-      ),
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("top-panel"),
-            SurfaceContent.Terminal("Build", 0),
-            SurfacePresentation.Pinned(PanelPosition.Top, 6)
-          ),
-          UiSurface(
-            SurfaceId("bottom-panel"),
-            SurfaceContent.Diagnostics(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Bottom, 5)
-          )
-        )
+      )
+    )
+    val state = DockedPanelFixtures.dockAllContent(
+      configuredState,
+      List(
+        (SurfaceId("top-panel"), SurfaceContent.Terminal("Build", 0), PanelPosition.Top, 6),
+        (SurfaceId("bottom-panel"), SurfaceContent.Diagnostics(Nil), PanelPosition.Bottom, 5)
       )
     )
 
@@ -353,7 +324,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
           UiSurface(
             SurfaceId("left-panel"),
             SurfaceContent.Outline(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Left, 16)
+            SurfacePresentation.Docked
           ),
           UiSurface(
             SurfaceId("command-runner"),
@@ -363,12 +334,13 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
-    val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
+    val dockedState      = DockedPanelFixtures.dockExisting(state, SurfaceId("left-panel"), PanelPosition.Left, 16)
+    val calculatedLayout = LayoutEngine.calculateLayout(dockedState, viewport)
+    val contract         = EditorLayoutContract.from(dockedState, viewport, calculatedLayout)
 
     contract.viewportRect shouldBe viewportRect
     contract.contentAreaRect.bottom shouldBe calculatedLayout.gutterRect.map(_.y).getOrElse(viewport.height)
-    contract.workspace.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
+    contract.workspace.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(dockedState, calculatedLayout)
     contract.pinnedSurfaceTitleRects.keySet shouldBe contract.pinnedSurfaceRects.keySet
     contract.pinnedSurfaceContentRects.keySet shouldBe contract.pinnedSurfaceRects.keySet
     contract.floatingOverlayContentRects.map(_._1) shouldBe contract.floatingOverlayRects.map(_._1)
@@ -385,7 +357,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val pinnedPanel = UiSurface(
       SurfaceId("left-panel"),
       SurfaceContent.Outline(Nil),
-      SurfacePresentation.Pinned(PanelPosition.Left, 16)
+      SurfacePresentation.Docked
     )
     val quickInfo = UiSurface(
       SurfaceId("quick-info"),
@@ -397,7 +369,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.CommandPalette(runner),
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
-    val state = AppState.initial.copy(
+    val builtState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
@@ -412,6 +384,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
         uiSurfaces = List(pinnedPanel, quickInfo, commandRunner)
       )
     )
+    val state = DockedPanelFixtures.dockExisting(builtState, pinnedPanel.id, PanelPosition.Left, 16)
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
@@ -445,38 +418,37 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report overlapping pinned surface title and content rectangles" in {
-    val panel = UiSurface(
-      SurfaceId("left-panel"),
-      SurfaceContent.Outline(Nil),
-      SurfacePresentation.Pinned(PanelPosition.Left, 16)
-    )
-    val state            = AppState.initial.copy(runtime = AppState.initial.runtime.copy(uiSurfaces = List(panel)))
+    val panelId = SurfaceId("left-panel")
+    val state = DockedPanelFixtures.dock(AppState.initial, panelId, SurfaceContent.Outline(Nil), PanelPosition.Left, 16)
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
-    val titleRect        = contract.pinnedSurfaceTitleRects(panel.id)
+    val titleRect        = contract.pinnedSurfaceTitleRects(panelId)
     val malformed = contract.copy(
-      pinnedSurfaceContentRects = contract.pinnedSurfaceContentRects.updated(panel.id, titleRect)
+      pinnedSurfaceContentRects = contract.pinnedSurfaceContentRects.updated(panelId, titleRect)
     )
 
     malformed.violations.map(violation => violation.ownerName -> violation.childName) should contain(
-      s"pinned surface ${panel.id.value} title" -> s"pinned surface ${panel.id.value} content"
+      s"pinned surface ${panelId.value} title" -> s"pinned surface ${panelId.value} content"
     )
   }
 
   it should "keep markdown preview rows inside the pinned panel content contract" in {
-    val buffer = Buffer.fromString(BufferId(1), "# Title\n\nFirst paragraph\n\nSecond paragraph")
-    val preview = UiSurface(
-      SurfaceId("markdown-preview"),
-      SurfaceContent.MarkdownPreview(buffer.id, "Notes"),
-      SurfacePresentation.Pinned(PanelPosition.Right, 30)
-    )
-    val state = AppState.initial.copy(
+    val buffer    = Buffer.fromString(BufferId(1), "# Title\n\nFirst paragraph\n\nSecond paragraph")
+    val previewId = SurfaceId("markdown-preview")
+    val baseState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id)
-      ),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(preview))
+      )
     )
+    val state = DockedPanelFixtures.dock(
+      baseState,
+      previewId,
+      SurfaceContent.MarkdownPreview(buffer.id, "Notes"),
+      PanelPosition.Right,
+      30
+    )
+    val preview = state.surfaceById(previewId).getOrElse(fail("expected markdown preview surface"))
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
@@ -500,14 +472,11 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expose frame, title, and content rectangles for expanded surfaces" in {
-    val expandedPanel = UiSurface(
-      SurfaceId("expanded-panel"),
-      SurfaceContent.Diagnostics(Nil),
-      SurfacePresentation.Expanded(PanelPosition.Right, 24)
-    )
-    val state = AppState.initial.copy(
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(expandedPanel))
-    )
+    val expandedId = SurfaceId("expanded-panel")
+    val docked =
+      DockedPanelFixtures.dock(AppState.initial, expandedId, SurfaceContent.Diagnostics(Nil), PanelPosition.Right, 24)
+    val state         = DockedPanelFixtures.expand(docked, expandedId)
+    val expandedPanel = state.surfaceById(expandedId).getOrElse(fail("expected expanded panel surface"))
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
@@ -543,19 +512,20 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "provide shared panel lookups for pinned and expanded surfaces" in {
-    val pinnedPanel = UiSurface(
-      SurfaceId("left-panel"),
-      SurfaceContent.Outline(Nil),
-      SurfacePresentation.Pinned(PanelPosition.Left, 16)
-    )
-    val expandedPanel = UiSurface(
-      SurfaceId("expanded-panel"),
-      SurfaceContent.Diagnostics(Nil),
-      SurfacePresentation.Expanded(PanelPosition.Right, 24)
-    )
-    val state = AppState.initial.copy(
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(pinnedPanel, expandedPanel))
-    )
+    val expandedId = SurfaceId("expanded-panel")
+    val withPinned =
+      DockedPanelFixtures.dock(
+        AppState.initial,
+        SurfaceId("left-panel"),
+        SurfaceContent.Outline(Nil),
+        PanelPosition.Left,
+        16
+      )
+    val withExpanded =
+      DockedPanelFixtures.dock(withPinned, expandedId, SurfaceContent.Diagnostics(Nil), PanelPosition.Right, 24)
+    val state         = DockedPanelFixtures.expand(withExpanded, expandedId)
+    val pinnedPanel   = state.surfaceById(SurfaceId("left-panel")).getOrElse(fail("expected pinned surface"))
+    val expandedPanel = state.surfaceById(expandedId).getOrElse(fail("expected expanded surface"))
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
@@ -564,10 +534,10 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       .flatMap(view => view.surfaceId.map(_ -> view))
       .toMap
 
-    EditorLayoutContract.panelRectFor(pinnedPanel, calculatedLayout) shouldBe Some(
+    EditorLayoutContract.panelRectFor(pinnedPanel, state, calculatedLayout) shouldBe Some(
       contract.pinnedSurfaceRects(pinnedPanel.id)
     )
-    EditorLayoutContract.panelRectFor(expandedPanel, calculatedLayout) shouldBe Some(
+    EditorLayoutContract.panelRectFor(expandedPanel, state, calculatedLayout) shouldBe Some(
       contract.expandedSurfaceRects(expandedPanel.id)
     )
     contract.panelRect(pinnedPanel.id) shouldBe Some(contract.pinnedSurfaceRects(pinnedPanel.id))
@@ -756,7 +726,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
     val pinnedPanel = UiSurface(
       SurfaceId("find-panel"),
       SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(2, 4)), 0)),
-      SurfacePresentation.Pinned(PanelPosition.Left, 18)
+      SurfacePresentation.Docked
     )
     val quickInfo = UiSurface(
       SurfaceId("quick-info"),
@@ -768,7 +738,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.CommandPalette(runner),
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
-    val state = AppState.initial.copy(
+    val builtState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
@@ -781,6 +751,7 @@ class LayoutContractSpec extends AnyFlatSpec with Matchers:
       ),
       runtime = AppState.initial.runtime.copy(uiSurfaces = List(pinnedPanel, quickInfo, commandRunner))
     )
+    val state = DockedPanelFixtures.dockExisting(builtState, pinnedPanel.id, PanelPosition.Left, 18)
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)

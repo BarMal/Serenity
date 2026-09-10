@@ -136,7 +136,13 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.persisted.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 720))
     state.runtime.viewportSize shouldBe Some(ViewportSize(90, 28))
     state.persisted.theme.name shouldBe Theme.dark.name
-    state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 36))
+    state.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Docked)
+    state.pinnedSurfaces.map(surface =>
+      state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id))
+    ) shouldBe List(Some(PanelPosition.Right))
+    state.pinnedSurfaces.map(surface =>
+      com.serenity.state.reducers.PanelStateReducer.currentSize(surface.id, state)
+    ) shouldBe List(Some(36))
     observedWindowSize.get.unsafeRunSync() shouldBe None
   }
 
@@ -291,12 +297,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     state.persisted.buffers(BufferId(0)).document.language shouldBe Some(LanguageId.Markdown)
     state.pinnedSurfaces.collectFirst {
-      case UiSurface(
-            _,
-            SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
-            SurfacePresentation.Pinned(PanelPosition.Right, 40),
-            _
-          ) =>
+      case surface @ UiSurface(_, SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"), _, _)
+          if state.persisted.layout.workspaceTree
+            .flatMap(_.positionForSurface(surface.id))
+            .contains(
+              PanelPosition.Right
+            ) =>
         true
     } shouldBe Some(true)
   }
@@ -336,12 +342,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
     state.persisted.config.defaultDocumentMode shouldBe com.serenity.config.DefaultDocumentMode.Markdown
     state.pinnedSurfaces.collect { case UiSurface(_, SurfaceContent.Outline(_, _), _, _) => () } shouldBe Nil
     state.pinnedSurfaces.collectFirst {
-      case UiSurface(
-            _,
-            SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
-            SurfacePresentation.Pinned(PanelPosition.Right, 40),
-            _
-          ) =>
+      case surface @ UiSurface(_, SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"), _, _)
+          if state.persisted.layout.workspaceTree
+            .flatMap(_.positionForSurface(surface.id))
+            .contains(
+              PanelPosition.Right
+            ) =>
         true
     } shouldBe Some(true)
   }
@@ -425,7 +431,12 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
     val outlineSymbols = state.pinnedSurfaces.collectFirst {
-      case UiSurface(_, SurfaceContent.Outline(symbols, _), SurfacePresentation.Pinned(PanelPosition.Left, 30), _) =>
+      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, _), _, _)
+          if state.persisted.layout.workspaceTree
+            .flatMap(_.positionForSurface(surface.id))
+            .contains(
+              PanelPosition.Left
+            ) =>
         symbols
     }
 

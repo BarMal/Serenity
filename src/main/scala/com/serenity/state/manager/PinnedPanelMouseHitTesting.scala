@@ -323,11 +323,10 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
       case None =>
         state
 
-  private def panelPosition(surface: UiSurface): Option[PanelPosition] =
+  private def panelPosition(surface: UiSurface, state: AppState): Option[PanelPosition] =
     surface.presentation match
-      case SurfacePresentation.Pinned(position, _)   => Some(position)
-      case SurfacePresentation.Expanded(position, _) => Some(position)
-      case _                                         => None
+      case SurfacePresentation.Docked => state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id))
+      case _                          => None
 
   private def pinnedPanelRowHitAt(event: MouseInputEvent, state: AppState): Option[PinnedPanelRowHit] =
     state.runtime.viewportSize.flatMap { viewportSize =>
@@ -337,7 +336,7 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
           case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, hitRegions, _) =>
             for
               surface  <- state.surfaceById(surfaceId)
-              position <- panelPosition(surface)
+              position <- panelPosition(surface, state)
               contentRect <- hitRegions.collectFirst {
                 case SceneHitRegion(SceneHitKind.Content, rect) if rect.contains(event.col, event.row) => rect
               }

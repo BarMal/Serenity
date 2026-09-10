@@ -104,13 +104,27 @@ final private[manager] class StateManagerConfigEffects(
       val surface = UiSurface(
         id = SurfaceId.CompanionSprite,
         content = SurfaceContent.CompanionSprite,
-        presentation =
-          SurfacePresentation.Pinned(config.companionSpriteConfig.position, config.companionSpriteConfig.size)
+        presentation = SurfacePresentation.Docked
       )
-      state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ surface))
+      // Docking is the tree's job alone (issue #817) -- `AppState.dockCompanionSprite` is the one place that seeds a
+      // companion sprite's position/ratio, reused here so startup and this runtime toggle can't drift apart.
+      state.copy(
+        persisted = state.persisted.copy(layout = AppState.dockCompanionSprite(state.persisted.layout, config)),
+        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ surface)
+      )
     else if !shouldShow && exists then
-      state.copy(runtime =
-        state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == SurfaceId.CompanionSprite))
+      val prunedTree = state.persisted.layout.workspaceTree.flatMap(_.removeSurface(SurfaceId.CompanionSprite))
+      val maximized = state.persisted.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
+        state.persisted.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).contains(SurfaceId.CompanionSprite)
+      )
+      state.copy(
+        persisted = state.persisted.copy(layout =
+          state.persisted.layout.copy(
+            workspaceTree = prunedTree.orElse(state.persisted.layout.workspaceTree),
+            maximizedWorkspaceNodeId = maximized
+          )
+        ),
+        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == SurfaceId.CompanionSprite))
       )
     else state
 
@@ -221,8 +235,8 @@ final private[manager] class StateManagerConfigEffects(
   /** A surface occupying a workspace dock, whether at its pinned size or expanded over the editor. */
   private def isDockedSurface(surface: UiSurface): Boolean =
     surface.presentation match
-      case SurfacePresentation.Pinned(_, _) | SurfacePresentation.Expanded(_, _) => true
-      case _                                                                     => false
+      case SurfacePresentation.Docked => true
+      case _                          => false
 
   private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     updateMotionConfig(config => update(config).withCustomMotionBaseline)
