@@ -63,6 +63,49 @@ jobs:
       - name: Check file and method size ratchet
         run: sbt -v architectureCheck
 
+      # The ratchet above stops individual entries regressing, but a deliberate `writeArchitectureBaseline`
+      # re-run can still grow the file (new entry, or a worsened one) without anyone having to justify it --
+      # see issue #1413. This makes that growth visible and requires a same-diff justification for it.
+      - name: Report architecture baseline size
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r COUNT SUM < <(awk -F'\t' '
+            /^[[:space:]]*#/ {next}
+            NF==0 {next}
+            NF==3 {count++; sum+=$3}
+            END{printf "%d %d\n", count+0, sum+0}
+          ' project/architecture-baseline.tsv)
+          echo "Architecture baseline: $COUNT entries, $SUM total lines/hits over target." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Require justification for baseline growth
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          git fetch --depth=1 origin "$BASE_SHA"
+
+          stats() {
+            awk -F'\t' '
+              /^[[:space:]]*#/ {next}
+              NF==0 {next}
+              NF==3 {count++; sum+=$3}
+              END{printf "%d %d\n", count+0, sum+0}
+            '
+          }
+
+          read -r BASE_COUNT BASE_SUM < <(git show "$BASE_SHA:project/architecture-baseline.tsv" | stats)
+          read -r HEAD_COUNT HEAD_SUM < <(stats < project/architecture-baseline.tsv)
+          echo "base: $BASE_COUNT entries / $BASE_SUM total  |  head: $HEAD_COUNT entries / $HEAD_SUM total"
+
+          if [ "$HEAD_COUNT" -gt "$BASE_COUNT" ] || [ "$HEAD_SUM" -gt "$BASE_SUM" ]; then
+            if ! git diff "$BASE_SHA" HEAD -- project/architecture-baseline.tsv | grep -q '^+# paydown:'; then
+              echo "::error file=project/architecture-baseline.tsv::Baseline grew ($BASE_COUNT -> $HEAD_COUNT entries, $BASE_SUM -> $HEAD_SUM total) without a justification. Add a '# paydown: <why, issue link>' comment line to project/architecture-baseline.tsv explaining the new or worsened entry, then commit it alongside the change."
+              exit 1
+            fi
+          fi
+
   test:
     name: Test
     runs-on: ubuntu-latest
