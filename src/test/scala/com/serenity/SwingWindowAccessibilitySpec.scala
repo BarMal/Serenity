@@ -8,6 +8,7 @@ import javax.swing.JPanel
 import scala.collection.mutable.ListBuffer
 
 import com.serenity.ui.accessibility.{
+  AccessibilityAnnouncement,
   AccessibilityRole,
   AccessibilitySnapshot,
   AccessibleNode,
@@ -84,6 +85,9 @@ class SwingWindowAccessibilitySpec extends AnyFlatSpec with Matchers:
           if event.getPropertyName == javax.accessibility.AccessibleContext.ACCESSIBLE_DESCRIPTION_PROPERTY then
             events += Option(event.getNewValue).fold("")(_.toString)
     )
+    // The bridge relays `snapshot.announcements` verbatim; the diff against prior state is computed once, by
+    // `AccessibilityModel` (see `AccessibilityModelSpec`), so each fixture supplies the announcement its message
+    // would carry off that diff rather than the bridge re-deriving it from the node list.
     val status = (message: String) =>
       AccessibilitySnapshot(
         List(
@@ -97,7 +101,7 @@ class SwingWindowAccessibilitySpec extends AnyFlatSpec with Matchers:
             LayoutRect(0, 0, 20, 1)
           )
         ),
-        Nil
+        List(AccessibilityAnnouncement(message))
       )
 
     bridge.publish(status("Invalid command"))
