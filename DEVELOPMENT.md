@@ -96,7 +96,9 @@ entry means deleting it:
 sbt writeArchitectureBaseline   # after removing a violation, to bank the win
 ```
 
-The baseline may shrink, never grow. If you must add to it, explain the entry in review.
+The baseline may shrink, never grow. If you must add to it, explain the entry in review: CI's
+`architecture` job fails a PR whose baseline entry count or total measured lines/hits grows unless the
+diff also adds a `# paydown: <why, issue link>` comment line to `project/architecture-baseline.tsv`.
 
 ## Codex CLI
 
