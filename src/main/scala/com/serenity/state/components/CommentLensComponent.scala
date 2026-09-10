@@ -93,12 +93,13 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
     lens.copy(cursor = math.max(0, math.min(lens.clampedCursor + delta, lens.draft.length)))
 
   private def replaceLens(state: AppState, surface: UiSurface, lens: CommentLensState): AppState =
-    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-      case current if current.id == surface.id =>
-        current.copy(content = SurfaceContent.CommentLens(lens.copy(cursor = lens.clampedCursor)))
-      case current =>
-        current
-    }))
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+          _.copy(content = SurfaceContent.CommentLens(lens.copy(cursor = lens.clampedCursor)))
+        )
+      )
+    )
 
   private def saveAndDismiss(state: AppState, surface: UiSurface, lens: CommentLensState): AppState =
     val savedText = Option(lens.draft.trim).filter(_.nonEmpty).getOrElse("Comment")

@@ -5,11 +5,11 @@ import cats.effect.IO
 /** Registry for discovering and accessing available themes at runtime */
 object ThemeRegistry:
 
-  private val manager = new ConfigurableThemeManager(new ThemeConfigLoader())
+  private val loader = new ThemeConfigLoader()
 
   /** Get all available theme names (internal + user + bundled) without file extensions */
   def getAvailableThemeNames: IO[List[String]] =
-    manager.listAvailableThemes
+    getThemesBySource.map(_.all)
 
   /** Check if a theme exists by name */
   def themeExists(themeName: String): IO[Boolean] =
@@ -18,10 +18,10 @@ object ThemeRegistry:
   /** Get theme names grouped by source */
   def getThemesBySource: IO[ThemesBySource] =
     for
-      userThemes <- new ThemeConfigLoader()
-        .listAvailableThemes(new ThemeConfigLoader().getUserThemesDirectory)
+      userThemes <- loader
+        .listAvailableThemes(loader.getUserThemesDirectory)
         .map(_.map(_.getFileName.toString.stripSuffix(".conf")))
-      bundledThemes <- new ThemeConfigLoader().listBundledThemes
+      bundledThemes <- loader.listBundledThemes
       internalThemes = com.serenity.ui.theme.DefaultThemes.allInternal.keys.toList
     yield ThemesBySource(
       internal = internalThemes.sorted,

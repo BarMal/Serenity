@@ -220,14 +220,9 @@ object RendererFramePlanner:
       case Some(support) =>
         scene.modalBackdrop match
           case None =>
-            RendererFrameState.modalLayerBuffers.synchronized {
-              val _ = RendererFrameState.modalLayerBuffers.remove(context.surface)
-            }
+            RendererFrameState.forgetModalLayerBuffer(context.surface)
           case Some(_) =>
-            val cached =
-              RendererFrameState.modalLayerBuffers.synchronized(
-                Option(RendererFrameState.modalLayerBuffers.get(context.surface))
-              )
+            val cached = RendererFrameState.cachedModalLayerFor(context.surface)
             val reusable = !isDirty && cached.exists { c =>
               c.viewportWidth == context.surface.viewportWidth &&
               c.viewportHeight == context.surface.viewportHeight &&
@@ -246,9 +241,7 @@ object RendererFramePlanner:
                   context.surface.viewportHeight,
                   context.cursorVisible
                 )
-                RendererFrameState.modalLayerBuffers.synchronized {
-                  val _ = RendererFrameState.modalLayerBuffers.put(context.surface, newlyCached)
-                }
+                RendererFrameState.rememberModalLayerBuffer(context.surface, newlyCached)
                 context.surface.pixels.compositeFullSurfaceLayer(image)
               }
 
@@ -297,10 +290,7 @@ object RendererFramePlanner:
     context.surface.layerBuffers match
       case None => paintPanel(context)
       case Some(support) =>
-        val cached =
-          RendererFrameState.panelLayerBuffers
-            .synchronized(Option(RendererFrameState.panelLayerBuffers.get(context.surface)))
-            .flatMap(_.get(surfaceId))
+        val cached = RendererFrameState.cachedPanelLayersFor(context.surface).get(surfaceId)
         val reusable = !isDirty && cached.exists { c =>
           c.viewportWidth == context.surface.viewportWidth &&
           c.viewportHeight == context.surface.viewportHeight &&
@@ -321,19 +311,13 @@ object RendererFramePlanner:
               context.cursorVisible,
               frameRect
             )
-            RendererFrameState.panelLayerBuffers.synchronized {
-              val current = Option(RendererFrameState.panelLayerBuffers.get(context.surface))
-                .getOrElse(Map.empty[SurfaceId, CachedPanelLayer])
-              val _ = RendererFrameState.panelLayerBuffers.put(context.surface, current.updated(surfaceId, newlyCached))
-            }
+            RendererFrameState.rememberPanelLayer(context.surface, surfaceId, newlyCached)
             context.surface.pixels.compositeFullSurfaceLayer(image)
           }
 
-  /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry in
-    * [[RendererFrameState.panelLayerBuffers]] -- a dismissed panel's cache would otherwise sit in that inner
-    * `Map[SurfaceId, _]` forever (a `WeakHashMap` reclaims the outer, per-surface entry once a `RenderSurface` is no
-    * longer referenced, but [[SurfaceId]] is a plain value, not a pixel buffer whose lifetime this module can track
-    * that way).
+  /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry -- a
+    * dismissed panel's cache would otherwise sit in that inner `Map[SurfaceId, _]` forever ([[SurfaceId]] is a plain
+    * value, not an object [[RendererFrameState]] can bound the lifetime of any other way).
     */
   private def forgetStalePanelLayerBuffers(state: AppState, scene: UiSceneSnapshot, surface: RenderSurface): Unit =
     val pinnedAndExpandedIds = RendererFloatingPanels.pinnedAndExpandedSurfaces(state).map(_.id).toSet
@@ -341,12 +325,7 @@ object RendererFramePlanner:
     val floatingIds =
       (overlays.aboveCursor.toList ++ overlays.belowCursorStack).flatMap(_.surfaceId).toSet
     val activeIds = pinnedAndExpandedIds ++ floatingIds
-    RendererFrameState.panelLayerBuffers.synchronized {
-      val current =
-        Option(RendererFrameState.panelLayerBuffers.get(surface)).getOrElse(Map.empty[SurfaceId, CachedPanelLayer])
-      val _ =
-        RendererFrameState.panelLayerBuffers.put(surface, current.filter { case (id, _) => activeIds.contains(id) })
-    }
+    RendererFrameState.pruneStalePanelLayers(surface, activeIds)
 
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *
@@ -356,21 +335,14 @@ object RendererFramePlanner:
     */
   def forgetPreservedContent(surface: RenderSurface, output: Option[FrameOutput]): Unit =
     surface.persistentContentKey.foreach { key =>
-      RendererFrameState.bufferDamage.synchronized {
-        val _ = RendererFrameState.bufferDamage.remove(key)
-        val _ = RendererFrameState.bufferScreen.remove(key)
-      }
-      RendererFrameState.bufferDrawState.synchronized { val _ = RendererFrameState.bufferDrawState.remove(key) }
+      RendererFrameState.forgetBufferState(key)
       // The previous frame's snapshots and panel rects are reuse promises about pixels this surface no longer holds,
       // so they go with the rest of them. `preparedScenes` stays: it is a layout memo, not a promise about pixels, and
       // its own `matches` check is what decides whether it still applies.
       RendererFrameState.forgetPreviousFrameState(key)
     }
     output.foreach { value =>
-      RendererFrameState.screenDamage.synchronized { val _ = RendererFrameState.screenDamage.remove(value.screenToken) }
-      RendererFrameState.screenPaneIds.synchronized {
-        val _ = RendererFrameState.screenPaneIds.remove(value.screenToken)
-      }
+      RendererFrameState.forgetScreenState(value.screenToken)
       value.repaintRegion.set(None)
     }
 

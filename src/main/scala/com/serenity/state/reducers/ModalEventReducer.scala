@@ -649,6 +649,6 @@ object ModalEventReducer:
           case Some(surface) =>
             val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(modal))
             state.copy(runtime =
-              state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == id) :+ updatedSurface)
+              state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == id)(updatedSurface))
             )
           case None => state

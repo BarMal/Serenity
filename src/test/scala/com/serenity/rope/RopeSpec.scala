@@ -110,33 +110,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
       .orFail
       .collect() shouldBe "Hello! World!"
 
-  it should "search for first occurrence" in new ChunkedRopeSpecScope:
-    val lorem0: String =
-      """Lorem ipsum dolor sit amet, consectetur adipiscing
-         |elit, sed do eiusmod tempor incididunt ut labore et
-         |dolore magna aliqua. Ut enim ad minim veniam, quis
-         |nostrud exercitation ullamco laboris nisi ut aliquip
-         |ex ea commodo consequat. Duis aute irure dolor in
-         |reprehenderit in voluptate velit esse cillum dolore
-         |eu fugiat nulla pariatur. Excepteur sint occaecat
-         |cupidatat non proident, sunt in culpa qui officia
-         |deserunt mollit anim id est laborum.""".stripMargin
-
-    val rope: Rope = Rope(lorem0)
-
-    val search0: String = "Lorem"
-    rope.search(search0) shouldBe Some(0)
-
-    val normalized      = lorem0.replace("\r\n", "\n")
-    val search1: String = "laborum"
-    rope.search(search1) shouldBe Some(normalized.indexOf(search1))
-
-    val search2: String = "in culpa qui officia"
-    rope.search(search2) shouldBe Some(normalized.indexOf(search2))
-
-    val search3: String = "Doesn't exist in the body"
-    rope.search(search3) shouldBe None
-
   it should "search for all occurrences" in new ChunkedRopeSpecScope:
     val text = "the cat sat on the mat with the rat"
     val rope = Rope(text)
@@ -158,7 +131,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     val text = "a" * 28 + "boundary" + "b" * 28
     val rope = Rope(text)
 
-    rope.search("boundary") shouldBe Some(28)
     rope.searchAll("boundary") should contain(28)
 
   it should "handle repeated patterns" in new ChunkedRopeSpecScope:
@@ -167,15 +139,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     val results = rope.searchAll("abc")
     results should contain theSameElementsAs List(0, 4, 8, 12)
-
-  it should "handle patterns at boundaries" in new ChunkedRopeSpecScope:
-    // Create text where pattern spans leaf boundary
-    val part1 = "x" * 28 + "te"
-    val part2 = "st" + "y" * 28
-    val text  = part1 + part2
-    val rope  = Rope(text)
-
-    rope.search("test") shouldBe Some(28)
 
   it should "handle single character searches" in new ChunkedRopeSpecScope:
     val text = "abcabc"
@@ -188,14 +151,12 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     val text = "hello world test"
     val rope = Rope(text)
 
-    rope.search("test") shouldBe Some(12)
     rope.searchAll("test") should contain(12)
 
   it should "handle empty search results" in new ChunkedRopeSpecScope:
     val text = "hello world"
     val rope = Rope(text)
 
-    rope.search("xyz") shouldBe None
     rope.searchAll("xyz") shouldBe empty
 
   it should "handle case-sensitive searches" in new ChunkedRopeSpecScope:
@@ -221,14 +182,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     val results = rope.searchAll(pattern)
     results.length shouldBe 2
-
-  it should "handle patterns with special characters" in new ChunkedRopeSpecScope:
-    val text = "test\nwith\ttabs and spaces"
-    val rope = Rope(text)
-
-    rope.search("\n") shouldBe Some(4)
-    rope.search("\t") shouldBe Some(9)
-    rope.search(" ") shouldBe Some(14)
 
   it should "replaceAll correctly" in new ChunkedRopeSpecScope:
     val text = "the cat sat on the mat"
@@ -265,7 +218,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
       // Test operations on large rope work correctly
       rope.index(0) shouldBe Some('H')
       if largeText.nonEmpty then rope.index(largeText.length - 1) should be(defined)
-      rope.search("Hello") shouldBe Some(0)
 
       // Test that rebalancing works on large ropes
       val rebalanced = rope.rebalance
@@ -358,7 +310,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     empty.weight shouldBe 0
     empty.index(0) shouldBe None
-    empty.search("test") shouldBe None
     empty.searchAll("test") shouldBe List.empty
     empty.splitAt(0) shouldBe Some((Leaf(""), Leaf("")))
     empty.insert(0, "hello").orFail.collect() shouldBe "hello"
@@ -371,8 +322,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     single.weight shouldBe 1
     single.index(0) shouldBe Some('a')
     single.index(1) shouldBe None
-    single.search("a") shouldBe Some(0)
-    single.search("b") shouldBe None
     single.splitAt(0) shouldBe Some((Leaf(""), single))
     single.splitAt(1) shouldBe Some((single, Leaf("")))
     single.replace(0, 'b').orFail.collect() shouldBe "b"
@@ -402,7 +351,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     unicode.weight should be > 10 // Unicode chars take more bytes
     unicode.index(0) shouldBe Some('c')
-    unicode.search("🚀") shouldBe defined
     unicode.searchAll("a") should have length 2
     unicode.replace(5, '⭐').orFail.collect() should include("⭐")
 
@@ -414,13 +362,11 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     rope.weight shouldBe 1000
     rope.index(500) shouldBe Some('a')
     rope.index(999) shouldBe Some('a')
-    rope.search("a") shouldBe Some(0)
     rope.slice(100, 200).weight shouldBe 100
 
     // Test operations on long rope
     val inserted = rope.insert(500, "TEST").orFail
     inserted.weight shouldBe 1004
-    inserted.search("TEST") shouldBe Some(500)
 
     val deleted = rope.deleteRight(100, 100).orFail
     deleted.weight shouldBe 900
@@ -444,7 +390,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     // All operations should work
     rope.index(0) should be(defined)
-    rope.search("prefix") should be(defined)
     rope.splitAt(5) should be(defined)
 
   it should "handle rapid alternating insertions and deletions" in new ChunkedRopeSpecScope:
@@ -471,12 +416,10 @@ class RopeSpec extends AnyFlatSpec with Matchers:
   it should "handle degenerate cases" in new RopeSpecScope:
     // Test with empty search terms
     val rope = Rope("hello world")
-    rope.search("") shouldBe None
     rope.searchAll("") shouldBe List.empty
     rope.replaceAll("", "x").collect() shouldBe "hello world"
 
     // Test with search terms longer than rope
-    rope.search("this is way too long") shouldBe None
     rope.searchAll("very long search term") shouldBe List.empty
 
     // Test deletion with zero count
@@ -708,7 +651,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     val content = "alpha needle\nbeta\nneedle gamma"
     val rope    = NonCollectingIndexedRope(Rope(content))
 
-    rope.search("needle") shouldBe Some(content.indexOf("needle"))
     rope.searchAll("needle") shouldBe List(content.indexOf("needle"), content.lastIndexOf("needle"))
     rope.searchAll("missing") shouldBe Nil
 
@@ -791,11 +733,10 @@ class RopeSpec extends AnyFlatSpec with Matchers:
     def apply(delegate: Rope)(using Balance): ExplodingIndexRope = new ExplodingIndexRope(delegate)
 
   // See `ExplodingIndexRope` above for why this extends `Leaf` rather than `Rope`, and for the guarantee that
-  // narrows as a result. `search` still genuinely exercises indexed access below (it calls the virtual `index`
-  // override one character at a time, which pattern matching cannot bypass), but `searchAll`/`linesFrom`/
-  // `linesIteratorFrom` route through `Rope`'s private `chunksInRange`, which pattern-matches `case Leaf(value)`
-  // directly -- unavoidable once this must satisfy `Leaf` -- so those three are overridden here to forward straight
-  // to `delegate` rather than silently falling through the Leaf fast path with a materialised value.
+  // narrows as a result. `searchAll`/`linesFrom`/`linesIteratorFrom` route through `Rope`'s private `chunksInRange`,
+  // which pattern-matches `case Leaf(value)` directly -- unavoidable once this must satisfy `Leaf` -- so those three
+  // are overridden here to forward straight to `delegate` rather than silently falling through the Leaf fast path
+  // with a materialised value.
   final class NonCollectingIndexedRope(delegate: Rope)(using Balance) extends Leaf(delegate.collect()):
     override def weight: Int =
       delegate.weight
@@ -823,9 +764,6 @@ class RopeSpec extends AnyFlatSpec with Matchers:
 
     override def splitAt(index: Int): Option[(Rope, Rope)] =
       delegate.splitAt(index)
-
-    override def index(i: Int): Option[Char] =
-      delegate.index(i)
 
     override def searchAll(term: String): List[Int] =
       delegate.searchAll(term)

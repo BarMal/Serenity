@@ -153,12 +153,13 @@ final private[manager] class StateManagerKeybindingEffects(
                   .copy(statusMessage =
                     Some("Binding is already assigned. Enter to unbind the other action, or Escape to preserve it.")
                   )
-                state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-                  case current if current.id == surface.id =>
-                    current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-                  case current =>
-                    current
-                }))
+                state.copy(runtime =
+                  state.runtime.copy(uiSurfaces =
+                    state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+                      _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+                    )
+                  )
+                )
               case None => state
           case _ => state
       case None => state

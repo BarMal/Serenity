@@ -38,7 +38,8 @@ final private[manager] class CommentLensMouseHitTesting(port: CommentLensMouseHi
     yield (surface, lens)
 
   private def replaceLensMode(state: AppState, surface: UiSurface, lens: CommentLensState): AppState =
-    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-      case current if current.id == surface.id => current.copy(content = SurfaceContent.CommentLens(lens))
-      case current                             => current
-    }))
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(_.copy(content = SurfaceContent.CommentLens(lens)))
+      )
+    )

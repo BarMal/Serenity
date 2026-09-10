@@ -7,7 +7,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 
 class PeekOverlayTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[PeekInputEvent]:
 
-  override def converters =
+  override lazy val converters =
     List(
       LocalKeymapConverters.converter(appConfig.inputConfig.focusedKeymapConfig.peek.bindings),
       peekCharacterConverter

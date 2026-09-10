@@ -5,7 +5,7 @@ import com.serenity.keystroke.events.EditorEvent
 
 class EditorInputTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[EditorEvent]:
 
-  override def converters = List(
+  override lazy val converters = List(
     LocalKeymapConverters.converter(appConfig.inputConfig.focusedKeymapConfig.editor.bindings),
     TextCharacterConverters.characterConverter
   )

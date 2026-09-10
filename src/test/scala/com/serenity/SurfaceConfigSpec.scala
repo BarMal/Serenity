@@ -14,17 +14,27 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     PostProcessingEffect.fromConfigKey("glow") shouldBe Some(PostProcessingEffect.Glow)
   }
 
-  "SurfaceConfig" should "own the surface-related schema metadata" in {
-    SurfaceConfigSchemaKeys.currentKeys.should(contain("ui.material"))
+  "SurfaceConfig" should "own the motion-hierarchy schema metadata" in {
+    // #1406: material, post-processing, display, command-runner, text-area and viewport keys used to be duplicated
+    // here too, but `ConfigRegistry` already owned parsing/validation/writing for every one of them end-to-end, so
+    // `ConfigManager.parseConfig`'s fallback to this schema was unreachable dead code for those keys. Only the motion
+    // hierarchy has no `ConfigField` to read it back with, so it is the one thing left here.
     SurfaceConfigSchemaKeys.currentKeys.should(contain("ui.motion.cursor.speed_scale"))
-    SurfaceConfigSchemaKeys.currentKeys.should(contain("display.contextual_toolbar_mode"))
-    SurfaceConfigSchemaKeys.currentKeys.should(contain("viewport.height.max"))
+    SurfaceConfigSchemaKeys.currentKeys.should(contain("ui.motion.panel_open"))
+    SurfaceConfigSchemaKeys.currentKeys.should(contain("ui.motion.family.command_surfaces.transition"))
+    SurfaceConfigSchemaKeys.currentKeys.shouldNot(contain("ui.material"))
+    SurfaceConfigSchemaKeys.currentKeys.shouldNot(contain("display.contextual_toolbar_mode"))
+    SurfaceConfigSchemaKeys.currentKeys.shouldNot(contain("viewport.height.max"))
 
     SurfaceConfigSchemaKeys.deprecatedKeys("ui_motion_cursor_speed_scale").shouldBe("ui.motion.cursor.speed_scale")
-    SurfaceConfigSchemaKeys.deprecatedKeys("viewport_width_percent").shouldBe("viewport.width.percent")
-    SurfaceConfigSchemaKeys
-      .deprecatedKeys("display_contextual_toolbar_mode")
-      .shouldBe("display.contextual_toolbar_mode")
+    SurfaceConfigSchemaKeys.deprecatedKeys("ui_motion_command_runner").shouldBe("ui.motion.command_runner")
+    SurfaceConfigSchemaKeys.deprecatedKeys.shouldNot(contain key "viewport_width_percent")
+    SurfaceConfigSchemaKeys.deprecatedKeys.shouldNot(contain key "display_contextual_toolbar_mode")
+
+    // Retired keys are still known and parsed -- just through `ConfigRegistry` rather than this schema.
+    ConfigRegistry.allKeys.should(contain("ui.material"))
+    ConfigRegistry.allKeys.should(contain("display.contextual_toolbar_mode"))
+    ConfigRegistry.allKeys.should(contain("viewport.height.max"))
   }
 
   it should "group motion, appearance, and text display settings under AppConfig" in {
@@ -200,58 +210,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "parse surface display config entries centrally" in {
-    val commandRunnerConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "command.runner.visible.rows", "7")
-        .getOrElse(fail("command runner visible rows parse"))
-    val renderFpsConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "render_fps", "uncapped")
-        .getOrElse(fail("render fps parse"))
-    val wordWrapConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "display.word.wrap", "off")
-        .getOrElse(fail("word wrap parse"))
-    val focusedTextBodyConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "display_focused_text_body", "on")
-        .getOrElse(fail("focused text body parse"))
-    val contextualToolbarConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "display.contextual_toolbar", "disabled")
-        .getOrElse(fail("contextual toolbar parse"))
-    val toolbarModeConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "display.contextual.toolbar.mode", "both")
-        .getOrElse(fail("contextual toolbar mode parse"))
-
-    commandRunnerConfig.surfaceConfig.commandRunnerVisibleRows.shouldBe(Some(7))
-    SurfaceConfigSchemaParser
-      .parse(AppConfig.default, "command_runner.visible_rows", "auto")
-      .map(_.surfaceConfig.commandRunnerVisibleRows)
-      .shouldBe(Some(None))
-    SurfaceConfigSchemaParser
-      .parse(AppConfig.default, "command_runner.item_gap_rows", "1")
-      .map(_.surfaceConfig.commandRunnerItemGapRows)
-      .shouldBe(Some(1))
-    SurfaceConfigSchemaParser
-      .parse(AppConfig.default, "command_runner.cursor_gap_rows", "3")
-      .map(_.surfaceConfig.commandRunnerCursorGapRows)
-      .shouldBe(Some(Some(3)))
-    renderFpsConfig.surfaceConfig.renderFpsTarget.shouldBe(RenderFpsTarget.Uncapped)
-    wordWrapConfig.surfaceConfig.wordWrapEnabled.shouldBe(false)
-    focusedTextBodyConfig.surfaceConfig.focusedTextBodyEnabled.shouldBe(true)
-    contextualToolbarConfig.surfaceConfig.contextualToolbarEnabled.shouldBe(false)
-    toolbarModeConfig.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.IconAndText)
-    SurfaceConfigSchemaParser.parse(AppConfig.default, "render.fps", "turbo").shouldBe(None)
-  }
-
   it should "parse surface motion config entries centrally" in {
-    val materialConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "ui_material", "crystal")
-        .getOrElse(fail("material preset parse"))
     val motionConfig =
       SurfaceConfigSchemaParser
         .parse(AppConfig.default, "ui.motion", "reduced")
@@ -301,7 +260,6 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
         .parse(AppConfig.default, "ui_motion_ui", "smooth")
         .getOrElse(fail("ui animation parse"))
 
-    materialConfig.surfaceConfig.materialPreset.shouldBe(MaterialPreset.Crystal)
     motionConfig.surfaceConfig.motionPreset.shouldBe(MotionPreset.Reduced)
     speedScaleConfig.surfaceConfig.elementTransitionSpeedScale.shouldBe(1.75)
     editorTextSpeedScaleConfig.surfaceConfig.editorTextTransitionSpeedScale.shouldBe(Some(0.5))
@@ -321,79 +279,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     SurfaceConfigSchemaParser.parse(AppConfig.default, "ui.motion", "turbo").shouldBe(None)
   }
 
-  it should "validate surface display config entries centrally" in {
-    SurfaceConfigSchemaParser.invalidValue("command_runner.visible_rows", "7").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("command_runner.visible_rows", "0").shouldBe(true)
-    SurfaceConfigSchemaParser.invalidValue("render.fps", "uncapped").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("render.fps", "turbo").shouldBe(true)
-    SurfaceConfigSchemaParser.invalidValue("display.word_wrap", "off").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("display.word_wrap", "maybe").shouldBe(true)
-    SurfaceConfigSchemaParser.invalidValue("display.focused_text_body", "on").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("display.contextual_toolbar", "disabled").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("display.contextual_toolbar_mode", "both").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("display.contextual_toolbar_mode", "pictures").shouldBe(true)
-  }
-
-  it should "parse surface layout config entries centrally" in {
-    val leftInsetConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "text_area.left.percent", "20")
-        .getOrElse(fail("left inset parse"))
-    val rightInsetConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "text.area.right.percent", "10")
-        .getOrElse(fail("right inset parse"))
-    val topInsetConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "text_area_top_percent", "5")
-        .getOrElse(fail("top inset parse"))
-    val bottomInsetConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "text_area.bottom.percent", "15")
-        .getOrElse(fail("bottom inset parse"))
-    val widthPercentConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "viewport_width_percent", "80")
-        .getOrElse(fail("viewport width percent parse"))
-    val widthMaxConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "viewport.width.max", "")
-        .getOrElse(fail("viewport width max parse"))
-    val heightPercentConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "viewport.height.percent", "100")
-        .getOrElse(fail("viewport height percent parse"))
-    val heightMaxConfig =
-      SurfaceConfigSchemaParser
-        .parse(AppConfig.default, "viewport_height_max", "50")
-        .getOrElse(fail("viewport height max parse"))
-
-    leftInsetConfig.surfaceConfig.textAreaInsets.leftPercent.shouldBe(20.0)
-    rightInsetConfig.surfaceConfig.textAreaInsets.rightPercent.shouldBe(10.0)
-    topInsetConfig.surfaceConfig.textAreaInsets.topPercent.shouldBe(5.0)
-    bottomInsetConfig.surfaceConfig.textAreaInsets.bottomPercent.shouldBe(15.0)
-    widthPercentConfig.surfaceConfig.viewportSizing.width.percentValue.shouldBe(80.0)
-    widthMaxConfig.surfaceConfig.viewportSizing.width.maxCells.shouldBe(None)
-    heightPercentConfig.surfaceConfig.viewportSizing.height.percentValue.shouldBe(100.0)
-    heightMaxConfig.surfaceConfig.viewportSizing.height.maxCells.shouldBe(Some(50))
-    SurfaceConfigSchemaParser.parse(AppConfig.default, "viewport.width.percent", "0").shouldBe(None)
-  }
-
-  it should "validate surface layout config entries centrally" in {
-    SurfaceConfigSchemaParser.invalidValue("text_area.left.percent", "20").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("text_area.left.percent", "60").shouldBe(true)
-    SurfaceConfigSchemaParser.invalidValue("viewport.width.percent", "80").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("viewport.width.percent", "0").shouldBe(true)
-    SurfaceConfigSchemaParser.invalidValue("viewport.width.max", "").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("viewport.width.max", "0").shouldBe(true)
-    SurfaceConfigSchemaParser.invalidValue("viewport.height.percent", "100").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("viewport.height.max", "50").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("viewport.height.max", "0").shouldBe(true)
-  }
-
   it should "validate surface motion config entries centrally" in {
-    SurfaceConfigSchemaParser.invalidValue("ui.material", "crystal").shouldBe(false)
-    SurfaceConfigSchemaParser.invalidValue("ui.material", "neon").shouldBe(true)
     SurfaceConfigSchemaParser.invalidValue("ui.motion", "reduced").shouldBe(false)
     SurfaceConfigSchemaParser.invalidValue("ui.motion", "turbo").shouldBe(true)
     SurfaceConfigSchemaParser.invalidValue("ui.motion.speed_scale", "1.75").shouldBe(false)

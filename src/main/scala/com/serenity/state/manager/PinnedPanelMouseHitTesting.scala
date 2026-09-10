@@ -144,10 +144,8 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     focusPanel: Boolean
   ): AppState =
     val updatedContent = SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path))
-    val updatedSurfaces = state.runtime.uiSurfaces.map {
-      case surface if surface.id == hit.surface.id => surface.copy(content = updatedContent)
-      case surface                                 => surface
-    }
+    val updatedSurfaces =
+      state.runtime.uiSurfaces.replacedWhere(_.id == hit.surface.id)(_.copy(content = updatedContent))
     val nextFocus = if focusPanel then Focus.Surface(hit.surface.id) else state.persisted.focus
     state.copy(
       persisted = state.persisted.copy(focus = nextFocus),
@@ -160,12 +158,13 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     symbols: List[Symbol],
     location: Location
   ): AppState =
-    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-      case existing if existing.id == surface.id =>
-        existing.copy(content = SurfaceContent.Outline(symbols, Some(location)))
-      case existing =>
-        existing
-    }))
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+          _.copy(content = SurfaceContent.Outline(symbols, Some(location)))
+        )
+      )
+    )
 
   private def selectPinnedCommentsLocation(
     state: AppState,
@@ -173,12 +172,13 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     symbols: List[Symbol],
     location: Location
   ): AppState =
-    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-      case existing if existing.id == surface.id =>
-        existing.copy(content = SurfaceContent.Comments(symbols, Some(location)))
-      case existing =>
-        existing
-    }))
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+          _.copy(content = SurfaceContent.Comments(symbols, Some(location)))
+        )
+      )
+    )
 
   private def selectPinnedDiagnosticsLocation(
     state: AppState,
@@ -186,12 +186,13 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     issues: List[Diagnostic],
     location: Location
   ): AppState =
-    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-      case existing if existing.id == surface.id =>
-        existing.copy(content = SurfaceContent.Diagnostics(issues, Some(location)))
-      case existing =>
-        existing
-    }))
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+          _.copy(content = SurfaceContent.Diagnostics(issues, Some(location)))
+        )
+      )
+    )
 
   private def pinnedDirectoryMouseHitAt(
     event: MouseInputEvent,

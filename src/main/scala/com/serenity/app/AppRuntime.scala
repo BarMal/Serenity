@@ -201,6 +201,7 @@ object AppRuntime:
           )
         )
         animationTickCadence <- Ref.of[IO, AnimationTickCadence](AnimationTickCadence.empty)
+        translatorCache      <- Ref.of[IO, Option[FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
         inputFunnel = inputEventPhase(
@@ -210,7 +211,8 @@ object AppRuntime:
           checkResizeAndHandle,
           cursorVisible,
           breathIndex,
-          emitDamage
+          emitDamage,
+          translatorCache
         )
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
@@ -356,7 +358,10 @@ object AppRuntime:
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
-    emitDamage: Damage => IO[Unit]
+    emitDamage: Damage => IO[Unit],
+    translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]] = Ref.unsafe[IO, Option[FocusedTranslatorCacheEntry]](
+      None
+    )
   )(using balance: com.serenity.rope.Balance): Stream[IO, Event] => Stream[IO, Unit] =
     _.evalMap { event =>
       for
@@ -368,13 +373,18 @@ object AppRuntime:
             observeWindowSitterTyping(event, stateManager) >>
             stateManager.applyEvent(event) >>
             ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
-            refreshFocusedInputTranslator(stateManager, inputRouter) >>
+            refreshFocusedInputTranslator(stateManager, inputRouter, translatorCache) >>
             resetCursorActivity(cursorVisible, breathIndex)
         after           <- stateManager.getCurrentState
         afterAnimations <- stateManager.getBufferAnimations
         _               <- emitDamage(DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations))
       yield ()
     }.drain
+
+  /** Keyed on `AppConfig` identity (structural equality): the focused-translator set changes only when the config does,
+    * far less often than every keystroke/mouse-move that flows through `refreshFocusedInputTranslator` (issue #1409).
+    */
+  private[serenity] type FocusedTranslatorCacheEntry = (AppConfig, FocusedInputTranslator.TranslatorSet)
 
   private[serenity] def observeWindowSitterTyping(
     event: Event,
@@ -402,11 +412,21 @@ object AppRuntime:
 
   private def refreshFocusedInputTranslator(
     stateManager: StateReader,
-    inputRouter: InputRouter[IO, Event]
+    inputRouter: InputRouter[IO, Event],
+    translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]]
   ): IO[Unit] =
-    stateManager.getCurrentState.flatMap(state =>
-      inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state))
-    )
+    stateManager.getCurrentState.flatMap { state =>
+      val config = state.persisted.config
+      translatorCache.get
+        .flatMap {
+          case Some((cachedConfig, cachedTranslators)) if cachedConfig == config =>
+            IO.pure(cachedTranslators)
+          case _ =>
+            val translators = FocusedInputTranslator.TranslatorSet.forConfig(config)
+            translatorCache.set(Some(config -> translators)).as(translators)
+        }
+        .flatMap(translators => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state, translators)))
+    }
 
   private[serenity] def fastRenderPhase(
     stateManager: StateReader,

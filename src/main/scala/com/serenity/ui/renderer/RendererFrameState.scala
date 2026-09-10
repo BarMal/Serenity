@@ -3,8 +3,8 @@ package com.serenity.ui.renderer
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
-import scala.jdk.CollectionConverters.*
-
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -43,10 +43,6 @@ final case class RenderInputs(
   * enough to know when that accumulation cannot be trusted on its own: the set of panes actually drawn (a pane can
   * appear or disappear -- e.g. an empty buffer gaining content -- without the layout reference changing, which is
   * `paneChromeDamage`'s usual signal for that), and the non-`AppState` [[RenderInputs]] above.
-  *
-  * Weak keys: the base image pool recycles a small number of images, and an image the pool drops must not be held alive
-  * by this cache. Access is synchronised because the render thread is not guaranteed to be a single thread across the
-  * app's lifetime.
   */
 final case class DrawState(paneIds: Set[PaneId], inputs: RenderInputs)
 
@@ -112,29 +108,93 @@ final case class PreparedScene(
       uiMetrics == candidateUiMetrics &&
       viewportSize == candidateViewportSize
 
+/** A `Ref[IO, Map[K, V]]`-backed cache bounded to [[RendererFrameState.PerCacheCapacity]] most-recently-written
+  * entries, standing in for `java.util.WeakHashMap`'s GC-driven eviction (see that constant's doc comment for why a
+  * recency bound is an equivalent, and simpler, way to keep these process-wide caches from growing without limit).
+  * `Ref.modify`'s CAS retry loop replaces the manual `synchronized` blocks this module used to need for the same
+  * "render thread isn't guaranteed to be one thread" reason; every accessor below runs its `IO` synchronously
+  * (`unsafeRunSync`) so callers keep the module's long-standing synchronous API.
+  */
+final private class BoundedRefCache[K, V](capacity: Int):
+  private case class Contents(entries: Map[K, V], order: Vector[K])
+
+  private val state: Ref[IO, Contents] = Ref.unsafe(Contents(Map.empty, Vector.empty))
+
+  private def bounded(contents: Contents): Contents =
+    if contents.order.size <= capacity then contents
+    else
+      val dropCount = contents.order.size - capacity
+      val dropped   = contents.order.take(dropCount)
+      Contents(contents.entries -- dropped, contents.order.drop(dropCount))
+
+  def get(key: K): Option[V] =
+    state.get.map(_.entries.get(key)).unsafeRunSync()
+
+  def snapshot: Map[K, V] =
+    state.get.map(_.entries).unsafeRunSync()
+
+  def put(key: K, value: V): Unit =
+    state
+      .update(c => bounded(Contents(c.entries.updated(key, value), c.order.filterNot(_ == key) :+ key)))
+      .unsafeRunSync()
+
+  def remove(key: K): Unit =
+    state.update(c => Contents(c.entries - key, c.order.filterNot(_ == key))).unsafeRunSync()
+
+  /** Rewrites every entry at once (e.g. folding damage into several tracked identities together) rather than one key at
+    * a time.
+    */
+  def replaceAll(f: Map[K, V] => Map[K, V]): Unit =
+    modify(entries => (f(entries), ()))
+
+  /** As [[cats.effect.Ref.modify]]: transforms the whole map and reports a value computed alongside that transform,
+    * atomically.
+    */
+  def modify[A](f: Map[K, V] => (Map[K, V], A)): A =
+    state
+      .modify { c =>
+        val (nextEntries, result) = f(c.entries)
+        val nextOrder = c.order.filter(nextEntries.contains) ++ nextEntries.keySet.diff(c.order.toSet).toVector
+        (bounded(Contents(nextEntries, nextOrder)), result)
+      }
+      .unsafeRunSync()
+
 /** Per-frame caches consulted across the whole module: the prepared render plan a cursor-only redraw can reuse, the
   * accumulated repaint damage a persisting surface hasn't drawn yet, and the previous frame's floating-panel rects/pane
-  * snapshots later frames diff against. All the module's mutable, synchronized bookkeeping lives here, in one place,
-  * regardless of which render entry point or frame-planning step reads or updates it.
+  * snapshots later frames diff against. All the module's mutable bookkeeping lives here, behind [[BoundedRefCache]], in
+  * one place, regardless of which render entry point or frame-planning step reads or updates it.
   */
 object RendererFrameState:
+
+  /** Per-cache capacity for every [[BoundedRefCache]] below. These caches are process-wide singletons keyed by object
+    * identity (`SurfaceContentIdentity`, `ScreenIdentity`, `RenderSurface`) with no notion of when their key is done
+    * being useful -- the retired `WeakHashMap`s handled that by letting an entry disappear once nothing else in the app
+    * referenced its key, which also kept a recycled image-pool identity or a long-lived test run's surfaces from
+    * pinning cache entries forever. A `Ref`-backed `Map` cannot observe reachability the way a weak key can, so this
+    * bounds growth the other safe way instead: capping each cache to its most recently *written* entries and evicting
+    * the rest. Eviction is safe (not just convenient) because every reader here already treats an untracked identity
+    * exactly like one that has never been seen -- `drainBufferDamage`/`drainScreenDamage` report `Damage.Everything`,
+    * `drawStateChanged`/`screenPaneIdsChanged` report a change, and a cached layer image simply isn't reused. So an
+    * evicted-but-still-live surface costs one extra full redraw the next time it's touched, not incorrect output. 64
+    * mirrors the bound [[com.serenity.state.manager.AuthoritativeUiScene]]'s own `prepared` cache already uses for the
+    * same "no real bound, but must not grow forever" reason, comfortably above the handful of surfaces/screens a single
+    * window (or a single test) ever has live at once.
+    */
+  val PerCacheCapacity: Int = 64
 
   /** Frame state below is kept per surface, keyed by the same [[SurfaceContentIdentity]] the damage accumulator uses:
     * what one surface drew last frame says nothing about what another one preserves, and a single slot shared by every
     * surface made whichever surface painted most recently the "previous frame" for all of them. A surface with no
     * persistence key preserves nothing between frames, so it has no previous frame to remember and none is kept for it
     * -- it redraws in full, which is what a non-persisting surface does anyway.
-    *
-    * Weak keys and synchronised access for the reasons [[bufferDamage]] documents: the base image pool recycles its
-    * images, and the render thread is not guaranteed to be one thread for the app's lifetime.
     */
-  private val preparedScenes = new java.util.WeakHashMap[SurfaceContentIdentity, PreparedScene]()
+  private val preparedScenes = new BoundedRefCache[SurfaceContentIdentity, PreparedScene](PerCacheCapacity)
 
   def preparedSceneFor(surface: RenderSurface): Option[PreparedScene] =
-    surface.persistentContentKey.flatMap(key => preparedScenes.synchronized(Option(preparedScenes.get(key))))
+    surface.persistentContentKey.flatMap(preparedScenes.get)
 
   def rememberPreparedScene(surface: RenderSurface, scene: PreparedScene): Unit =
-    surface.persistentContentKey.foreach(key => preparedScenes.synchronized { val _ = preparedScenes.put(key, scene) })
+    surface.persistentContentKey.foreach(key => preparedScenes.put(key, scene))
 
   /** Screen-pixel rects the floating panels (`renderFloatingPanels`'s `overlays`) occupied on the *previous* frame a
     * surface painted, keyed by surface id within it. `planFrame`/`dirtyRowsFor` read this before `renderFloatingPanels`
@@ -143,15 +203,13 @@ object RendererFrameState:
     * of `renderFloatingPanels` once this frame's rects are known, ready for the next frame's `planFrame` call.
     */
   private val previousFloatingSurfaceRects =
-    new java.util.WeakHashMap[SurfaceContentIdentity, Map[SurfaceId, PixelRect]]()
+    new BoundedRefCache[SurfaceContentIdentity, Map[SurfaceId, PixelRect]](PerCacheCapacity)
 
   def previousFloatingSurfaceRectsFor(key: SurfaceContentIdentity): Map[SurfaceId, PixelRect] =
-    previousFloatingSurfaceRects.synchronized(Option(previousFloatingSurfaceRects.get(key))).getOrElse(Map.empty)
+    previousFloatingSurfaceRects.get(key).getOrElse(Map.empty)
 
   def rememberFloatingSurfaceRects(surface: RenderSurface, rects: Map[SurfaceId, PixelRect]): Unit =
-    surface.persistentContentKey.foreach { key =>
-      previousFloatingSurfaceRects.synchronized { val _ = previousFloatingSurfaceRects.put(key, rects) }
-    }
+    surface.persistentContentKey.foreach(key => previousFloatingSurfaceRects.put(key, rects))
 
   /** Each pane's [[TextLayoutSnapshot]] as of the *previous* frame planned for a surface, keyed by pane id within it --
     * `dirtyRowsFor` reads this (via `planFrame`, which always runs before this state is updated for the frame being
@@ -162,26 +220,25 @@ object RendererFrameState:
     * [[previousFloatingSurfaceRects]] documents above, except the snapshot itself (not a later paint step) is already
     * known by the time `planFrame` runs, so there's no need to wait for painting to record it.
     */
-  private val previousSnapshots = new java.util.WeakHashMap[SurfaceContentIdentity, Map[PaneId, TextLayoutSnapshot]]()
+  private val previousSnapshots =
+    new BoundedRefCache[SurfaceContentIdentity, Map[PaneId, TextLayoutSnapshot]](PerCacheCapacity)
 
   def previousSnapshotsFor(key: SurfaceContentIdentity): Map[PaneId, TextLayoutSnapshot] =
-    previousSnapshots.synchronized(Option(previousSnapshots.get(key))).getOrElse(Map.empty)
+    previousSnapshots.get(key).getOrElse(Map.empty)
 
   def rememberSnapshots(surface: RenderSurface, snapshots: Map[PaneId, TextLayoutSnapshot]): Unit =
-    surface.persistentContentKey.foreach { key =>
-      previousSnapshots.synchronized { val _ = previousSnapshots.put(key, snapshots) }
-    }
+    surface.persistentContentKey.foreach(key => previousSnapshots.put(key, snapshots))
 
   /** Drops `key`'s remembered previous-frame snapshots and floating-panel rects -- used by
     * [[RendererFramePlanner.forgetPreservedContent]] when a surface's preserved pixels are no longer valid, since both
     * are reuse promises about pixels that surface no longer holds.
     */
   def forgetPreviousFrameState(key: SurfaceContentIdentity): Unit =
-    previousSnapshots.synchronized { val _ = previousSnapshots.remove(key) }
-    previousFloatingSurfaceRects.synchronized { val _ = previousFloatingSurfaceRects.remove(key) }
+    previousSnapshots.remove(key)
+    previousFloatingSurfaceRects.remove(key)
 
-  val bufferDamage    = new java.util.WeakHashMap[SurfaceContentIdentity, Damage]()
-  val bufferDrawState = new java.util.WeakHashMap[SurfaceContentIdentity, DrawState]()
+  private val bufferDamage    = new BoundedRefCache[SurfaceContentIdentity, Damage](PerCacheCapacity)
+  private val bufferDrawState = new BoundedRefCache[SurfaceContentIdentity, DrawState](PerCacheCapacity)
 
   /** Which screen each tracked buffer identity was last drawn for, so [[accumulateBufferDamage]] only folds a frame's
     * damage into buffers that actually belong to the same screen -- e.g. the same `SwingWindow`'s own two pooled
@@ -191,30 +248,69 @@ object RendererFrameState:
     * render session -- another window, or another independent `render` call in the same process -- would otherwise have
     * its damage silently mixed into this one's, and vice versa.
     */
-  val bufferScreen = new java.util.WeakHashMap[SurfaceContentIdentity, ScreenIdentity]()
+  private val bufferScreen = new BoundedRefCache[SurfaceContentIdentity, ScreenIdentity](PerCacheCapacity)
 
   /** Distinct from [[bufferDamage]] because base images alternate: the pixels a surface preserves come from two frames
     * ago, while the screen shows the last one published.
     */
-  val screenDamage  = new java.util.WeakHashMap[ScreenIdentity, Damage]()
-  val screenPaneIds = new java.util.WeakHashMap[ScreenIdentity, Set[PaneId]]()
+  private val screenDamage  = new BoundedRefCache[ScreenIdentity, Damage](PerCacheCapacity)
+  private val screenPaneIds = new BoundedRefCache[ScreenIdentity, Set[PaneId]](PerCacheCapacity)
 
   /** Keyed by the [[RenderSurface]] a frame was painted onto, exactly like [[bufferScreen]] above and for the same
     * reason: a single JVM-wide slot would let one surface's cached modal image leak into another surface's frame --
     * harmless in production (there is only ever one real window) but a real hazard for any other concurrently running
     * render session in the same process, tests included, since these caches are process-wide singletons every suite
-    * shares. A `WeakHashMap` (rather than the `AtomicReference` this used to be) lets a surface's entry disappear once
-    * nothing else references it, instead of pinning every `RenderSurface` a process ever rendered to for its whole
-    * lifetime.
+    * shares.
     */
-  val modalLayerBuffers = new java.util.WeakHashMap[RenderSurface, CachedModalLayer]()
+  private val modalLayerBuffers = new BoundedRefCache[RenderSurface, CachedModalLayer](PerCacheCapacity)
+
+  def cachedModalLayerFor(surface: RenderSurface): Option[CachedModalLayer] = modalLayerBuffers.get(surface)
+
+  def rememberModalLayerBuffer(surface: RenderSurface, layer: CachedModalLayer): Unit =
+    modalLayerBuffers.put(surface, layer)
+
+  def forgetModalLayerBuffer(surface: RenderSurface): Unit = modalLayerBuffers.remove(surface)
 
   /** Keyed by [[RenderSurface]] first and [[SurfaceId]] second, for the same cross-surface-leak reason as
     * [[modalLayerBuffers]] -- a bare `Map[SurfaceId, CachedPanelLayer]` shared process-wide let any two independently
     * rendered surfaces that happen to reuse the same `SurfaceId` (unremarkable: tests across many specs all use
     * `SurfaceId("outline")`) stomp on each other's cached panel image.
     */
-  val panelLayerBuffers = new java.util.WeakHashMap[RenderSurface, Map[SurfaceId, CachedPanelLayer]]()
+  private val panelLayerBuffers = new BoundedRefCache[RenderSurface, Map[SurfaceId, CachedPanelLayer]](PerCacheCapacity)
+
+  def cachedPanelLayersFor(surface: RenderSurface): Map[SurfaceId, CachedPanelLayer] =
+    panelLayerBuffers.get(surface).getOrElse(Map.empty)
+
+  def rememberPanelLayer(surface: RenderSurface, surfaceId: SurfaceId, layer: CachedPanelLayer): Unit =
+    panelLayerBuffers.replaceAll { tracked =>
+      val current = tracked.getOrElse(surface, Map.empty[SurfaceId, CachedPanelLayer])
+      tracked.updated(surface, current.updated(surfaceId, layer))
+    }
+
+  /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry -- a
+    * dismissed panel's cache would otherwise sit in that inner `Map[SurfaceId, _]` forever ([[SurfaceId]] is a plain
+    * value, not an object this module can bound the lifetime of any other way).
+    */
+  def pruneStalePanelLayers(surface: RenderSurface, activeIds: Set[SurfaceId]): Unit =
+    panelLayerBuffers.replaceAll { tracked =>
+      val current = tracked.getOrElse(surface, Map.empty[SurfaceId, CachedPanelLayer])
+      tracked.updated(surface, current.filter { case (id, _) => activeIds.contains(id) })
+    }
+
+  /** Drops every buffer-scoped cache entry for `key` -- used by [[RendererFramePlanner.forgetPreservedContent]]
+    * alongside [[forgetPreviousFrameState]] when a surface's preserved pixels are no longer valid.
+    */
+  def forgetBufferState(key: SurfaceContentIdentity): Unit =
+    bufferDamage.remove(key)
+    bufferScreen.remove(key)
+    bufferDrawState.remove(key)
+
+  /** Drops every screen-scoped cache entry for `screenToken`, the [[forgetBufferState]] counterpart for the screen
+    * rather than a preserving surface.
+    */
+  def forgetScreenState(screenToken: ScreenIdentity): Unit =
+    screenDamage.remove(screenToken)
+    screenPaneIds.remove(screenToken)
 
   /** Folds `damage` into every buffer identity already being tracked for `output`'s screen (every identity, if there is
     * no output to scope by), via [[DamageAccumulator.accumulateBuffers]] -- called unconditionally on every frame,
@@ -222,14 +318,14 @@ object RendererFrameState:
     * several frames still accrues what each of them changed.
     */
   def accumulateBufferDamage(output: Option[FrameOutput], damage: Damage): Unit =
-    bufferDamage.synchronized {
-      val tracked = mapAsScala(bufferDamage)
+    val screenOwners = bufferScreen.snapshot
+    bufferDamage.replaceAll { tracked =>
       val scoped = output match
         case None => tracked
         case Some(value) =>
-          tracked.filter { case (key, _) => Option(bufferScreen.get(key)).forall(_ == value.screenToken) }
+          tracked.filter { case (key, _) => screenOwners.get(key).forall(_ == value.screenToken) }
       val updated = DamageAccumulator.accumulateBuffers(scoped, damage)
-      updated.foreach { case (key, value) => val _ = bufferDamage.put(key, value) }
+      tracked ++ updated
     }
 
   /** Reports and resets what has accumulated for `persistenceKey` since it was last drawn into, via
@@ -238,13 +334,13 @@ object RendererFrameState:
     * `output`'s screen as this identity's owner, so future [[accumulateBufferDamage]] calls scope correctly.
     */
   def drainBufferDamage(output: Option[FrameOutput], persistenceKey: SurfaceContentIdentity): Damage =
-    bufferDamage.synchronized {
-      output.foreach(value => bufferScreen.put(persistenceKey, value.screenToken))
-      val wasTracked          = bufferDamage.containsKey(persistenceKey)
-      val (observed, updated) = DamageAccumulator.observeBufferDraw(mapAsScala(bufferDamage), persistenceKey)
-      updated.foreach { case (key, value) => val _ = bufferDamage.put(key, value) }
-      if wasTracked then observed else Damage.Everything
+    output.foreach(value => bufferScreen.put(persistenceKey, value.screenToken))
+    val wasTracked = bufferDamage.get(persistenceKey).isDefined
+    val observed = bufferDamage.modify { tracked =>
+      val (obs, updated) = DamageAccumulator.observeBufferDraw(tracked, persistenceKey)
+      (updated, obs)
     }
+    if wasTracked then observed else Damage.Everything
 
   /** Records `paneIds`/`inputs` as this identity's current draw state and reports whether either differs from what was
     * remembered -- a pane appearing or disappearing without a layout-reference change (an empty buffer gaining
@@ -256,11 +352,10 @@ object RendererFrameState:
     paneIds: Set[PaneId],
     inputs: RenderInputs
   ): Boolean =
-    bufferDrawState.synchronized {
-      val next     = DrawState(paneIds, inputs)
-      val previous = Option(bufferDrawState.get(persistenceKey))
-      val _        = bufferDrawState.put(persistenceKey, next)
-      !previous.contains(next)
+    val next = DrawState(paneIds, inputs)
+    bufferDrawState.modify { tracked =>
+      val previous = tracked.get(persistenceKey)
+      (tracked.updated(persistenceKey, next), !previous.contains(next))
     }
 
   /** Folds `damage` into the screen's own accumulated total for `output`'s screen, via
@@ -269,9 +364,9 @@ object RendererFrameState:
     */
   def accumulateScreenDamage(output: Option[FrameOutput], damage: Damage): Unit =
     output.foreach { value =>
-      screenDamage.synchronized {
-        val current = Option(screenDamage.get(value.screenToken)).getOrElse(Damage.Nothing)
-        val _       = screenDamage.put(value.screenToken, DamageAccumulator.accumulateScreen(current, damage))
+      screenDamage.replaceAll { tracked =>
+        val current = tracked.getOrElse(value.screenToken, Damage.Nothing)
+        tracked.updated(value.screenToken, DamageAccumulator.accumulateScreen(current, damage))
       }
     }
 
@@ -283,13 +378,13 @@ object RendererFrameState:
     output match
       case None => Damage.Everything
       case Some(value) =>
-        screenDamage.synchronized {
-          val wasTracked        = screenDamage.containsKey(value.screenToken)
-          val current           = Option(screenDamage.get(value.screenToken)).getOrElse(Damage.Nothing)
-          val (observed, reset) = DamageAccumulator.observeScreenPublish(current)
-          val _                 = screenDamage.put(value.screenToken, reset)
-          if wasTracked then observed else Damage.Everything
+        val wasTracked = screenDamage.get(value.screenToken).isDefined
+        val observed = screenDamage.modify { tracked =>
+          val current      = tracked.getOrElse(value.screenToken, Damage.Nothing)
+          val (obs, reset) = DamageAccumulator.observeScreenPublish(current)
+          (tracked.updated(value.screenToken, reset), obs)
         }
+        if wasTracked then observed else Damage.Everything
 
   /** As [[drawStateChanged]], but for the screen's own published pane set -- distinct because the screen shows the
     * previous frame while a surface's own preserved pixels come from the one before that (see [[screenDamage]]).
@@ -298,14 +393,10 @@ object RendererFrameState:
     output match
       case None => true
       case Some(value) =>
-        screenPaneIds.synchronized {
-          val previous = Option(screenPaneIds.get(value.screenToken))
-          val _        = screenPaneIds.put(value.screenToken, paneIds)
-          !previous.contains(paneIds)
+        screenPaneIds.modify { tracked =>
+          val previous = tracked.get(value.screenToken)
+          (tracked.updated(value.screenToken, paneIds), !previous.contains(paneIds))
         }
-
-  private def mapAsScala(map: java.util.Map[SurfaceContentIdentity, Damage]): Map[SurfaceContentIdentity, Damage] =
-    map.asScala.toMap
 
   /** Logical pixels map one-to-one onto canvas component pixels: the canvas scales the frame image back to its own
     * logical size when it paints, so a region measured against the frame is already in component coordinates.

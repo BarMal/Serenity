@@ -1,7 +1,9 @@
 package com.serenity.ui.theme
 
-import java.util.LinkedHashMap
+import scala.collection.immutable.ListMap
 
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref}
 import com.serenity.lsp.config.LanguageId
 
 object ThemeManager:
@@ -16,12 +18,28 @@ object ThemeManager:
   private val MaxHighlightCacheEntries = 4096
   private val MaxLexIndexCacheEntries  = 64
 
-  private val highlightCache =
-    new LinkedHashMap[(String, Theme, Option[LanguageId], LexState), List[StyledText]](16, 0.75f, true):
-      override def removeEldestEntry(
-        eldest: java.util.Map.Entry[(String, Theme, Option[LanguageId], LexState), List[StyledText]]
-      ): Boolean =
-        size() > MaxHighlightCacheEntries
+  private type HighlightKey = (String, Theme, Option[LanguageId], LexState)
+
+  /** Bounded, `Ref`-backed replacement for the previous `LinkedHashMap` + `synchronized` highlight/lex caches (issue
+    * #1412). `highlightLine`/`lineStartStates` stay plain synchronous `def`s: both are called from deep inside the
+    * Java2D/terminal paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its own thread rather than
+    * running inside an IO fiber, so making them return `IO` would mean threading `IO` through the entire rendering call
+    * graph -- well beyond this package, and out of scope for this issue. `unsafeRunSync()` below bridges that
+    * synchronous boundary to `Ref`'s `IO`-typed API; a `Ref` get/update is a plain in-memory compare-and-set with no
+    * real suspension, so this carries none of the thread-pool-exhaustion risk `unsafeRunSync` usually warrants
+    * elsewhere. Eviction here is bounded-FIFO (oldest inserted, not oldest accessed) rather than the previous
+    * access-order LRU -- a deliberate simplification, since a `ListMap` has no cheap way to bump an existing key to
+    * "most recently used" without an extra write on every cache *hit* too.
+    */
+  private val highlightCacheRef: Ref[IO, ListMap[HighlightKey, List[StyledText]]] =
+    Ref.unsafe(ListMap.empty)
+
+  private val lexIndexCacheRef: Ref[IO, ListMap[String, LexIndexEntry]] =
+    Ref.unsafe(ListMap.empty)
+
+  private def boundedPut[K, V](cache: ListMap[K, V], key: K, value: V, maxEntries: Int): ListMap[K, V] =
+    val updated = (cache - key) + (key -> value)
+    if updated.size <= maxEntries then updated else updated.drop(updated.size - maxEntries)
 
   /** The subset of languages that get token-aware highlighting today. Every other language, including no declared
     * language at all, renders as plain text rather than being coerced through Scala-shaped lexical rules -- see issue
@@ -44,10 +62,10 @@ object ThemeManager:
     startState: LexState = LexState.Default
   ): List[StyledText] =
     val key    = (line, theme, language, startState)
-    val cached = highlightCache.synchronized(Option(highlightCache.get(key)))
+    val cached = highlightCacheRef.get.map(_.get(key)).unsafeRunSync()
     cached.getOrElse {
       val computed = computeHighlightLine(line, theme, language, startState)
-      highlightCache.synchronized(highlightCache.put(key, computed): Unit)
+      highlightCacheRef.update(boundedPut(_, key, computed, MaxHighlightCacheEntries)).unsafeRunSync()
       computed
     }
 
@@ -85,19 +103,16 @@ object ThemeManager:
     if !isTokenAware(language) then Vector.fill(lines.length)(LexState.Default)
     else
       val linesVec = lines.toVector
-      val previous = lexIndexCache.synchronized(Option(lexIndexCache.get(documentKey)))
+      val previous = lexIndexCacheRef.get.map(_.get(documentKey)).unsafeRunSync()
       val computed = previous match
         case Some(entry) => incrementalStates(entry, linesVec)
         case None        => fullStates(linesVec)
-      lexIndexCache.synchronized(lexIndexCache.put(documentKey, LexIndexEntry(linesVec, computed)): Unit)
+      lexIndexCacheRef
+        .update(boundedPut(_, documentKey, LexIndexEntry(linesVec, computed), MaxLexIndexCacheEntries))
+        .unsafeRunSync()
       computed
 
   final private case class LexIndexEntry(lines: Vector[String], startStates: Vector[LexState])
-
-  private val lexIndexCache =
-    new LinkedHashMap[String, LexIndexEntry](16, 0.75f, true):
-      override def removeEldestEntry(eldest: java.util.Map.Entry[String, LexIndexEntry]): Boolean =
-        size() > MaxLexIndexCacheEntries
 
   private def fullStates(lines: Vector[String]): Vector[LexState] =
     lines.scanLeft(LexState.Default)((state, line) => tokenize(line, state)._2).dropRight(1)

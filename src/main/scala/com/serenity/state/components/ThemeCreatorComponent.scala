@@ -67,12 +67,13 @@ class ThemeCreatorComponent extends TypedFocusedComponent[ModalInputEvent]:
     surface: UiSurface,
     creatorState: com.serenity.ui.theme.config.ThemeCreatorState
   ): AppState =
-    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-      case current if current.id == surface.id =>
-        current.copy(content = SurfaceContent.ThemeCreator(creatorState))
-      case current =>
-        current
-    }))
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+          _.copy(content = SurfaceContent.ThemeCreator(creatorState))
+        )
+      )
+    )
 
   private def dismissAndRestore(
     state: AppState,

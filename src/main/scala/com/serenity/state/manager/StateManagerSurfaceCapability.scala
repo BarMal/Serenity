@@ -74,7 +74,7 @@ final private[manager] class StateManagerSurfaceCapability(
         case Some(surface) =>
           val nextSurface = surface.copy(content = SurfaceContent.Terminal(text, text.length))
           state.copy(runtime =
-            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
+            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(nextSurface))
           ) -> Nil
         case _ =>
           val result = PanelStateReducer.pin(content, position, size, state)
@@ -149,7 +149,7 @@ final private[manager] class StateManagerSurfaceCapability(
           case Some(surface) =>
             val nextSurface = surface.copy(content = SurfaceContent.DirectoryTree(tree, selectedPath = None))
             state.copy(runtime =
-              state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
+              state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(nextSurface))
             ) -> Nil
           case None =>
             val result = PanelStateReducer.pin(content, PanelPosition.Left, 30, state)
@@ -174,7 +174,8 @@ final private[manager] class StateManagerSurfaceCapability(
               val newSurface = surface.copy(content = newContent)
               Some(
                 state.copy(runtime =
-                  state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface)
+                  state.runtime
+                    .copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(newSurface))
                 )
               )
             case _ => None
@@ -209,7 +210,7 @@ final private[manager] class StateManagerSurfaceCapability(
                 )
                 currentState.copy(
                   runtime = currentState.runtime.copy(
-                    uiSurfaces = currentState.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface
+                    uiSurfaces = currentState.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(updatedSurface)
                   )
                 )
               case _ =>

@@ -74,18 +74,6 @@ object AnimatedCell:
       case Nil          => List.empty
       case head :: tail => tail :+ head
 
-  def fromForegroundInterpolation(
-    char: Char,
-    startColor: Color,
-    endColor: Color,
-    steps: Int
-  ): AnimatedCell =
-    AnimatedCell(
-      content = Some(char),
-      foregroundSteps = RgbInterpolator.interpolateRgba(startColor, endColor, steps),
-      backgroundSteps = List.empty
-    )
-
   def fromThemeTransition(
     oldForeground: Color,
     newForeground: Color,
@@ -121,14 +109,3 @@ object AnimatedCell:
         ColorTimeline(startColor, endColor, steps, delayFrames.max(0))
       )
     )
-
-  def createFadeAnimation(
-    char: Char,
-    startColor: Color,
-    endColor: Color,
-    durationMs: Int = 100,
-    tickRateMs: Int = 16
-  ): AnimatedCell =
-    val steps = if durationMs <= 0 then 0 else math.max(1, durationMs / tickRateMs)
-    if steps <= 0 then AnimatedCell(Some(char), List.empty, List.empty)
-    else fromForegroundInterpolation(char, startColor, endColor, steps)

@@ -26,22 +26,6 @@ class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
     completed.isComplete should be(true)
   }
 
-  it should "create deterministic animation duration" in {
-    val cell = AnimatedCell.createFadeAnimation('x', black, white, durationMs = 96, tickRateMs = 16)
-    cell.foregroundSteps.length shouldEqual 6
-  }
-
-  it should "handle immediate completion for zero-step animations" in {
-    val cell = AnimatedCell.createFadeAnimation('x', white, white, durationMs = 0)
-    cell.isComplete shouldEqual true
-  }
-
-  it should "handle single-step animations" in {
-    val cell = AnimatedCell.createFadeAnimation('x', black, white, durationMs = 16, tickRateMs = 16)
-    cell.foregroundSteps.length shouldEqual 1
-    cell.advance().isComplete shouldEqual true
-  }
-
   "AnimationState list-based advancement" should "advance all animations automatically" in {
     val animState = AnimationState.empty
       .addCharacterAnimation('a', 0, 0, black, white, 3)
@@ -94,19 +78,4 @@ class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
     cleanedUp.getCell(0, 0) should be(empty)
     cleanedUp.getCell(1, 0) should be(empty)
     cleanedUp.getCell(2, 0) should be(empty)
-  }
-
-  "List-based animation lifecycle" should "create, advance, and complete deterministically" in {
-    val cell = AnimatedCell.createFadeAnimation('x', black, white, durationMs = 48, tickRateMs = 16)
-
-    cell.foregroundSteps.length shouldEqual 3
-
-    val step1 = cell.advance()
-    step1.isComplete should be(false)
-
-    val step2 = step1.advance()
-    step2.isComplete should be(false)
-
-    val step3 = step2.advance()
-    step3.isComplete should be(true)
   }

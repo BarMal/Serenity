@@ -65,7 +65,8 @@ final private[manager] class StateManagerOperationBoundary private (
     )
     stateWithId
       .copy(runtime =
-        stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces.filterNot(_.id == surfaceId) :+ surface)
+        stateWithId.runtime
+          .copy(uiSurfaces = stateWithId.runtime.uiSurfaces.movedToEndWhere(_.id == surfaceId)(surface))
       )
       .pushFocus(Focus.Surface(surfaceId))
 

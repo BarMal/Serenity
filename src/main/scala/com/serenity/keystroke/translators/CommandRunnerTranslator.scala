@@ -6,7 +6,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 
 class CommandRunnerTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[CommandRunnerEvent]:
 
-  override def converters = List(
+  override lazy val converters = List(
     LocalKeymapConverters.converter(appConfig.inputConfig.focusedKeymapConfig.commandRunner.bindings),
     commandRunnerCharacterConverter
   )

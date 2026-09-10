@@ -152,7 +152,7 @@ object LspManager:
         ) { (conn, context) =>
           Trace
             .timed(s"lsp.hover.$uri")(
-              conn.sendRequest("textDocument/hover", LspProtocol.textDocumentPositionParams(uri, line, character))
+              conn.sendRequest("textDocument/hover", LspProtocol.hoverParams(uri, line, character))
             )
             .flatMap(response =>
               LspProtocol.parseHoverText(response).fold(IO.unit) { text =>
@@ -197,7 +197,7 @@ object LspManager:
         ) { (conn, context) =>
           Trace
             .timed(s"lsp.definition.$uri")(
-              conn.sendRequest("textDocument/definition", LspProtocol.textDocumentPositionParams(uri, line, character))
+              conn.sendRequest("textDocument/definition", LspProtocol.definitionParams(uri, line, character))
             )
             .flatMap(response =>
               LspProtocol.parseDefinitionLocation(response).fold(IO.unit) { location =>

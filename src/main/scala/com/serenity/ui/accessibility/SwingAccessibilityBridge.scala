@@ -9,6 +9,9 @@ import com.serenity.ui.layout.CellMetrics
 
 /** Publishes canvas semantics as non-intercepting native Swing accessibility children. */
 final class SwingAccessibilityBridge(canvas: JComponent):
+  // Holds the last *published* snapshot purely for `describe`'s before/after text in `firePropertyChange`; the
+  // focus/value diff itself lives only in `AccessibilityModel` (`AccessibilitySnapshot.announcements`) and is
+  // relayed here, not recomputed.
   private val previous     = AtomicReference[Option[AccessibilitySnapshot]](None)
   private val materialized = AtomicReference[Option[(List[AccessibleNode], CellMetrics)]](None)
   private val proxies      = AtomicReference[List[JComponent]](Nil)
@@ -26,7 +29,7 @@ final class SwingAccessibilityBridge(canvas: JComponent):
     if !materialized.get.contains((snapshot.nodes, metrics)) then
       replaceChildren(snapshot.nodes, metrics)
       materialized.set(Some((snapshot.nodes, metrics)))
-    announcements(previous.get, snapshot).foreach { announcement =>
+    snapshot.announcements.foreach { announcement =>
       context.firePropertyChange(
         AccessibleContext.ACCESSIBLE_DESCRIPTION_PROPERTY,
         priorDescription,
@@ -90,25 +93,6 @@ final class SwingAccessibilityBridge(canvas: JComponent):
         val value = node.value.filter(_.nonEmpty).fold("")(current => s": $current")
         s"${node.role.toString.toLowerCase} ${node.name}$value"
       case None => "Canvas-rendered Serenity editor"
-
-  private def announcements(
-    prior: Option[AccessibilitySnapshot],
-    current: AccessibilitySnapshot
-  ): List[AccessibilityAnnouncement] =
-    val previousNodes = prior.map(_.nodes.map(node => node.id -> node).toMap).getOrElse(Map.empty)
-    current.nodes.flatMap { node =>
-      val focus =
-        Option.when(node.focused && !previousNodes.get(node.id).exists(_.focused))(AccessibilityAnnouncement(node.name))
-      val status = Option
-        .when(
-          node.role == AccessibilityRole.Status && !previousNodes
-            .get(node.id)
-            .flatMap(_.value)
-            .contains(node.value.getOrElse(""))
-        )(node.value.map(AccessibilityAnnouncement.apply))
-        .flatten
-      List(focus, status).flatten
-    }
 
   private trait SemanticFocusProxy:
     private val semanticallyFocused = AtomicBoolean(false)

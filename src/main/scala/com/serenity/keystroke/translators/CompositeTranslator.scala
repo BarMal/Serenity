@@ -7,7 +7,7 @@ class CompositeTranslator(
     translators: List[Translator[? <: Event]]
 ) extends Translator[Event]:
 
-  override def converters: List[PartialFunction[KeyStrokeInfo, Event]] =
+  override lazy val converters: List[PartialFunction[KeyStrokeInfo, Event]] =
     translators.flatMap(_.converters.map(_.andThen(identity[Event])))
 
 object CompositeTranslator:

@@ -116,7 +116,9 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
       val normalized     = toolbarState.normalized(items)
       val updatedSurface = surface.copy(content = SurfaceContent.ContextualToolbar(normalized))
       current.copy(runtime =
-        current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+        current.runtime.copy(uiSurfaces =
+          current.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(updatedSurface)
+        )
       )
     }
 

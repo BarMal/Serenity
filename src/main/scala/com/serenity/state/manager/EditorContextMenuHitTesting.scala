@@ -89,11 +89,13 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
       case Some((surface, menu, index)) =>
         stateRef
           .update { current =>
-            current.copy(runtime = current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.map {
-              case existing if existing.id == surface.id =>
-                existing.copy(content = SurfaceContent.ContextMenu(menu.withSelectedIndex(index)))
-              case existing => existing
-            }))
+            current.copy(runtime =
+              current.runtime.copy(uiSurfaces =
+                current.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+                  _.copy(content = SurfaceContent.ContextMenu(menu.withSelectedIndex(index)))
+                )
+              )
+            )
           }
           .as(true)
       case None =>
