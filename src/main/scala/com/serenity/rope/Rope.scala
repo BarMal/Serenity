@@ -239,28 +239,6 @@ sealed trait Rope(using balance: Balance):
     val clamped = math.max(0, math.min(offset, weight))
     offsetToLineColumnIn(this, clamped, 0, 0)
 
-  def search(term: String): Option[Int] =
-    if term.isEmpty || term.length > weight then None
-    else
-      @tailrec
-      def loop(offset: Int): Option[Int] =
-        if offset > weight - term.length then None
-        else if matchesAt(offset, term) then Some(offset)
-        else loop(offset + 1)
-
-      loop(0)
-
-  private def matchesAt(offset: Int, term: String): Boolean =
-    @tailrec
-    def loop(index: Int): Boolean =
-      if index >= term.length then true
-      else
-        this.index(offset + index) match
-          case Some(char) if char == term.charAt(index) => loop(index + 1)
-          case _                                        => false
-
-    loop(0)
-
   final private case class LineTraversal(
       chunks: Iterator[(Int, String)],
       chunk: String,
