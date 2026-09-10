@@ -1,13 +1,7 @@
 package com.serenity.session
 
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{
-  Layout,
-  SessionDockedPanel,
-  SessionWorkspaceNode,
-  WorkspaceNodeId,
-  WorkspaceTree
-}
+import com.serenity.ui.layout.{Layout, SessionDockedPanel, SessionWorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 
 /** Persistent layout information
   */

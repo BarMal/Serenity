@@ -48,7 +48,8 @@ class CommandRunnerRenderPerformanceSpec extends AnyFlatSpec with Matchers:
             layout = state.persisted.layout.copy(
               editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
               activeEditorPaneId = Some(paneId),
-              workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
+              workspaceTree =
+                Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
             )
           )
         )

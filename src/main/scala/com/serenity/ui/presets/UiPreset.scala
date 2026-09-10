@@ -585,9 +585,8 @@ object UiPreset:
         case None =>
           Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${newPaneId.value}"), newPaneId)))
     }
-    val finalTree = droppedPaneIds.foldLeft(treeWithNewPanes) { (tree, droppedId) =>
-      tree.flatMap(_.remove(droppedId)).orElse(tree)
-    }
+    val finalTree =
+      droppedPaneIds.foldLeft(treeWithNewPanes)((tree, droppedId) => tree.flatMap(_.remove(droppedId)).orElse(tree))
 
     state.copy(
       persisted = state.persisted.copy(

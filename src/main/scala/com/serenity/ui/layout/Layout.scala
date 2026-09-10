@@ -9,8 +9,8 @@ final case class Layout(
     maximizedWorkspaceNodeId: Option[WorkspaceNodeId] = None
 ):
 
-  /** The current pane order, driven solely by `workspaceTree` -- `None` only when there are no editor panes yet
-    * (e.g. `Layout.empty`, the transient pre-first-pane bootstrap state).
+  /** The current pane order, driven solely by `workspaceTree` -- `None` only when there are no editor panes yet (e.g.
+    * `Layout.empty`, the transient pre-first-pane bootstrap state).
     */
   def orderedPaneIds: List[PaneId] =
     workspaceTree.map(_.paneIds).getOrElse(Nil)

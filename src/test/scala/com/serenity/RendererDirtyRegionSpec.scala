@@ -2,7 +2,16 @@ package com.serenity
 
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, LayoutEngine, PixelRect, TextLayoutSnapshot, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutEngine,
+  PixelRect,
+  TextLayoutSnapshot,
+  ViewportSize,
+  WorkspaceNode,
+  WorkspaceNodeId,
+  WorkspaceTree
+}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec

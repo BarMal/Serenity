@@ -278,9 +278,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     )
     val viewportSize = ViewportSize(100, 30)
 
-    val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
-    val paneLayouts      = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
-    val editorRect        = calculatedLayout.editorPanelRect
+    val calculatedLayout   = LayoutEngine.calculateLayout(state, viewportSize)
+    val paneLayouts        = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
+    val editorRect         = calculatedLayout.editorPanelRect
     val expectedFirstWidth = editorRect.width / 2
 
     paneLayouts should have size 2
@@ -319,9 +319,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
-    val paneLayouts      = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
-    val editorRect         = calculatedLayout.editorPanelRect
+    val calculatedLayout    = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val paneLayouts         = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
+    val editorRect          = calculatedLayout.editorPanelRect
     val expectedFirstHeight = editorRect.height / 2
 
     paneLayouts(PaneId(0)) shouldBe LayoutRect(editorRect.x, editorRect.y, editorRect.width, expectedFirstHeight)
@@ -483,14 +483,18 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   it should "give every pane an on-screen share of the editor width, roughly equal for three panes" in {
     val paneIds = List(PaneId(0), PaneId(1), PaneId(2))
     val panes   = paneIds.map(id => id -> EditorPane.empty(id)).toMap
-    val layout  = Layout(editorPanes = panes, activeEditorPaneId = Some(PaneId(0)), workspaceTree = Some(linearWorkspaceTree(paneIds)))
+    val layout = Layout(
+      editorPanes = panes,
+      activeEditorPaneId = Some(PaneId(0)),
+      workspaceTree = Some(linearWorkspaceTree(paneIds))
+    )
     val state =
       AppState(persisted = Persisted(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0))))
     val viewportSize = ViewportSize(120, 24)
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts      = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
-    val editorRect        = calculatedLayout.editorPanelRect
+    val editorRect       = calculatedLayout.editorPanelRect
 
     paneLayouts should have size 3
     paneLayouts.values.foreach(rect => editorRect.containsRect(rect) shouldBe true)
@@ -505,13 +509,17 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     val paneIds = (0 until 5).map(PaneId.apply).toList
     val panes   = paneIds.map(id => id -> EditorPane.empty(id)).toMap
-    val layout  = Layout(editorPanes = panes, activeEditorPaneId = Some(PaneId(0)), workspaceTree = Some(linearWorkspaceTree(paneIds)))
+    val layout = Layout(
+      editorPanes = panes,
+      activeEditorPaneId = Some(PaneId(0)),
+      workspaceTree = Some(linearWorkspaceTree(paneIds))
+    )
     val state =
       AppState(persisted = Persisted(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0))))
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts      = LayoutEngine.calculatePaneLayoutsWithMinWidth(state, calculatedLayout, minPaneWidth)
-    val editorRect        = calculatedLayout.editorPanelRect
+    val editorRect       = calculatedLayout.editorPanelRect
 
     paneLayouts should have size 5
     paneLayouts.values.foreach(rect => editorRect.containsRect(rect) shouldBe true)
@@ -524,7 +532,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     val paneIds = (0 until 4).map(PaneId.apply).toList
     val panes   = paneIds.map(id => id -> EditorPane.empty(id)).toMap
-    val layout  = Layout(
+    val layout = Layout(
       editorPanes = panes,
       activeEditorPaneId = Some(PaneId(2)), // Focus on pane 2
       workspaceTree = Some(linearWorkspaceTree(paneIds))
@@ -534,8 +542,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts      = LayoutEngine.calculatePaneLayoutsWithMinWidth(state, calculatedLayout, minPaneWidth)
-    val editorRect        = calculatedLayout.editorPanelRect
-    val focusedPane        = paneLayouts(PaneId(2))
+    val editorRect       = calculatedLayout.editorPanelRect
+    val focusedPane      = paneLayouts(PaneId(2))
 
     paneLayouts should have size 4
     editorRect.containsRect(focusedPane) shouldBe true

@@ -1,7 +1,7 @@
 package com.serenity.state.models
 
-/** Invariant checking for [[AppState]], pulled out of that file to keep it under the architecture ratchet's
-  * file-length target. Pure functions over an [[AppState]] snapshot -- no state of their own.
+/** Invariant checking for [[AppState]], pulled out of that file to keep it under the architecture ratchet's file-length
+  * target. Pure functions over an [[AppState]] snapshot -- no state of their own.
   */
 object AppStateValidation:
 

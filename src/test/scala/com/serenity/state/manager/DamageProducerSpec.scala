@@ -457,8 +457,7 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val after = before.copy(persisted =
       before.persisted.copy(layout =
         before.persisted.layout.copy(
-          editorPanes =
-            before.persisted.layout.editorPanes.updated(secondId, EditorPane.withBuffer(secondId, bufferId))
+          editorPanes = before.persisted.layout.editorPanes.updated(secondId, EditorPane.withBuffer(secondId, bufferId))
         )
       )
     )

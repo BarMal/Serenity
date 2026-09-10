@@ -16,7 +16,7 @@ given Decoder[SessionEditorPane] = deriveDecoder
 
 given Decoder[SessionLayout] = Decoder.instance { cursor =>
   for
-    editorPanesRaw            <- cursor.get[List[SessionEditorPane]]("editorPanes")
+    editorPanesRaw           <- cursor.get[List[SessionEditorPane]]("editorPanes")
     activeEditorPaneId       <- cursor.get[Option[Int]]("activeEditorPaneId")
     legacyPaneOrder          <- cursor.getOrElse[List[Int]]("paneOrder")(Nil)
     workspaceTree            <- cursor.getOrElse[Option[SessionWorkspaceNode]]("workspaceTree")(None)
@@ -29,7 +29,7 @@ given Decoder[SessionLayout] = Decoder.instance { cursor =>
     val orderedByLegacyField =
       if legacyPaneOrder.isEmpty then editorPanesRaw
       else
-        val byId = editorPanesRaw.map(pane => pane.id -> pane).toMap
+        val byId      = editorPanesRaw.map(pane => pane.id -> pane).toMap
         val requested = legacyPaneOrder.flatMap(byId.get)
         val missing   = editorPanesRaw.filterNot(pane => legacyPaneOrder.contains(pane.id))
         requested ++ missing
