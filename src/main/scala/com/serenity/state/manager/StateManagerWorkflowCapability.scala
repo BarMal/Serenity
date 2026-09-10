@@ -317,7 +317,7 @@ final private[manager] class StateManagerWorkflowCapability(
         case Some(surface) =>
           val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)))
           state.copy(runtime =
-            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId) :+ updatedSurface)
+            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surfaceId)(updatedSurface))
           )
         case None =>
           state

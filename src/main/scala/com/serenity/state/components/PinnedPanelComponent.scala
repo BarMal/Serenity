@@ -2,7 +2,7 @@ package com.serenity.state.components
 
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.keystroke.events.*
-import com.serenity.state.models.{AppState, Focus, SurfacePresentation}
+import com.serenity.state.models.{AppState, Focus, SurfacePresentation, movedToEndWhere}
 import com.serenity.state.reducers.{AppEffect, ExplorerEffect, FileEffect, ReducerResult}
 import com.serenity.ui.layout.{DirectoryTreeData, PanelPosition}
 
@@ -178,5 +178,5 @@ class PinnedPanelComponent(
 
   private def replaceSurface(currentState: AppState, updated: com.serenity.state.models.UiSurface): AppState =
     currentState.copy(runtime =
-      currentState.runtime.copy(uiSurfaces = currentState.runtime.uiSurfaces.filterNot(_.id == updated.id) :+ updated)
+      currentState.runtime.copy(uiSurfaces = currentState.runtime.uiSurfaces.movedToEndWhere(_.id == updated.id)(updated))
     )

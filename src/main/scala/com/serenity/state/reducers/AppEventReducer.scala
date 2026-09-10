@@ -369,4 +369,4 @@ object AppEventReducer:
       case _                               => false
 
   private def upsertSurface(surfaces: List[UiSurface], surface: UiSurface): List[UiSurface] =
-    surfaces.filterNot(_.id == surface.id) :+ surface
+    surfaces.movedToEndWhere(_.id == surface.id)(surface)

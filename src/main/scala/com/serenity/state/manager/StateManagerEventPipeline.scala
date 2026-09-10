@@ -347,12 +347,9 @@ final private[manager] class StateManagerEventPipeline(
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
             val updatedRunner = runner.withUiPresetPreviews(previews)
-            val updatedSurfaces = state.runtime.uiSurfaces.map {
-              case current if current.id == surface.id =>
-                current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              case current =>
-                current
-            }
+            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+              _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+            )
             state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
           case _ =>
             state
