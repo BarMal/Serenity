@@ -141,7 +141,7 @@ Priority labels used in this archived snapshot:
 - `[x]` LSP diagnostics flow back into app state and can be rendered in diagnostics surfaces.[31][33]
 - `[~][P2]` Language detection and workspace-root markers exist, but the shipped LSP path is still configured through `LspUserConfig.empty`, which limits user control compared with a fuller IDE configuration surface.[33][43]
 - `[ ][P2]` No direct implementation evidence was found for build, compilation, test running, debugging, or dependency resolution workflows.[33]
-- `[ ][P2]` Surface types for quick info and symbol definitions exist, but no direct request path was found for hover/completion/definition/intellisense flows driven from the current LSP layer. Current LSP event handling is still diagnostics-oriented.[32][33]
+- `[x]` Hover, completion, and go-to-definition request paths are implemented end-to-end: `LspEffect.HoverRequested`/`CompletionRequested`/`DefinitionRequested` are handled in `StateManagerProjectLspEffects`, which sends `textDocument/hover`/`completion`/`definition` requests through `LspManager`'s per-document-version staleness tracking and parses the responses via `LspProtocol`, applying `LspEvent.LspHoverReceived`/`LspCompletionReceived`/`LspDefinitionReceived` back into app state.[33][63][64]
 
 ## 15. Architecture And Maintainability
 
@@ -163,7 +163,7 @@ Use GitHub Issues as the canonical backlog:
 ## Snapshot Summary
 
 - Strongest implemented areas today: rope-backed editing, session restore/save, typography/layout correctness, nested command-runner overlays, theming/animation, and pinned-panel basics.[1][5][11][17][19][27]
-- Biggest current gaps remain: broader search surfaces such as find-all/project-wide search, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond diagnostics-oriented LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
+- Biggest current gaps remain: broader search surfaces such as find-all/project-wide search, richer Markdown preview/document rendering beyond the same-metric block lens, UI-level mouse polish beyond editing interactions, multi-panel-per-side layouts, panel presets, and deeper IDE features beyond the existing hover/completion/definition/diagnostics LSP plumbing.[3][12][14][30][33][40][46][47][49][50]
 - These notes describe the 2026-06-05 snapshot. Check GitHub Issues for current gaps, prioritisation, and implementation order.
 
 ## Sources
@@ -230,3 +230,5 @@ Use GitHub Issues as the canonical backlog:
 [60] `src/test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala`
 [61] `src/test/scala/com/serenity/ScrollingNavigationSpec.scala`
 [62] `src/test/scala/com/serenity/EditorEventReducerSpec.scala`
+[63] `src/main/scala/com/serenity/state/manager/StateManagerProjectLspEffects.scala`
+[64] `src/main/scala/com/serenity/lsp/client/LspProtocol.scala`
