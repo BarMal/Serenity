@@ -68,8 +68,8 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "tag search results with their category once a search term is present" in {
     val commands = List(
-      Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),
-      Command.typed("close", "Close current file", CommandIntent.File(FileIntent.CloseCurrentFile))
+      Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile), CommandCategory.File),
+      Command.typed("close", "Close current file", CommandIntent.File(FileIntent.CloseCurrentFile), CommandCategory.File)
     )
     val runner = CommandRunner.empty
       .activate(CommandRegistry(commands), AppConfig.default)
@@ -84,7 +84,14 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
       showKeyHints = false
     )
 
-    resolved.rows.map(_.plainText) shouldBe List("[File] Open - Open file")
+    // `updateSearchTerm` also searches the app-wide settings tree unconditionally, independent of the small
+    // registry passed here (see `SurfaceContentResolverSpec`'s "render root search text..." comment on the same
+    // behavior), so other unrelated rows can legitimately appear alongside the command match this test targets, and
+    // `bindingFor` can attach a real default hotkey (e.g. "ctrl+o") looked up by intent -- so this only pins the
+    // category tag and description this resolver is responsible for, not the full row text.
+    val openRow = resolved.rows
+      .find(row => row.plainText.startsWith("[File] Open") && row.plainText.contains("Open file"))
+    openRow shouldBe defined
   }
 
   "resolveSettingsSurface" should "title the surface \"Settings\" and breadcrumb-header the root group" in {

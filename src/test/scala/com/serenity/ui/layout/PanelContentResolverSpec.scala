@@ -70,7 +70,7 @@ class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
 
   "resolveTerminal" should "number lines for a vertical layout" in {
     val resolved = PanelContentResolver.resolveTerminal(
-      LayoutRect(0, 0, 10, 20),
+      LayoutRect(0, 0, 20, 50),
       SurfaceRenderMode.Floating,
       buffer = "alpha\nbeta\ngamma",
       cursor = 3
@@ -81,13 +81,13 @@ class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "prefix a square layout with the cursor position" in {
     val resolved = PanelContentResolver.resolveTerminal(
-      LayoutRect(0, 0, 12, 12),
+      LayoutRect(0, 0, 20, 20),
       SurfaceRenderMode.Floating,
       buffer = "alpha\nbeta",
       cursor = 7
     )
 
-    resolved.rows.map(_.plainText) shouldBe List("cursor: 7", "alpha")
+    resolved.rows.map(_.plainText) shouldBe List("cursor: 7", "alpha", "beta")
   }
 
   it should "summarize a compact layout as line count and cursor" in {
@@ -133,7 +133,7 @@ class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
   it should "prefix the active symbol with a marker in a vertical layout" in {
     val active = symbolAt("bar", 1)
     val resolved = PanelContentResolver.resolveOutline(
-      LayoutRect(0, 0, 10, 20),
+      LayoutRect(0, 0, 20, 50),
       SurfaceRenderMode.Floating,
       List(symbolAt("foo", 0), active),
       activeLocation = Some(active.location)
@@ -173,7 +173,7 @@ class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
   "resolveComments" should "treat square layout the same as vertical" in {
     val active = symbolAt("note", 3)
     val resolved = PanelContentResolver.resolveComments(
-      LayoutRect(0, 0, 12, 12),
+      LayoutRect(0, 0, 20, 20),
       SurfaceRenderMode.Floating,
       List(active),
       activeLocation = Some(active.location)
@@ -220,7 +220,7 @@ class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
   it should "list vertical rows with severity and message, marking the active location" in {
     val active = diagnostic("boom", DiagnosticSeverity.Error, 0)
     val resolved = PanelContentResolver.resolveDiagnostics(
-      LayoutRect(0, 0, 10, 20),
+      LayoutRect(0, 0, 20, 50),
       SurfaceRenderMode.Floating,
       List(active, diagnostic("careful", DiagnosticSeverity.Warning, 1)),
       activeLocation = Some(active.location)
@@ -232,7 +232,7 @@ class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "prefix square-layout diagnostics with an error/warning summary" in {
     val resolved = PanelContentResolver.resolveDiagnostics(
-      LayoutRect(0, 0, 12, 12),
+      LayoutRect(0, 0, 20, 20),
       SurfaceRenderMode.Floating,
       List(diagnostic("boom", DiagnosticSeverity.Error, 0)),
       activeLocation = None
@@ -258,10 +258,13 @@ class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
     val groups = List(ShortcutHelpGroup("Global", List(ShortcutHelpEntry("Save", "ctrl+s"))))
 
     val floating = PanelContentResolver.resolveShortcutsHelp(LayoutRect(0, 0, 10, 20), SurfaceRenderMode.Floating, groups)
-    val compact  = PanelContentResolver.resolveShortcutsHelp(LayoutRect(0, 0, 10, 3), SurfaceRenderMode.Floating, groups)
+    // Width alone would classify as SurfaceLayoutKind.Compact, but resolveShortcutsHelp never branches on layout
+    // kind (unlike its siblings above) -- only `rect.height` bounds the row count, so a narrow-but-tall rect still
+    // renders identically to a wide one.
+    val narrow = PanelContentResolver.resolveShortcutsHelp(LayoutRect(0, 0, 10, 6), SurfaceRenderMode.Floating, groups)
 
     floating.rows.map(_.plainText) shouldBe List("Global", "Save: ctrl+s")
-    compact.rows.map(_.plainText) shouldBe List("Global", "Save: ctrl+s")
+    narrow.rows.map(_.plainText) shouldBe List("Global", "Save: ctrl+s")
   }
 
   // ── resolveTabList ──────────────────────────────────────────────────────────

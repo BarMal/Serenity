@@ -90,26 +90,25 @@ class ContextualToolbarContentResolverSpec extends AnyFlatSpec with Matchers:
     closed.rows.forall(_.layout == OverlayRowLayout.Distributed) shouldBe true
   }
 
-  it should "render dropdown options as a Distributed detail row, marking the selected option" in {
-    val toolbarState = ContextualToolbarState(
-      detailState = Some(ContextualToolbarDetailState.Dropdown("font-family", 0))
-    )
-
-    val resolved = ContextualToolbarContentResolver.resolve(
-      toolbarState,
-      proseState,
-      LayoutRect(0, 0, 80, 8),
-      SurfaceRenderMode.Floating
-    )
+  it should "render dropdown options as Distributed detail rows, marking the selected option" in {
+    val rect          = LayoutRect(0, 0, 80, 8)
+    val toolbarState  = ContextualToolbarState(detailState = Some(ContextualToolbarDetailState.Dropdown("font-family", 0)))
+    val closed        = ContextualToolbarContentResolver.resolve(ContextualToolbarState(), proseState, rect, SurfaceRenderMode.Floating)
+    val resolved      = ContextualToolbarContentResolver.resolve(toolbarState, proseState, rect, SurfaceRenderMode.Floating)
 
     val items    = ContextualToolbar.itemsFor(proseState)
     val dropdown = ContextualToolbar.dropdownItem("font-family", items).getOrElse(fail("Expected a font-family dropdown"))
     val expectedFirstOption = dropdown.optionItem.options.headOption.map(_.label)
 
-    val detailRow = resolved.rows.last
-    detailRow.layout shouldBe OverlayRowLayout.Distributed
-    detailRow.segments.headOption.map(_.text) shouldBe expectedFirstOption
-    detailRow.segments.headOption.map(_.selected) shouldBe Some(true)
+    // The installed-font option list is host-dependent (as many entries as system font families) and can wrap into
+    // more than one Distributed detail row, so search across every row appended beyond the closed-state's top-level
+    // item rows rather than assuming a single trailing row.
+    val detailRows = resolved.rows.drop(closed.rows.size)
+    detailRows should not be empty
+    detailRows.foreach(_.layout shouldBe OverlayRowLayout.Distributed)
+
+    val selectedSegments = detailRows.flatMap(_.segments).filter(_.selected)
+    selectedSegments.map(_.text) shouldBe expectedFirstOption.toList
   }
 
   it should "render an open input detail through the shared CommandPaletteContentResolver.inputRow renderer" in {
