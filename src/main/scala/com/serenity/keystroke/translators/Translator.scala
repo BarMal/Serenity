@@ -8,7 +8,7 @@ trait Translator[+T <: Event]:
   def converters: List[PartialFunction[KeyStrokeInfo, T]]
 
   def translate(info: KeyStrokeInfo): Event =
-    converters
-      .find(_.isDefinedAt(info))
-      .map(_(info))
+    converters.iterator
+      .flatMap(_.lift(info))
+      .nextOption()
       .getOrElse(UnhandledEvent(info, this))

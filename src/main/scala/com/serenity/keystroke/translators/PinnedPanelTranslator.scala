@@ -7,7 +7,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 
 class PinnedPanelTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[PanelInputEvent]:
 
-  override def converters =
+  override val converters =
     List(
       LocalKeymapConverters.converter(appConfig.inputConfig.focusedKeymapConfig.panel.bindings),
       panelCharacterConverter
