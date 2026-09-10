@@ -162,6 +162,13 @@ object CommentRendering:
       case None =>
         Nil
 
+  /** Bounds `blockCommentRange`'s backward/forward scan, mirroring `MarkdownBlockLens`'s `fenceProbeWindow` pattern: an
+    * unterminated or absent block-comment marker near the cursor would otherwise walk the entire document -- twice,
+    * on every cursor move (issue #1417). A comment spanning more lines than this in either direction from the cursor
+    * is not found; that trade-off is the point of a bound.
+    */
+  private val BlockCommentProbeWindow = 512
+
   private def blockCommentRange(
     buffer: Buffer,
     lineIndex: Int,
@@ -170,11 +177,13 @@ object CommentRendering:
     val lineCount = buffer.document.content.lineCount
     if lineIndex < 0 || lineIndex >= lineCount then None
     else
+      val firstProbeLine = (lineIndex - BlockCommentProbeWindow).max(0)
+      val lastProbeLine  = (lineIndex + BlockCommentProbeWindow).min(lineCount - 1)
       for
-        start <- (lineIndex to 0 by -1).find(index =>
+        start <- (lineIndex to firstProbeLine by -1).find(index =>
           buffer.document.content.getLine(index).exists(_.trim.startsWith(syntax.start))
         )
-        end <- (start until lineCount).find(index =>
+        end <- (start to lastProbeLine).find(index =>
           buffer.document.content.getLine(index).exists(_.trim.endsWith(syntax.end))
         )
         if lineIndex <= end
