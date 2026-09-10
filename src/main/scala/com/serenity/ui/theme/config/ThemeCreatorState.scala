@@ -95,119 +95,78 @@ object ThemeCreatorState:
 
   private val descriptors: List[Descriptor] =
     List(
-      Descriptor("theme.name", "Theme Name", _.name, (config, value) => config.copy(name = value), isColor = false),
-      Descriptor("ui.foreground", "Foreground", _.ui.foreground, updateUi((ui, value) => ui.copy(foreground = value))),
-      Descriptor("ui.background", "Background", _.ui.background, updateUi((ui, value) => ui.copy(background = value))),
-      Descriptor("ui.cursor", "Cursor", _.ui.cursor, updateUi((ui, value) => ui.copy(cursor = value))),
-      Descriptor("ui.border", "Border", _.ui.border, updateUi((ui, value) => ui.copy(border = value))),
-      Descriptor(
-        "ui.panel-border",
-        "Panel Border",
-        config => config.ui.panelBorder.getOrElse(config.ui.border),
-        updateUi((ui, value) => ui.copy(panelBorder = Some(value)))
-      ),
-      Descriptor(
-        "ui.margin",
-        "Margin",
-        config => config.ui.margin.getOrElse(config.ui.background),
-        updateUi((ui, value) => ui.copy(margin = Some(value)))
-      ),
-      Descriptor("ui.muted", "Muted Text", _.ui.muted, updateUi((ui, value) => ui.copy(muted = value))),
-      Descriptor(
-        "ui.placeholder",
-        "Placeholder",
-        _.ui.placeholder,
-        updateUi((ui, value) => ui.copy(placeholder = value))
-      ),
-      uiToken(
-        "ui.highlighted.foreground",
-        "Highlight Foreground",
-        _.highlighted,
-        (ui, token) => ui.copy(highlighted = token),
-        foreground = true
-      ),
-      uiToken(
-        "ui.highlighted.background",
-        "Highlight Background",
-        _.highlighted,
-        (ui, token) => ui.copy(highlighted = token),
-        foreground = false
-      ),
-      uiToken(
-        "ui.menu-item.foreground",
-        "Menu Foreground",
-        _.menuItem,
-        (ui, token) => ui.copy(menuItem = token),
-        foreground = true
-      ),
-      uiToken(
-        "ui.menu-item.background",
-        "Menu Background",
-        _.menuItem,
-        (ui, token) => ui.copy(menuItem = token),
-        foreground = false
-      ),
-      uiToken(
-        "ui.panel.foreground",
-        "Panel Foreground",
-        _.panel,
-        (ui, token) => ui.copy(panel = token),
-        foreground = true
-      ),
-      uiToken(
-        "ui.panel.background",
-        "Panel Background",
-        _.panel,
-        (ui, token) => ui.copy(panel = token),
-        foreground = false
-      ),
-      uiToken(
-        "ui.error.foreground",
-        "Error Foreground",
-        _.error,
-        (ui, token) => ui.copy(error = token),
-        foreground = true
-      ),
-      uiToken(
-        "ui.error.background",
-        "Error Background",
-        _.error,
-        (ui, token) => ui.copy(error = token),
-        foreground = false
-      ),
-      uiToken(
-        "ui.warning.foreground",
-        "Warning Foreground",
-        ui => ui.warning.getOrElse(ThemeFieldSchema.warningDefault),
-        (ui, token) => ui.copy(warning = Some(token)),
-        foreground = true
-      ),
-      uiToken(
-        "ui.warning.background",
-        "Warning Background",
-        ui => ui.warning.getOrElse(ThemeFieldSchema.warningDefault),
-        (ui, token) => ui.copy(warning = Some(token)),
-        foreground = false
-      ),
-      syntax("syntax.keyword.foreground", "Keyword", _.keyword, (syntax, value) => syntax.copy(keyword = value)),
-      syntax("syntax.string.foreground", "String", _.string, (syntax, value) => syntax.copy(string = value)),
-      syntax("syntax.comment.foreground", "Comment", _.comment, (syntax, value) => syntax.copy(comment = value)),
-      syntax("syntax.number.foreground", "Number", _.number, (syntax, value) => syntax.copy(number = value)),
-      syntax("syntax.operator.foreground", "Operator", _.operator, (syntax, value) => syntax.copy(operator = value)),
-      syntax(
-        "syntax.identifier.foreground",
-        "Identifier",
-        _.identifier,
-        (syntax, value) => syntax.copy(identifier = value)
-      ),
-      optionalSyntax(ThemeFieldSchema.typeField),
-      optionalSyntax(ThemeFieldSchema.delimiterField),
-      optionalSyntax(ThemeFieldSchema.errorField),
-      optionalSyntax(ThemeFieldSchema.normalField)
-    )
+      Descriptor("theme.name", "Theme Name", _.name, (config, value) => config.copy(name = value), isColor = false)
+    ) ++
+      ThemeFieldSchema.uiScalarFields.map(uiScalarDescriptor) ++
+      List(
+        Descriptor(
+          "ui.panel-border",
+          "Panel Border",
+          config => config.ui.panelBorder.getOrElse(config.ui.border),
+          updateUi((ui, value) => ui.copy(panelBorder = Some(value)))
+        ),
+        Descriptor(
+          "ui.margin",
+          "Margin",
+          config => config.ui.margin.getOrElse(config.ui.background),
+          updateUi((ui, value) => ui.copy(margin = Some(value)))
+        )
+      ) ++
+      ThemeFieldSchema.uiTokenFields.flatMap(uiTokenDescriptors) ++
+      List(
+        uiToken(
+          "ui.warning.foreground",
+          "Warning Foreground",
+          ui => ui.warning.getOrElse(ThemeFieldSchema.warningDefault),
+          (ui, token) => ui.copy(warning = Some(token)),
+          foreground = true
+        ),
+        uiToken(
+          "ui.warning.background",
+          "Warning Background",
+          ui => ui.warning.getOrElse(ThemeFieldSchema.warningDefault),
+          (ui, token) => ui.copy(warning = Some(token)),
+          foreground = false
+        )
+      ) ++
+      ThemeFieldSchema.mandatorySyntaxFields.map(field =>
+        syntax(field.path, field.label, field.select, field.replace)
+      ) ++
+      List(
+        optionalSyntax(ThemeFieldSchema.typeField),
+        optionalSyntax(ThemeFieldSchema.delimiterField),
+        optionalSyntax(ThemeFieldSchema.errorField),
+        optionalSyntax(ThemeFieldSchema.normalField)
+      )
 
   private def updateUi(update: (UiColors, String) => UiColors): (ThemeConfig, String) => ThemeConfig =
     (config, value) => config.copy(ui = update(config.ui, normalizeColorInput(value)))
+
+  private def uiScalarDescriptor(field: ThemeFieldSchema.UiScalarFieldSchema): Descriptor =
+    Descriptor(
+      field.path,
+      field.label,
+      config => field.select(config.ui),
+      updateUi((ui, value) => field.replace(ui, value))
+    )
+
+  private def uiTokenDescriptors(field: ThemeFieldSchema.UiTokenFieldSchema): List[Descriptor] =
+    List(
+      uiToken(
+        s"${field.path}.foreground",
+        s"${field.label} Foreground",
+        field.select,
+        field.replace,
+        foreground = true
+      ),
+      uiToken(
+        s"${field.path}.background",
+        s"${field.label} Background",
+        field.select,
+        field.replace,
+        foreground = false
+      )
+    )
 
   private def uiToken(
     path: String,

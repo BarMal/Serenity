@@ -13,27 +13,27 @@ object ThemeConfigWriter:
     ThemeConfig(
       name = theme.name,
       ui = UiColors(
-        foreground = hex(theme.foreground),
-        background = hex(theme.background),
-        cursor = hex(theme.cursor),
-        highlighted = tokenConfig(theme.highlighted),
-        menuItem = tokenConfig(theme.menuItem),
-        panel = tokenConfig(theme.panel),
-        error = tokenConfig(theme.error),
+        foreground = hex(ThemeFieldSchema.uiForegroundField.themeValue(theme)),
+        background = hex(ThemeFieldSchema.uiBackgroundField.themeValue(theme)),
+        cursor = hex(ThemeFieldSchema.uiCursorField.themeValue(theme)),
+        highlighted = tokenConfig(ThemeFieldSchema.uiHighlightedField.themeValue(theme)),
+        menuItem = tokenConfig(ThemeFieldSchema.uiMenuItemField.themeValue(theme)),
+        panel = tokenConfig(ThemeFieldSchema.uiPanelField.themeValue(theme)),
+        error = tokenConfig(ThemeFieldSchema.uiErrorField.themeValue(theme)),
         warning = Some(tokenConfig(theme.warning)),
-        border = hex(theme.border),
+        border = hex(ThemeFieldSchema.uiBorderField.themeValue(theme)),
         panelBorder = Some(hex(theme.panelBorder)),
         margin = Some(hex(theme.margin)),
-        muted = hex(theme.muted),
-        placeholder = hex(theme.placeholder)
+        muted = hex(ThemeFieldSchema.uiMutedField.themeValue(theme)),
+        placeholder = hex(ThemeFieldSchema.uiPlaceholderField.themeValue(theme))
       ),
       syntax = SyntaxColors(
-        keyword = syntaxConfig(theme, SyntaxElement.Keyword),
-        string = syntaxConfig(theme, SyntaxElement.String),
-        comment = syntaxConfig(theme, SyntaxElement.Comment),
-        number = syntaxConfig(theme, SyntaxElement.Number),
-        operator = syntaxConfig(theme, SyntaxElement.Operator),
-        identifier = syntaxConfig(theme, SyntaxElement.Identifier),
+        keyword = syntaxConfig(theme, ThemeFieldSchema.keywordField.element),
+        string = syntaxConfig(theme, ThemeFieldSchema.stringField.element),
+        comment = syntaxConfig(theme, ThemeFieldSchema.commentField.element),
+        number = syntaxConfig(theme, ThemeFieldSchema.numberField.element),
+        operator = syntaxConfig(theme, ThemeFieldSchema.operatorField.element),
+        identifier = syntaxConfig(theme, ThemeFieldSchema.identifierField.element),
         typ = Some(syntaxConfig(theme, SyntaxElement.Type)),
         delimiter = Some(syntaxConfig(theme, SyntaxElement.Delimiter)),
         whitespace = Some(syntaxConfig(theme, SyntaxElement.Whitespace)),
@@ -63,30 +63,29 @@ object ThemeConfigWriter:
     def optional(field: SyntaxFieldSchema): String =
       renderSyntax(field.select(config.syntax).getOrElse(field.default), 4)
 
+    val uiScalarLines = ThemeFieldSchema.uiScalarFields
+      .map(field => s"""    ${field.hoconKey} = "${field.select(config.ui)}"""")
+      .mkString("\n")
+
+    val uiTokenLines = ThemeFieldSchema.uiTokenFields
+      .map(field => s"    ${field.hoconKey} ${renderToken(field.select(config.ui), 4)}")
+      .mkString("\n")
+
+    val mandatorySyntaxLines = ThemeFieldSchema.mandatorySyntaxFields
+      .map(field => s"    ${field.hoconKey} ${renderSyntax(field.select(config.syntax), 4)}")
+      .mkString("\n")
+
     s"""theme {
        |  name = "${escape(config.name)}"
        |  ui {
-       |    foreground = "${config.ui.foreground}"
-       |    background = "${config.ui.background}"
-       |    cursor = "${config.ui.cursor}"
-       |    border = "${config.ui.border}"
+$uiScalarLines
        |    panel-border = "${config.ui.panelBorder.getOrElse(config.ui.border)}"
        |    margin = "${config.ui.margin.getOrElse(config.ui.background)}"
-       |    muted = "${config.ui.muted}"
-       |    placeholder = "${config.ui.placeholder}"
-       |    highlighted ${renderToken(config.ui.highlighted, 4)}
-       |    menu-item ${renderToken(config.ui.menuItem, 4)}
-       |    panel ${renderToken(config.ui.panel, 4)}
-       |    error ${renderToken(config.ui.error, 4)}
+$uiTokenLines
        |    warning ${renderToken(config.ui.warning.getOrElse(ThemeFieldSchema.warningDefault), 4)}
        |  }
        |  syntax {
-       |    keyword ${renderSyntax(config.syntax.keyword, 4)}
-       |    string ${renderSyntax(config.syntax.string, 4)}
-       |    comment ${renderSyntax(config.syntax.comment, 4)}
-       |    number ${renderSyntax(config.syntax.number, 4)}
-       |    operator ${renderSyntax(config.syntax.operator, 4)}
-       |    identifier ${renderSyntax(config.syntax.identifier, 4)}
+$mandatorySyntaxLines
        |    typ ${optional(ThemeFieldSchema.typeField)}
        |    delimiter ${optional(ThemeFieldSchema.delimiterField)}
        |    whitespace ${optional(ThemeFieldSchema.whitespaceField)}

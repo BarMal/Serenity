@@ -69,3 +69,100 @@ class ThemeFieldSchemaSpec extends AnyFlatSpec with Matchers:
     List("syntax.type.foreground", "syntax.delimiter.foreground", "syntax.error.foreground", "syntax.normal.foreground")
       .foreach(path => descriptorPaths should contain(path))
   }
+
+  // ── Mandatory field coverage (issue #1410) ──────────────────────────────────
+  //
+  // ConfigurableThemeManager (config -> domain), ThemeConfigWriter (domain -> config -> text) and ThemeCreatorState
+  // (creator UI rows) each independently hand-enumerated the MANDATORY theme fields too, with no shared source of
+  // truth -- so a field added to one could silently be missing from another. These tests pin every mandatory-field
+  // consumer's actual behavior to `ThemeFieldSchema`'s field lists, so a field present in the schema but not wired
+  // into one of the three consumers fails here.
+
+  "ThemeFieldSchema.uiScalarFields" should "cover exactly the mandatory scalar UiColors fields" in {
+    ThemeFieldSchema.uiScalarFields.map(_.path) should contain theSameElementsAs List(
+      "ui.foreground",
+      "ui.background",
+      "ui.cursor",
+      "ui.border",
+      "ui.muted",
+      "ui.placeholder"
+    )
+  }
+
+  "ThemeFieldSchema.uiTokenFields" should "cover exactly the mandatory UiTokenConfig UiColors fields" in {
+    ThemeFieldSchema.uiTokenFields.map(_.path) should contain theSameElementsAs List(
+      "ui.highlighted",
+      "ui.menu-item",
+      "ui.panel",
+      "ui.error"
+    )
+  }
+
+  "ThemeFieldSchema.mandatorySyntaxFields" should "cover exactly the mandatory SyntaxColors elements" in {
+    ThemeFieldSchema.mandatorySyntaxFields.map(_.element) should contain theSameElementsAs List(
+      SyntaxElement.Keyword,
+      SyntaxElement.String,
+      SyntaxElement.Comment,
+      SyntaxElement.Number,
+      SyntaxElement.Operator,
+      SyntaxElement.Identifier
+    )
+  }
+
+  "ThemeCreatorState" should "expose an editable row for every mandatory scalar UI field in the schema" in {
+    val paths = ThemeCreatorState.fromTheme(DefaultThemes.defaultDark).rows.map(_.path)
+    ThemeFieldSchema.uiScalarFields.foreach(field => paths should contain(field.path))
+  }
+
+  it should "expose foreground/background rows for every mandatory UI token field in the schema" in {
+    val paths = ThemeCreatorState.fromTheme(DefaultThemes.defaultDark).rows.map(_.path)
+    ThemeFieldSchema.uiTokenFields.foreach { field =>
+      paths should contain(s"${field.path}.foreground")
+      paths should contain(s"${field.path}.background")
+    }
+  }
+
+  it should "expose a row for every mandatory syntax field in the schema" in {
+    val paths = ThemeCreatorState.fromTheme(DefaultThemes.defaultDark).rows.map(_.path)
+    ThemeFieldSchema.mandatorySyntaxFields.foreach(field => paths should contain(field.path))
+  }
+
+  "ThemeConfigWriter.render" should "render every mandatory field declared in the schema" in {
+    val rendered = ThemeConfigWriter.render(ThemeConfig.defaultDark)
+
+    ThemeFieldSchema.uiScalarFields.foreach { field =>
+      rendered should include(s"""${field.hoconKey} = "${field.select(ThemeConfig.defaultDark.ui)}"""")
+    }
+    ThemeFieldSchema.mandatorySyntaxFields.foreach { field =>
+      rendered should include(s"""foreground = "${field.select(ThemeConfig.defaultDark.syntax).foreground}"""")
+    }
+  }
+
+  "ConfigurableThemeManager.configToTheme" should
+    "produce a Theme whose mandatory scalar UI colors match the config, for every schema field" in {
+      val theme = ConfigurableThemeManager.configToTheme(ThemeConfig.defaultDark).toOption.get
+
+      ThemeFieldSchema.uiScalarFields.foreach { field =>
+        val expected = ColorParser.parseColor(field.select(ThemeConfig.defaultDark.ui)).toOption.get
+        field.themeValue(theme) shouldBe expected
+      }
+    }
+
+  it should "produce a Theme whose mandatory UI token colors match the config, for every schema field" in {
+    val theme = ConfigurableThemeManager.configToTheme(ThemeConfig.defaultDark).toOption.get
+
+    ThemeFieldSchema.uiTokenFields.foreach { field =>
+      val expectedForeground = ColorParser.parseColor(field.select(ThemeConfig.defaultDark.ui).foreground).toOption.get
+      field.themeValue(theme).foreground shouldBe expectedForeground
+    }
+  }
+
+  it should "produce a Theme whose mandatory syntax colors match the config, for every schema field" in {
+    val theme = ConfigurableThemeManager.configToTheme(ThemeConfig.defaultDark).toOption.get
+
+    ThemeFieldSchema.mandatorySyntaxFields.foreach { field =>
+      val expected =
+        ColorParser.parseColor(field.select(ThemeConfig.defaultDark.syntax).foreground).toOption.get
+      theme.colorFor(field.element).foreground shouldBe expected
+    }
+  }

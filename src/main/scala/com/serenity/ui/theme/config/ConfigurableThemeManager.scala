@@ -10,19 +10,19 @@ object ConfigurableThemeManager:
 
   def configToTheme(config: ThemeConfig): Either[String, Theme] =
     for
-      foreground   <- ColorParser.parseColor(config.ui.foreground)
-      background   <- ColorParser.parseColor(config.ui.background)
-      cursor       <- ColorParser.parseColor(config.ui.cursor)
-      highlighted  <- convertUiToken(config.ui.highlighted)
-      menuItem     <- convertUiToken(config.ui.menuItem)
-      panel        <- convertUiToken(config.ui.panel)
-      error        <- convertUiToken(config.ui.error)
+      foreground   <- ColorParser.parseColor(ThemeFieldSchema.uiForegroundField.select(config.ui))
+      background   <- ColorParser.parseColor(ThemeFieldSchema.uiBackgroundField.select(config.ui))
+      cursor       <- ColorParser.parseColor(ThemeFieldSchema.uiCursorField.select(config.ui))
+      highlighted  <- convertUiToken(ThemeFieldSchema.uiHighlightedField.select(config.ui))
+      menuItem     <- convertUiToken(ThemeFieldSchema.uiMenuItemField.select(config.ui))
+      panel        <- convertUiToken(ThemeFieldSchema.uiPanelField.select(config.ui))
+      error        <- convertUiToken(ThemeFieldSchema.uiErrorField.select(config.ui))
       warning      <- convertUiToken(config.ui.warning.getOrElse(ThemeFieldSchema.warningDefault))
-      border       <- ColorParser.parseColor(config.ui.border)
+      border       <- ColorParser.parseColor(ThemeFieldSchema.uiBorderField.select(config.ui))
       panelBorder  <- parseOptionalColor(config.ui.panelBorder, border)
       margin       <- parseOptionalColor(config.ui.margin, background)
-      muted        <- ColorParser.parseColor(config.ui.muted)
-      placeholder  <- ColorParser.parseColor(config.ui.placeholder)
+      muted        <- ColorParser.parseColor(ThemeFieldSchema.uiMutedField.select(config.ui))
+      placeholder  <- ColorParser.parseColor(ThemeFieldSchema.uiPlaceholderField.select(config.ui))
       syntaxColors <- convertSyntaxColors(config.syntax, background)
     yield Theme(
       name = config.name,
@@ -67,14 +67,7 @@ object ConfigurableThemeManager:
     syntax: SyntaxColors,
     defaultBackground: Color
   ): Either[String, Map[SyntaxElement, ThemeColor]] =
-    val mandatory = List(
-      (SyntaxElement.Keyword, syntax.keyword),
-      (SyntaxElement.String, syntax.string),
-      (SyntaxElement.Comment, syntax.comment),
-      (SyntaxElement.Number, syntax.number),
-      (SyntaxElement.Operator, syntax.operator),
-      (SyntaxElement.Identifier, syntax.identifier)
-    )
+    val mandatory = ThemeFieldSchema.mandatorySyntaxFields.map(field => (field.element, field.select(syntax)))
     val optional =
       ThemeFieldSchema.syntaxFields.map(field => (field.element, field.select(syntax).getOrElse(field.default)))
     val conversions = mandatory ++ optional
