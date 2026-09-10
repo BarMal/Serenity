@@ -45,363 +45,306 @@ object CommandRunnerReducer:
 
   private def reduceActive(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
     event match
-      case RunnerDismiss =>
-        if submenuRecording(state) then ReducerResult.noEffects(clearSubmenuRecording(state))
-        else if submenuEditing(state) then ReducerResult.noEffects(clearSubmenuEditMode(state))
-        else if submenuSearching(state) then ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch("")))
-        else if submenuHasFocus(state) then
-          // Escape always means "up one level, or close if there is no level left" (issue #1059) --
-          // `SettingsSurfaceState.escape`'s two outcomes are exactly what `exitSubmenuToPreview` already computes via
-          // its own `activeSettingsSurface.flatMap(_.pop)`: `Popped` pops with a re-pointed parent, `CloseSurface`
-          // clears to the root (not the whole runner -- "closing the settings surface" per `SettingsSurfaceState`'s
-          // own doc, not closing the overlay). One call covers both outcomes for both the settings-tab and
-          // dedicated-Settings entry points alike, with no more branching on `isSettingsSurface` -- that branch used
-          // to preempt this one and always fully deactivate regardless of depth, which was the bug.
-          ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
-        else if rootEditing(state) then ReducerResult.noEffects(clearRootEditMode(state))
-        else ReducerResult.noEffects(deactivate(state))
-
-      case RunnerSubmit =>
-        if submenuHasFocus(state) then submitSubmenu(state)
-        else if currentRunner(state).exists(_.selectedItem.exists(entersGroupOnSubmit))
-        then ReducerResult.noEffects(replaceRunner(state, _.enterSelectedGroup))
-        else
-          currentRunner(state) match
-            case None =>
-              // Unreachable: `reduce` only dispatches here when currentRunner(state) is Some and
-              // active. Mirrors the fallback below for the no-selection case.
-              ReducerResult.noEffects(deactivate(state))
-            case Some(runner) =>
-              runner.editingItemId match
-                case Some(itemId) =>
-                  runner.inputItems.find(_.id == itemId) match
-                    case Some(item) =>
-                      item.parse(runner.editingText) match
-                        case Some(intent) =>
-                          val cmd = Command.typed(itemId, item.label, intent, CommandCategory.Settings)
-                          ReducerResult(
-                            state = replaceRunner(
-                              state,
-                              r => r.copy(editingItemId = None, editingText = "", statusMessage = None)
-                            ),
-                            effects = List(AppEffect.ExecuteCommand(cmd))
-                          )
-                        case None =>
-                          ReducerResult.noEffects(
-                            replaceRunner(
-                              state,
-                              _.copy(statusMessage = Some(invalidInputMessage(item, runner.editingText)))
-                            )
-                          )
-                    case None =>
-                      ReducerResult.noEffects(state)
-
-                case None =>
-                  runner.selectedItem match
-                    case Some(_: CommandSurfaceItem.InputItem) =>
-                      ReducerResult.noEffects(state)
-                    case Some(CommandSurfaceItem.CommandItem(command))
-                        if command.intent == CommandIntent.Settings(
-                          SettingsIntent.General(GeneralSettingsIntent.OpenSettings)
-                        ) =>
-                      ReducerResult.noEffects(replaceRunner(state, _.openSettings))
-                    case Some(CommandSurfaceItem.CommandItem(command)) =>
-                      ReducerResult(
-                        state = deactivate(state),
-                        effects = List(AppEffect.ExecuteCommand(command))
-                      )
-                    case Some(option: CommandSurfaceItem.OptionItem) =>
-                      option.selectedIntent match
-                        case Some(intent) =>
-                          ReducerResult(
-                            state = state,
-                            effects = List(
-                              AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category))
-                            )
-                          )
-                        case None =>
-                          ReducerResult.noEffects(state)
-                    case _ =>
-                      ReducerResult.noEffects(deactivate(state))
-
-      case RunnerInsertChar(char) =>
-        if submenuHasFocus(state) then
-          currentRunner(state) match
-            case Some(runner) =>
-              runner.activeSettingsSurface match
-                case Some(surface) =>
-                  val page          = surface.current
-                  val allItems      = runner.submenuItems(page.groupId)
-                  val editingItemId = page.editingItemId
-                  val editingText   = page.draftText
-                  val selectedInput = runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex).collect {
-                    case input: CommandSurfaceItem.InputItem => input
-                  }
-                  val activeInput = allItems
-                    .collectFirst {
-                      case input: CommandSurfaceItem.InputItem if editingItemId.contains(input.id) => input
-                    }
-                    .orElse(selectedInput)
-                  if activeInput.exists(_.accepts(editingText, char)) then
-                    activeInput match
-                      case Some(item) =>
-                        val nextText = if editingItemId.contains(item.id) then editingText + char else char.toString
-                        ReducerResult.noEffects(
-                          replaceRunner(
-                            state,
-                            r => r.withSubmenuEditingItem(item.id, nextText).copy(statusMessage = None)
-                          )
-                        )
-                      case None =>
-                        ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(page.searchTerm + char)))
-                  else if editingItemId.isEmpty then
-                    ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(page.searchTerm + char)))
-                  else ReducerResult.noEffects(state)
-                case None =>
-                  ReducerResult.noEffects(state)
-            case None =>
-              ReducerResult.noEffects(state)
-        else
-          currentRunner(state) match
-            case Some(runner) =>
-              runner.editingItemId match
-                case Some(itemId) =>
-                  val item = runner.inputItems.find(_.id == itemId)
-                  if item.exists(_.accepts(runner.editingText, char)) then
-                    ReducerResult.noEffects(
-                      replaceRunner(state, r => r.copy(editingText = r.editingText + char, statusMessage = None))
-                    )
-                  else ReducerResult.noEffects(state)
-                case None =>
-                  runner.selectedItem match
-                    case Some(item: CommandSurfaceItem.InputItem) =>
-                      if item.accepts("", char) then
-                        ReducerResult.noEffects(
-                          replaceRunner(
-                            state,
-                            r =>
-                              r.copy(editingItemId = Some(item.id), editingText = char.toString, statusMessage = None)
-                          )
-                        )
-                      else ReducerResult.noEffects(state)
-                    case _ =>
-                      given CommandRegistry = registry
-                      ReducerResult.noEffects(
-                        replaceRunner(state, r => r.updateSearchTerm(r.searchTerm + char))
-                      )
-            case None =>
-              ReducerResult.noEffects(state)
-
-      case RunnerRecordBinding(info, recordedAtMillis) =>
-        recordBinding(state, info, recordedAtMillis)
-
-      case RunnerBindingRecordingExpired(recordedAtMillis) =>
-        expireRecordedBinding(state, recordedAtMillis)
-
-      case RunnerDeleteBackward =>
-        if submenuHasFocus(state) then
-          // Backspace always means "delete one character of the current page's text", via
-          // `SettingsSurfaceState.deleteBackward` -- never a navigation, and a no-op when there is no text to delete
-          // (issue #1059's fix: this used to fall through to `exitSubmenuToPreview`, silently navigating up a level
-          // on an empty-text Backspace).
-          ReducerResult.noEffects(replaceRunner(state, _.deleteSubmenuTextBackward))
-        else
-          currentRunner(state).flatMap(_.editingItemId) match
-            case Some(_) =>
-              if currentRunner(state).exists(_.editingText.nonEmpty) then
-                ReducerResult.noEffects(
-                  replaceRunner(state, r => r.copy(editingText = r.editingText.dropRight(1), statusMessage = None))
-                )
-              else ReducerResult.noEffects(state)
-            case None =>
-              if currentRunner(state).exists(_.searchTerm.nonEmpty) then
-                given CommandRegistry = registry
-                ReducerResult.noEffects(
-                  replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm.dropRight(1)))
-                )
-              else ReducerResult.noEffects(state)
-
-      case RunnerDeleteForward =>
-        if submenuHasFocus(state) then
-          currentRunner(state).flatMap(_.activeSettingsSurface) match
-            case Some(surface) if surface.current.editingItemId.nonEmpty =>
-              ReducerResult.noEffects(state)
-            case _ =>
-              ReducerResult.noEffects(state)
-        else
-          currentRunner(state).flatMap(_.editingItemId) match
-            case Some(_) =>
-              ReducerResult.noEffects(state)
-            case None =>
-              ReducerResult.noEffects(state)
-
-      case RunnerDeleteWordBackward =>
-        if submenuHasFocus(state) then
-          currentRunner(state).flatMap(_.activeSettingsSurface) match
-            case Some(surface) if surface.current.editingItemId.nonEmpty && surface.current.draftText.nonEmpty =>
-              ReducerResult.noEffects(
-                replaceRunner(
-                  state,
-                  r =>
-                    r.withSubmenuEditingText(TextEditing.deleteWordBackward(surface.current.draftText))
-                      .copy(statusMessage = None)
-                )
-              )
-            case Some(surface) if surface.current.searchTerm.nonEmpty =>
-              ReducerResult.noEffects(
-                replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordBackward(surface.current.searchTerm)))
-              )
-            case _ =>
-              ReducerResult.noEffects(state)
-        else
-          currentRunner(state).flatMap(_.editingItemId) match
-            case Some(_) =>
-              if currentRunner(state).exists(_.editingText.nonEmpty) then
-                ReducerResult.noEffects(
-                  replaceRunner(
-                    state,
-                    r => r.copy(editingText = TextEditing.deleteWordBackward(r.editingText), statusMessage = None)
-                  )
-                )
-              else ReducerResult.noEffects(state)
-            case None =>
-              if currentRunner(state).exists(_.searchTerm.nonEmpty) then
-                given CommandRegistry = registry
-                ReducerResult.noEffects(
-                  replaceRunner(
-                    state,
-                    runner => runner.updateSearchTerm(TextEditing.deleteWordBackward(runner.searchTerm))
-                  )
-                )
-              else ReducerResult.noEffects(state)
-
-      case RunnerDeleteWordForward =>
-        if submenuHasFocus(state) then
-          currentRunner(state).flatMap(_.activeSettingsSurface) match
-            case Some(surface) if surface.current.editingItemId.nonEmpty && surface.current.draftText.nonEmpty =>
-              ReducerResult.noEffects(
-                replaceRunner(
-                  state,
-                  r =>
-                    r.withSubmenuEditingText(TextEditing.deleteWordForward(surface.current.draftText))
-                      .copy(statusMessage = None)
-                )
-              )
-            case Some(surface) if surface.current.searchTerm.nonEmpty =>
-              ReducerResult.noEffects(
-                replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordForward(surface.current.searchTerm)))
-              )
-            case _ =>
-              ReducerResult.noEffects(state)
-        else
-          currentRunner(state).flatMap(_.editingItemId) match
-            case Some(_) =>
-              if currentRunner(state).exists(_.editingText.nonEmpty) then
-                ReducerResult.noEffects(
-                  replaceRunner(
-                    state,
-                    r => r.copy(editingText = TextEditing.deleteWordForward(r.editingText), statusMessage = None)
-                  )
-                )
-              else ReducerResult.noEffects(state)
-            case None =>
-              if currentRunner(state).exists(_.searchTerm.nonEmpty) then
-                given CommandRegistry = registry
-                ReducerResult.noEffects(
-                  replaceRunner(
-                    state,
-                    runner => runner.updateSearchTerm(TextEditing.deleteWordForward(runner.searchTerm))
-                  )
-                )
-              else ReducerResult.noEffects(state)
-
-      case RunnerPaste =>
-        state.runtime.clipboard
-          .getOrElse("")
-          .filter(char => char != '\r' && char != '\n')
-          .foldLeft(ReducerResult.noEffects(state))((result, char) =>
-            reduceActive(RunnerInsertChar(char), result.state, registry)
-          )
-
-      case RunnerNavigate(Direction.Up) =>
-        if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(-1)))
-        else ReducerResult.noEffects(replaceRunner(state, _.moveSelection(-1)))
-
-      case RunnerNavigate(Direction.Down) =>
-        if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(1)))
-        else ReducerResult.noEffects(replaceRunner(state, _.moveSelection(1)))
-
+      case RunnerDismiss                               => reduceDismiss(state)
+      case RunnerSubmit                                => reduceSubmit(state)
+      case RunnerInsertChar(char)                       => reduceInsertChar(char, state, registry)
+      case RunnerRecordBinding(info, recordedAtMillis) => recordBinding(state, info, recordedAtMillis)
+      case RunnerBindingRecordingExpired(recordedAtMillis) => expireRecordedBinding(state, recordedAtMillis)
+      case RunnerDeleteBackward                        => reduceDeleteBackward(state, registry)
+      case RunnerDeleteForward                         => reduceDeleteForward(state)
+      case RunnerDeleteWordBackward                    => reduceDeleteWordBackward(state, registry)
+      case RunnerDeleteWordForward                     => reduceDeleteWordForward(state, registry)
+      case RunnerPaste                                 => reducePaste(state, registry)
+      case RunnerNavigate(Direction.Up)                => reduceVerticalNavigate(-1, state)
+      case RunnerNavigate(Direction.Down)               => reduceVerticalNavigate(1, state)
       case RunnerSelectVisibleItem(index) =>
         ReducerResult.noEffects(replaceRunner(state, _.withSelectedVisibleIndex(index)))
-
       case RunnerSelectSubmenuItem(index) =>
         ReducerResult.noEffects(replaceRunner(state, _.withSelectedFocusedSubmenuIndex(index)))
+      case RunnerNavigate(Direction.Left)  => reduceHorizontalNavigate(-1, state)
+      case RunnerNavigate(Direction.Right) => reduceHorizontalNavigate(1, state)
 
-      case RunnerNavigate(Direction.Left) =>
-        if submenuHasFocus(state) then
-          currentRunner(state) match
-            case Some(runner) =>
-              val updatedRunner = runner.adjustSelectedSubmenuOption(-1)
-              val effects = submenuSelectedOption(updatedRunner)
-                .flatMap(_.selectedIntent)
-                .toList
-                .map(intent =>
-                  AppEffect.ExecuteCommand(
-                    Command.typed(intent.toString, intent.toString, intent, CommandCategory.Settings)
+  private def reduceDismiss(state: AppState): ReducerResult =
+    if submenuRecording(state) then ReducerResult.noEffects(clearSubmenuRecording(state))
+    else if submenuEditing(state) then ReducerResult.noEffects(clearSubmenuEditMode(state))
+    else if submenuSearching(state) then ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch("")))
+    else if submenuHasFocus(state) then
+      // Escape always means "up one level, or close if there is no level left" (issue #1059) --
+      // `SettingsSurfaceState.escape`'s two outcomes are exactly what `exitSubmenuToPreview` already computes via
+      // its own `activeSettingsSurface.flatMap(_.pop)`: `Popped` pops with a re-pointed parent, `CloseSurface`
+      // clears to the root (not the whole runner -- "closing the settings surface" per `SettingsSurfaceState`'s
+      // own doc, not closing the overlay). One call covers both outcomes for both the settings-tab and
+      // dedicated-Settings entry points alike, with no more branching on `isSettingsSurface` -- that branch used
+      // to preempt this one and always fully deactivate regardless of depth, which was the bug.
+      ReducerResult.noEffects(replaceRunner(state, _.exitSubmenuToPreview))
+    else if rootEditing(state) then ReducerResult.noEffects(clearRootEditMode(state))
+    else ReducerResult.noEffects(deactivate(state))
+
+  private def reduceSubmit(state: AppState): ReducerResult =
+    if submenuHasFocus(state) then submitSubmenu(state)
+    else if currentRunner(state).exists(_.selectedItem.exists(entersGroupOnSubmit))
+    then ReducerResult.noEffects(replaceRunner(state, _.enterSelectedGroup))
+    else
+      currentRunner(state) match
+        case None =>
+          // Unreachable: `reduce` only dispatches here when currentRunner(state) is Some and
+          // active. Mirrors the fallback below for the no-selection case.
+          ReducerResult.noEffects(deactivate(state))
+        case Some(runner) =>
+          runner.editingItemId match
+            case Some(itemId) => submitRootEditingItem(state, runner, itemId)
+            case None         => submitRootSelection(state, runner)
+
+  private def submitRootEditingItem(state: AppState, runner: CommandRunner, itemId: String): ReducerResult =
+    runner.inputItems.find(_.id == itemId) match
+      case Some(item) =>
+        item.parse(runner.editingText) match
+          case Some(intent) =>
+            val cmd = Command.typed(itemId, item.label, intent, CommandCategory.Settings)
+            ReducerResult(
+              state = replaceRunner(state, r => r.copy(editingItemId = None, editingText = "", statusMessage = None)),
+              effects = List(AppEffect.ExecuteCommand(cmd))
+            )
+          case None =>
+            ReducerResult.noEffects(
+              replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, runner.editingText))))
+            )
+      case None =>
+        ReducerResult.noEffects(state)
+
+  private def submitRootSelection(state: AppState, runner: CommandRunner): ReducerResult =
+    runner.selectedItem match
+      case Some(_: CommandSurfaceItem.InputItem) =>
+        ReducerResult.noEffects(state)
+      case Some(CommandSurfaceItem.CommandItem(command))
+          if command.intent == CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.OpenSettings)) =>
+        ReducerResult.noEffects(replaceRunner(state, _.openSettings))
+      case Some(CommandSurfaceItem.CommandItem(command)) =>
+        ReducerResult(state = deactivate(state), effects = List(AppEffect.ExecuteCommand(command)))
+      case Some(option: CommandSurfaceItem.OptionItem) =>
+        option.selectedIntent match
+          case Some(intent) =>
+            ReducerResult(
+              state = state,
+              effects = List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category)))
+            )
+          case None =>
+            ReducerResult.noEffects(state)
+      case _ =>
+        ReducerResult.noEffects(deactivate(state))
+
+  private def reduceInsertChar(char: Char, state: AppState, registry: CommandRegistry): ReducerResult =
+    if submenuHasFocus(state) then insertCharIntoSubmenu(char, state)
+    else insertCharIntoRoot(char, state, registry)
+
+  private def insertCharIntoSubmenu(char: Char, state: AppState): ReducerResult =
+    currentRunner(state) match
+      case Some(runner) =>
+        runner.activeSettingsSurface match
+          case Some(surface) =>
+            val page          = surface.current
+            val allItems      = runner.submenuItems(page.groupId)
+            val editingItemId = page.editingItemId
+            val editingText   = page.draftText
+            val selectedInput = runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex).collect {
+              case input: CommandSurfaceItem.InputItem => input
+            }
+            val activeInput = allItems
+              .collectFirst {
+                case input: CommandSurfaceItem.InputItem if editingItemId.contains(input.id) => input
+              }
+              .orElse(selectedInput)
+            if activeInput.exists(_.accepts(editingText, char)) then
+              activeInput match
+                case Some(item) =>
+                  val nextText = if editingItemId.contains(item.id) then editingText + char else char.toString
+                  ReducerResult.noEffects(
+                    replaceRunner(state, r => r.withSubmenuEditingItem(item.id, nextText).copy(statusMessage = None))
                   )
-                )
-              ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
-            case None => ReducerResult.noEffects(state)
-        else
-          currentRunner(state) match
-            case Some(runner) if runner.searchTerm.isEmpty && runner.editingItemId.isEmpty =>
-              runner.selectedItem match
-                case Some(option: CommandSurfaceItem.OptionItem) =>
-                  val nextIndex     = (option.selectedIndex - 1 + option.options.length) % option.options.length
-                  val nextOption    = option.options(nextIndex)
-                  val updatedRunner = runner.adjustSelectedOption(-1)
-                  val effects =
-                    List(
-                      AppEffect.ExecuteCommand(
-                        Command.typed(option.id, option.label, nextOption.intent, option.category)
-                      )
+                case None =>
+                  ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(page.searchTerm + char)))
+            else if editingItemId.isEmpty then
+              ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch(page.searchTerm + char)))
+            else ReducerResult.noEffects(state)
+          case None =>
+            ReducerResult.noEffects(state)
+      case None =>
+        ReducerResult.noEffects(state)
+
+  private def insertCharIntoRoot(char: Char, state: AppState, registry: CommandRegistry): ReducerResult =
+    currentRunner(state) match
+      case Some(runner) =>
+        runner.editingItemId match
+          case Some(itemId) =>
+            val item = runner.inputItems.find(_.id == itemId)
+            if item.exists(_.accepts(runner.editingText, char)) then
+              ReducerResult.noEffects(
+                replaceRunner(state, r => r.copy(editingText = r.editingText + char, statusMessage = None))
+              )
+            else ReducerResult.noEffects(state)
+          case None =>
+            runner.selectedItem match
+              case Some(item: CommandSurfaceItem.InputItem) =>
+                if item.accepts("", char) then
+                  ReducerResult.noEffects(
+                    replaceRunner(
+                      state,
+                      r => r.copy(editingItemId = Some(item.id), editingText = char.toString, statusMessage = None)
                     )
-                  ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
-                case _ =>
-                  ReducerResult.noEffects(state)
-            case _ =>
-              ReducerResult.noEffects(state)
-
-      case RunnerNavigate(Direction.Right) =>
-        if submenuHasFocus(state) then
-          currentRunner(state) match
-            case Some(runner) =>
-              val updatedRunner = runner.adjustSelectedSubmenuOption(1)
-              val effects = submenuSelectedOption(updatedRunner)
-                .flatMap(_.selectedIntent)
-                .toList
-                .map(intent =>
-                  AppEffect.ExecuteCommand(
-                    Command.typed(intent.toString, intent.toString, intent, CommandCategory.Settings)
                   )
-                )
-              ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
-            case None => ReducerResult.noEffects(state)
-        else
-          currentRunner(state) match
-            case Some(runner) if runner.searchTerm.isEmpty && runner.editingItemId.isEmpty =>
-              runner.selectedItem match
-                case Some(option: CommandSurfaceItem.OptionItem) =>
-                  val nextIndex     = (option.selectedIndex + 1) % option.options.length
-                  val nextIntent    = option.options(nextIndex).intent
-                  val updatedRunner = runner.adjustSelectedOption(1)
-                  val effects =
-                    List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, nextIntent, option.category)))
-                  ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
-                case _ =>
-                  ReducerResult.noEffects(state)
-            case _ =>
-              ReducerResult.noEffects(state)
+                else ReducerResult.noEffects(state)
+              case _ =>
+                given CommandRegistry = registry
+                ReducerResult.noEffects(replaceRunner(state, r => r.updateSearchTerm(r.searchTerm + char)))
+      case None =>
+        ReducerResult.noEffects(state)
+
+  private def reduceDeleteBackward(state: AppState, registry: CommandRegistry): ReducerResult =
+    if submenuHasFocus(state) then
+      // Backspace always means "delete one character of the current page's text", via
+      // `SettingsSurfaceState.deleteBackward` -- never a navigation, and a no-op when there is no text to delete
+      // (issue #1059's fix: this used to fall through to `exitSubmenuToPreview`, silently navigating up a level
+      // on an empty-text Backspace).
+      ReducerResult.noEffects(replaceRunner(state, _.deleteSubmenuTextBackward))
+    else
+      currentRunner(state).flatMap(_.editingItemId) match
+        case Some(_) =>
+          if currentRunner(state).exists(_.editingText.nonEmpty) then
+            ReducerResult.noEffects(
+              replaceRunner(state, r => r.copy(editingText = r.editingText.dropRight(1), statusMessage = None))
+            )
+          else ReducerResult.noEffects(state)
+        case None =>
+          if currentRunner(state).exists(_.searchTerm.nonEmpty) then
+            given CommandRegistry = registry
+            ReducerResult.noEffects(
+              replaceRunner(state, runner => runner.updateSearchTerm(runner.searchTerm.dropRight(1)))
+            )
+          else ReducerResult.noEffects(state)
+
+  private def reduceDeleteForward(state: AppState): ReducerResult =
+    // Forward-delete is not implemented for either the submenu or root search/input text; every branch
+    // is a deliberate no-op (preserved verbatim from the pre-extraction `reduceActive`).
+    ReducerResult.noEffects(state)
+
+  private def reduceDeleteWordBackward(state: AppState, registry: CommandRegistry): ReducerResult =
+    if submenuHasFocus(state) then
+      currentRunner(state).flatMap(_.activeSettingsSurface) match
+        case Some(surface) if surface.current.editingItemId.nonEmpty && surface.current.draftText.nonEmpty =>
+          ReducerResult.noEffects(
+            replaceRunner(
+              state,
+              r =>
+                r.withSubmenuEditingText(TextEditing.deleteWordBackward(surface.current.draftText))
+                  .copy(statusMessage = None)
+            )
+          )
+        case Some(surface) if surface.current.searchTerm.nonEmpty =>
+          ReducerResult.noEffects(
+            replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordBackward(surface.current.searchTerm)))
+          )
+        case _ =>
+          ReducerResult.noEffects(state)
+    else
+      currentRunner(state).flatMap(_.editingItemId) match
+        case Some(_) =>
+          if currentRunner(state).exists(_.editingText.nonEmpty) then
+            ReducerResult.noEffects(
+              replaceRunner(
+                state,
+                r => r.copy(editingText = TextEditing.deleteWordBackward(r.editingText), statusMessage = None)
+              )
+            )
+          else ReducerResult.noEffects(state)
+        case None =>
+          if currentRunner(state).exists(_.searchTerm.nonEmpty) then
+            given CommandRegistry = registry
+            ReducerResult.noEffects(
+              replaceRunner(state, runner => runner.updateSearchTerm(TextEditing.deleteWordBackward(runner.searchTerm)))
+            )
+          else ReducerResult.noEffects(state)
+
+  private def reduceDeleteWordForward(state: AppState, registry: CommandRegistry): ReducerResult =
+    if submenuHasFocus(state) then
+      currentRunner(state).flatMap(_.activeSettingsSurface) match
+        case Some(surface) if surface.current.editingItemId.nonEmpty && surface.current.draftText.nonEmpty =>
+          ReducerResult.noEffects(
+            replaceRunner(
+              state,
+              r =>
+                r.withSubmenuEditingText(TextEditing.deleteWordForward(surface.current.draftText))
+                  .copy(statusMessage = None)
+            )
+          )
+        case Some(surface) if surface.current.searchTerm.nonEmpty =>
+          ReducerResult.noEffects(
+            replaceRunner(state, _.updateSubmenuSearch(TextEditing.deleteWordForward(surface.current.searchTerm)))
+          )
+        case _ =>
+          ReducerResult.noEffects(state)
+    else
+      currentRunner(state).flatMap(_.editingItemId) match
+        case Some(_) =>
+          if currentRunner(state).exists(_.editingText.nonEmpty) then
+            ReducerResult.noEffects(
+              replaceRunner(
+                state,
+                r => r.copy(editingText = TextEditing.deleteWordForward(r.editingText), statusMessage = None)
+              )
+            )
+          else ReducerResult.noEffects(state)
+        case None =>
+          if currentRunner(state).exists(_.searchTerm.nonEmpty) then
+            given CommandRegistry = registry
+            ReducerResult.noEffects(
+              replaceRunner(state, runner => runner.updateSearchTerm(TextEditing.deleteWordForward(runner.searchTerm)))
+            )
+          else ReducerResult.noEffects(state)
+
+  private def reducePaste(state: AppState, registry: CommandRegistry): ReducerResult =
+    state.runtime.clipboard
+      .getOrElse("")
+      .filter(char => char != '\r' && char != '\n')
+      .foldLeft(ReducerResult.noEffects(state))((result, char) =>
+        reduceActive(RunnerInsertChar(char), result.state, registry)
+      )
+
+  private def reduceVerticalNavigate(delta: Int, state: AppState): ReducerResult =
+    if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(delta)))
+    else ReducerResult.noEffects(replaceRunner(state, _.moveSelection(delta)))
+
+  private def reduceHorizontalNavigate(delta: Int, state: AppState): ReducerResult =
+    if submenuHasFocus(state) then adjustSubmenuOption(delta, state)
+    else cycleRootOption(delta, state)
+
+  private def adjustSubmenuOption(delta: Int, state: AppState): ReducerResult =
+    currentRunner(state) match
+      case Some(runner) =>
+        val updatedRunner = runner.adjustSelectedSubmenuOption(delta)
+        val effects = submenuSelectedOption(updatedRunner)
+          .flatMap(_.selectedIntent)
+          .toList
+          .map(intent =>
+            AppEffect.ExecuteCommand(Command.typed(intent.toString, intent.toString, intent, CommandCategory.Settings))
+          )
+        ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
+      case None => ReducerResult.noEffects(state)
+
+  private def cycleRootOption(delta: Int, state: AppState): ReducerResult =
+    currentRunner(state) match
+      case Some(runner) if runner.searchTerm.isEmpty && runner.editingItemId.isEmpty =>
+        runner.selectedItem match
+          case Some(option: CommandSurfaceItem.OptionItem) =>
+            val nextIndex     = (option.selectedIndex + delta + option.options.length) % option.options.length
+            val nextIntent    = option.options(nextIndex).intent
+            val updatedRunner = runner.adjustSelectedOption(delta)
+            val effects =
+              List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, nextIntent, option.category)))
+            ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
+          case _ =>
+            ReducerResult.noEffects(state)
+      case _ =>
+        ReducerResult.noEffects(state)
 
   private def deactivate(state: AppState): AppState =
     state
