@@ -18,6 +18,9 @@ import com.serenity.config.{
 import com.serenity.lsp.config.LspUserConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import io.circe.{Decoder, Encoder, HCursor, Json}
+import org.slf4j.LoggerFactory
+
+private val sessionFieldLogger = LoggerFactory.getLogger("com.serenity.session.SessionConfigCodec")
 
 /** A setting session state keeps whole where the config file spreads it over several keys.
   *
@@ -31,12 +34,24 @@ final case class SessionField[A](key: String, get: AppConfig => A, set: (AppConf
   def encode(config: AppConfig): (String, Json) = key -> encoder(get(config))
 
   /** A key the file does not carry is left alone: `Option` decodes a missing key as `None`, which would turn every
-    * default into "not set" on an older session file.
+    * default into "not set" on an older session file. A key that is present but does not decode is logged rather than
+    * silently dropped -- see #1423 -- naming the field and the value so a typo in a hand-edited session file shows up
+    * somewhere other than a setting quietly reverting to its default.
     */
   def decode(cursor: HCursor, config: AppConfig): AppConfig =
     val stored = cursor.downField(key)
     if !stored.succeeded then config
-    else stored.as(using decoder).fold(_ => config, value => set(config, value))
+    else
+      stored.as(using decoder).fold(
+        failure =>
+          sessionFieldLogger.warn(
+            s"[SESSION] Failed to decode field '$key' from ${stored.focus.map(_.noSpaces).getOrElse("<unknown>")}: " +
+              s"${failure.getMessage}; keeping existing value"
+          )
+          config
+        ,
+        value => set(config, value)
+      )
 
 /** How an `AppConfig` is written into a session file and read back out.
   *
