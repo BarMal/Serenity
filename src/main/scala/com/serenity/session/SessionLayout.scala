@@ -57,7 +57,7 @@ object SessionLayout:
 
   def fromAppState(state: AppState): SessionLayout =
     val dockedPanels = state.pinnedSurfaces.flatMap { surface =>
-      UiPreset.PinnedPanel.fromSurface(surface).map(SessionDockedPanel(surface.id.value, _))
+      UiPreset.PinnedPanel.fromSurface(surface, state).map(SessionDockedPanel(surface.id.value, _))
     }
     val persistedSurfaceIds = dockedPanels.map(panel => SurfaceId(panel.surfaceId)).toSet
     val workspaceTree = state.persisted.layout.workspaceTree
@@ -117,7 +117,7 @@ object SessionLayout:
       .flatMap(toWorkspaceNode)
       .map(WorkspaceTree.apply)
       .filter(_.validationErrors(editorPanes.keySet, pinnedSurfaceIds).isEmpty)
-    val fallbackTree  = fallbackWorkspaceTree(orderedPaneIds, splitDirection, surfaces)
+    val fallbackTree  = fallbackWorkspaceTree(orderedPaneIds, splitDirection, sessionLayout.dockedPanels)
     val workspaceTree = decodedTree.orElse(fallbackTree)
     val maximized = sessionLayout.maximizedWorkspaceNodeId
       .map(WorkspaceNodeId.apply)
@@ -171,23 +171,24 @@ object SessionLayout:
           secondNode
         )
 
+  /** Docks each persisted panel at its saved position, used only when a session predates a persisted `workspaceTree`
+    * (or that tree failed validation) -- position lives on `SessionDockedPanel`/`UiPreset.PinnedPanel` itself, the
+    * persistence-format mirror of `WorkspaceNode.DockedSurface.position`, not on the restored `UiSurface`, which no
+    * longer carries position at all (issue #817).
+    */
   private def fallbackWorkspaceTree(
     paneIds: List[PaneId],
     splitDirection: PaneSplitDirection,
-    surfaces: List[UiSurface]
+    dockedPanels: List[SessionDockedPanel]
   ): Option[WorkspaceTree] =
-    surfaces.zipWithIndex.foldLeft(WorkspaceTree.fromLegacy(paneIds, splitDirection)) {
-      case (Some(tree), (surface, index)) =>
-        surface.presentation match
-          case SurfacePresentation.Pinned(position, _) =>
-            tree.dock(
-              surface.id,
-              position,
-              WorkspaceNodeId(s"restored-dock-split-$index"),
-              WorkspaceNodeId(s"restored-dock-${surface.id.value}")
-            )
-          case _ =>
-            Some(tree)
+    dockedPanels.zipWithIndex.foldLeft(WorkspaceTree.fromLegacy(paneIds, splitDirection)) {
+      case (Some(tree), (panel, index)) =>
+        tree.dock(
+          SurfaceId(panel.surfaceId),
+          panel.panel.position,
+          WorkspaceNodeId(s"restored-dock-split-$index"),
+          WorkspaceNodeId(s"restored-dock-${panel.surfaceId}")
+        )
       case (None, _) =>
         None
     }

@@ -29,15 +29,15 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withFontConfig(FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f))
       .withBackgroundStyle(BackgroundStyle.GlassLike)
-    val panel = UiSurface.fromPanelContent(
+    val baseState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(config = config, theme = Theme.light)
+    )
+    val state = DockedPanelFixtures.dock(
+      baseState,
       SurfaceId("panel-1"),
       PanelContent.DirectoryTree(DirectoryTreeData(root), selectedPath = Some(root)),
       PanelPosition.Left,
       32
-    )
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(config = config, theme = Theme.light),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(panel))
     )
 
     val preset = UiPreset.capture("Writing", state, Some(PreferredWindowSize(1440, 960)))
@@ -53,17 +53,12 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
   it should "restore captured config, theme, and pinned panels onto app state" in {
     val root = Files.createTempDirectory("ui-preset-restore")
-    val initial = AppState.initial.copy(
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface.fromPanelContent(
-            SurfaceId("old-panel"),
-            PanelContent.Diagnostics(Nil),
-            PanelPosition.Bottom,
-            8
-          )
-        )
-      )
+    val initial = DockedPanelFixtures.dock(
+      AppState.initial,
+      SurfaceId("old-panel"),
+      PanelContent.Diagnostics(Nil),
+      PanelPosition.Bottom,
+      8
     )
     val preset = UiPreset(
       name = "Review",
@@ -89,7 +84,14 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     restored.persisted.config.editorConfig.fontConfig.textFontSize shouldBe 17.0f
     restored.persisted.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 800))
     restored.pinnedSurfaces should have size 1
-    restored.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Right, 44)
+    restored.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Docked
+    restored.persisted.layout.workspaceTree.flatMap(
+      _.positionForSurface(restored.pinnedSurfaces.head.id)
+    ) shouldBe Some(PanelPosition.Right)
+    com.serenity.state.reducers.PanelStateReducer.currentSize(
+      restored.pinnedSurfaces.head.id,
+      restored
+    ) shouldBe Some(44)
     restored.pinnedSurfaces.head.content shouldBe a[SurfaceContent.DirectoryTree]
   }
 

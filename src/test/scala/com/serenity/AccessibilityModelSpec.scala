@@ -55,16 +55,11 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "announce a focus change once while ignoring unchanged editor state" in {
-    val before       = AccessibilitySnapshot.from(AppState.initial, viewport)
-    val surfaceId    = SurfaceId("outline")
-    val initialState = AppState.initial
-    val afterState = initialState.copy(
-      persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
-      runtime = initialState.runtime.copy(
-        uiSurfaces =
-          List(UiSurface(surfaceId, SurfaceContent.Outline(Nil), SurfacePresentation.Pinned(PanelPosition.Left, 20)))
-      )
-    )
+    val before    = AccessibilitySnapshot.from(AppState.initial, viewport)
+    val surfaceId = SurfaceId("outline")
+    val docked =
+      DockedPanelFixtures.dock(AppState.initial, surfaceId, SurfaceContent.Outline(Nil), PanelPosition.Left, 20)
+    val afterState = docked.copy(persisted = docked.persisted.copy(focus = Focus.Surface(surfaceId)))
 
     val after = AccessibilitySnapshot.from(afterState, viewport, Some(before))
 

@@ -119,9 +119,15 @@ object LayoutEngine:
       math
         .ceil((state.persisted.config.editorConfig.minimumPaneWidth.max(1) + lineNumberWidth) / horizontalTextFraction)
         .toInt
+    // An expanded/maximized panel (issue #817: `Layout.maximizedWorkspaceNodeId`, not a separate presentation) takes
+    // over the whole central editor workspace via `expandedPanelRect` below, so its own dock space is excluded here
+    // rather than still being reserved for it as an ordinary docked panel.
+    val panelLayoutTree =
+      state.persisted.layout.workspaceTree.map { tree =>
+        state.expandedPanelSurface.flatMap(surface => tree.removeSurface(surface.id)).getOrElse(tree)
+      }
     val pinnedPanelLayout =
-      state.persisted.layout.workspaceTree
-        .filter(_.dockedSurfaceIds.nonEmpty)
+      panelLayoutTree
         .map(
           PinnedPanelLayoutEngine.calculateDockedPanelLayout(
             _,
@@ -132,14 +138,7 @@ object LayoutEngine:
             uiElementGap
           )
         )
-        .getOrElse(
-          PinnedPanelLayoutEngine.calculatePinnedPanelLayout(
-            state.pinnedSurfaces,
-            viewportSize.width,
-            contentHeight,
-            uiElementGap
-          )
-        )
+        .getOrElse(PinnedPanelLayoutEngine.PinnedPanelLayout(Map.empty, Map.empty))
     val pinnedPanelRects = pinnedPanelLayout.panelRects
 
     val topPinnedHeight =

@@ -37,28 +37,13 @@ final case class TextPanelView(
 
 object PinnedPanelViewModel:
 
+  /** Every docked surface's panel view, including the currently-expanded one -- `state.pinnedSurfaces` (issue #817)
+    * already covers it: expansion is a `Layout.maximizedWorkspaceNodeId` overlay on an otherwise still-docked surface,
+    * not a separate presentation that would exclude it, so no second, expanded-only surface list is needed here.
+    */
   def fromState(state: AppState, layout: CalculatedLayout): List[TextPanelView] =
-    (state.pinnedSurfaces ++ state.runtime.uiSurfaces.filter {
-      _.presentation match
-        case SurfacePresentation.Expanded(_, _) => true
-        case _                                  => false
-    }).flatMap {
-      case surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, _), _) =>
-        EditorLayoutContract.panelRectFor(surface, layout).map(rect => resolve(surface, rect, Some(state)))
-      case surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _) =>
-        EditorLayoutContract.panelRectFor(surface, layout).map(rect => resolve(surface, rect, Some(state)))
-      case _ =>
-        None
-    }
-
-  def fromLayout(layout: CalculatedLayout, surfaces: List[UiSurface]): List[TextPanelView] =
-    surfaces.flatMap {
-      case surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, _), _) =>
-        EditorLayoutContract.panelRectFor(surface, layout).map(rect => resolve(surface, rect, None))
-      case surface @ UiSurface(_, _, SurfacePresentation.Expanded(_, _), _) =>
-        EditorLayoutContract.panelRectFor(surface, layout).map(rect => resolve(surface, rect, None))
-      case _ =>
-        None
+    state.pinnedSurfaces.flatMap { surface =>
+      EditorLayoutContract.panelRectFor(surface, state, layout).map(rect => resolve(surface, rect, Some(state)))
     }
 
   def resolve(surface: UiSurface, rect: LayoutRect): TextPanelView =

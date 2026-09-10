@@ -2,9 +2,15 @@ package com.serenity.state.reducers
 
 import com.serenity.state.models.*
 import com.serenity.state.undo.HistoryEntry
-import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
 
 object PanelStateReducer:
+
+  /** Default absolute size (in cells) given to a floating surface pinned via drag-to-edge or peek-to-pin, matching
+    * every `toPinnedSurface` content case -- the tree has no notion of a content-specific default, so the requested
+    * ratio is seeded from this constant immediately after docking.
+    */
+  private val PeekToPinDefaultSize = 30
 
   /** Pin/unpin declare their own undo boundary (#1016 PR4) -- the same "the code that performs the change declares it"
     * principle #1361 applied to buffer edits, generalized here to the non-reducer-only panel-pin surface. Move, resize,
@@ -14,9 +20,10 @@ object PanelStateReducer:
   def pin(content: PanelContent, position: PanelPosition, size: Int, state: AppState): ReducerResult =
     val undoEntry                = HistoryEntry.PanelChange.capture(state)
     val (stateWithId, surfaceId) = state.allocateSurfaceId
-    val panel                    = UiSurface.fromPanelContent(surfaceId, content, position, size)
+    val panel                    = UiSurface.fromPanelContent(surfaceId, content)
     val workspaceTree = stateWithId.persisted.layout.effectiveWorkspaceTree.flatMap { tree =>
-      tree.dock(surfaceId, position, nextSplitId(tree, surfaceId), WorkspaceNodeId(s"dock-${surfaceId.value}"))
+      val (splitId, leafId) = tree.nextDockIds(surfaceId)
+      tree.dockSized(surfaceId, position, splitId, leafId, size, stateWithId.runtime.viewportSize)
     }
     ReducerResult.withEffect(
       stateWithId.copy(
@@ -42,27 +49,30 @@ object PanelStateReducer:
 
   /** The current size of a pinned surface, or `None` if it isn't pinned -- used by `StateManagerEffectHandlers`'s
     * command/keyboard resize path (issue #1310) to compute a delta-adjusted absolute size before calling `resize`.
+    * Reads back through the workspace tree's owning-split ratio (issue #817) -- the sole size record for a docked
+    * surface -- rather than any size carried on the surface itself.
     */
   def currentSize(surfaceId: SurfaceId, state: AppState): Option[Int] =
-    state.surfaceById(surfaceId).collect { case UiSurface(_, _, SurfacePresentation.Pinned(_, size), _) => size }
+    state.persisted.layout.workspaceTree.flatMap(_.currentSize(surfaceId, state.runtime.viewportSize))
 
   def resize(surfaceId: SurfaceId, newSize: Int, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
-      case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _)) =>
-        val resized = surface.copy(presentation = SurfacePresentation.Pinned(position, newSize))
-        val resizedTree = state.persisted.layout.workspaceTree.flatMap(
-          _.resizeSurface(surfaceId, surfaceAllocationRatio(position, newSize, state))
-        )
-        ReducerResult.noEffects(
-          state.copy(
-            persisted = state.persisted.copy(
-              layout =
-                state.persisted.layout.copy(workspaceTree = resizedTree.orElse(state.persisted.layout.workspaceTree))
-            ),
-            runtime = state.runtime.copy(uiSurfaces = replaceSurfaceInPlace(state.runtime.uiSurfaces, resized))
-          )
-        )
-      case _ =>
+      case Some(_) =>
+        val resizedTree = for
+          tree    <- state.persisted.layout.workspaceTree
+          ratio   <- tree.allocationRatio(surfaceId, newSize, state.runtime.viewportSize)
+          resized <- tree.resizeSurface(surfaceId, ratio)
+        yield resized
+        resizedTree match
+          case Some(_) =>
+            ReducerResult.noEffects(
+              state.copy(persisted =
+                state.persisted.copy(layout = state.persisted.layout.copy(workspaceTree = resizedTree))
+              )
+            )
+          case None =>
+            ReducerResult.noEffects(state)
+      case None =>
         ReducerResult.noEffects(state)
 
   def resize(position: PanelPosition, newSize: Int, state: AppState): ReducerResult =
@@ -98,24 +108,31 @@ object PanelStateReducer:
         ReducerResult.noEffects(state)
 
   def unpin(position: PanelPosition, state: AppState): ReducerResult =
-    panelToUnpin(position, state).orElse(panelSurfaceAt(position, state)) match
+    panelToUnpin(position, state) match
       case Some(surface) => unpin(surface.id, state)
       case None          => ReducerResult.noEffects(state)
 
   def move(surfaceId: SurfaceId, position: PanelPosition, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
-      case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, size), _)) =>
+      case Some(_) =>
+        // Preserve the panel's own size across the move (issue #817) -- `moveSurface` alone would otherwise leave
+        // the new edge's split at `WorkspaceTree.dock`'s default ratio, silently shrinking/growing an already-sized
+        // panel just because it changed edges.
+        val previousSize = currentSize(surfaceId, state)
         val movedTree = state.persisted.layout.workspaceTree.flatMap { tree =>
-          tree.moveSurface(surfaceId, position, nextSplitId(tree, surfaceId))
+          tree.moveSurface(surfaceId, position, tree.nextDockIds(surfaceId)._1).map { moved =>
+            previousSize
+              .flatMap(size => moved.allocationRatio(surfaceId, size, state.runtime.viewportSize))
+              .flatMap(ratio => moved.resizeSurface(surfaceId, ratio))
+              .getOrElse(moved)
+          }
         }
-        val moved           = surface.copy(presentation = SurfacePresentation.Pinned(position, size))
-        val updatedSurfaces = replaceSurfaceInPlace(state.runtime.uiSurfaces, moved)
         val orderedSurfaces = movedTree
           .map(tree =>
-            tree.dockedSurfaceIds.flatMap(surfaceId => updatedSurfaces.find(_.id == surfaceId)) ++
-              updatedSurfaces.filterNot(surface => tree.dockedSurfaceIds.contains(surface.id))
+            tree.dockedSurfaceIds.flatMap(id => state.runtime.uiSurfaces.find(_.id == id)) ++
+              state.runtime.uiSurfaces.filterNot(surface => tree.dockedSurfaceIds.contains(surface.id))
           )
-          .getOrElse(updatedSurfaces)
+          .getOrElse(state.runtime.uiSurfaces)
         ReducerResult.noEffects(
           state.copy(
             persisted = state.persisted.copy(
@@ -125,7 +142,7 @@ object PanelStateReducer:
             runtime = state.runtime.copy(uiSurfaces = orderedSurfaces)
           )
         )
-      case _ =>
+      case None =>
         ReducerResult.noEffects(state)
 
   def expand(surfaceId: SurfaceId, state: AppState): ReducerResult =
@@ -159,15 +176,11 @@ object PanelStateReducer:
 
   def pinActiveFloatingSurface(position: PanelPosition, state: AppState): ReducerResult =
     activeFloatingSurface(state)
-      .flatMap(surface => toPinnedSurface(surface, position))
+      .flatMap(toPinnedSurface)
       .map { panel =>
         val tree = state.persisted.layout.effectiveWorkspaceTree.flatMap { workspaceTree =>
-          workspaceTree.dock(
-            panel.id,
-            position,
-            nextSplitId(workspaceTree, panel.id),
-            WorkspaceNodeId(s"dock-${panel.id.value}")
-          )
+          val (splitId, leafId) = workspaceTree.nextDockIds(panel.id)
+          workspaceTree.dockSized(panel.id, position, splitId, leafId, PeekToPinDefaultSize, state.runtime.viewportSize)
         }
         ReducerResult.noEffects(
           state.copy(
@@ -188,7 +201,7 @@ object PanelStateReducer:
         case _                                  => false
     }
 
-  private def toPinnedSurface(surface: UiSurface, position: PanelPosition): Option[UiSurface] =
+  private def toPinnedSurface(surface: UiSurface): Option[UiSurface] =
     surface.content match
       case SurfaceContent.DirectoryListing(path, entries, selectedPath) =>
         Some(
@@ -197,7 +210,7 @@ object PanelStateReducer:
               DirectoryTreeData(path, entries = Map(path -> entries)),
               selectedPath.orElse(Some(path))
             ),
-            presentation = SurfacePresentation.Pinned(position, 30),
+            presentation = SurfacePresentation.Docked,
             dismissOnMove = false
           )
         )
@@ -205,13 +218,13 @@ object PanelStateReducer:
         Some(
           surface.copy(
             content = SurfaceContent.DirectoryTree(tree, selectedPath.orElse(Some(tree.rootPath))),
-            presentation = SurfacePresentation.Pinned(position, 30),
+            presentation = SurfacePresentation.Docked,
             dismissOnMove = false
           )
         )
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) |
           SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
-        Some(surface.copy(presentation = SurfacePresentation.Pinned(position, 30), dismissOnMove = false))
+        Some(surface.copy(presentation = SurfacePresentation.Docked, dismissOnMove = false))
       case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
           SurfaceContent.ThemePicker(_) | SurfaceContent.ThemeCreator(_) | SurfaceContent.FileSearch(_) |
           SurfaceContent.ContextualToolbar(_) | SurfaceContent.ContextMenu(_) | SurfaceContent.CommentLens(_) |
@@ -230,47 +243,27 @@ object PanelStateReducer:
   private def focusedPinnedSurfaceAt(position: PanelPosition, state: AppState): Option[UiSurface] =
     state.persisted.focus match
       case Focus.Surface(surfaceId) =>
-        state.surfaceById(surfaceId).filter(isPinnedAt(position))
+        state.surfaceById(surfaceId).filter(isPinnedAt(position, state))
       case _ =>
         None
 
   private def newestPinnedSurfaceAt(position: PanelPosition, state: AppState): Option[UiSurface] =
-    state.runtime.uiSurfaces.reverse.find(isPinnedAt(position))
+    state.runtime.uiSurfaces.reverse.find(isPinnedAt(position, state))
 
-  private def isPinnedAt(position: PanelPosition)(surface: UiSurface): Boolean =
-    surface.presentation match
-      case SurfacePresentation.Pinned(pos, _) if pos == position => true
-      case _                                                     => false
+  private def isPinnedAt(position: PanelPosition, state: AppState)(surface: UiSurface): Boolean =
+    isPinned(surface) && state.persisted.layout.workspaceTree
+      .flatMap(_.positionForSurface(surface.id))
+      .contains(
+        position
+      )
 
   private def isPinned(surface: UiSurface): Boolean =
     surface.presentation match
-      case SurfacePresentation.Pinned(_, _) => true
-      case _                                => false
+      case SurfacePresentation.Docked => true
+      case _                          => false
 
   private def panelSurfaceAt(position: PanelPosition, state: AppState): Option[UiSurface] =
-    state.runtime.uiSurfaces.find {
-      _.presentation match
-        case SurfacePresentation.Pinned(pos, _) if pos == position   => true
-        case SurfacePresentation.Expanded(pos, _) if pos == position => true
-        case _                                                       => false
-    }
-
-  private def replaceSurfaceInPlace(surfaces: List[UiSurface], updated: UiSurface): List[UiSurface] =
-    surfaces.map {
-      case surface if surface.id == updated.id => updated
-      case surface                             => surface
-    }
-
-  private def nextSplitId(tree: WorkspaceTree, surfaceId: SurfaceId): WorkspaceNodeId =
-    WorkspaceNodeId(s"dock-split-${surfaceId.value}-${tree.nodeIds.size}")
-
-  private def surfaceAllocationRatio(position: PanelPosition, requestedSize: Int, state: AppState): Double =
-    val total = state.runtime.viewportSize.fold(100) { viewport =>
-      position match
-        case PanelPosition.Left | PanelPosition.Right => viewport.width
-        case PanelPosition.Top | PanelPosition.Bottom => viewport.height
-    }
-    requestedSize.toDouble / total.max(1)
+    state.runtime.uiSurfaces.find(isPinnedAt(position, state))
 
   private def fallbackEditorFocus(state: AppState): Focus =
     state.persisted.layout.activeEditorPaneId match

@@ -58,7 +58,7 @@ class FloatingSurfaceSpec extends AnyFlatSpec with Matchers:
           UiSurface(
             SurfaceId("pinned"),
             SurfaceContent.Diagnostics(Nil),
-            SurfacePresentation.Pinned(com.serenity.ui.layout.PanelPosition.Bottom, 8)
+            SurfacePresentation.Docked
           )
         )
       )
@@ -68,21 +68,18 @@ class FloatingSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   "Renderer" should "paint an expanded surface above the editor pane it replaces" in {
-    val expanded = UiSurface(
-      SurfaceId("diagnostics"),
-      SurfaceContent.Diagnostics(Nil),
-      SurfacePresentation.Expanded(PanelPosition.Right, 22)
-    )
-    val expandedBase = baseState()
-    val state        = expandedBase.copy(runtime = expandedBase.runtime.copy(uiSurfaces = List(expanded)))
-    val surface      = new MockRenderSurface(80, 24)
+    val expandedId = SurfaceId("diagnostics")
+    val docked =
+      DockedPanelFixtures.dock(baseState(), expandedId, SurfaceContent.Diagnostics(Nil), PanelPosition.Right, 22)
+    val state   = DockedPanelFixtures.expand(docked, expandedId)
+    val surface = new MockRenderSurface(80, 24)
 
     RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
 
     val frame = UiSceneSnapshot
       .from(state, ViewportSize(80, 24))
       .workspace
-      .find(_.id == SceneNodeId.Surface(expanded.id))
+      .find(_.id == SceneNodeId.Surface(expandedId))
       .map(_.frameRect)
       .getOrElse(fail("expected expanded surface frame"))
     (frame.x until frame.right).map(surface.getChar(_, frame.y)).mkString.trim should include("diagnostics")

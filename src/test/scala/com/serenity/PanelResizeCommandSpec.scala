@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.SurfacePresentation
+import com.serenity.state.reducers.PanelStateReducer
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -45,8 +45,8 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
     stateManager.commandExecutor.executeCommand(resizeCommand(panelId, 6)).unsafeRunSync()
 
-    val resized = stateManager.getCurrentState.unsafeRunSync().surfaceById(panelId).map(_.presentation)
-    resized shouldBe Some(SurfacePresentation.Pinned(PanelPosition.Left, 30))
+    val resized = PanelStateReducer.currentSize(panelId, stateManager.getCurrentState.unsafeRunSync())
+    resized shouldBe Some(30)
   }
 
   it should "shrink a pinned panel by a negative delta" in {
@@ -62,8 +62,8 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
     stateManager.commandExecutor.executeCommand(resizeCommand(panelId, -6)).unsafeRunSync()
 
-    val resized = stateManager.getCurrentState.unsafeRunSync().surfaceById(panelId).map(_.presentation)
-    resized shouldBe Some(SurfacePresentation.Pinned(PanelPosition.Left, 18))
+    val resized = PanelStateReducer.currentSize(panelId, stateManager.getCurrentState.unsafeRunSync())
+    resized shouldBe Some(18)
   }
 
   it should "clamp shrinking at the minimum panel size rather than going to zero or negative" in {
@@ -79,8 +79,11 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
     stateManager.commandExecutor.executeCommand(resizeCommand(panelId, -100)).unsafeRunSync()
 
-    val resized = stateManager.getCurrentState.unsafeRunSync().surfaceById(panelId).map(_.presentation)
-    resized shouldBe Some(SurfacePresentation.Pinned(PanelPosition.Left, 4))
+    // `StateManagerPanelEffects.setPanelSize`'s own floor (`MinimumPanelSize = 4`) would allow 4, but the workspace
+    // tree's ratio floor (`WorkspaceTree.MinimumSplitRatio = 0.05`, issue #817) is reached first against the assumed
+    // 100-cell total used when no real viewport is known yet -- a stricter, independent floor, not a regression.
+    val resized = PanelStateReducer.currentSize(panelId, stateManager.getCurrentState.unsafeRunSync())
+    resized shouldBe Some(5)
   }
 
   it should "no-op when the target surface isn't pinned" in {

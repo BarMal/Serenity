@@ -11,7 +11,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.state.reducers.PanelStateReducer
 import com.serenity.state.undo.HistoryEntry
-import com.serenity.ui.layout.{DirEntry, PanelPosition, PanelTarget, SplitAxis}
+import com.serenity.ui.layout.{DirEntry, PanelPosition, PanelTarget, SplitAxis, WorkspaceTree}
 import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 
 /** Pinned-panel management: pinning/unpinning/moving/resizing the explorer, outline, comments, diagnostics, and
@@ -111,9 +111,10 @@ final private[manager] class StateManagerPanelEffects(
   // the task's own 100ms output-refresh tick (`runProjectTask`) just re-pins it right back (issue #1294).
   private def unpinViewPanel(state: AppState, position: PanelPosition): IO[Unit] =
     val closingRunningTaskPanel = state.pinnedSurfaces.exists { surface =>
-      (surface.content, surface.presentation) match
-        case (SurfaceContent.Terminal(_, _), SurfacePresentation.Pinned(`position`, _)) => true
-        case _                                                                          => false
+      surface.content match
+        case SurfaceContent.Terminal(_, _) =>
+          state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position)
+        case _ => false
     }
     unpinPanel(PanelTarget.ByPosition(position)) >>
       (if closingRunningTaskPanel then cancelProjectTaskSilently else IO.unit)
@@ -270,11 +271,50 @@ final private[manager] class StateManagerPanelEffects(
         state.persisted.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.persisted.focus)
       case _ =>
         state.persisted.focus
+    val prunedTree = removedIds.foldLeft(state.persisted.layout.workspaceTree) { (tree, id) =>
+      tree.flatMap(_.removeSurface(id)).orElse(tree)
+    }
+    val maximized = state.persisted.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
+      state.persisted.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).exists(removedIds.contains)
+    )
     state.copy(
-      persisted = state.persisted.copy(focus = nextFocus),
+      persisted = state.persisted.copy(
+        focus = nextFocus,
+        layout = state.persisted.layout.copy(
+          workspaceTree = prunedTree.orElse(state.persisted.layout.workspaceTree),
+          maximizedWorkspaceNodeId = maximized
+        )
+      ),
       runtime =
         state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => removedIds.contains(surface.id)))
     )
+
+  /** The retained surface's own dock/move/resize -- collapsed into one tree update alongside the flat-list upsert
+    * below, so this path (issue #817) keeps the workspace tree in step with `uiSurfaces` itself rather than relying on
+    * a separate reconciliation pass to notice the drift.
+    */
+  private def placeInTree(
+    tree: Option[WorkspaceTree],
+    surfaceId: SurfaceId,
+    position: PanelPosition,
+    size: Int,
+    isNewlyDocked: Boolean,
+    state: AppState
+  ): Option[WorkspaceTree] =
+    tree.flatMap { workspaceTree =>
+      if isNewlyDocked then
+        val (splitId, leafId) = workspaceTree.nextDockIds(surfaceId)
+        workspaceTree.dockSized(surfaceId, position, splitId, leafId, size, state.runtime.viewportSize)
+      else if workspaceTree.positionForSurface(surfaceId).contains(position) then
+        workspaceTree
+          .allocationRatio(surfaceId, size, state.runtime.viewportSize)
+          .flatMap(workspaceTree.resizeSurface(surfaceId, _))
+      else
+        val (splitId, _) = workspaceTree.nextDockIds(surfaceId)
+        workspaceTree.moveSurface(surfaceId, position, splitId).flatMap { moved =>
+          moved.allocationRatio(surfaceId, size, state.runtime.viewportSize).flatMap(moved.resizeSurface(surfaceId, _))
+        }
+    }
 
   private def upsertPanelKind(
     kind: PanelKind,
@@ -289,54 +329,67 @@ final private[manager] class StateManagerPanelEffects(
         state.runtime.uiSurfaces.filterNot(surface => panelKindOf(surface.content).contains(kind))
       )
     )
-    val (stateWithId, surface) = retainedSurface match
+    val droppedIds = matchingSurfaces.filterNot(surface => retainedSurface.exists(_.id == surface.id)).map(_.id).toSet
+    val treeWithoutDropped = droppedIds.foldLeft(state.persisted.layout.workspaceTree) { (tree, id) =>
+      tree.flatMap(_.removeSurface(id)).orElse(tree)
+    }
+    val (stateWithId, surface, isNewlyDocked) = retainedSurface match
       case Some(existing) =>
-        stateWithoutKind -> existing.copy(
-          content = content,
-          presentation = SurfacePresentation.Pinned(position, size),
-          dismissOnMove = false
+        (
+          stateWithoutKind,
+          existing.copy(content = content, presentation = SurfacePresentation.Docked, dismissOnMove = false),
+          false
         )
       case None =>
         val (allocatedState, surfaceId) = stateWithoutKind.allocateSurfaceId
-        allocatedState -> UiSurface(
-          surfaceId,
-          content,
-          SurfacePresentation.Pinned(position, size),
-          dismissOnMove = false
+        (allocatedState, UiSurface(surfaceId, content, SurfacePresentation.Docked, dismissOnMove = false), true)
+    val placedTree =
+      treeWithoutDropped
+        .orElse(stateWithId.persisted.layout.effectiveWorkspaceTree)
+        .fold(state.persisted.layout.workspaceTree)(tree =>
+          placeInTree(Some(tree), surface.id, position, size, isNewlyDocked, stateWithId)
         )
     val nextFocus = state.persisted.focus match
       case Focus.Surface(surfaceId) if matchingSurfaces.exists(_.id == surfaceId) => Focus.Surface(surface.id)
       case _                                                                      => state.persisted.focus
     stateWithId.copy(
-      persisted = stateWithId.persisted.copy(focus = nextFocus),
+      persisted = stateWithId.persisted.copy(
+        focus = nextFocus,
+        layout =
+          stateWithId.persisted.layout.copy(workspaceTree = placedTree.orElse(state.persisted.layout.workspaceTree))
+      ),
       runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface)
     )
 
+  /** Reorders a docked panel among the others sharing its edge (issue #1310) by rearranging the workspace tree's own
+    * nesting for that edge (issue #817: the tree is the sole record of same-edge order, via `WorkspaceTree.dock`'s
+    * insertion-order nesting), rather than splicing `uiSurfaces` and leaving a later reconciliation pass to notice.
+    */
   private def reorderPanelKind(kind: PanelKind, delta: Int)(state: AppState): AppState =
     if delta == 0 then state
     else
-      val pinnedPanels = state.runtime.uiSurfaces.collect {
-        case surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, _), _)
-            if panelKindOf(surface.content).isDefined =>
-          surface -> position
-      }
-      pinnedPanels.find((surface, _) => panelKindOf(surface.content).contains(kind)) match
+      state.persisted.layout.workspaceTree match
         case None => state
-        case Some((targetSurface, targetPosition)) =>
-          val sameEdge = pinnedPanels.collect {
-            case (surface, position) if position == targetPosition => surface
-          }
-          val currentIndex = sameEdge.indexWhere(_.id == targetSurface.id)
-          val targetIndex  = (currentIndex + delta).max(0).min(sameEdge.length - 1)
-          if currentIndex < 0 || currentIndex == targetIndex then state
-          else
-            val reorderedSameEdge = moveWithinList(sameEdge, currentIndex, targetIndex)
-            val replacements      = reorderedSameEdge.iterator
-            val updatedSurfaces = state.runtime.uiSurfaces.map { surface =>
-              if sameEdge.exists(_.id == surface.id) then replacements.next()
-              else surface
-            }
-            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
+        case Some(tree) =>
+          def kindOf(surfaceId: SurfaceId): Option[PanelKind] =
+            state.runtime.uiSurfaces.find(_.id == surfaceId).flatMap(surface => panelKindOf(surface.content))
+          tree.dockedSurfaceIds.find(id => kindOf(id).contains(kind)) match
+            case None => state
+            case Some(targetId) =>
+              tree.positionForSurface(targetId) match
+                case None => state
+                case Some(targetPosition) =>
+                  val sameEdge =
+                    tree.dockedSurfaceIds.filter(id => tree.positionForSurface(id).contains(targetPosition))
+                  val currentIndex = sameEdge.indexOf(targetId)
+                  val targetIndex  = (currentIndex + delta).max(0).min(sameEdge.length - 1)
+                  if currentIndex < 0 || currentIndex == targetIndex then state
+                  else
+                    val desiredOrder  = moveWithinList(sameEdge, currentIndex, targetIndex)
+                    val reorderedTree = tree.reorderAt(targetPosition, desiredOrder)
+                    state.copy(persisted =
+                      state.persisted.copy(layout = state.persisted.layout.copy(workspaceTree = Some(reorderedTree)))
+                    )
 
   private def moveWithinList[A](values: List[A], from: Int, to: Int): List[A] =
     if from == to then values
@@ -385,22 +438,7 @@ final private[manager] class StateManagerPanelEffects(
     }
 
   private def unpinMarkdownPreviewPanel(): IO[Unit] =
-    stateRef.update { state =>
-      val markdownPreviewSurfaceIds = state.pinnedSurfaces.collect {
-        case UiSurface(id, SurfaceContent.MarkdownPreview(_, _), SurfacePresentation.Pinned(_, _), _) => id
-      }.toSet
-      val nextFocus = state.persisted.focus match
-        case Focus.Surface(surfaceId) if markdownPreviewSurfaceIds.contains(surfaceId) =>
-          state.persisted.layout.activeEditorPaneId.map(Focus.EditorPane.apply).getOrElse(state.persisted.focus)
-        case _ =>
-          state.persisted.focus
-      state.copy(
-        persisted = state.persisted.copy(focus = nextFocus),
-        runtime = state.runtime.copy(uiSurfaces =
-          state.runtime.uiSurfaces.filterNot(surface => markdownPreviewSurfaceIds.contains(surface.id))
-        )
-      )
-    }
+    stateRef.update(removePanelKind(PanelKind.MarkdownPreview))
 
   private[manager] def pinExplorerPanelEffect(position: PanelPosition, path: Path, size: Int): IO[Unit] =
     for

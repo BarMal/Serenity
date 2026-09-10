@@ -169,18 +169,11 @@ object UiSceneSnapshot:
     calculatedLayout: CalculatedLayout,
     initialZIndex: Int
   ): List[SceneNode] =
-    val pinned = state.pinnedSurfaces
-    val expanded = state.runtime.uiSurfaces.filter {
-      _.presentation match
-        case SurfacePresentation.Expanded(_, _) => true
-        case _                                  => false
-    }
-    (pinned ++ expanded).zipWithIndex.flatMap {
+    state.pinnedSurfaces.zipWithIndex.flatMap {
       case (surface, offset) =>
-        val frame =
-          if state.expandedPanelSurface.exists(_.id == surface.id) then calculatedLayout.expandedPanelRect
-          else panelRect(surface, calculatedLayout)
-        frame.map(frame => surfaceNode(surface.id, SceneLayer.Workspace, frame, initialZIndex + offset))
+        EditorLayoutContract
+          .panelRectFor(surface, state, calculatedLayout)
+          .map(frame => surfaceNode(surface.id, SceneLayer.Workspace, frame, initialZIndex + offset))
     }
 
   private def floatingSurfaceNodes(
@@ -209,14 +202,6 @@ object UiSceneSnapshot:
         initialZIndex + offset
       )
     }
-
-  private def panelRect(surface: UiSurface, calculatedLayout: CalculatedLayout): Option[LayoutRect] =
-    surface.presentation match
-      case SurfacePresentation.Pinned(position, _) =>
-        calculatedLayout.pinnedSurfaceRects.get(surface.id).orElse(calculatedLayout.pinnedPanelRects.get(position))
-      case SurfacePresentation.Expanded(_, _) =>
-        calculatedLayout.expandedPanelRect
-      case _ => None
 
   private def surfaceNode(surfaceId: SurfaceId, layer: SceneLayer, frame: LayoutRect, zIndex: Int): SceneNode =
     val content = SurfaceFrameLayout(frame).contentRect

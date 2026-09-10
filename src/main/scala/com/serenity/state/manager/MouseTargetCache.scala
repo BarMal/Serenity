@@ -178,8 +178,13 @@ private[manager] object MouseTargetLayoutKey:
       },
       uiSurfaces = state.runtime.uiSurfaces.map(SurfaceGeometryKey.from),
       derivedCursorInfoBarSurface = state.cursorInfoBarSurface,
-      pinnedPanels = state.runtime.uiSurfaces.collect {
-        case UiSurface(id, _, SurfacePresentation.Pinned(position, size), _) => (id, position, size)
+      pinnedPanels = state.persisted.layout.workspaceTree.toList.flatMap { tree =>
+        tree.dockedSurfaceIds.flatMap { id =>
+          for
+            position <- tree.positionForSurface(id)
+            size     <- tree.currentSize(id, state.runtime.viewportSize)
+          yield (id, position, size)
+        }
       },
       lineNumberContent =
         if state.persisted.config.surfaceConfig.showLineNumbers then

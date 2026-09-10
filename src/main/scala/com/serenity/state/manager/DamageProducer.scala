@@ -337,15 +337,14 @@ object DamageProducer:
     if before.cursorInfoBarSurface == after.cursorInfoBarSurface then Damage.Nothing
     else Damage.Surface(UiSurface.CursorInfoBarSurfaceId)
 
-  /** Whether `before`/`after` present the same *kind* of [[SurfacePresentation]] (ignoring the fields each kind
-    * carries, e.g. a `Pinned` panel's position/size) -- the presentation-stability half of
+  /** Whether `before`/`after` present the same *kind* of [[SurfacePresentation]] (ignoring the fields a non-marker kind
+    * carries, e.g. a `Floating` surface's anchor/placement) -- the presentation-stability half of
     * [[singleSurfaceOnlyContentChange]]'s carve-out.
     */
   private def samePresentationKind(before: SurfacePresentation, after: SurfacePresentation): Boolean =
     (before, after) match
-      case (_: SurfacePresentation.Pinned, _: SurfacePresentation.Pinned)     => true
+      case (SurfacePresentation.Docked, SurfacePresentation.Docked)           => true
       case (_: SurfacePresentation.Floating, _: SurfacePresentation.Floating) => true
-      case (_: SurfacePresentation.Expanded, _: SurfacePresentation.Expanded) => true
       case _                                                                  => false
 
   /** `Some(id)` when `uiSurfaces` differs only in the fields of the one surface identified by `id`, and that surface

@@ -8,7 +8,7 @@ import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspR
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{DirtyLineDiff, PanelPosition}
+import com.serenity.ui.layout.DirtyLineDiff
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -337,7 +337,7 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val surface = UiSurface(
       SurfaceId("outline"),
       SurfaceContent.Outline(Nil),
-      SurfacePresentation.Pinned(PanelPosition.Left, 20)
+      SurfacePresentation.Docked
     )
     val bare   = stateWithContent("alpha")
     val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
@@ -350,7 +350,7 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
     val surface = UiSurface(
       SurfaceId("outline"),
       SurfaceContent.Outline(Nil),
-      SurfacePresentation.Expanded(PanelPosition.Left, 20)
+      SurfacePresentation.Docked
     )
     val bare   = stateWithContent("alpha")
     val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
@@ -361,7 +361,7 @@ class DamageProducerSpec extends AnyFlatSpec with Matchers:
 
   it should "report Everything when a surface's presentation kind changes" in {
     val surface =
-      UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Pinned(PanelPosition.Left, 20))
+      UiSurface(SurfaceId("palette"), SurfaceContent.Comments(Nil), SurfacePresentation.Docked)
     val bare   = stateWithContent("alpha")
     val before = bare.copy(runtime = bare.runtime.copy(uiSurfaces = List(surface)))
     val after = before.copy(runtime =

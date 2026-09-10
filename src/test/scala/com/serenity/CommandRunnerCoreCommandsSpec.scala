@@ -29,6 +29,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
+  private def isPinnedAt(state: AppState, surface: UiSurface, position: PanelPosition): Boolean =
+    surface.presentation == SurfacePresentation.Docked &&
+      state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position)
+
   private def testFileDialog(
     openSelection: Option[Path] = None,
     saveSelection: Option[Path] = None
@@ -692,12 +696,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.commandRunnerSurface shouldBe None
     val pinnedSurface = updatedState.pinnedSurfaces
       .collectFirst {
-        case surface @ com.serenity.state.models.UiSurface(
-              _,
-              SurfaceContent.DirectoryTree(tree, _),
-              com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _),
-              _
-            ) =>
+        case surface @ com.serenity.state.models.UiSurface(_, SurfaceContent.DirectoryTree(tree, _), _, _)
+            if isPinnedAt(updatedState, surface, PanelPosition.Left) =>
           surface -> tree.rootPath
       }
       .getOrElse(fail("Expected pinned explorer surface"))
@@ -711,9 +711,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "pin-outline", "pin-outline")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.pinnedSurfaces.exists {
-      _.presentation == com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Right, 30)
-    } shouldBe true
+    updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Right)) shouldBe true
     updatedState.pinnedSurfaces.exists(_.content == SurfaceContent.Outline(Nil)) shouldBe true
   }
 
@@ -759,11 +757,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "pin-comments", "pin-comments")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.pinnedSurfaces.exists {
-      _.presentation == com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Right, 30)
-    } shouldBe true
+    updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Right)) shouldBe true
     val commentSymbols = updatedState.pinnedSurfaces.collectFirst {
-      case UiSurface(_, SurfaceContent.Comments(symbols, _), SurfacePresentation.Pinned(PanelPosition.Right, 30), _) =>
+      case surface @ UiSurface(_, SurfaceContent.Comments(symbols, _), _, _)
+          if isPinnedAt(updatedState, surface, PanelPosition.Right) =>
         symbols
     }
     commentSymbols shouldBe Some(
@@ -796,12 +793,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     val outlineSymbols = updatedState.pinnedSurfaces.collectFirst {
-      case UiSurface(
-            _,
-            SurfaceContent.Outline(symbols, activeLocation),
-            SurfacePresentation.Pinned(PanelPosition.Right, 30),
-            _
-          ) =>
+      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, activeLocation), _, _)
+          if isPinnedAt(updatedState, surface, PanelPosition.Right) =>
         symbols -> activeLocation
     }
 
@@ -1153,8 +1146,10 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "pin-outline", "pin-outline")
 
-    val outlineSymbols = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.collectFirst {
-      case UiSurface(_, SurfaceContent.Outline(symbols, _), SurfacePresentation.Pinned(PanelPosition.Right, 30), _) =>
+    val currentState = stateManager.getCurrentState.unsafeRunSync()
+    val outlineSymbols = currentState.pinnedSurfaces.collectFirst {
+      case surface @ UiSurface(_, SurfaceContent.Outline(symbols, _), _, _)
+          if isPinnedAt(currentState, surface, PanelPosition.Right) =>
         symbols
     }
 
@@ -1197,9 +1192,7 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "pin-diagnostics", "pin-diagnostics")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    updatedState.pinnedSurfaces.exists {
-      _.presentation == com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
-    } shouldBe true
+    updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Bottom)) shouldBe true
     updatedState.pinnedSurfaces.exists(_.content == SurfaceContent.Diagnostics(Nil)) shouldBe true
   }
 
@@ -1229,12 +1222,8 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
     val preview = updatedState.pinnedSurfaces.collectFirst {
-      case surface @ UiSurface(
-            _,
-            SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"),
-            SurfacePresentation.Pinned(PanelPosition.Right, 40),
-            _
-          ) =>
+      case surface @ UiSurface(_, SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"), _, _)
+          if isPinnedAt(updatedState, surface, PanelPosition.Right) =>
         surface
     }
 
@@ -1287,12 +1276,15 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    val tree         = updatedState.persisted.layout.workspaceTree
     updatedState.pinnedSurfaces.collect {
-      case UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Pinned(position, _), _) => position
-    } shouldBe List(PanelPosition.Left)
+      case surface @ UiSurface(_, SurfaceContent.Outline(_, _), _, _) =>
+        tree.flatMap(_.positionForSurface(surface.id))
+    }.flatten shouldBe List(PanelPosition.Left)
     updatedState.pinnedSurfaces.collect {
-      case UiSurface(_, SurfaceContent.Diagnostics(_, _), SurfacePresentation.Pinned(position, _), _) => position
-    } shouldBe List(PanelPosition.Bottom)
+      case surface @ UiSurface(_, SurfaceContent.Diagnostics(_, _), _, _) =>
+        tree.flatMap(_.positionForSurface(surface.id))
+    }.flatten shouldBe List(PanelPosition.Bottom)
   }
 
   it should "turn off a typed panel pin without removing other pinned panels" in {
@@ -1863,9 +1855,5 @@ class CommandRunnerCoreCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(sm, "unpin-left-panel", "unpin-left-panel")
 
     val updatedState = sm.getCurrentState.unsafeRunSync()
-    updatedState.pinnedSurfaces.exists {
-      _.presentation match
-        case com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _) => true
-        case _                                                                           => false
-    } shouldBe false
+    updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Left)) shouldBe false
   }

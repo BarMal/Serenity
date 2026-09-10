@@ -113,17 +113,12 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "hydrate workspace panel pin options from current pinned surfaces" in {
-    val base = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))),
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            SurfaceId("outline-panel"),
-            SurfaceContent.Outline(Nil),
-            SurfacePresentation.Pinned(PanelPosition.Right, 30)
-          )
-        )
-      )
+    val base = DockedPanelFixtures.dock(
+      AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0)))),
+      SurfaceId("outline-panel"),
+      SurfaceContent.Outline(Nil),
+      PanelPosition.Right,
+      30
     )
 
     val opened = AppEventReducer.reduce(ToggleCommandRunner, base, registry).state

@@ -19,7 +19,7 @@ private[manager] object PinnedPanelAnimations:
     val contract     = EditorLayoutContract.from(state, viewportSize, layout)
     val maybeAnimation =
       for
-        position  <- panelPosition(surface)
+        position  <- panelPosition(surface, state)
         rect      <- contract.panelRect(surface.id)
         animation <- openAnimation(position, rect, state)
       yield animation
@@ -38,7 +38,7 @@ private[manager] object PinnedPanelAnimations:
     val contract       = EditorLayoutContract.from(prevState, tSize, previousLayout)
     val maybeGhost =
       for
-        position  <- panelPosition(closedSurface)
+        position  <- panelPosition(closedSurface, prevState)
         rect      <- contract.panelRect(closedSurface.id)
         animation <- closeAnimation(position, rect, state)
       yield
@@ -133,8 +133,7 @@ private[manager] object PinnedPanelAnimations:
         .toMap
     ElementTransitionCells(frame = Map(borderCell), content = contentCells)
 
-  private def panelPosition(surface: UiSurface): Option[PanelPosition] =
+  private def panelPosition(surface: UiSurface, state: AppState): Option[PanelPosition] =
     surface.presentation match
-      case SurfacePresentation.Pinned(position, _)   => Some(position)
-      case SurfacePresentation.Expanded(position, _) => Some(position)
-      case _                                         => None
+      case SurfacePresentation.Docked => state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id))
+      case _                          => None

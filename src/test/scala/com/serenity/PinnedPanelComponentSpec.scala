@@ -15,7 +15,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val paneId = PaneId(0)
+  private val paneId    = PaneId(0)
+  private val surfaceId = SurfaceId("left-panel")
 
   private def baseState: AppState =
     val bufferId = BufferId(1)
@@ -33,17 +34,13 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+  private def dockedState(content: SurfaceContent): AppState =
+    val docked = DockedPanelFixtures.dock(baseState, surfaceId, content, PanelPosition.Left, 24)
+    docked.copy(persisted = docked.persisted.copy(focus = Focus.Surface(surfaceId)))
+
   "PinnedPanelComponent" should "treat pinned ui surfaces as the live source of truth" in {
-    val surface = UiSurface.fromPanelContent(
-      SurfaceId("left-panel"),
-      PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
-      PanelPosition.Left,
-      24
-    )
-    val state = baseState.copy(
-      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
-      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
-    )
+    val state =
+      dockedState(PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None).asSurfaceContent)
 
     val component = PinnedPanelComponent(PanelPosition.Left)
 
@@ -53,16 +50,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep navigation local to the pinned panel" in {
-    val surface = UiSurface.fromPanelContent(
-      SurfaceId("left-panel"),
-      PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
-      PanelPosition.Left,
-      24
-    )
-    val state = baseState.copy(
-      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
-      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
-    )
+    val state =
+      dockedState(PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None).asSurfaceContent)
 
     val component = PinnedPanelComponent(PanelPosition.Left)
 
@@ -71,9 +60,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
 
   it should "move directory selection down within a pinned explorer panel" in {
     val root = Paths.get("/repo")
-    val surface = UiSurface(
-      id = SurfaceId("left-panel"),
-      content = SurfaceContent.DirectoryTree(
+    val state = dockedState(
+      SurfaceContent.DirectoryTree(
         DirectoryTreeData(
           root,
           entries = Map(
@@ -84,12 +72,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
           )
         ),
         selectedPath = Some(root.resolve("src"))
-      ),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
-    )
-    val state = baseState.copy(
-      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
-      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
+      )
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -97,17 +80,19 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
     component.processEvent(PanelInputEvent.Navigate(Direction.Down), state) match
       case ComponentResult.StateChange(update) =>
         val updatedState = update(state)
-        updatedState.runtime.uiSurfaces.head.content shouldBe SurfaceContent.DirectoryTree(
-          DirectoryTreeData(
-            root,
-            entries = Map(
-              root -> List(
-                DirEntry(root.resolve("src"), "src", isDirectory = true),
-                DirEntry(root.resolve("build.sbt"), "build.sbt", isDirectory = false)
+        updatedState.surfaceById(surfaceId).map(_.content) shouldBe Some(
+          SurfaceContent.DirectoryTree(
+            DirectoryTreeData(
+              root,
+              entries = Map(
+                root -> List(
+                  DirEntry(root.resolve("src"), "src", isDirectory = true),
+                  DirEntry(root.resolve("build.sbt"), "build.sbt", isDirectory = false)
+                )
               )
-            )
-          ),
-          selectedPath = Some(root.resolve("build.sbt"))
+            ),
+            selectedPath = Some(root.resolve("build.sbt"))
+          )
         )
       case other =>
         fail(s"Expected StateChange, got $other")
@@ -116,20 +101,14 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
   it should "emit a direct-load effect when activating a selected file in the explorer panel" in {
     val root         = Paths.get("/repo")
     val selectedFile = root.resolve("build.sbt")
-    val surface = UiSurface(
-      id = SurfaceId("left-panel"),
-      content = SurfaceContent.DirectoryTree(
+    val state = dockedState(
+      SurfaceContent.DirectoryTree(
         DirectoryTreeData(
           root,
           entries = Map(root -> List(DirEntry(selectedFile, "build.sbt", isDirectory = false)))
         ),
         selectedPath = Some(selectedFile)
-      ),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
-    )
-    val state = baseState.copy(
-      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
-      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
+      )
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -143,20 +122,14 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
   it should "emit a load-directory effect when activating a selected directory in the explorer panel" in {
     val root        = Paths.get("/repo")
     val selectedDir = root.resolve("src")
-    val surface = UiSurface(
-      id = SurfaceId("left-panel"),
-      content = SurfaceContent.DirectoryTree(
+    val state = dockedState(
+      SurfaceContent.DirectoryTree(
         DirectoryTreeData(
           root,
           entries = Map(root -> List(DirEntry(selectedDir, "src", isDirectory = true)))
         ),
         selectedPath = Some(selectedDir)
-      ),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
-    )
-    val state = baseState.copy(
-      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
-      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
+      )
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -174,9 +147,8 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
   it should "collapse an expanded directory when navigating left on that selection" in {
     val root        = Paths.get("/repo")
     val selectedDir = root.resolve("src")
-    val surface = UiSurface(
-      id = SurfaceId("left-panel"),
-      content = SurfaceContent.DirectoryTree(
+    val state = dockedState(
+      SurfaceContent.DirectoryTree(
         DirectoryTreeData(
           root,
           expandedPaths = Set(selectedDir),
@@ -186,12 +158,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
           )
         ),
         selectedPath = Some(selectedDir)
-      ),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
-    )
-    val state = baseState.copy(
-      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
-      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
+      )
     )
 
     val component = PinnedPanelComponent(PanelPosition.Left)
@@ -199,16 +166,18 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
     component.processEvent(PanelInputEvent.Navigate(Direction.Left), state) match
       case ComponentResult.StateChange(update) =>
         val updatedState = update(state)
-        updatedState.runtime.uiSurfaces.head.content shouldBe SurfaceContent.DirectoryTree(
-          DirectoryTreeData(
-            root,
-            expandedPaths = Set.empty,
-            entries = Map(
-              root        -> List(DirEntry(selectedDir, "src", isDirectory = true)),
-              selectedDir -> List(DirEntry(selectedDir.resolve("Main.scala"), "Main.scala", isDirectory = false))
-            )
-          ),
-          selectedPath = Some(selectedDir)
+        updatedState.surfaceById(surfaceId).map(_.content) shouldBe Some(
+          SurfaceContent.DirectoryTree(
+            DirectoryTreeData(
+              root,
+              expandedPaths = Set.empty,
+              entries = Map(
+                root        -> List(DirEntry(selectedDir, "src", isDirectory = true)),
+                selectedDir -> List(DirEntry(selectedDir.resolve("Main.scala"), "Main.scala", isDirectory = false))
+              )
+            ),
+            selectedPath = Some(selectedDir)
+          )
         )
       case other =>
         fail(s"Expected StateChange, got $other")
@@ -221,22 +190,14 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "execute a resize command for the panel at this position on a resize keystroke (issue #1310)" in {
-    val surface = UiSurface.fromPanelContent(
-      SurfaceId("left-panel"),
-      PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None),
-      PanelPosition.Left,
-      24
-    )
-    val state = baseState.copy(
-      persisted = baseState.persisted.copy(focus = Focus.Surface(surface.id)),
-      runtime = baseState.runtime.copy(uiSurfaces = List(surface))
-    )
+    val state =
+      dockedState(PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/repo")), None).asSurfaceContent)
     val component = PinnedPanelComponent(PanelPosition.Left)
 
     component.processEvent(PanelInputEvent.Resize(1), state) match
       case ComponentResult.ExecuteCommand(command) =>
         command.intent shouldBe com.serenity.command.CommandIntent.View(
-          com.serenity.command.ViewIntent.SetPanelSize(surface.id, 1)
+          com.serenity.command.ViewIntent.SetPanelSize(surfaceId, 1)
         )
       case other =>
         fail(s"Expected ExecuteCommand, got $other")

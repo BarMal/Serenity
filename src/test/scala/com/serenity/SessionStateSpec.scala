@@ -1109,20 +1109,11 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "round-trip nested workspace trees, docked panels on every edge, and maximisation" in {
-    val pane0 = PaneId(0)
-    val pane1 = PaneId(1)
-    val panels = List(
-      PanelPosition.Left,
-      PanelPosition.Right,
-      PanelPosition.Top,
-      PanelPosition.Bottom
-    ).zipWithIndex.map { (position, index) =>
-      UiSurface.fromPanelContent(
-        SurfaceId(s"surface-$index"),
-        PanelContent.Diagnostics(Nil),
-        position,
-        8 + index
-      )
+    val pane0     = PaneId(0)
+    val pane1     = PaneId(1)
+    val positions = List(PanelPosition.Left, PanelPosition.Right, PanelPosition.Top, PanelPosition.Bottom)
+    val panels = positions.zipWithIndex.map { (_, index) =>
+      UiSurface.fromPanelContent(SurfaceId(s"surface-$index"), PanelContent.Diagnostics(Nil))
     }
     val editorTree = WorkspaceTree(
       WorkspaceNode.Split(
@@ -1133,11 +1124,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         WorkspaceNode.Leaf(WorkspaceNodeId("editor-1"), pane1)
       )
     )
-    val workspaceTree = panels.zipWithIndex.foldLeft(editorTree) {
-      case (tree, (panel, index)) =>
-        val position = panel.presentation match
-          case SurfacePresentation.Pinned(value, _) => value
-          case other                                => fail(s"Expected pinned panel, got $other")
+    val workspaceTree = panels.zip(positions).zipWithIndex.foldLeft(editorTree) {
+      case (tree, ((panel, position), index)) =>
         tree
           .dock(
             panel.id,
@@ -1290,12 +1278,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "ignore unsupported persisted panel content without losing buffers" in {
-    val panel = UiSurface.fromPanelContent(
-      SurfaceId("surface-0"),
-      PanelContent.Diagnostics(Nil),
-      PanelPosition.Left,
-      8
-    )
+    val panel = UiSurface.fromPanelContent(SurfaceId("surface-0"), PanelContent.Diagnostics(Nil))
     val tree = WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))
       .dock(
         panel.id,

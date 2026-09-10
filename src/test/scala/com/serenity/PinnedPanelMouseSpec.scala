@@ -30,19 +30,28 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-  private def explorerSurface(tree: DirectoryTreeData, selectedPath: Option[java.nio.file.Path]) =
-    UiSurface(
-      id = SurfaceId("explorer"),
-      content = SurfaceContent.DirectoryTree(tree, selectedPath),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Left, 28)
-    )
+  private def dockExplorer(
+    sm: StateManager,
+    id: SurfaceId,
+    tree: DirectoryTreeData,
+    selectedPath: Option[java.nio.file.Path]
+  ): Unit =
+    sm.updateState(state =>
+      DockedPanelFixtures.dock(state, id, SurfaceContent.DirectoryTree(tree, selectedPath), PanelPosition.Left, 28)
+    ).unsafeRunSync()
 
-  private def expandedExplorerSurface(tree: DirectoryTreeData, selectedPath: Option[java.nio.file.Path]) =
-    UiSurface(
-      id = SurfaceId("expanded-explorer"),
-      content = SurfaceContent.DirectoryTree(tree, selectedPath),
-      presentation = SurfacePresentation.Expanded(PanelPosition.Left, 28)
-    )
+  private def dockExpandedExplorer(
+    sm: StateManager,
+    id: SurfaceId,
+    tree: DirectoryTreeData,
+    selectedPath: Option[java.nio.file.Path]
+  ): Unit =
+    sm.updateState(state =>
+      DockedPanelFixtures.expand(
+        DockedPanelFixtures.dock(state, id, SurfaceContent.DirectoryTree(tree, selectedPath), PanelPosition.Left, 28),
+        id
+      )
+    ).unsafeRunSync()
 
   private def leftPanelContentRect(state: AppState): LayoutRect =
     panelContentRect(state, SurfaceId("explorer"))
@@ -113,45 +122,46 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val surface = explorerSurface(tree, selectedPath = Some(root))
-    val sm      = makeStateManager()
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("explorer")
+    val sm        = makeStateManager()
+    dockExplorer(sm, surfaceId, tree, selectedPath = Some(root))
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 2)
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surfaceId, displayedItemRow = 2)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.persisted.focus shouldBe Focus.Surface(surface.id)
-    updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
+    updated.persisted.focus shouldBe Focus.Surface(surfaceId)
+    updated.surfaceById(surfaceId).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
   }
 
   it should "not route clicks or hover to a pinned panel while a close confirmation is active" in {
-    val root  = Paths.get("/repo")
-    val src   = root.resolve("src")
-    val tree  = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
-    val panel = explorerSurface(tree, selectedPath = Some(root))
+    val root    = Paths.get("/repo")
+    val src     = root.resolve("src")
+    val tree    = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
+    val panelId = SurfaceId("explorer")
     val close = ModalDialog(
       SurfaceId("close-confirmation"),
       Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")),
       ModalPlacement.Centered
     )
     val sm = makeStateManager()
+    dockExplorer(sm, panelId, tree, selectedPath = Some(root))
     sm.updateState(state =>
       state.copy(
         persisted = state.persisted.copy(focus = Focus.Modal),
-        runtime = state.runtime.copy(uiSurfaces = List(panel), modalStack = List(close))
+        runtime = state.runtime.copy(modalStack = List(close))
       )
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), panel.id, displayedItemRow = 1)
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), panelId, displayedItemRow = 1)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.persisted.focus shouldBe Focus.Modal
-    after.surfaceById(panel.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(root)))
+    after.surfaceById(panelId).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(root)))
   }
 
   it should "select and focus an expanded directory tree row on primary click" in {
@@ -167,38 +177,38 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val surface = expandedExplorerSurface(tree, selectedPath = Some(root))
-    val sm      = makeStateManager()
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("expanded-explorer")
+    val sm        = makeStateManager()
+    dockExpandedExplorer(sm, surfaceId, tree, selectedPath = Some(root))
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 2)
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surfaceId, displayedItemRow = 2)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.persisted.focus shouldBe Focus.Surface(surface.id)
-    updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
+    updated.persisted.focus shouldBe Focus.Surface(surfaceId)
+    updated.surfaceById(surfaceId).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
   }
 
   it should "characterize expanded panel clicks against the scene node content region" in {
-    val root    = Paths.get("/repo")
-    val src     = root.resolve("src")
-    val tree    = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
-    val surface = expandedExplorerSurface(tree, selectedPath = Some(root))
-    val sm      = makeStateManager()
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val root      = Paths.get("/repo")
+    val src       = root.resolve("src")
+    val tree      = DirectoryTreeData(root, entries = Map(root -> List(DirEntry(src, "src", isDirectory = true))))
+    val surfaceId = SurfaceId("expanded-explorer")
+    val sm        = makeStateManager()
+    dockExpandedExplorer(sm, surfaceId, tree, selectedPath = Some(root))
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
     val scene = UiSceneSnapshot.from(state, viewport)
     val node = scene.workspace
-      .find(_.id == SceneNodeId.Surface(surface.id))
+      .find(_.id == SceneNodeId.Surface(surfaceId))
       .getOrElse(fail("expected expanded surface node"))
     val content = node.hitRegions
       .collectFirst { case SceneHitRegion(SceneHitKind.Content, rect) => rect }
       .getOrElse(fail("expected expanded content hit region"))
     val row = scene.editorContract
-      .panelRowSlots(surface.id)
+      .panelRowSlots(surfaceId)
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y }
       .getOrElse(fail("expected expanded content row"))
 
@@ -213,18 +223,18 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       root,
       entries = Map(root -> List(DirEntry(src, "src", isDirectory = true)))
     )
-    val surface = explorerSurface(tree, selectedPath = Some(root))
-    val sm      = makeStateManager()
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("explorer")
+    val sm        = makeStateManager()
+    dockExplorer(sm, surfaceId, tree, selectedPath = Some(root))
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
-    val point  = panelItemPoint(before, surface.id, displayedItemRow = 1)
+    val point  = panelItemPoint(before, surfaceId, displayedItemRow = 1)
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe before.persisted.focus
-    updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(src)))
+    updated.surfaceById(surfaceId).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(src)))
   }
 
   it should "activate a double-clicked loaded directory tree row" in {
@@ -237,18 +247,18 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
         src  -> List(DirEntry(src.resolve("Main.scala"), "Main.scala", isDirectory = false))
       )
     )
-    val surface = explorerSurface(tree, selectedPath = Some(root))
-    val sm      = makeStateManager()
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("explorer")
+    val sm        = makeStateManager()
+    dockExplorer(sm, surfaceId, tree, selectedPath = Some(root))
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 1)
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surfaceId, displayedItemRow = 1)
     sm.applyEvent(MouseClick(point._1, point._2, clickCount = 2)).unsafeRunSync()
 
     val expandedTree = tree.copy(expandedPaths = Set(src))
     val updated      = sm.getCurrentState.unsafeRunSync()
-    updated.persisted.focus shouldBe Focus.Surface(surface.id)
-    updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(expandedTree, Some(src)))
+    updated.persisted.focus shouldBe Focus.Surface(surfaceId)
+    updated.surfaceById(surfaceId).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(expandedTree, Some(src)))
   }
 
   it should "navigate to an outline row on primary click" in {
@@ -258,15 +268,13 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       Symbol("Intro", SymbolKind.Heading, Location(0, 0)),
       Symbol("Middle", SymbolKind.Heading, Location(1, 2))
     )
-    val surface = UiSurface(
-      id = SurfaceId("outline"),
-      content = SurfaceContent.Outline(symbols),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
-    )
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("outline")
+    sm.updateState(state =>
+      DockedPanelFixtures.dock(state, surfaceId, SurfaceContent.Outline(symbols), PanelPosition.Right, 28)
+    ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 1)
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surfaceId, displayedItemRow = 1)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
@@ -281,21 +289,25 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       Symbol("Intro", SymbolKind.Heading, Location(0, 0)),
       Symbol("Middle", SymbolKind.Heading, Location(1, 2))
     )
-    val surface = UiSurface(
-      id = SurfaceId("outline"),
-      content = SurfaceContent.Outline(symbols, Some(Location(0, 0))),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
-    )
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("outline")
+    sm.updateState(state =>
+      DockedPanelFixtures.dock(
+        state,
+        surfaceId,
+        SurfaceContent.Outline(symbols, Some(Location(0, 0))),
+        PanelPosition.Right,
+        28
+      )
+    ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
-    val point  = panelItemPoint(before, surface.id, displayedItemRow = 1)
+    val point  = panelItemPoint(before, surfaceId, displayedItemRow = 1)
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe before.persisted.focus
-    updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.Outline(symbols, Some(Location(1, 2))))
+    updated.surfaceById(surfaceId).map(_.content) shouldBe Some(SurfaceContent.Outline(symbols, Some(Location(1, 2))))
   }
 
   it should "navigate to a comments row on primary click and open the comment lens" in {
@@ -318,16 +330,14 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
         )
     ).unsafeRunSync()
 
-    val symbols = DocumentNavigation.commentSymbols(List(comment))
-    val surface = UiSurface(
-      id = SurfaceId("comments"),
-      content = SurfaceContent.Comments(symbols),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
-    )
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val symbols   = DocumentNavigation.commentSymbols(List(comment))
+    val surfaceId = SurfaceId("comments")
+    sm.updateState(state =>
+      DockedPanelFixtures.dock(state, surfaceId, SurfaceContent.Comments(symbols), PanelPosition.Right, 28)
+    ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 0)
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surfaceId, displayedItemRow = 0)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
@@ -362,22 +372,20 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
         )
     ).unsafeRunSync()
 
-    val symbols = DocumentNavigation.commentSymbols(List(comment))
-    val surface = UiSurface(
-      id = SurfaceId("comments"),
-      content = SurfaceContent.Comments(symbols),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 28)
-    )
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val symbols   = DocumentNavigation.commentSymbols(List(comment))
+    val surfaceId = SurfaceId("comments")
+    sm.updateState(state =>
+      DockedPanelFixtures.dock(state, surfaceId, SurfaceContent.Comments(symbols), PanelPosition.Right, 28)
+    ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
-    val point  = panelItemPoint(before, surface.id, displayedItemRow = 0)
+    val point  = panelItemPoint(before, surfaceId, displayedItemRow = 0)
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe before.persisted.focus
-    updated.surfaceById(surface.id).map(_.content) shouldBe Some(SurfaceContent.Comments(symbols, Some(Location(1, 0))))
+    updated.surfaceById(surfaceId).map(_.content) shouldBe Some(SurfaceContent.Comments(symbols, Some(Location(1, 0))))
   }
 
   it should "navigate to a diagnostics row on primary click" in {
@@ -387,15 +395,13 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       Diagnostic("unused import", DiagnosticSeverity.Warning, Location(0, 1)),
       Diagnostic("type mismatch", DiagnosticSeverity.Error, Location(2, 3))
     )
-    val surface = UiSurface(
-      id = SurfaceId("diagnostics"),
-      content = SurfaceContent.Diagnostics(issues),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Left, 28)
-    )
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("diagnostics")
+    sm.updateState(state =>
+      DockedPanelFixtures.dock(state, surfaceId, SurfaceContent.Diagnostics(issues), PanelPosition.Left, 28)
+    ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surface.id, displayedItemRow = 2)
+    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surfaceId, displayedItemRow = 2)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
@@ -410,21 +416,19 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       Diagnostic("unused import", DiagnosticSeverity.Warning, Location(0, 1)),
       Diagnostic("type mismatch", DiagnosticSeverity.Error, Location(2, 3))
     )
-    val surface = UiSurface(
-      id = SurfaceId("diagnostics"),
-      content = SurfaceContent.Diagnostics(issues),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Left, 28)
-    )
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("diagnostics")
+    sm.updateState(state =>
+      DockedPanelFixtures.dock(state, surfaceId, SurfaceContent.Diagnostics(issues), PanelPosition.Left, 28)
+    ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
-    val point  = panelItemPoint(before, surface.id, displayedItemRow = 2)
+    val point  = panelItemPoint(before, surfaceId, displayedItemRow = 2)
     sm.applyEvent(MouseMove(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe before.persisted.focus
-    updated.surfaceById(surface.id).map(_.content) shouldBe Some(
+    updated.surfaceById(surfaceId).map(_.content) shouldBe Some(
       SurfaceContent.Diagnostics(issues, Some(Location(2, 3)))
     )
   }
@@ -436,27 +440,27 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       Diagnostic("unused import", DiagnosticSeverity.Warning, Location(0, 1)),
       Diagnostic("type mismatch", DiagnosticSeverity.Error, Location(2, 3))
     )
-    val surface = UiSurface(
-      id = SurfaceId("diagnostics"),
-      content = SurfaceContent.Diagnostics(issues),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 18)
-    )
-    sm.updateState(state =>
-      state.copy(
-        persisted = state.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)),
-        runtime = state.runtime.copy(uiSurfaces = List(surface))
-      )
-    ).unsafeRunSync()
+    val surfaceId = SurfaceId("diagnostics")
+    sm.updateState { state =>
+      // Seed the panel's ratio against the viewport it will actually render at (issue #817: the ratio is the sole
+      // size record), so `SurfaceLayoutKind.classify` below sees the requested 18-cell width, not a mismatched
+      // fallback total.
+      val withViewport = state.copy(runtime = state.runtime.copy(viewportSize = Some(compactSquareViewport)))
+      val docked =
+        DockedPanelFixtures.dock(withViewport, surfaceId, SurfaceContent.Diagnostics(issues), PanelPosition.Right, 18)
+      docked
+        .copy(persisted = docked.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+    }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(compactSquareViewport)).unsafeRunSync()
 
     val state       = sm.getCurrentState.unsafeRunSync()
-    val frameRect   = panelFrameRect(state, surface.id, compactSquareViewport)
-    val contentRect = panelContract(state, compactSquareViewport).panelContentRect(surface.id).get
+    val frameRect   = panelFrameRect(state, surfaceId, compactSquareViewport)
+    val contentRect = panelContract(state, compactSquareViewport).panelContentRect(surfaceId).get
 
     SurfaceLayoutKind.classify(frameRect) shouldBe SurfaceLayoutKind.Square
     SurfaceLayoutKind.classify(contentRect) shouldBe SurfaceLayoutKind.Compact
 
-    val point = panelItemPoint(state, surface.id, displayedItemRow = 1, viewportSize = compactSquareViewport)
+    val point = panelItemPoint(state, surfaceId, displayedItemRow = 1, viewportSize = compactSquareViewport)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
@@ -471,15 +475,14 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       Diagnostic("unused import", DiagnosticSeverity.Warning, Location(0, 1)),
       Diagnostic("type mismatch", DiagnosticSeverity.Error, Location(2, 3))
     )
-    val surface = UiSurface(
-      id = SurfaceId("diagnostics"),
-      content = SurfaceContent.Diagnostics(issues),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
-    )
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("diagnostics")
+    sm.updateState { state =>
+      val withViewport = state.copy(runtime = state.runtime.copy(viewportSize = Some(viewport)))
+      DockedPanelFixtures.dock(withViewport, surfaceId, SurfaceContent.Diagnostics(issues), PanelPosition.Bottom, 10)
+    }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val rect = panelContentRect(sm.getCurrentState.unsafeRunSync(), surface.id)
+    val rect = panelContentRect(sm.getCurrentState.unsafeRunSync(), surfaceId)
     SurfaceLayoutKind.classify(rect) shouldBe SurfaceLayoutKind.Horizontal
 
     sm.applyEvent(MouseClick(rect.x + 1, rect.y + 1)).unsafeRunSync()
@@ -496,9 +499,9 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       root,
       entries = Map(root -> List(DirEntry(src, "src", isDirectory = true)))
     )
-    val surface = explorerSurface(tree, selectedPath = Some(root))
-    val sm      = makeStateManager()
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface)))).unsafeRunSync()
+    val surfaceId = SurfaceId("explorer")
+    val sm        = makeStateManager()
+    dockExplorer(sm, surfaceId, tree, selectedPath = Some(root))
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before       = sm.getCurrentState.unsafeRunSync()
@@ -509,16 +512,10 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(dragColumn, beforeRect.y + 2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    val resizedSurface = updated
-      .surfaceById(surface.id)
-      .getOrElse(fail("Expected resized pinned panel"))
-    val updatedSize =
-      resizedSurface.presentation match
-        case SurfacePresentation.Pinned(PanelPosition.Left, size) => size
-        case other                                                => fail(s"Expected left pinned surface, got $other")
+    updated.surfaceById(surfaceId).getOrElse(fail("Expected resized pinned panel"))
     val afterLayout = LayoutEngine.calculateLayoutWithUI(updated, viewport)
+    val updatedSize = afterLayout.pinnedPanelRects(PanelPosition.Left).width
 
     updatedSize shouldBe dragColumn + 1
-    afterLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe updatedSize
     afterLayout.editorPanelRect.x should be < beforeLayout.editorPanelRect.x
   }

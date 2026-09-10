@@ -18,7 +18,7 @@ private[serenity] object CommandRunnerPanelSelections:
   private def selectedIndex(kind: PanelKind, state: AppState): Int =
     state.runtime.uiSurfaces.reverse
       .find(surface => panelKind(surface.content).contains(kind))
-      .flatMap(positionOf)
+      .flatMap(surface => positionOf(surface, state))
       .map(positionIndex)
       .getOrElse(0)
 
@@ -59,11 +59,10 @@ private[serenity] object CommandRunnerPanelSelections:
       case SurfaceContent.GhostOverlay(_, _)        => None
       case SurfaceContent.CompanionSprite           => None
 
-  private def positionOf(surface: UiSurface): Option[PanelPosition] =
+  private def positionOf(surface: UiSurface, state: AppState): Option[PanelPosition] =
     surface.presentation match
-      case SurfacePresentation.Pinned(position, _)   => Some(position)
-      case SurfacePresentation.Expanded(position, _) => Some(position)
-      case SurfacePresentation.Floating(_, _)        => None
+      case SurfacePresentation.Docked => state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id))
+      case SurfacePresentation.Floating(_, _) => None
 
   private def positionIndex(position: PanelPosition): Int =
     position match

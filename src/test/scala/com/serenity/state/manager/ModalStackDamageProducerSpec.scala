@@ -2,7 +2,6 @@ package com.serenity.state.manager
 
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -60,7 +59,7 @@ class ModalStackDamageProducerSpec extends AnyFlatSpec with Matchers:
     val pinned = UiSurface(
       SurfaceId("outline"),
       SurfaceContent.Outline(Nil),
-      SurfacePresentation.Pinned(PanelPosition.Left, 20)
+      SurfacePresentation.Docked
     )
     val bare   = stateWithContent("alpha")
     val before = bare.copy(runtime = bare.runtime.copy(modalStack = List(dialog), uiSurfaces = List(pinned)))

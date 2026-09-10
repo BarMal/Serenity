@@ -181,16 +181,14 @@ object RendererFloatingPanels:
       }
     }
 
-  /** Every pinned panel plus every surface presented as [[SurfacePresentation.Expanded]] -- the two presentation kinds
-    * [[renderPinnedPanels]] paints identically (an expanded panel is a pinned panel temporarily grown to fill more of
-    * the workspace; both read their geometry from the same scene node and the same [[PinnedPanelRenderer]]).
+  /** Every docked panel, expanded or not -- `state.pinnedSurfaces` (issue #817) already includes the currently expanded
+    * one (expansion is a `Layout.maximizedWorkspaceNodeId` overlay on an otherwise still-docked surface, not a separate
+    * presentation), and the renderer paints both cases identically (an expanded panel is a pinned panel temporarily
+    * grown to fill more of the workspace; both read their geometry from the same scene node and the same
+    * [[PinnedPanelRenderer]]).
     */
   def pinnedAndExpandedSurfaces(state: AppState): List[UiSurface] =
-    state.pinnedSurfaces ++ state.runtime.uiSurfaces.filter {
-      _.presentation match
-        case SurfacePresentation.Expanded(_, _) => true
-        case _                                  => false
-    }
+    state.pinnedSurfaces
 
   private def renderMarkdownPreviewPanel(
     bufferId: BufferId,

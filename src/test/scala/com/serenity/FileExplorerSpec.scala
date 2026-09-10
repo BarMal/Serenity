@@ -35,9 +35,9 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
     state.pinnedSurfaces should have size 1
-    state.pinnedSurfaces.head.presentation match
-      case SurfacePresentation.Pinned(PanelPosition.Left, _) => succeed
-      case other                                             => fail(s"Expected Pinned(Left, _), got $other")
+    state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(state.pinnedSurfaces.head.id)) shouldBe Some(
+      PanelPosition.Left
+    )
 
   it should "populate the listing with the provided file names" in new ExplorerFixture:
     sm.panelManager.loadDirectoryTree(Paths.get("/repo"), List("src", "test", "build.sbt")).unsafeRunSync()

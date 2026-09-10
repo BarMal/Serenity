@@ -67,14 +67,11 @@ final private[manager] class StateManagerSurfaceCapability(
     stateRef.get.flatMap { state =>
       val existing = state.pinnedSurfaces.reverse.find { surface =>
         surface.content match
-          case SurfaceContent.Terminal(_, _) =>
-            surface.presentation match
-              case SurfacePresentation.Pinned(_, _) => true
-              case _                                => false
-          case _ => false
+          case SurfaceContent.Terminal(_, _) => true
+          case _                             => false
       }
       val (updated, effects) = existing match
-        case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(_, _), _)) =>
+        case Some(surface) =>
           val nextSurface = surface.copy(content = SurfaceContent.Terminal(text, text.length))
           state.copy(runtime =
             state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
@@ -144,25 +141,16 @@ final private[manager] class StateManagerSurfaceCapability(
     stateRef.get.flatMap { state =>
       val maybeExistingExplorer = state.pinnedSurfaces.reverse.find { surface =>
         surface.content match
-          case SurfaceContent.DirectoryTree(_, _) =>
-            surface.presentation match
-              case SurfacePresentation.Pinned(_, _) => true
-              case _                                => false
-          case _ =>
-            false
+          case SurfaceContent.DirectoryTree(_, _) => true
+          case _                                  => false
       }
       val (updated, effects) =
         maybeExistingExplorer match
-          case Some(surface @ UiSurface(_, _, SurfacePresentation.Pinned(position, size), _)) =>
-            val nextSurface = surface.copy(
-              content = SurfaceContent.DirectoryTree(tree, selectedPath = None),
-              presentation = SurfacePresentation.Pinned(position, size)
-            )
+          case Some(surface) =>
+            val nextSurface = surface.copy(content = SurfaceContent.DirectoryTree(tree, selectedPath = None))
             state.copy(runtime =
               state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ nextSurface)
             ) -> Nil
-          case Some(_) =>
-            state -> Nil
           case None =>
             val result = PanelStateReducer.pin(content, PanelPosition.Left, 30, state)
             result.state -> result.effects
@@ -176,12 +164,8 @@ final private[manager] class StateManagerSurfaceCapability(
       val updated = state.pinnedSurfaces.reverse
         .find { surface =>
           surface.content match
-            case SurfaceContent.DirectoryTree(_, _) =>
-              surface.presentation match
-                case SurfacePresentation.Pinned(_, _) => true
-                case _                                => false
-            case _ =>
-              false
+            case SurfaceContent.DirectoryTree(_, _) => true
+            case _                                  => false
         }
         .flatMap { surface =>
           surface.content match

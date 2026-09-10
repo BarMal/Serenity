@@ -9,7 +9,7 @@ import com.serenity.config.AppMode
 import com.serenity.project.ProjectTaskKind
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{BufferId, SurfaceContent, SurfacePresentation}
+import com.serenity.state.models.{BufferId, SurfaceContent}
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -24,6 +24,18 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("ProjectWorkflowStateManagerSpec"))
     StateManager.apply(logger).unsafeRunSync()
+
+  private def bottomTerminalText(state: com.serenity.state.models.AppState): Option[String] =
+    state.pinnedSurfaces
+      .collectFirst {
+        case surface @ com.serenity.state.models.UiSurface(_, SurfaceContent.Terminal(buffer, _), _, _)
+            if state.persisted.layout.workspaceTree
+              .flatMap(_.positionForSurface(surface.id))
+              .contains(
+                PanelPosition.Bottom
+              ) =>
+          buffer
+      }
 
   "Project workflow commands" should "be registered under the project category" in {
     val commands = CommandRegistry.default.commandsForCategory(CommandCategory.Project)
@@ -72,14 +84,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         )
         .unsafeRunSync()
 
-      val terminalText = stateManager.getCurrentState
-        .unsafeRunSync()
-        .pinnedSurfaces
-        .collectFirst {
-          case surface if surface.presentation == SurfacePresentation.Pinned(PanelPosition.Bottom, 14) =>
-            surface.content
-        }
-        .collect { case SurfaceContent.Terminal(buffer, _) => buffer }
+      val terminalText = bottomTerminalText(stateManager.getCurrentState.unsafeRunSync())
         .getOrElse(fail("Expected bottom terminal panel"))
 
       terminalText should include("No build task found")
@@ -115,14 +120,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val terminalText = stateManager.getCurrentState
-      .unsafeRunSync()
-      .pinnedSurfaces
-      .collectFirst {
-        case surface if surface.presentation == SurfacePresentation.Pinned(PanelPosition.Bottom, 14) =>
-          surface.content
-      }
-      .collect { case SurfaceContent.Terminal(buffer, _) => buffer }
+    val terminalText = bottomTerminalText(stateManager.getCurrentState.unsafeRunSync())
       .getOrElse(fail("Expected bottom terminal panel"))
 
     terminalText should include("not available in prose mode")

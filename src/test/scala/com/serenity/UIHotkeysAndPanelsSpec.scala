@@ -96,7 +96,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val pinned = state.pinnedSurfaces
     pinned should have size 2
 
-    val positions = pinned.collect { case UiSurface(_, _, SurfacePresentation.Pinned(pos, _), _) => pos }
+    val positions =
+      pinned.flatMap(surface => state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)))
     positions should contain(PanelPosition.Right)
     positions should contain(PanelPosition.Bottom)
 
@@ -131,7 +132,14 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val updated = stateManager.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     updated.pinnedSurfaces.map(_.id) shouldBe List(diagnostics.id)
-    updated.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Pinned(PanelPosition.Bottom, 30)
+    updated.persisted.layout.workspaceTree.flatMap(_.positionForSurface(diagnostics.id)) shouldBe Some(
+      PanelPosition.Bottom
+    )
+    // Outline and diagnostics shared the Right edge's column from line 119 through the move on line 126, and a
+    // same-edge column's width is a single tree ratio shared by every panel docked there (issue #817) -- so
+    // resizing outline to 20 on line 125 changed diagnostics' rendered width too, not just outline's, before
+    // diagnostics ever moved to Bottom on its own.
+    com.serenity.state.reducers.PanelStateReducer.currentSize(diagnostics.id, updated) shouldBe Some(20)
     updated.persisted.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(List(diagnostics.id))
 
   it should "start an element transition animation when pinning a panel" in new UIFixture:
@@ -248,9 +256,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val state  = stateManager.getCurrentState.unsafeRunSync()
     val pinned = state.pinnedSurfaces
     pinned should have size 1
-    pinned.head.presentation match
-      case SurfacePresentation.Pinned(PanelPosition.Right, size) => size shouldBe 50
-      case other                                                 => fail(s"Expected Pinned(Right, 50), got $other")
+    com.serenity.state.reducers.PanelStateReducer.currentSize(pinned.head.id, state) shouldBe Some(50)
 
   it should "do nothing when resizing a position with no panel" in new UIFixture:
     stateManager.panelManager.resizePinnedPanel(PanelTarget.ByPosition(PanelPosition.Left), 40).unsafeRunSync()
@@ -304,9 +310,12 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.panelManager.expandPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
 
     val expanded = stateManager.getCurrentState.unsafeRunSync()
-    expanded.expandedPanelSurface.map(_.presentation) shouldBe Some(
-      SurfacePresentation.Pinned(PanelPosition.Right, 30)
-    )
+    expanded.expandedPanelSurface.map(_.presentation) shouldBe Some(SurfacePresentation.Docked)
+    expanded.persisted.layout.workspaceTree.flatMap(
+      _.positionForSurface(expanded.expandedPanelSurface.get.id)
+    ) shouldBe Some(PanelPosition.Right)
+    com.serenity.state.reducers.PanelStateReducer.currentSize(expanded.expandedPanelSurface.get.id, expanded) shouldBe
+      Some(30)
     expanded.pinnedSurfaces should have size 1
     expanded.persisted.layout.maximizedWorkspaceNodeId shouldBe defined
 
@@ -315,7 +324,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val collapsed = stateManager.getCurrentState.unsafeRunSync()
     collapsed.expandedPanelSurface shouldBe None
     collapsed.persisted.layout.maximizedWorkspaceNodeId shouldBe None
-    collapsed.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Pinned(PanelPosition.Right, 30))
+    collapsed.pinnedSurfaces.map(_.presentation) shouldBe List(SurfacePresentation.Docked)
 
   it should "do nothing when expanding a surface ID that isn't a pinned panel" in new UIFixture:
     val before = stateManager.getCurrentState.unsafeRunSync()
@@ -351,7 +360,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().expandedPanelSurface.map(_.presentation) shouldBe Some(
-      SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
+      SurfacePresentation.Docked
     )
 
     stateManager.commandExecutor
@@ -366,7 +375,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.map(_.presentation) shouldBe List(
-      SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
+      SurfacePresentation.Docked
     )
 
   // ── Backlog ───────────────────────────────────────────────────────────────

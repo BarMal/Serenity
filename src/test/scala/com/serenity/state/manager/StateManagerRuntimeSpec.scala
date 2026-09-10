@@ -12,7 +12,7 @@ import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
-import com.serenity.state.models.{AppState, BufferId, SurfaceContent, SurfacePresentation, UiSurface}
+import com.serenity.state.models.{AppState, BufferId, SurfaceContent}
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -304,10 +304,15 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
     yield
       taskWasDestroyed shouldBe Some(())
       projectTaskAfter shouldBe None
-      stateAfterUnpin.pinnedSurfaces.exists {
-        case UiSurface(_, SurfaceContent.Terminal(_, _), SurfacePresentation.Pinned(PanelPosition.Bottom, _), _) =>
-          true
-        case _ => false
+      stateAfterUnpin.pinnedSurfaces.exists { surface =>
+        surface.content match
+          case SurfaceContent.Terminal(_, _) =>
+            stateAfterUnpin.persisted.layout.workspaceTree
+              .flatMap(_.positionForSurface(surface.id))
+              .contains(
+                PanelPosition.Bottom
+              )
+          case _ => false
       } shouldBe false
 
     program.unsafeRunSync()

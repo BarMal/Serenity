@@ -37,13 +37,13 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       tree,
       Some(root.resolve("src"))
     ),
-    presentation = SurfacePresentation.Pinned(PanelPosition.Left, 24)
+    presentation = SurfacePresentation.Docked
   )
 
   private val terminalPanel = UiSurface(
     id = SurfaceId("terminal"),
     content = SurfaceContent.Terminal("sbt test\ncompile\nrun", cursor = 7),
-    presentation = SurfacePresentation.Pinned(PanelPosition.Bottom, 10)
+    presentation = SurfacePresentation.Docked
   )
 
   private val outlineSymbols = List(
@@ -56,7 +56,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
   private val outlinePanel = UiSurface(
     id = SurfaceId("outline"),
     content = SurfaceContent.Outline(outlineSymbols),
-    presentation = SurfacePresentation.Pinned(PanelPosition.Right, 20)
+    presentation = SurfacePresentation.Docked
   )
 
   private val commentSymbols = List(
@@ -67,7 +67,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
   private val commentsPanel = UiSurface(
     id = SurfaceId("comments"),
     content = SurfaceContent.Comments(commentSymbols),
-    presentation = SurfacePresentation.Pinned(PanelPosition.Right, 20)
+    presentation = SurfacePresentation.Docked
   )
 
   private val diagnosticsPanel = UiSurface(
@@ -79,7 +79,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
         Diagnostic("Can inline", DiagnosticSeverity.Info, Location(12, 2))
       )
     ),
-    presentation = SurfacePresentation.Pinned(PanelPosition.Bottom, 12)
+    presentation = SurfacePresentation.Docked
   )
 
   "PinnedPanelViewModel.resolve" should "shape directory trees for wide panel geometry" in {
@@ -153,7 +153,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       content = SurfaceContent.ModalWorkflow(
         Modal.Find("needle", List(FindResult(2, 4)), 0)
       ),
-      presentation = SurfacePresentation.Pinned(PanelPosition.Right, 24)
+      presentation = SurfacePresentation.Docked
     )
 
     val view = PinnedPanelViewModel.resolve(modalPanel, LayoutRect(0, 0, 40, 8))

@@ -58,7 +58,7 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
         SurfaceContent.Diagnostics(
           List(Diagnostic("Unused import", DiagnosticSeverity.Warning, Location(2, 1)))
         ),
-        SurfacePresentation.Pinned(PanelPosition.Bottom, 8)
+        SurfacePresentation.Docked
       )
     )
 
@@ -74,31 +74,30 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
 
   it should "derive floating and pinned surface projections from stored surfaces" in {
     val root = Paths.get("/repo")
-    val surfaces = List(
-      UiSurface(
-        SurfaceId("peek"),
-        SurfaceContent.DirectoryListing(
-          root,
-          List(DirEntry(root.resolve("src"), "src", isDirectory = true)),
-          Some(root.resolve("src"))
-        ),
-        SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.AboveCursor),
-        dismissOnMove = true
+    val floating = UiSurface(
+      SurfaceId("peek"),
+      SurfaceContent.DirectoryListing(
+        root,
+        List(DirEntry(root.resolve("src"), "src", isDirectory = true)),
+        Some(root.resolve("src"))
       ),
-      UiSurface(
-        SurfaceId("pinned"),
-        SurfaceContent.DirectoryTree(
-          DirectoryTreeData(
-            root,
-            entries = Map(root -> List(DirEntry(root.resolve("src"), "src", isDirectory = true)))
-          ),
-          Some(root.resolve("src"))
-        ),
-        SurfacePresentation.Pinned(PanelPosition.Bottom, 8)
-      )
+      SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.AboveCursor),
+      dismissOnMove = true
     )
-
-    val state = baseState().copy(runtime = baseState().runtime.copy(uiSurfaces = surfaces))
+    val withFloating = baseState().copy(runtime = baseState().runtime.copy(uiSurfaces = List(floating)))
+    val state = DockedPanelFixtures.dock(
+      withFloating,
+      SurfaceId("pinned"),
+      SurfaceContent.DirectoryTree(
+        DirectoryTreeData(
+          root,
+          entries = Map(root -> List(DirEntry(root.resolve("src"), "src", isDirectory = true)))
+        ),
+        Some(root.resolve("src"))
+      ),
+      PanelPosition.Bottom,
+      8
+    )
 
     state.floatingSurfaces.map(_.id) shouldBe List(SurfaceId("peek"))
     state.pinnedSurfaces.map(_.id) shouldBe List(SurfaceId("pinned"))

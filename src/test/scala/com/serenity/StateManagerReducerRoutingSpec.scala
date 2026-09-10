@@ -284,20 +284,17 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers:
         24
       )
       .unsafeRunSync()
-    val pinnedSurfaceId = stateManager.getCurrentState
-      .unsafeRunSync()
-      .runtime
-      .uiSurfaces
-      .collectFirst {
-        case surface @ UiSurface(
-              _,
-              _,
-              com.serenity.state.models.SurfacePresentation.Pinned(PanelPosition.Left, _),
-              _
-            ) =>
-          surface.id
-      }
+    val pinnedState = stateManager.getCurrentState.unsafeRunSync()
+    val pinnedSurfaceId = pinnedState.pinnedSurfaces
+      .find(surface =>
+        pinnedState.persisted.layout.workspaceTree
+          .flatMap(_.positionForSurface(surface.id))
+          .contains(
+            PanelPosition.Left
+          )
+      )
       .get
+      .id
     stateManager.focusManager.switchFocus(Focus.Surface(pinnedSurfaceId)).unsafeRunSync()
 
     stateManager.applyEvent(PanelInputEvent.ReturnFocus).unsafeRunSync()

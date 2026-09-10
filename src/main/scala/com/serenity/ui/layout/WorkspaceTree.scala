@@ -69,6 +69,13 @@ final case class WorkspaceTree(root: WorkspaceNode):
   def positionForSurface(surfaceId: SurfaceId): Option[PanelPosition] =
     WorkspaceTree.dockedSurface(root, surfaceId).map(_.position)
 
+  /** Fresh, collision-free split/leaf node IDs for docking a not-yet-docked surface (issue #817) -- the one place every
+    * pin path (`PanelStateReducer`, `UiPreset`, `SessionLayout`, the companion sprite panel) derives the IDs it hands
+    * to [[dock]], so they can't drift out of sync with each other.
+    */
+  def nextDockIds(surfaceId: SurfaceId): (WorkspaceNodeId, WorkspaceNodeId) =
+    (WorkspaceNodeId(s"dock-split-${surfaceId.value}-${nodeIds.size}"), WorkspaceNodeId(s"dock-${surfaceId.value}"))
+
   /** Replaces one editor leaf with a ratio-controlled split containing the original and new pane. */
   def split(
     paneId: PaneId,
@@ -129,6 +136,38 @@ final case class WorkspaceTree(root: WorkspaceNode):
                 (SplitAxis.Vertical, 1.0 - WorkspaceTree.DefaultDockRatio, root, surface)
           Some(WorkspaceTree(WorkspaceNode.Split(splitId, axis, ratio, first, second)))
 
+  /** Docks `surfaceId` at `position` with the given absolute `size` (converted to a ratio against `viewportSize`, issue
+    * #817) -- the one place every pin path performs both steps together, so they can't drift apart.
+    *
+    * `dock`'s "no panel at this edge yet" branch wraps the *entire* existing tree as one side of a brand-new split,
+    * nesting one level deeper whatever was already docked at the opposite edge of the same axis (Left/Right, or
+    * Top/Bottom) -- which would otherwise silently shrink that surface's rendered extent even though nothing asked to
+    * resize it. This re-seeds the opposite surface's ratio from its own pre-dock absolute size (via [[currentSize]] /
+    * [[allocationRatio]], which are ancestor-aware) after the new dock, so docking a second panel on the other side
+    * never moves a first one's size, however deep the resulting nesting.
+    */
+  def dockSized(
+    surfaceId: SurfaceId,
+    position: PanelPosition,
+    splitId: WorkspaceNodeId,
+    leafId: WorkspaceNodeId,
+    size: Int,
+    viewportSize: Option[ViewportSize]
+  ): Option[WorkspaceTree] =
+    val opposite = WorkspaceTree.oppositePosition(position)
+    val opposingSurface = dockedSurfaceIds
+      .find(id => positionForSurface(id).contains(opposite))
+      .flatMap(id => currentSize(id, viewportSize).map(id -> _))
+    for
+      docked  <- dock(surfaceId, position, splitId, leafId)
+      ratio   <- docked.allocationRatio(surfaceId, size, viewportSize)
+      resized <- docked.resizeSurface(surfaceId, ratio)
+      finalTree <- opposingSurface match
+        case Some((oppositeId, oppositeSize)) =>
+          resized.allocationRatio(oppositeId, oppositeSize, viewportSize).flatMap(resized.resizeSurface(oppositeId, _))
+        case None => Some(resized)
+    yield finalTree
+
   /** Removes one docked surface and collapses its now-redundant parent. */
   def removeSurface(surfaceId: SurfaceId): Option[WorkspaceTree] =
     Option.when(dockedSurfaceIds.contains(surfaceId))(
@@ -153,6 +192,60 @@ final case class WorkspaceTree(root: WorkspaceNode):
       if ratio.isFinite then ratio.max(WorkspaceTree.MinimumSplitRatio).min(WorkspaceTree.MaximumSplitRatio)
       else WorkspaceTree.DefaultDockRatio
     WorkspaceTree.resizeDockedSurface(root, surfaceId, normalized).map(WorkspaceTree.apply)
+
+  /** The docked surface's current allocation, read back from the same owning split [[resizeSurface]] writes -- the sole
+    * size record for a docked surface (issue #817), so callers needing "how big is this panel right now" (e.g. a
+    * command/keyboard resize delta) read it here rather than from any size carried on the surface itself.
+    */
+  def ratioForSurface(surfaceId: SurfaceId): Option[Double] =
+    WorkspaceTree.ratioForDockedSurface(root, surfaceId)
+
+  /** `surfaceId`'s current absolute size (in cells), read back through its owning split's ratio against the extent that
+    * split actually receives in *this* tree -- not `viewportSize` directly, since nesting under another docked
+    * surface's split (issue #817's `dockSized` compensation, or simply two panels sharing an axis) leaves less than the
+    * full viewport to divide. Inverse of [[allocationRatio]].
+    */
+  def currentSize(surfaceId: SurfaceId, viewportSize: Option[ViewportSize]): Option[Int] =
+    for
+      position <- positionForSurface(surfaceId)
+      ratio    <- ratioForSurface(surfaceId)
+      extent <- WorkspaceTree.availableExtentForSurface(
+        root,
+        surfaceId,
+        WorkspaceTree.axisFor(position),
+        WorkspaceTree.totalExtent(position, viewportSize)
+      )
+    yield math.round(ratio * extent).toInt
+
+  /** The ratio `surfaceId`'s owning split needs so the surface renders at `requestedSize` cells, given the extent that
+    * split actually receives in *this* tree (see [[currentSize]]). `surfaceId` must already be docked -- [[dockSized]]
+    * calls this only after placing the surface, so the extent reflects its real ancestor chain.
+    */
+  def allocationRatio(surfaceId: SurfaceId, requestedSize: Int, viewportSize: Option[ViewportSize]): Option[Double] =
+    for
+      position <- positionForSurface(surfaceId)
+      extent <- WorkspaceTree.availableExtentForSurface(
+        root,
+        surfaceId,
+        WorkspaceTree.axisFor(position),
+        WorkspaceTree.totalExtent(position, viewportSize)
+      )
+    yield requestedSize.toDouble / extent.max(1)
+
+  /** Rearranges the docked surfaces at one edge into `desiredOrder`, preserving every other branch -- the tree encodes
+    * same-edge order via nesting (issue #817: `dock`'s "existing panel at this edge" branch always nests the newly
+    * docked surface after the ones already there), so reordering redocks each surface in turn via [[moveSurface]], the
+    * same primitive this tree already uses to relocate a surface to a different edge. An id in `desiredOrder` not
+    * currently docked at `position` is skipped, leaving the tree unchanged for that entry rather than aborting the
+    * whole reorder.
+    */
+  def reorderAt(position: PanelPosition, desiredOrder: List[SurfaceId]): WorkspaceTree =
+    desiredOrder.foldLeft(this) { (tree, surfaceId) =>
+      if tree.positionForSurface(surfaceId).contains(position) then
+        val (splitId, _) = tree.nextDockIds(surfaceId)
+        tree.moveSurface(surfaceId, position, splitId).getOrElse(tree)
+      else tree
+    }
 
   def nodeIdForSurface(surfaceId: SurfaceId): Option[WorkspaceNodeId] =
     WorkspaceTree.dockedSurface(root, surfaceId).map(_.id)
@@ -220,6 +313,70 @@ object WorkspaceTree:
   val MinimumSplitRatio: Double = 0.05
   val MaximumSplitRatio: Double = 0.95
   val DefaultDockRatio: Double  = 0.25
+
+  /** Assumed total-cells extent used to convert an absolute docked-panel size when no real viewport is known yet
+    * (matches every call site's own prior fallback).
+    */
+  private val AssumedViewportExtent = 100
+
+  /** The other edge on the same axis (Left/Right, or Top/Bottom) -- the one whose docked surface, if any, `dockSized`
+    * re-seeds when a new dock at `position` would otherwise nest it (and shrink its rendered extent) unasked.
+    */
+  def oppositePosition(position: PanelPosition): PanelPosition =
+    position match
+      case PanelPosition.Left   => PanelPosition.Right
+      case PanelPosition.Right  => PanelPosition.Left
+      case PanelPosition.Top    => PanelPosition.Bottom
+      case PanelPosition.Bottom => PanelPosition.Top
+
+  /** The axis a docked panel's position divides along -- Left/Right split width, Top/Bottom split height. */
+  private def axisFor(position: PanelPosition): SplitAxis =
+    position match
+      case PanelPosition.Left | PanelPosition.Right => SplitAxis.Horizontal
+      case PanelPosition.Top | PanelPosition.Bottom => SplitAxis.Vertical
+
+  /** The full viewport extent along `position`'s axis, falling back to [[AssumedViewportExtent]] before any real
+    * viewport is known.
+    */
+  private def totalExtent(position: PanelPosition, viewportSize: Option[ViewportSize]): Int =
+    viewportSize.fold(AssumedViewportExtent) { viewport =>
+      position match
+        case PanelPosition.Left | PanelPosition.Right => viewport.width
+        case PanelPosition.Top | PanelPosition.Bottom => viewport.height
+    }
+
+  /** The extent actually available to the split [[resizeDockedSurface]] would update for `surfaceId` -- `extent`
+    * reduced by every same-`axis` ancestor split's fraction on the path from `node` down to that split (a
+    * different-axis ancestor divides the other dimension, so it passes `extent` through unchanged). This is what
+    * [[WorkspaceTree.currentSize]] and [[WorkspaceTree.allocationRatio]] divide by instead of the raw viewport, so a
+    * docked surface's absolute size round-trips correctly regardless of how deeply it ends up nested.
+    *
+    * Mirrors [[resizeDockedSurface]]'s own match order exactly -- the split it updates for `surfaceId` is the outermost
+    * one with `surfaceId` somewhere in one branch and an editor pane in the other, not necessarily `surfaceId`'s direct
+    * parent: two panels stacked on the same edge (`dock`'s "existing panel at this position" branch) nest the second
+    * surface's own leaf under an inner split with no editor-pane branch at all, so `resizeDockedSurface` -- and this --
+    * skip past it to the split one level up.
+    */
+  private def availableExtentForSurface(
+    node: WorkspaceNode,
+    surfaceId: SurfaceId,
+    axis: SplitAxis,
+    extent: Int
+  ): Option[Int] =
+    node match
+      case _: WorkspaceNode.Leaf | _: WorkspaceNode.DockedSurface =>
+        None
+      case split: WorkspaceNode.Split
+          if split.first.dockedSurfaceIds.contains(surfaceId) && split.second.paneIds.nonEmpty =>
+        Some(extent)
+      case split: WorkspaceNode.Split
+          if split.second.dockedSurfaceIds.contains(surfaceId) && split.first.paneIds.nonEmpty =>
+        Some(extent)
+      case split: WorkspaceNode.Split =>
+        val firstExtent  = if split.splitAxis == axis then math.round(extent * split.ratio).toInt else extent
+        val secondExtent = if split.splitAxis == axis then extent - firstExtent else extent
+        availableExtentForSurface(split.first, surfaceId, axis, firstExtent)
+          .orElse(availableExtentForSurface(split.second, surfaceId, axis, secondExtent))
 
   private def replaceLeaf(
     node: WorkspaceNode,
@@ -351,6 +508,19 @@ object WorkspaceTree:
           .orElse(
             resizeDockedSurface(split.second, surfaceId, surfaceRatio).map(updated => split.copy(second = updated))
           )
+
+  private def ratioForDockedSurface(node: WorkspaceNode, surfaceId: SurfaceId): Option[Double] =
+    node match
+      case _: WorkspaceNode.Leaf | _: WorkspaceNode.DockedSurface =>
+        None
+      case split: WorkspaceNode.Split
+          if split.first.dockedSurfaceIds.contains(surfaceId) && split.second.paneIds.nonEmpty =>
+        Some(split.ratio)
+      case split: WorkspaceNode.Split
+          if split.second.dockedSurfaceIds.contains(surfaceId) && split.first.paneIds.nonEmpty =>
+        Some(1.0 - split.ratio)
+      case split: WorkspaceNode.Split =>
+        ratioForDockedSurface(split.first, surfaceId).orElse(ratioForDockedSurface(split.second, surfaceId))
 
   private def withoutDockedSurfaces(node: WorkspaceNode): Option[WorkspaceNode] =
     node match

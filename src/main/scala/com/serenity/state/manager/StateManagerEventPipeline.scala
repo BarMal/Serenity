@@ -321,8 +321,10 @@ final private[manager] class StateManagerEventPipeline(
             NoOpLocalEventHandler
           case Some(surface) =>
             surface.presentation match
-              case SurfacePresentation.Pinned(position, _)   => FocusHandlerRouting.forPinnedPanel(position)
-              case SurfacePresentation.Expanded(position, _) => FocusHandlerRouting.forPinnedPanel(position)
+              case SurfacePresentation.Docked =>
+                state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)) match
+                  case Some(position) => FocusHandlerRouting.forPinnedPanel(position)
+                  case None           => FocusHandlerRouting.forSurfaceContent(surface.content)
               case SurfacePresentation.Floating(_, _) =>
                 FocusHandlerRouting.forSurfaceContent(surface.content)
 
