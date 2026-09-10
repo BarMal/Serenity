@@ -12,13 +12,14 @@ import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.session.given
-import com.serenity.session.{SessionBuffer, SessionFindResult, SessionFindState, SessionState, SessionWorkspaceNode}
+import com.serenity.session.{SessionBuffer, SessionFindResult, SessionFindState, SessionState}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{
   Layout,
   PaneSplitDirection,
   PanelContent,
   PanelPosition,
+  SessionWorkspaceNode,
   SplitAxis,
   WorkspaceNode,
   WorkspaceNodeId,

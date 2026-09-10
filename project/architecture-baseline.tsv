@@ -14,7 +14,7 @@ main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitS
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	654
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	131
 main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
-main/scala/com/serenity/ui/presets/UiPreset.scala	file length	913
+main/scala/com/serenity/ui/presets/UiPreset.scala	file length	852
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	615
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	file length	734
 main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	method applyGlow	90
@@ -41,12 +41,12 @@ test/scala/com/serenity/RendererMarkdownLensSpec.scala	file length	889
 test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	637
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	714
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	728
-test/scala/com/serenity/SessionStateSpec.scala	file length	1505
+test/scala/com/serenity/SessionStateSpec.scala	file length	1506
 test/scala/com/serenity/StateManagerElementTransitionSettingsSpec.scala	file length	817
-test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	1048
+test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	1054
 test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1255
 test/scala/com/serenity/TextOverlayRendererSpec.scala	file length	806
-test/scala/com/serenity/UiPresetSpec.scala	file length	702
+test/scala/com/serenity/UiPresetSpec.scala	file length	705
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320
 test/scala/com/serenity/rope/RopeSpec.scala	file length	847

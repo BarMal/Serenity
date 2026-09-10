@@ -4,8 +4,6 @@ import java.nio.file.Paths
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.presets.UiPreset.PanelContentSnapshot
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -63,26 +61,26 @@ class PanelContentSpec extends AnyFlatSpec with Matchers:
     PanelContent.fromSurfaceContent(SurfaceContent.QuickInfo("info")) shouldBe None
   }
 
-  "UiPreset.PanelContentSnapshot" should
+  "SessionPanelContent" should
     "deliberately drop the transient active-location highlight for Outline, Comments, and Diagnostics when persisting" in {
       val location = Location(1, 1)
 
-      UiPreset.PinnedPanel
+      SessionPinnedPanel
         .fromPanelContent(PanelContent.Outline(Nil, Some(location)), PanelPosition.Left, 20)
-        .map(_.content) shouldBe Some(PanelContentSnapshot.Outline(Nil))
+        .map(_.content) shouldBe Some(SessionPanelContent.Outline(Nil))
 
-      UiPreset.PinnedPanel
+      SessionPinnedPanel
         .fromPanelContent(PanelContent.Comments(Nil, Some(location)), PanelPosition.Left, 20)
-        .map(_.content) shouldBe Some(PanelContentSnapshot.Comments(Nil))
+        .map(_.content) shouldBe Some(SessionPanelContent.Comments(Nil))
 
-      UiPreset.PinnedPanel
+      SessionPinnedPanel
         .fromPanelContent(PanelContent.Diagnostics(Nil, Some(location)), PanelPosition.Bottom, 10)
-        .map(_.content) shouldBe Some(PanelContentSnapshot.Diagnostics(Nil))
+        .map(_.content) shouldBe Some(SessionPanelContent.Diagnostics(Nil))
     }
 
   it should "restore a diagnostics panel without resurrecting a stale active location" in {
     val location = Location(1, 1)
-    val panel = UiPreset.PinnedPanel
+    val panel = SessionPinnedPanel
       .fromPanelContent(PanelContent.Diagnostics(Nil, Some(location)), PanelPosition.Bottom, 10)
       .getOrElse(fail("diagnostics should be capturable"))
 

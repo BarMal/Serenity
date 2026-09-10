@@ -14,13 +14,15 @@ import com.serenity.animation.TransitionKind
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.io.AtomicFileWriter
+import com.serenity.session.SessionLayout
 import com.serenity.session.given
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
+import com.serenity.ui.layout.given
 import com.serenity.ui.theme.Theme
 import io.circe.*
-import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.generic.semiauto.deriveEncoder
 import io.circe.parser.decode
 import io.circe.syntax.*
 
@@ -28,13 +30,27 @@ final case class UiPreset(
     name: String,
     config: AppConfig,
     themeName: String,
-    pinnedPanels: List[UiPreset.PinnedPanel],
+    dockedPanels: List[SessionDockedPanel] = Nil,
     targetEditorPaneCount: Option[Int] = None,
+    workspaceTree: Option[SessionWorkspaceNode] = None,
+    maximizedWorkspaceNodeId: Option[String] = None,
+    schemaVersion: Int = UiPreset.CurrentSchemaVersion,
     unknownFields: JsonObject = JsonObject.empty,
     configUnknownFields: JsonObject = JsonObject.empty
-)
+):
+
+  /** Flat view of the persisted panel content, independent of workspace-tree topology. */
+  def pinnedPanels: List[SessionPinnedPanel] = dockedPanels.map(_.panel)
 
 object UiPreset:
+
+  /** Schema version 2 adds workspace trees, docked panel snapshots, and maximised-node identity -- the same shape
+    * session persistence uses (see [[com.serenity.session.SessionState.CurrentSchemaVersion]]). Version-1 presets
+    * decode through the legacy `pinnedPanels` field, migrated into `dockedPanels` with synthesised surface identity and
+    * no persisted tree; applying such a preset falls back to the same legacy topology session restore uses. Invalid
+    * version-2 trees fall back the same way, preserving buffers and supported panel content.
+    */
+  val CurrentSchemaVersion: Int = 2
 
   def normalizedName(name: String): String =
     Normalizer.normalize(name.trim, Normalizer.Form.NFC)
@@ -273,19 +289,19 @@ object UiPreset:
     if size == size.round.toFloat then size.toInt.toString + "pt"
     else f"$size%.1fpt"
 
-  private def panelSummary(panels: List[PinnedPanel]): Option[String] =
+  private def panelSummary(panels: List[SessionPinnedPanel]): Option[String] =
     Option(panels.map(panel => s"${panel.position} ${panelContentName(panel.content)} ${panel.size}").mkString(", "))
       .filter(_.nonEmpty)
 
-  private def panelContentName(content: PanelContentSnapshot): String =
+  private def panelContentName(content: SessionPanelContent): String =
     content match
-      case PanelContentSnapshot.DirectoryTree(_, _, _) => "files"
-      case PanelContentSnapshot.Terminal(_, _)         => "terminal"
-      case PanelContentSnapshot.Outline(_)             => "outline"
-      case PanelContentSnapshot.Comments(_)            => "comments"
-      case PanelContentSnapshot.Diagnostics(_)         => "diagnostics"
-      case PanelContentSnapshot.MarkdownPreview(_, _)  => "markdown preview"
-      case PanelContentSnapshot.CompanionSprite        => "companion sprite"
+      case SessionPanelContent.DirectoryTree(_, _, _) => "files"
+      case SessionPanelContent.Terminal(_, _)         => "terminal"
+      case SessionPanelContent.Outline(_)             => "outline"
+      case SessionPanelContent.Comments(_)            => "comments"
+      case SessionPanelContent.Diagnostics(_)         => "diagnostics"
+      case SessionPanelContent.MarkdownPreview(_, _)  => "markdown preview"
+      case SessionPanelContent.CompanionSprite        => "companion sprite"
 
   private def writingPreset: UiPreset =
     UiPreset(
@@ -309,7 +325,6 @@ object UiPreset:
         )
         .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position)),
       themeName = Theme.dark.name,
-      pinnedPanels = Nil,
       targetEditorPaneCount = Some(1)
     )
 
@@ -332,7 +347,6 @@ object UiPreset:
           )
         ),
       themeName = Theme.dark.name,
-      pinnedPanels = Nil,
       targetEditorPaneCount = Some(1)
     )
 
@@ -348,11 +362,14 @@ object UiPreset:
         .withSyntaxHighlighting(true)
         .withFontConfig(FontConfig()),
       themeName = Theme.dark.name,
-      pinnedPanels = List(
-        PinnedPanel(
-          PanelPosition.Left,
-          32,
-          PanelContentSnapshot.DirectoryTree(".", selectedPath = None, expandedPaths = Nil)
+      dockedPanels = List(
+        SessionDockedPanel(
+          "code-directory-tree",
+          SessionPinnedPanel(
+            PanelPosition.Left,
+            32,
+            SessionPanelContent.DirectoryTree(".", selectedPath = None, expandedPaths = Nil)
+          )
         )
       )
     )
@@ -372,7 +389,6 @@ object UiPreset:
         .withSyntaxHighlighting(true)
         .withFontConfig(FontConfig()),
       themeName = Theme.dark.name,
-      pinnedPanels = Nil,
       targetEditorPaneCount = Some(1)
     )
 
@@ -387,112 +403,17 @@ object UiPreset:
         .withInterfaceDensity(InterfaceDensity.Comfortable)
         .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)),
       themeName = Theme.dark.name,
-      pinnedPanels = List(
-        PinnedPanel(PanelPosition.Left, 30, PanelContentSnapshot.Outline(Nil)),
-        PinnedPanel(PanelPosition.Bottom, 10, PanelContentSnapshot.Diagnostics(Nil))
+      dockedPanels = List(
+        SessionDockedPanel(
+          "review-outline",
+          SessionPinnedPanel(PanelPosition.Left, 30, SessionPanelContent.Outline(Nil))
+        ),
+        SessionDockedPanel(
+          "review-diagnostics",
+          SessionPinnedPanel(PanelPosition.Bottom, 10, SessionPanelContent.Diagnostics(Nil))
+        )
       )
     )
-
-  final case class PinnedPanel(
-      position: PanelPosition,
-      size: Int,
-      content: PanelContentSnapshot
-  ):
-
-    def toUiSurface(id: SurfaceId): UiSurface =
-      UiSurface(
-        id = id,
-        content = content.toSurfaceContent,
-        presentation = SurfacePresentation.Docked
-      )
-
-  enum PanelContentSnapshot:
-    case DirectoryTree(rootPath: String, selectedPath: Option[String], expandedPaths: List[String])
-    case Terminal(buffer: String, cursor: Int)
-    case Outline(symbols: List[Symbol])
-    case Comments(symbols: List[Symbol])
-    case Diagnostics(issues: List[Diagnostic])
-    case MarkdownPreview(bufferId: Int, title: String)
-    case CompanionSprite
-
-    def toSurfaceContent: SurfaceContent =
-      this match
-        case DirectoryTree(rootPath, selectedPath, expandedPaths) =>
-          SurfaceContent.DirectoryTree(
-            DirectoryTreeData(
-              rootPath = Path.of(rootPath),
-              expandedPaths = expandedPaths.map(Path.of(_)).toSet,
-              entries = Map.empty
-            ),
-            selectedPath.map(Path.of(_))
-          )
-        case Terminal(buffer, cursor) =>
-          SurfaceContent.Terminal(buffer, cursor)
-        case Outline(symbols) =>
-          SurfaceContent.Outline(symbols)
-        case Comments(symbols) =>
-          SurfaceContent.Comments(symbols)
-        case Diagnostics(issues) =>
-          SurfaceContent.Diagnostics(issues)
-        case MarkdownPreview(bufferId, title) =>
-          SurfaceContent.MarkdownPreview(BufferId(bufferId), title)
-        case CompanionSprite =>
-          SurfaceContent.CompanionSprite
-
-  object PinnedPanel:
-
-    /** Reads a docked surface's position and size back through the workspace tree (issue #817: the sole record of
-      * both), rather than from any position/size carried on the surface itself.
-      */
-    def fromSurface(surface: UiSurface, state: AppState): Option[PinnedPanel] =
-      surface.presentation match
-        case SurfacePresentation.Docked =>
-          for
-            tree     <- state.persisted.layout.workspaceTree
-            position <- tree.positionForSurface(surface.id)
-            size     <- tree.currentSize(surface.id, state.runtime.viewportSize)
-            panel    <- fromSurfaceContent(surface.content, position, size)
-          yield panel
-        case _ =>
-          None
-
-    def fromPanelContent(content: PanelContent, position: PanelPosition, size: Int): Option[PinnedPanel] =
-      fromSurfaceContent(content.asSurfaceContent, position, size)
-
-    private def fromSurfaceContent(
-      content: SurfaceContent,
-      position: PanelPosition,
-      size: Int
-    ): Option[PinnedPanel] =
-      PanelContent.fromSurfaceContent(content).map(panel => PinnedPanel(position, size, toSnapshot(panel)))
-
-    /** Persistence mapping from the pinnable content model to its saved form. Exhaustive over [[PanelContent]] with no
-      * wildcard, so adding a new pinnable case is a compile error here until it is given an explicit persistence
-      * decision.
-      *
-      * `activeLocation` on Outline, Comments, and Diagnostics tracks a live cursor/selection highlight; it has no
-      * meaning across a save/restore, so the snapshot form deliberately does not carry it.
-      */
-    private def toSnapshot(content: PanelContent): PanelContentSnapshot =
-      content match
-        case PanelContent.DirectoryTree(tree, selectedPath) =>
-          PanelContentSnapshot.DirectoryTree(
-            rootPath = tree.rootPath.toString,
-            selectedPath = selectedPath.map(_.toString),
-            expandedPaths = tree.expandedPaths.toList.map(_.toString).sorted
-          )
-        case PanelContent.Terminal(buffer, cursor) =>
-          PanelContentSnapshot.Terminal(buffer, cursor)
-        case PanelContent.Outline(symbols, _) =>
-          PanelContentSnapshot.Outline(symbols)
-        case PanelContent.Comments(symbols, _) =>
-          PanelContentSnapshot.Comments(symbols)
-        case PanelContent.Diagnostics(issues, _) =>
-          PanelContentSnapshot.Diagnostics(issues)
-        case PanelContent.MarkdownPreview(bufferId, title) =>
-          PanelContentSnapshot.MarkdownPreview(bufferId.value, title)
-        case PanelContent.CompanionSprite =>
-          PanelContentSnapshot.CompanionSprite
 
   def capture(
     name: String,
@@ -500,6 +421,8 @@ object UiPreset:
     preferredWindowSize: Option[com.serenity.config.PreferredWindowSize]
   ): UiPreset =
     val normalizedName = name.trim
+    val dockedPanels   = SessionDockedPanel.captureFrom(state)
+    val workspaceTree  = SessionWorkspaceNode.captureFrom(state, dockedPanels)
     UiPreset(
       name = normalizedName,
       config = state.persisted.config.withWindowConfig(
@@ -508,8 +431,10 @@ object UiPreset:
         )
       ),
       themeName = state.persisted.theme.name,
-      pinnedPanels = state.pinnedSurfaces.flatMap(PinnedPanel.fromSurface(_, state)),
-      targetEditorPaneCount = Option(state.persisted.layout.editorPanes.size).filter(_ > 0)
+      dockedPanels = dockedPanels,
+      targetEditorPaneCount = Option(state.persisted.layout.editorPanes.size).filter(_ > 0),
+      workspaceTree = workspaceTree,
+      maximizedWorkspaceNodeId = SessionWorkspaceNode.captureMaximizedNodeId(state, workspaceTree)
     )
 
   def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
@@ -525,7 +450,7 @@ object UiPreset:
         case SurfacePresentation.Docked => false
         case _                          => true
     }
-    // The old pinned panels are wholly replaced by `preset.pinnedPanels` below -- prune them from the tree here
+    // The old docked panels are wholly replaced by `preset.dockedPanels` below -- prune them from the tree here
     // (issue #817: the sole record of docked placement) rather than leaving stale entries for a later pass to notice.
     val prunedIds = state.pinnedSurfaces.map(_.id).toSet
     val prunedTree = prunedIds.foldLeft(state.persisted.layout.workspaceTree) { (tree, id) =>
@@ -539,41 +464,59 @@ object UiPreset:
         case _ =>
           state.persisted.focus
 
-    val (stateWithPanels, restoredPanels, treeWithPanels) =
-      preset.pinnedPanels.foldLeft(
-        (state.copy(runtime = state.runtime.copy(uiSurfaces = unpinnedSurfaces)), List.empty[UiSurface], prunedTree)
-      ) {
-        case ((currentState, panels, tree), panel) =>
-          val (nextState, surfaceId) = currentState.allocateSurfaceId
-          val surface                = panel.toUiSurface(surfaceId)
-          val dockedTree = tree.flatMap { workspaceTree =>
-            val (splitId, leafId) = workspaceTree.nextDockIds(surfaceId)
-            workspaceTree.dockSized(
-              surfaceId,
-              panel.position,
-              splitId,
-              leafId,
-              panel.size,
-              nextState.runtime.viewportSize
-            )
-          }
-          (nextState, panels :+ surface, dockedTree.orElse(tree))
-      }
+    // Panels restore keyed by their own persisted surface id (not freshly allocated) so identity matches whatever
+    // the persisted workspace tree's docked-surface nodes reference.
+    val restoredPanels        = preset.dockedPanels.map(docked => docked.panel.toUiSurface(SurfaceId(docked.surfaceId)))
+    val reservedNextSurfaceId = state.runtime.nextSurfaceId.max(SessionLayout.nextSurfaceId(restoredPanels))
 
-    val restoredState = stateWithPanels.copy(
-      persisted = stateWithPanels.persisted.copy(
+    // A preset's own persisted `workspaceTree` (issue #820) carries real nested topology, so it takes priority when
+    // it still validates against the panes/panels actually being applied. Otherwise redock each panel one at a time
+    // onto the existing (pruned) tree at its saved position/size, preserving whatever editor-pane split structure was
+    // already there -- the same behaviour presets had before they could persist a tree of their own. Only when there
+    // is no existing tree to redock onto do we fall back to rebuilding the legacy pane-strip-plus-dock topology (the
+    // same last-resort session restore uses), so applying a preset never leaves an invalid layout.
+    val decodedTree = preset.workspaceTree
+      .flatMap(SessionWorkspaceNode.toWorkspaceNode)
+      .map(WorkspaceTree.apply)
+      .filter(_.validationErrors(state.persisted.layout.editorPanes.keySet, restoredPanels.map(_.id).toSet).isEmpty)
+
+    val redockedTree = preset.dockedPanels.zip(restoredPanels).foldLeft(prunedTree) {
+      case (Some(tree), (docked, surface)) =>
+        val (splitId, leafId) = tree.nextDockIds(surface.id)
+        tree
+          .dockSized(surface.id, docked.panel.position, splitId, leafId, docked.panel.size, state.runtime.viewportSize)
+          .orElse(Some(tree))
+      case (None, _) =>
+        None
+    }
+
+    val fallbackTree = SessionDockedPanel.fallbackWorkspaceTree(
+      state.persisted.layout.orderedPaneIds,
+      state.persisted.layout.splitDirection,
+      preset.dockedPanels
+    )
+
+    val treeWithPanels = decodedTree.orElse(redockedTree).orElse(fallbackTree)
+
+    val maximizedWorkspaceNodeId = preset.maximizedWorkspaceNodeId
+      .map(WorkspaceNodeId.apply)
+      .filter(nodeId => treeWithPanels.exists(_.surfaceIdForNode(nodeId).nonEmpty))
+
+    val restoredState = state.copy(
+      persisted = state.persisted.copy(
         config = config,
         theme = theme,
         focus = withoutPinnedFocus,
-        layout = stateWithPanels.persisted.layout.copy(
-          workspaceTree = treeWithPanels.orElse(stateWithPanels.persisted.layout.workspaceTree)
+        layout = state.persisted.layout.copy(
+          workspaceTree = treeWithPanels.orElse(state.persisted.layout.workspaceTree),
+          maximizedWorkspaceNodeId = maximizedWorkspaceNodeId
         )
       ),
-      runtime = stateWithPanels.runtime.copy(
+      runtime = state.runtime.copy(
         uiSurfaces = unpinnedSurfaces ++ restoredPanels,
-        surfaceAnimations = stateWithPanels.runtime.surfaceAnimations.filterNot((surfaceId, _) =>
-          state.pinnedSurfaces.exists(_.id == surfaceId)
-        )
+        nextSurfaceId = reservedNextSurfaceId,
+        surfaceAnimations =
+          state.runtime.surfaceAnimations.filterNot((surfaceId, _) => state.pinnedSurfaces.exists(_.id == surfaceId))
       )
     )
 
@@ -636,55 +579,6 @@ object UiPreset:
       runtime = state.runtime.copy(nextPaneId = nextPaneId)
     )
 
-  given Encoder[PanelPosition] = Encoder.encodeString.contramap(_.toString)
-
-  given Decoder[PanelPosition] = Decoder.decodeString.emap {
-    case "Left"   => Right(PanelPosition.Left)
-    case "Right"  => Right(PanelPosition.Right)
-    case "Bottom" => Right(PanelPosition.Bottom)
-    case "Top"    => Right(PanelPosition.Top)
-    case other    => Left(s"Unknown PanelPosition: $other")
-  }
-
-  given Encoder[SymbolKind] = Encoder.encodeString.contramap(_.toString)
-
-  given Decoder[SymbolKind] = Decoder.decodeString.emap {
-    case "Function" => Right(SymbolKind.Function)
-    case "Class"    => Right(SymbolKind.Class)
-    case "Method"   => Right(SymbolKind.Method)
-    case "Variable" => Right(SymbolKind.Variable)
-    case "Constant" => Right(SymbolKind.Constant)
-    case "Heading"  => Right(SymbolKind.Heading)
-    case "Bookmark" => Right(SymbolKind.Bookmark)
-    case "Section"  => Right(SymbolKind.Section)
-    case other      => Left(s"Unknown SymbolKind: $other")
-  }
-
-  given Encoder[DiagnosticSeverity] = Encoder.encodeString.contramap(_.toString)
-
-  given Decoder[DiagnosticSeverity] = Decoder.decodeString.emap {
-    case "Error"   => Right(DiagnosticSeverity.Error)
-    case "Warning" => Right(DiagnosticSeverity.Warning)
-    case "Info"    => Right(DiagnosticSeverity.Info)
-    case "Hint"    => Right(DiagnosticSeverity.Hint)
-    case other     => Left(s"Unknown DiagnosticSeverity: $other")
-  }
-
-  given Encoder[Location] = deriveEncoder
-  given Decoder[Location] = deriveDecoder
-
-  given Encoder[Symbol] = deriveEncoder
-  given Decoder[Symbol] = deriveDecoder
-
-  given Encoder[Diagnostic] = deriveEncoder
-  given Decoder[Diagnostic] = deriveDecoder
-
-  given Encoder[PanelContentSnapshot] = deriveEncoder
-  given Decoder[PanelContentSnapshot] = deriveDecoder
-
-  given Encoder[PinnedPanel] = deriveEncoder
-  given Decoder[PinnedPanel] = deriveDecoder
-
   private given rawUiPresetEncoder: Encoder.AsObject[UiPreset] = deriveEncoder
 
   given Encoder[UiPreset] = Encoder.AsObject.instance { preset =>
@@ -699,22 +593,67 @@ object UiPreset:
     preset.unknownFields.deepMerge(encodedPreset)
   }
 
+  private val KnownFields = Set(
+    "name",
+    "config",
+    "themeName",
+    "dockedPanels",
+    "pinnedPanels",
+    "targetEditorPaneCount",
+    "workspaceTree",
+    "maximizedWorkspaceNodeId",
+    "schemaVersion"
+  )
+
+  /** Reads the current `dockedPanels` shape when present; otherwise migrates the legacy `pinnedPanels` shape (a flat
+    * panel list with no stable surface identity) by synthesising one, matching schema-v1 session decode.
+    */
+  private def decodeDockedPanels(cursor: HCursor): Decoder.Result[List[SessionDockedPanel]] =
+    cursor.downField("dockedPanels").focus match
+      case Some(_) =>
+        cursor.get[List[SessionDockedPanel]]("dockedPanels")
+      case None =>
+        cursor.getOrElse[List[SessionPinnedPanel]]("pinnedPanels")(Nil).map { legacyPanels =>
+          legacyPanels.zipWithIndex.map { case (panel, index) => SessionDockedPanel(s"legacy-panel-$index", panel) }
+        }
+
   given Decoder[UiPreset] = Decoder.instance { cursor =>
     for
-      name                  <- cursor.get[String]("name")
-      config                <- cursor.get[AppConfig]("config")
-      themeName             <- cursor.get[String]("themeName")
-      pinnedPanels          <- cursor.get[List[PinnedPanel]]("pinnedPanels")
-      targetEditorPaneCount <- cursor.get[Option[Int]]("targetEditorPaneCount")
+      name                     <- cursor.get[String]("name")
+      config                   <- cursor.get[AppConfig]("config")
+      themeName                <- cursor.get[String]("themeName")
+      dockedPanels             <- decodeDockedPanels(cursor)
+      targetEditorPaneCount    <- cursor.get[Option[Int]]("targetEditorPaneCount")
+      workspaceTree            <- cursor.getOrElse[Option[SessionWorkspaceNode]]("workspaceTree")(None)
+      maximizedWorkspaceNodeId <- cursor.getOrElse[Option[String]]("maximizedWorkspaceNodeId")(None)
+      schemaVersion            <- cursor.getOrElse[Int]("schemaVersion")(1)
+      _ <- Either.cond(
+        schemaVersion <= CurrentSchemaVersion,
+        (),
+        DecodingFailure(
+          s"Unsupported UI preset schema version: $schemaVersion (current: $CurrentSchemaVersion)",
+          cursor.history
+        )
+      )
     yield
-      val knownKeys = Set("name", "config", "themeName", "pinnedPanels", "targetEditorPaneCount")
       val unknown = cursor.value.asObject.fold(JsonObject.empty)(objectValue =>
-        JsonObject.fromIterable(objectValue.toIterable.filterNot((key, _) => knownKeys.contains(key)))
+        JsonObject.fromIterable(objectValue.toIterable.filterNot((key, _) => KnownFields.contains(key)))
       )
       val configUnknownFields = cursor.downField("config").focus.flatMap(_.asObject).fold(JsonObject.empty) { rawConfig =>
         unknownJsonFields(rawConfig, config.asJson.asObject.getOrElse(JsonObject.empty))
       }
-      UiPreset(name, config, themeName, pinnedPanels, targetEditorPaneCount, unknown, configUnknownFields)
+      UiPreset(
+        name,
+        config,
+        themeName,
+        dockedPanels,
+        targetEditorPaneCount,
+        workspaceTree,
+        maximizedWorkspaceNodeId,
+        schemaVersion,
+        unknown,
+        configUnknownFields
+      )
   }
 
 final case class UiPresetIndex(presets: List[UiPreset], unknownFields: JsonObject = JsonObject.empty):

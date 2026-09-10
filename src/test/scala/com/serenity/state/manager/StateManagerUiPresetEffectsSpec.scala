@@ -187,7 +187,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
 
   it should "apply a custom preset's theme, config, and font, and auto-save the session" in {
     val fixture = harness(commandPaletteState())
-    val preset = UiPreset(name = "Custom", config = AppConfig.default, themeName = Theme.light.name, pinnedPanels = Nil)
+    val preset  = UiPreset(name = "Custom", config = AppConfig.default, themeName = Theme.light.name)
     fixture.store.create(preset).unsafeRunSync()
 
     fixture.presets.interpret(UiPresetsIntent.ApplyUiPreset("Custom")).unsafeRunSync()
@@ -219,8 +219,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Custom",
       config = AppConfig.default.withFontConfig(fontConfig),
-      themeName = Theme.dark.name,
-      pinnedPanels = Nil
+      themeName = Theme.dark.name
     )
     fixture.store.create(preset).unsafeRunSync()
 
@@ -235,7 +234,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
   it should "reject applying a preset whose theme cannot be loaded" in {
     val fixture = harness(commandPaletteState())
     val preset =
-      UiPreset(name = "Custom", config = AppConfig.default, themeName = "does-not-exist-theme", pinnedPanels = Nil)
+      UiPreset(name = "Custom", config = AppConfig.default, themeName = "does-not-exist-theme")
     fixture.store.create(preset).unsafeRunSync()
 
     fixture.presets.interpret(UiPresetsIntent.ApplyUiPreset("Custom")).unsafeRunSync()
