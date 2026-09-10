@@ -168,8 +168,8 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
           layout = Layout(
             editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
             activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+            workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+          ),
           theme = Theme.light,
           config = AppConfig.default
             .withLineNumbers(false)

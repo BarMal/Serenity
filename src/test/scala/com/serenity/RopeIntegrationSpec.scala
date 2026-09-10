@@ -127,8 +127,8 @@ Final line with medium length content here""".replace("\r\n", "\n")
       val layout = Layout(
         editorPanes = panes,
         activeEditorPaneId = panes.keys.headOption,
-          workspaceTree = Some(TestWorkspaceTrees.linear(panes.keys.toList.sortBy(_.value)*))
-        )
+        workspaceTree = Some(TestWorkspaceTrees.linear(panes.keys.toList.sortBy(_.value)*))
+      )
 
       AppState(
         persisted = Persisted(

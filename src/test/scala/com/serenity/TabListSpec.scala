@@ -19,7 +19,9 @@ class TabListSpec extends AnyFlatSpec with Matchers:
     val pane = EditorPane.withBuffer(PaneId(0), focused)
     AppState(
       persisted = Persisted(
-        layout = Layout(editorPanes = Map(PaneId(0) -> pane), activeEditorPaneId = Some(PaneId(0)),
+        layout = Layout(
+          editorPanes = Map(PaneId(0) -> pane),
+          activeEditorPaneId = Some(PaneId(0)),
           workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         buffers = buffers.map(b => b.id -> b).toMap,

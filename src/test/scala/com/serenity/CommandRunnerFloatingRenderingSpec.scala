@@ -178,8 +178,8 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
           layout = Layout(
             editorPanes = Map(paneId -> pane),
             activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+            workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+          ),
           focus = Focus.Surface(SurfaceId("command-runner")),
           theme = Theme.light
         ),

@@ -599,8 +599,8 @@ object PerformanceBenchmarks:
           layout = Layout(
             editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, BufferId(0))),
             activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        )
+            workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+          )
         )
       )
 
