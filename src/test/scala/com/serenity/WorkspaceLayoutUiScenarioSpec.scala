@@ -8,9 +8,9 @@ import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** End-to-end scenario coverage (#821) for the workspace-tree composition contract: the default distraction-free
-  * page, nested mixed-axis pane splits, multiple docked panels sharing one edge, and maximise/restore -- the pieces
-  * of #812's acceptance criteria that only had unit-level coverage before this (see `WorkspaceTreeSpec`,
+/** End-to-end scenario coverage (#821) for the workspace-tree composition contract: the default distraction-free page,
+  * nested mixed-axis pane splits, multiple docked panels sharing one edge, and maximise/restore -- the pieces of #812's
+  * acceptance criteria that only had unit-level coverage before this (see `WorkspaceTreeSpec`,
   * `PaneWidthConstraintRegressionSpec`, `UIHotkeysAndPanelsSpec`), not a full state-pipeline-plus-renderer pass.
   */
 class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
@@ -37,8 +37,8 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "lay out nested mixed-axis workspace panes without overlap, each rendering its own buffer" in {
-    val driver         = UiScenarioDriver.create("nested-mixed-axis-panes").unsafeRunSync()
-    val (left, top, bottom) = (PaneId(0), PaneId(1), PaneId(2))
+    val driver                       = UiScenarioDriver.create("nested-mixed-axis-panes").unsafeRunSync()
+    val (left, top, bottom)          = (PaneId(0), PaneId(1), PaneId(2))
     val (leftBuf, topBuf, bottomBuf) = (BufferId(0), BufferId(1), BufferId(2))
     val tree = WorkspaceTree(
       WorkspaceNode.Split(
@@ -146,12 +146,15 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("panel-maximize-restore").unsafeRunSync()
 
     driver.stateManager.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 8).unsafeRunSync()
-    val pinnedSurfaceId = driver.state.unsafeRunSync().pinnedSurfaces.headOption
+    val pinnedSurfaceId = driver.state
+      .unsafeRunSync()
+      .pinnedSurfaces
+      .headOption
       .getOrElse(fail("Expected one pinned panel"))
       .id
 
     val pinnedFrame = driver.renderFrame("docked").unsafeRunSync()
-    val dockedRect   = pinnedFrame.evidence.surfaceRects.getOrElse(pinnedSurfaceId, fail("Expected docked panel rect"))
+    val dockedRect  = pinnedFrame.evidence.surfaceRects.getOrElse(pinnedSurfaceId, fail("Expected docked panel rect"))
 
     driver.stateManager.commandExecutor
       .executeCommand(

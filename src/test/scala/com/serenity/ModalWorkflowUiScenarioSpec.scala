@@ -7,15 +7,15 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** End-to-end scenario coverage (#821) for the blocking modal layer (#814): a parent dialog with a nested child
-  * confirmation on top, rendered through the full state-pipeline-plus-renderer pass rather than only at the reducer
-  * or layer-compositing unit level (see `ModalStateReducerSpec`, `ModalLayerCompositingSpec`).
+  * confirmation on top, rendered through the full state-pipeline-plus-renderer pass rather than only at the reducer or
+  * layer-compositing unit level (see `ModalStateReducerSpec`, `ModalLayerCompositingSpec`).
   */
 class ModalWorkflowUiScenarioSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
   "UiScenarioDriver" should "render a blocking modal with a nested child confirmation on top, trapping focus" in {
-    val driver  = UiScenarioDriver.create("modal-with-child-confirmation").unsafeRunSync()
+    val driver   = UiScenarioDriver.create("modal-with-child-confirmation").unsafeRunSync()
     val bufferId = BufferId(0)
 
     val parent = ModalDialog(
