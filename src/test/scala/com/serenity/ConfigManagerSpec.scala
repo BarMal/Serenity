@@ -336,6 +336,23 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("config.version = 1")
   }
 
+  it should "clamp out-of-range font sizes when loading via the registry" in {
+    val configFile = Files.createTempFile("serenity-font-clamp-config", ".conf")
+    Files.writeString(
+      configFile,
+      """font.code.size = 400
+        |font.text.size = 1
+        |font.ui.size = -5
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.editorConfig.fontConfig.codeFontSize shouldBe 48.0f
+    config.editorConfig.fontConfig.textFontSize shouldBe 8.0f
+    config.editorConfig.fontConfig.uiFontSize shouldBe 8.0f
+  }
+
   it should "write default editor selection-extension keymap bindings" in {
     val written = ConfigManager.configToString(AppConfig.default)
 

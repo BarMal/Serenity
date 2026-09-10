@@ -1,6 +1,8 @@
 package com.serenity.ui.theme.config
 
-import com.serenity.ui.theme.SyntaxElement
+import java.awt.Color
+
+import com.serenity.ui.theme.{SyntaxElement, Theme, ThemeColor}
 
 /** One optional `SyntaxColors` field: which slot it reads/writes, its HOCON path and creator-UI label, and the fallback
   * value used when the field is absent from config.
@@ -79,3 +81,169 @@ object ThemeFieldSchema:
 
   val syntaxFields: List[SyntaxFieldSchema] =
     List(typeField, delimiterField, whitespaceField, errorField, normalField)
+
+  // ── Mandatory fields ─────────────────────────────────────────────────────
+  //
+  // Unlike the optional fields above, these are always present on both `ThemeConfig` and `Theme` -- there is no
+  // fallback-default concept for them, so each descriptor instead carries a `themeValue` accessor for the
+  // domain -> config direction (`ThemeConfigWriter.themeToConfig`) alongside the config-side `select`/`replace` pair
+  // used by `ConfigurableThemeManager`, `ThemeConfigWriter.render` and `ThemeCreatorState`.
+
+  /** One mandatory `UiColors` field stored as a plain hex-color string (`foreground`, `background`, `cursor`, `border`,
+    * `muted`, `placeholder`).
+    */
+  final case class UiScalarFieldSchema(
+      path: String,
+      hoconKey: String,
+      label: String,
+      select: UiColors => String,
+      replace: (UiColors, String) => UiColors,
+      themeValue: Theme => Color
+  )
+
+  val uiForegroundField: UiScalarFieldSchema =
+    UiScalarFieldSchema(
+      "ui.foreground",
+      "foreground",
+      "Foreground",
+      _.foreground,
+      (ui, v) => ui.copy(foreground = v),
+      _.foreground
+    )
+
+  val uiBackgroundField: UiScalarFieldSchema =
+    UiScalarFieldSchema(
+      "ui.background",
+      "background",
+      "Background",
+      _.background,
+      (ui, v) => ui.copy(background = v),
+      _.background
+    )
+
+  val uiCursorField: UiScalarFieldSchema =
+    UiScalarFieldSchema("ui.cursor", "cursor", "Cursor", _.cursor, (ui, v) => ui.copy(cursor = v), _.cursor)
+
+  val uiBorderField: UiScalarFieldSchema =
+    UiScalarFieldSchema("ui.border", "border", "Border", _.border, (ui, v) => ui.copy(border = v), _.border)
+
+  val uiMutedField: UiScalarFieldSchema =
+    UiScalarFieldSchema("ui.muted", "muted", "Muted Text", _.muted, (ui, v) => ui.copy(muted = v), _.muted)
+
+  val uiPlaceholderField: UiScalarFieldSchema =
+    UiScalarFieldSchema(
+      "ui.placeholder",
+      "placeholder",
+      "Placeholder",
+      _.placeholder,
+      (ui, v) => ui.copy(placeholder = v),
+      _.placeholder
+    )
+
+  val uiScalarFields: List[UiScalarFieldSchema] =
+    List(uiForegroundField, uiBackgroundField, uiCursorField, uiBorderField, uiMutedField, uiPlaceholderField)
+
+  /** One mandatory `UiColors` field stored as a `UiTokenConfig` (`highlighted`, `menuItem`, `panel`, `error`). `path`
+    * and `label` are prefixes -- consumers that expose separate foreground/background rows (`ThemeCreatorState`) suffix
+    * them with `.foreground`/`.background` and `" Foreground"`/`" Background"`.
+    */
+  final case class UiTokenFieldSchema(
+      path: String,
+      hoconKey: String,
+      label: String,
+      select: UiColors => UiTokenConfig,
+      replace: (UiColors, UiTokenConfig) => UiColors,
+      themeValue: Theme => ThemeColor
+  )
+
+  val uiHighlightedField: UiTokenFieldSchema =
+    UiTokenFieldSchema(
+      "ui.highlighted",
+      "highlighted",
+      "Highlight",
+      _.highlighted,
+      (ui, v) => ui.copy(highlighted = v),
+      _.highlighted
+    )
+
+  val uiMenuItemField: UiTokenFieldSchema =
+    UiTokenFieldSchema("ui.menu-item", "menu-item", "Menu", _.menuItem, (ui, v) => ui.copy(menuItem = v), _.menuItem)
+
+  val uiPanelField: UiTokenFieldSchema =
+    UiTokenFieldSchema("ui.panel", "panel", "Panel", _.panel, (ui, v) => ui.copy(panel = v), _.panel)
+
+  val uiErrorField: UiTokenFieldSchema =
+    UiTokenFieldSchema("ui.error", "error", "Error", _.error, (ui, v) => ui.copy(error = v), _.error)
+
+  val uiTokenFields: List[UiTokenFieldSchema] =
+    List(uiHighlightedField, uiMenuItemField, uiPanelField, uiErrorField)
+
+  /** One mandatory `SyntaxColors` element (`keyword`, `string`, `comment`, `number`, `operator`, `identifier`). See
+    * `SyntaxFieldSchema` for its five optional counterparts; no `themeValue` accessor is needed here since the domain
+    * side is already keyed generically by `SyntaxElement` via `Theme.colorFor`/`Theme.syntaxColors`.
+    */
+  final case class MandatorySyntaxFieldSchema(
+      element: SyntaxElement,
+      path: String,
+      hoconKey: String,
+      label: String,
+      select: SyntaxColors => SyntaxElementConfig,
+      replace: (SyntaxColors, SyntaxElementConfig) => SyntaxColors
+  )
+
+  val keywordField: MandatorySyntaxFieldSchema = MandatorySyntaxFieldSchema(
+    SyntaxElement.Keyword,
+    "syntax.keyword.foreground",
+    "keyword",
+    "Keyword",
+    _.keyword,
+    (syntax, v) => syntax.copy(keyword = v)
+  )
+
+  val stringField: MandatorySyntaxFieldSchema = MandatorySyntaxFieldSchema(
+    SyntaxElement.String,
+    "syntax.string.foreground",
+    "string",
+    "String",
+    _.string,
+    (syntax, v) => syntax.copy(string = v)
+  )
+
+  val commentField: MandatorySyntaxFieldSchema = MandatorySyntaxFieldSchema(
+    SyntaxElement.Comment,
+    "syntax.comment.foreground",
+    "comment",
+    "Comment",
+    _.comment,
+    (syntax, v) => syntax.copy(comment = v)
+  )
+
+  val numberField: MandatorySyntaxFieldSchema = MandatorySyntaxFieldSchema(
+    SyntaxElement.Number,
+    "syntax.number.foreground",
+    "number",
+    "Number",
+    _.number,
+    (syntax, v) => syntax.copy(number = v)
+  )
+
+  val operatorField: MandatorySyntaxFieldSchema = MandatorySyntaxFieldSchema(
+    SyntaxElement.Operator,
+    "syntax.operator.foreground",
+    "operator",
+    "Operator",
+    _.operator,
+    (syntax, v) => syntax.copy(operator = v)
+  )
+
+  val identifierField: MandatorySyntaxFieldSchema = MandatorySyntaxFieldSchema(
+    SyntaxElement.Identifier,
+    "syntax.identifier.foreground",
+    "identifier",
+    "Identifier",
+    _.identifier,
+    (syntax, v) => syntax.copy(identifier = v)
+  )
+
+  val mandatorySyntaxFields: List[MandatorySyntaxFieldSchema] =
+    List(keywordField, stringField, commentField, numberField, operatorField, identifierField)

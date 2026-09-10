@@ -4,6 +4,9 @@ import scala.jdk.CollectionConverters.*
 
 import com.typesafe.config.{ConfigList, ConfigValue, ConfigValueType}
 import io.circe.{Decoder, Encoder, HCursor, Json}
+import org.slf4j.LoggerFactory
+
+private val configFieldLogger = LoggerFactory.getLogger("com.serenity.config.ConfigField")
 
 /** How one setting's value crosses each boundary it has to cross.
   *
@@ -190,7 +193,19 @@ final case class ConfigField[A](
   def decode(cursor: HCursor, config: AppConfig): AppConfig =
     val stored = cursor.downField(sessionKey)
     if !stored.succeeded then config
-    else stored.as(using codec.decoder).fold(_ => config, value => restore.getOrElse(set)(config, value))
+    else
+      stored
+        .as(using codec.decoder)
+        .fold(
+          failure =>
+            configFieldLogger.warn(
+              s"[SESSION] Failed to decode field '$sessionKey' from " +
+                s"${stored.focus.map(_.noSpaces).getOrElse("<unknown>")}: ${failure.getMessage}; keeping existing value"
+            )
+            config
+          ,
+          value => restore.getOrElse(set)(config, value)
+        )
 
 /** A key that is only ever read.
   *
