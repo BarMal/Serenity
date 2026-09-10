@@ -156,6 +156,28 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     comment.inlineMarkdown shouldBe "Important note"
   }
 
+  it should "bound the block-comment scan distance instead of walking the whole document (#1417)" in {
+    val cursorLine  = 10000
+    val totalLines  = 20000
+    // Generous relative to the production probe window: catches a regression back to an unbounded scan (which would
+    // read line 0 and/or the last line) without hard-coupling the test to the exact bound chosen in production code.
+    val probeMargin = 1000
+    val allowedLines = (cursorLine - probeMargin to cursorLine + probeMargin).toSet
+
+    val source = (0 until totalLines).map(line => s"val value$line = $line").mkString("\n")
+    val guardedContent = GuardedGetLineRope(Rope(source), allowedLines)
+    val base            = Buffer.fromString(BufferId(1), "")
+    val buffer = base
+      .copy(
+        document = base.document.copy(content = guardedContent, language = Some(LanguageId.Scala)),
+        editing = base.editing.copy(cursors = List(CursorPosition(cursorLine, 4)))
+      )
+
+    // No block-comment markers anywhere in the buffer, so an unbounded scan would walk to line 0 and to the last
+    // line -- both outside `allowedLines` -- and trip `GuardedGetLineRope`'s assertion before this ever returns.
+    CommentRendering.atCursor(buffer) shouldBe None
+  }
+
   // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
   // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
   // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
