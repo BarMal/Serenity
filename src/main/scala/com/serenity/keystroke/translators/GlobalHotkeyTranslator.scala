@@ -5,6 +5,6 @@ import com.serenity.keystroke.events.Event
 
 class GlobalHotkeyTranslator(appConfig: AppConfig = AppConfig.default) extends Translator[Event]:
 
-  override val converters = List(
+  override lazy val converters = List(
     TextHotkeyConverters.hotkeyConverter(appConfig)
   )
