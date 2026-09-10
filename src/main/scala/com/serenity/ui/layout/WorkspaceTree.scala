@@ -312,6 +312,37 @@ object WorkspaceTree:
     */
   private val AssumedViewportExtent = 100
 
+  /** Grows and shrinks `tree` to contain exactly `targetPaneIds`, for callers (`UiPreset.resizeEditorPanes`) that
+    * decide a whole target pane set at once rather than adding or removing one pane at a time. New panes are spliced
+    * in before dropped ones are removed, so `.remove` never targets the tree's last remaining leaf when the target
+    * set is otherwise disjoint from the current one; each new pane splits off the most recently added leaf (or seeds
+    * a fresh single-leaf tree when `tree` is `None`, i.e. no panes existed yet).
+    */
+  def withExactPanes(tree: Option[WorkspaceTree], targetPaneIds: List[PaneId]): Option[WorkspaceTree] =
+    val currentPaneIds = tree.map(_.paneIds).getOrElse(Nil)
+    val newPaneIds     = targetPaneIds.filterNot(currentPaneIds.contains)
+    val droppedPaneIds = currentPaneIds.filterNot(targetPaneIds.contains)
+
+    def leaf(paneId: PaneId): WorkspaceTree = WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId))
+
+    val withNewPanes = newPaneIds.foldLeft(tree) { (acc, newPaneId) =>
+      acc.flatMap(_.paneIds.lastOption) match
+        case Some(anchor) =>
+          acc
+            .flatMap(
+              _.split(
+                anchor,
+                newPaneId,
+                SplitAxis.Horizontal,
+                WorkspaceNodeId(s"resize-split-${anchor.value}-${newPaneId.value}"),
+                WorkspaceNodeId(s"editor-${newPaneId.value}")
+              )
+            )
+            .orElse(Some(leaf(newPaneId)))
+        case None => Some(leaf(newPaneId))
+    }
+    droppedPaneIds.foldLeft(withNewPanes)((acc, droppedId) => acc.flatMap(_.remove(droppedId)).orElse(acc))
+
   /** The other edge on the same axis (Left/Right, or Top/Bottom) -- the one whose docked surface, if any, `dockSized`
     * re-seeds when a new dock at `position` would otherwise nest it (and shrink its rendered extent) unasked.
     */

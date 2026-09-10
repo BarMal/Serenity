@@ -555,9 +555,7 @@ object UiPreset:
     }.toMap
     val nextActivePaneId = targetPaneIds.headOption
     // state.runtime.nextPaneId.value is always present, so folding from it as the seed always yields the true max.
-    val nextPaneId = PaneId(
-      targetPaneIds.map(_.value + 1).foldLeft(state.runtime.nextPaneId.value)(_ max _)
-    )
+    val nextPaneId = PaneId(targetPaneIds.map(_.value + 1).foldLeft(state.runtime.nextPaneId.value)(_ max _))
     val nextFocus = state.persisted.focus match
       case Focus.EditorPane(paneId) if targetPaneIds.contains(paneId) =>
         state.persisted.focus
@@ -566,27 +564,7 @@ object UiPreset:
       case _ =>
         nextActivePaneId.map(Focus.EditorPane.apply).getOrElse(state.persisted.focus)
 
-    val droppedPaneIds = state.persisted.layout.editorPanes.keySet -- targetPaneIds.toSet
-    val treeWithNewPanes = newPaneIds.foldLeft(state.persisted.layout.workspaceTree) { (tree, newPaneId) =>
-      val anchorPaneId = tree.map(_.paneIds).getOrElse(Nil).lastOption.orElse(existingTargetPaneIds.lastOption)
-      anchorPaneId match
-        case Some(anchor) =>
-          tree
-            .flatMap(
-              _.split(
-                anchor,
-                newPaneId,
-                SplitAxis.Horizontal,
-                WorkspaceNodeId(s"resize-split-${anchor.value}-${newPaneId.value}"),
-                WorkspaceNodeId(s"editor-${newPaneId.value}")
-              )
-            )
-            .orElse(Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${newPaneId.value}"), newPaneId))))
-        case None =>
-          Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${newPaneId.value}"), newPaneId)))
-    }
-    val finalTree =
-      droppedPaneIds.foldLeft(treeWithNewPanes)((tree, droppedId) => tree.flatMap(_.remove(droppedId)).orElse(tree))
+    val finalTree = WorkspaceTree.withExactPanes(state.persisted.layout.workspaceTree, targetPaneIds)
 
     state.copy(
       persisted = state.persisted.copy(

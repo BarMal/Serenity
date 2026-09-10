@@ -34,7 +34,6 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId)
       )
     )
-
   "FocusedInputTranslator" should "treat Enter as newline in editor focus" in {
     val translator = FocusedInputTranslator.forState(editorState)
 

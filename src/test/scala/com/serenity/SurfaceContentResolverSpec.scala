@@ -18,6 +18,12 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val root = Paths.get("/repo")
+  private def singlePaneLayout(paneId: PaneId, bufferId: BufferId): Layout =
+    Layout(
+      editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+      activeEditorPaneId = Some(paneId),
+      workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+    )
 
   private val entries = List(
     DirEntry(root.resolve("src"), "src", isDirectory = true),
@@ -936,11 +942,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
             )
         ),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         focus = Focus.EditorPane(paneId)
       )
     )
@@ -1023,11 +1025,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
             )
         ),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         focus = Focus.EditorPane(paneId)
       )
     )

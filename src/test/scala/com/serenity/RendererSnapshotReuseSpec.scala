@@ -138,6 +138,13 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
   private val cellMetrics  = CellMetrics.fromFont(monoFont)
   private val viewportSize = ViewportSize(80, 24)
 
+  private def singlePaneLayout(paneId: PaneId, bufferId: BufferId): Layout =
+    Layout(
+      editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+      activeEditorPaneId = Some(paneId),
+      workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+    )
+
   private def buildState(content: String, cursorCol: Int): AppState =
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
@@ -264,11 +271,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
       )
@@ -300,11 +303,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(true).withGutter(false).withWordWrap(false)
       )
@@ -343,11 +342,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
       )
@@ -383,11 +378,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
       )
@@ -424,11 +415,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
@@ -476,11 +463,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
@@ -523,11 +506,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
@@ -568,11 +547,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
@@ -617,11 +592,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)

@@ -300,17 +300,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
             PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
           ),
           activeEditorPaneId = Some(PaneId(1)),
-          workspaceTree = Some(
-            WorkspaceTree(
-              WorkspaceNode.Split(
-                WorkspaceNodeId("editors"),
-                SplitAxis.Horizontal,
-                0.5,
-                WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)),
-                WorkspaceNode.Leaf(WorkspaceNodeId("editor-1"), PaneId(1))
-              )
-            )
-          )
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0), PaneId(1)))
         ),
         focus = Focus.EditorPane(PaneId(1)),
         theme = Theme.light

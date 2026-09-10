@@ -32,6 +32,13 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private def singlePaneLayout(bufferId: BufferId): Layout =
+    Layout(
+      editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
+      activeEditorPaneId = Some(PaneId(0)),
+      workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
+    )
+
   "SessionState" should "restore clean file-backed buffers from disk content" in {
     val tempFile = Files.createTempFile("session-state-clean", ".txt")
     Files.writeString(tempFile, "content from disk")
@@ -41,11 +48,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
+        layout = singlePaneLayout(buffer.id),
         focus = Focus.EditorPane(PaneId(0))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -72,11 +75,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
+        layout = singlePaneLayout(buffer.id),
         focus = Focus.EditorPane(PaneId(0))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -103,11 +102,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
+        layout = singlePaneLayout(buffer.id),
         focus = Focus.EditorPane(PaneId(0))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -132,11 +127,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
+        layout = singlePaneLayout(buffer.id),
         focus = Focus.EditorPane(PaneId(0))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -172,11 +163,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
+        layout = singlePaneLayout(buffer.id),
         focus = Focus.EditorPane(PaneId(0))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -222,11 +209,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
+        layout = singlePaneLayout(buffer.id),
         focus = Focus.EditorPane(PaneId(0))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -264,11 +247,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
+        layout = singlePaneLayout(buffer.id),
         focus = Focus.EditorPane(PaneId(0))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -301,11 +280,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
+        layout = singlePaneLayout(buffer.id),
         focus = Focus.EditorPane(PaneId(0))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -343,11 +318,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = Layout(
-          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0)),
-          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
-        ),
+        layout = singlePaneLayout(buffer.id),
         focus = Focus.EditorPane(PaneId(0))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -1085,17 +1056,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         layout = Layout(
           editorPanes = Map(pane1.id -> pane1, pane2.id -> pane2),
           activeEditorPaneId = Some(pane2.id),
-          workspaceTree = Some(
-            WorkspaceTree(
-              WorkspaceNode.Split(
-                WorkspaceNodeId("editors"),
-                SplitAxis.Horizontal,
-                0.5,
-                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane2.id.value}"), pane2.id),
-                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.id.value}"), pane1.id)
-              )
-            )
-          )
+          workspaceTree = Some(TestWorkspaceTrees.linear(pane2.id, pane1.id))
         )
       )
     )
@@ -1241,8 +1202,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
       .map(SessionState.toAppState(_, Theme.default))
       .getOrElse(fail("schema-v1 session should decode"))
 
-    // Schema-v1 files carried no `PaneSplitDirection` after #821; the pane order is preserved, but the seeded
-    // fallback tree always builds a horizontal split (see `WorkspaceSnapshot.linearWorkspaceTree`).
+    // #821 retired PaneSplitDirection: order is preserved, but the fallback tree always builds horizontal now.
     restored.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane1, pane0))
     restored.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(SplitAxis.Horizontal))
     restored.persisted.layout.maximizedWorkspaceNodeId shouldBe None

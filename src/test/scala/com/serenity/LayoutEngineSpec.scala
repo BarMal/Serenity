@@ -455,41 +455,21 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     panes.values.map(_.width).sum shouldBe layout.editorPanelRect.width
   }
 
-  // These next three specs used to exercise the pre-#821 flat pane-strip engine's visible-pane windowing: capping how
-  // many panes could show at once by minimum width, hiding the rest off screen, and re-centering that window on the
-  // focused pane when it scrolled out of view. The workspace tree (now the sole pane layout path) has no windowing
-  // concept at all -- every leaf a `WorkspaceNode.Split` recursion visits gets an on-screen rect, clamped by
-  // `splitExtent` rather than hidden, however far short of its minimum width that leaves it (see
-  // `PaneWidthConstraintRegressionSpec` for the same point made directly against the tree). So "N panes side by side"
-  // is now expressed as a linear tree (mirroring `SessionDockedPanel`'s own last-resort seed), and these specs assert
-  // what is actually still guaranteed -- every pane keeps an on-screen entry that exactly partitions the editor
-  // width -- rather than the deleted capacity-windowing behaviour, which this rewrite cannot express because nothing
-  // in the current design does it any more.
-  private def linearWorkspaceTree(paneIds: List[PaneId]): WorkspaceTree =
-    def leaf(paneId: PaneId): WorkspaceNode = WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)
-    def build(paneId: PaneId, remaining: List[PaneId]): WorkspaceNode =
-      remaining match
-        case Nil => leaf(paneId)
-        case next :: tail =>
-          WorkspaceNode.Split(
-            WorkspaceNodeId(s"split-${paneId.value}-${remaining.map(_.value).mkString("-")}"),
-            SplitAxis.Horizontal,
-            1.0 / (remaining.size + 1),
-            leaf(paneId),
-            build(next, tail)
-          )
-    WorkspaceTree(build(paneIds.head, paneIds.tail))
-
-  it should "give every pane an on-screen share of the editor width, roughly equal for three panes" in {
-    val paneIds = List(PaneId(0), PaneId(1), PaneId(2))
-    val panes   = paneIds.map(id => id -> EditorPane.empty(id)).toMap
+  // The next three specs replace pre-#821 flat-strip windowing assertions (panes hidden off-screen past capacity,
+  // re-centered on focus) with the tree's actual guarantee: every leaf gets an on-screen rect that exactly
+  // partitions its parent's width, however many panes there are (see `PaneWidthConstraintRegressionSpec` too).
+  private def stateWithLinearPanes(paneIds: List[PaneId], activePaneId: PaneId): AppState =
+    val panes = paneIds.map(id => id -> EditorPane.empty(id)).toMap
     val layout = Layout(
       editorPanes = panes,
-      activeEditorPaneId = Some(PaneId(0)),
-      workspaceTree = Some(linearWorkspaceTree(paneIds))
+      activeEditorPaneId = Some(activePaneId),
+      workspaceTree = Some(TestWorkspaceTrees.linear(paneIds*))
     )
-    val state =
-      AppState(persisted = Persisted(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0))))
+    AppState(persisted = Persisted(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(activePaneId)))
+
+  it should "give every pane an on-screen share of the editor width, roughly equal for three panes" in {
+    val paneIds      = List(PaneId(0), PaneId(1), PaneId(2))
+    val state         = stateWithLinearPanes(paneIds, PaneId(0))
     val viewportSize = ViewportSize(120, 24)
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
@@ -508,14 +488,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val viewportSize = ViewportSize(100, 24) // Editor area ~= 70 chars, far short of 5 * 40
 
     val paneIds = (0 until 5).map(PaneId.apply).toList
-    val panes   = paneIds.map(id => id -> EditorPane.empty(id)).toMap
-    val layout = Layout(
-      editorPanes = panes,
-      activeEditorPaneId = Some(PaneId(0)),
-      workspaceTree = Some(linearWorkspaceTree(paneIds))
-    )
-    val state =
-      AppState(persisted = Persisted(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(0))))
+    val state   = stateWithLinearPanes(paneIds, PaneId(0))
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts      = LayoutEngine.calculatePaneLayoutsWithMinWidth(state, calculatedLayout, minPaneWidth)
@@ -531,14 +504,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val viewportSize = ViewportSize(100, 24) // Editor area ~= 70 chars, short of 4 * 30
 
     val paneIds = (0 until 4).map(PaneId.apply).toList
-    val panes   = paneIds.map(id => id -> EditorPane.empty(id)).toMap
-    val layout = Layout(
-      editorPanes = panes,
-      activeEditorPaneId = Some(PaneId(2)), // Focus on pane 2
-      workspaceTree = Some(linearWorkspaceTree(paneIds))
-    )
-    val state =
-      AppState(persisted = Persisted(layout = layout, buffers = Map.empty, focus = Focus.EditorPane(PaneId(2))))
+    val state   = stateWithLinearPanes(paneIds, PaneId(2)) // Focus on pane 2
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
     val paneLayouts      = LayoutEngine.calculatePaneLayoutsWithMinWidth(state, calculatedLayout, minPaneWidth)

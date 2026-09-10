@@ -23,6 +23,13 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
   given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
+  private def singlePaneLayout(paneId: PaneId, bufferId: BufferId): Layout =
+    Layout(
+      editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+      activeEditorPaneId = Some(paneId),
+      workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+    )
+
   private def renderState(
     content: String,
     cursor: CursorPosition,
@@ -41,16 +48,11 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       editing = bufferBase.editing.copy(cursors = List(cursor)),
       viewport = viewport
     )
-    val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = config
       )
@@ -99,16 +101,11 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.JsonLang)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4, topVisualLine = 1)
       )
-    val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default.withGutter(false).withWordWrap(true)
       )
@@ -132,16 +129,11 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val buffer =
       val base = Buffer.fromString(bufferId, "content")
       base.copy(document = base.document.copy(filePath = Some(Path.of(title))))
-    val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light
       )
     )
@@ -314,11 +306,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
       )
@@ -354,11 +342,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(false).withGutter(false)
       )
@@ -396,11 +380,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(false).withGutter(false)
       )
@@ -454,11 +434,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
@@ -503,11 +479,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
+        layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(false).withGutter(false)
       )

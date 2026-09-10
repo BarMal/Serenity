@@ -169,17 +169,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
               pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
             ),
             activeEditorPaneId = Some(pane1),
-            workspaceTree = Some(
-              WorkspaceTree(
-                WorkspaceNode.Split(
-                  WorkspaceNodeId("editors"),
-                  SplitAxis.Horizontal,
-                  0.5,
-                  WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0),
-                  WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane1.value}"), pane1)
-                )
-              )
-            )
+            workspaceTree = Some(TestWorkspaceTrees.linear(pane0, pane1))
           ),
           focus = Focus.EditorPane(pane1)
         ),
