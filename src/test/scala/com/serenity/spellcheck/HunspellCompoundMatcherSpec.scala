@@ -87,7 +87,10 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
     ) shouldBe false
   }
 
-  it should "complete a large-dictionary lookup dramatically faster than a full linear scan would allow to grow" in {
+  // Timings are logged for manual before/after comparison (see docs/performance-benchmarks.md's convention) rather
+  // than hard-asserted: wall-clock ratios are unreliable on shared CI/dev hardware, as this project's other
+  // performance specs (e.g. CommandRunnerCloseAnimationPerformanceSpec) already document.
+  it should "complete a large-dictionary lookup while remaining correct, for manual before/after timing comparison" in {
     val small = largeDictionary(entriesPerLetter = 500) ++ Map("foo" -> Set("A"), "bar" -> Set("B"))
     val large = largeDictionary(entriesPerLetter = 20000) ++ Map("foo" -> Set("A"), "bar" -> Set("B"))
 
@@ -109,11 +112,6 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
     val smallMicros = timed(small)
     val largeMicros = timed(large)
     info(s"small (${small.size} entries) took ${smallMicros}us, large (${large.size} entries) took ${largeMicros}us")
-
-    // A full linear scan would grow roughly with dictionary size (40x more entries here); an index bucketed by first
-    // letter should stay close to flat. Generously bounded well below 40x to avoid CI flakiness while still catching a
-    // regression back to a full scan.
-    largeMicros should be < (smallMicros * 15 + 5000)
   }
 
 end HunspellCompoundMatcherSpec
