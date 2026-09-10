@@ -1,7 +1,7 @@
 package com.serenity.state.components
 
 import com.serenity.keystroke.events.*
-import com.serenity.state.models.{AppState, SurfaceContent}
+import com.serenity.state.models.{AppState, SurfaceContent, replacedWhere}
 
 class StartupPageComponent extends TypedFocusedComponent[StartupPageEvent]:
 
@@ -35,10 +35,8 @@ class StartupPageComponent extends TypedFocusedComponent[StartupPageEvent]:
     surfaceId: com.serenity.state.models.SurfaceId,
     updatedPage: com.serenity.state.models.StartupPage
   )(state: AppState): AppState =
-    val updatedSurfaces = state.runtime.uiSurfaces.map { surface =>
-      if surface.id == surfaceId then surface.copy(content = SurfaceContent.StartPage(updatedPage))
-      else surface
-    }
+    val updatedSurfaces =
+      state.runtime.uiSurfaces.replacedWhere(_.id == surfaceId)(_.copy(content = SurfaceContent.StartPage(updatedPage)))
     state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
 
   private def executeSelectedAction(startPage: com.serenity.state.models.StartupPage): ComponentResult =

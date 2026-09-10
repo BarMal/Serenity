@@ -33,11 +33,13 @@ object CommandRunnerReducer:
       case Some(surface) =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
-            opened.copy(runtime = opened.runtime.copy(uiSurfaces = opened.runtime.uiSurfaces.map {
-              case current if current.id == surface.id =>
-                current.copy(content = SurfaceContent.CommandPalette(runner.openSettings))
-              case current => current
-            }))
+            opened.copy(runtime =
+              opened.runtime.copy(uiSurfaces =
+                opened.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+                  _.copy(content = SurfaceContent.CommandPalette(runner.openSettings))
+                )
+              )
+            )
           case _ => opened
       case None => opened
 
@@ -697,12 +699,9 @@ object CommandRunnerReducer:
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
             val updatedRunner = update(runner)
-            val updatedSurfaces = state.runtime.uiSurfaces.map {
-              case current if current.id == surface.id =>
-                current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              case other =>
-                other
-            }
+            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+              _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+            )
             state.copy(
               runtime = state.runtime.copy(uiSurfaces = updatedSurfaces),
               persisted = state.persisted.copy(focus = Focus.Surface(surface.id))

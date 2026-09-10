@@ -300,12 +300,9 @@ final private[manager] class StateManagerUiPresetEffects(
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
             val updatedRunner = runner.withUiPresetPreviews(previews)
-            val updatedSurfaces = state.runtime.uiSurfaces.map {
-              case current if current.id == surface.id =>
-                current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              case current =>
-                current
-            }
+            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+              _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+            )
             state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
           case _ =>
             state
@@ -345,12 +342,9 @@ final private[manager] class StateManagerUiPresetEffects(
               editingText = "",
               statusMessage = Some(statusMessage)
             )
-            val updatedSurfaces = state.runtime.uiSurfaces.map {
-              case current if current.id == surface.id =>
-                current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              case current =>
-                current
-            }
+            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+              _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+            )
             state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
           case _ =>
             state
@@ -380,12 +374,9 @@ final private[manager] class StateManagerUiPresetEffects(
                   editingPresetName = Some(name.trim),
                   statusMessage = Some(statusMessage)
                 )
-              val updatedSurfaces = state.runtime.uiSurfaces.map {
-                case current if current.id == surface.id =>
-                  current.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-                case current =>
-                  current
-              }
+              val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+                _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
+              )
               state.copy(
                 persisted = state.persisted.copy(focus = Focus.Surface(surface.id)),
                 runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)

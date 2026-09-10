@@ -1,7 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
-import com.serenity.state.models.{AppState, SurfaceContent}
+import com.serenity.state.models.{AppState, SurfaceContent, movedToEndWhere}
 import com.serenity.ui.layout.*
 
 object SystemEventReducer:
@@ -87,7 +87,7 @@ object SystemEventReducer:
             )
             surface.copy(content = SurfaceContent.DirectoryTree(tree, Some(path)))
         state.copy(runtime =
-          state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ updatedSurface)
+          state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(updatedSurface))
         )
       }
       .getOrElse(state)

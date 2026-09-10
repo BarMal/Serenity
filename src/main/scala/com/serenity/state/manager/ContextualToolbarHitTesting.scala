@@ -159,12 +159,13 @@ final private[manager] class ContextualToolbarHitTesting(port: ContextualToolbar
     surface: UiSurface,
     toolbarState: ContextualToolbarState
   ): AppState =
-    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-      case existing if existing.id == surface.id =>
-        existing.copy(content = SurfaceContent.ContextualToolbar(toolbarState))
-      case existing =>
-        existing
-    }))
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+          _.copy(content = SurfaceContent.ContextualToolbar(toolbarState))
+        )
+      )
+    )
 
   private def editorFocus(state: AppState): Focus =
     state.persisted.layout.activeEditorPaneId

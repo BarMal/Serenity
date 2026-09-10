@@ -36,7 +36,7 @@ class ThemePickerComponent extends TypedFocusedComponent[ModalInputEvent]:
     val newPicker  = pickerState.moveSelection(delta)
     val newSurface = surface.copy(content = SurfaceContent.ThemePicker(newPicker))
     val newState = state.copy(runtime =
-      state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id) :+ newSurface)
+      state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(newSurface))
     )
     newPicker.selectedTheme match
       case Some(name) =>
