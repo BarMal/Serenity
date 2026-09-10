@@ -31,7 +31,8 @@ class CursorInfoBarSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.EditorPane(paneId),
         config = config

@@ -148,12 +148,12 @@ private[serenity] object StateManagerTestFixtures:
 
   def resizePaneSplit(splitId: WorkspaceNodeId, ratio: Double): AppState => AppState =
     state =>
-      state.persisted.layout.effectiveWorkspaceTree
+      state.persisted.layout.workspaceTree
         .flatMap(_.resize(splitId, ratio))
         .map(tree =>
           state.copy(persisted =
             state.persisted
-              .copy(layout = state.persisted.layout.copy(workspaceTree = Some(tree), paneOrder = tree.paneIds))
+              .copy(layout = state.persisted.layout.copy(workspaceTree = Some(tree)))
           )
         )
         .getOrElse(state)
@@ -196,7 +196,7 @@ private[serenity] object StateManagerTestFixtures:
     val updatedTree =
       targetPaneId match
         case Some(target) =>
-          state.persisted.layout.effectiveWorkspaceTree.flatMap(
+          state.persisted.layout.workspaceTree.flatMap(
             _.split(
               target,
               paneId,
@@ -215,7 +215,6 @@ private[serenity] object StateManagerTestFixtures:
             layout = state.persisted.layout.copy(
               editorPanes = state.persisted.layout.editorPanes.updated(paneId, pane),
               activeEditorPaneId = Some(paneId),
-              paneOrder = tree.paneIds,
               workspaceTree = Some(tree)
             ),
             focus = Focus.EditorPane(paneId)

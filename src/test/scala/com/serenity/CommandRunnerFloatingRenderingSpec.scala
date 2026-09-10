@@ -35,6 +35,13 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
 
   private val cellMetrics = CellMetrics.fromFont(codeFont)
 
+  private def singlePaneLayout: Layout =
+    Layout(
+      editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+      activeEditorPaneId = Some(paneId),
+      workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+    )
+
   private def stateWithRunner(
     theme: Theme,
     searchTerm: String,
@@ -50,17 +57,13 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .copy(
         editing = EditingState(cursors = cursors)
       )
-    val pane = EditorPane.withBuffer(paneId, bufferId)
 
     val initialState = AppState.initial
     initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
-        ),
+        layout = singlePaneLayout,
         focus = Focus.Surface(SurfaceId("command-runner")),
         theme = theme
       ),
@@ -168,16 +171,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       val buffer = Buffer
         .fromString(bufferId, content)
         .copy(editing = EditingState(cursors = List(cursor)))
-      val pane         = EditorPane.withBuffer(paneId, bufferId)
       val initialState = AppState.initial
       val state = initialState.copy(
         persisted = initialState.persisted.copy(
           buffers = Map(bufferId -> buffer),
           bufferOrder = List(bufferId),
-          layout = Layout(
-            editorPanes = Map(paneId -> pane),
-            activeEditorPaneId = Some(paneId)
-          ),
+          layout = singlePaneLayout,
           focus = Focus.Surface(SurfaceId("command-runner")),
           theme = Theme.light
         ),
@@ -234,16 +233,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .copy(
         editing = EditingState(cursors = List(CursorPosition(1, 2)))
       )
-    val pane         = EditorPane.withBuffer(paneId, bufferId)
     val initialState = AppState.initial
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
-        ),
+        layout = singlePaneLayout,
         focus = Focus.Surface(SurfaceId("command-runner")),
         theme = Theme.light
       ),
@@ -323,16 +318,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .copy(
         editing = EditingState(cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val pane         = EditorPane.withBuffer(paneId, bufferId)
     val initialState = AppState.initial
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
-        ),
+        layout = singlePaneLayout,
         focus = Focus.Surface(SurfaceId("command-runner")),
         theme = Theme.light
       ),
@@ -376,16 +367,12 @@ class CommandRunnerFloatingRenderingSpec extends AnyFlatSpec with Matchers:
       .copy(
         editing = EditingState(cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val pane         = EditorPane.withBuffer(paneId, bufferId)
     val initialState = AppState.initial
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
-        ),
+        layout = singlePaneLayout,
         focus = Focus.Surface(SurfaceId("command-runner")),
         theme = Theme.light
       ),

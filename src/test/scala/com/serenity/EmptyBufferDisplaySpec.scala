@@ -52,7 +52,7 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
       val initialState = AppState(
         persisted = Persisted(
           buffers = Map(bufferId -> initialBuffer),
-          layout = Layout(Map(paneId -> pane), Some(paneId)),
+          layout = Layout(Map(paneId -> pane), Some(paneId), Some(TestWorkspaceTrees.linear(paneId))),
           focus = Focus.EditorPane(paneId)
         )
       )
@@ -90,7 +90,7 @@ class EmptyBufferDisplaySpec extends AnyFunSpec with Matchers:
       val initialState = AppState(
         persisted = Persisted(
           buffers = Map(bufferId -> bufferWithContent),
-          layout = Layout(Map(paneId -> pane), Some(paneId)),
+          layout = Layout(Map(paneId -> pane), Some(paneId), Some(TestWorkspaceTrees.linear(paneId))),
           focus = Focus.EditorPane(paneId)
         )
       )

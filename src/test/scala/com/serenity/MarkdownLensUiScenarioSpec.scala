@@ -8,7 +8,7 @@ import com.serenity.config.MarkdownViewMode
 import com.serenity.keystroke.events.{MoveDown, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.PaneSplitDirection
+import com.serenity.ui.layout.{SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -95,8 +95,17 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
                 PaneId(1) -> EditorPane.withBuffer(PaneId(1), secondId)
               ),
               activeEditorPaneId = Some(PaneId(1)),
-              paneOrder = List(PaneId(0), PaneId(1)),
-              splitDirection = PaneSplitDirection.Vertical
+              workspaceTree = Some(
+                WorkspaceTree(
+                  WorkspaceNode.Split(
+                    WorkspaceNodeId("editors"),
+                    SplitAxis.Vertical,
+                    0.5,
+                    WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)),
+                    WorkspaceNode.Leaf(WorkspaceNodeId("editor-1"), PaneId(1))
+                  )
+                )
+              )
             ),
             focus = Focus.EditorPane(PaneId(1))
           ),

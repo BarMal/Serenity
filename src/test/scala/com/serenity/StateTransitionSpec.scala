@@ -294,7 +294,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       persisted = base.persisted.copy(
         layout = base.persisted.layout.copy(
           editorPanes = base.persisted.layout.editorPanes.updated(outsideId, outsidePane),
-          workspaceTree = base.persisted.layout.effectiveWorkspaceTree
+          workspaceTree = base.persisted.layout.workspaceTree
         ),
         focus = Focus.EditorPane(outsideId)
       )

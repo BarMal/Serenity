@@ -15,13 +15,6 @@ enum SplitAxis:
   case Horizontal
   case Vertical
 
-object SplitAxis:
-
-  def fromLegacy(direction: PaneSplitDirection): SplitAxis =
-    direction match
-      case PaneSplitDirection.Horizontal => Horizontal
-      case PaneSplitDirection.Vertical   => Vertical
-
 /** One persistent node in the editor workspace tree. */
 sealed trait WorkspaceNode:
   def id: WorkspaceNodeId
@@ -319,6 +312,39 @@ object WorkspaceTree:
     */
   private val AssumedViewportExtent = 100
 
+  /** Grows and shrinks `tree` to contain exactly `targetPaneIds`, for callers (`UiPreset.resizeEditorPanes`) that
+    * decide a whole target pane set at once rather than adding or removing one pane at a time. New panes are spliced in
+    * before dropped ones are removed, so `.remove` never targets the tree's last remaining leaf when the target set is
+    * otherwise disjoint from the current one; each new pane splits off the most recently added leaf (or seeds a fresh
+    * single-leaf tree when `tree` is `None`, i.e. no panes existed yet).
+    */
+  def withExactPanes(tree: Option[WorkspaceTree], targetPaneIds: List[PaneId]): Option[WorkspaceTree] =
+    val currentPaneIds = tree.map(_.paneIds).getOrElse(Nil)
+    val newPaneIds     = targetPaneIds.filterNot(currentPaneIds.contains)
+    val droppedPaneIds = currentPaneIds.filterNot(targetPaneIds.contains)
+
+    def leaf(paneId: PaneId): WorkspaceTree = WorkspaceTree(
+      WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)
+    )
+
+    val withNewPanes = newPaneIds.foldLeft(tree) { (acc, newPaneId) =>
+      acc.flatMap(_.paneIds.lastOption) match
+        case Some(anchor) =>
+          acc
+            .flatMap(
+              _.split(
+                anchor,
+                newPaneId,
+                SplitAxis.Horizontal,
+                WorkspaceNodeId(s"resize-split-${anchor.value}-${newPaneId.value}"),
+                WorkspaceNodeId(s"editor-${newPaneId.value}")
+              )
+            )
+            .orElse(Some(leaf(newPaneId)))
+        case None => Some(leaf(newPaneId))
+    }
+    droppedPaneIds.foldLeft(withNewPanes)((acc, droppedId) => acc.flatMap(_.remove(droppedId)).orElse(acc))
+
   /** The other edge on the same axis (Left/Right, or Top/Bottom) -- the one whose docked surface, if any, `dockSized`
     * re-seeds when a new dock at `position` would otherwise nest it (and shrink its rendered extent) unasked.
     */
@@ -541,25 +567,3 @@ object WorkspaceTree:
       .collect { case (value, count) if count > 1 => value }
       .toList
       .sortBy(_.toString)
-
-  /** Converts the legacy uniform pane strip into an equivalent nested binary tree. */
-  def fromLegacy(paneIds: List[PaneId], direction: PaneSplitDirection): Option[WorkspaceTree] =
-    def leaf(paneId: PaneId): WorkspaceNode =
-      WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)
-
-    def build(paneId: PaneId, remaining: List[PaneId]): WorkspaceNode =
-      remaining match
-        case Nil => leaf(paneId)
-        case nextPaneId :: tail =>
-          val ratio = 1.0 / (remaining.size + 1)
-          WorkspaceNode.Split(
-            WorkspaceNodeId(s"legacy-${paneId.value}-${remaining.map(_.value).mkString("-")}"),
-            SplitAxis.fromLegacy(direction),
-            ratio,
-            leaf(paneId),
-            build(nextPaneId, tail)
-          )
-
-    paneIds match
-      case Nil           => None
-      case first :: rest => Some(WorkspaceTree(build(first, rest)))

@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{PixelRect, ViewportSize}
+import com.serenity.ui.layout.{PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,7 +33,7 @@ class RendererCursorRepaintSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferWithCursors.id)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId),
         theme = Theme.light

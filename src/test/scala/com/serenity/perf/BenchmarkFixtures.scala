@@ -1,5 +1,6 @@
 package com.serenity.perf
 
+import com.serenity.TestWorkspaceTrees
 import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{InlineMark, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
@@ -33,7 +34,8 @@ private[perf] object BenchmarkFixtures:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)

@@ -112,7 +112,7 @@ object EditorState:
         state
       case Some(pane) if state.persisted.layout.editorPanes.size == 1 =>
         val retainedTree =
-          state.persisted.layout.effectiveWorkspaceTree.orElse(
+          state.persisted.layout.workspaceTree.orElse(
             Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
           )
         state.copy(
@@ -120,7 +120,6 @@ object EditorState:
             layout = state.persisted.layout.copy(
               editorPanes = Map(paneId -> pane.copy(bufferId = None)),
               activeEditorPaneId = Some(paneId),
-              paneOrder = List(paneId),
               workspaceTree = retainedTree
             ),
             focus = Focus.EditorPane(paneId)
@@ -130,7 +129,7 @@ object EditorState:
         val previousOrder = state.persisted.layout.orderedPaneIds
         val removedIndex  = previousOrder.indexOf(paneId)
         val updatedPanes  = state.persisted.layout.editorPanes - paneId
-        val updatedTree   = state.persisted.layout.effectiveWorkspaceTree.flatMap(_.remove(paneId))
+        val updatedTree   = state.persisted.layout.workspaceTree.flatMap(_.remove(paneId))
         val updatedOrder  = updatedTree.map(_.paneIds).getOrElse(previousOrder.filterNot(_ == paneId))
         val nextActivePaneId =
           if state.persisted.layout.activeEditorPaneId.contains(paneId) then
@@ -146,7 +145,6 @@ object EditorState:
           persisted = state.persisted.copy(
             layout = state.persisted.layout.copy(
               editorPanes = updatedPanes,
-              paneOrder = updatedOrder,
               activeEditorPaneId = nextActivePaneId,
               workspaceTree = updatedTree
             ),
@@ -170,7 +168,7 @@ object EditorState:
             case Some(bufferId) => EditorPane.withBuffer(newPaneId, bufferId)
             case None           => EditorPane.empty(newPaneId)
 
-        state.persisted.layout.effectiveWorkspaceTree
+        state.persisted.layout.workspaceTree
           .flatMap(
             _.split(
               paneId,
@@ -186,7 +184,6 @@ object EditorState:
                 layout = state.persisted.layout.copy(
                   editorPanes = state.persisted.layout.editorPanes.updated(newPaneId, newPane),
                   activeEditorPaneId = Some(newPaneId),
-                  paneOrder = tree.paneIds,
                   workspaceTree = Some(tree)
                 ),
                 focus = Focus.EditorPane(newPaneId)
@@ -262,7 +259,6 @@ object EditorState:
           layout = state.persisted.layout.copy(
             editorPanes = Map(paneId -> EditorPane.empty(paneId)),
             activeEditorPaneId = Some(paneId),
-            paneOrder = List(paneId),
             workspaceTree = Some(tree)
           ),
           focus = Focus.EditorPane(paneId)

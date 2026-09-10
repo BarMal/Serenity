@@ -128,7 +128,7 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     updatedState.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(0))
     updatedState.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(1))
     updatedState.persisted.focus shouldBe Focus.EditorPane(PaneId(1))
-    updatedState.persisted.layout.paneOrder shouldBe List(PaneId(0), PaneId(1))
+    updatedState.persisted.layout.orderedPaneIds shouldBe List(PaneId(0), PaneId(1))
     updatedState.runtime.nextPaneId shouldBe PaneId(2)
     updatedState.persisted.layout.workspaceTree shouldBe Some(
       com.serenity.ui.layout.WorkspaceTree(
@@ -277,7 +277,7 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
   }
 
   private def addPane(state: AppState, after: PaneId, paneId: PaneId, bufferId: BufferId): AppState =
-    val tree = state.persisted.layout.effectiveWorkspaceTree
+    val tree = state.persisted.layout.workspaceTree
       .flatMap(
         _.split(
           after,
@@ -292,7 +292,6 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
       persisted = state.persisted.copy(
         layout = state.persisted.layout.copy(
           editorPanes = state.persisted.layout.editorPanes.updated(paneId, EditorPane.withBuffer(paneId, bufferId)),
-          paneOrder = tree.paneIds,
           workspaceTree = Some(tree)
         )
       ),

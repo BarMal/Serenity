@@ -7,6 +7,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.io.FileManager
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
@@ -30,7 +31,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
         com.serenity.ui.layout.Layout(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         )
       else com.serenity.ui.layout.Layout(editorPanes = Map.empty, activeEditorPaneId = None)
     base.copy(

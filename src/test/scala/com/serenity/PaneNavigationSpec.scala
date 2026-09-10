@@ -61,7 +61,7 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
 
   it should "keep workspace leaves stable while opening and navigating buffers" in new NavigationFixture:
     val initialLeaves =
-      stateManager.getCurrentState.unsafeRunSync().persisted.layout.effectiveWorkspaceTree.map(_.paneIds)
+      stateManager.getCurrentState.unsafeRunSync().persisted.layout.workspaceTree.map(_.paneIds)
 
     stateManager.applyEvent(NewTab).unsafeRunSync()
     stateManager.applyEvent(NewTab).unsafeRunSync()
@@ -69,7 +69,7 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(PreviousTab).unsafeRunSync()
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.persisted.layout.effectiveWorkspaceTree.map(_.paneIds) shouldBe initialLeaves
+    finalState.persisted.layout.workspaceTree.map(_.paneIds) shouldBe initialLeaves
     finalState.persisted.layout.editorPanes.keySet shouldBe initialLeaves.toList.flatten.toSet
 
   it should "cycle backward through buffers with Ctrl+Shift+Tab (PreviousTab)" in new NavigationFixture:

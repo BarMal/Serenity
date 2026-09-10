@@ -492,7 +492,6 @@ object UiPreset:
 
     val fallbackTree = SessionDockedPanel.fallbackWorkspaceTree(
       state.persisted.layout.orderedPaneIds,
-      state.persisted.layout.splitDirection,
       preset.dockedPanels
     )
 
@@ -556,9 +555,7 @@ object UiPreset:
     }.toMap
     val nextActivePaneId = targetPaneIds.headOption
     // state.runtime.nextPaneId.value is always present, so folding from it as the seed always yields the true max.
-    val nextPaneId = PaneId(
-      targetPaneIds.map(_.value + 1).foldLeft(state.runtime.nextPaneId.value)(_ max _)
-    )
+    val nextPaneId = PaneId(targetPaneIds.map(_.value + 1).foldLeft(state.runtime.nextPaneId.value)(_ max _))
     val nextFocus = state.persisted.focus match
       case Focus.EditorPane(paneId) if targetPaneIds.contains(paneId) =>
         state.persisted.focus
@@ -567,12 +564,14 @@ object UiPreset:
       case _ =>
         nextActivePaneId.map(Focus.EditorPane.apply).getOrElse(state.persisted.focus)
 
+    val finalTree = WorkspaceTree.withExactPanes(state.persisted.layout.workspaceTree, targetPaneIds)
+
     state.copy(
       persisted = state.persisted.copy(
         layout = state.persisted.layout.copy(
           editorPanes = resizedPanes,
           activeEditorPaneId = nextActivePaneId,
-          paneOrder = targetPaneIds
+          workspaceTree = finalTree
         ),
         focus = nextFocus
       ),

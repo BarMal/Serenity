@@ -86,7 +86,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
           bufferOrder = List(buffer.id),
           layout = Layout(
             editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-            activeEditorPaneId = Some(PaneId(0))
+            activeEditorPaneId = Some(PaneId(0)),
+            workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
           ),
           focus = Focus.EditorPane(PaneId(0))
         ),

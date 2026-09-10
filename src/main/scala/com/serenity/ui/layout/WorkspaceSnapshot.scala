@@ -215,18 +215,17 @@ object SessionDockedPanel:
       SessionPinnedPanel.fromSurface(surface, state).map(SessionDockedPanel(surface.id.value, _))
     }
 
-  /** Docks each persisted panel at its saved position onto the legacy pane-strip tree -- the shared fallback used when
-    * a persisted tree is absent or fails validation, by both session restore and UI preset apply. Position lives on
-    * `SessionDockedPanel`/`SessionPinnedPanel` itself, the persistence-format mirror of
+  /** Docks each persisted panel at its saved position onto `linearWorkspaceTree`'s seed -- the shared fallback used
+    * when a persisted tree is absent or fails validation, by both session restore and UI preset apply. Position lives
+    * on `SessionDockedPanel`/`SessionPinnedPanel` itself, the persistence-format mirror of
     * `WorkspaceNode.DockedSurface.position`, not on the restored `UiSurface`, which no longer carries position at all
     * (issue #817).
     */
   def fallbackWorkspaceTree(
     paneIds: List[com.serenity.state.models.PaneId],
-    splitDirection: PaneSplitDirection,
     dockedPanels: List[SessionDockedPanel]
   ): Option[WorkspaceTree] =
-    dockedPanels.zipWithIndex.foldLeft(WorkspaceTree.fromLegacy(paneIds, splitDirection)) {
+    dockedPanels.zipWithIndex.foldLeft(linearWorkspaceTree(paneIds)) {
       case (Some(tree), (panel, index)) =>
         tree.dock(
           SurfaceId(panel.surfaceId),
@@ -237,3 +236,32 @@ object SessionDockedPanel:
       case (None, _) =>
         None
     }
+
+  /** Builds a simple left-to-right nested split of `paneIds`, used only as the last-resort seed when restoring a
+    * session or preset that has no valid persisted tree -- replaces the old `WorkspaceTree.fromLegacy` adapter (#821),
+    * with no `PaneSplitDirection` concept: nothing in production ever wrote a non-default direction, so this always
+    * builds a horizontal split, matching prior behaviour for every real session/preset on disk.
+    */
+  private def linearWorkspaceTree(paneIds: List[com.serenity.state.models.PaneId]): Option[WorkspaceTree] =
+    def leaf(paneId: com.serenity.state.models.PaneId): WorkspaceNode =
+      WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)
+
+    def build(
+      paneId: com.serenity.state.models.PaneId,
+      remaining: List[com.serenity.state.models.PaneId]
+    ): WorkspaceNode =
+      remaining match
+        case Nil => leaf(paneId)
+        case nextPaneId :: tail =>
+          val ratio = 1.0 / (remaining.size + 1)
+          WorkspaceNode.Split(
+            WorkspaceNodeId(s"restored-linear-${paneId.value}-${remaining.map(_.value).mkString("-")}"),
+            SplitAxis.Horizontal,
+            ratio,
+            leaf(paneId),
+            build(nextPaneId, tail)
+          )
+
+    paneIds match
+      case Nil           => None
+      case first :: rest => Some(WorkspaceTree(build(first, rest)))

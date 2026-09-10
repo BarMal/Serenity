@@ -29,7 +29,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("peek"))
       ),
@@ -73,7 +74,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("modal"))
       ),
@@ -108,7 +110,11 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default.withCommandRunnerItemGapRows(1),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
-        layout = Layout(editorPanes = Map(paneId -> pane), activeEditorPaneId = Some(paneId)),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+        ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
       runtime = AppState.initial.runtime.copy(
@@ -145,7 +151,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("find"))
       ),
@@ -199,7 +206,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("context-menu"))
       ),
@@ -251,7 +259,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("command-runner"))
       ),
@@ -288,7 +297,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.EditorPane(paneId)
       ),
@@ -327,7 +337,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("file-modal"))
       ),
@@ -405,7 +416,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("command-runner")),
         config = AppConfig.default.withUiElementGap(0.25)
