@@ -74,7 +74,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
 
   it should "dispatch conventional core editing shortcuts from platform-resolved hotkeys" in {
     val linuxState = withConfig(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")))
-    val macState    = withConfig(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")))
+    val macState   = withConfig(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")))
 
     val linux = FocusedInputTranslator.forState(linuxState)
     val mac   = FocusedInputTranslator.forState(macState)
@@ -184,7 +184,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         |""".stripMargin
     )
     val loadedState = withConfig(ConfigManager.loadConfig(Some(configFile.toString)))
-    val duplicate = HotkeyTrigger(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
+    val duplicate   = HotkeyTrigger(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
     val invalidConfig = AppConfig.default.withHotkeyConfig(
       HotkeyConfig(
         AppConfig.default.inputConfig.hotkeyConfig.bindings ++ Map(
