@@ -34,6 +34,10 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId)
       )
     )
+
+  private def withConfig(config: AppConfig): AppState =
+    editorState.copy(persisted = editorState.persisted.copy(config = config))
+
   "FocusedInputTranslator" should "treat Enter as newline in editor focus" in {
     val translator = FocusedInputTranslator.forState(editorState)
 
@@ -69,16 +73,8 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "dispatch conventional core editing shortcuts from platform-resolved hotkeys" in {
-    val linuxState = editorState.copy(persisted =
-      editorState.persisted.copy(
-        config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux"))
-      )
-    )
-    val macState = editorState.copy(persisted =
-      editorState.persisted.copy(
-        config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X"))
-      )
-    )
+    val linuxState = withConfig(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")))
+    val macState    = withConfig(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Mac OS X")))
 
     val linux = FocusedInputTranslator.forState(linuxState)
     val mac   = FocusedInputTranslator.forState(macState)
@@ -187,11 +183,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         |hotkey.find = ctrl+k
         |""".stripMargin
     )
-    val loadedState = editorState.copy(persisted =
-      editorState.persisted.copy(
-        config = ConfigManager.loadConfig(Some(configFile.toString))
-      )
-    )
+    val loadedState = withConfig(ConfigManager.loadConfig(Some(configFile.toString)))
     val duplicate = HotkeyTrigger(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
     val invalidConfig = AppConfig.default.withHotkeyConfig(
       HotkeyConfig(
@@ -207,13 +199,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
       .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
       .isInstanceOf[UnhandledEvent[?]] shouldBe true
     FocusedInputTranslator
-      .forState(
-        editorState.copy(persisted =
-          editorState.persisted.copy(
-            config = invalidConfig
-          )
-        )
-      )
+      .forState(withConfig(invalidConfig))
       .translate(KeyStrokeInfo(InputKey.Character, Some('k'), Set(Modifier.Ctrl)))
       .isInstanceOf[UnhandledEvent[?]] shouldBe true
   }

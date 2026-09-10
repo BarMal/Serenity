@@ -18,6 +18,7 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val root = Paths.get("/repo")
+
   private def singlePaneLayout(paneId: PaneId, bufferId: BufferId): Layout =
     Layout(
       editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
@@ -946,7 +947,6 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId)
       )
     )
-
     val resolved = SurfaceContentResolver.resolveContextualToolbar(
       ContextualToolbarState(),
       state,
@@ -1029,7 +1029,6 @@ class SurfaceContentResolverSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId)
       )
     )
-
     val resolved = SurfaceContentResolver.resolveContextualToolbar(
       ContextualToolbarState(),
       state,

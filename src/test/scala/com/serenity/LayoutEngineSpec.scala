@@ -469,7 +469,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
   it should "give every pane an on-screen share of the editor width, roughly equal for three panes" in {
     val paneIds      = List(PaneId(0), PaneId(1), PaneId(2))
-    val state         = stateWithLinearPanes(paneIds, PaneId(0))
+    val state        = stateWithLinearPanes(paneIds, PaneId(0))
     val viewportSize = ViewportSize(120, 24)
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
