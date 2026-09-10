@@ -108,14 +108,17 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         .withBackgroundStyle(BackgroundStyle.Solid)
         .withPreferredWindowSize(PreferredWindowSize(1280, 720)),
       themeName = Theme.dark.name,
-      pinnedPanels = List(
-        com.serenity.ui.presets.UiPreset.PinnedPanel
-          .fromPanelContent(
-            PanelContent.Outline(Nil),
-            PanelPosition.Right,
-            36
-          )
-          .getOrElse(fail("outline should be capturable"))
+      dockedPanels = List(
+        com.serenity.ui.layout.SessionDockedPanel(
+          "panel-1",
+          com.serenity.ui.layout.SessionPinnedPanel
+            .fromPanelContent(
+              PanelContent.Outline(Nil),
+              PanelPosition.Right,
+              36
+            )
+            .getOrElse(fail("outline should be capturable"))
+        )
       )
     )
     store.upsert(preset).unsafeRunSync()
@@ -680,10 +683,13 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
         .withMotionPreset(com.serenity.config.MotionPreset.Reduced)
         .withMaterialPreset(com.serenity.config.MaterialPreset.Solid),
       themeName = Theme.dark.name,
-      pinnedPanels = List(
-        UiPreset.PinnedPanel
-          .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Right, 34)
-          .getOrElse(fail("outline should be capturable"))
+      dockedPanels = List(
+        SessionDockedPanel(
+          "panel-1",
+          SessionPinnedPanel
+            .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Right, 34)
+            .getOrElse(fail("outline should be capturable"))
+        )
       )
     )
     store.upsert(preset).unsafeRunSync()
@@ -762,7 +768,7 @@ class StateManagerUiPresetSpec extends AnyFlatSpec with Matchers:
       name = "Drafting",
       config = AppConfig.default,
       themeName = Theme.dark.name,
-      pinnedPanels = Nil
+      dockedPanels = Nil
     )
     store.upsert(preset).unsafeRunSync()
 

@@ -66,14 +66,17 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
         .withFontConfig(FontConfig(textFontFamily = "Serif", textFontSize = 17.0f))
         .withPreferredWindowSize(PreferredWindowSize(1280, 800)),
       themeName = Theme.dark.name,
-      pinnedPanels = List(
-        UiPreset.PinnedPanel
-          .fromPanelContent(
-            PanelContent.DirectoryTree(DirectoryTreeData(root), selectedPath = Some(root)),
-            PanelPosition.Right,
-            44
-          )
-          .getOrElse(fail("directory tree panel should be capturable"))
+      dockedPanels = List(
+        SessionDockedPanel(
+          "panel-1",
+          SessionPinnedPanel
+            .fromPanelContent(
+              PanelContent.DirectoryTree(DirectoryTreeData(root), selectedPath = Some(root)),
+              PanelPosition.Right,
+              44
+            )
+            .getOrElse(fail("directory tree panel should be capturable"))
+        )
       )
     )
 
@@ -159,7 +162,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     compact.config.surfaceConfig.contextualToolbarEnabled shouldBe false
     compact.pinnedPanels shouldBe Nil
 
-    review.pinnedPanels.map(_.content) should contain(UiPreset.PanelContentSnapshot.Diagnostics(Nil))
+    review.pinnedPanels.map(_.content) should contain(SessionPanelContent.Diagnostics(Nil))
   }
 
   it should "summarize presets for command runner previews" in {
@@ -190,7 +193,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       name = "Two Pane Drafting",
       config = AppConfig.default,
       themeName = Theme.dark.name,
-      pinnedPanels = Nil,
+      dockedPanels = Nil,
       targetEditorPaneCount = Some(2)
     )
 
@@ -199,21 +202,21 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "name every pinnable panel content kind in its preview summary" in {
-    val panel = UiPreset.PinnedPanel
+    val panel = SessionPinnedPanel
       .fromPanelContent(PanelContent.Comments(Nil), PanelPosition.Left, 28)
       .getOrElse(fail("comments should be capturable"))
     val preset = UiPreset(
       name = "Review",
       config = AppConfig.default,
       themeName = Theme.dark.name,
-      pinnedPanels = List(panel)
+      dockedPanels = List(SessionDockedPanel("panel-1", panel))
     )
 
     UiPreset.Preview.fromPreset(preset).hint should include("Left comments 28")
   }
 
   it should "patch appearance fields without replacing preset layout snapshots" in {
-    val panel = UiPreset.PinnedPanel
+    val panel = SessionPinnedPanel
       .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
@@ -221,7 +224,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       config =
         AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid).withInterfaceDensity(InterfaceDensity.Compact),
       themeName = Theme.dark.name,
-      pinnedPanels = List(panel),
+      dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
     val sourceConfig = AppConfig.default
@@ -242,14 +245,14 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "patch motion fields without replacing preset layout snapshots" in {
-    val panel = UiPreset.PinnedPanel
+    val panel = SessionPinnedPanel
       .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default.withMotionPreset(MotionPreset.Reduced),
       themeName = Theme.dark.name,
-      pinnedPanels = List(panel),
+      dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
     val sourceConfig = AppConfig.default
@@ -276,14 +279,14 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "patch typography fields without replacing preset layout snapshots" in {
-    val panel = UiPreset.PinnedPanel
+    val panel = SessionPinnedPanel
       .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default.withFontConfig(FontConfig(textFontFamily = Font.SANS_SERIF, textFontSize = 12.0f)),
       themeName = Theme.dark.name,
-      pinnedPanels = List(panel),
+      dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
     val sourceConfig = AppConfig.default.withFontConfig(
@@ -308,7 +311,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "patch document default fields without replacing preset layout snapshots" in {
-    val panel = UiPreset.PinnedPanel
+    val panel = SessionPinnedPanel
       .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
@@ -317,7 +320,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
         .withDefaultDocumentMode(DefaultDocumentMode.PlainText)
         .withMarkdownViewMode(MarkdownViewMode.Source),
       themeName = Theme.dark.name,
-      pinnedPanels = List(panel),
+      dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
     val sourceConfig = AppConfig.default
@@ -333,7 +336,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "patch text display fields without replacing preset layout snapshots" in {
-    val panel = UiPreset.PinnedPanel
+    val panel = SessionPinnedPanel
       .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
@@ -343,7 +346,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
         .withGutter(true)
         .withWordWrap(true),
       themeName = Theme.dark.name,
-      pinnedPanels = List(panel),
+      dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
     val sourceConfig = AppConfig.default
@@ -370,7 +373,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "patch language tool fields without replacing preset layout snapshots" in {
-    val panel = UiPreset.PinnedPanel
+    val panel = SessionPinnedPanel
       .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
@@ -379,7 +382,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
         SpellCheckConfig(enabled = false, languages = List("en"), additionalWords = List("serenity"))
       ),
       themeName = Theme.dark.name,
-      pinnedPanels = List(panel),
+      dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
     val sourceConfig = AppConfig.default.withSpellCheck(
@@ -449,7 +452,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       name = "Two Pane Drafting",
       config = AppConfig.default,
       themeName = Theme.dark.name,
-      pinnedPanels = Nil,
+      dockedPanels = Nil,
       targetEditorPaneCount = Some(2)
     )
 
@@ -470,7 +473,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       name = "Legacy",
       config = AppConfig.default,
       themeName = Theme.dark.name,
-      pinnedPanels = Nil
+      dockedPanels = Nil
     )
     val legacyJson = preset.asJson.hcursor
       .downField("targetEditorPaneCount")
@@ -491,7 +494,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       name = "Focus",
       config = AppConfig.default.withPreferredWindowSize(PreferredWindowSize(1000, 700)),
       themeName = "dark",
-      pinnedPanels = Nil
+      dockedPanels = Nil
     )
     val second = first.copy(config = AppConfig.default.withPreferredWindowSize(PreferredWindowSize(1200, 900)))
 
@@ -513,7 +516,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       name = "Focus",
       config = AppConfig.default.withPreferredWindowSize(PreferredWindowSize(1000, 700)),
       themeName = "dark",
-      pinnedPanels = Nil
+      dockedPanels = Nil
     )
     val review = focus.copy(name = "Review Notes")
 

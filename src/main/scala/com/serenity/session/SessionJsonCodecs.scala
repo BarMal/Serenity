@@ -2,19 +2,14 @@ package com.serenity.session
 
 import com.serenity.config.AppConfig
 import com.serenity.richtext.*
-import com.serenity.ui.layout.PaneSplitDirection
+import com.serenity.ui.layout.given
+import com.serenity.ui.layout.{PaneSplitDirection, SessionDockedPanel, SessionWorkspaceNode}
 import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 
 given Encoder[SessionState] = deriveEncoder
 
 given Encoder[SessionLayout] = deriveEncoder
-
-given Encoder[SessionWorkspaceNode] = deriveEncoder
-given Decoder[SessionWorkspaceNode] = deriveDecoder
-
-given Encoder[SessionDockedPanel] = deriveEncoder
-given Decoder[SessionDockedPanel] = deriveDecoder
 
 given Encoder[SessionEditorPane] = deriveEncoder
 given Decoder[SessionEditorPane] = deriveDecoder

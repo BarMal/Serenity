@@ -205,7 +205,7 @@ final private[manager] class StateManagerUiPresetEffects(
   private def reloadPresetDirectories(preset: UiPreset): IO[Unit] =
     preset.pinnedPanels.traverse_ { panel =>
       panel.content match
-        case UiPreset.PanelContentSnapshot.DirectoryTree(rootPath, _, expandedPaths) =>
+        case com.serenity.ui.layout.SessionPanelContent.DirectoryTree(rootPath, _, expandedPaths) =>
           (rootPath :: expandedPaths).distinct.traverse_(path =>
             loadPinnedDirectoryEffect(panel.position, java.nio.file.Path.of(path))
           )
