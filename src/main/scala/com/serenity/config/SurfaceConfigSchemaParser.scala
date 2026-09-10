@@ -1,13 +1,15 @@
 package com.serenity.config
 
 import com.serenity.animation.*
-import com.serenity.keystroke.Modifier
-import com.serenity.state.models.SurfacePlacement
 
 import AppConfigMotionOps.*
 
-/** Parses one surface setting's text value against the keys [[SurfaceConfigSchemaKeys]] declares, returning the updated
-  * configuration or `None` when the key is not a surface setting or the value is not one it accepts.
+/** Parses one `ui.motion.*` setting's text value against the keys [[SurfaceConfigSchemaKeys]] declares, returning the
+  * updated configuration or `None` when the key is not a motion setting or the value is not one it accepts.
+  *
+  * Everything this used to also parse for material/post-processing/display/command-runner/text-area/viewport settings
+  * is gone (#1406) -- [[ConfigRegistry]] owns those end-to-end, and `ConfigManager.parseConfig` tries it first, so this
+  * module's copy never ran.
   */
 object SurfaceConfigSchemaParser:
 
@@ -15,11 +17,7 @@ object SurfaceConfigSchemaParser:
 
   def parse(config: AppConfig, key: String, value: String): Option[AppConfig] =
     val trimmed = value.trim
-    if materialPresetKeys.contains(key) then parseMaterialPreset(trimmed).map(config.withMaterialPreset)
-    else if postProcessingKeys.contains(key) then
-      PostProcessingEffect.fromConfigKey(trimmed).map(config.withPostProcessingEffect)
-    else if uiShadowsKeys.contains(key) then trimmed.toBooleanOption.map(config.withUiShadowsEnabled)
-    else if motionPresetKeys.contains(key) then parseMotionPreset(trimmed).map(config.withMotionPreset)
+    if motionPresetKeys.contains(key) then parseMotionPreset(trimmed).map(config.withMotionPreset)
     else if motionAccessibilityKeys.contains(key) then
       MotionAccessibility.fromConfigKey(trimmed).map(config.withMotionAccessibility)
     else if motionFamilyKeys.contains(key) then parseMotionFamily(config, key, trimmed)
@@ -44,84 +42,10 @@ object SurfaceConfigSchemaParser:
       parseTransitionKind(trimmed).map(kind => config.withPanelOpenTransitionKind(Some(kind)))
     else if panelCloseTransitionKeys.contains(key) then
       parseTransitionKind(trimmed).map(kind => config.withPanelCloseTransitionKind(Some(kind)))
-    else if commandRunnerVisibleRowsKeys.contains(key) then
-      parseCommandRunnerVisibleRows(trimmed).map(config.withCommandRunnerVisibleRows)
-    else if commandRunnerItemGapRowsKeys.contains(key) then
-      parseCommandRunnerItemGapRows(trimmed).map(config.withCommandRunnerItemGapRows)
-    else if commandRunnerCursorGapRowsKeys.contains(key) then
-      parseCommandRunnerCursorGapRows(trimmed).map(config.withCommandRunnerCursorGapRows)
-    else if cursorInfoBarBackgroundAlphaKeys.contains(key) then
-      parseCursorInfoBarBackgroundAlpha(trimmed).map(config.withCursorInfoBarBackgroundAlpha)
-    else parseDisplayAndLayout(config, key, trimmed)
-
-  private def parseDisplayAndLayout(config: AppConfig, key: String, trimmed: String): Option[AppConfig] =
-    if renderFpsKeys.contains(key) then RenderFpsTarget.fromConfigKey(trimmed).map(config.withRenderFpsTarget)
-    else if renderDamageGranularityKeys.contains(key) then
-      RenderDamageGranularity.fromConfigKey(trimmed).map(config.withRenderDamageGranularity)
-    else if wordWrapKeys.contains(key) then parseBoolean(trimmed).map(config.withWordWrap)
-    else if visualLineNavigationKeys.contains(key) then parseBoolean(trimmed).map(config.withVisualLineCursorNavigation)
-    else if blurRadiusKeys.contains(key) then
-      trimmed.toFloatOption.filter(radius => radius >= 0.0f && radius <= 1.0f).map(config.withBlurRadius)
-    else if backgroundStyleKeys.contains(key) then
-      BackgroundStyle.fromConfigKey(trimmed).map(config.withBackgroundStyle)
-    else if lineNumberKeys.contains(key) then parseBoolean(trimmed).map(config.withLineNumbers)
-    else if gutterKeys.contains(key) then parseBoolean(trimmed).map(config.withGutter)
-    else if wordCountKeys.contains(key) then parseBoolean(trimmed).map(config.withWordCount)
-    else if commentDisplayModeKeys.contains(key) then
-      CommentDisplayMode.fromConfigKey(trimmed).map(config.withCommentDisplayMode)
-    else if commandRunnerShowKeyHintsKeys.contains(key) then
-      parseBoolean(trimmed).map(config.withCommandRunnerShowKeyHints)
-    else if commandRunnerCursorPeekKeys.contains(key) then
-      parseBoolean(trimmed).map(config.withCommandRunnerCursorPeekEnabled)
-    else if commandRunnerCursorPeekModifierKeys.contains(key) then
-      parseModifier(trimmed).map(config.withCommandRunnerCursorPeekModifier)
-    else if commandRunnerCursorPeekTapWindowKeys.contains(key) then
-      trimmed.toLongOption.map(config.withCommandRunnerCursorPeekTapWindowMillis)
-    else if commandRunnerCursorPeekPlacementKeys.contains(key) then
-      parseSurfacePlacement(trimmed).map(config.withCommandRunnerCursorPeekPlacement)
-    else if paneHeaderKeys.contains(key) then parseBoolean(trimmed).map(config.withPaneHeaders)
-    else if focusedTextBodyKeys.contains(key) then parseBoolean(trimmed).map(config.withFocusedTextBody)
-    else if contextualToolbarKeys.contains(key) then parseBoolean(trimmed).map(config.withContextualToolbarEnabled)
-    else if contextualToolbarModeKeys.contains(key) then
-      ToolbarDisplayMode.fromConfigKey(trimmed).map(config.withContextualToolbarDisplayMode)
-    else if textAreaLeftPercentKeys.contains(key) then parseInsetPercent(trimmed).map(config.withTextAreaLeftInset)
-    else if textAreaRightPercentKeys.contains(key) then parseInsetPercent(trimmed).map(config.withTextAreaRightInset)
-    else if textAreaTopPercentKeys.contains(key) then parseInsetPercent(trimmed).map(config.withTextAreaTopInset)
-    else if textAreaBottomPercentKeys.contains(key) then parseInsetPercent(trimmed).map(config.withTextAreaBottomInset)
-    else if viewportWidthPercentKeys.contains(key) then
-      parseViewportPercent(trimmed)
-        .map(percent =>
-          config.withViewportWidthSizing(config.surfaceConfig.viewportSizing.width.copy(percent = percent))
-        )
-    else if viewportWidthMaxKeys.contains(key) then
-      parseViewportMaxCells(trimmed)
-        .map(maxCells =>
-          config.withViewportWidthSizing(config.surfaceConfig.viewportSizing.width.copy(maxCells = maxCells))
-        )
-    else if viewportHeightPercentKeys.contains(key) then
-      parseViewportPercent(trimmed)
-        .map(percent =>
-          config.withViewportHeightSizing(config.surfaceConfig.viewportSizing.height.copy(percent = percent))
-        )
-    else if viewportHeightMaxKeys.contains(key) then
-      parseViewportMaxCells(trimmed)
-        .map(maxCells =>
-          config.withViewportHeightSizing(config.surfaceConfig.viewportSizing.height.copy(maxCells = maxCells))
-        )
     else None
 
   def invalidValue(key: String, value: String): Boolean =
     parse(AppConfig.default, key, value).isEmpty
-
-  private def parseModifier(value: String): Option[Modifier] =
-    Modifier.values.find(_.toString.equalsIgnoreCase(value))
-
-  // The cursor-peek prototype's placement is only ever above/below the cursor -- `SurfacePlacement.Corner` (issue
-  // #1310) isn't a value this setting can take, and being a parameterized case, it also means `.values` is no
-  // longer generated for the enum.
-  private def parseSurfacePlacement(value: String): Option[SurfacePlacement] =
-    List(SurfacePlacement.AboveCursor, SurfacePlacement.BelowCursor)
-      .find(placement => placement.toString.equalsIgnoreCase(value.replace("-", "")))
 
   private def parseBoolean(value: String): Option[Boolean] =
     value.toLowerCase match
@@ -176,75 +100,6 @@ object SurfaceConfigSchemaParser:
           )
         case _ => None
     yield config.withMotionFamilyConfiguration(family, updated)
-
-  private def parseCommandRunnerVisibleRows(value: String): Option[Option[Int]] =
-    value.toLowerCase match
-      case "auto" | "default" | "" => Some(None)
-      case other =>
-        other.toIntOption
-          .filter(rows =>
-            rows >= AppConfig.MinCommandRunnerVisibleRows &&
-              rows <= AppConfig.MaxCommandRunnerVisibleRows
-          )
-          .map(rows => Some(rows))
-
-  private def parseCommandRunnerItemGapRows(value: String): Option[Double] =
-    value.toDoubleOption.filter(rows =>
-      rows >= AppConfig.MinCommandRunnerItemGapRows && rows <= AppConfig.MaxCommandRunnerItemGapRows
-    )
-
-  private def parseCommandRunnerCursorGapRows(value: String): Option[Option[Double]] =
-    value.toLowerCase match
-      case "auto" | "default" | "" => Some(None)
-      case other =>
-        other.toDoubleOption
-          .filter(rows =>
-            rows >= AppConfig.MinCommandRunnerCursorGapRows && rows <= AppConfig.MaxCommandRunnerCursorGapRows
-          )
-          .map(rows => Some(rows))
-
-  private def parseCursorInfoBarBackgroundAlpha(value: String): Option[Option[Double]] =
-    value.toLowerCase match
-      case "auto" | "default" | "" => Some(None)
-      case other =>
-        other.toDoubleOption
-          .filter(alpha =>
-            alpha >= AppConfig.MinCursorInfoBarBackgroundAlpha && alpha <= AppConfig.MaxCursorInfoBarBackgroundAlpha
-          )
-          .map(alpha => Some(alpha))
-
-  /** These are stored as fractions and written as percentages, so reading one back divides by 100 -- and binary
-    * floating point turns 17.3 into 0.17299999999999996 rather than the 0.173 that was saved. Rounding to the precision
-    * the file actually carries makes saving and loading a settings value give that value back.
-    */
-  private def fractionOfPercent(value: Double): Double =
-    BigDecimal(value / 100.0).setScale(9, BigDecimal.RoundingMode.HALF_UP).toDouble
-
-  private def parseInsetPercent(value: String): Option[Double] =
-    value.toDoubleOption
-      .map(fractionOfPercent)
-      .filter(percent => percent >= 0.0 && percent <= TextAreaInsets.MaxInset)
-
-  private def parseViewportPercent(value: String): Option[Double] =
-    value.toDoubleOption
-      .map(fractionOfPercent)
-      .filter(percent =>
-        percent >= ViewportAxisSizing.MinPercent &&
-          percent <= ViewportAxisSizing.MaxPercent
-      )
-
-  private def parseViewportMaxCells(value: String): Option[Option[Int]] =
-    if value.trim.isEmpty then Some(None)
-    else value.toIntOption.filter(_ >= 1).map(Some(_))
-
-  private def parseMaterialPreset(value: String): Option[MaterialPreset] =
-    value.toLowerCase match
-      case "solid" | "opaque"      => Some(MaterialPreset.Solid)
-      case "clear" | "transparent" => Some(MaterialPreset.Clear)
-      case "frosted" | "soft"      => Some(MaterialPreset.Frosted)
-      case "crystal" | "glass"     => Some(MaterialPreset.Crystal)
-      case "custom"                => Some(MaterialPreset.Custom)
-      case _                       => None
 
   private def parseMotionPreset(value: String): Option[MotionPreset] =
     value.toLowerCase match
