@@ -15,11 +15,16 @@ import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValue, ConfigValueType}
+import org.slf4j.LoggerFactory
 
 import AppConfigMotionOps.*
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
+
+  // `loadConfigResult`/`loadConfig` run synchronously, outside Cats Effect supervision, so they log the same way
+  // `CrashReporter` does rather than through the `Logger[IO]` the IO-based `loadConfigResultIO` path uses.
+  private val logger = LoggerFactory.getLogger("com.serenity.config.ConfigManager")
 
   val defaultConfigPath: Path =
     Paths.get(System.getProperty("user.home"), ".serenity", "config.conf")
@@ -34,8 +39,8 @@ object ConfigManager:
     if Files.exists(path) then
       try parseConfigResult(path)
       catch
-        case _: Exception =>
-          System.err.println(s"[CONFIG] Failed to load config from $path, using defaults")
+        case error: Exception =>
+          logger.error(s"[CONFIG] Failed to load config from $path, using defaults", error)
           ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
     else ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
 

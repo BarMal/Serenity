@@ -167,6 +167,16 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     result.report.invalidEntries.map(_.key) should contain("spellcheck.enabled")
   }
 
+  it should "fall back to defaults without throwing when a config file cannot be parsed" in {
+    val configFile = Files.createTempFile("serenity-unparseable-sync-config", ".conf")
+    Files.writeString(configFile, "this is not = valid = hocon {\n")
+
+    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+    result.config shouldBe AppConfig.default
+    result.report shouldBe ConfigMigrationReport.empty
+  }
+
   it should "return default config result with an empty report when the config file is missing" in {
     val missingConfig = Files.createTempDirectory("serenity-missing-config-result").resolve("missing.conf")
 
