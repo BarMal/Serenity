@@ -1,7 +1,7 @@
 package com.serenity.ui.renderer
 
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
+import java.awt.Font
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.MockRenderSurface
