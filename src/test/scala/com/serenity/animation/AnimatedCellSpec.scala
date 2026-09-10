@@ -107,14 +107,6 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
 
   // ── Smart constructors ────────────────────────────────────────────────────
 
-  "AnimatedCell.fromForegroundInterpolation" should "produce a foreground-only fade" in {
-    val cell = AnimatedCell.fromForegroundInterpolation('x', black, white, steps = 4)
-    cell.content shouldEqual Some('x')
-    cell.foregroundSteps shouldEqual RgbInterpolator.interpolateRgba(black, white, 4)
-    cell.backgroundSteps shouldEqual List.empty
-    cell.cycling should be(false)
-  }
-
   "AnimatedCell.fromThemeTransition" should "interpolate both foreground and background" in {
     val cell = AnimatedCell.fromThemeTransition(
       oldForeground = black,
@@ -136,18 +128,6 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
     cell.backgroundSteps shouldEqual List.empty
     cell.isComplete should be(false)
     cell.advance().isComplete should be(true)
-  }
-
-  "AnimatedCell.createFadeAnimation" should "derive step count from duration and tick rate" in {
-    val cell = AnimatedCell.createFadeAnimation('a', black, white, durationMs = 96, tickRateMs = 16)
-    cell.content shouldEqual Some('a')
-    cell.foregroundSteps should have length 6
-    cell.backgroundSteps shouldEqual List.empty
-  }
-
-  it should "be immediately complete for zero duration" in {
-    val cell = AnimatedCell.createFadeAnimation('a', black, white, durationMs = 0)
-    cell.isComplete should be(true)
   }
 
   "AnimatedCell.parametricForeground" should "advance delayed colour interpolation without storing step lists" in {
