@@ -115,18 +115,17 @@ Priority labels used in this archived snapshot:
 
 ## 11. Pinned Panels And Layouts
 
-- `[x]` Serenity supports pinned panels on the top, bottom, left, and right via `SurfacePresentation.Pinned` and `PanelPosition`.[21][30]
+- `[x]` Serenity supports pinned panels on the top, bottom, left, and right via `SurfacePresentation.Docked` and `WorkspaceTree`, with position, size, and order owned solely by the tree.[21][30]
 - `[x]` Different panel types can be pinned, resized, focused, replaced in-position, or unpinned.[21][30][31]
-- `[x]` Multiple pinned panels can coexist when they occupy different sides, and layout reflows around them.[5][30]
-- `[~][P1]` Only one pinned surface is kept per side at a time. The broader product shape of multiple panels per side is still not implemented.[30][31]
-- `[~][P1]` Floating surfaces such as directory listing, outline, and diagnostics can be pinned into side panels, but not every floating surface type is pinnable.[31]
+- `[x]` Multiple pinned panels can coexist on the same side, nested in the workspace tree, and layout reflows around them.[5][30]
+- `[x]` Floating surfaces such as directory listing, outline, and diagnostics can be pinned into side panels, but not every floating surface type is pinnable.[31]
 
 ## 12. Panel Presets, Expansion, And Density Modes
 
 - `[x]` Panels can be removed with `unpin`, and focus falls back to the editor when appropriate.[31]
 - `[x]` Built-in workflows are peer, reversible workspace presets: Writing provides centred serif prose with optional panels and no pane header; Documentation keeps the same low-chrome reading surface with Markdown preview support; Code keeps line numbers, a gutter, pane identity, and a project panel; Compact preserves the dense keyboard-forward editor presentation. The active preset writes its covered configuration to the normal config file, so later sessions retain the chosen presentation.[16][17][30][31]
 - `[x]` Readable measure is an explicit text-area inset owned by prose presets; density controls supported chrome metrics such as gutter and command-surface spacing rather than carrying an unused editor-margin value.[16][30]
-- `[ ][P1]` No direct implementation evidence was found for expanding a side panel into a central editor-space view.[30][31]
+- `[x]` A docked panel can be expanded into a central editor-space view and restored, via `Layout.maximizedWorkspaceNodeId` and `PanelStateReducer.expand`/`collapseExpandedPanel` — an overlay on the still-docked surface, not a separate presentation.[30][31]
 - `[ ][P1]` No direct implementation evidence was found for standard preset panel/workspace configurations.[30][31]
 - `[ ][P1]` No direct implementation evidence was found for an explicit minimalist/maximalist interface mode system.[16][17][30]
 
