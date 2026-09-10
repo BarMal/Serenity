@@ -43,7 +43,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -73,7 +74,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -103,7 +105,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -131,7 +134,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -170,7 +174,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -219,7 +224,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -260,7 +266,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -296,7 +303,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -337,7 +345,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         focus = Focus.EditorPane(PaneId(0))
       ),
@@ -1042,7 +1051,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
             PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
             PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
           ),
-          activeEditorPaneId = Some(PaneId(1))
+          activeEditorPaneId = Some(PaneId(1)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0), PaneId(1)))
         ),
         focus = Focus.EditorPane(PaneId(1))
       ),
@@ -1373,7 +1383,8 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
             PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer1.id),
             PaneId(1) -> EditorPane.withBuffer(PaneId(1), buffer2.id)
           ),
-          activeEditorPaneId = Some(PaneId(1))
+          activeEditorPaneId = Some(PaneId(1)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0), PaneId(1)))
         ),
         focus = Focus.EditorPane(PaneId(1))
       ),

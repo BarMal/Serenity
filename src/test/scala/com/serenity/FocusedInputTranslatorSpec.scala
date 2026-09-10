@@ -28,7 +28,8 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")),
         layout = Layout(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.EditorPane(paneId)
       )

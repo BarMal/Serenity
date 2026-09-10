@@ -34,7 +34,8 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         theme = Theme.light,
         config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)

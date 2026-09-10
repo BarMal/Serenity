@@ -108,7 +108,8 @@ class ThemeCreatorSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.empty.persisted.copy(
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), BufferId(0))),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         ),
         buffers = Map(BufferId(0) -> Buffer.newEmpty(BufferId(0))),
         theme = DefaultThemes.defaultDark

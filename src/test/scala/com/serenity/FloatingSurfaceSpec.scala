@@ -27,7 +27,8 @@ class FloatingSurfaceSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.EditorPane(paneId)
       )

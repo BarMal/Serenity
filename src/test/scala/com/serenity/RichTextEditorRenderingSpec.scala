@@ -50,7 +50,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(buffer.id),
         layout = Layout(
           editorPanes = Map(paneId -> com.serenity.state.models.EditorPane.withBuffer(paneId, buffer.id)),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         theme = Theme.light,
         config = AppConfig.default.withLineNumbers(false).withGutter(false)

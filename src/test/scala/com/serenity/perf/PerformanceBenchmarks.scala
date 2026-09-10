@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage
 import java.nio.file.{Files, Path}
 
 import cats.effect.{IO, Resource}
+import com.serenity.TestWorkspaceTrees
 import com.serenity.animation.*
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.keystroke.events.{
@@ -597,8 +598,9 @@ object PerformanceBenchmarks:
           bufferOrder = buffers.keys.toList,
           layout = Layout(
             editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, BufferId(0))),
-            activeEditorPaneId = Some(paneId)
-          )
+            activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+        )
         )
       )
 

@@ -146,7 +146,8 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = com.serenity.ui.layout.Layout(
           editorPanes = Map(paneId -> pane),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         )
       )
     )

@@ -568,7 +568,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId)
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.EditorPane(paneId)
       ),
@@ -614,7 +615,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         )
       ),
       runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
@@ -649,7 +651,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         )
       ),
       runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
@@ -682,7 +685,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         )
       ),
       runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
@@ -710,7 +714,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = Layout(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), bufferId)),
-          activeEditorPaneId = Some(PaneId(0))
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
         )
       ),
       runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
