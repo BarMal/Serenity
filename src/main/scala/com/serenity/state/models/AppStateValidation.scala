@@ -57,14 +57,6 @@ object AppStateValidation:
       if !state.persisted.layout.editorPanes.contains(paneId) then
         errors += s"Active editor pane does not exist: ${paneId.value}"
     }
-    // Pane-order coherence: no stale references, no repeats. (Completeness against `editorPanes` is intentionally not
-    // required here -- the workspace tree reconciliation pass is the source of truth for a fully-covering order.)
-    val duplicatePaneOrder = duplicates(state.persisted.layout.paneOrder.map(_.value))
-    if duplicatePaneOrder.nonEmpty then
-      errors += s"Pane order contains duplicate entries: ${duplicatePaneOrder.mkString(", ")}"
-    val stalePaneOrder = state.persisted.layout.paneOrder.filterNot(state.persisted.layout.editorPanes.contains)
-    if stalePaneOrder.nonEmpty then
-      errors += s"Pane order references non-existent panes: ${stalePaneOrder.map(_.value).mkString(", ")}"
     // Buffer-order coherence: no stale references, no repeats.
     val duplicateBufferOrder = duplicates(state.persisted.bufferOrder.map(_.value))
     if duplicateBufferOrder.nonEmpty then

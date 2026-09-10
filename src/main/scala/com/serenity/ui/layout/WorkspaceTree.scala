@@ -15,13 +15,6 @@ enum SplitAxis:
   case Horizontal
   case Vertical
 
-object SplitAxis:
-
-  def fromLegacy(direction: PaneSplitDirection): SplitAxis =
-    direction match
-      case PaneSplitDirection.Horizontal => Horizontal
-      case PaneSplitDirection.Vertical   => Vertical
-
 /** One persistent node in the editor workspace tree. */
 sealed trait WorkspaceNode:
   def id: WorkspaceNodeId
@@ -541,25 +534,3 @@ object WorkspaceTree:
       .collect { case (value, count) if count > 1 => value }
       .toList
       .sortBy(_.toString)
-
-  /** Converts the legacy uniform pane strip into an equivalent nested binary tree. */
-  def fromLegacy(paneIds: List[PaneId], direction: PaneSplitDirection): Option[WorkspaceTree] =
-    def leaf(paneId: PaneId): WorkspaceNode =
-      WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)
-
-    def build(paneId: PaneId, remaining: List[PaneId]): WorkspaceNode =
-      remaining match
-        case Nil => leaf(paneId)
-        case nextPaneId :: tail =>
-          val ratio = 1.0 / (remaining.size + 1)
-          WorkspaceNode.Split(
-            WorkspaceNodeId(s"legacy-${paneId.value}-${remaining.map(_.value).mkString("-")}"),
-            SplitAxis.fromLegacy(direction),
-            ratio,
-            leaf(paneId),
-            build(nextPaneId, tail)
-          )
-
-    paneIds match
-      case Nil           => None
-      case first :: rest => Some(WorkspaceTree(build(first, rest)))
