@@ -30,11 +30,11 @@ private[manager] object FocusHandlerRouting:
   private val startupPage: LocalEventHandler       = new StartupPageComponent()
 
   /** Handler for floating "peek" content: read-only info popups and previews that only respond to dismiss/navigate (see
-    * `PeekOverlayComponent`), plus content that is only ever presented Pinned or Expanded (`DirectoryTree`, `Terminal`,
-    * `Outline`, `Comments`, `Diagnostics` -- see `UiSurface.fromPanelContent`, which is their only construction site)
-    * and so never actually reaches this table in practice, and the transient `GhostOverlay` fade-out surface, which is
-    * allocated under a fresh id that is never pushed onto the focus stack. All are routed here to match this codebase's
-    * prior behaviour, where every one of them fell through a wildcard to `PeekOverlayComponent`.
+    * `PeekOverlayComponent`), plus content that is only ever presented Docked (`DirectoryTree`, `Terminal`, `Outline`,
+    * `Comments`, `Diagnostics` -- see `UiSurface.fromPanelContent`, which is their only construction site) and so never
+    * actually reaches this table in practice, and the transient `GhostOverlay` fade-out surface, which is allocated
+    * under a fresh id that is never pushed onto the focus stack. All are routed here to match this codebase's prior
+    * behaviour, where every one of them fell through a wildcard to `PeekOverlayComponent`.
     */
   private val peekOverlay: LocalEventHandler = new PeekOverlayComponent()
 
