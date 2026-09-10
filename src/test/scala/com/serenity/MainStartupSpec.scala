@@ -44,7 +44,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val finalState = result.unsafeRunSync()
 
     finalState.runtime.viewportSize.shouldBe(Some(initialViewportSize))
-    finalState.persisted.theme.should(not.be(com.serenity.ui.theme.Theme.default))
+    finalState.persisted.theme.name.shouldBe("dark")
     finalState.persisted.buffers.shouldBe(Map.empty)
     finalState.persisted.layout.editorPanes.shouldBe(Map.empty)
     finalState.startPageSurface.shouldBe(defined)
