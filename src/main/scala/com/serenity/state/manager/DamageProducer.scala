@@ -266,9 +266,9 @@ object DamageProducer:
     * itself changing (tabbing between two already-open floating panels).
     *
     * [[uiSurfacesDamage]] carves out one narrower case: a transition that changes only the one surface identified by
-    * some `SurfaceId`, whose presentation is the same kind (`Modal`/`Pinned`/`Floating`/`Expanded`) on both sides, and
+    * some `SurfaceId`, whose presentation is the same kind (`Modal`/`Docked`/`Floating`) on both sides, and
     * nothing else about `uiSurfaces`, reports `Damage.Surface` scoped to that surface instead of `Everything` (#1100
-    * stage 2 for the modal only; stage 3 extends it to pinned/floating/expanded panels). This is safe for every
+    * stage 2 for the modal only; stage 3 extends it to docked/floating panels). This is safe for every
     * presentation kind because `Renderer`'s per-surface layer buffer (`LayerBufferSupport.newLayerSurface` for the
     * modal, `newSeededLayerSurface` for panels that read pixels back via `blurRegion`) always paints into an isolated
     * buffer seeded correctly for that kind, never the live frame surface directly -- see
