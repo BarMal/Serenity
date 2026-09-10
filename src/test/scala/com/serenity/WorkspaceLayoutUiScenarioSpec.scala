@@ -168,8 +168,12 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
     val expandedFrame = driver.renderFrame("expanded").unsafeRunSync()
     val expandedRect =
       expandedFrame.evidence.surfaceRects.getOrElse(pinnedSurfaceId, fail("Expected expanded panel rect"))
-    expandedRect.width should be > dockedRect.width
+    // A Bottom-docked panel already spans close to the full viewport width even at its small docked height, so
+    // maximising it grows height dramatically while width can even shrink slightly (line-number gutter reservation
+    // differs once the panel takes over the whole workspace) -- total area is the robust "now fills the workspace"
+    // signal, not either dimension alone.
     expandedRect.height should be > dockedRect.height
+    (expandedRect.width * expandedRect.height) should be > (dockedRect.width * dockedRect.height)
 
     driver.stateManager.commandExecutor
       .executeCommand(
