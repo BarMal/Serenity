@@ -60,6 +60,9 @@ object ThemeConfigWriter:
     if sanitized.isEmpty then "custom-theme" else sanitized
 
   def render(config: ThemeConfig): String =
+    def optional(field: SyntaxFieldSchema): String =
+      renderSyntax(field.select(config.syntax).getOrElse(field.default), 4)
+
     s"""theme {
        |  name = "${escape(config.name)}"
        |  ui {
@@ -75,7 +78,7 @@ object ThemeConfigWriter:
        |    menu-item ${renderToken(config.ui.menuItem, 4)}
        |    panel ${renderToken(config.ui.panel, 4)}
        |    error ${renderToken(config.ui.error, 4)}
-       |    warning ${renderToken(config.ui.warning.getOrElse(UiTokenConfig("#F0B429", "#2B2000")), 4)}
+       |    warning ${renderToken(config.ui.warning.getOrElse(ThemeFieldSchema.warningDefault), 4)}
        |  }
        |  syntax {
        |    keyword ${renderSyntax(config.syntax.keyword, 4)}
@@ -84,11 +87,11 @@ object ThemeConfigWriter:
        |    number ${renderSyntax(config.syntax.number, 4)}
        |    operator ${renderSyntax(config.syntax.operator, 4)}
        |    identifier ${renderSyntax(config.syntax.identifier, 4)}
-       |    typ ${renderSyntax(config.syntax.typ.getOrElse(SyntaxElementConfig("#AF7AC5")), 4)}
-       |    delimiter ${renderSyntax(config.syntax.delimiter.getOrElse(SyntaxElementConfig("#D5D8DC")), 4)}
-       |    whitespace ${renderSyntax(config.syntax.whitespace.getOrElse(SyntaxElementConfig("#000000")), 4)}
-       |    error ${renderSyntax(config.syntax.error.getOrElse(SyntaxElementConfig("#FF6B6B")), 4)}
-       |    normal ${renderSyntax(config.syntax.normal.getOrElse(SyntaxElementConfig(config.ui.foreground)), 4)}
+       |    typ ${optional(ThemeFieldSchema.typeField)}
+       |    delimiter ${optional(ThemeFieldSchema.delimiterField)}
+       |    whitespace ${optional(ThemeFieldSchema.whitespaceField)}
+       |    error ${optional(ThemeFieldSchema.errorField)}
+       |    normal ${optional(ThemeFieldSchema.normalField)}
        |  }
        |}
        |""".stripMargin
