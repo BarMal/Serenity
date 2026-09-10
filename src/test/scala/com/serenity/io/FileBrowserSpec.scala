@@ -1,7 +1,6 @@
 package com.serenity.io
 
 import java.nio.file.{Files, Path}
-import scala.compiletime.uninitialized
 
 import cats.effect.{IO, Ref}
 import cats.effect.syntax.all.*
@@ -13,10 +12,7 @@ import org.scalatest.matchers.should.Matchers
 /** Regression coverage for #1416: `listDirectory` must not serialize its per-entry blocking IO one file at a time. */
 class FileBrowserSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll:
 
-  private var tempDir: Path = uninitialized
-
-  override def beforeAll(): Unit =
-    tempDir = Files.createTempDirectory("file-browser-spec")
+  private val tempDir: Path = Files.createTempDirectory("file-browser-spec")
 
   override def afterAll(): Unit =
     def delete(path: Path): Unit =
