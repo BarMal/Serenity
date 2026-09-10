@@ -17,9 +17,7 @@ object ConfigurableThemeManager:
       menuItem    <- convertUiToken(config.ui.menuItem)
       panel       <- convertUiToken(config.ui.panel)
       error       <- convertUiToken(config.ui.error)
-      warning <- config.ui.warning match
-        case Some(w) => convertUiToken(w)
-        case None    => Right(ThemeColor(new java.awt.Color(0xf0b429), new java.awt.Color(0x2b2000)))
+      warning     <- convertUiToken(config.ui.warning.getOrElse(ThemeFieldSchema.warningDefault))
       border       <- ColorParser.parseColor(config.ui.border)
       panelBorder  <- parseOptionalColor(config.ui.panelBorder, border)
       margin       <- parseOptionalColor(config.ui.margin, background)
@@ -69,23 +67,18 @@ object ConfigurableThemeManager:
     syntax: SyntaxColors,
     defaultBackground: Color
   ): Either[String, Map[SyntaxElement, ThemeColor]] =
-    val defaultFg = SyntaxElementConfig("#F5F7FA", None, StyleConfig())
-    val conversions = List(
+    val mandatory = List(
       (SyntaxElement.Keyword, syntax.keyword),
       (SyntaxElement.String, syntax.string),
       (SyntaxElement.Comment, syntax.comment),
       (SyntaxElement.Number, syntax.number),
       (SyntaxElement.Operator, syntax.operator),
-      (SyntaxElement.Identifier, syntax.identifier),
-      (SyntaxElement.Type, syntax.typ.getOrElse(SyntaxElementConfig("#AF7AC5", None, StyleConfig(bold = true)))),
-      (SyntaxElement.Delimiter, syntax.delimiter.getOrElse(defaultFg)),
-      (SyntaxElement.Whitespace, syntax.whitespace.getOrElse(SyntaxElementConfig("#000000", None, StyleConfig()))),
-      (
-        SyntaxElement.Error,
-        syntax.error.getOrElse(SyntaxElementConfig("#FF6B6B", None, StyleConfig(underline = true)))
-      ),
-      (SyntaxElement.Normal, syntax.normal.getOrElse(defaultFg))
+      (SyntaxElement.Identifier, syntax.identifier)
     )
+    val optional = ThemeFieldSchema.syntaxFields.map { field =>
+      (field.element, field.select(syntax).getOrElse(field.default))
+    }
+    val conversions = mandatory ++ optional
 
     val results = conversions.map {
       case (element, config) =>

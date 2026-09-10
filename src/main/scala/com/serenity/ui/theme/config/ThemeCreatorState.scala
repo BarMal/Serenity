@@ -178,14 +178,14 @@ object ThemeCreatorState:
       uiToken(
         "ui.warning.foreground",
         "Warning Foreground",
-        ui => ui.warning.getOrElse(UiTokenConfig("#F0B429", "#2B2000")),
+        ui => ui.warning.getOrElse(ThemeFieldSchema.warningDefault),
         (ui, token) => ui.copy(warning = Some(token)),
         foreground = true
       ),
       uiToken(
         "ui.warning.background",
         "Warning Background",
-        ui => ui.warning.getOrElse(UiTokenConfig("#F0B429", "#2B2000")),
+        ui => ui.warning.getOrElse(ThemeFieldSchema.warningDefault),
         (ui, token) => ui.copy(warning = Some(token)),
         foreground = false
       ),
@@ -200,25 +200,10 @@ object ThemeCreatorState:
         _.identifier,
         (syntax, value) => syntax.copy(identifier = value)
       ),
-      optionalSyntax("syntax.type.foreground", "Type", _.typ, (syntax, value) => syntax.copy(typ = Some(value))),
-      optionalSyntax(
-        "syntax.delimiter.foreground",
-        "Delimiter",
-        _.delimiter,
-        (syntax, value) => syntax.copy(delimiter = Some(value))
-      ),
-      optionalSyntax(
-        "syntax.error.foreground",
-        "Syntax Error",
-        _.error,
-        (syntax, value) => syntax.copy(error = Some(value))
-      ),
-      optionalSyntax(
-        "syntax.normal.foreground",
-        "Normal Text",
-        _.normal,
-        (syntax, value) => syntax.copy(normal = Some(value))
-      )
+      optionalSyntax(ThemeFieldSchema.typeField),
+      optionalSyntax(ThemeFieldSchema.delimiterField),
+      optionalSyntax(ThemeFieldSchema.errorField),
+      optionalSyntax(ThemeFieldSchema.normalField)
     )
 
   private def updateUi(update: (UiColors, String) => UiColors): (ThemeConfig, String) => ThemeConfig =
@@ -261,21 +246,15 @@ object ThemeCreatorState:
         config.copy(syntax = replace(config.syntax, updatedElement))
     )
 
-  private def optionalSyntax(
-    path: String,
-    label: String,
-    select: SyntaxColors => Option[SyntaxElementConfig],
-    replace: (SyntaxColors, SyntaxElementConfig) => SyntaxColors
-  ): Descriptor =
+  private def optionalSyntax(field: SyntaxFieldSchema): Descriptor =
     Descriptor(
-      path,
-      label,
-      config => select(config.syntax).map(_.foreground).getOrElse(config.ui.foreground),
+      field.path,
+      field.label,
+      config => field.select(config.syntax).getOrElse(field.default).foreground,
       (config, value) =>
-        val updatedElement = select(config.syntax)
-          .getOrElse(SyntaxElementConfig(config.ui.foreground, Some(config.ui.background)))
-          .copy(foreground = normalizeColorInput(value))
-        config.copy(syntax = replace(config.syntax, updatedElement))
+        val updatedElement =
+          field.select(config.syntax).getOrElse(field.default).copy(foreground = normalizeColorInput(value))
+        config.copy(syntax = field.replace(config.syntax, updatedElement))
     )
 
   private def normalizeColorInput(value: String): String =
