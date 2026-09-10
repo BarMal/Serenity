@@ -5,7 +5,7 @@ import java.io.StringWriter
 
 import com.serenity.config.CursorMode
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{HardwareCursorShape, HardwareCursorStyle, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -189,7 +189,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId),
         theme = Theme.light
@@ -470,7 +470,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
           layout = AppState.initial.persisted.layout.copy(
             editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
             activeEditorPaneId = Some(paneId),
-            paneOrder = List(paneId)
+            workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
           ),
           focus = Focus.EditorPane(paneId),
           theme = Theme.light
@@ -520,7 +520,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId),
         theme = Theme.light
@@ -558,7 +558,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId),
         theme = Theme.light

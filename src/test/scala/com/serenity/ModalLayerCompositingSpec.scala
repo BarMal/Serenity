@@ -4,7 +4,7 @@ import java.awt.image.BufferedImage
 
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{LayerBufferSupport, RenderSurface, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -38,7 +38,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
           activeEditorPaneId = Some(paneId),
-          paneOrder = List(paneId)
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.Modal
       ),

@@ -585,7 +585,6 @@ object PerformanceBenchmarks:
     val bufferCount    = 30
     val linesPerBuffer = 2_000
     val paneId         = PaneId(0)
-
     def session(): AppState =
       val buffers = (0 until bufferCount).map { i =>
         val id = BufferId(i)
@@ -597,7 +596,8 @@ object PerformanceBenchmarks:
           bufferOrder = buffers.keys.toList,
           layout = Layout(
             editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, BufferId(0))),
-            activeEditorPaneId = Some(paneId)
+            activeEditorPaneId = Some(paneId),
+            workspaceTree = Some(com.serenity.TestWorkspaceTrees.linear(paneId))
           )
         )
       )

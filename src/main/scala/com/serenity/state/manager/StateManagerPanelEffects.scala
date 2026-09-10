@@ -345,7 +345,7 @@ final private[manager] class StateManagerPanelEffects(
         (allocatedState, UiSurface(surfaceId, content, SurfacePresentation.Docked, dismissOnMove = false), true)
     val placedTree =
       treeWithoutDropped
-        .orElse(stateWithId.persisted.layout.effectiveWorkspaceTree)
+        .orElse(stateWithId.persisted.layout.workspaceTree)
         .fold(state.persisted.layout.workspaceTree)(tree =>
           placeInTree(Some(tree), surface.id, position, size, isNewlyDocked, stateWithId)
         )

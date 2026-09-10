@@ -16,7 +16,7 @@ object DockedPanelFixtures:
     * `UiSurface`s (e.g. alongside floating ones) up front and only needs the tree entry added separately.
     */
   def dockExisting(state: AppState, id: SurfaceId, position: PanelPosition, size: Int): AppState =
-    val tree = state.persisted.layout.effectiveWorkspaceTree.flatMap { workspaceTree =>
+    val tree = state.persisted.layout.workspaceTree.flatMap { workspaceTree =>
       val (splitId, leafId) = workspaceTree.nextDockIds(id)
       workspaceTree.dockSized(id, position, splitId, leafId, size, state.runtime.viewportSize)
     }

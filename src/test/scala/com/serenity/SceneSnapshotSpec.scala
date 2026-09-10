@@ -51,7 +51,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.Outline(Nil),
       SurfacePresentation.Docked
     )
-    val tree = AppState.initial.persisted.layout.effectiveWorkspaceTree
+    val tree = AppState.initial.persisted.layout.workspaceTree
       .flatMap(
         _.dock(panel.id, PanelPosition.Right, WorkspaceNodeId("split"), WorkspaceNodeId("dock-outline"))
       )
@@ -129,7 +129,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
         layout = AppState.initial.persisted.layout.copy(
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0)),
-          paneOrder = List(PaneId(0))
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
         )
       ),
       runtime = AppState.initial.runtime.copy(uiSurfaces = List(first, second))
@@ -243,7 +243,17 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
             secondPane -> EditorPane.empty(secondPane)
           ),
           activeEditorPaneId = Some(secondPane),
-          paneOrder = List(firstPane, secondPane)
+          workspaceTree = Some(
+            WorkspaceTree(
+              WorkspaceNode.Split(
+                WorkspaceNodeId("editors"),
+                SplitAxis.Horizontal,
+                0.5,
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${firstPane.value}"), firstPane),
+                WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${secondPane.value}"), secondPane)
+              )
+            )
+          )
         ),
         focus = Focus.EditorPane(secondPane)
       )
