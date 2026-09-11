@@ -11,7 +11,8 @@ import com.serenity.ui.theme.config.ThemeCreatorState
 opaque type SurfaceId = String
 
 object SurfaceId:
-  def apply(value: String): SurfaceId = value
+  def apply(value: String): SurfaceId      = value
+  def unapply(id: SurfaceId): Some[String] = Some(id)
 
   extension (id: SurfaceId) def value: String = id
 

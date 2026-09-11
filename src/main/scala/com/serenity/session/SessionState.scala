@@ -17,7 +17,7 @@ object SchemaVersion:
   def apply(value: Int): SchemaVersion = value
 
   extension (version: SchemaVersion)
-    def value: Int = version
+    def value: Int                        = version
     def <=(other: SchemaVersion): Boolean = version <= other
 
 /** Represents the persistent session state that survives application restarts. This is a subset of AppState containing

@@ -5,9 +5,9 @@ import io.circe.syntax.*
 import io.circe.{HCursor, Json}
 
 /** Every shape an incoming JSON-RPC message can actually take (see
-  * https://www.jsonrpc.org/specification#response_object): a successful response, an error response, or a
-  * notification. `Malformed` is a catch-all for anything else (e.g. a server-to-client request, which this client
-  * does not serve) so it can be logged instead of silently dropped.
+  * https://www.jsonrpc.org/specification#response_object): a successful response, an error response, or a notification.
+  * `Malformed` is a catch-all for anything else (e.g. a server-to-client request, which this client does not serve) so
+  * it can be logged instead of silently dropped.
   */
 enum JsonRpcMessage:
   case Response(id: RequestId, result: Json)

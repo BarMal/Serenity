@@ -8,9 +8,9 @@ import com.serenity.ui.layout.*
 
 /** State the event pipeline exposes for opening, hovering, and selecting from the editor's right-click context menu.
   * `resolveMouseTarget` stays owned by the pipeline's core mouse-targeting module since it is shared with click/press/
-  * drag handling, not exclusive to the context menu. As a capability record rather than a trait -- nothing here
-  * breaks a construction-order cycle (#1389), so mockability is the only reason this needs an interface at all, and a
-  * record fakes trivially without one (#1017).
+  * drag handling, not exclusive to the context menu. As a capability record rather than a trait -- nothing here breaks
+  * a construction-order cycle (#1389), so mockability is the only reason this needs an interface at all, and a record
+  * fakes trivially without one (#1017).
   */
 final private[manager] case class EditorContextMenuHitTestingPort(
     stateRef: Ref[IO, AppState],

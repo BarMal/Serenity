@@ -7,8 +7,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 /** State the event pipeline exposes for hovering and clicking the contextual toolbar, as a capability record rather
-  * than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is the only reason this
-  * needs an interface at all, and a record fakes trivially without one (#1017).
+  * than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is the only reason this needs
+  * an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class ContextualToolbarHitTestingPort(
     stateRef: Ref[IO, AppState],

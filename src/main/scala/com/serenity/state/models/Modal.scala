@@ -140,6 +140,7 @@ final case class ReplaceWorkflowState(
     copy(selectedScope = scopes(wrappedIndex), statusMessage = None)
 
 sealed trait FileWorkflowState:
+
   /** Derived from the concrete subtype rather than stored, so it can never disagree with which subtype this is. */
   def mode: FileWorkflowMode = this match
     case _: OpenFileWorkflowState   => FileWorkflowMode.Open

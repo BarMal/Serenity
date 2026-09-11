@@ -66,8 +66,8 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
       requestFiber <- conn
         .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace")))
         .start
-      outgoing     <- conn.takeOutgoing
-      requestJson  <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
+      outgoing    <- conn.takeOutgoing
+      requestJson <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
       requestId <- IO
         .fromOption(requestJson.hcursor.downField("id").as[Long].toOption)(new RuntimeException("Missing request id"))
       _ <- conn.handleIncomingJson(

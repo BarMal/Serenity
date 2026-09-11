@@ -17,10 +17,10 @@ import com.serenity.keystroke.events.EditorEvent
 import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
-import org.slf4j.LoggerFactory
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.slf4j.LoggerFactory
 
 class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 

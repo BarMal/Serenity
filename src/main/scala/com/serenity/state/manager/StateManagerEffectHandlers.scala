@@ -397,9 +397,8 @@ final private[manager] class StateManagerEffectHandlers(
             // overwrite a live buffer instead of being rejected.
             state <- stateRef.get
             newBufferId = loadedBuffer.id
-            stateWithBuffer = state.copy(persisted =
-              state.persisted.copy(buffers = state.persisted.buffers + (newBufferId -> loadedBuffer))
-            )
+            stateWithBuffer = state
+              .copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (newBufferId -> loadedBuffer)))
             updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
             rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
             focused      = EditorState.focusBuffer(rebalanced, newBufferId)

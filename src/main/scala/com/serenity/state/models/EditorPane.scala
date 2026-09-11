@@ -5,7 +5,8 @@ import cats.Order
 opaque type PaneId = Int
 
 object PaneId:
-  def apply(value: Int): PaneId = value
+  def apply(value: Int): PaneId      = value
+  def unapply(id: PaneId): Some[Int] = Some(id)
 
   extension (id: PaneId) def value: Int = id
 

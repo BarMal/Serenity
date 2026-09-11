@@ -11,7 +11,8 @@ import com.serenity.rope.Rope
 opaque type BufferId = Int
 
 object BufferId:
-  def apply(value: Int): BufferId = value
+  def apply(value: Int): BufferId      = value
+  def unapply(id: BufferId): Some[Int] = Some(id)
 
   extension (id: BufferId) def value: Int = id
 

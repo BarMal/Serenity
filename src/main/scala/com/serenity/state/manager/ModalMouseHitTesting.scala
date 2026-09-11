@@ -6,9 +6,9 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.*
 
-/** State the event pipeline exposes for routing mouse input into a blocking or floating modal workflow, as a
-  * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
-  * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
+/** State the event pipeline exposes for routing mouse input into a blocking or floating modal workflow, as a capability
+  * record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is the only
+  * reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class ModalMouseHitTestingPort(
     stateRef: Ref[IO, AppState],

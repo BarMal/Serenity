@@ -296,7 +296,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     )
 
     val objectResult = location
-    val arrayResult   = Json.arr(location)
+    val arrayResult  = Json.arr(location)
 
     LspProtocol.parseDefinitionLocation(objectResult).map(_.uri) shouldBe Some(DocumentUri("file:///foo/Bar.scala"))
     LspProtocol.parseDefinitionLocation(arrayResult).map(_.range.start.line) shouldBe Some(7)
@@ -309,8 +309,8 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
       Json.obj("label" -> "mapValues".asJson)
     )
     val completionList = Json.obj("isIncomplete" -> false.asJson, "items" -> candidates)
-    val arrayResult     = candidates
-    val emptyResult     = Json.arr()
+    val arrayResult    = candidates
+    val emptyResult    = Json.arr()
 
     LspProtocol.parseCompletionItems(completionList) shouldBe Some(List("map", "mapValues"))
     LspProtocol.parseCompletionItems(arrayResult) shouldBe Some(List("map", "mapValues"))

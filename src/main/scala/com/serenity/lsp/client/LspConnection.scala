@@ -29,8 +29,8 @@ class LspConnection private (
 
   def sendRequest(method: LspMethod, params: Json, timeout: FiniteDuration): IO[Json] =
     for
-      rawId    <- idRef.updateAndGet(_ + 1)
-      id        = RequestId(rawId)
+      rawId <- idRef.updateAndGet(_ + 1)
+      id = RequestId(rawId)
       deferred <- Deferred[IO, Either[Throwable, Json]]
       _        <- pendingRef.update(_ + (id -> deferred))
       result <-
