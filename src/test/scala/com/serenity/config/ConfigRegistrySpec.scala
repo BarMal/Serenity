@@ -28,7 +28,6 @@ class ConfigRegistrySpec extends AnyFlatSpec with Matchers with ScalaCheckProper
     val schemaOnly = (ConfigKeySchema.currentKeys ++ ConfigKeySchema.deprecatedKeys.keySet)
       .filterNot(ConfigRegistry.allKeys.contains)
       .filterNot(ConfigGroups.handles)
-      .filterNot(ConfigLegacyKeys.handles)
       .filterNot(_ == "config.version")
 
     schemaOnly shouldBe empty

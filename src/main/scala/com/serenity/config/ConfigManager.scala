@@ -451,9 +451,6 @@ object ConfigManager:
 
     Option.when(invalid)(InvalidConfigEntry(key, value, "Invalid value for supported config key"))
 
-  private def clampFontSize(size: Float): Float =
-    size.max(8.0f).min(48.0f)
-
   /** A config that carries a text scale but never says which mode it is in means manual scaling -- that is what the
     * multiplier was for before `font.scale.mode` existed. A config that does say is taken at its word, including when
     * it says the scaling is off.
