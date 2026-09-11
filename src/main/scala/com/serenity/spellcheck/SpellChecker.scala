@@ -181,6 +181,21 @@ object SpellChecker:
       dictionary.compoundRules,
       dictionary.compoundWordFlags,
       dictionary.compoundMin
+    ) ||
+    // Free-form COMPOUNDFLAG compounding (#1198) is a second, independent mechanism a dictionary may declare
+    // alongside COMPOUNDRULE (real Croatian/Persian .aff files do this) -- tried as a sibling ('||'-shaped) so either
+    // mechanism accepting the word is sufficient, and neither masks the other's rejection.
+    HunspellFreeCompoundMatcher.matches(
+      normalized,
+      dictionary.compoundFlagTrie,
+      HunspellFreeCompoundMatcher.CompoundFlags(
+        dictionary.compoundFlag,
+        dictionary.compoundBeginFlag,
+        dictionary.compoundMiddleFlag,
+        dictionary.compoundEndFlag
+      ),
+      dictionary.compoundMin,
+      dictionary.compoundWordMax
     )
 
   private def isSpellCheckDiagnostic(diagnostic: Diagnostic): Boolean =

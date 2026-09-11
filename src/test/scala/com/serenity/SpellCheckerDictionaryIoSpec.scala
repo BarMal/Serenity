@@ -116,17 +116,16 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   "SpellChecker Hunspell affix support" should "explicitly report unsupported affix directives instead of silently ignoring them" in {
-    // COMPOUNDFLAG and CHECKCOMPOUNDDUP (issue #1187) remain unimplemented -- the free-form COMPOUNDFLAG
-    // word-segmentation mechanism and the CHECKCOMPOUND* validation family are deferred to a follow-up issue,
-    // see the PR description for why COMPOUNDMIN/COMPOUNDRULE and CIRCUMFIX (both implemented below) were the
-    // confidently-verifiable subset.
+    // CHECKCOMPOUNDDUP and CHECKCOMPOUNDCASE (issue #1198) remain unimplemented -- the CHECKCOMPOUND* validation
+    // family is deferred to a follow-up issue; see the PR description for why free-form COMPOUNDFLAG compounding
+    // (implemented below) and the CHECKCOMPOUND* filters were split into separate PRs.
     val (dictionary, _) = writeHunspellDictionary(
       "serenity-unsupported-affix",
       List("hello/A"),
       List(
         "SET UTF-8",
-        "COMPOUNDFLAG A",
-        "CHECKCOMPOUNDDUP"
+        "CHECKCOMPOUNDDUP",
+        "CHECKCOMPOUNDCASE"
       )
     )
     val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
@@ -135,8 +134,8 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
 
     diagnostics.map(_.code) should contain(Some("dictionary-load-failed"))
     val failureMessages = diagnostics.filter(_.code.contains("dictionary-load-failed")).map(_.message)
-    failureMessages.exists(_.contains("COMPOUNDFLAG")) shouldBe true
     failureMessages.exists(_.contains("CHECKCOMPOUNDDUP")) shouldBe true
+    failureMessages.exists(_.contains("CHECKCOMPOUNDCASE")) shouldBe true
     diagnostics.map(_.message) should contain("Possible spelling issue: wurld")
   }
 
@@ -149,6 +148,26 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
 
     val diagnostics = SpellChecker.check("draft drafting", config)
+
+    diagnostics.map(_.code) should not contain Some("dictionary-load-failed")
+  }
+
+  it should "not report COMPOUNDFLAG/COMPOUNDBEGIN/COMPOUNDMIDDLE/COMPOUNDEND/COMPOUNDWORDMAX as unsupported" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-supported-compoundflag-directives",
+      List("un/U", "der/W", "stand/V"),
+      List(
+        "SET UTF-8",
+        "COMPOUNDMIN 2",
+        "COMPOUNDBEGIN U",
+        "COMPOUNDMIDDLE V",
+        "COMPOUNDEND W",
+        "COMPOUNDWORDMAX 3"
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("understand", config)
 
     diagnostics.map(_.code) should not contain Some("dictionary-load-failed")
   }
@@ -293,5 +312,117 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
       "Possible spelling issue: legnagy",
       "Possible spelling issue: legeslegnagy"
     )
+  }
+
+  // Real-shaped fixture verified verbatim against hunspell's own tests/compoundflag.{aff,dic,good,wrong} (issue
+  // #1198): COMPOUNDMIN 3, COMPOUNDFLAG A, dictionary foo/A bar/A xy/A yz/A. "foobar"/"barfoo"/"foobarfoo" are in
+  // compoundflag.good (free-form: any order, any count of 2+); "fooxy" is in compoundflag.wrong because "xy" is
+  // below COMPOUNDMIN.
+  "SpellChecker free-form COMPOUNDFLAG support" should
+    "accept two- and three-word free-form compounds in any order and reject a COMPOUNDMIN-violating segment" in {
+      val (dictionary, _) = writeHunspellDictionary(
+        "serenity-compoundflag-hunspell-corpus",
+        List("foo/A", "bar/A", "xy/A", "yz/A"),
+        List(
+          "SET UTF-8",
+          "COMPOUNDMIN 3",
+          "COMPOUNDFLAG A"
+        )
+      )
+      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+      val diagnostics = SpellChecker.check("foobar barfoo foobarfoo fooxy", config)
+
+      diagnostics.map(_.message) shouldBe List("Possible spelling issue: fooxy")
+    }
+
+  it should "reject a single compound-flagged dictionary word -- COMPOUNDFLAG needs two or more members" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-compoundflag-single-word",
+      List("foo/A", "bar/A"),
+      List("SET UTF-8", "COMPOUNDMIN 3", "COMPOUNDFLAG A")
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("foo bar foobar", config)
+
+    diagnostics shouldBe Nil
+  }
+
+  // Real-word fixture: Norwegian "sol" (sun) + "skinn" (shine/skin) -> "solskinn" (sunshine), a genuine Norwegian
+  // compound -- the free-form COMPOUNDFLAG mechanism this PR implements is well-attested in Norwegian .aff files
+  // per #1198's investigation.
+  it should "accept a real Norwegian compound word formed from two compound-flagged roots" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-compoundflag-norwegian",
+      List("sol/A", "skinn/A"),
+      List("SET UTF-8", "COMPOUNDMIN 3", "COMPOUNDFLAG A")
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("solskinn", config)
+
+    diagnostics shouldBe Nil
+  }
+
+  it should "enforce COMPOUNDWORDMAX, rejecting a compound with more segments than the declared maximum" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-compoundflag-wordmax",
+      List("aa/A", "bb/A", "cc/A", "dd/A"),
+      List("SET UTF-8", "COMPOUNDMIN 2", "COMPOUNDFLAG A", "COMPOUNDWORDMAX 2")
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("aabb aabbcc", config)
+
+    // "aabb" (2 members) is within COMPOUNDWORDMAX 2; "aabbcc" would need 3 members, exceeding it.
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: aabbcc")
+  }
+
+  // Real syntax verified against hunspell's own tests/germancompounding.aff (`COMPOUNDBEGIN`/`COMPOUNDMIDDLE`/
+  // `COMPOUNDEND`, one flag letter each).
+  it should "enforce COMPOUNDBEGIN/COMPOUNDMIDDLE/COMPOUNDEND positional roles, rejecting a word in the wrong position" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-compoundflag-positional",
+      List("un/U", "der/W", "stand/V"),
+      List(
+        "SET UTF-8",
+        "COMPOUNDMIN 2",
+        "COMPOUNDBEGIN U",
+        "COMPOUNDMIDDLE V",
+        "COMPOUNDEND W"
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("unstandder derstandun", config)
+
+    // "unstandder": begin-flagged "un" + middle-flagged "stand" + end-flagged "der" -- valid role order.
+    // "derstandun": end-flagged "der" leading and begin-flagged "un" trailing -- both roles violated.
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: derstandun")
+  }
+
+  // Confirms neither compounding mechanism masks the other's rejection when a dictionary declares both COMPOUNDRULE
+  // and free-form COMPOUNDFLAG (issue #1198: real Croatian/Persian .aff files do this).
+  it should "accept compounds via either COMPOUNDRULE or COMPOUNDFLAG when a dictionary declares both, without either masking the other's rejection" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-compoundrule-and-compoundflag-coexist",
+      List("garten/R", "haus/R", "foo/C", "bar/C"),
+      List(
+        "SET UTF-8",
+        "COMPOUNDMIN 3",
+        "COMPOUNDRULE 1",
+        "COMPOUNDRULE R*",
+        "COMPOUNDFLAG C"
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("gartenhaus foobar bargarten", config)
+
+    // gartenhaus: matches only COMPOUNDRULE (R*, flag R members). foobar: matches only COMPOUNDFLAG (flag C
+    // members). bargarten mixes a COMPOUNDFLAG-only word ("bar", flag C) with a COMPOUNDRULE-only word ("garten",
+    // flag R) -- neither mechanism alone can segment it, so it must still be rejected.
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: bargarten")
   }
 end SpellCheckerDictionaryIoSpec
