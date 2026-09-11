@@ -15,9 +15,8 @@ import com.serenity.state.models.*
   * decision alone never needed -- cursor and selection movement, comment/diagnostic annotations, and language
   * reclassification -- each of those used to invalidate pixels via `Renderer`'s own retired `PaneRowKey`/
   * `PaneContentKey` structural comparison, so this producer covers them now that `planFrame` runs entirely on
-  * `Damage`/`RendererFrameState` instead of that comparison. See
-  * `CursorViewport.ensureVisibleCursors`'s doc comment for why per-reducer-branch emission was rejected in favour of
-  * this boundary-pass pattern.
+  * `Damage`/`RendererFrameState` instead of that comparison. See `CursorViewport.ensureVisibleCursors`'s doc comment
+  * for why per-reducer-branch emission was rejected in favour of this boundary-pass pattern.
   *
   * Buffer content damage goes through `RopeDiff`, which finds the changed offset range by walking the rope's persistent
   * tree structure rather than comparing text, so its cost tracks how much of the document an edit actually touched
