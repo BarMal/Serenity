@@ -8,10 +8,14 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
 
-final case class BufferId(value: Int)
+opaque type BufferId = Int
 
 object BufferId:
-  given Order[BufferId] = Order.by(_.value)
+  def apply(value: Int): BufferId = value
+
+  extension (id: BufferId) def value: Int = id
+
+  given Order[BufferId] = Order.by(identity)
 
 enum TypographyRole:
   case Code

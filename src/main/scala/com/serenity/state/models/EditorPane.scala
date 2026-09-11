@@ -2,10 +2,14 @@ package com.serenity.state.models
 
 import cats.Order
 
-final case class PaneId(value: Int)
+opaque type PaneId = Int
 
 object PaneId:
-  given Order[PaneId] = Order.by(_.value)
+  def apply(value: Int): PaneId = value
+
+  extension (id: PaneId) def value: Int = id
+
+  given Order[PaneId] = Order.by(identity)
 
 final case class SmoothScrollState(
     targetTopLine: Int,

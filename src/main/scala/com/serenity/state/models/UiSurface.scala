@@ -8,9 +8,13 @@ import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ThemeCreatorState
 
-final case class SurfaceId(value: String)
+opaque type SurfaceId = String
 
 object SurfaceId:
+  def apply(value: String): SurfaceId = value
+
+  extension (id: SurfaceId) def value: String = id
+
   /** Reserved id for the experimental command-runner cursor-peek prototype's single peek panel
     * (`SurfaceConfig.commandRunnerCursorPeekEnabled`) -- a fixed constant rather than an allocated id, since this
     * single-panel prototype only ever has the one peek surface at a time. `LayoutEngine.calculateFloatingSurfaceRect`
