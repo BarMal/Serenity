@@ -26,6 +26,10 @@ class UndoRedoPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  // Each successful case spins up a fresh StateManager and drives it through up to 30 edits and as many undo/redo
+  // steps, so keep the sample count well below ScalaCheck's 100-case default rather than let the suite balloon.
+  given generatorConfig: PropertyCheckConfiguration = PropertyCheckConfiguration(minSuccessful = 30)
+
   private val logger = LoggerFactory[IO].getLogger(using LoggerName("UndoRedoPropertySpec"))
 
   private def genEdit: Gen[Event] =
